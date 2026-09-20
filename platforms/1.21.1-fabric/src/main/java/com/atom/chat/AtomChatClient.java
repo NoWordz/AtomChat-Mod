@@ -33,9 +33,10 @@ public class AtomChatClient implements ClientModInitializer {
 
     @Override
     public void onInitializeClient() {
-        // Second, idempotent call: the mixin plugin already claimed AWT before
-        // any mod was constructed. See AwtDisplay for why being first matters.
-        AwtDisplay.claim();
+        // Idempotent second call: the client-only mixin plugin claimed AWT
+        // before Minecraft's Main ran. This log line reports the outcome of
+        // whichever call won, so it is the picker's field diagnostic.
+        AtomChat.LOGGER.info("AWT toolkit: {}", AwtDisplay.claim());
         AtomChatConfig.get();
         CacheDirs.migrateFromOldConfigPaths();
         WallpaperStore.init(

@@ -1,5 +1,18 @@
 # Changelog
 
+## v0.2.13
+
+> 本版修掉 issue #19：专用服务端被客户端的 AWT「抢跑」拖下水。三个发布目标（Fabric 1.21.1 / NeoForge 1.21.1 / Forge 1.20.1）同步。
+
+### 修复
+
+- **专用服务端不再触碰 AWT（issue #19）**：shared 的 mixin 插件过去无条件调用 `AwtDisplay.claim()`，在无 X 显示的专用服务器上会强行拉起 X11 toolkit；失败后 `GraphicsEnvironment$LocalGE` 初始化永久损坏，此后服务端任何图片处理（实测 WorldComment）都抛 `NoClassDefFoundError`。抢跑点现在仍是 mixin 插件期（必须早于游戏 `Main`，否则 headless 结果已被缓存锁死），但拆成每个平台一份、且只在客户端生效：NeoForge / Forge 的插件用 `FMLEnvironment.dist.isClient()` 守护，Fabric 继续靠 `fabric.mod.json` 的 `environment: "client"`。专用服务端不再加载 AWT。
+- 客户端启动日志新增一行 `AWT toolkit: <结果>`，图片选择器出问题时能直接区分「没抢到」和「这台机器没有显示」。
+
+### 说明
+
+- 曾尝试把抢跑点移到 `AtomChatClient` 的 mod 构造期；真实客户端 + TFC 实测该时机返回 `locked-headless`（`Main`/`Minecraft` 在 mod 构造前已缓存 headless），选择器不可用，故保留插件期抢跑、只收窄到客户端。
+
 ## v0.2.12
 
 > 本版是「加固」版：没有新界面、也不改玩法。做的是三件事 —— 让诊断不再说假话、让渲染这一层出问题时**构建会红**而不是靠人看、以及给性能装一把尺子。四个目标（Fabric 1.21.1 / NeoForge 1.21.1 / Forge 1.20.1）同步。

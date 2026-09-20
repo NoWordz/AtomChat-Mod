@@ -17,15 +17,16 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * its enums) therefore poisons the whole process, and every Swing window opened
  * later throws {@link java.awt.HeadlessException}.
  *
- * <p>Being first is the only defence, so {@link #claim()} runs from
- * {@code AtomChatMixinPlugin}'s static initialiser: Mixin prepares plugin
- * classes before any mod is constructed. Measured on a NeoForge 1.21.1 launch,
- * that is ~4.6s into the process, against ~5.5s for Minecraft's {@code Main}
- * and ~9.9s for the first mod class to touch AWT.
+ * <p>Being first is the only defence, so {@link #claim()} runs from each
+ * platform's client-only mixin config plugin: Mixin prepares plugins before
+ * Minecraft's {@code Main} runs its static initialiser, whereas by the time
+ * mods are constructed the cached answer may already be locked. A dedicated
+ * server never runs the claim - the loader-side plugins skip it when the dist
+ * is not client, and Fabric does not even load the config. Issue #19 happened
+ * because the shared plugin used to claim on both sides.
  *
- * <p>Deliberately JDK-only - no Minecraft, no loader, no mod classes. This class
- * is loaded while mixin configurations are still being prepared, so it has to
- * stand on its own.
+ * <p>Deliberately JDK-only - no Minecraft or mod classes - so the earliest
+ * possible caller can reach it before class loading has settled.
  */
 public final class AwtDisplay {
     /** The toolkit was initialised here, with a display available. */

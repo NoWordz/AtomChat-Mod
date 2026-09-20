@@ -42,9 +42,10 @@ public final class AtomChatClient {
 
     /** Called from the common mod constructor on the client only. */
     public static void init(IEventBus modEventBus) {
-        // Second, idempotent call: the mixin plugin already claimed AWT before
-        // any mod was constructed. See AwtDisplay for why being first matters.
-        AwtDisplay.claim();
+        // Idempotent second call: the client-only mixin plugin claimed AWT
+        // before Minecraft's Main ran. This log line reports the outcome of
+        // whichever call won, so it is the picker's field diagnostic.
+        AtomChat.LOGGER.info("AWT toolkit: {}", AwtDisplay.claim());
 
         modEventBus.addListener(PanelBlurRenderer::registerShaders);
         modEventBus.addListener(AtomChatClient::onClientSetup);

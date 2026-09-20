@@ -70,9 +70,9 @@ public final class FilePicker {
      *                   pick a file the store will silently refuse.
      */
     public static Path pickImage(Runnable beforeShow, Runnable afterShow, Predicate<String> nameFilter) {
-        // The claim normally happened at startup (AwtDisplay, via the mixin
-        // plugin, before any other mod could reach AWT); repeating it is free
-        // and covers a process where the picker is the first AWT user.
+        // The claim normally happened at client startup, before any other mod
+        // could reach AWT; repeating it is free and covers a process where the
+        // picker is the first AWT user.
         AwtDisplay.claim();
         AtomicReference<Path> result = new AtomicReference<>();
         CountDownLatch done = new CountDownLatch(1);

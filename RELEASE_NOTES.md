@@ -4,6 +4,14 @@
 用「新增 / 修复 / 更改」等常规分类组织，写法自由，不要拿语言名当标题。
 仓库 GitHub Release 正文取整段；Modrinth / CurseForge 的 changelog 取段尾英文块（英文内部不要空行）。
 
+## v0.2.13
+
+本版修掉 issue #19：专用服务端被客户端的 AWT「抢跑」拖下水。三个发布目标（Fabric 1.21.1 / NeoForge 1.21.1 / Forge 1.20.1）同步。
+
+修复：shared 的 mixin 插件过去无条件调用 `AwtDisplay.claim()`，在无显示的专用服务器上强行拉起 X11 toolkit；失败后 `GraphicsEnvironment$LocalGE` 初始化永久损坏，之后服务端任何图片处理（实测 WorldComment）都会抛 `NoClassDefFoundError`。抢跑点仍在 mixin 插件期（必须早于游戏 `Main`），但拆成每平台一份、只在客户端生效：NeoForge / Forge 用 `FMLEnvironment.dist.isClient()` 守护，Fabric 靠 `environment: "client"`。专用服务端不再加载 AWT。客户端启动新增一行 `AWT toolkit: <outcome>` 便于排查。
+
+Fixed issue #19, where a dedicated server could be forced onto the AWT toolkit by a client-side head start: the shared mixin plugin called AwtDisplay.claim() unconditionally, so a headless server with a stale DISPLAY variable tried to bring up X11, permanently poisoned GraphicsEnvironment$LocalGE, and made every later server-side image operation (WorldComment in the report) fail with NoClassDefFoundError. The claim now stays in the mixin-plugin phase - it has to run before Minecraft's Main caches the headless answer - but each target ships its own client-only plugin: NeoForge and Forge gate on FMLEnvironment.dist.isClient() and Fabric relies on the config's "environment": "client", so a dedicated server never loads AWT. The client startup log now prints the AWT outcome for field diagnosis.
+
 ## v0.2.12
 
 本版是「加固」版：没有新界面、也不改玩法。三件事 —— 让诊断不再说假话、让渲染这一层出问题时构建会红而不是靠人看、以及给性能装一把尺子。四个目标（Fabric 1.21.1 / NeoForge 1.21.1 / Forge 1.20.1）同步。

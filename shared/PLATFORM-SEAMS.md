@@ -13,7 +13,7 @@
 分组是编译期事实：甲组少一个类型，那个目标当场编不过。判据用简单名的词边界匹配
 （覆盖 import 全限定名与同包简单名两种写法），偏保守 —— 注释里的提及也算，宁可多列。
 
-当前：甲组 **97** 个，乙组 **32** 个。
+当前：甲组 **97** 个，乙组 **35** 个。
 
 ## 甲：共用代码引用了的（接缝）
 
@@ -93,6 +93,7 @@
 | 目标 | 类型 |
 |---|---|
 | 1.20.1-forge | `com.atom.chat.AtomChatClient` |
+| 1.20.1-forge | `com.atom.chat.mixin.AtomChatMixinPlugin` |
 | 1.20.1-forge | `com.atom.chat.net.AvatarPayloads` |
 | 1.20.1-forge | `com.atom.chat.net.ConfigScreenServer` |
 | 1.20.1-forge | `com.atom.chat.net.ForgeWireIo` |
@@ -104,6 +105,7 @@
 | 1.20.1-forge | `com.atom.chat.platform.ForgePlatform` |
 | 1.20.1-forge | `com.atom.chat.net.AvatarCompanionServerTest` |
 | 1.21.1-fabric | `com.atom.chat.AtomChatClient` |
+| 1.21.1-fabric | `com.atom.chat.mixin.AtomChatMixinPlugin` |
 | 1.21.1-fabric | `com.atom.chat.net.AvatarPayloads` |
 | 1.21.1-fabric | `com.atom.chat.net.ConfigScreenServer` |
 | 1.21.1-fabric | `com.atom.chat.net.FabricWireIo` |
@@ -115,6 +117,7 @@
 | 1.21.1-fabric | `com.atom.chat.platform.FabricPlatform` |
 | 1.21.1-fabric | `com.atom.chat.net.AvatarCompanionServerTest` |
 | 1.21.1-neoforge | `com.atom.chat.AtomChatClient` |
+| 1.21.1-neoforge | `com.atom.chat.mixin.AtomChatMixinPlugin` |
 | 1.21.1-neoforge | `com.atom.chat.net.AvatarPayloads` |
 | 1.21.1-neoforge | `com.atom.chat.net.ConfigScreenServer` |
 | 1.21.1-neoforge | `com.atom.chat.net.MediaCompanionClient` |

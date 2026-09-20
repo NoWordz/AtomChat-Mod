@@ -9,17 +9,15 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * Exists to run one line as early as a mod possibly can: {@link AwtDisplay#claim()}.
+ * Claims the process-wide AWT toolkit as early as a mod can: Mixin instantiates
+ * config plugins before Minecraft's {@code Main} runs its static initialiser.
+ * That head start is the whole point - by mod-construction time the cached
+ * headless answer may already be locked (issue #19), and no later hook is early
+ * enough. The rest of the plugin is inert.
  *
- * <p>Mixin instantiates config plugins while it prepares configurations, which
- * is before any mod's classes are initialised and before Minecraft's own
- * {@code Main} runs its static initialiser - both of which end up writing
- * {@code java.awt.headless=true}. Whoever touches AWT first decides,
- * permanently, whether Swing windows can be created in this process, so the
- * hook is this class's static initialiser. The rest of the plugin is inert.
- *
- * <p>No behaviour here is conditional: the picker simply degrades to a logged
- * error on a machine that genuinely has no display.
+ * <p>No dist check is needed here: fabric.mod.json marks this mixin config
+ * {@code "environment": "client"}, so a dedicated server never loads it and the
+ * class is not even instantiated there.
  */
 public class AtomChatMixinPlugin implements IMixinConfigPlugin {
     static {
