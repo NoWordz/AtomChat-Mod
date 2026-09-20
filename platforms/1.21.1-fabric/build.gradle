@@ -100,8 +100,12 @@ def changelogFor(version) {
     // section in RELEASE_NOTES.md (Chinese summary first, English last; the
     // whole bilingual section is for the GitHub release body).
     def trimmed = section.trim()
-    def idx = trimmed.lastIndexOf('\n\n')
-    return idx >= 0 ? trimmed.substring(idx).trim() : trimmed
+    // Store changelog = 分隔线 `----` **之后**的英文块（写法约定见 RELEASE_NOTES.md 顶部）。
+    // 【为什么不用"最后一个空行"】英文块自己也会分段（`**Fixed**` + 空行 + 条目），按空行取
+    // 只会取到最后一段、把前面几段一起丢掉，而且构建照样是绿的 —— 静默丢失。
+    // 用 `-{3,}` 而不是写死三个/四个横线：本仓库历史上两种都写过，不想被横线根数绑架。
+    def sep = trimmed =~ /(?m)^-{3,}$/
+    return sep.find() ? trimmed.substring(sep.end()).trim() : trimmed
 }
 
 modrinth {
