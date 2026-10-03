@@ -21,7 +21,7 @@ The mod is **client-side only**: it works without a server install (images go to
 *   📤 **Sending local images** — pick with the image button, drag a file into the window, or paste with Ctrl+V; the upload inserts itself into the draft
 *   📦 **Server-side media hosting** — with AtomChat on the server, images / GIFs are stored there and handed out to other players: content-addressed dedup, on-demand chunked delivery, game connection only, **no HTTP port opened**; if the server lacks AtomChat, hosting is off, the file is too large or the upload fails, the client falls back to the external host
 *   🎁 **Server packs** — joining a server syncs its stickers, quick phrases, server icon and MOTD; the sticker panel gains a read-only "This server" section and the phrases panel a read-only group; transfer is sha256-verified per file and only sends the delta; Settings → Privacy can turn it off
-*   😀 **Emoji / kaomoji / stickers** — three tabs with a sliding indicator and full-width push transition; your own stickers live locally, up to 20 with a scrolling grid (GIFs show their first frame in the grid and animate once sent)
+*   😀 **Emoji / kaomoji / stickers** — three tabs with a sliding indicator and full-width push transition; your own stickers live locally, unlimited by default with a scrolling grid (GIFs show their first frame in the grid and animate once sent)
 *   ⚡ **Phrases & input** — the lightning button opens your quick phrases (tap to insert, never sends straight away, up to 20 at 256 characters each); multi-line input, @ mentions, IMBlocker command-state bridging, WATUT "typing" indicator
 *   🔗 **Rich text & context menus** — names and bodies carry colors, underlines, click and hover events: `/tell`, coordinates, FTB accept / deny and external links are all clickable, bare URLs become links; the menu offers copy / quote / save / @ / whisper / teleport / block
 *   👥 **Whispers & conversation list** — ordered public → online → recent offline with real IDs, skin avatars, presence dots and unread badges; whispers run over `/msg` with per-conversation drafts; a separate profile page shows player details
@@ -98,7 +98,7 @@ The mod sends no telemetry and no personal data; uploads only happen when you pi
 
 **Do I need it on the server?** No — it is a client-side mod. A server install additionally enables media hosting and avatar sync.
 
-**Where are stickers stored?** Your own live in `.minecraft/config/atomchat/emotes/` (up to 20, png / jpg / jpeg / gif); stickers offered by the server appear in the read-only "This server" section and do not count against those 20.
+**Where are stickers stored?** Your own live in `.minecraft/config/atomchat/emotes/` (unlimited by default, png / jpg / jpeg / gif; `emoteMax` in `atomchat-client.json` sets a cap); stickers offered by the server appear in the read-only "This server" section and are counted separately.
 
 **Why is a message shown in gray?** When the client cannot be sure a line is player chat it conservatively falls back to gray system text — common with nickname plugins using unrecognized formats.
 

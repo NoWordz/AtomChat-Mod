@@ -80,17 +80,61 @@ class EmoteStoreTest {
     }
 
     @Test
-    void capsAtMax() throws IOException {
-        EmoteStore store = newStore();
+    void capsAtTheConfiguredMaximum() throws IOException {
+        EmoteStore store = new EmoteStore(tmp.resolve("emotes"), () -> 3);
         File source = touch(tmp, "src.png", "x".getBytes(StandardCharsets.UTF_8));
-        for (int i = 0; i < EmoteStore.MAX; i++) {
+        for (int i = 0; i < 3; i++) {
             File f = touch(tmp, "s" + i + ".png", "x".getBytes(StandardCharsets.UTF_8));
             assertTrue(store.add(f), "add #" + i + " should succeed");
         }
-        assertEquals(EmoteStore.MAX, store.count());
+        assertEquals(3, store.count());
         assertTrue(store.isFull());
         assertFalse(store.add(source), "add beyond the cap must fail");
-        assertEquals(EmoteStore.MAX, store.count());
+        assertEquals(3, store.count());
+    }
+
+    @Test
+    void defaultStoreKeepsEverySticker() throws IOException {
+        EmoteStore store = newStore();
+        for (int i = 0; i < 30; i++) {
+            assertTrue(store.add(touch(tmp, String.format("k%02d.png", i), "x".getBytes(StandardCharsets.UTF_8))),
+                    "no cap by default, add #" + i + " should succeed");
+        }
+        assertEquals(30, store.count());
+        assertFalse(store.isFull());
+    }
+
+    @Test
+    void aNegativeCapCountsAsUnlimited() throws IOException {
+        EmoteStore store = new EmoteStore(tmp.resolve("emotes"), () -> -5);
+        for (int i = 0; i < 25; i++) {
+            touch(store.dir(), String.format("n%02d.png", i), "x".getBytes(StandardCharsets.UTF_8));
+        }
+        store.refresh();
+        assertEquals(25, store.count());
+        assertFalse(store.isFull());
+    }
+
+    @Test
+    void aRaisedCapAppliesOnTheNextRefresh() throws IOException {
+        java.util.concurrent.atomic.AtomicInteger cap = new java.util.concurrent.atomic.AtomicInteger(2);
+        EmoteStore store = new EmoteStore(tmp.resolve("emotes"), cap::get);
+        for (int i = 0; i < 5; i++) {
+            touch(store.dir(), String.format("r%02d.png", i), "x".getBytes(StandardCharsets.UTF_8));
+        }
+        store.refresh();
+        assertEquals(2, store.count());
+        assertTrue(store.isFull());
+
+        cap.set(4);
+        store.refresh();
+        assertEquals(4, store.count());
+        assertTrue(store.isFull());
+
+        cap.set(2);
+        store.refresh();
+        assertEquals(2, store.count(), "a lowered cap also applies on the next refresh");
+        assertTrue(store.isFull());
     }
 
     @Test
@@ -153,15 +197,14 @@ class EmoteStoreTest {
     }
 
     @Test
-    void localCapIsTwentyAndUnrelatedToTheServerSource() throws IOException {
-        EmoteStore store = newStore();
-        for (int i = 0; i < EmoteStore.MAX + 3; i++) {
+    void externalFilesAreTrimmedToTheLocalCap() throws IOException {
+        EmoteStore store = new EmoteStore(tmp.resolve("emotes"), () -> 5);
+        for (int i = 0; i < 8; i++) {
             touch(store.dir(), String.format("l%02d.png", i), "x".getBytes(StandardCharsets.UTF_8));
         }
         store.refresh();
 
-        assertEquals(20, EmoteStore.MAX);
-        assertEquals(EmoteStore.MAX, store.count());
+        assertEquals(5, store.count(), "the scan keeps the first 5 sorted names");
         assertTrue(store.isFull());
     }
 
@@ -180,7 +223,7 @@ class EmoteStoreTest {
         assertEquals(1, store.count(), "the server source is not part of the local list");
         assertEquals(5, store.serverCount());
         assertEquals("s00.png", store.serverList().get(0).getName());
-        assertFalse(store.isFull(), "twenty local slots stay twenty");
+        assertFalse(store.isFull(), "no local cap by default");
     }
 
     @Test

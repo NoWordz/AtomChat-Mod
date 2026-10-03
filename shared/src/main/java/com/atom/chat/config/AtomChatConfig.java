@@ -191,6 +191,14 @@ public class AtomChatConfig {
      */
     public boolean serverPacksEnabled = true;
     /**
+     * How many stickers the player may keep in their own emote folder (the
+     * "+" slot in the emote panel). 0 — the default — keeps every sticker
+     * they add; a positive value caps the folder and greys the "+" slot out
+     * once it is full. Server-pack emotes are a read-only mirror with their
+     * own cap and never count against this.
+     */
+    public int emoteMax = 0;
+    /**
      * Whether chat history is kept per world on disk under
      * {@code <config>/atomchat/history/} and restored when you rejoin that
      * world. Off by default: chat (including private conversations) is written

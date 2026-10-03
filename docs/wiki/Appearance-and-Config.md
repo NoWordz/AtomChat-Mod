@@ -72,7 +72,7 @@ Anything you can change in game can also be edited in the file, which is what yo
 |---|---|
 | `config/atomchat/atomchat-client.json` | The client's main config |
 | `config/atomchat/avatar/` | Custom avatars (256px PNG) |
-| `config/atomchat/emotes/` | Your own emotes (up to 20) |
+| `config/atomchat/emotes/` | Your own emotes (unlimited by default, `emoteMax` sets a cap) |
 | `config/atomchat/server-emotes/` | **Server only:** the distribution source handed to clients |
 | `config/atomchat/wallpaper/` | Custom wallpaper |
 | `config/atomchat/history/` | Chat history (off by default, one file per server / world) |
@@ -113,6 +113,7 @@ The server's own config and data live under the server's game directory; see the
 | `notifyVolume` | `1.0` | Notification volume, 0–1 |
 | `mentionRequireAt` | `false` | `true` counts only an explicit `@name` as a mention; `false` also counts a bare name |
 | `serverPacksEnabled` | `true` | Whether to accept server-offered emotes / phrases / identity |
+| `emoteMax` | `0` | Cap for your own sticker folder, `0` = unlimited; takes effect when the chat screen reopens |
 | `chatHistoryEnabled` / `historyRetentionDays` | `false` / `7` | Keep chat history / days to keep it (`0` = forever) |
 | `teleportCommandMode` | `"auto"` | Teleport command mode: `auto` / `tp` / `tpa` |
 | `quickPhrases` | `[]` | Quick phrases (up to 20, each ≤256 characters); a fresh config is seeded with `/atomchat gui` once, and deleting it sticks |

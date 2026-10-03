@@ -9,6 +9,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
+import java.util.function.IntSupplier;
 
 /**
  * Emotes in two sources: the player's own folder at
@@ -16,11 +17,11 @@ import java.util.List;
  * and, since 0.2.9, the emotes of a downloaded server pack.
  *
  * <p>The local half keeps the original rules — adding a file copies it in (the
- * source is kept), duplicates overwrite by name, sorted by name, capped at
- * {@link #MAX} entries. The server half is a read-only mirror of whatever the
- * joined server offered, capped at {@link #SERVER_MAX}: {@link #remove} refuses
- * anything outside the local folder, so a server's emote can never be deleted
- * from the panel.
+ * source is kept), duplicates overwrite by name, sorted by name, capped at a
+ * configurable maximum (0 keeps every sticker). The server half is a read-only
+ * mirror of whatever the joined server offered, capped at {@link #SERVER_MAX}:
+ * {@link #remove} refuses anything outside the local folder, so a server's
+ * emote can never be deleted from the panel.
  *
  * <p>This class is deliberately pure {@code java.nio}: no Skia and no
  * Minecraft/Fabric imports, so the scan/sort/cap/add/remove logic is
@@ -28,19 +29,31 @@ import java.util.List;
  * is the separate {@link EmoteImageCache} concern.
  */
 public final class EmoteStore {
-    public static final int MAX = 20;
+    /** A local cap at or below this keeps every sticker the player adds. */
+    public static final int UNLIMITED = 0;
     /** Emotes a downloaded server pack may contribute; read-only. */
     public static final int SERVER_MAX = 32;
 
     private static final String[] EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif"};
 
     private final Path dir;
+    /**
+     * Read at every scan, not captured once: a hand-edited config takes effect
+     * the next time the panel rescans, even though the store outlives a
+     * config reload.
+     */
+    private final IntSupplier localMax;
     private List<File> cached = Collections.emptyList();
     private Path serverDir;
     private List<File> serverCached = Collections.emptyList();
 
     public EmoteStore(Path dir) {
+        this(dir, () -> UNLIMITED);
+    }
+
+    public EmoteStore(Path dir, IntSupplier localMax) {
         this.dir = dir;
+        this.localMax = localMax == null ? () -> UNLIMITED : localMax;
         refresh();
     }
 
@@ -85,7 +98,9 @@ public final class EmoteStore {
 
     /** Re-scans both folders, sorts by name and applies the two caps. */
     public void refresh() {
-        cached = Collections.unmodifiableList(scan(dir, MAX));
+        int cap = localMax.getAsInt();
+        cached = Collections.unmodifiableList(
+                scan(dir, cap > UNLIMITED ? cap : Integer.MAX_VALUE));
         serverCached = serverDir == null
                 ? Collections.emptyList()
                 : Collections.unmodifiableList(scan(serverDir, SERVER_MAX));
@@ -122,7 +137,8 @@ public final class EmoteStore {
     }
 
     public boolean isFull() {
-        return cached.size() >= MAX;
+        int cap = localMax.getAsInt();
+        return cap > UNLIMITED && cached.size() >= cap;
     }
 
     /** Copies {@code source} into the emote dir. False when full or invalid. */
