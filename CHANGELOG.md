@@ -1,5 +1,39 @@
 # Changelog
 
+## v0.2.14
+
+> 本版放开本地表情的数量限制，并给想限量的玩家一个配置项。三个发布目标（Fabric 1.21.1 / NeoForge 1.21.1 / Forge 1.20.1）同步。
+
+**新增**
+
+- **客户端配置 `emoteMax`**（`atomchat-client.json`，默认 `0` = 不限量）：设为正整数即为本地表情的上限，重开聊天界面后生效；加满时表情面板的「+」号槽变灰。
+
+**更改**
+
+- **本地表情不再默认限 20 个**：表情面板里「+」号添加的本地表情现在默认不限量（想限多少用 `emoteMax` 自己设）。
+- 服务端下发的表情不变：仍是只读的本服分区，客户端最多显示 32 个，与本地名额分开计数。
+
+**说明**
+
+- README（中英）、Modrinth / CurseForge / MC 百科三份商店描述、双语 wiki 中所有「最多 20 个」的说法已同步改为「默认不限量 + `emoteMax` 可设上限」。
+
+----
+
+> This release lifts the default cap on local emotes and gives players who want a cap a config option. The three release targets (Fabric 1.21.1 / NeoForge 1.21.1 / Forge 1.20.1) ship it together.
+
+**Added**
+
+- **A client config `emoteMax`** (`atomchat-client.json`, default `0` = unlimited): setting it to a positive integer caps local emotes, taking effect when the chat UI is reopened; the "+" slot greys out once the cap is reached.
+
+**Changed**
+
+- **Local emotes are no longer capped at 20 by default**: local emotes added through the "+" slot in the emote panel are unlimited unless you set a cap with `emoteMax`.
+- Server-delivered emotes are unchanged: still a read-only server-side section, showing at most 32 in the client, counted separately from the local allowance.
+
+**Notes**
+
+- All "up to 20" mentions in the READMEs (Chinese and English), the three store descriptions (Modrinth / CurseForge / MC Encyclopedia) and the bilingual wiki have been updated to "unlimited by default, cap via `emoteMax`".
+
 ## v0.2.13
 
 > 本版修掉 issue #19：专用服务端被客户端的 AWT「抢跑」拖下水。三个发布目标（Fabric 1.21.1 / NeoForge 1.21.1 / Forge 1.20.1）同步。

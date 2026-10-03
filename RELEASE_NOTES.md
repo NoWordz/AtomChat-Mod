@@ -1,5 +1,29 @@
 # Release Notes
 
+## v0.2.14
+
+本版放开本地表情的数量限制：默认不限量，想限量的玩家可以自己设上限。三个发布目标（Fabric 1.21.1 / NeoForge 1.21.1 / Forge 1.20.1）同步。
+
+**新增**
+
+- 客户端配置 `emoteMax`（`atomchat-client.json`，默认 0 = 不限量）：设为正整数即为本地表情的上限，重开聊天界面后生效，加满时「+」号槽变灰。
+
+**更改**
+
+- 表情面板里「+」号添加的本地表情不再默认限 20 个，现在默认不限量。
+- 服务端下发的表情不变：仍是只读的本服分区，客户端最多显示 32 个，与本地名额分开计数。
+
+----
+
+**Added**
+
+- a client config `emoteMax` (`atomchat-client.json`, default 0 = unlimited): a positive integer caps local emotes, taking effect when the chat UI is reopened; the "+" slot greys out once the cap is reached.
+
+**Changed**
+
+- local emotes added through the "+" slot in the emote panel are no longer capped at 20 by default; they are unlimited unless you set a cap with `emoteMax`.
+- server-delivered emotes are unchanged: still a read-only server-side section, showing at most 32 in the client, counted separately from the local allowance.
+
 ## v0.2.13
 
 本版修掉 issue #19：专用服务端被客户端的 AWT「抢跑」拖下水。三个发布目标（Fabric 1.21.1 / NeoForge 1.21.1 / Forge 1.20.1）同步。
