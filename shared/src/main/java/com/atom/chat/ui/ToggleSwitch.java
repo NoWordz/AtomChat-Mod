@@ -26,6 +26,10 @@ public final class ToggleSwitch {
     private final PressScale scale = PressScale.control();
     private boolean hover;
     private boolean pressed;
+    /** How long a click pulse holds the pressed target after the state flipped. */
+    private static final long PULSE_MS = 90;
+    /** End of the armed click pulse; 0 = none. */
+    private long pulseUntil;
 
     public ToggleSwitch() {
         anim.setValue(0.0F);
@@ -41,6 +45,21 @@ public final class ToggleSwitch {
         this.pressed = pressed;
     }
 
+    /**
+     * Arms a one-shot press pulse (the EmojiPanel cell pattern): the pressed
+     * target holds for {@link #PULSE_MS}, then the spring rebounds with its
+     * overshoot. This is what makes the click bounce state-change proof — the
+     * click performs on mouse-down and the same frame writes the config file,
+     * so a bounce tied to the physical press window can be swallowed whole.
+     */
+    public void pulse() {
+        pulseUntil = System.currentTimeMillis() + PULSE_MS;
+    }
+
+    private boolean pulsing() {
+        return System.currentTimeMillis() < pulseUntil;
+    }
+
     /** Jumps to the target with no animation (used when a page is first shown). */
     public void snapTo(boolean on) {
         anim.setValue(on ? 1.0F : 0.0F);
@@ -53,7 +72,7 @@ public final class ToggleSwitch {
     public void update(float dtMs, boolean on) {
         anim.animateTo(UiMotion.TOGGLE_MS, on ? 1.0F : 0.0F);
         anim.update(dtMs);
-        scale.update(hover, pressed, dtMs, Animations.enabled());
+        scale.update(hover, pressed || pulsing(), dtMs, Animations.enabled());
     }
 
     /**

@@ -2025,6 +2025,14 @@ public final class SettingsSectionPage {
                     return;
                 }
                 item.set(!item.value());
+                // One-shot pulse on the control the click flipped: the bounce
+                // follows the state change, not the physical press window (the
+                // same frame writes the config, so a press-bound bounce can be
+                // swallowed entirely).
+                ToggleSwitch control = switches.get(item.id());
+                if (control != null) {
+                    control.pulse();
+                }
             }
             case INFO -> {
                 if (hit.row().info().isLink()) {
