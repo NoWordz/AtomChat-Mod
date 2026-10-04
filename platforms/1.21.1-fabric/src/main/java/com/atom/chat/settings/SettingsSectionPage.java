@@ -10,6 +10,7 @@ import com.atom.chat.image.PlayerAvatar;
 import com.atom.chat.render.Easing;
 import com.atom.chat.render.SkiaDraw;
 import com.atom.chat.render.SkiaFontRenderer;
+import com.atom.chat.theme.ThemeService;
 import com.atom.chat.ui.AppIcons;
 import com.atom.chat.ui.ToggleSwitch;
 import com.atom.chat.wallpaper.WallpaperStore;
@@ -44,7 +45,7 @@ import java.util.Map;
  * hit-testing and measurement can never disagree.</p>
  */
 public final class SettingsSectionPage {
-    public enum RowKind { HERO, SWITCH, SLIDER, COLOR, INFO, BLOCKED, LABEL, ACTION }
+    public enum RowKind { HERO, SWITCH, SLIDER, COLOR, INFO, BLOCKED, LABEL, ACTION, THEMES }
 
     public record Row(RowKind kind, SettingsItem item, SettingsSlider slider,
                       SettingsColor color, SettingsCatalog.InfoRow info, PlayerRef player,
@@ -79,6 +80,10 @@ public final class SettingsSectionPage {
 
         static Row ofAction(String actionId, SettingsItem item) {
             return new Row(RowKind.ACTION, item, null, null, null, null, null, actionId);
+        }
+
+        static Row ofThemes() {
+            return new Row(RowKind.THEMES, null, null, null, null, null, null, null);
         }
     }
 
@@ -119,9 +124,8 @@ public final class SettingsSectionPage {
     private static final String LABEL_THIRD_PARTY = "atomchat.settings.about.thirdparty.group";
     private static final String LABEL_MOD_INFO = "atomchat.settings.about.modinfo";
     private static final String LABEL_ADVANCED = "atomchat.settings.group.advanced";
+    private static final String LABEL_APPEARANCE_ADVANCED = "atomchat.settings.group.appearance.advanced";
     private static final String LABEL_ADJUST = "atomchat.settings.group.adjust";
-    private static final String LABEL_BUBBLE_COLORS = "atomchat.settings.group.bubblecolors";
-    private static final String LABEL_UI_COLORS = "atomchat.settings.group.uicolors";
     private static final String LABEL_CHAT_MESSAGES = "atomchat.settings.group.chat.messages";
     private static final String LABEL_CHAT_HISTORY = "atomchat.settings.group.chat.history";
     private static final String LABEL_CHAT_NOTIFY = "atomchat.settings.group.chat.notify";
@@ -129,7 +133,6 @@ public final class SettingsSectionPage {
     private static final String ACTION_WALLPAPER_PICK = "wallpaper_pick";
     private static final String ACTION_WALLPAPER_CLEAR = "wallpaper_clear";
     private static final String ACTION_TELEPORT_MODE = "teleport_mode";
-    private static final String ACTION_THEME = "theme_cycle";
     private static final String ACTION_HISTORY_CLEAR = "history_clear";
     private static final String ACTION_CACHE_CLEAR = "cache_clear";
     private static final String ACTION_TEST_SOUND = "test_sound";
@@ -207,8 +210,14 @@ public final class SettingsSectionPage {
     private static final long CONFIRM_ARM_MS = 3000L;
     private String armedActionId;
     private long armedActionAt;
-    /** Collapsed colour groups; session-only, every session starts expanded. */
-    private final java.util.Set<String> collapsedColorGroups = new java.util.HashSet<>();
+    /** Collapsed colour groups; session-only. The appearance "advanced" group
+     *  starts collapsed by design: theme + everyday knobs on top, the twelve
+     *  colour rows tucked away until asked for. */
+    private final java.util.Set<String> collapsedColorGroups =
+            new java.util.HashSet<>(java.util.List.of("appearance_advanced"));
+    /** Dot under the pointer when the theme row was hit; hit() writes it,
+     *  perform() consumes it (same click, so no staleness window). */
+    private int pressedThemeDot = -1;
 
     /** Whether the given destructive action is showing its red confirm state. */
     public boolean actionArmed(String actionId) {
@@ -234,17 +243,14 @@ public final class SettingsSectionPage {
      * child rows when collapsed.
      */
     private static String foldableGroup(String labelKey) {
-        if (LABEL_BUBBLE_COLORS.equals(labelKey)) {
-            return "bubble";
-        }
-        if (LABEL_UI_COLORS.equals(labelKey)) {
-            return "ui";
-        }
         if (LABEL_ADJUST.equals(labelKey)) {
             return "adjust";
         }
         if (LABEL_ADVANCED.equals(labelKey)) {
             return "advanced";
+        }
+        if (LABEL_APPEARANCE_ADVANCED.equals(labelKey)) {
+            return "appearance_advanced";
         }
         if (LABEL_BLOCKED.equals(labelKey)) {
             return "blocked";
@@ -274,17 +280,11 @@ public final class SettingsSectionPage {
     }
 
     /**
-     * Theme card, parked: the preset system works but the look it should
-     * encapsulate is still settling (card tint slider landed first), so the
-     * card renders veiled with a "coming soon" subtitle and ignores clicks.
+     * Theme picker row: seven dots (frosted + six colour presets) drawn in a
+     * horizontal strip, each filled with its preset accent; the active one
+     * gets a ring. Replaces the old parked theme_cycle action card.
      */
-    private SettingsItem themeItem() {
-        return new SettingsItem("theme_cycle",
-                "atomchat.settings.appearance.theme",
-                "atomchat.settings.appearance.theme.desc",
-                () -> false, v -> {
-        }, () -> false);
-    }
+    private static final int THEME_DOT_COUNT = 1 + ThemeService.presets().length;
 
     private final Map<String, ToggleSwitch> switches = new HashMap<>();
     private final Map<Integer, Float> rowHover = new HashMap<>();
@@ -340,7 +340,7 @@ public final class SettingsSectionPage {
     public static float rowHeight(RowKind kind) {
         return switch (kind) {
             case LABEL -> UiTokens.SETTINGS_LABEL_H;
-            case SLIDER, COLOR -> UiTokens.SETTINGS_SLIDER_ROW_H;
+            case SLIDER, COLOR, THEMES -> UiTokens.SETTINGS_SLIDER_ROW_H;
             case HERO -> UiTokens.SETTINGS_HERO_H;
             default -> UiTokens.SETTINGS_ROW_H;
         };
@@ -394,11 +394,6 @@ public final class SettingsSectionPage {
         } else if (ACTION_TELEPORT_MODE.equals(row.actionId())) {
             String mode = AtomChatConfig.get().teleportCommandMode;
             subtitle = tr("atomchat.settings.chat.teleport." + (mode == null ? "auto" : mode));
-            verb = tr("atomchat.settings.action.cycle");
-        } else if (ACTION_THEME.equals(row.actionId())) {
-            String theme = AtomChatConfig.get().themeName;
-            subtitle = tr("atomchat.settings.theme."
-                    + (theme == null || theme.isBlank() ? "none" : theme));
             verb = tr("atomchat.settings.action.cycle");
         } else if (ACTION_HISTORY_CLEAR.equals(row.actionId())) {
             subtitle = tr(AtomChatConfig.get().chatHistoryEnabled
@@ -536,9 +531,10 @@ public final class SettingsSectionPage {
 
     private List<Row> appearanceRows() {
         List<Row> rows = new ArrayList<>();
+        // Theme strip first — one tap to a whole new look.
+        rows.add(Row.ofThemes());
         addGroup(rows, groupKey(SettingsSection.APPEARANCE), () -> {
             addSwitches(rows, SettingsSection.APPEARANCE, "blur", "outline", "motion");
-            rows.add(Row.ofAction(ACTION_THEME, themeItem()));
             rows.add(Row.ofAction(ACTION_WALLPAPER_PICK, wallpaperPickItem()));
             if (WallpaperStore.isSet()) {
                 rows.add(Row.ofAction(ACTION_WALLPAPER_CLEAR, wallpaperClearItem()));
@@ -547,18 +543,10 @@ public final class SettingsSectionPage {
         addGroup(rows, LABEL_ADJUST, () ->
                 addSliders(rows, SettingsSection.APPEARANCE,
                         "opacity", "width", "scale", "cardtint"));
-        addGroup(rows, LABEL_BUBBLE_COLORS, () -> {
+        // Everything else: the full colour palette, folded away by default.
+        addGroup(rows, LABEL_APPEARANCE_ADVANCED, () -> {
             for (SettingsColor color : SettingsCatalog.colors(SettingsSection.APPEARANCE)) {
-                if ("bubble".equals(color.group())) {
-                    rows.add(Row.ofColor(color));
-                }
-            }
-        });
-        addGroup(rows, LABEL_UI_COLORS, () -> {
-            for (SettingsColor color : SettingsCatalog.colors(SettingsSection.APPEARANCE)) {
-                if ("ui".equals(color.group())) {
-                    rows.add(Row.ofColor(color));
-                }
+                rows.add(Row.ofColor(color));
             }
         });
         return rows;
@@ -732,6 +720,7 @@ public final class SettingsSectionPage {
             case SWITCH -> drawSwitch(canvas, row, rect, accent, dtMs);
             case SLIDER -> drawSlider(canvas, row, rect, accent);
             case COLOR -> drawColor(canvas, row, rect);
+            case THEMES -> drawThemes(canvas, rect);
             case INFO -> drawInfo(canvas, row, rect);
             case BLOCKED -> drawBlocked(canvas, row, rect, hover, buttonFont);
             case ACTION -> drawAction(canvas, row, rect, hover);
@@ -747,6 +736,79 @@ public final class SettingsSectionPage {
 
     private static float swatchX(UiLayout.Rect rect, int index) {
         return rect.x() + UiTokens.SETTINGS_ROW_PAD + UiTokens.s(9) + index * UiTokens.s(26);
+    }
+
+    /**
+     * Theme strip: title + current-preset name on the caption line, then the
+     * seven dots — frosted, then the six colour presets — each filled with its
+     * own accent so the row previews every palette at a glance. The active
+     * dot wears a ring in the interface text colour (white vanishes on the
+     * light palettes' white cards).
+     */
+    private void drawThemes(Canvas canvas, UiLayout.Rect rect) {
+        Font titleFont = FontManager.font(UiTokens.SETTINGS_TILE_TITLE);
+        Font valueFont = FontManager.font(UiTokens.SETTINGS_TILE_SUB);
+        String currentId = AtomChatConfig.get().themeName;
+        if (currentId == null) {
+            currentId = "";
+        }
+
+        SkiaFontRenderer.drawText(canvas, titleFont,
+                tr("atomchat.settings.appearance.theme"),
+                rect.x() + UiTokens.SETTINGS_ROW_PAD,
+                SkiaFontRenderer.centerBaselineY(titleFont, rect.y() + s(18)),
+                textPrimary());
+        String currentKey;
+        if (currentId.isEmpty() || ThemeService.FROSTED.equals(currentId)) {
+            currentKey = "atomchat.settings.theme.frosted";
+        } else if (ThemeService.byId(currentId) != null) {
+            currentKey = "atomchat.settings.theme." + currentId;
+        } else if (ThemeService.MODERN.equals(currentId)) {
+            currentKey = "atomchat.settings.theme.modern";
+        } else {
+            currentKey = "atomchat.settings.theme.custom";
+        }
+        SkiaFontRenderer.drawTextRight(canvas, valueFont, tr(currentKey),
+                rect.right() - UiTokens.SETTINGS_ROW_PAD, rect.y() + s(18),
+                sec(255));
+
+        float r = UiTokens.s(10);
+        float cy = swatchCy(rect);
+        boolean frostedActive = currentId.isEmpty() || ThemeService.FROSTED.equals(currentId);
+        drawThemeDot(canvas, swatchX(rect, 0), cy, r, ThemeService.FROSTED_ACCENT, frostedActive);
+        ThemeService.Preset[] presets = ThemeService.presets();
+        for (int i = 0; i < presets.length; i++) {
+            drawThemeDot(canvas, swatchX(rect, i + 1), cy, r,
+                    presets[i].accent(), presets[i].id().equals(currentId));
+        }
+    }
+
+    /** One theme dot with the same selection-ring language as the colour rows. */
+    private void drawThemeDot(Canvas canvas, float cx, float cy, float r,
+                              int color, boolean selected) {
+        SkiaDraw.drawRoundedRect(canvas, cx - r, cy - r, 2.0F * r, 2.0F * r, r, color);
+        if (selected) {
+            try (Paint ring = new Paint().setColor(textPrimary())
+                    .setMode(PaintMode.STROKE).setStrokeWidth(s(2)).setAntiAlias(true)) {
+                canvas.drawOval(io.github.humbleui.types.Rect.makeXYWH(
+                        cx - r - s(3), cy - r - s(3), 2.0F * (r + s(3)), 2.0F * (r + s(3))), ring);
+            }
+        }
+    }
+
+    /** Index of the theme dot under the pointer, or -1. Geometry matches the
+     *  renderer (same swatch strip); 0 = frosted, 1..6 = colour presets. */
+    private int themeDotAt(UiLayout.Rect rect, float vmx, float vmy) {
+        float cy = swatchCy(rect);
+        if (vmy < cy - UiTokens.s(16) || vmy > cy + UiTokens.s(16)) {
+            return -1;
+        }
+        for (int i = 0; i < THEME_DOT_COUNT; i++) {
+            if (Math.abs(vmx - swatchX(rect, i)) <= UiTokens.s(13)) {
+                return i;
+            }
+        }
+        return -1;
     }
 
     private void drawColor(Canvas canvas, Row row, UiLayout.Rect rect) {
@@ -1218,6 +1280,9 @@ public final class SettingsSectionPage {
         Font buttonFont = FontManager.font(UiTokens.FONT_QUOTE);
         for (int i = 0; i < rows.size(); i++) {
             UiLayout.Rect rect = rowRect(rows, i, scrollY, layout);
+            if (rows.get(i).kind() == RowKind.THEMES) {
+                pressedThemeDot = themeDotAt(rect, vmx, vmy);
+            }
             RowHit hit = new RowHit(rows.get(i), i, rect.x(), rect.y(), rect.w(), rect.h(),
                     actionX(rows.get(i), rect, buttonFont));
             if (hit.contains(vmx, vmy)) {
@@ -1495,6 +1560,21 @@ public final class SettingsSectionPage {
                 if (hit.row().player() != null) {
                     BlockList.setBlocked(hit.row().player(), false);
                 }
+            }
+            case THEMES -> {
+                // pressedThemeDot was computed by hit() for this same click.
+                int dot = pressedThemeDot;
+                pressedThemeDot = -1;
+                if (dot < 0) {
+                    return;
+                }
+                AtomChatConfig config = AtomChatConfig.get();
+                if (dot == 0) {
+                    ThemeService.apply(config, ThemeService.FROSTED);
+                } else {
+                    ThemeService.apply(config, ThemeService.presets()[dot - 1].id());
+                }
+                AtomChatConfig.save(config);
             }
             default -> {
             }

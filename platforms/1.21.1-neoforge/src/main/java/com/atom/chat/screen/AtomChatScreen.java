@@ -49,7 +49,6 @@ import com.atom.chat.render.SkiaGraphics;
 import com.atom.chat.settings.SettingsHomePage;
 import com.atom.chat.settings.SettingsSection;
 import com.atom.chat.settings.SettingsSectionPage;
-import com.atom.chat.theme.ThemeService;
 import com.atom.chat.ui.Animations;
 import com.atom.chat.ui.BottomTabBar;
 import com.atom.chat.ui.ScrollController;
@@ -215,12 +214,6 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
                 default -> "tp";
             };
             TeleportCommands.reset();
-            AtomChatConfig.save(cfg);
-        } else if ("theme_cycle".equals(actionId)) {
-            // Snapshot application: clicking applies the other preset in place.
-            AtomChatConfig cfg = AtomChatConfig.get();
-            boolean onModern = ThemeService.MODERN.equals(cfg.themeName);
-            ThemeService.apply(cfg, onModern ? ThemeService.FROSTED : ThemeService.MODERN);
             AtomChatConfig.save(cfg);
         } else if ("history_clear".equals(actionId)) {
             // Wipes the current session (and the world's saved file when
