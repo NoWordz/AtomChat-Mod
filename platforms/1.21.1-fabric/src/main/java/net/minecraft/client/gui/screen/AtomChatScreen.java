@@ -47,7 +47,6 @@ import com.atom.chat.render.SkiaFontRenderer;
 import com.atom.chat.render.SkiaGraphics;
 import com.atom.chat.settings.SettingsHomePage;
 import com.atom.chat.settings.SettingsSection;
-import com.atom.chat.settings.SettingsCategoryPage;
 import com.atom.chat.settings.SettingsSectionPage;
 import com.atom.chat.ui.Animations;
 import com.atom.chat.ui.BottomTabBar;
@@ -181,7 +180,10 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
     }, avatarStore);
     private final SettingsHomePage settingsHomePage = new SettingsHomePage();
     private final SettingsSectionPage settingsSectionPage = new SettingsSectionPage();
-    private final SettingsCategoryPage settingsCategoryPage = new SettingsCategoryPage();
+    /** Per-chip scroll memory ("section:chip" -> offset); the detail
+     *  controller is shared across chips. */
+    private final java.util.HashMap<String, Float> chipScroll = new java.util.HashMap<>();
+    private String chipScrollKey = "";
 
     {
         // Action cards (pick/clear wallpaper) need the shell's file picker,
@@ -697,19 +699,13 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
         pushNav(NavPage.settingsSection(section));
     }
 
-    /** Pushes the category menu — the settings home tile routes through it. */
-    public void openSettingsCategory() {
-        pushNav(NavPage.of(AppPage.SETTINGS_CATEGORY));
-    }
-
     private void pushNav(NavPage page) {
         saveCurrentDraft();
         AppPage fromPage = topPage();
         if (page.page() == AppPage.WORLD_CHAT) {
             worldScroll.reset();
         }
-        if (page.page() == AppPage.SETTINGS_SECTION
-                || page.page() == AppPage.SETTINGS_CATEGORY) {
+        if (page.page() == AppPage.SETTINGS_SECTION) {
             resetSettingsUi();
         }
         if (page.page() == AppPage.PROFILE_DETAIL) {
@@ -799,7 +795,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
         pageNavTo = to;
         pageNavPopPending = popPending;
         pageNavAnim.setValue(0.0F);
-        pageNavAnim.animateTo(Animations.ms(UiMotion.TAB_MS), 1.0F);
+        pageNavAnim.animateTo(Animations.ms(UiMotion.PAGE_NAV_MS), 1.0F);
         // Pushes enter with the scale+fade; pops keep the slide-out.
         if (!popPending) {
             startPageEnter();
@@ -875,7 +871,22 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
     private void resetSettingsUi() {
         detailScroll.reset();
         settingsSectionPage.reset();
-        settingsCategoryPage.reset();
+        chipScroll.clear();
+        chipScrollKey = "";
+    }
+
+    /** Saves the outgoing chip's scroll offset and restores the incoming one,
+     *  so each chip of a section page remembers where the user left it. */
+    private void syncChipScroll(SettingsSection section) {
+        String key = section.id() + ':' + settingsSectionPage.activeChipIndex(section);
+        if (!key.equals(chipScrollKey)) {
+            if (!chipScrollKey.isEmpty()) {
+                chipScroll.put(chipScrollKey, detailScroll.getScrollY());
+            }
+            chipScrollKey = key;
+            Float saved = chipScroll.get(key);
+            detailScroll.scrollTo(saved == null ? 0.0F : saved, false);
+        }
     }
 
     private float pageNavDx(float travel) {
@@ -1883,7 +1894,6 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
                 // opaque saveLayer.
                 boolean enter = pushing && !pageNavPopPending
                         && (moving.page() == AppPage.SETTINGS_SECTION
-                        || moving.page() == AppPage.SETTINGS_CATEGORY
                         || moving.page() == AppPage.PROFILE_DETAIL);
                 // On an enter the root stays put beneath the scaling page.
                 float rootDx = enter ? 0.0F
@@ -1913,13 +1923,8 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
                 // A settings sub-page has no composer tail to draw into the
                 // open layer, so it renders and closes its own layer here. The
                 // chat page leaves the layer open for the shared tail below.
-                if (moving.page() == AppPage.SETTINGS_SECTION
-                        || moving.page() == AppPage.SETTINGS_CATEGORY) {
-                    if (moving.page() == AppPage.SETTINGS_CATEGORY) {
-                        drawSettingsCategory(canvas, mouseX, mouseY);
-                    } else {
-                        drawSettingsSection(canvas, mouseX, mouseY, moving.section());
-                    }
+                if (moving.page() == AppPage.SETTINGS_SECTION) {
+                    drawSettingsSection(canvas, mouseX, mouseY, moving.section());
                     if (enterLayer != null) {
                         canvas.restore();
                         enterLayer.close();
@@ -1953,13 +1958,8 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
             }
         }
         // A settled settings sub-page: header + list, nothing else.
-        if (!navRunning && (topPage() == AppPage.SETTINGS_SECTION
-                || topPage() == AppPage.SETTINGS_CATEGORY)) {
-            if (topPage() == AppPage.SETTINGS_CATEGORY) {
-                drawSettingsCategory(canvas, mouseX, mouseY);
-            } else {
-                drawSettingsSection(canvas, mouseX, mouseY, topNav().section());
-            }
+        if (!navRunning && topPage() == AppPage.SETTINGS_SECTION) {
+            drawSettingsSection(canvas, mouseX, mouseY, topNav().section());
             drawPushedHeader(canvas, vmx, vmy, topNav());
             drawBezel(canvas, detailLayout());
             return;
@@ -2177,14 +2177,12 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
 
     /** Layout and scroll controller of whatever list the top page is showing. */
     private UiLayout listLayout() {
-        return topPage() == AppPage.SETTINGS_SECTION || topPage() == AppPage.SETTINGS_CATEGORY
-                || topPage() == AppPage.PROFILE_DETAIL
+        return topPage() == AppPage.SETTINGS_SECTION || topPage() == AppPage.PROFILE_DETAIL
                 ? detailLayout() : rootLayout();
     }
 
     private ScrollController listScroll() {
-        return topPage() == AppPage.SETTINGS_SECTION || topPage() == AppPage.SETTINGS_CATEGORY
-                || topPage() == AppPage.PROFILE_DETAIL
+        return topPage() == AppPage.SETTINGS_SECTION || topPage() == AppPage.PROFILE_DETAIL
                 ? detailScroll : rootScroll;
     }
 
@@ -2210,6 +2208,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
         float vmx = toVirtualX(mouseX);
         float vmy = toVirtualY(mouseY);
         detailScroll.setContent(settingsSectionPage.measureContent(layout, section), layout.list.h());
+        syncChipScroll(section);
         detailScroll.updateAnimation(System.currentTimeMillis());
         settingsSectionPage.render(canvas, layout, section, vmx, vmy, detailScroll.getScrollY(), accent());
         drawScrollbar(canvas, layout, vmx, vmy, detailScroll);
@@ -2218,24 +2217,6 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
         // active-but-unrendered modal eats every click and freezes the screen.
         imageCropper.render(canvas, layout.rect(), vmx, vmy);
         colorPicker.render(canvas, layout.rect(), vmx, vmy, accent());
-    }
-
-    /** Body of the pushed settings category menu: scroll state, cards, bar. */
-    private void drawSettingsCategory(Canvas canvas, int mouseX, int mouseY) {
-        drawSettingsCategoryBody(canvas, toVirtualX(mouseX), toVirtualY(mouseY));
-    }
-
-    /**
-     * Core category-menu renderer taking already-virtual pointer coords, so
-     * the root-page slot ({@link #drawRootPageBody}) can reuse it without
-     * double-converting the mouse.
-     */
-    private void drawSettingsCategoryBody(Canvas canvas, float vmx, float vmy) {
-        UiLayout layout = detailLayout();
-        detailScroll.setContent(settingsCategoryPage.measureContent(layout), layout.list.h());
-        detailScroll.updateAnimation(System.currentTimeMillis());
-        settingsCategoryPage.render(canvas, layout, vmx, vmy, detailScroll.getScrollY());
-        drawScrollbar(canvas, layout, vmx, vmy, detailScroll);
     }
 
     /** Body of a pushed profile detail page (another player's profile). */
@@ -2318,10 +2299,6 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
                 case PROFILE -> profilePage.render(canvas, layout, rootMouseX, rootMouseY, rootScroll.getScrollY());
                 case SETTINGS -> settingsHomePage.render(canvas, layout, rootMouseX, rootMouseY,
                         rootScroll.getScrollY());
-                // The root slot must not sit empty while a pushed settings
-                // category page fades in (or a pop back to it slides): paint
-                // the real menu beneath the moving layer.
-                case SETTINGS_CATEGORY -> drawSettingsCategoryBody(canvas, rootMouseX, rootMouseY);
                 case WORLD_CHAT, PRIVATE_CHAT ->
                         throw new IllegalStateException("Root page body cannot render chat/detail pages");
             }
@@ -2364,7 +2341,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
             case CHAT_LIST -> 0;
             case PROFILE -> 1;
             case SETTINGS -> 2;
-            case WORLD_CHAT, PRIVATE_CHAT, SETTINGS_SECTION, SETTINGS_CATEGORY, PROFILE_DETAIL ->
+            case WORLD_CHAT, PRIVATE_CHAT, SETTINGS_SECTION, PROFILE_DETAIL ->
                     throw new IllegalStateException("Pushed pages have no bottom tab index");
         };
     }
@@ -2401,7 +2378,6 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
             case PRIVATE_CHAT -> activePrivateTarget() != null
                     ? activePrivateTarget().realName() : tr("atomchat.channel.private");
             case SETTINGS_SECTION -> tr("atomchat.tab.settings");
-            case SETTINGS_CATEGORY -> tr("atomchat.tab.settings");
             case PROFILE_DETAIL -> tr("atomchat.page.profile.title");
         };
     }
@@ -3813,27 +3789,18 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
                 pageScroll.beginDrag(my);
                 return true;
             }
-            // The pushed settings category menu: back arrow, then cards.
-            if (topPage() == AppPage.SETTINGS_CATEGORY) {
-                if (button == 0 && isBackButtonHit(mx, my)) {
-                    popPage();
-                    return true;
-                }
-                if (button == 0) {
-                    int card = settingsCategoryPage.cardAt(mx, my, pageLayout,
-                            pageScroll.getScrollY());
-                    if (card >= 0) {
-                        settingsCategoryPage.setPressedCard(card);
-                        openSettingsSection(settingsCategoryPage.sectionAt(card));
-                    }
-                }
-                return true;
-            }
             // A pushed settings sub-page: back arrow, then switch rows.
             if (topPage() == AppPage.SETTINGS_SECTION) {
                 if (button == 0 && isBackButtonHit(mx, my)) {
                     popPage();
                     return true;
+                }
+                if (button == 0) {
+                    int chip = settingsSectionPage.chipAt(topNav().section(), mx, my, pageLayout);
+                    if (chip >= 0) {
+                        settingsSectionPage.selectChip(topNav().section(), chip);
+                        return true;
+                    }
                 }
                 if (button == 0 && settingsSectionPage.themesPress(mx, my, pageLayout,
                         topNav().section(), pageScroll.getScrollY())) {
@@ -3912,9 +3879,9 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
             if (topPage() == AppPage.SETTINGS && button == 0) {
                 SettingsSection section = settingsHomePage.hit(mx, my, pageLayout, pageScroll.getScrollY());
                 if (section != null) {
-                    // The tile no longer jumps straight into a section: the
-                    // category menu in between lists every destination.
-                    openSettingsCategory();
+                    // Tiles open their section directly; the section page
+                    // groups its rows into in-page chips instead.
+                    openSettingsSection(section);
                     return true;
                 }
             }
@@ -3985,7 +3952,6 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
             if (isWorldChatPage()) {
                 return false;
             }
-            settingsCategoryPage.setPressedCard(-1);
             settingsSectionPage.endThemeStrip();
             settingsSectionPage.endSliderDrag();
             settingsSectionPage.setPressedRow(-1);

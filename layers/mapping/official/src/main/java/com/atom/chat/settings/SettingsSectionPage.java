@@ -132,26 +132,12 @@ public final class SettingsSectionPage {
     private static final String LABEL_MOD_INFO = "atomchat.settings.about.modinfo";
     private static final String LABEL_ADVANCED = "atomchat.settings.group.advanced";
     private static final String LABEL_APPEARANCE_ADVANCED = "atomchat.settings.group.advancedcolors";
-    private static final String LABEL_ADJUST = "atomchat.settings.group.adjust";
-    private static final String LABEL_CHAT_MESSAGES = "atomchat.settings.group.chat.messages";
-    private static final String LABEL_CHAT_HISTORY = "atomchat.settings.group.chat.history";
-    private static final String LABEL_CHAT_NOTIFY = "atomchat.settings.group.chat.notify";
-    private static final String LABEL_CHAT_TELEPORT = "atomchat.settings.group.chat.teleport";
     private static final String ACTION_WALLPAPER_PICK = "wallpaper_pick";
     private static final String ACTION_WALLPAPER_CLEAR = "wallpaper_clear";
     private static final String ACTION_TELEPORT_MODE = "teleport_mode";
     private static final String ACTION_HISTORY_CLEAR = "history_clear";
     private static final String ACTION_CACHE_CLEAR = "cache_clear";
     private static final String ACTION_TEST_SOUND = "test_sound";
-
-    /** Per-section heading for the leading switch/action group. */
-    private static String groupKey(SettingsSection section) {
-        return switch (section) {
-            case APPEARANCE, PRIVACY -> "atomchat.settings.group.display";
-            case CHAT -> "atomchat.settings.group.behaviour";
-            case ABOUT -> LABEL_MOD_INFO;
-        };
-    }
 
     /** "Custom wallpaper" card: picking an image copies it into the config dir. */
     private SettingsItem wallpaperPickItem() {
@@ -211,6 +197,123 @@ public final class SettingsSectionPage {
         });
     }
 
+    /**
+     * In-page section tabs: the segmented chip row at the top of the sections
+     * whose full row list is too tall to scan (appearance, chat). Each chip
+     * shows one natural group; switching crossfades the two row sets over
+     * {@link #CHIP_SWITCH_MS} with a 3px micro-slide. Privacy and about stay
+     * single-page (no chips) - their lists fit one screen.
+     */
+    public record SectionChip(String id, String labelKey) {
+    }
+
+    private static final List<SectionChip> APPEARANCE_CHIPS = List.of(
+            new SectionChip("theme", "atomchat.settings.appearance.theme"),
+            new SectionChip("display", "atomchat.settings.group.display"),
+            new SectionChip("adjust", "atomchat.settings.group.adjust"));
+    private static final List<SectionChip> CHAT_CHIPS = List.of(
+            new SectionChip("messages", "atomchat.settings.group.chat.messages"),
+            new SectionChip("history", "atomchat.settings.group.chat.history"),
+            new SectionChip("notify", "atomchat.settings.group.chat.notify"),
+            new SectionChip("teleport", "atomchat.settings.group.chat.teleport"));
+    /** Crossfade duration of a chip switch. */
+    private static final long CHIP_SWITCH_MS = 110L;
+    /** Height of the reserved chip band above the scrolling rows. */
+    private static final float CHIP_BAR_H = UiTokens.s(44);
+    private static final float CHIP_PILL_H = UiTokens.s(26);
+    private static final float CHIP_PILL_GAP = UiTokens.s(8);
+    private static final float CHIP_PILL_PAD = UiTokens.s(10);
+
+    /** Active chip index per section id (chip-less sections never read it). */
+    private final Map<String, Integer> activeChip = new HashMap<>();
+    /** Chip id a switch crossfade is coming from; null when settled. */
+    private String chipSwitchFromId;
+    private long chipSwitchAtMs;
+    /** Hover row of the interactive (incoming) layer, fed to rowHover decay. */
+    private int lastInteractiveHover = -1;
+
+    /** The chip row of a section, or an empty list when the section has none. */
+    public List<SectionChip> chips(SettingsSection section) {
+        return switch (section) {
+            case APPEARANCE -> APPEARANCE_CHIPS;
+            case CHAT -> CHAT_CHIPS;
+            default -> List.of();
+        };
+    }
+
+    /** Index of the chip whose rows are showing. */
+    public int activeChipIndex(SettingsSection section) {
+        List<SectionChip> sectionChips = chips(section);
+        if (sectionChips.isEmpty()) {
+            return -1;
+        }
+        int index = activeChip.getOrDefault(section.id(), 0);
+        return Math.max(0, Math.min(index, sectionChips.size() - 1));
+    }
+
+    private String activeChipId(SettingsSection section) {
+        List<SectionChip> sectionChips = chips(section);
+        return sectionChips.isEmpty() ? ""
+                : sectionChips.get(activeChipIndex(section)).id();
+    }
+
+    /** Reserved band height above the rows (zero for chip-less sections). */
+    public float chipBarHeight(SettingsSection section) {
+        return chips(section).isEmpty() ? 0.0F : CHIP_BAR_H;
+    }
+
+    /** Chip index under the pointer, or -1. Geometry mirrors {@link #drawChipBar}. */
+    public int chipAt(SettingsSection section, float vmx, float vmy, UiLayout layout) {
+        List<SectionChip> sectionChips = chips(section);
+        if (sectionChips.isEmpty()) {
+            return -1;
+        }
+        float pillY = layout.list.y() + (CHIP_BAR_H - CHIP_PILL_H) / 2.0F;
+        if (vmy < pillY || vmy > pillY + CHIP_PILL_H) {
+            return -1;
+        }
+        Font font = FontManager.font(UiTokens.SETTINGS_TILE_SUB);
+        float x = layout.list.x() + UiTokens.SETTINGS_ROW_PAD;
+        for (int i = 0; i < sectionChips.size(); i++) {
+            float w = chipWidth(font, sectionChips.get(i));
+            if (vmx >= x && vmx <= x + w) {
+                return i;
+            }
+            x += w + CHIP_PILL_GAP;
+        }
+        return -1;
+    }
+
+    private static float chipWidth(Font font, SectionChip chip) {
+        return SkiaFontRenderer.getStringWidth(font, tr(chip.labelKey()))
+                + CHIP_PILL_PAD * 2.0F;
+    }
+
+    /**
+     * Switches the visible chip and arms the crossfade. No-op on the active
+     * chip; with decorative motion off the fade is gated at draw time, so the
+     * rows swap instantly.
+     */
+    public void selectChip(SettingsSection section, int index) {
+        List<SectionChip> sectionChips = chips(section);
+        if (index < 0 || index >= sectionChips.size()
+                || index == activeChipIndex(section)) {
+            return;
+        }
+        chipSwitchFromId = activeChipId(section);
+        chipSwitchAtMs = System.currentTimeMillis();
+        activeChip.put(section.id(), index);
+    }
+
+    /** Rows of one chip by id (the crossfade's outgoing layer). */
+    private List<Row> rowsForChip(SettingsSection section, String chipId) {
+        return switch (section) {
+            case APPEARANCE -> appearanceRows(chipId);
+            case CHAT -> chatRows(chipId);
+            default -> rows(section);
+        };
+    }
+
     /** Two-step confirm for destructive actions: first tap arms a red
      *  "确定清除？", second tap within the window really fires. Guards against
      *  accidental wipes; any click that is not the armed button disarms. */
@@ -249,9 +352,6 @@ public final class SettingsSectionPage {
      * child rows when collapsed.
      */
     private static String foldableGroup(String labelKey) {
-        if (LABEL_ADJUST.equals(labelKey)) {
-            return "adjust";
-        }
         if (LABEL_ADVANCED.equals(labelKey)) {
             return "advanced";
         }
@@ -266,21 +366,6 @@ public final class SettingsSectionPage {
         }
         if (LABEL_THIRD_PARTY.equals(labelKey)) {
             return "thirdparty";
-        }
-        if ("atomchat.settings.group.display".equals(labelKey)) {
-            return "display";
-        }
-        if (LABEL_CHAT_MESSAGES.equals(labelKey)) {
-            return "chat_messages";
-        }
-        if (LABEL_CHAT_HISTORY.equals(labelKey)) {
-            return "chat_history";
-        }
-        if (LABEL_CHAT_TELEPORT.equals(labelKey)) {
-            return "chat_teleport";
-        }
-        if (LABEL_CHAT_NOTIFY.equals(labelKey)) {
-            return "chat_notify";
         }
         return null;
     }
@@ -501,11 +586,11 @@ public final class SettingsSectionPage {
         return SkiaFontRenderer.getHeight(font);
     }
 
-    /** Rows in display order for the given section. */
+    /** Rows in display order for the given section (active chip applied). */
     public List<Row> rows(SettingsSection section) {
         return switch (section) {
-            case CHAT -> chatRows();
-            case APPEARANCE -> appearanceRows();
+            case CHAT -> chatRows(activeChipId(section));
+            case APPEARANCE -> appearanceRows(activeChipId(section));
             case PRIVACY -> privacyRows();
             case ABOUT -> aboutRows();
         };
@@ -544,59 +629,66 @@ public final class SettingsSectionPage {
         }
     }
 
-    private List<Row> chatRows() {
+    /** One chip of the chat page: the rows of that group, no group label
+     *  (the chip itself names the group). */
+    private List<Row> chatRows(String chip) {
         List<Row> rows = new ArrayList<>();
-        addGroup(rows, LABEL_CHAT_MESSAGES, () -> {
-            addSwitches(rows, SettingsSection.CHAT,
-                    "entry", "poke", "images", "anti_spam", "compact_messages");
-            addSliders(rows, SettingsSection.CHAT, "timestamp");
-        });
-        addGroup(rows, LABEL_CHAT_HISTORY, () -> {
-            addSwitches(rows, SettingsSection.CHAT, "history");
-            addSliders(rows, SettingsSection.CHAT, "history_retention");
-            rows.add(Row.ofAction(ACTION_HISTORY_CLEAR, historyClearItem()));
-        });
-        addGroup(rows, LABEL_CHAT_NOTIFY, () -> {
-            addSwitches(rows, SettingsSection.CHAT,
-                    "mention_banner", "mention_sound", "whisper_banner", "whisper_sound");
-            addSliders(rows, SettingsSection.CHAT, "notify_volume");
-            rows.add(Row.ofAction(ACTION_TEST_SOUND, testSoundItem()));
-        });
-        addGroup(rows, LABEL_CHAT_TELEPORT, () ->
-                rows.add(Row.ofAction(ACTION_TELEPORT_MODE, teleportModeItem())));
+        switch (chip == null ? "messages" : chip) {
+            case "history" -> {
+                addSwitches(rows, SettingsSection.CHAT, "history");
+                addSliders(rows, SettingsSection.CHAT, "history_retention");
+                rows.add(Row.ofAction(ACTION_HISTORY_CLEAR, historyClearItem()));
+            }
+            case "notify" -> {
+                addSwitches(rows, SettingsSection.CHAT,
+                        "mention_banner", "mention_sound", "whisper_banner", "whisper_sound");
+                addSliders(rows, SettingsSection.CHAT, "notify_volume");
+                rows.add(Row.ofAction(ACTION_TEST_SOUND, testSoundItem()));
+            }
+            case "teleport" ->
+                    rows.add(Row.ofAction(ACTION_TELEPORT_MODE, teleportModeItem()));
+            default -> {
+                addSwitches(rows, SettingsSection.CHAT,
+                        "entry", "poke", "images", "anti_spam", "compact_messages");
+                addSliders(rows, SettingsSection.CHAT, "timestamp");
+            }
+        }
         return rows;
     }
 
-    private List<Row> appearanceRows() {
+    /** One chip of the appearance page. The theme chip carries the preview
+     *  strip, the corner knob and the folded colour palette; display holds the
+     *  chrome switches plus the wallpaper cards; adjust the four sliders. */
+    private List<Row> appearanceRows(String chip) {
         List<Row> rows = new ArrayList<>();
-        // Theme strip first — one tap to a whole new look.
-        rows.add(Row.ofThemes());
-        addGroup(rows, groupKey(SettingsSection.APPEARANCE), () -> {
-            addSwitches(rows, SettingsSection.APPEARANCE, "blur", "outline", "motion");
-            // Corner style is an independent knob now — no preset writes it —
-            // so the segmented control lives in the display group beside the
-            // other chrome switches.
-            rows.add(Row.ofCorners());
-            rows.add(Row.ofAction(ACTION_WALLPAPER_PICK, wallpaperPickItem()));
-            if (WallpaperStore.isSet()) {
-                rows.add(Row.ofAction(ACTION_WALLPAPER_CLEAR, wallpaperClearItem()));
+        switch (chip == null ? "theme" : chip) {
+            case "display" -> {
+                addSwitches(rows, SettingsSection.APPEARANCE, "blur", "outline", "motion");
+                rows.add(Row.ofAction(ACTION_WALLPAPER_PICK, wallpaperPickItem()));
+                if (WallpaperStore.isSet()) {
+                    rows.add(Row.ofAction(ACTION_WALLPAPER_CLEAR, wallpaperClearItem()));
+                }
             }
-        });
-        addGroup(rows, LABEL_ADJUST, () ->
-                addSliders(rows, SettingsSection.APPEARANCE,
-                        "opacity", "width", "scale", "cardtint"));
-        // Everything else: the full colour palette, folded away by default.
-        addGroup(rows, LABEL_APPEARANCE_ADVANCED, () -> {
-            for (SettingsColor color : SettingsCatalog.colors(SettingsSection.APPEARANCE)) {
-                rows.add(Row.ofColor(color));
+            case "adjust" -> addSliders(rows, SettingsSection.APPEARANCE,
+                    "opacity", "width", "scale", "cardtint");
+            default -> {
+                // Theme strip first - one tap to a whole new look.
+                rows.add(Row.ofThemes());
+                rows.add(Row.ofCorners());
+                // The full colour palette, folded away by default.
+                addGroup(rows, LABEL_APPEARANCE_ADVANCED, () -> {
+                    for (SettingsColor color : SettingsCatalog.colors(SettingsSection.APPEARANCE)) {
+                        rows.add(Row.ofColor(color));
+                    }
+                });
             }
-        });
+        }
         return rows;
     }
 
     private List<Row> privacyRows() {
         List<Row> rows = new ArrayList<>();
-        addGroup(rows, groupKey(SettingsSection.PRIVACY), () ->
+        addGroup(rows, "atomchat.settings.group.display", () ->
                 addSwitches(rows, SettingsSection.PRIVACY, "hideBlocked"));
         addGroup(rows, LABEL_BLOCKED, () -> {
             for (PlayerRef player : blockedPlayers()) {
@@ -645,9 +737,9 @@ public final class SettingsSectionPage {
     public float measureContent(UiLayout layout, SettingsSection section) {
         List<Row> rows = rows(section);
         if (rows.isEmpty()) {
-            return UiTokens.ROOT_CONTENT_GAP;
+            return UiTokens.ROOT_CONTENT_GAP + chipBarHeight(section);
         }
-        float total = UiTokens.ROOT_CONTENT_GAP;
+        float total = UiTokens.ROOT_CONTENT_GAP + chipBarHeight(section);
         for (Row row : rows) {
             total += rowHeight(row, layout);
         }
@@ -655,8 +747,14 @@ public final class SettingsSectionPage {
         return total;
     }
 
-    private UiLayout.Rect rowRect(List<Row> rows, int index, float scrollY, UiLayout layout) {
-        float y = layout.list.y() + UiTokens.ROOT_CONTENT_GAP - scrollY;
+    /** Top edge of the scrollable rows: content gap plus the chip band. */
+    private float contentTop(UiLayout layout, SettingsSection section) {
+        return layout.list.y() + UiTokens.ROOT_CONTENT_GAP + chipBarHeight(section);
+    }
+
+    private UiLayout.Rect rowRect(SettingsSection section, List<Row> rows, int index,
+                                  float scrollY, UiLayout layout) {
+        float y = contentTop(layout, section) - scrollY;
         for (int i = 0; i < index; i++) {
             y += rowHeight(rows.get(i), layout) + UiTokens.SETTINGS_ROW_GAP;
         }
@@ -687,24 +785,94 @@ public final class SettingsSectionPage {
         float dt = Math.min(50.0F, Math.max(1.0F, now - lastFrameMs));
         lastFrameMs = now;
         currentSectionForSettle = section;
-
-        List<Row> rows = rows(section);
-        Font buttonFont = FontManager.font(UiTokens.FONT_QUOTE);
-        int hovered = -1;
         pointerX = vmx;
         pointerY = vmy;
 
+        List<Row> rows = rows(section);
+        // Chip switch crossfade: the outgoing rows fade out while sliding up
+        // and away, the incoming rows fade in while sliding up into place.
+        boolean chipFading = chipSwitchFromId != null && Animations.enabled()
+                && now - chipSwitchAtMs < CHIP_SWITCH_MS;
+        float t = chipFading
+                ? Math.min(1.0F, (now - chipSwitchAtMs) / (float) CHIP_SWITCH_MS) : 1.0F;
+        if (!chipFading) {
+            chipSwitchFromId = null;
+        }
+
+        float barH = chipBarHeight(section);
         canvas.save();
         try {
-            SkiaDraw.clip(canvas, layout.list.x(), layout.list.y(), layout.list.w(), layout.list.h(), 0.0F);
+            // The chip band owns the top of the list: rows clip below it, so a
+            // scrolled list never draws through the pills.
+            SkiaDraw.clip(canvas, layout.list.x(), layout.list.y() + barH,
+                    layout.list.w(), layout.list.h() - barH, 0.0F);
+            if (chipFading) {
+                drawRows(canvas, layout, section,
+                        rowsForChip(section, chipSwitchFromId), vmx, vmy, scrollY,
+                        accent, dt, 1.0F - t, -t * s(3), false);
+            }
+            drawRows(canvas, layout, section, rows, vmx, vmy, scrollY, accent, dt,
+                    chipFading ? t : 1.0F, chipFading ? (1.0F - t) * s(3) : 0.0F, true);
+        } finally {
+            canvas.restore();
+        }
+
+        if (barH > 0.0F) {
+            drawChipBar(canvas, layout, section, accent);
+        }
+
+        int hovered = lastInteractiveHover;
+        hoveredIndex = hovered;
+        if (hovered >= 0) {
+            rowHover.putIfAbsent(hovered, 0.0F);
+        }
+        for (Integer key : new ArrayList<>(rowHover.keySet())) {
+            float target = key == hovered ? 1.0F : 0.0F;
+            rowHover.put(key, UiMotion.approach(rowHover.get(key), target, dt, UiMotion.HOVER_MS));
+        }
+
+        if (section == SettingsSection.PRIVACY && blockedPlayers().isEmpty()) {
+            drawEmptyBlocked(canvas, layout, section, rows, scrollY);
+        }
+        advanceSettle(now);
+    }
+
+    /**
+     * One chip layer: the row loop. {@code alpha}/{@code dy} carry the chip
+     * switch crossfade; the outgoing layer draws with {@code interactive}
+     * false — it must not advance hover/press state, the pointer already
+     * belongs to the incoming chip.
+     */
+    private void drawRows(Canvas canvas, UiLayout layout, SettingsSection section,
+                          List<Row> rows, float vmx, float vmy, float scrollY,
+                          int accent, float dt, float alpha, float dy, boolean interactive) {
+        if (interactive) {
+            lastInteractiveHover = -1;
+        }
+        if (rows.isEmpty() || alpha <= 0.005F) {
+            return;
+        }
+        Font buttonFont = FontManager.font(UiTokens.FONT_QUOTE);
+        int hovered = -1;
+        canvas.save();
+        Paint layer = null;
+        try {
+            if (alpha < 0.995F) {
+                layer = new Paint().setAlphaf(alpha);
+                canvas.saveLayer(io.github.humbleui.types.Rect.makeXYWH(
+                        layout.list.x(), layout.list.y(), layout.list.w(), layout.list.h()), layer);
+            }
+            canvas.translate(0.0F, dy);
             for (int i = 0; i < rows.size(); i++) {
                 Row row = rows.get(i);
-                UiLayout.Rect rect = rowRect(rows, i, scrollY, layout);
+                UiLayout.Rect rect = rowRect(section, rows, i, scrollY, layout);
                 if (rect.bottom() < layout.list.y() || rect.y() > layout.list.bottom()) {
                     continue;
                 }
-                drawnRowIndex = i;
-                boolean over = row.kind() != RowKind.LABEL
+                if (interactive) {
+                    drawnRowIndex = i;
+                }
+                boolean over = interactive && row.kind() != RowKind.LABEL
                         && vmx >= rect.x() && vmx <= rect.right()
                         && vmy >= rect.y() && vmy <= rect.bottom();
                 if (over) {
@@ -713,8 +881,8 @@ public final class SettingsSectionPage {
                 // Colour rows resolve the pointer to a row-local swatch index
                 // so drawColor can bounce the one under it (-1 = none).
                 if (row.kind() == RowKind.COLOR) {
-                    hoveredSwatch = swatchAt(row.color(), rect, vmx, vmy);
-                    swatchRowIndex = i;
+                    hoveredSwatch = interactive ? swatchAt(row.color(), rect, vmx, vmy) : -1;
+                    swatchRowIndex = interactive ? i : -1;
                 } else {
                     hoveredSwatch = -1;
                     swatchRowIndex = -1;
@@ -722,12 +890,15 @@ public final class SettingsSectionPage {
                 // Draw from the animated value only. Never force it to 1 while
                 // hovered — that is what made the highlight snap in instead of
                 // fading in over the same 90ms the toolbar buttons use.
-                // Rows press-scale around their centre (0.98) and hit-tests
-                // keep using unscaled coordinates, like the message entrance.
+                // Rows press-scale around their centre and hit-tests keep using
+                // unscaled coordinates, like the message entrance.
                 PressScale press = row.kind() == RowKind.LABEL ? null
-                        : rowPress.computeIfAbsent(i, k -> PressScale.row());
+                        : interactive ? rowPress.computeIfAbsent(i, k -> PressScale.row())
+                        : rowPress.get(i);
                 if (press != null) {
-                    press.update(false, i == pressedRow, dt, Animations.enabled());
+                    if (interactive) {
+                        press.update(false, i == pressedRow, dt, Animations.enabled());
+                    }
                     press.begin(canvas, rect.x() + rect.w() / 2.0F, rect.y() + rect.h() / 2.0F);
                 }
                 try {
@@ -740,26 +911,47 @@ public final class SettingsSectionPage {
                 }
             }
         } finally {
+            if (layer != null) {
+                layer.close();
+            }
             canvas.restore();
         }
-
-        hoveredIndex = hovered;
-        if (hovered >= 0) {
-            rowHover.putIfAbsent(hovered, 0.0F);
+        if (interactive) {
+            lastInteractiveHover = hovered;
         }
-        for (Integer key : new ArrayList<>(rowHover.keySet())) {
-            float target = key == hovered ? 1.0F : 0.0F;
-            rowHover.put(key, UiMotion.approach(rowHover.get(key), target, dt, UiMotion.HOVER_MS));
-        }
-
-        if (section == SettingsSection.PRIVACY && blockedPlayers().isEmpty()) {
-            drawEmptyBlocked(canvas, layout, rows, scrollY);
-        }
-        advanceSettle(now);
     }
 
-    private void drawEmptyBlocked(Canvas canvas, UiLayout layout, List<Row> rows, float scrollY) {
-        UiLayout.Rect last = rowRect(rows, rows.size() - 1, scrollY, layout);
+    /** The segmented chip row: one pill per group, the active one tinted and
+     *  traced by the accent, same language as the old corner chips. */
+    private void drawChipBar(Canvas canvas, UiLayout layout, SettingsSection section,
+                             int accent) {
+        List<SectionChip> sectionChips = chips(section);
+        Font font = FontManager.font(UiTokens.SETTINGS_TILE_SUB);
+        float pillY = layout.list.y() + (CHIP_BAR_H - CHIP_PILL_H) / 2.0F;
+        float x = layout.list.x() + UiTokens.SETTINGS_ROW_PAD;
+        int activeIndex = activeChipIndex(section);
+        int accentRgb = accent & 0x00FFFFFF;
+        for (int i = 0; i < sectionChips.size(); i++) {
+            SectionChip chip = sectionChips.get(i);
+            float w = chipWidth(font, chip);
+            boolean selected = i == activeIndex;
+            SkiaDraw.drawRoundedRect(canvas, x, pillY, w, CHIP_PILL_H, CHIP_PILL_H / 2.0F,
+                    selected ? Color.makeARGB(36, (accentRgb >> 16) & 0xFF,
+                            (accentRgb >> 8) & 0xFF, accentRgb & 0xFF)
+                            : Color.makeARGB(40, 255, 255, 255));
+            if (selected) {
+                SkiaDraw.drawEdgeHighlight(canvas, x, pillY, w, CHIP_PILL_H,
+                        CHIP_PILL_H / 2.0F, s(1.2F), accent);
+            }
+            SkiaFontRenderer.drawTextCentered(canvas, font, tr(chip.labelKey()),
+                    x + w / 2.0F, pillY + CHIP_PILL_H / 2.0F, selected ? accent : sec(200));
+            x += w + CHIP_PILL_GAP;
+        }
+    }
+
+    private void drawEmptyBlocked(Canvas canvas, UiLayout layout, SettingsSection section,
+                                  List<Row> rows, float scrollY) {
+        UiLayout.Rect last = rowRect(section, rows, rows.size() - 1, scrollY, layout);
         float top = last.bottom() + s(10);
         float height = Math.min(s(160), Math.max(s(90), layout.list.bottom() - top));
         if (height <= 0.0F) {
@@ -943,7 +1135,7 @@ public final class SettingsSectionPage {
         List<Row> rows = rows(section);
         for (int i = 0; i < rows.size(); i++) {
             if (rows.get(i).kind() == RowKind.THEMES) {
-                return rowRect(rows, i, scrollY, layout);
+                return rowRect(section, rows, i, scrollY, layout);
             }
         }
         return null;
@@ -1653,7 +1845,7 @@ public final class SettingsSectionPage {
         List<Row> rows = rows(section);
         Font buttonFont = FontManager.font(UiTokens.FONT_QUOTE);
         for (int i = 0; i < rows.size(); i++) {
-            UiLayout.Rect rect = rowRect(rows, i, scrollY, layout);
+            UiLayout.Rect rect = rowRect(section, rows, i, scrollY, layout);
             RowKind kind = rows.get(i).kind();
             if (kind == RowKind.CORNERS) {
                 pressedCornerChip = cornerChipAt(rect, vmx, vmy);
@@ -1675,7 +1867,7 @@ public final class SettingsSectionPage {
             if (row.kind() != RowKind.SLIDER) {
                 continue;
             }
-            UiLayout.Rect rect = rowRect(rows, i, scrollY, layout);
+            UiLayout.Rect rect = rowRect(section, rows, i, scrollY, layout);
             SliderHit hit = new SliderHit(row, i, rect, sliderTrackRect(rect));
             if (hit.contains(vmx, vmy)) {
                 return hit;
@@ -1717,7 +1909,7 @@ public final class SettingsSectionPage {
         if (row.kind() != RowKind.SLIDER) {
             return;
         }
-        UiLayout.Rect track = sliderTrackRect(rowRect(rows, activeSliderIndex, scrollY, layout));
+        UiLayout.Rect track = sliderTrackRect(rowRect(section, rows, activeSliderIndex, scrollY, layout));
         float t = track.w() <= 0.0F ? 0.0F : (vmx - track.x()) / track.w();
         dragValue = row.slider().denormalizeContinuous(t);
         row.slider().apply(dragValue);
@@ -1858,7 +2050,7 @@ public final class SettingsSectionPage {
                 continue;
             }
             SettingsColor color = row.color();
-            UiLayout.Rect rect = rowRect(rows, rowIdx, scrollY, layout);
+            UiLayout.Rect rect = rowRect(section, rows, rowIdx, scrollY, layout);
             float r = UiTokens.s(9);
             float cy = swatchCy(rect);
             float dy = vmy - cy;
@@ -1974,6 +2166,9 @@ public final class SettingsSectionPage {
     /** Drops per-page transient state so reopening a section starts clean. */
     public void reset() {
         switches.clear();
+        activeChip.clear();
+        chipSwitchFromId = null;
+        lastInteractiveHover = -1;
         rowHover.clear();
         rowPress.clear();
         swatchScale.clear();

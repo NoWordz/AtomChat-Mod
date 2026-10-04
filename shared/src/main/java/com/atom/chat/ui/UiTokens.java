@@ -238,12 +238,6 @@ public final class UiTokens {
     // Settings section rows (switch items, blocked players, about entries).
     public static final float SETTINGS_ROW_H = s(56);
     /**
-     * Category menu (between settings home and a section page): one horizontal
-     * card per category with icon plate, title, subtitle and a chevron.
-     */
-    public static final float SETTINGS_CATEGORY_H = s(64);
-    public static final float SETTINGS_CATEGORY_ICON = s(38);
-    /**
      * Theme-preview row: title line up top, then the horizontally scrollable
      * mini-panel cards, then the theme name under each card.
      */

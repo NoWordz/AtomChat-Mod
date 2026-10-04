@@ -21,21 +21,6 @@ class NavPageTest {
     }
 
     @Test
-    void categoryPageIsANonRootParameterlessEntry() {
-        NavPage page = NavPage.of(AppPage.SETTINGS_CATEGORY);
-        assertEquals(AppPage.SETTINGS_CATEGORY, page.page());
-        assertFalse(page.isRoot());
-        assertNull(page.param());
-        assertNull(page.section());
-    }
-
-    @Test
-    void categoryIdRoundTripsThroughTheEnum() {
-        assertEquals(AppPage.SETTINGS_CATEGORY, AppPage.fromId("settings_category"));
-        assertEquals("settings_category", AppPage.SETTINGS_CATEGORY.id());
-    }
-
-    @Test
     void rootClassification() {
         assertTrue(NavPage.of(AppPage.CHAT_LIST).isRoot());
         assertFalse(NavPage.of(AppPage.WORLD_CHAT).isRoot());

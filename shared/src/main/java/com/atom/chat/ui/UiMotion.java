@@ -43,6 +43,8 @@ public final class UiMotion {
     public static final long POPUP_MS = 110;
     /** Tab content push + indicator travel when switching emoji tabs. */
     public static final long TAB_MS = 200;
+    /** Page push/pop slide (settings sub-pages, profile detail). */
+    public static final long PAGE_NAV_MS = 140;
     /** Input bar growing/shrinking by one line. */
     public static final long INPUT_GROW_MS = 110;
     /**
