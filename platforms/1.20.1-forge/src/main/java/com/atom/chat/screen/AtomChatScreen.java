@@ -386,6 +386,11 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
     private NavPage pageNavFrom;
     private NavPage pageNavTo;
     private boolean pageNavPopPending;
+    /** Melodify-style page enter: 0.94 -> 1 on a bounce spring, fade ~120ms. */
+    private static final float PAGE_ENTER_SCALE_FROM = 0.94F;
+    private static final long PAGE_ENTER_FADE_MS = 120L;
+    private final SpringAnim pageNavScale = UiSpring.newBounceSpring();
+    private long pageNavStartMs;
 
     /** Hover wash behind the unified header back arrow. */
     private float backButtonHover;
@@ -790,6 +795,10 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
         pageNavPopPending = popPending;
         pageNavAnim.setValue(0.0F);
         pageNavAnim.animateTo(Animations.ms(UiMotion.TAB_MS), 1.0F);
+        // Pushes enter with the scale+fade; pops keep the slide-out.
+        if (!popPending) {
+            startPageEnter();
+        }
     }
 
     private void finishPageNav() {
@@ -800,6 +809,50 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
         pageNavTo = null;
         pageNavPopPending = false;
         pageNavAnim.setValue(0.0F);
+    }
+
+    /**
+     * Arms the Melodify-style enter for a push: the page starts at 0.94 scale
+     * on a bounce spring and fades in over ~120ms. With decorative motion off
+     * both channels snap, so the switch lands immediately.
+     */
+    private void startPageEnter() {
+        if (Animations.enabled()) {
+            pageNavScale.snapTo(PAGE_ENTER_SCALE_FROM);
+            pageNavScale.setTarget(1.0F);
+            pageNavStartMs = System.currentTimeMillis();
+        } else {
+            pageNavScale.snapTo(1.0F);
+            pageNavStartMs = System.currentTimeMillis() - PAGE_ENTER_FADE_MS;
+        }
+    }
+
+    private void updatePageEnter(float frameDt) {
+        pageNavScale.update(frameDt, Animations.enabled());
+    }
+
+    /** Enter fade: 0 -> 1 over {@link #PAGE_ENTER_FADE_MS}, ease-out. */
+    private float pageEnterAlpha() {
+        if (!Animations.enabled()) {
+            return 1.0F;
+        }
+        float t = Math.min(1.0F, (System.currentTimeMillis() - pageNavStartMs)
+                / (float) PAGE_ENTER_FADE_MS);
+        return Easing.easeOutQuad(t);
+    }
+
+    /** Centers the enter scale around the panel middle. Draw-only: hit-tests
+     *  keep unscaled coordinates, like every other transform in this screen. */
+    private void applyEnterScale(Canvas canvas, UiLayout.Rect panelRect) {
+        float scale = pageNavScale.value();
+        if (scale == 1.0F) {
+            return;
+        }
+        float cx = panelRect.x() + panelRect.w() / 2.0F;
+        float cy = panelRect.y() + panelRect.h() / 2.0F;
+        canvas.translate(cx, cy);
+        canvas.scale(scale, scale);
+        canvas.translate(-cx, -cy);
     }
 
     /** Clears the transient state of a settings sub-page when leaving it. */
@@ -1814,7 +1867,15 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
                 float travel = layout.rect().w();
                 float progress = pageNavAnim.getValue();
                 boolean pushing = !pageNavTo.isRoot();
-                float rootDx = pushing ? -travel * progress : -travel * (1.0F - progress);
+                // Melodify enter applies to the pages that own their whole
+                // drawing lifecycle (settings section/category, profile); a
+                // chat push keeps the paired slide into the shared tail.
+                boolean enter = pushing && (moving.page() == AppPage.SETTINGS_SECTION
+                        || moving.page() == AppPage.SETTINGS_CATEGORY
+                        || moving.page() == AppPage.PROFILE_DETAIL);
+                // On an enter the root stays put beneath the scaling page.
+                float rootDx = enter ? 0.0F
+                        : pushing ? -travel * progress : -travel * (1.0F - progress);
                 UiLayout.Rect panelRect = layout.rect();
                 canvas.save();
                 SkiaDraw.clip(canvas, panelRect.x(), panelRect.y(), panelRect.w(), panelRect.h(), 0.0F);
@@ -1822,9 +1883,21 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
                 drawRootScreen(canvas, mouseX, mouseY, navRoot.page());
                 canvas.restore();
 
-                canvas.save();
-                SkiaDraw.clip(canvas, panelRect.x(), panelRect.y(), panelRect.w(), panelRect.h(), 0.0F);
-                canvas.translate(pageNavDx(travel), 0.0F);
+                Paint enterLayer = null;
+                if (enter) {
+                    // A translucent offscreen layer gives the page its fade
+                    // while the spring drives the scale; the layer and its
+                    // paint are closed by the branch that finishes drawing.
+                    updatePageEnter(frameDt);
+                    enterLayer = new Paint().setAlphaf(pageEnterAlpha());
+                    canvas.saveLayer(Rect.makeXYWH(panelRect.x(), panelRect.y(),
+                            panelRect.w(), panelRect.h()), enterLayer);
+                    applyEnterScale(canvas, panelRect);
+                } else {
+                    canvas.save();
+                    SkiaDraw.clip(canvas, panelRect.x(), panelRect.y(), panelRect.w(), panelRect.h(), 0.0F);
+                    canvas.translate(pageNavDx(travel), 0.0F);
+                }
                 // A settings sub-page has no composer tail to draw into the
                 // open layer, so it renders and closes its own layer here. The
                 // chat page leaves the layer open for the shared tail below.
@@ -1834,6 +1907,10 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
                         drawSettingsCategory(canvas, mouseX, mouseY);
                     } else {
                         drawSettingsSection(canvas, mouseX, mouseY, moving.section());
+                    }
+                    if (enterLayer != null) {
+                        canvas.restore();
+                        enterLayer.close();
                     }
                     canvas.restore();
                     suppressHeader = false;
@@ -1846,6 +1923,10 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
                 }
                 if (moving.page() == AppPage.PROFILE_DETAIL) {
                     drawProfileDetail(canvas, mouseX, mouseY);
+                    if (enterLayer != null) {
+                        canvas.restore();
+                        enterLayer.close();
+                    }
                     canvas.restore();
                     suppressHeader = false;
                     drawPushedHeader(canvas, vmx, vmy, pushing ? moving : navRoot);
