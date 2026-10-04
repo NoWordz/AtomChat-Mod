@@ -402,7 +402,8 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
     // Animation state — durations live in UiMotion so every transition is tuned
     // in one place and none of them can drift back to a sluggish value. The
     // panel slide is the one exception: it rides the spring language
-    // (UiSpring/SpringAnim) so opening overshoots a few percent and settles.
+    // (UiSpring/SpringAnim) so opening lands fast and dead — near-critically
+    // damped, no bounce.
     // Toolbar icons are kept as inline SVG path data (not assets): three tiny
     // paths are cheaper than a resource pipeline, stay crisp at every scale,
     // and are trivial to recolour for hover/pressed/theme states. The paths use
@@ -468,7 +469,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
     private static final int GLFW_KEY_V = 86;
     /** Open-animation slide distance, in virtual px. The blur pre-pass offsets
      * its capture rect by the same amount, so the two must stay in step. */
-    private static final float OPEN_SLIDE_PX = 36.0F;
+    private static final float OPEN_SLIDE_PX = 18.0F;
     /** Slack around the panel in the fade layer, so bezel/shadow are not clipped. */
     private static final float LAYER_CHROME = 32.0F;
     private final long openStart = System.currentTimeMillis();

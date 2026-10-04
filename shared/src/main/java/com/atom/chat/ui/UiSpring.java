@@ -23,16 +23,22 @@ package com.atom.chat.ui;
  */
 public final class UiSpring {
     /**
-     * Panel open/close. Stiffness 220 with damping ratio 0.66.
+     * Panel open/close. Stiffness 520 with damping ratio 0.98.
      *
-     * <p>Why zeta 0.66 and not 0.75: the overshoot of a damped spring is
-     * exp(-zeta*pi/sqrt(1-zeta^2)). At 0.75 that is ~2.8% — below the brief's
-     * own 3% floor and too subtle to read as a settle; 0.66 lands the intended
-     * 5-8% band (~6% simulated). Stiffness 220 keeps the travel inside
-     * ~0.4s to a visual stop (settle threshold in {@link SpringAnim}).</p>
+     * <p>Panel open/close is spatial fast-travel: the brief is "get out of the
+     * way fast, arrive dead" — so near-critical damping. The overshoot of a
+     * damped spring is exp(-zeta*pi/sqrt(1-zeta^2)); at 0.98 that is ~0.06%,
+     * numerically zero: the panel lands and stays, no visible bounce. The
+     * earlier 220/0.66 tune (~6% overshoot, ~0.4s) read as sluggish and
+     * springy for a surface this large. Stiffness 520 puts the visual stop
+     * inside ~0.13s (settle threshold in {@link SpringAnim}).</p>
+     *
+     * <p>Bounce stays a language for small things only: hover/press scaling
+     * ({@link #newBounceSpring()}) and the message entrance
+     * ({@link #messageEase(float)}).</p>
      */
-    public static final float PANEL_STIFFNESS = 220.0F;
-    public static final float PANEL_DAMPING_RATIO = 0.66F;
+    public static final float PANEL_STIFFNESS = 520.0F;
+    public static final float PANEL_DAMPING_RATIO = 0.98F;
 
     /**
      * Overshoot constant of the message-entrance ease. Standard easeOutBack

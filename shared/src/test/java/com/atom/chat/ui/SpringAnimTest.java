@@ -7,10 +7,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Guards for the spring motion language. The panel spring must arrive fast
- * (the duration it replaced was 150ms; a spring that wanders for a second
- * reads as lag), overshoot in a restrained band (the settle is the entire
- * feel being bought here), and collapse to the end state when decorative
- * motion is off.
+ * (a surface this large reads as lag if it wanders) and land without a
+ * visible bounce — the open/close brief is spatial fast-travel, so the PANEL
+ * tokens are near-critically damped. Bounce belongs to hover/press scaling
+ * ({@code UiSpring#newBounceSpring}), and everything must collapse to the
+ * end state when decorative motion is off.
  */
 class SpringAnimTest {
 
@@ -49,11 +50,14 @@ class SpringAnimTest {
     }
 
     @Test
-    void panelSpringOvershootStaysRestrained() {
+    void panelSpringLandsWithoutBounce() {
         Object[] r = runOpen(UiSpring.newPanelSpring(), 16L, 60);
         float overshoot = (Float) r[0] - 1.0F;
-        assertTrue(overshoot >= 0.03F && overshoot <= 0.10F,
-                "panel overshoot must land in the 3-10% band, got " + (overshoot * 100) + "%");
+        long settleMs = (Long) r[1];
+        assertTrue(overshoot <= 0.015F,
+                "panel overshoot must be invisible (<=1.5%), got " + (overshoot * 100) + "%");
+        assertTrue(settleMs >= 0 && settleMs <= 200,
+                "near-critically damped panel must settle within 200ms, took " + settleMs + "ms");
     }
 
     @Test
@@ -113,9 +117,9 @@ class SpringAnimTest {
                 settleMs = t + 16L;
             }
         }
-        assertTrue(min <= -0.03F && min >= -0.10F,
-                "closing undershoot mirrors the open overshoot band, got " + (min * 100) + "%");
-        assertTrue(settleMs >= 0 && settleMs <= 400, "close path settles within the same budget");
+        assertTrue(min >= -0.015F,
+                "closing must not visibly bounce past the closed edge, got " + (min * 100) + "%");
+        assertTrue(settleMs >= 0 && settleMs <= 200, "close path settles within the same no-bounce budget");
         assertEquals(0.0F, s.value(), 0.0F, "close path snaps exactly onto 0");
     }
 

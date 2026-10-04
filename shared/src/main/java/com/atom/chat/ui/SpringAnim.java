@@ -16,18 +16,26 @@ package com.atom.chat.ui;
  * See {@link UiSpring} for the tuned tokens.</p>
  *
  * <p>Domain note: the settle thresholds are tuned for the 0..1 progress
- * values this UI feeds it (3% of travel ≈ 1px on the panel slide — past the
- * eye's resolution). Do not reuse for pixel-domain values without rescaling
- * the thresholds.</p>
+ * values this UI feeds it (9% of travel ≈ 1.6px on the 18px panel slide —
+ * past the eye's resolution mid-fade). Do not reuse for other domains without
+ * rescaling the thresholds; the bounce spring in {@link UiSpring} passes its
+ * own, much tighter pair for the 0.97..1.03 scale range.</p>
  */
 public final class SpringAnim {
     /** Largest wall-clock delta accepted per frame; anything longer is a hitch, not motion. */
     private static final float MAX_DT_MS = 50.0F;
     /** Fixed integration substep. Small enough that semi-implicit Euler adds no visible numerical damping at k=220. */
     private static final float SUBSTEP_MS = 4.0F;
-    /** Settle thresholds: position within 3% of unit travel AND velocity under 1.0 unit/s. */
-    private static final float SETTLE_EPS_POS = 0.03F;
-    private static final float SETTLE_EPS_VEL = 1.0F;
+    /**
+     * Settle thresholds: position within 9% of unit travel AND velocity under
+     * 2.0 units/s. The pixel meaning is unchanged from the original 0.03/1.0
+     * pair — those were picked when the panel slide was 36px (3% ≈ 1px,
+     * 1.0 ≈ 36px/s); with the slide halved to 18px the same visual judgement
+     * is 9% ≈ 1.6px and 2.0 ≈ 36px/s, and the panel still stops inside the
+     * 200ms budget (176ms at 60fps simulated) instead of haunting to 240ms.
+     */
+    private static final float SETTLE_EPS_POS = 0.09F;
+    private static final float SETTLE_EPS_VEL = 2.0F;
 
     private final float stiffness;
     private final float damping;
