@@ -36,8 +36,8 @@ class SpringAnimTest {
     void panelSpringSettlesWithinBudget() {
         Object[] r = runOpen(UiSpring.newPanelSpring(), 16L, 60);
         long settleMs = (Long) r[1];
-        assertTrue(settleMs >= 0 && settleMs <= 400,
-                "panel spring must reach a visual stop within 400ms, took " + settleMs + "ms");
+        assertTrue(settleMs >= 0 && settleMs <= 120,
+                "panel spring must reach a visual stop within 120ms, took " + settleMs + "ms");
         // After settling the value must be exactly the target (snap, no residue).
         SpringAnim s = UiSpring.newPanelSpring();
         s.snapTo(0.0F);
@@ -54,10 +54,10 @@ class SpringAnimTest {
         Object[] r = runOpen(UiSpring.newPanelSpring(), 16L, 60);
         float overshoot = (Float) r[0] - 1.0F;
         long settleMs = (Long) r[1];
-        assertTrue(overshoot <= 0.015F,
-                "panel overshoot must be invisible (<=1.5%), got " + (overshoot * 100) + "%");
-        assertTrue(settleMs >= 0 && settleMs <= 200,
-                "near-critically damped panel must settle within 200ms, took " + settleMs + "ms");
+        assertTrue(overshoot <= 0.01F,
+                "panel overshoot must be invisible (<=1%), got " + (overshoot * 100) + "%");
+        assertTrue(settleMs >= 0 && settleMs <= 120,
+                "critically damped panel must settle within 120ms, took " + settleMs + "ms");
     }
 
     @Test
@@ -119,7 +119,7 @@ class SpringAnimTest {
         }
         assertTrue(min >= -0.015F,
                 "closing must not visibly bounce past the closed edge, got " + (min * 100) + "%");
-        assertTrue(settleMs >= 0 && settleMs <= 200, "close path settles within the same no-bounce budget");
+        assertTrue(settleMs >= 0 && settleMs <= 120, "close path settles within the same no-bounce budget");
         assertEquals(0.0F, s.value(), 0.0F, "close path snaps exactly onto 0");
     }
 

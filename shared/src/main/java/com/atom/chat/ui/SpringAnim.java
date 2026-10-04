@@ -15,9 +15,9 @@ package com.atom.chat.ui;
  * anything that must never overshoot (fades, hover tints, scrollbar alpha).
  * See {@link UiSpring} for the tuned tokens.</p>
  *
- * <p>Domain note: the settle thresholds are tuned for the 0..1 progress
- * values this UI feeds it (9% of travel ≈ 1.6px on the 18px panel slide —
- * past the eye's resolution mid-fade). Do not reuse for other domains without
+ * <p>Domain note: the default settle thresholds are tuned for the 0..1
+ * progress values this UI feeds it. Callers in other domains (the panel
+ * spring, the bounce scale spring) pass their own rescaled pair. Do not reuse
  * rescaling the thresholds; the bounce spring in {@link UiSpring} passes its
  * own, much tighter pair for the 0.97..1.03 scale range.</p>
  */
@@ -27,12 +27,10 @@ public final class SpringAnim {
     /** Fixed integration substep. Small enough that semi-implicit Euler adds no visible numerical damping at k=220. */
     private static final float SUBSTEP_MS = 4.0F;
     /**
-     * Settle thresholds: position within 9% of unit travel AND velocity under
-     * 2.0 units/s. The pixel meaning is unchanged from the original 0.03/1.0
-     * pair — those were picked when the panel slide was 36px (3% ≈ 1px,
-     * 1.0 ≈ 36px/s); with the slide halved to 18px the same visual judgement
-     * is 9% ≈ 1.6px and 2.0 ≈ 36px/s, and the panel still stops inside the
-     * 200ms budget (176ms at 60fps simulated) instead of haunting to 240ms.
+     * Default settle thresholds: position within 9% of unit travel AND
+     * velocity under 2.0 units/s. Callers far from this domain (the panel
+     * spring, the bounce scale spring) pass their own rescaled pair through
+     * the full constructor instead — see {@code UiSpring.newPanelSpring()}.
      */
     private static final float SETTLE_EPS_POS = 0.09F;
     private static final float SETTLE_EPS_VEL = 2.0F;

@@ -23,22 +23,23 @@ package com.atom.chat.ui;
  */
 public final class UiSpring {
     /**
-     * Panel open/close. Stiffness 520 with damping ratio 0.98.
+     * Panel open/close. Stiffness 1200 with damping ratio 1.0 (critically
+     * damped).
      *
      * <p>Panel open/close is spatial fast-travel: the brief is "get out of the
-     * way fast, arrive dead" — so near-critical damping. The overshoot of a
-     * damped spring is exp(-zeta*pi/sqrt(1-zeta^2)); at 0.98 that is ~0.06%,
-     * numerically zero: the panel lands and stays, no visible bounce. The
-     * earlier 220/0.66 tune (~6% overshoot, ~0.4s) read as sluggish and
-     * springy for a surface this large. Stiffness 520 puts the visual stop
-     * inside ~0.13s (settle threshold in {@link SpringAnim}).</p>
+     * way fast, arrive dead" — so critical damping, no overshoot at all
+     * (exp(-zeta*pi/sqrt(1-zeta^2)) is exactly 0% at zeta 1). The earlier
+     * 520/0.98 tune landed in ~130ms and still read as a beat too slow for an
+     * open that should feel near-instant; 1200 puts the visual stop inside
+     * ~0.09s at 60fps (simulated 80ms with the rescaled thresholds below,
+     * 84ms at 144fps).</p>
      *
      * <p>Bounce stays a language for small things only: hover/press scaling
      * ({@link #newBounceSpring()}) and the message entrance
      * ({@link #messageEase(float)}).</p>
      */
-    public static final float PANEL_STIFFNESS = 520.0F;
-    public static final float PANEL_DAMPING_RATIO = 0.98F;
+    public static final float PANEL_STIFFNESS = 1200.0F;
+    public static final float PANEL_DAMPING_RATIO = 1.0F;
 
     /**
      * Overshoot constant of the message-entrance ease. Standard easeOutBack
@@ -51,9 +52,17 @@ public final class UiSpring {
     private UiSpring() {
     }
 
-    /** A fresh panel spring at value 0. Callers drive it with setTarget/update. */
+    /**
+     * A fresh panel spring at value 0. Callers drive it with setTarget/update.
+     *
+     * <p>Sets its own settle thresholds, rescaled to the faster spring and the
+     * 10px slide: position within 25% of unit travel (2.5px on the panel
+     * slide, masked by the open fade) and velocity under 6.0 units/s. With the
+     * rescaled pair the spring reports settled at ~80ms/60fps; the looser
+     * thresholds are what buy the sub-90ms stop without a visible jump.</p>
+     */
     public static SpringAnim newPanelSpring() {
-        return new SpringAnim(PANEL_STIFFNESS, PANEL_DAMPING_RATIO);
+        return new SpringAnim(PANEL_STIFFNESS, PANEL_DAMPING_RATIO, 0.25F, 6.0F);
     }
 
     /**
@@ -63,7 +72,7 @@ public final class UiSpring {
      * so a control pushed to 0.97 springs back through 1.00 with a soft
      * overshoot instead of halting — brisk but visible. Bounce lives ONLY on
      * hover/press scaling and the message entrance; large surfaces (the
-     * panel) travel near-critically damped (see {@link #PANEL_STIFFNESS}).
+     * panel) travel critically damped (see {@link #PANEL_STIFFNESS}).
      *
      * <p>The scale domain is 0.97..1.03, far narrower than the 0..1 progress
      * range {@link SpringAnim}'s default settle thresholds assume (9% of a

@@ -483,7 +483,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
     private static final int GLFW_KEY_V = 86;
     /** Open-animation slide distance, in virtual px. The blur pre-pass offsets
      * its capture rect by the same amount, so the two must stay in step. */
-    private static final float OPEN_SLIDE_PX = 18.0F;
+    private static final float OPEN_SLIDE_PX = 10.0F;
     /** Slack around the panel in the fade layer, so bezel/shadow are not clipped. */
     private static final float LAYER_CHROME = 32.0F;
     private final long openStart = System.currentTimeMillis();
