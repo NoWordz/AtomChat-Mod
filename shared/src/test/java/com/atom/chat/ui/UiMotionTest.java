@@ -61,9 +61,11 @@ class UiMotionTest {
     void durationsStaySnappy() {
         // Any transition slower than this reads as sticky on screen. This guard
         // covers *responses to input* only — MESSAGE_MS is a content reveal and
-        // is asserted separately below.
+        // is asserted separately below. PANEL_MS is deliberately absent: the
+        // panel open/close moved to the spring language (UiSpring), which has
+        // its own arrival budget in SpringAnimTest.
         long[] all = {
-                UiMotion.PANEL_MS, UiMotion.SCROLL_SNAP_MS,
+                UiMotion.SCROLL_SNAP_MS,
                 UiMotion.SCROLL_WHEEL_MS, UiMotion.HOVER_MS, UiMotion.SCROLLBAR_FADE_MS,
                 UiMotion.SCROLLBAR_EMPHASIS_MS, UiMotion.POPUP_MS, UiMotion.INPUT_GROW_MS
         };

@@ -21,6 +21,7 @@ import com.atom.chat.text.RichTextLayout.RichLine;
 import com.atom.chat.ui.Animations;
 import com.atom.chat.ui.ScrollController;
 import com.atom.chat.ui.UiMotion;
+import com.atom.chat.ui.UiSpring;
 import com.atom.chat.ui.UiTokens;
 import io.github.humbleui.skija.Canvas;
 import io.github.humbleui.skija.Color;
@@ -244,12 +245,14 @@ public final class MessageListView {
                         // layer rectangle must cover the full travel so a sliding
                         // bubble is never clipped by its own offscreen layer.
                         float travel = UiTokens.MESSAGE_SLIDE;
-                        // Two curves, one timeline: the slide decelerates hard
-                        // (cubic) while the fade ramps gently across the whole
-                        // entrance (quad), so the opacity change is still
-                        // happening while the bubble is still moving.
+                        // Two curves, one timeline: the slide decelerates with
+                        // a small back-ease overshoot (<=5%, UiSpring.messageEase)
+                        // while the fade ramps gently across the whole entrance
+                        // (quad), so the opacity change is still happening while
+                        // the bubble is still moving. The fade must never
+                        // overshoot; only the spatial half gets the spring feel.
                         float fade = Easing.easeOutQuad(t);
-                        float move = Easing.easeOutCubic(t);
+                        float move = UiSpring.messageEase(t);
                         // System capsules are centered and have no sender side;
                         // they fade in place rather than pretending to be someone's
                         // bubble.

@@ -12,14 +12,21 @@ package com.atom.chat.ui;
  * 2. Transitions snap to the target on the frame that gets there, so state
  *    (hover highlight, scrollbar alpha, popup fade) always lands exactly on
  *    0 or 1 instead of hovering just above it forever.
+ *
+ * <p>Division of labour with the spring language ({@link UiSpring} /
+ * {@link SpringAnim}): durations drive opacity, emphasis and every value that
+ * must never overshoot; springs drive spatial displacement of large surfaces,
+ * where a small physical overshoot reads as mass. The panel open/close is the
+ * one transition that moved out of this class into
+ * {@code UiSpring.newPanelSpring()} (the former {@code PANEL_MS} duration is
+ * gone with it); everything here stays duration-driven on purpose.</p>
  */
 public final class UiMotion {
-    /** Panel open/close: slide + fade. */
-    public static final long PANEL_MS = 150;
     /**
      * New message entry. Deliberately the slowest transition in the UI: this is
      * a content reveal, not a response to input, and an opacity ramp under
-     * ~200ms is over before the eye registers it as a fade.
+     * ~200ms is over before the eye registers it as a fade. The slide half of
+     * the entrance rides {@link UiSpring#messageEase} on this same timeline.
      */
     public static final long MESSAGE_MS = 220;
     /** Snap back to the bottom after sending. */

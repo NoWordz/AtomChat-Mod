@@ -14,7 +14,16 @@ public final class Easing {
     }
 
     public static float easeOutBack(float t) {
-        float c1 = 1.70158F;
+        return easeOutBack(t, 1.70158F);
+    }
+
+    /**
+     * easeOutBack with a tunable overshoot constant: the peak overshoot above
+     * 1 is (4/27)*c1^3/(c1+1)^2, so callers can buy a smaller bounce than the
+     * standard curve's ~10% (c1 1.70158) — see {@code UiSpring.MESSAGE_EASE_C1}
+     * for the restrained variant used by the message entrance.
+     */
+    public static float easeOutBack(float t, float c1) {
         float c3 = c1 + 1.0F;
         return 1.0F + c3 * (float) Math.pow(t - 1.0F, 3) + c1 * (float) Math.pow(t - 1.0F, 2);
     }

@@ -57,7 +57,9 @@ import com.atom.chat.ui.UiLayout;
 import com.atom.chat.ui.EmojiPanel;
 import com.atom.chat.ui.PanelBackground;
 import com.atom.chat.ui.QuickPhrasePanel;
+import com.atom.chat.ui.SpringAnim;
 import com.atom.chat.ui.UiMotion;
+import com.atom.chat.ui.UiSpring;
 import com.atom.chat.ui.UiTokens;
 import com.atom.chat.ui.input.InputHandler;
 import com.atom.chat.ui.input.InputRouter;
@@ -404,8 +406,9 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
     /** Hover washes for the emoji panel tab strip (owned by {@link EmojiPanel}). */
 
     // Animation state — durations live in UiMotion so every transition is tuned
-    // in one place and none of them can drift back to a sluggish value.
-    private static final long OPEN_ANIM_MS = UiMotion.PANEL_MS;
+    // in one place and none of them can drift back to a sluggish value. The
+    // panel slide is the one exception: it rides the spring language
+    // (UiSpring/SpringAnim) so opening overshoots a few percent and settles.
     // Toolbar icons are kept as inline SVG path data (not assets): three tiny
     // paths are cheaper than a resource pipeline, stay crisp at every scale,
     // and are trivial to recolour for hover/pressed/theme states. The paths use
@@ -476,8 +479,12 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
     private static final float LAYER_CHROME = 32.0F;
     private final long openStart = System.currentTimeMillis();
     private boolean closing;
-    private long closeStart;
+    /** Panel open/close progress (0 hidden, 1 open); slightly overshoots both ends. */
     private float panelProgress = 1.0F;
+    /** Spring behind panelProgress; the tuned feel lives in UiSpring.PANEL_*. */
+    private final SpringAnim panelSpring = UiSpring.newPanelSpring();
+    /** Wall-clock timestamp of the previous frame — the spring consumes real dt. */
+    private long lastFrameNanos = System.nanoTime();
     private boolean blurDrawnThisFrame;
     private int pressedButton = -1;
     private long pressTime;
@@ -1010,11 +1017,19 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
 
     @Override
     public void render(GuiGraphics context, int mouseX, int mouseY, float delta) {
-        if (closing && System.currentTimeMillis() - closeStart >= OPEN_ANIM_MS) {
+        // Spring-driven panel progress. The dt clamp (<=50ms) lives inside the
+        // spring; with decorative motion off update() snaps to the target, so
+        // the disabled path and the close completion both go through isSettled().
+        long nowNanos = System.nanoTime();
+        float frameDtMs = Math.max(0.0F, Math.min(50.0F, (nowNanos - lastFrameNanos) / 1_000_000.0F));
+        lastFrameNanos = nowNanos;
+        panelSpring.setTarget(closing ? 0.0F : 1.0F);
+        panelSpring.update(frameDtMs, Animations.enabled());
+        panelProgress = panelSpring.value();
+        if (closing && panelSpring.isSettled()) {
             this.client.setScreen(null);
             return;
         }
-        panelProgress = currentPanelProgress();
 
         // The blur pre-pass is raw GL and must run before Skia paints the panel.
         // Load the shader first so drawPanel knows whether it may use the
@@ -1103,18 +1118,6 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
         for (ScrollController controller : privateScrolls.values()) {
             controller.setDecorativeMotion(on);
         }
-    }
-
-    private float currentPanelProgress() {
-        long now = System.currentTimeMillis();
-        // Decorative motion off: the panel is simply there (or already gone).
-        if (!Animations.enabled()) {
-            return closing ? 0.0F : 1.0F;
-        }
-        if (closing) {
-            return 1.0F - Easing.easeOutCubic(Math.min(1.0F, (now - closeStart) / (float) OPEN_ANIM_MS));
-        }
-        return Easing.easeOutCubic(Math.min(1.0F, (now - openStart) / (float) OPEN_ANIM_MS));
     }
 
     /** Collapses the suggestion popup and clears the gray ghost suffix. */
@@ -1549,10 +1552,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
     }
 
     private void requestClose() {
-        if (!closing) {
-            closing = true;
-            closeStart = System.currentTimeMillis();
-        }
+        closing = true;
     }
 
     /**
