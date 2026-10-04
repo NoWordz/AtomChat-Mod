@@ -910,6 +910,7 @@ public final class SettingsSectionPage {
         } finally {
             if (layer != null) {
                 layer.close();
+                canvas.restore();
             }
             canvas.restore();
         }

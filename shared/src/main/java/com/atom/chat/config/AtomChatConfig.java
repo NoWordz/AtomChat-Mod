@@ -113,7 +113,7 @@ public class AtomChatConfig {
             return;
         }
         cornerRadius = switch (cornerStyle) {
-            case "medium" -> 18f;
+            case "medium" -> 14f;
             case "small" -> 10f;
             default -> 28f;
         };

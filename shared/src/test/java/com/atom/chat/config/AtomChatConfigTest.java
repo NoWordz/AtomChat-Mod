@@ -31,7 +31,7 @@ class AtomChatConfigTest {
         AtomChatConfig medium = new AtomChatConfig();
         medium.cornerStyle = "medium";
         medium.migrateCornerStyle();
-        assertEquals(18f, medium.cornerRadius, 0.0F);
+        assertEquals(14f, medium.cornerRadius, 0.0F);
 
         AtomChatConfig small = new AtomChatConfig();
         small.cornerStyle = "small";
