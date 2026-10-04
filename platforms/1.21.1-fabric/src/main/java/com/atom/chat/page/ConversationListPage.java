@@ -11,6 +11,7 @@ import com.atom.chat.render.SkiaDraw;
 import com.atom.chat.render.SkiaFontRenderer;
 import com.atom.chat.settings.SettingsSectionPage;
 import com.atom.chat.ui.AppIcons;
+import com.atom.chat.ui.UiCards;
 import com.atom.chat.ui.UiLayout;
 import com.atom.chat.ui.UiMotion;
 import com.atom.chat.ui.UiTokens;
@@ -342,12 +343,8 @@ public final class ConversationListPage {
     }
 
     private void drawNormalRow(Canvas canvas, Row row, float x, float y, float w, float hoverAlpha) {
-        SkiaDraw.drawRoundedRect(canvas, x, y, w, ROW_H, UiTokens.radius(12), UiTokens.cardFill());
-        SkiaDraw.drawEdgeHighlight(canvas, x, y, w, ROW_H, UiTokens.radius(12), UiTokens.s(1.2F), UiTokens.CARD_EDGE);
-        if (hoverAlpha > 0.01F) {
-            SkiaDraw.drawRoundedRect(canvas, x, y, w, ROW_H, UiTokens.radius(12),
-                    UiTokens.cardHover(hoverAlpha));
-        }
+        // Settings-page card stack: soft shadow, fill, polarity hairline, hover wash.
+        UiCards.drawCard(canvas, x, y, w, ROW_H, UiTokens.settingsRowRadius(), hoverAlpha);
         drawRowContent(canvas, row, x, y, w);
     }
 
@@ -361,12 +358,7 @@ public final class ConversationListPage {
         canvas.save();
         try (Paint layer = new Paint().setColorFilter(ColorFilter.makeMatrix(new ColorMatrix(matrix)))) {
             canvas.saveLayer(Rect.makeXYWH(x - 1, y - 1, w + 2, ROW_H + 2), layer);
-            SkiaDraw.drawRoundedRect(canvas, x, y, w, ROW_H, UiTokens.radius(12), UiTokens.cardFill());
-            SkiaDraw.drawEdgeHighlight(canvas, x, y, w, ROW_H, UiTokens.radius(12), UiTokens.s(1.2F), UiTokens.CARD_EDGE);
-            if (hoverAlpha > 0.01F) {
-                SkiaDraw.drawRoundedRect(canvas, x, y, w, ROW_H, UiTokens.radius(12),
-                        UiTokens.cardHover(hoverAlpha));
-            }
+            UiCards.drawCard(canvas, x, y, w, ROW_H, UiTokens.settingsRowRadius(), hoverAlpha);
             drawRowContent(canvas, row, x, y, w);
             canvas.restore();
         } finally {
