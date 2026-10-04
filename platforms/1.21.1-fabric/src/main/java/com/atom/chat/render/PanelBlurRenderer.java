@@ -121,10 +121,19 @@ public final class PanelBlurRenderer {
         } finally {
             GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, restoreFbo);
             GL30.glViewport(restoreViewport[0], restoreViewport[1], restoreViewport[2], restoreViewport[3]);
+            // The raw writes above move the driver behind Blaze3D's cache-gated
+            // setters; mirror every value the cache claims to own, driver
+            // write first, cache setter second (the GlStateUtil rule). A cache
+            // left disagreeing with the driver makes the next vanilla bind a
+            // silent no-op on the wrong target.
+            GlStateManager._glBindFramebuffer(GL30.GL_FRAMEBUFFER, restoreFbo);
+            GlStateManager._viewport(restoreViewport[0], restoreViewport[1], restoreViewport[2], restoreViewport[3]);
             if (restoreScissor) {
                 GL30.glEnable(GL30.GL_SCISSOR_TEST);
+                GlStateManager._enableScissorTest();
             } else {
                 GL30.glDisable(GL30.GL_SCISSOR_TEST);
+                GlStateManager._disableScissorTest();
             }
         }
     }
@@ -238,6 +247,12 @@ public final class PanelBlurRenderer {
         // GL textures are bottom-up; the shader flips V so GUI top-left is texture top.
         uFlipV.set(0, 1.0F);
 
+        // Hand the next consumer (Skia flush, then the world pass) the blend
+        // bit this frame arrived with, on refresh frames and skipped frames
+        // alike: an unconditional disable made the frames that ran Kawase
+        // passes and the frames that reused the sticky texture disagree on a
+        // global bit, alternating with the refresh cadence itself.
+        boolean blendWasOn = GL11C.glIsEnabled(GL11C.GL_BLEND);
         RenderSystem.enableBlend();
         RenderSystem.defaultBlendFunc();
         RenderSystem.setShaderTexture(0, texture);
@@ -250,7 +265,11 @@ public final class PanelBlurRenderer {
         bb.vertex(pose, x + w, y, 0).texture(1.0F, 0.0F).color(1.0F, 1.0F, 1.0F, alpha);
         BufferRenderer.drawWithGlobalProgram(bb.end());
 
-        RenderSystem.disableBlend();
+        if (blendWasOn) {
+            RenderSystem.enableBlend();
+        } else {
+            RenderSystem.disableBlend();
+        }
         return true;
     }
 
@@ -297,6 +316,7 @@ public final class PanelBlurRenderer {
             return new int[]{fbo, tex};
         } finally {
             GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, previousFbo);
+            GlStateManager._glBindFramebuffer(GL30.GL_FRAMEBUFFER, previousFbo);
         }
     }
 
@@ -334,6 +354,7 @@ public final class PanelBlurRenderer {
         GL30.glGetIntegerv(GL30.GL_VIEWPORT, viewport);
         boolean scissor = GL30.glIsEnabled(GL30.GL_SCISSOR_TEST);
         GL30.glDisable(GL30.GL_SCISSOR_TEST);
+        GlStateManager._disableScissorTest();
 
         int glY0 = fbHeight - (y + h);
         int glY1 = fbHeight - y;
@@ -360,9 +381,18 @@ public final class PanelBlurRenderer {
         }
 
         GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, oldFbo);
+        GlStateManager._glBindFramebuffer(GL30.GL_FRAMEBUFFER, oldFbo);
         GL30.glViewport(viewport[0], viewport[1], viewport[2], viewport[3]);
+        GlStateManager._viewport(viewport[0], viewport[1], viewport[2], viewport[3]);
         if (scissor) {
             GL30.glEnable(GL30.GL_SCISSOR_TEST);
+            GlStateManager._enableScissorTest();
+        } else {
+            // Mirror the disable too: the raw disable at the top moved the
+            // driver behind the cache, and a cache left claiming "enabled"
+            // turns vanilla's next enableScissor into a silent no-op.
+            GL30.glDisable(GL30.GL_SCISSOR_TEST);
+            GlStateManager._disableScissorTest();
         }
         return lastBlurTex;
     }
@@ -381,6 +411,7 @@ public final class PanelBlurRenderer {
         int oldFbo = GL30.glGetInteger(GL30.GL_FRAMEBUFFER_BINDING);
         int[] viewport = new int[4];
         GL30.glGetIntegerv(GL30.GL_VIEWPORT, viewport);
+        boolean blendWasOn = GL11C.glIsEnabled(GL11C.GL_BLEND);
 
         GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, dstFbo);
         GL30.glViewport(0, 0, w, h);
@@ -397,7 +428,17 @@ public final class PanelBlurRenderer {
         bb.vertex(-1.0F, 1.0F, 0.0F);
         BufferRenderer.drawWithGlobalProgram(bb.end());
 
+        // Same rule as drawRoundedQuad: each pass hands back the blend bit it
+        // found, so five passes and zero passes leave identical global state.
+        if (blendWasOn) {
+            RenderSystem.enableBlend();
+        } else {
+            RenderSystem.disableBlend();
+        }
+
         GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, oldFbo);
+        GlStateManager._glBindFramebuffer(GL30.GL_FRAMEBUFFER, oldFbo);
         GL30.glViewport(viewport[0], viewport[1], viewport[2], viewport[3]);
+        GlStateManager._viewport(viewport[0], viewport[1], viewport[2], viewport[3]);
     }
 }
