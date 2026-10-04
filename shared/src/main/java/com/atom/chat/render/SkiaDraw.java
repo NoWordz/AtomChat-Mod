@@ -25,11 +25,28 @@ public final class SkiaDraw {
         }
     }
 
+    /**
+     * Blur-radius -> MaskFilter cache. drawRoundedShadow used to allocate a
+     * fresh native MaskFilter on every call (and leave it to the GC); radii
+     * only vary with the ui scale, so a tiny cache keeps the draw path
+     * allocation-free. Cleared wholesale when a new scale shows up — the
+     * handful of orphans go the same GC route the old code took every frame.
+     * Render-thread only, like the rest of the draw path.
+     */
+    private static final java.util.Map<Float, MaskFilter> BLUR_FILTERS = new java.util.HashMap<>();
+    private static final Paint SHADOW_PAINT = new Paint().setAntiAlias(true);
+
     public static void drawRoundedShadow(Canvas canvas, float x, float y, float width, float height, float radius, float blur, int color) {
-        try (Paint shadow = new Paint().setColor(color).setAntiAlias(true)
-                .setMaskFilter(MaskFilter.makeBlur(FilterBlurMode.NORMAL, blur))) {
-            canvas.drawRRect(RRect.makeXYWH(x + blur * 0.5F, y + blur * 0.5F, width, height, radius), shadow);
+        MaskFilter filter = BLUR_FILTERS.get(blur);
+        if (filter == null) {
+            if (BLUR_FILTERS.size() >= 16) {
+                BLUR_FILTERS.clear();
+            }
+            filter = MaskFilter.makeBlur(FilterBlurMode.NORMAL, blur);
+            BLUR_FILTERS.put(blur, filter);
         }
+        canvas.drawRRect(RRect.makeXYWH(x + blur * 0.5F, y + blur * 0.5F, width, height, radius),
+                SHADOW_PAINT.setColor(color).setMaskFilter(filter));
     }
 
     /**

@@ -841,6 +841,17 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
         return Easing.easeOutQuad(t);
     }
 
+    /**
+     * True once the enter transform has nothing left to show: the scale is
+     * back at 1 and the fade is complete. A fully-opaque full-panel
+     * saveLayer behind an identity transform is pure overdraw, so the enter
+     * branch skips the layer entirely in that state (motion off lands here
+     * from frame one; with motion on, every frame after the ~120ms fade).
+     */
+    private boolean pageEnterDone() {
+        return Math.abs(pageNavScale.value() - 1.0F) < 1e-3F && pageEnterAlpha() >= 0.999F;
+    }
+
     /** Centers the enter scale around the panel middle. Draw-only: hit-tests
      *  keep unscaled coordinates, like every other transform in this screen. */
     private void applyEnterScale(Canvas canvas, UiLayout.Rect panelRect) {
@@ -1869,8 +1880,13 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
                 boolean pushing = !pageNavTo.isRoot();
                 // Melodify enter applies to the pages that own their whole
                 // drawing lifecycle (settings section/category, profile); a
-                // chat push keeps the paired slide into the shared tail.
-                boolean enter = pushing && (moving.page() == AppPage.SETTINGS_SECTION
+                // chat push keeps the paired slide into the shared tail. Pops
+                // never enter: pageNavTo is then the destination (e.g. the
+                // category page under a sliding-out section), and the stale
+                // pageNavStartMs would hard-cut at alpha 1 behind a fully
+                // opaque saveLayer.
+                boolean enter = pushing && !pageNavPopPending
+                        && (moving.page() == AppPage.SETTINGS_SECTION
                         || moving.page() == AppPage.SETTINGS_CATEGORY
                         || moving.page() == AppPage.PROFILE_DETAIL);
                 // On an enter the root stays put beneath the scaling page.
@@ -1884,7 +1900,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
                 canvas.restore();
 
                 Paint enterLayer = null;
-                if (enter) {
+                if (enter && !pageEnterDone()) {
                     // A translucent offscreen layer gives the page its fade
                     // while the spring drives the scale; the layer and its
                     // paint are closed by the branch that finishes drawing.
@@ -1893,7 +1909,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
                     canvas.saveLayer(Rect.makeXYWH(panelRect.x(), panelRect.y(),
                             panelRect.w(), panelRect.h()), enterLayer);
                     applyEnterScale(canvas, panelRect);
-                } else {
+                } else if (!enter) {
                     canvas.save();
                     SkiaDraw.clip(canvas, panelRect.x(), panelRect.y(), panelRect.w(), panelRect.h(), 0.0F);
                     canvas.translate(pageNavDx(travel), 0.0F);
@@ -1911,8 +1927,11 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
                     if (enterLayer != null) {
                         canvas.restore();
                         enterLayer.close();
+                    } else if (!enter) {
+                        // The slide branch opened a save; the snapped enter
+                        // opened nothing, so it must not pop past it.
+                        canvas.restore();
                     }
-                    canvas.restore();
                     suppressHeader = false;
                     // The header always names the destination, never the page
                     // that is sliding away — a pop flips the title on frame one
@@ -1926,8 +1945,10 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
                     if (enterLayer != null) {
                         canvas.restore();
                         enterLayer.close();
+                    } else if (!enter) {
+                        // Same pairing as the settings branch above.
+                        canvas.restore();
                     }
-                    canvas.restore();
                     suppressHeader = false;
                     drawPushedHeader(canvas, vmx, vmy, pushing ? moving : navRoot);
                     drawBezel(canvas, detailLayout());
@@ -2205,9 +2226,16 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
 
     /** Body of the pushed settings category menu: scroll state, cards, bar. */
     private void drawSettingsCategory(Canvas canvas, int mouseX, int mouseY) {
+        drawSettingsCategoryBody(canvas, toVirtualX(mouseX), toVirtualY(mouseY));
+    }
+
+    /**
+     * Core category-menu renderer taking already-virtual pointer coords, so
+     * the root-page slot ({@link #drawRootPageBody}) can reuse it without
+     * double-converting the mouse.
+     */
+    private void drawSettingsCategoryBody(Canvas canvas, float vmx, float vmy) {
         UiLayout layout = detailLayout();
-        float vmx = toVirtualX(mouseX);
-        float vmy = toVirtualY(mouseY);
         detailScroll.setContent(settingsCategoryPage.measureContent(layout), layout.list.h());
         detailScroll.updateAnimation(System.currentTimeMillis());
         settingsCategoryPage.render(canvas, layout, vmx, vmy, detailScroll.getScrollY());
@@ -2294,6 +2322,10 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
                 case PROFILE -> profilePage.render(canvas, layout, rootMouseX, rootMouseY, rootScroll.getScrollY());
                 case SETTINGS -> settingsHomePage.render(canvas, layout, rootMouseX, rootMouseY,
                         rootScroll.getScrollY());
+                // The root slot must not sit empty while a pushed settings
+                // category page fades in (or a pop back to it slides): paint
+                // the real menu beneath the moving layer.
+                case SETTINGS_CATEGORY -> drawSettingsCategoryBody(canvas, rootMouseX, rootMouseY);
                 case WORLD_CHAT, PRIVATE_CHAT ->
                         throw new IllegalStateException("Root page body cannot render chat/detail pages");
             }
@@ -3931,9 +3963,14 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
             // An active slider drag owns the pointer until release; the value
             // follows the pointer's X even outside the row.
             if (settingsSectionPage.isDraggingThemeStrip()) {
-                settingsSectionPage.dragThemeStrip(toVirtualX(mouseX),
+                settingsSectionPage.dragThemeStrip(toVirtualX(mouseX), toVirtualY(mouseY),
                         settingsSectionPage.themesRowRect(listLayout(), topNav().section(),
                                 listScroll().getScrollY()));
+                if (!settingsSectionPage.isDraggingThemeStrip()) {
+                    // The strip released a vertical flick: hand the gesture to
+                    // the page list, starting from the current pointer.
+                    listScroll().beginDrag(toVirtualY(mouseY));
+                }
                 return true;
             }
             if (settingsSectionPage.isDraggingSlider()) {

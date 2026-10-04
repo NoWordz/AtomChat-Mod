@@ -205,20 +205,40 @@ public final class SkiaFontRenderer {
     private static void drawTextPass(Canvas canvas, Font font, String text, float x, float y, int color,
                                      io.github.humbleui.skija.ImageFilter shadow) {
         canvas.save();
-        try (Paint paint = new Paint().setColor(color)) {
+        try {
             if (shadow != null) {
-                paint.setImageFilter(shadow);
-            }
-            int currentColor = color;
-            float drawX = x;
-            for (TextSegment segment : parseColoredText(text)) {
-                if (segment.colorCode != null) {
-                    currentColor = getColorFromCode(segment.colorCode, currentColor, color);
+                // One filtered layer around the whole block: giving every
+                // colour segment a filtered paint made each drawRuns call
+                // trigger its own implicit blur layer. The filter runs once,
+                // when this layer is restored below.
+                float pad = 8.0F;
+                var metrics = font.getMetrics();
+                try (Paint layer = new Paint()) {
+                    layer.setImageFilter(shadow);
+                    canvas.saveLayer(io.github.humbleui.types.Rect.makeXYWH(
+                            x - pad, y + metrics.getAscent() - pad,
+                            getStringWidth(font, text) + pad * 2.0F,
+                            (metrics.getDescent() - metrics.getAscent()) + pad * 2.0F), layer);
                 }
-                if (!segment.text.isEmpty()) {
-                    paint.setColor(currentColor);
-                    drawRuns(canvas, segment.text, drawX, y, font, paint);
-                    drawX += measureRuns(font, segment.text);
+            }
+            try (Paint paint = new Paint().setColor(color)) {
+                int currentColor = color;
+                float drawX = x;
+                for (TextSegment segment : parseColoredText(text)) {
+                    if (segment.colorCode != null) {
+                        currentColor = getColorFromCode(segment.colorCode, currentColor, color);
+                    }
+                    if (!segment.text.isEmpty()) {
+                        paint.setColor(currentColor);
+                        drawRuns(canvas, segment.text, drawX, y, font, paint);
+                        drawX += measureRuns(font, segment.text);
+                    }
+                }
+            } finally {
+                if (shadow != null) {
+                    // Exactly one restore per saveLayer, before the bare
+                    // save's own restore.
+                    canvas.restore();
                 }
             }
         } finally {

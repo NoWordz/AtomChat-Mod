@@ -222,9 +222,6 @@ public final class SettingsSectionPage {
      *  colour rows tucked away until asked for. */
     private final java.util.Set<String> collapsedColorGroups =
             new java.util.HashSet<>(java.util.List.of("appearance_advanced"));
-    /** Dot under the pointer when the theme row was hit; hit() writes it,
-     *  perform() consumes it (same click, so no staleness window). */
-    private int pressedThemeDot = -1;
     /** Corner chip armed by hit() for the click perform() will handle. */
     private int pressedCornerChip = -1;
 
@@ -303,6 +300,7 @@ public final class SettingsSectionPage {
     private long themeStripAnimStart;
     private boolean themeStripAnimActive;
     private float themeStripDragStartX;
+    private float themeStripDragStartY;
     private float themeStripDragStartScroll;
     private boolean themeStripPressed;
     private boolean themeStripDragged;
@@ -968,21 +966,39 @@ public final class SettingsSectionPage {
         themeStripPressed = true;
         themeStripDragged = false;
         themeStripDragStartX = vmx;
+        themeStripDragStartY = vmy;
         themeStripDragStartScroll = themeStripScroll;
         pressedThemeCard = themeCardAt(rect, vmx, vmy, themeStripScroll);
         return true;
     }
 
-    /** Drag routing: the strip follows the pointer 1:1 until release. */
-    public void dragThemeStrip(float vmx, UiLayout.Rect rect) {
+    /**
+     * Drag routing: the strip follows the pointer 1:1 until release. The slop
+     * is two-axis — a mostly vertical flick past the threshold means the user
+     * is scrolling the page list, not the strip: the gesture is released (the
+     * screen re-arms the list scroll) and the armed card dies, so the release
+     * can never select a theme.
+     */
+    public void dragThemeStrip(float vmx, float vmy, UiLayout.Rect rect) {
         if (!themeStripPressed || rect == null) {
             return;
         }
         float dx = vmx - themeStripDragStartX;
-        if (!themeStripDragged && Math.abs(dx) > UiTokens.s(8)) {
-            // Past the slop this is a scroll, not a tap: the armed card dies.
-            themeStripDragged = true;
-            pressedThemeCard = -1;
+        float dy = vmy - themeStripDragStartY;
+        if (!themeStripDragged) {
+            float dist = (float) Math.sqrt(dx * dx + dy * dy);
+            if (dist > UiTokens.s(8)) {
+                if (Math.abs(dy) > Math.abs(dx)) {
+                    // Vertical intent: hand the gesture back to the list.
+                    themeStripPressed = false;
+                    pressedThemeCard = -1;
+                    return;
+                }
+                // Past the slop this is a horizontal scroll, not a tap:
+                // the armed card dies.
+                themeStripDragged = true;
+                pressedThemeCard = -1;
+            }
         }
         if (themeStripDragged) {
             themeStripScroll = themeStripTarget = clampScroll(
@@ -1461,10 +1477,12 @@ public final class SettingsSectionPage {
                 UiTokens.SLIDER_KNOB / 2.0F, Color.makeARGB(255, 255, 255, 255)); // knob: mechanical white
         // Cut the round head out of the track with a card-coloured gap ring,
         // then trace the gap with an accent hairline. Knob geometry unchanged.
+        // The ring is the card surface pre-mixed over the panel (opaque): a
+        // translucent cardFill only tinted the track instead of cutting it.
         float knobCx = knobX + UiTokens.SLIDER_KNOB / 2.0F;
         float knobCy = knobY + UiTokens.SLIDER_KNOB / 2.0F;
         float knobR = UiTokens.SLIDER_KNOB / 2.0F;
-        SkiaDraw.drawRing(canvas, knobCx, knobCy, knobR + s(1.5F), s(3.0F), UiTokens.cardFill());
+        SkiaDraw.drawRing(canvas, knobCx, knobCy, knobR + s(1.5F), s(3.0F), UiTokens.cardCutout());
         SkiaDraw.drawRing(canvas, knobCx, knobCy, knobR + s(3.5F), s(1.0F), accent);
     }
 

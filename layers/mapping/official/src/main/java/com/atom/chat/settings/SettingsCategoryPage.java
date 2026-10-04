@@ -37,7 +37,6 @@ public final class SettingsCategoryPage {
     private final SettingsSection[] categories = SettingsSection.values();
     private final float[] cardHover = new float[categories.length];
     private final Map<Integer, PressScale> cardPress = new HashMap<>();
-    private int hoveredCard = -1;
     private int pressedCard = -1;
     private long lastFrameMs = System.currentTimeMillis();
 
@@ -112,7 +111,6 @@ public final class SettingsCategoryPage {
             canvas.restore();
         }
 
-        hoveredCard = hovered;
         for (int i = 0; i < cardHover.length; i++) {
             cardHover[i] = UiMotion.approach(cardHover[i], i == hovered ? 1.0F : 0.0F, dt,
                     UiMotion.HOVER_MS);
@@ -222,7 +220,6 @@ public final class SettingsCategoryPage {
     /** Drops per-page transient state so reopening the menu starts clean. */
     public void reset() {
         pressedCard = -1;
-        hoveredCard = -1;
         cardPress.clear();
     }
 }

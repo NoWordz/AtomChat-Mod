@@ -225,6 +225,11 @@ public final class MessageListView {
             pruneEntranceSettled(now);
             float dtMs = Math.min(50.0F, Math.max(1.0F, now - lastFrameMs));
             lastFrameMs = now;
+            // Row press bounce: integrate once per frame. Stepping the shared
+            // spring inside the loop below ran it once per row with the target
+            // flipping between 0.98 and 1.0 each time, which collapsed the
+            // bounce into a hard cut.
+            rowPress.update(false, pressedIndex >= 0, dtMs, Animations.enabled());
             float cursorY = y;
             for (int mi = 0; mi < messages.size(); mi++) {
                 ChatMessage msg = messages.get(mi);
@@ -282,8 +287,8 @@ public final class MessageListView {
                     drawJumpHighlight(canvas, msg, x, cursorY, width, h);
                     // Row press bounce: 0.98 around the row centre while the
                     // press is held; hit-tests stay in unscaled space, like the
-                    // entrance slide above.
-                    rowPress.update(false, pressedIndex == hits.size(), dtMs, Animations.enabled());
+                    // entrance slide above. The spring itself is stepped once
+                    // per frame above the loop.
                     rowPress.begin(canvas, x + width / 2.0F, cursorY + messageHeight(msg, width, grouped) / 2.0F);
                     int spanStart;
                     MessageHit hit;

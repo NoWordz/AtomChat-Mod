@@ -46,6 +46,25 @@ public final class UiTokens {
         return io.github.humbleui.skija.Color.makeARGB((int) (45.0F * weight), 255, 255, 255);
     }
 
+    /**
+     * Opaque stand-in for the card surface, pre-mixed from the card colour at
+     * the card-tint alpha over the panel colour. Used where a shape has to
+     * read as a hole cut through to the card (the slider knob's gap ring): a
+     * translucent {@link #cardFill()} over the accent track only tints it,
+     * while this pre-mix looks like a cut-out on frosted and opaque panels
+     * alike.
+     */
+    public static int cardCutout() {
+        com.atom.chat.config.AtomChatConfig config = com.atom.chat.config.AtomChatConfig.get();
+        float t = Math.max(0.0F, Math.min(1.0F, config.cardTint));
+        int cardRgb = config.cardColor & 0x00FFFFFF;
+        int panelRgb = config.panelBgColor & 0x00FFFFFF;
+        int r = Math.round(((cardRgb >> 16) & 0xFF) * t + ((panelRgb >> 16) & 0xFF) * (1.0F - t));
+        int g = Math.round(((cardRgb >> 8) & 0xFF) * t + ((panelRgb >> 8) & 0xFF) * (1.0F - t));
+        int b = Math.round((cardRgb & 0xFF) * t + (panelRgb & 0xFF) * (1.0F - t));
+        return io.github.humbleui.skija.Color.makeARGB(255, r, g, b);
+    }
+
     // Panel
     public static float panelRadius() {
         return radius(28);
