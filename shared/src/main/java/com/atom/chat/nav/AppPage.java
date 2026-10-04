@@ -12,6 +12,12 @@ public enum AppPage {
      */
     SETTINGS_SECTION("settings_section", false),
     /**
+     * The category menu between the settings home and a section page: one
+     * horizontal card per category. Carries no parameter - the destination
+     * section is chosen on the menu itself.
+     */
+    SETTINGS_CATEGORY("settings_category", false),
+    /**
      * Another player's profile pushed as a detail page (avatar click / menu):
      * full-width push/pop animation, back returns to the page underneath.
      */
