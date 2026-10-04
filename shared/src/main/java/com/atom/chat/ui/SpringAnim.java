@@ -39,6 +39,8 @@ public final class SpringAnim {
 
     private final float stiffness;
     private final float damping;
+    private final float settleEpsPos;
+    private final float settleEpsVel;
     private float value;
     private float velocity;
     private float target;
@@ -50,8 +52,21 @@ public final class SpringAnim {
      *                     overshoots by exp(-zeta*pi/sqrt(1-zeta^2))
      */
     public SpringAnim(float stiffness, float dampingRatio) {
+        this(stiffness, dampingRatio, SETTLE_EPS_POS, SETTLE_EPS_VEL);
+    }
+
+    /**
+     * Full form for domains far from the 0..1 progress range: the settle
+     * thresholds must be rescaled to the travelled distance, or the spring
+     * either snaps before the motion reads or wanders forever. The bounce
+     * scale spring in {@link UiSpring#newBounceSpring()} travels only
+     * 0.02-0.06 units and passes its own, much tighter pair.
+     */
+    public SpringAnim(float stiffness, float dampingRatio, float settleEpsPos, float settleEpsVel) {
         this.stiffness = stiffness;
         this.damping = 2.0F * dampingRatio * (float) Math.sqrt(stiffness);
+        this.settleEpsPos = settleEpsPos;
+        this.settleEpsVel = settleEpsVel;
     }
 
     /** Current animated value. */
@@ -112,7 +127,7 @@ public final class SpringAnim {
             velocity += (-stiffness * (value - target) - damping * velocity) * h;
             value += velocity * h;
         }
-        if (Math.abs(value - target) <= SETTLE_EPS_POS && Math.abs(velocity) <= SETTLE_EPS_VEL) {
+        if (Math.abs(value - target) <= settleEpsPos && Math.abs(velocity) <= settleEpsVel) {
             value = target;
             velocity = 0.0F;
             settled = true;

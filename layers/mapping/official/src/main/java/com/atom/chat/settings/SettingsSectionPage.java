@@ -11,7 +11,9 @@ import com.atom.chat.render.Easing;
 import com.atom.chat.render.SkiaDraw;
 import com.atom.chat.render.SkiaFontRenderer;
 import com.atom.chat.theme.ThemeService;
+import com.atom.chat.ui.Animations;
 import com.atom.chat.ui.AppIcons;
+import com.atom.chat.ui.PressScale;
 import com.atom.chat.ui.ToggleSwitch;
 import com.atom.chat.wallpaper.WallpaperStore;
 
@@ -288,6 +290,22 @@ public final class SettingsSectionPage {
 
     private final Map<String, ToggleSwitch> switches = new HashMap<>();
     private final Map<Integer, Float> rowHover = new HashMap<>();
+    /** Per-row press bounce (rows press 0.98; hover never scales a row). */
+    private final Map<Integer, PressScale> rowPress = new HashMap<>();
+    /** Row index under an active press for the bounce; -1 = none. */
+    private int pressedRow = -1;
+    /** Per-swatch bounce scales, keyed by {@link #swatchKey}. */
+    private final Map<Long, PressScale> swatchScale = new HashMap<>();
+    /** Swatch hover/press state (row-local swatch index), -1 = none. */
+    private int hoveredSwatch = -1;
+    private int pressedSwatch = -1;
+    /** Index of the colour row the swatch state belongs to; -1 = none. */
+    private int swatchRowIndex = -1;
+    /** Row index being drawn this iteration (switch press attribution). */
+    private int drawnRowIndex = -1;
+    /** Render-time pointer, for per-control hover (the switch, swatches). */
+    private float pointerX;
+    private float pointerY;
     private String draggingSliderId;
     private int activeSliderIndex = -1;
     private float dragValue;
@@ -649,6 +667,8 @@ public final class SettingsSectionPage {
         List<Row> rows = rows(section);
         Font buttonFont = FontManager.font(UiTokens.FONT_QUOTE);
         int hovered = -1;
+        pointerX = vmx;
+        pointerY = vmy;
 
         canvas.save();
         try {
@@ -659,17 +679,41 @@ public final class SettingsSectionPage {
                 if (rect.bottom() < layout.list.y() || rect.y() > layout.list.bottom()) {
                     continue;
                 }
+                drawnRowIndex = i;
                 boolean over = row.kind() != RowKind.LABEL
                         && vmx >= rect.x() && vmx <= rect.right()
                         && vmy >= rect.y() && vmy <= rect.bottom();
                 if (over) {
                     hovered = i;
                 }
+                // Colour rows resolve the pointer to a row-local swatch index
+                // so drawColor can bounce the one under it (-1 = none).
+                if (row.kind() == RowKind.COLOR) {
+                    hoveredSwatch = swatchAt(row.color(), rect, vmx, vmy);
+                    swatchRowIndex = i;
+                } else {
+                    hoveredSwatch = -1;
+                    swatchRowIndex = -1;
+                }
                 // Draw from the animated value only. Never force it to 1 while
                 // hovered — that is what made the highlight snap in instead of
                 // fading in over the same 90ms the toolbar buttons use.
-                drawRow(canvas, row, rect, rowHover.getOrDefault(i, 0.0F),
-                        buttonFont, accent, dt);
+                // Rows press-scale around their centre (0.98) and hit-tests
+                // keep using unscaled coordinates, like the message entrance.
+                PressScale press = row.kind() == RowKind.LABEL ? null
+                        : rowPress.computeIfAbsent(i, k -> PressScale.row());
+                if (press != null) {
+                    press.update(false, i == pressedRow, dt, Animations.enabled());
+                    press.begin(canvas, rect.x() + rect.w() / 2.0F, rect.y() + rect.h() / 2.0F);
+                }
+                try {
+                    drawRow(canvas, row, rect, rowHover.getOrDefault(i, 0.0F),
+                            buttonFont, accent, dt);
+                } finally {
+                    if (press != null) {
+                        canvas.restore();
+                    }
+                }
             }
         } finally {
             canvas.restore();
@@ -719,7 +763,7 @@ public final class SettingsSectionPage {
             case HERO -> drawHero(canvas, rect);
             case SWITCH -> drawSwitch(canvas, row, rect, accent, dtMs);
             case SLIDER -> drawSlider(canvas, row, rect, accent);
-            case COLOR -> drawColor(canvas, row, rect);
+            case COLOR -> drawColor(canvas, row, rect, dtMs);
             case THEMES -> drawThemes(canvas, rect);
             case INFO -> drawInfo(canvas, row, rect);
             case BLOCKED -> drawBlocked(canvas, row, rect, hover, buttonFont);
@@ -727,6 +771,39 @@ public final class SettingsSectionPage {
             default -> {
             }
         }
+    }
+
+    /** Map key for a per-swatch bounce spring: row index << 32 | swatch. */
+    private static long swatchKey(int rowIndex, int swatchIndex) {
+        return (long) rowIndex << 32 | swatchIndex;
+    }
+
+    /** Arms the row press bounce (mouse-down) or clears it (-1 on release). */
+    public void setPressedRow(int index) {
+        pressedRow = index;
+    }
+
+    /** Arms the colour-swatch press bounce or clears it (-1 on release). */
+    public void setPressedSwatch(int swatchIndex) {
+        pressedSwatch = swatchIndex;
+    }
+
+    /**
+     * Row-local swatch index under the pointer, or -1. Geometry mirrors
+     * {@link #colorHit}: same strip centre, same r+s(4) slop.
+     */
+    private int swatchAt(SettingsColor color, UiLayout.Rect rect, float vmx, float vmy) {
+        float r = UiTokens.s(9);
+        float cy = swatchCy(rect);
+        if (Math.abs(vmy - cy) > r + UiTokens.s(4) || vmy < rect.y() || vmy > rect.bottom()) {
+            return -1;
+        }
+        for (int i = 0; i < color.swatchCount(); i++) {
+            if (Math.abs(vmx - swatchX(rect, i)) <= r + UiTokens.s(4)) {
+                return i;
+            }
+        }
+        return -1;
     }
 
     /** Swatch strip geometry: centre Y within the row and the X step. */
@@ -811,7 +888,7 @@ public final class SettingsSectionPage {
         return -1;
     }
 
-    private void drawColor(Canvas canvas, Row row, UiLayout.Rect rect) {
+    private void drawColor(Canvas canvas, Row row, UiLayout.Rect rect, float dtMs) {
         SettingsColor color = row.color();
         Font titleFont = FontManager.font(UiTokens.SETTINGS_TILE_TITLE);
         Font valueFont = FontManager.font(UiTokens.SETTINGS_TILE_SUB);
@@ -839,14 +916,24 @@ public final class SettingsSectionPage {
         for (int i = 0; i < color.swatchCount(); i++) {
             float scx = swatchX(rect, i);
             int swatch = color.swatchColor(i);
-            SkiaDraw.drawRoundedRect(canvas, scx - r, cy - r, 2.0F * r, 2.0F * r, r, swatch);
-            if (swatch == color.value()) {
-                // Selection ring: white outline with a breathing gap.
-                try (Paint ring = new Paint().setColor(Color.makeARGB(255, 255, 255, 255))
-                        .setMode(PaintMode.STROKE).setStrokeWidth(s(2)).setAntiAlias(true)) {
-                    canvas.drawOval(io.github.humbleui.types.Rect.makeXYWH(
-                            scx - r - s(3), cy - r - s(3), 2.0F * (r + s(3)), 2.0F * (r + s(3))), ring);
+            // One bounce spring per swatch (keyed row+index): hover 1.03,
+            // press 0.97, spring back on release. Hit-tests stay unscaled.
+            PressScale ps = swatchScale.computeIfAbsent(swatchKey(swatchRowIndex, i),
+                    k -> PressScale.control());
+            ps.update(i == hoveredSwatch, i == pressedSwatch, dtMs, Animations.enabled());
+            ps.begin(canvas, scx, cy);
+            try {
+                SkiaDraw.drawRoundedRect(canvas, scx - r, cy - r, 2.0F * r, 2.0F * r, r, swatch);
+                if (swatch == color.value()) {
+                    // Selection ring: white outline with a breathing gap.
+                    try (Paint ring = new Paint().setColor(Color.makeARGB(255, 255, 255, 255))
+                            .setMode(PaintMode.STROKE).setStrokeWidth(s(2)).setAntiAlias(true)) {
+                        canvas.drawOval(io.github.humbleui.types.Rect.makeXYWH(
+                                scx - r - s(3), cy - r - s(3), 2.0F * (r + s(3)), 2.0F * (r + s(3))), ring);
+                    }
                 }
+            } finally {
+                canvas.restore();
             }
         }
         // "+" cell: opens the custom colour picker (emote-grid plus language).
@@ -1052,9 +1139,15 @@ public final class SettingsSectionPage {
     private void drawSwitch(Canvas canvas, Row row, UiLayout.Rect rect, int accent, float dtMs) {
         SettingsItem item = row.item();
         ToggleSwitch control = switches.computeIfAbsent(item.id(), k -> new ToggleSwitch());
-        control.update(dtMs, item.available() && item.value());
 
         float switchX = rect.right() - UiTokens.SETTINGS_ROW_PAD - UiTokens.SWITCH_W;
+        // Pointer-over-switch drives the control's own hover bounce; a row
+        // press only counts when it landed on the switch. Unscaled coordinates.
+        boolean overSwitch = pointerX >= switchX && pointerX <= switchX + UiTokens.SWITCH_W
+                && pointerY >= rect.y() && pointerY <= rect.bottom();
+        control.setInteraction(overSwitch, overSwitch && pressedRow == drawnRowIndex);
+        control.update(dtMs, item.available() && item.value());
+
         float switchY = rect.y() + (rect.h() - UiTokens.SWITCH_H) / 2.0F;
         control.render(canvas, switchX, switchY, accent);
 
@@ -1605,6 +1698,10 @@ public final class SettingsSectionPage {
     public void reset() {
         switches.clear();
         rowHover.clear();
+        rowPress.clear();
+        swatchScale.clear();
+        pressedRow = -1;
+        pressedSwatch = -1;
         draggingSliderId = null;
         hoveredIndex = -1;
         cancelNumberEdit();

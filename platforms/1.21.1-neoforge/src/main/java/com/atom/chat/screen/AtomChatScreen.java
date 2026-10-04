@@ -2278,6 +2278,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
         if (index < 0) {
             return false;
         }
+        bottomTabBar.setPressedTab(index);
         AppPage root = switch (index) {
             case 0 -> AppPage.CHAT_LIST;
             case 1 -> AppPage.PROFILE;
@@ -3706,6 +3707,8 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
                             mx, my, pageLayout, section, pageScroll.getScrollY());
                     if (colorHit != null) {
                         settingsSectionPage.disarmAction();
+                        // Arm the swatch bounce; the press visual holds until release.
+                        settingsSectionPage.setPressedSwatch(colorHit.plus() ? -1 : colorHit.swatchIndex());
                         if (colorHit.plus()) {
                             colorPicker.open(colorHit.color());
                         } else {
@@ -3715,9 +3718,14 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
                     }
                     SettingsSectionPage.RowHit hit = settingsSectionPage.hit(mx, my, pageLayout,
                             section, pageScroll.getScrollY());
-                    if (hit != null && hit.onAction(mx, my)) {
-                        settingsSectionPage.perform(hit);
-                        return true;
+                    if (hit != null) {
+                        // Arm the row press bounce wherever the press landed;
+                        // hit-tests stay unscaled.
+                        settingsSectionPage.setPressedRow(hit.index());
+                        if (hit.onAction(mx, my)) {
+                            settingsSectionPage.perform(hit);
+                            return true;
+                        }
                     }
                     settingsSectionPage.disarmAction();
                 }
@@ -3801,6 +3809,9 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
                 return false;
             }
             settingsSectionPage.endSliderDrag();
+            settingsSectionPage.setPressedRow(-1);
+            settingsSectionPage.setPressedSwatch(-1);
+            bottomTabBar.setPressedTab(-1);
             if (button == 0 && listScroll().isDragging()) {
                 listScroll().endDrag();
                 return true;
@@ -4054,6 +4065,12 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
                 if (my < hit.y() || my > hit.bottom()) {
                     continue;
                 }
+                // Row press bounce: arm on a left press inside the bubble.
+                if (button == 0
+                        && mx >= hit.bubbleX() && mx <= hit.bubbleX() + hit.bubbleWidth()
+                        && my >= hit.bubbleY() && my <= hit.bubbleBottom()) {
+                    messageListView.setPressedIndex(hit.index());
+                }
                 if (button == 1 && hit.avatarSize() > 0F
                         && mx >= hit.avatarX() && mx <= hit.avatarX() + hit.avatarSize()
                         && my >= hit.avatarY() && my <= hit.avatarY() + hit.avatarSize()
@@ -4167,6 +4184,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
                 return false;
             }
             if (button == 0) {
+                messageListView.setPressedIndex(-1);
                 float mx = toVirtualX(mouseX);
                 float my = toVirtualY(mouseY);
                 boolean wasSelecting = messageListView.isSelecting();

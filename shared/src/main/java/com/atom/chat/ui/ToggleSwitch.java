@@ -22,9 +22,23 @@ public final class ToggleSwitch {
     private static final int KNOB = Color.makeARGB(255, 255, 255, 255);
 
     private final Animator anim = new Animator(Easing::easeOutCubic);
+    /** Hover/press bounce; hit-testing stays unscaled upstream, this is draw-only. */
+    private final PressScale scale = PressScale.control();
+    private boolean hover;
+    private boolean pressed;
 
     public ToggleSwitch() {
         anim.setValue(0.0F);
+    }
+
+    /**
+     * Pointer state for the scale bounce. The switch itself never hit-tests —
+     * the row reports whether the pointer is over the switch and whether the
+     * row press landed on it.
+     */
+    public void setInteraction(boolean hover, boolean pressed) {
+        this.hover = hover;
+        this.pressed = pressed;
     }
 
     /** Jumps to the target with no animation (used when a page is first shown). */
@@ -39,6 +53,7 @@ public final class ToggleSwitch {
     public void update(float dtMs, boolean on) {
         anim.animateTo(UiMotion.TOGGLE_MS, on ? 1.0F : 0.0F);
         anim.update(dtMs);
+        scale.update(hover, pressed, dtMs, Animations.enabled());
     }
 
     /**
@@ -47,14 +62,19 @@ public final class ToggleSwitch {
      * @param accent the on-state track colour
      */
     public void render(Canvas canvas, float x, float y, int accent) {
-        float p = Math.max(0.0F, Math.min(1.0F, anim.getValue()));
-        SkiaDraw.drawRoundedRect(canvas, x, y, UiTokens.SWITCH_W, UiTokens.SWITCH_H,
-                UiTokens.SWITCH_H / 2.0F, SkiaDraw.lerpColor(TRACK_OFF, accent, p));
+        scale.begin(canvas, x + UiTokens.SWITCH_W / 2.0F, y + UiTokens.SWITCH_H / 2.0F);
+        try {
+            float p = Math.max(0.0F, Math.min(1.0F, anim.getValue()));
+            SkiaDraw.drawRoundedRect(canvas, x, y, UiTokens.SWITCH_W, UiTokens.SWITCH_H,
+                    UiTokens.SWITCH_H / 2.0F, SkiaDraw.lerpColor(TRACK_OFF, accent, p));
 
-        float travel = UiTokens.SWITCH_W - UiTokens.SWITCH_KNOB - UiTokens.SWITCH_INSET * 2.0F;
-        float knobX = x + UiTokens.SWITCH_INSET + travel * p;
-        float knobY = y + (UiTokens.SWITCH_H - UiTokens.SWITCH_KNOB) / 2.0F;
-        SkiaDraw.drawRoundedRect(canvas, knobX, knobY, UiTokens.SWITCH_KNOB, UiTokens.SWITCH_KNOB,
-                UiTokens.SWITCH_KNOB / 2.0F, KNOB);
+            float travel = UiTokens.SWITCH_W - UiTokens.SWITCH_KNOB - UiTokens.SWITCH_INSET * 2.0F;
+            float knobX = x + UiTokens.SWITCH_INSET + travel * p;
+            float knobY = y + (UiTokens.SWITCH_H - UiTokens.SWITCH_KNOB) / 2.0F;
+            SkiaDraw.drawRoundedRect(canvas, knobX, knobY, UiTokens.SWITCH_KNOB, UiTokens.SWITCH_KNOB,
+                    UiTokens.SWITCH_KNOB / 2.0F, KNOB);
+        } finally {
+            canvas.restore();
+        }
     }
 }

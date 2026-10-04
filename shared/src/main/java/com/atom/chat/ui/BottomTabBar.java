@@ -30,9 +30,21 @@ public final class BottomTabBar {
 
     private final Animator indicatorAnim = new Animator(Easing::easeInOutCubic);
     private final float[] tabHover = new float[3];
+    /** Per-tab press/hover bounce; hit-testing stays unscaled, this is draw-only. */
+    private final PressScale[] tabScale = {PressScale.control(), PressScale.control(), PressScale.control()};
+    /** Tab index under an active press, for the bounce; -1 = none. */
+    private int pressedTab = -1;
 
     public BottomTabBar() {
         indicatorAnim.setValue(0.0F);
+    }
+
+    /**
+     * Arms the press bounce for a tab (mouse-down) or clears it (-1 on
+     * release). Geometry comes from {@link #hitTest} on the caller side.
+     */
+    public void setPressedTab(int index) {
+        pressedTab = index;
     }
 
     /** The animator used for the selected capsule; shared with the root content transition. */
@@ -65,6 +77,7 @@ public final class BottomTabBar {
         for (int i = 0; i < 3; i++) {
             tabHover[i] = UiMotion.approach(tabHover[i], i == hovered ? 1.0F : 0.0F,
                     deltaMs, UiMotion.HOVER_MS);
+            tabScale[i].update(i == hovered, i == pressedTab, deltaMs, Animations.enabled());
         }
     }
 
@@ -113,8 +126,14 @@ public final class BottomTabBar {
             // The selected tab's glyph takes the accent colour (on selection,
             // not hover) so the tab state reads twice: pill + tinted icon.
             int iconColor = i == selectedIndex ? accent : textPrimary;
-            drawIconCentered(canvas, ICONS[i], cellCenterX, iconCenterY,
-                    UiTokens.TAB_ICON_SIZE, iconColor);
+            // Icon-only bounce around the glyph centre; the pill wash stays put.
+            tabScale[i].begin(canvas, cellCenterX, iconCenterY);
+            try {
+                drawIconCentered(canvas, ICONS[i], cellCenterX, iconCenterY,
+                        UiTokens.TAB_ICON_SIZE, iconColor);
+            } finally {
+                canvas.restore();
+            }
         }
     }
 

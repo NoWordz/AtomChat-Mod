@@ -1,0 +1,74 @@
+package com.atom.chat.ui;
+
+import io.github.humbleui.skija.Canvas;
+
+/**
+ * Per-control hover/press scale driven by the bounce spring
+ * ({@link UiSpring#newBounceSpring()}). One instance per interactive
+ * control — never shared — and hit-testing keeps using unscaled
+ * coordinates: the scale is draw-only, exactly like the message-entrance
+ * slide.
+ *
+ * <p>Controls (switches, grid cells, icons, swatches) breathe both ways:
+ * 1.03 on hover, 0.97 while pressed, springing back on release. Rows
+ * (settings/message lines) press only — scaling a whole row on hover reads
+ * as jitter, so their hover target stays 1.0.</p>
+ *
+ * <p>With decorative motion off ({@link Animations#enabled()}) the scale
+ * pins to exactly 1.0.</p>
+ */
+public final class PressScale {
+    private final SpringAnim spring = UiSpring.newBounceSpring();
+    private final float hoverTarget;
+    private final float pressTarget;
+
+    private PressScale(float hoverTarget, float pressTarget) {
+        this.hoverTarget = hoverTarget;
+        this.pressTarget = pressTarget;
+        spring.snapTo(1.0F);
+    }
+
+    /** Controls: 1.03 on hover, 0.97 while pressed. */
+    public static PressScale control() {
+        return new PressScale(1.03F, 0.97F);
+    }
+
+    /** Rows: press-only 0.98, hover does not scale. */
+    public static PressScale row() {
+        return new PressScale(1.0F, 0.98F);
+    }
+
+    /**
+     * Advances toward the state's target. With {@code animEnabled} false the
+     * target is 1.0 and the spring snaps, so the scale never leaves 1.
+     */
+    public void update(boolean hover, boolean pressed, float dtMs, boolean animEnabled) {
+        spring.setTarget(animEnabled ? (pressed ? pressTarget : hover ? hoverTarget : 1.0F) : 1.0F);
+        spring.update(dtMs, animEnabled);
+    }
+
+    /** Current scale (1 = no transform). */
+    public float scale() {
+        return spring.value();
+    }
+
+    /** True once the spring is back at rest at 1.0 (lets maps drop idle entries). */
+    public boolean isResting() {
+        return spring.isSettled() && Math.abs(spring.value() - 1.0F) < 1e-4F;
+    }
+
+    /**
+     * Begins a centered scale: {@code canvas.save()} plus a translate/scale
+     * around (cx, cy). The caller draws the control, then calls
+     * {@code canvas.restore()} — always, including when the scale is 1.
+     */
+    public void begin(Canvas canvas, float cx, float cy) {
+        canvas.save();
+        float s = spring.value();
+        if (s != 1.0F) {
+            canvas.translate(cx, cy);
+            canvas.scale(s, s);
+            canvas.translate(-cx, -cy);
+        }
+    }
+}

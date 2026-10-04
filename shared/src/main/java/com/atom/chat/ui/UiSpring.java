@@ -57,6 +57,30 @@ public final class UiSpring {
     }
 
     /**
+     * Hover/press scaling constants — the bounce language of this UI.
+     * Stiffness 400 with damping ratio 0.58: the overshoot term
+     * exp(-zeta*pi/sqrt(1-zeta^2)) lands near 11% of the travelled distance,
+     * so a control pushed to 0.97 springs back through 1.00 with a soft
+     * overshoot instead of halting — brisk but visible. Bounce lives ONLY on
+     * hover/press scaling and the message entrance; large surfaces (the
+     * panel) travel near-critically damped (see {@link #PANEL_STIFFNESS}).
+     *
+     * <p>The scale domain is 0.97..1.03, far narrower than the 0..1 progress
+     * range {@link SpringAnim}'s default settle thresholds assume (9% of a
+     * 0.03 move is invisible), so {@link #newBounceSpring()} passes
+     * thresholds rescaled to the travel: 0.0015 position (5% of a 3% move),
+     * 0.3 velocity. Simulated at 60fps that settles in ~130ms, frame-rate
+     * independent.</p>
+     */
+    public static final float BOUNCE_STIFFNESS = 400.0F;
+    public static final float BOUNCE_DAMPING_RATIO = 0.58F;
+
+    /** A fresh hover/press scale spring at value 1 (no scale). */
+    public static SpringAnim newBounceSpring() {
+        return new SpringAnim(BOUNCE_STIFFNESS, BOUNCE_DAMPING_RATIO, 0.0015F, 0.3F);
+    }
+
+    /**
      * New-message entrance slide curve: {@code t} in 0..1, peaks at ~104.7%
      * and lands exactly on 1. The fade half of the entrance stays on
      * {@code Easing.easeOutQuad} — opacity never overshoots.

@@ -135,4 +135,35 @@ class SpringAnimTest {
         assertTrue(peak > 1.0F && peak <= 1.05F,
                 "message entrance overshoot must be at most 5%, got " + (100 * (peak - 1)) + "%");
     }
+
+    /**
+     * The bounce spring lives in the 0.97..1.03 scale domain, so it must
+     * settle briskly there (not wander for the want of rescaled thresholds)
+     * and land exactly when the pointer leaves.
+     */
+    @Test
+    void bounceSpringFitsTheScaleDomain() {
+        SpringAnim s = UiSpring.newBounceSpring();
+        s.snapTo(1.0F);
+        s.setTarget(1.03F);
+        float peak = 0.0F;
+        long settleMs = -1;
+        long t = 0;
+        for (int i = 0; i < 90 && settleMs < 0; i++, t += 16L) {
+            s.update(16L, true);
+            peak = Math.max(peak, s.value());
+            if (s.isSettled()) {
+                settleMs = t + 16L;
+            }
+        }
+        assertTrue(peak > 1.0F, "hover scale must actually travel");
+        assertTrue(settleMs >= 0 && settleMs <= 200,
+                "bounce must settle inside 200ms, took " + settleMs + "ms");
+        s.setTarget(1.0F);
+        for (int i = 0; i < 120; i++) {
+            s.update(16L, true);
+        }
+        assertEquals(1.0F, s.value(), 0.0F, "release lands exactly on 1");
+        assertTrue(s.isSettled());
+    }
 }

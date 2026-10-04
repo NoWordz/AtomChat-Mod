@@ -100,6 +100,13 @@ public final class EmojiPanel {
     private float anim;
     // Per-cell hover fade shared by the emoji / kaomoji / emote grids.
     private final Map<Integer, Float> cellHover = new HashMap<>();
+    // Per-cell press/hover scale bounce, same keys as cellHover.
+    private final Map<Integer, PressScale> cellScale = new HashMap<>();
+    /** Cell of the last click, still in the pressed phase of its pulse. */
+    private int pressedCellKey = -1;
+    private long pressedCellAtMs;
+    /** How long a click keeps its cell in the pressed phase before springing back. */
+    private static final long CELL_PULSE_MS = 110;
     /** Hover washes for the tab strip. */
     private final float[] tabHover = new float[3];
     // Tab transition: double-layer content slide + sliding indicator.
@@ -150,6 +157,8 @@ public final class EmojiPanel {
         if (open) {
             refreshEmotes();
             cellHover.clear();
+            cellScale.clear();
+            pressedCellKey = -1;
         }
     }
 
@@ -202,6 +211,8 @@ public final class EmojiPanel {
                 tab = t;
                 scroll = 0;
                 cellHover.clear();
+                cellScale.clear();
+                pressedCellKey = -1;
                 if (t == 2) {
                     // Rescan so files dropped into the emote dir by hand show up.
                     refreshEmotes();
@@ -236,6 +247,7 @@ public final class EmojiPanel {
         col = Math.max(0, Math.min(cols - 1, col));
         int idx = row * cols + col;
         if (idx >= 0 && idx < items.length) {
+            pulseCell(gridHoverKey(tab, idx));
             return items[idx];
         }
         return "";
@@ -337,6 +349,8 @@ public final class EmojiPanel {
         if (emoteStore.add(file.toFile())) {
             emoteImageCache.clear();
             cellHover.clear();
+            cellScale.clear();
+            pressedCellKey = -1;
         }
     }
 
@@ -395,6 +409,13 @@ public final class EmojiPanel {
 
     private int gridHoverKey(int tab, int index) {
         return tab * 1000 + index;
+    }
+
+    /** Click feedback: hold the cell pressed for a beat, then spring back. */
+    private void pulseCell(int key) {
+        pressedCellKey = key;
+        pressedCellAtMs = System.currentTimeMillis();
+        cellScale.computeIfAbsent(key, k -> PressScale.control());
     }
 
     /**
@@ -517,6 +538,27 @@ public final class EmojiPanel {
         if (hoveredKey >= 0 && !cellHover.containsKey(hoveredKey)) {
             cellHover.put(hoveredKey, 0.0F);
         }
+        // The scale bounce rides the same key set: pressed during the click
+        // pulse, hover target while the pointer stays, dropped once it is
+        // back at rest away from the pointer.
+        long now = System.currentTimeMillis();
+        boolean pulsing = pressedCellKey >= 0 && now - pressedCellAtMs < CELL_PULSE_MS;
+        Iterator<Map.Entry<Integer, PressScale>> scaleIt = cellScale.entrySet().iterator();
+        while (scaleIt.hasNext()) {
+            Map.Entry<Integer, PressScale> e = scaleIt.next();
+            boolean isHovered = e.getKey() == hoveredKey;
+            PressScale ps = e.getValue();
+            ps.update(isHovered, pulsing && e.getKey() == pressedCellKey, frameDt, Animations.enabled());
+            if (!isHovered && ps.isResting()) {
+                scaleIt.remove();
+            }
+        }
+        if (!pulsing) {
+            pressedCellKey = -1;
+        }
+        if (hoveredKey >= 0 && !cellScale.containsKey(hoveredKey)) {
+            cellScale.put(hoveredKey, PressScale.control());
+        }
     }
 
     /**
@@ -581,19 +623,29 @@ public final class EmojiPanel {
             if (ey + itemH < contentY || ey > contentY + contentH) {
                 continue;
             }
-            if (interactive) {
-                float hov = cellHover.getOrDefault(gridHoverKey(tab, i), 0.0F);
-                if (hov > 0.01F) {
-                    SkiaDraw.drawRoundedRect(canvas, ex + s(2), ey + s(2), cellW - s(4), itemH - s(4), s(6),
-                            Color.makeARGB((int) (60.0F * hov), 255, 255, 255));
-                }
+            PressScale ps = interactive ? cellScale.get(gridHoverKey(tab, i)) : null;
+            if (ps != null) {
+                ps.begin(canvas, ex + cellW / 2.0F, ey + itemH / 2.0F);
             }
-            if (tab == 1) {
-                SkiaFontRenderer.drawText(canvas, itemFont, items[i], ex + s(8),
-                        SkiaFontRenderer.centerBaselineY(itemFont, ey + itemH / 2.0F), textPrimary());
-            } else {
-                SkiaFontRenderer.drawTextCentered(canvas, itemFont, items[i],
-                        ex + cellW / 2.0F, ey + itemH / 2.0F, textPrimary());
+            try {
+                if (interactive) {
+                    float hov = cellHover.getOrDefault(gridHoverKey(tab, i), 0.0F);
+                    if (hov > 0.01F) {
+                        SkiaDraw.drawRoundedRect(canvas, ex + s(2), ey + s(2), cellW - s(4), itemH - s(4), s(6),
+                                Color.makeARGB((int) (60.0F * hov), 255, 255, 255));
+                    }
+                }
+                if (tab == 1) {
+                    SkiaFontRenderer.drawText(canvas, itemFont, items[i], ex + s(8),
+                            SkiaFontRenderer.centerBaselineY(itemFont, ey + itemH / 2.0F), textPrimary());
+                } else {
+                    SkiaFontRenderer.drawTextCentered(canvas, itemFont, items[i],
+                            ex + cellW / 2.0F, ey + itemH / 2.0F, textPrimary());
+                }
+            } finally {
+                if (ps != null) {
+                    canvas.restore();
+                }
             }
         }
     }
@@ -634,6 +686,8 @@ public final class EmojiPanel {
                     emoteStore.remove(emote);
                     emoteImageCache.invalidate(emote);
                     cellHover.clear();
+                    cellScale.clear();
+                    pressedCellKey = -1;
                     return "";
                 }
                 open = false;
@@ -642,6 +696,7 @@ public final class EmojiPanel {
             }
             case ADD -> {
                 if (!emoteStore.isFull()) {
+                    pulseCell(gridHoverKey(2, emoteStore.count()));
                     host.pickEmoteFile();
                 }
                 return "";
@@ -689,24 +744,56 @@ public final class EmojiPanel {
                 float ex = contentX + col * colW;
                 switch (c.kind()) {
                     case LOCAL -> {
-                        float hover = cellHover.getOrDefault(gridHoverKey(2, c.index()), 0.0F);
-                        drawEmoteImage(canvas, emotes.get(c.index()), ex, ey, colW, cell, pad);
-                        if (interactive) {
-                            drawCellActions(canvas, ex, ey, colW, cell, hover);
+                        PressScale ps = interactive ? cellScale.get(gridHoverKey(2, c.index())) : null;
+                        if (ps != null) {
+                            ps.begin(canvas, ex + colW / 2.0F, ey + cell / 2.0F);
+                        }
+                        try {
+                            float hover = cellHover.getOrDefault(gridHoverKey(2, c.index()), 0.0F);
+                            drawEmoteImage(canvas, emotes.get(c.index()), ex, ey, colW, cell, pad);
+                            if (interactive) {
+                                drawCellActions(canvas, ex, ey, colW, cell, hover);
+                            }
+                        } finally {
+                            if (ps != null) {
+                                canvas.restore();
+                            }
                         }
                     }
                     case SERVER -> {
                         // Read-only, but it highlights like any other cell: the only
                         // thing missing is the x, which would promise a delete this
                         // cell cannot do.
-                        drawEmoteImage(canvas, serverEmotes.get(c.index()), ex, ey, colW, cell, pad);
-                        if (interactive) {
-                            drawHoverWash(canvas, ex, ey, colW, cell, cellHover.getOrDefault(
-                                    gridHoverKey(2, SERVER_HOVER_BASE + c.index()), 0.0F));
+                        PressScale ps = interactive ? cellScale.get(gridHoverKey(2, SERVER_HOVER_BASE + c.index())) : null;
+                        if (ps != null) {
+                            ps.begin(canvas, ex + colW / 2.0F, ey + cell / 2.0F);
+                        }
+                        try {
+                            drawEmoteImage(canvas, serverEmotes.get(c.index()), ex, ey, colW, cell, pad);
+                            if (interactive) {
+                                drawHoverWash(canvas, ex, ey, colW, cell, cellHover.getOrDefault(
+                                        gridHoverKey(2, SERVER_HOVER_BASE + c.index()), 0.0F));
+                            }
+                        } finally {
+                            if (ps != null) {
+                                canvas.restore();
+                            }
                         }
                     }
-                    case ADD -> drawAddSlot(canvas, ex, ey, colW, cell,
-                            interactive ? cellHover.getOrDefault(gridHoverKey(2, addKey), 0.0F) : 0.0F);
+                    case ADD -> {
+                        PressScale ps = interactive ? cellScale.get(gridHoverKey(2, addKey)) : null;
+                        if (ps != null) {
+                            ps.begin(canvas, ex + colW / 2.0F, ey + cell / 2.0F);
+                        }
+                        try {
+                            drawAddSlot(canvas, ex, ey, colW, cell,
+                                    interactive ? cellHover.getOrDefault(gridHoverKey(2, addKey), 0.0F) : 0.0F);
+                        } finally {
+                            if (ps != null) {
+                                canvas.restore();
+                            }
+                        }
+                    }
                     default -> {
                     }
                 }
