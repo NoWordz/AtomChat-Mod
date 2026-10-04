@@ -84,12 +84,41 @@ public class AtomChatConfig {
      */
     public String teleportCommandMode = "auto";
     /**
-     * Corner style for the surrounding chrome (panel, cards, pills, popups —
-     * chat bubbles excluded on purpose): {@code large} (shipped default),
-     * {@code medium} or {@code small} (modern flat). No settings UI yet —
-     * presets write it and the file can be hand-edited.
+     * Corner radius for the surrounding chrome (panel, cards, pills, popups —
+     * chat bubbles excluded on purpose), on the reference-px scale the UI
+     * draws at: {@code 28} is the shipped default, {@code 0} means square
+     * corners on every surface, the slider tops out at {@code s(28)}.
+     * Replaces the old three-step {@code cornerStyle}, which lives on only
+     * for the one-time file migration below and is never read or written
+     * afterwards. Presets and the factory-default reset deliberately leave
+     * this knob alone.
      */
-    public String cornerStyle = "large";
+    public float cornerRadius = 28f;
+    /**
+     * Legacy three-step corner style ({@code large}/{@code medium}/
+     * {@code small}). Migration source only: {@link #load()} folds it into
+     * {@link #cornerRadius} once and nulls it, so it is neither read nor
+     * written again (Gson omits nulls from the saved file).
+     */
+    public String cornerStyle = null;
+
+    /**
+     * One-time migration of an old config file: the three-step style maps
+     * onto the continuous radius (large=28 / medium=18 / small=10), then the
+     * legacy field is dropped. Idempotent by the null check — a config that
+     * already migrated (or was never legacy) is untouched.
+     */
+    void migrateCornerStyle() {
+        if (cornerStyle == null) {
+            return;
+        }
+        cornerRadius = switch (cornerStyle) {
+            case "medium" -> 18f;
+            case "small" -> 10f;
+            default -> 28f;
+        };
+        cornerStyle = null;
+    }
     /**
      * Card/chrome surface tint, 0..1. At 0 the surfaces are the frosted
      * translucent white washes; at 1 they are opaque tints lifted from the
@@ -259,6 +288,7 @@ public class AtomChatConfig {
                     if (config.blockedPlayers == null) {
                         config.blockedPlayers = new java.util.ArrayList<>();
                     }
+                    config.migrateCornerStyle();
                     // Write the merged instance straight back: options added in
                     // newer builds are absent from an older file, and Gson drops
                     // unknown keys — so without this a new option could never be

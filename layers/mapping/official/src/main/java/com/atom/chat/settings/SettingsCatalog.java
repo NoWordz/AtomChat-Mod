@@ -2,6 +2,7 @@ package com.atom.chat.settings;
 
 import com.atom.chat.AtomChat;
 import com.atom.chat.config.AtomChatConfig;
+import com.atom.chat.ui.UiTokens;
 import com.atom.chat.wallpaper.WallpaperStore;
 import io.github.humbleui.skija.Color;
 import net.minecraft.network.chat.Component;
@@ -168,7 +169,16 @@ public final class SettingsCatalog {
                             0.00F, 1.00F, 0.05F,
                             () -> AtomChatConfig.get().cardTint,
                             v -> AtomChatConfig.get().cardTint = v,
-                            v -> Math.round(v * 100.0F) + "%"));
+                            v -> Math.round(v * 100.0F) + "%"),
+                    // Continuous corner radius, 0 = square corners everywhere.
+                    // Replaces the old three-step cornerStyle chips; presets
+                    // and the factory reset never write it.
+                    new SettingsSlider("corner_radius",
+                            "atomchat.settings.appearance.corners",
+                            0.0F, UiTokens.s(28), 1.0F,
+                            () -> AtomChatConfig.get().cornerRadius,
+                            v -> AtomChatConfig.get().cornerRadius = v,
+                            v -> Math.round(v) + " px"));
             case CHAT -> List.of(
                     new SettingsSlider("timestamp",
                             "atomchat.settings.chat.timestamp",

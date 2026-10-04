@@ -16,10 +16,24 @@ public final class UiTokens {
      * Corner-scaled radius for the surrounding chrome — panel, cards, pills,
      * popups. Chat bubbles are deliberately excluded (their radius is part of
      * the message identity), so bubble draws keep using {@link #BUBBLE_RADIUS}.
+     * Driven by the continuous {@code cornerRadius} config knob through
+     * {@link #radiusFactor(float)}: 0 gives hard 0-radius (pure square) calls
+     * on every surface.
      */
     public static float radius(float v) {
-        return s(v) * com.atom.chat.theme.ThemeService.cornerFactor(
-                com.atom.chat.config.AtomChatConfig.get().cornerStyle);
+        return s(v) * radiusFactor(
+                com.atom.chat.config.AtomChatConfig.get().cornerRadius);
+    }
+
+    /**
+     * Radius multiplier for a configured corner radius: {@code 0} is square
+     * (factor 0 everywhere), the {@code 28} reference is the shipped default
+     * look (factor 1, the old "large"), the slider maximum {@code s(28)} is
+     * 1.25. Values outside 0..s(28) clamp.
+     */
+    public static float radiusFactor(float cornerRadius) {
+        float r = Math.max(0.0F, Math.min(cornerRadius, s(28)));
+        return r / 28f;
     }
 
     /**

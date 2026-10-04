@@ -88,8 +88,8 @@ public final class ThemeService {
             config.panelOutlineColor = panelOutlineColor;
             config.secondaryCapsuleBg = capsuleBg;
             config.secondaryCapsuleText = capsuleText;
-            // cornerStyle deliberately NOT written: it is an independent
-            // setting now (appearance page segmented control), not a preset
+            // cornerRadius deliberately NOT written: it is an independent
+            // setting now (appearance page radius slider), not a preset
             // side effect.
         }
     }
@@ -268,7 +268,7 @@ public final class ThemeService {
      * own field initialisers — so there is exactly one source of truth and a
      * shipped-default change updates the reset automatically.
      *
-     * <p>Not touched on purpose: the independent knobs ({@code cornerStyle},
+     * <p>Not touched on purpose: the independent knobs ({@code cornerRadius},
      * panel size/scale, wallpapers, everything outside the theme snapshot) and
      * the {@code themeName} stamp, which the caller sets.</p>
      */
