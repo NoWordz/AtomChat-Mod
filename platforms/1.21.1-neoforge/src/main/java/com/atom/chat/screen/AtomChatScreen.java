@@ -38,6 +38,7 @@ import com.atom.chat.page.ProfilePage;
 import com.atom.chat.font.FontManager;
 import com.atom.chat.mixin.MouseHandlerAccessor;
 import com.atom.chat.render.Animator;
+import com.atom.chat.render.BlurMotionGate;
 import com.atom.chat.render.ClickableSpan;
 import com.atom.chat.render.Easing;
 import com.atom.chat.render.PanelBlurRenderer;
@@ -485,6 +486,8 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
     private final SpringAnim panelSpring = UiSpring.newPanelSpring();
     /** Wall-clock timestamp of the previous frame — the spring consumes real dt. */
     private long lastFrameNanos = System.nanoTime();
+    /** Composer height seen by the previous blur-gate frame, for change detection. */
+    private float lastBlurInputExtraH;
     private boolean blurDrawnThisFrame;
     private int pressedButton = -1;
     private long pressTime;
@@ -1030,6 +1033,16 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
             this.client.setScreen(null);
             return;
         }
+        // Feed the blur cadence gate: camera or panel-chrome motion keeps the
+        // every-2-frames blur refresh; a still scene drops to the slow fallback
+        // (see BlurMotionGate). The pre-pass below asks the gate per frame.
+        boolean chromeAnimating = !panelSpring.isSettled()
+                || Math.abs(inputExtraH - lastBlurInputExtraH) > 0.01F;
+        BlurMotionGate.noteFrame(System.currentTimeMillis(),
+                client.player != null ? client.player.getYRot() : 0.0F,
+                client.player != null ? client.player.getXRot() : 0.0F,
+                chromeAnimating);
+        lastBlurInputExtraH = inputExtraH;
 
         // The blur pre-pass is raw GL and must run before Skia paints the panel.
         // Load the shader first so drawPanel knows whether it may use the

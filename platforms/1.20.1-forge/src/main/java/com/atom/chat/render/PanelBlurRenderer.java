@@ -312,7 +312,13 @@ public final class PanelBlurRenderer {
         int glY0 = fbHeight - (y + h);
         int glY1 = fbHeight - y;
 
-        boolean full = nextFullRefresh || recreated;
+        // r15 on-demand blur: the frame slot stays, but the shared gate decides
+        // whether a due slot actually runs. A still scene (camera + panel chrome)
+        // drops to the <=500ms fallback cadence; any motion restores the
+        // every-2-frames refresh. A denied slot simply reuses lastBlurTex.
+        long nowMs = System.currentTimeMillis();
+        boolean slotDue = nextFullRefresh || recreated;
+        boolean full = BlurMotionGate.allowFullRefresh(nowMs, slotDue, recreated);
         nextFullRefresh = !full;
         if (full) {
             blit(mainFbo, x, glY0, x + w, glY1, inputFbo, 0, 0, w, h);
