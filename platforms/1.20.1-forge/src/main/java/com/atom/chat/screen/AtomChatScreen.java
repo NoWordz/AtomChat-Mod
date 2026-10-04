@@ -3679,6 +3679,12 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
                     popPage();
                     return true;
                 }
+                if (button == 0 && settingsSectionPage.themesPress(mx, my, pageLayout,
+                        topNav().section(), pageScroll.getScrollY())) {
+                    // The theme strip owns clicks on its row: a settled press
+                    // selects a card, a moving one scrolls it.
+                    return true;
+                }
                 if (button == 0) {
                     SettingsSection section = topNav().section();
                     // A slider press starts a drag or nudges by one step; it
@@ -3792,6 +3798,12 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
             // scrollbar drag model; do not forward drags to the hidden composer.
             // An active slider drag owns the pointer until release; the value
             // follows the pointer's X even outside the row.
+            if (settingsSectionPage.isDraggingThemeStrip()) {
+                settingsSectionPage.dragThemeStrip(toVirtualX(mouseX),
+                        settingsSectionPage.themesRowRect(listLayout(), topNav().section(),
+                                listScroll().getScrollY()));
+                return true;
+            }
             if (settingsSectionPage.isDraggingSlider()) {
                 UiLayout layout = listLayout();
                 settingsSectionPage.dragSlider(layout, topNav().section(),
@@ -3810,6 +3822,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
             if (isWorldChatPage()) {
                 return false;
             }
+            settingsSectionPage.endThemeStrip();
             settingsSectionPage.endSliderDrag();
             settingsSectionPage.setPressedRow(-1);
             settingsSectionPage.setPressedSwatch(-1);
@@ -3830,6 +3843,16 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
             float my = toVirtualY(mouseY);
             // Dragging a slider must not scroll the list underneath it.
             if (settingsSectionPage.isDraggingSlider()) {
+                return true;
+            }
+            // The theme strip consumes the wheel while the pointer is over
+            // it: it scrolls horizontally, not the list underneath.
+            if (topPage() == AppPage.SETTINGS_SECTION
+                    && settingsSectionPage.themesUnderPointer(mx, my, listLayout(),
+                            topNav().section(), listScroll().getScrollY())) {
+                settingsSectionPage.wheelThemeStrip((float) verticalAmount,
+                        settingsSectionPage.themesRowRect(listLayout(), topNav().section(),
+                                listScroll().getScrollY()));
                 return true;
             }
             UiLayout.Rect pageList = listLayout().list;

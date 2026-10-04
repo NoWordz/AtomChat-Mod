@@ -58,6 +58,12 @@ public final class UiTokens {
     public static final int CARD_EDGE = io.github.humbleui.skija.Color.makeARGB(30, 255, 255, 255);
     /** Shared drop-shadow colour for floating chrome (header, composer, tab bar). */
     public static final int CHROME_SHADOW = io.github.humbleui.skija.Color.makeARGB(100, 0, 0, 0);
+    /**
+     * The lighter elevation tier for content cards (settings rows, tiles,
+     * preview cards): low alpha, small blur — enough to lift a card off the
+     * panel without the weight of floating chrome.
+     */
+    public static final int CARD_SHADOW = io.github.humbleui.skija.Color.makeARGB(38, 0, 0, 0);
     public static final float PANEL_ANCHOR_X = s(24);
     public static final float PANEL_TOP_GAP = s(8);
 
@@ -212,6 +218,15 @@ public final class UiTokens {
 
     // Settings section rows (switch items, blocked players, about entries).
     public static final float SETTINGS_ROW_H = s(56);
+    /**
+     * Theme-preview row: title line up top, then the horizontally scrollable
+     * mini-panel cards, then the theme name under each card.
+     */
+    public static final float SETTINGS_THEME_ROW_H = s(172);
+    /** One mini-panel preview card (the theme picker card, not its name line). */
+    public static final float THEME_CARD_W = s(96);
+    public static final float THEME_CARD_H = s(116);
+    public static final float THEME_CARD_GAP = s(10);
     /** About-page hero card: logo plate on the left, wordmark on the right. */
     public static final float SETTINGS_HERO_H = s(88);
     public static final float SETTINGS_HERO_PLATE = s(56);

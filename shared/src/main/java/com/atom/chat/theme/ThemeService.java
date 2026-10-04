@@ -177,6 +177,29 @@ public final class ThemeService {
     }
 
     /**
+     * The palette one theme-preview card draws with: accent, mini panel
+     * background, title-bar strip (the card surface), both bubbles and the
+     * corner scale the palette was designed around. Colour presets answer from
+     * their own fields; the Default tile (and any unknown id) answers from the
+     * factory config, so the default card previews exactly what picking it
+     * restores.
+     */
+    public record Preview(int accent, int panelBg, int card,
+                          int ownBubble, int otherBubble, float cornerFactor) {
+    }
+
+    public static Preview previewOf(String themeId) {
+        Preset preset = byId(themeId);
+        if (preset != null) {
+            return new Preview(preset.accent(), preset.panelBg(), preset.card(),
+                    preset.ownBubble(), preset.otherBubble(), cornerFactor(preset.cornerStyle()));
+        }
+        AtomChatConfig def = AtomChatConfig.DEFAULT;
+        return new Preview(def.accentColor, def.panelBgColor, def.cardColor,
+                def.ownBubbleColor, def.otherBubbleColor, cornerFactor(def.cornerStyle));
+    }
+
+    /**
      * Whether the panel surface reads as light. Text backing shadows are
      * tuned per surface polarity: on a light panel a whisper of shadow
      * grounds dark glyphs, on a dark panel the same filter needs more alpha

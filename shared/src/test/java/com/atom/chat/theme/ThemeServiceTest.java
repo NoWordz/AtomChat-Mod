@@ -289,6 +289,33 @@ class ThemeServiceTest {
         assertEquals(legacy.themeName, loaded.themeName);
         assertEquals("", loaded.themeName);
     }
+    /** Preview-card palettes: each colour preset answers with its own fields
+     *  and its native corner scale; the Default tile answers with the factory
+     *  palette, so the default card previews exactly what picking restores. */
+    @Test
+    void previewPaletteComesFromThemeOrFactory() {
+        for (ThemeService.Preset preset : ThemeService.presets()) {
+            ThemeService.Preview p = ThemeService.previewOf(preset.id());
+            assertEquals(preset.accent(), p.accent(), preset.id());
+            assertEquals(preset.panelBg(), p.panelBg(), preset.id());
+            assertEquals(preset.card(), p.card(), preset.id());
+            assertEquals(preset.ownBubble(), p.ownBubble(), preset.id());
+            assertEquals(preset.otherBubble(), p.otherBubble(), preset.id());
+            assertEquals(ThemeService.cornerFactor(preset.cornerStyle()), p.cornerFactor(), 1e-6F,
+                    preset.id());
+        }
+        ThemeService.Preview def = ThemeService.previewOf(ThemeService.FROSTED);
+        AtomChatConfig factory = AtomChatConfig.DEFAULT;
+        assertEquals(factory.accentColor, def.accent());
+        assertEquals(factory.panelBgColor, def.panelBg());
+        assertEquals(factory.cardColor, def.card());
+        assertEquals(factory.ownBubbleColor, def.ownBubble());
+        assertEquals(factory.otherBubbleColor, def.otherBubble());
+        assertEquals(1.0F, def.cornerFactor(), 1e-6F);
+        // Unknown ids fall back to the factory palette too.
+        assertEquals(def, ThemeService.previewOf("skypunk"));
+    }
+
     /** Backing-shadow polarity: relative luminance of the panel background
      *  (alpha ignored) against the 0.5 threshold picks the shadow strength. */
     @Test
