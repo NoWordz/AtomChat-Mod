@@ -1539,7 +1539,9 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
         float slide = (progress - 1.0F) * OPEN_SLIDE_PX;
         canvas.save();
         try (Paint layer = new Paint()) {
-            layer.setColor(Color.makeARGB((int) (255.0F * progress), 0, 0, 0));
+            // Spring overshoot pushes progress past [0,1]; the fade alpha must clamp.
+            float fade = Math.max(0.0F, Math.min(1.0F, progress));
+            layer.setColor(Color.makeARGB((int) (255.0F * fade), 0, 0, 0));
             // The layer must cover the panel at BOTH ends of the slide, otherwise
             // the fade layer clips the bezel while the panel is still OPEN_SLIDE_PX
             // to the left of its resting place.

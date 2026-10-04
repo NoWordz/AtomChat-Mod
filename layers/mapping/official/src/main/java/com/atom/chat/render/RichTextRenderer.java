@@ -81,7 +81,7 @@ public final class RichTextRenderer {
         float totalH = lines.size() * lineHeight;
         float blockTop = centerY - totalH / 2.0F;
         if (backing) {
-            drawRunsPass(canvas, font, lines, x + 1.0F, blockTop, lineHeight, fallbackColor, sink, false, false);
+            drawRunsPass(canvas, font, lines, x, blockTop, lineHeight, fallbackColor, sink, false, false);
         }
         drawRunsPass(canvas, font, lines, x, blockTop, lineHeight, fallbackColor, sink, addClickable, true);
     }

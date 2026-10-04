@@ -124,7 +124,7 @@ public final class SettingsSectionPage {
     private static final String LABEL_THIRD_PARTY = "atomchat.settings.about.thirdparty.group";
     private static final String LABEL_MOD_INFO = "atomchat.settings.about.modinfo";
     private static final String LABEL_ADVANCED = "atomchat.settings.group.advanced";
-    private static final String LABEL_APPEARANCE_ADVANCED = "atomchat.settings.group.appearance.advanced";
+    private static final String LABEL_APPEARANCE_ADVANCED = "atomchat.settings.group.advancedcolors";
     private static final String LABEL_ADJUST = "atomchat.settings.group.adjust";
     private static final String LABEL_CHAT_MESSAGES = "atomchat.settings.group.chat.messages";
     private static final String LABEL_CHAT_HISTORY = "atomchat.settings.group.chat.history";
