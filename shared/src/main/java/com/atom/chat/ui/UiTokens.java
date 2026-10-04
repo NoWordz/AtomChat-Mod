@@ -84,16 +84,21 @@ public final class UiTokens {
     public static final float BUTTON_RADIUS = s(9);
     public static final float BUTTON_GAP = s(6);
 
-    // Fonts
+    // Fonts. Body/input/name/quote were bumped one notch (r15 legibility pass):
+    // on 2K/4K panels the physical glyph size was diluted by uiDensity, so the
+    // virtual sizes carry more weight now. Every layout that wraps or centres
+    // these fonts reads the height back from the Font metrics (messageHeight,
+    // inputLineHeight, wrapped lines), so rows grow with the tokens; the fixed
+    // bands (NAME_BAND, QUOTE_HEIGHT) keep headroom above the new metric boxes.
     public static final float FONT_TITLE = s(19);
     public static final float FONT_TIME = s(16);
-    public static final float FONT_NAME = s(16);
-    public static final float FONT_BODY = s(18);
-    public static final float FONT_INPUT = s(18);
+    public static final float FONT_NAME = s(17);
+    public static final float FONT_BODY = s(20);
+    public static final float FONT_INPUT = s(20);
     public static final float FONT_BUTTON = s(16);
     public static final float FONT_EMOJI = s(22);
     public static final float FONT_KAOMOJI = s(17);
-    public static final float FONT_QUOTE = s(15);
+    public static final float FONT_QUOTE = s(16);
 
     // Messages
     public static final float AVATAR_SIZE = s(40);

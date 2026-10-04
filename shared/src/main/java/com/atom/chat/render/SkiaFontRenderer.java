@@ -151,6 +151,44 @@ public final class SkiaFontRenderer {
     }
 
     public static void drawText(Canvas canvas, Font font, String text, float x, float y, int color) {
+        drawText(canvas, font, text, x, y, color, false);
+    }
+
+    /**
+     * Flat dark under-copy used by the backing overloads. A legibility aid for
+     * white glyphs sitting directly on the dark frosted panel (names, message
+     * text): the eye reads the union of glyph + 1px dark copy, so thin strokes
+     * keep edge contrast over the busy blurred world. Deliberately a constant
+     * (not derived from the text colour) and deliberately not the styled
+     * drop-shadow of {@code ui.Text} — this one must stay invisible as an
+     * effect and only add contrast.
+     */
+    private static final int BACKING_COLOR = 0x4D000000;
+    private static final float BACKING_OFFSET = 1.0F;
+
+    /**
+     * Draws {@code text} with an optional light dark backing: the text is first
+     * drawn once as a 1px-offset translucent dark copy, then the real glyphs go
+     * on top. Colour-code segments apply to the main pass only; the backing is
+     * a flat wash so coloured text keeps its hue contrast.
+     */
+    public static void drawText(Canvas canvas, Font font, String text, float x, float y, int color, boolean backing) {
+        if (backing) {
+            drawText(canvas, font, text, x + BACKING_OFFSET, y + BACKING_OFFSET, BACKING_COLOR);
+        }
+        drawTextPlain(canvas, font, text, x, y, color);
+    }
+
+    /**
+     * One flat dark under-copy pass at the fixed backing offset/colour. Used by
+     * rich-text backing pre-passes that manage their own run loop (a whole
+     * block backs down before any main glyph goes on top).
+     */
+    public static void drawBackingText(Canvas canvas, Font font, String text, float x, float y) {
+        drawTextPlain(canvas, font, text, x + BACKING_OFFSET, y + BACKING_OFFSET, BACKING_COLOR);
+    }
+
+    private static void drawTextPlain(Canvas canvas, Font font, String text, float x, float y, int color) {
         canvas.save();
         try (Paint paint = new Paint().setColor(color)) {
             int currentColor = color;
@@ -175,11 +213,29 @@ public final class SkiaFontRenderer {
      * Every line keeps Minecraft color-code support.
      */
     public static void drawLines(Canvas canvas, Font font, java.util.List<String> lines, float x, float centerY, float lineHeight, int color) {
+        drawLines(canvas, font, lines, x, centerY, lineHeight, color, false);
+    }
+
+    /**
+     * Draws pre-wrapped lines as one block, vertically centered on centerY,
+     * with the same optional light dark backing as
+     * {@link #drawText(Canvas, Font, String, float, float, int, boolean)}. The
+     * backing is one full pre-pass so a line's dark copy never lands on the
+     * previous line's main glyphs.
+     */
+    public static void drawLines(Canvas canvas, Font font, java.util.List<String> lines, float x, float centerY, float lineHeight, int color, boolean backing) {
         if (lines.isEmpty()) {
             return;
         }
         float totalH = lines.size() * lineHeight;
         float blockTop = centerY - totalH / 2.0F;
+        if (backing) {
+            drawLinesPass(canvas, font, lines, x + BACKING_OFFSET, blockTop + BACKING_OFFSET, lineHeight, BACKING_COLOR);
+        }
+        drawLinesPass(canvas, font, lines, x, blockTop, lineHeight, color);
+    }
+
+    private static void drawLinesPass(Canvas canvas, Font font, java.util.List<String> lines, float x, float blockTop, float lineHeight, int color) {
         canvas.save();
         try (Paint paint = new Paint()) {
             for (int i = 0; i < lines.size(); i++) {

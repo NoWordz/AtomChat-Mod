@@ -56,11 +56,45 @@ public final class RichTextRenderer {
     public static void drawLines(Canvas canvas, Font font, List<RichLine> lines,
                                  float x, float centerY, float lineHeight, int fallbackColor,
                                  List<ClickableSpan> sink, boolean addClickable) {
+        drawLines(canvas, font, lines, x, centerY, lineHeight, fallbackColor, sink, addClickable, false);
+    }
+
+    /**
+     * Draws rich lines as one block vertically centered on {@code centerY}.
+     *
+     * <p>Each run uses the run's style color when present, otherwise
+     * {@code fallbackColor}. Underlines are drawn for runs that are underlined
+     * or carry a click event. When {@code addClickable} is true and a run has a
+     * click or hover event, its line-box rectangle is appended to {@code sink}.
+     *
+     * <p>With {@code backing} the whole block first goes down as one flat dark
+     * under-copy pre-pass (see {@code SkiaFontRenderer#drawBackingText}) before
+     * any main glyph is drawn — one full pre-pass keeps a run's backing from
+     * darkening the previous run's glyphs.
+     */
+    public static void drawLines(Canvas canvas, Font font, List<RichLine> lines,
+                                 float x, float centerY, float lineHeight, int fallbackColor,
+                                 List<ClickableSpan> sink, boolean addClickable, boolean backing) {
         if (lines == null || lines.isEmpty()) {
             return;
         }
         float totalH = lines.size() * lineHeight;
         float blockTop = centerY - totalH / 2.0F;
+        if (backing) {
+            drawRunsPass(canvas, font, lines, x + 1.0F, blockTop, lineHeight, fallbackColor, sink, false, false);
+        }
+        drawRunsPass(canvas, font, lines, x, blockTop, lineHeight, fallbackColor, sink, addClickable, true);
+    }
+
+    /**
+     * One full pass over all lines and runs at the given block top. The
+     * backing pass ({@code mainPass} false) draws every run as the flat dark
+     * under-copy and never underlines or records spans; the main pass behaves
+     * exactly as before.
+     */
+    private static void drawRunsPass(Canvas canvas, Font font, List<RichLine> lines,
+                                     float x, float blockTop, float lineHeight, int fallbackColor,
+                                     List<ClickableSpan> sink, boolean addClickable, boolean mainPass) {
         for (int i = 0; i < lines.size(); i++) {
             RichLine line = lines.get(i);
             float lineCenterY = blockTop + (i + 0.5F) * lineHeight;
@@ -70,6 +104,11 @@ public final class RichTextRenderer {
             for (RichText.RichRun run : line.runs()) {
                 String text = run.text();
                 if (text.isEmpty()) {
+                    continue;
+                }
+                if (!mainPass) {
+                    SkiaFontRenderer.drawBackingText(canvas, font, text, runX, baseline);
+                    runX += SkiaFontRenderer.getStringWidth(font, text);
                     continue;
                 }
                 int color = effectiveColor(run.style(), fallbackColor);

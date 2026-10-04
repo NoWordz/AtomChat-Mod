@@ -809,7 +809,7 @@ public final class MessageListView {
         SkiaDraw.drawRoundedRect(canvas, bubbleX, bubbleTop, bubbleWidth, bubbleHeight, UiTokens.BUBBLE_RADIUS, msg.isOwn() ? ownBubble() : otherBubble());
         drawMessageSelection(canvas, msg, lines, bubbleX + UiTokens.BUBBLE_PAD, bubbleTop + bubbleHeight / 2.0F, lineHeight, font);
         RichTextRenderer.drawLines(canvas, font, richLines, bubbleX + UiTokens.BUBBLE_PAD, bubbleTop + bubbleHeight / 2.0F,
-                lineHeight, bubbleText(msg), clickableSpans, true);
+                lineHeight, bubbleText(msg), clickableSpans, true, true);
         drawDuplicateBadge(canvas, msg, bubbleX, bubbleWidth, bubbleTop, bubbleHeight);
 
         float bottom = bubbleTop + bubbleHeight;
@@ -917,7 +917,7 @@ public final class MessageListView {
         // it to the cap-height baseline, matching the old drawText helper.
         float centerY = rowY + UiTokens.NAME_BAND / 2.0F;
         RichTextRenderer.drawLines(canvas, nameFont, lines, x, centerY, lineHeight, textPrimary(),
-                clickableSpans, true);
+                clickableSpans, true, true);
     }
 
     /**
