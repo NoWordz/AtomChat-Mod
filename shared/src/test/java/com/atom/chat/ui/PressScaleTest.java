@@ -15,9 +15,15 @@ class PressScaleTest {
     @Test
     void controlMovesTowardHoverAndBack() {
         PressScale ps = PressScale.control();
-        ps.update(true, false, 16.0F, true);
-        assertTrue(ps.scale() > 1.0F, "hover must scale up, got " + ps.scale());
-        ps.update(false, false, 16.0F, true);
+        for (int i = 0; i < 30; i++) {
+            ps.update(true, false, 16.0F, true);
+        }
+        assertTrue(ps.scale() > 1.05F, "hover must scale up visibly, got " + ps.scale());
+        ps.update(false, true, 16.0F, true);
+        for (int i = 0; i < 30; i++) {
+            ps.update(false, true, 16.0F, true);
+        }
+        assertTrue(ps.scale() < 0.93F, "press must dip visibly, got " + ps.scale());
         for (int i = 0; i < 120; i++) {
             ps.update(false, false, 16.0F, true);
         }
@@ -33,7 +39,10 @@ class PressScaleTest {
         }
         assertEquals(1.0F, ps.scale(), 0.0F, "row hover must not scale");
         ps.update(true, true, 16.0F, true);
-        assertTrue(ps.scale() < 1.0F, "row press must scale down, got " + ps.scale());
+        for (int i = 0; i < 30; i++) {
+            ps.update(true, true, 16.0F, true);
+        }
+        assertTrue(ps.scale() < 0.96F, "row press must scale down visibly, got " + ps.scale());
     }
 
     @Test

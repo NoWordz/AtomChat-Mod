@@ -10,9 +10,11 @@ import io.github.humbleui.skija.Canvas;
  * slide.
  *
  * <p>Controls (switches, grid cells, icons, swatches) breathe both ways:
- * 1.03 on hover, 0.97 while pressed, springing back on release. Rows
- * (settings/message lines) press only — scaling a whole row on hover reads
- * as jitter, so their hover target stays 1.0.</p>
+ * 1.08 on hover, 0.92 while pressed, springing back on release — sized so
+ * the bounce actually reads at arm's length: on a 40px icon the press dip
+ * is ~3px per side and the release overshoot another ~2px. Rows
+ * (settings/message lines) press only at 0.95 — scaling a whole row on
+ * hover reads as jitter, so their hover target stays 1.0.</p>
  *
  * <p>With decorative motion off ({@link Animations#enabled()}) the scale
  * pins to exactly 1.0.</p>
@@ -28,14 +30,14 @@ public final class PressScale {
         spring.snapTo(1.0F);
     }
 
-    /** Controls: 1.03 on hover, 0.97 while pressed. */
+    /** Controls: 1.08 on hover, 0.92 while pressed. */
     public static PressScale control() {
-        return new PressScale(1.03F, 0.97F);
+        return new PressScale(1.08F, 0.92F);
     }
 
-    /** Rows: press-only 0.98, hover does not scale. */
+    /** Rows: press-only 0.95, hover does not scale. */
     public static PressScale row() {
-        return new PressScale(1.0F, 0.98F);
+        return new PressScale(1.0F, 0.95F);
     }
 
     /**
