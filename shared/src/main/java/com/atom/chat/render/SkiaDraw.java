@@ -33,6 +33,17 @@ public final class SkiaDraw {
     }
 
     /**
+     * Stroke-only circle centred on (cx, cy) — the outline-ring primitive the
+     * slider knob's cut-out trace and the colour-swatch hairlines share.
+     */
+    public static void drawRing(Canvas canvas, float cx, float cy, float radius, float strokeWidth, int color) {
+        try (Paint paint = new Paint().setColor(color).setAntiAlias(true)
+                .setMode(PaintMode.STROKE).setStrokeWidth(strokeWidth)) {
+            canvas.drawOval(Rect.makeXYWH(cx - radius, cy - radius, radius * 2.0F, radius * 2.0F), paint);
+        }
+    }
+
+    /**
      * 1px-class inner edge highlight: a low-alpha stroke hugging the card
      * border, read as the lit edge an elevated surface catches. Draw right
      * after the card fill; the intensity contrast against the fill does the

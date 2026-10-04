@@ -8,6 +8,7 @@ import com.atom.chat.ui.Animations;
 import com.atom.chat.ui.PressScale;
 import com.atom.chat.ui.UiLayout;
 import com.atom.chat.ui.UiMotion;
+import com.atom.chat.ui.UiCards;
 import com.atom.chat.ui.UiTokens;
 import io.github.humbleui.skija.Canvas;
 import io.github.humbleui.skija.Font;
@@ -120,16 +121,8 @@ public final class SettingsCategoryPage {
 
     private void drawCard(Canvas canvas, UiLayout.Rect card, SettingsSection section,
                           int accent, int textPrimary, float hover) {
-        SkiaDraw.drawRoundedShadow(canvas, card.x(), card.y(), card.w(), card.h(),
-                UiTokens.settingsRowRadius(), UiTokens.s(6), UiTokens.CARD_SHADOW);
-        SkiaDraw.drawRoundedRect(canvas, card.x(), card.y(), card.w(), card.h(),
-                UiTokens.settingsRowRadius(), UiTokens.cardFill());
-        SkiaDraw.drawEdgeHighlight(canvas, card.x(), card.y(), card.w(), card.h(),
-                UiTokens.settingsRowRadius(), UiTokens.s(1.2F), UiTokens.CARD_EDGE);
-        if (hover > 0.01F) {
-            SkiaDraw.drawRoundedRect(canvas, card.x(), card.y(), card.w(), card.h(),
-                    UiTokens.settingsRowRadius(), UiTokens.cardHover(hover));
-        }
+        UiCards.drawCard(canvas, card.x(), card.y(), card.w(), card.h(),
+                UiTokens.settingsRowRadius(), hover);
 
         float padX = UiTokens.SETTINGS_ROW_PAD;
         float cy = card.y() + card.h() / 2.0F;

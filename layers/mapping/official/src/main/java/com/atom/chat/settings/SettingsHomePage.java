@@ -5,6 +5,7 @@ import com.atom.chat.render.SkiaDraw;
 import com.atom.chat.render.SkiaFontRenderer;
 import com.atom.chat.ui.AppIcons;
 import com.atom.chat.ui.UiLayout;
+import com.atom.chat.ui.UiCards;
 import com.atom.chat.ui.UiMotion;
 import com.atom.chat.ui.UiTokens;
 import io.github.humbleui.skija.Canvas;
@@ -102,14 +103,8 @@ public final class SettingsHomePage {
     }
 
     private void drawTile(Canvas canvas, UiLayout.Rect tile, SettingsSection section, float hover) {
-        SkiaDraw.drawRoundedRect(canvas, tile.x(), tile.y(), tile.w(), tile.h(),
-                UiTokens.settingsTileRadius(), UiTokens.cardFill());
-        SkiaDraw.drawEdgeHighlight(canvas, tile.x(), tile.y(), tile.w(), tile.h(),
-                UiTokens.settingsTileRadius(), UiTokens.s(1.2F), UiTokens.CARD_EDGE);
-        if (hover > 0.01F) {
-            SkiaDraw.drawRoundedRect(canvas, tile.x(), tile.y(), tile.w(), tile.h(),
-                    UiTokens.settingsTileRadius(), UiTokens.cardHover(hover));
-        }
+        UiCards.drawCard(canvas, tile.x(), tile.y(), tile.w(), tile.h(),
+                UiTokens.settingsTileRadius(), hover);
 
         // One vertically centred group: glyph above, single label below. Both
         // are horizontally centred, so nothing in the tile depends on text

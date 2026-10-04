@@ -20,6 +20,7 @@ import com.atom.chat.wallpaper.WallpaperStore;
 import java.nio.file.Path;
 import com.atom.chat.ui.UiLayout;
 import com.atom.chat.ui.UiMotion;
+import com.atom.chat.ui.UiCards;
 import com.atom.chat.ui.UiTokens;
 import io.github.humbleui.skija.Canvas;
 import io.github.humbleui.skija.Color;
@@ -776,14 +777,8 @@ public final class SettingsSectionPage {
             drawLabel(canvas, row, rect);
             return;
         }
-        SkiaDraw.drawRoundedRect(canvas, rect.x(), rect.y(), rect.w(), rect.h(),
-                UiTokens.settingsRowRadius(), UiTokens.cardFill());
-        SkiaDraw.drawEdgeHighlight(canvas, rect.x(), rect.y(), rect.w(), rect.h(),
-                UiTokens.settingsRowRadius(), s(1.2F), UiTokens.CARD_EDGE);
-        if (hover > 0.01F) {
-            SkiaDraw.drawRoundedRect(canvas, rect.x(), rect.y(), rect.w(), rect.h(),
-                    UiTokens.settingsRowRadius(), UiTokens.cardHover(hover));
-        }
+        UiCards.drawCard(canvas, rect.x(), rect.y(), rect.w(), rect.h(),
+                UiTokens.settingsRowRadius(), hover);
         switch (row.kind()) {
             case HERO -> drawHero(canvas, rect);
             case SWITCH -> drawSwitch(canvas, row, rect, accent, dtMs);
@@ -1188,6 +1183,9 @@ public final class SettingsSectionPage {
             ps.begin(canvas, scx, cy);
             try {
                 SkiaDraw.drawRoundedRect(canvas, scx - r, cy - r, 2.0F * r, 2.0F * r, r, swatch);
+                // Theme-adaptive hairline: pale swatches stay visible on light
+                // panels, dark ones on dark panels.
+                SkiaDraw.drawRing(canvas, scx, cy, r + s(0.75F), s(1.0F), UiCards.hairlineColor());
                 if (swatch == color.value()) {
                     // Selection ring: white outline with a breathing gap.
                     try (Paint ring = new Paint().setColor(Color.makeARGB(255, 255, 255, 255))
@@ -1204,6 +1202,7 @@ public final class SettingsSectionPage {
         float px = swatchX(rect, color.swatchCount());
         SkiaDraw.drawRoundedRect(canvas, px - r, cy - r, 2.0F * r, 2.0F * r, r,
                 Color.makeARGB(70, 255, 255, 255));
+        SkiaDraw.drawRing(canvas, px, cy, r + s(0.75F), s(1.0F), UiCards.hairlineColor());
         drawIconCentered(canvas, AppIcons.ICON_PLUS_PATH, px, cy, s(12),
                 textPrimary());
     }
@@ -1238,10 +1237,8 @@ public final class SettingsSectionPage {
      * {@link #heroImage()}, nothing else in the card moves.
      */
     private void drawHero(Canvas canvas, UiLayout.Rect rect) {
-        SkiaDraw.drawRoundedRect(canvas, rect.x(), rect.y(), rect.w(), rect.h(),
-                UiTokens.settingsRowRadius(), UiTokens.cardFill());
-        SkiaDraw.drawEdgeHighlight(canvas, rect.x(), rect.y(), rect.w(), rect.h(),
-                UiTokens.settingsRowRadius(), s(1.2F), UiTokens.CARD_EDGE);
+        UiCards.drawCard(canvas, rect.x(), rect.y(), rect.w(), rect.h(),
+                UiTokens.settingsRowRadius(), 0.0F);
         Image hero = heroImage();
         float plate = UiTokens.SETTINGS_HERO_PLATE;
         float plateX = rect.x() + UiTokens.SETTINGS_ROW_PAD;
@@ -1322,11 +1319,8 @@ public final class SettingsSectionPage {
                     rect.y() + rect.h() / 2.0F,
                     copy.redConfirm() ? Color.makeARGB(255, 235, 64, 52) : textPrimary());
         }
-        // Unavailable veil, same language as the wallpaper-gated blur switch.
-        if (!copy.available()) {
-            SkiaDraw.drawRoundedRect(canvas, rect.x(), rect.y(), rect.w(), rect.h(),
-                    UiTokens.settingsRowRadius(), Color.makeARGB(90, 10, 12, 16));
-        }
+        // Disabled rows dim their text/controls only (the sec(130) copy
+        // above); the card base stays put so the list never turns patchy.
     }
 
     /**
@@ -1429,10 +1423,7 @@ public final class SettingsSectionPage {
                 textPrimary());
         drawWrappedDescription(canvas, rect, subFont, tr(subtitleKey), textX, descMaxW,
                 sec(item.available() ? 200 : 130));
-        if (!item.available()) {
-            SkiaDraw.drawRoundedRect(canvas, rect.x(), rect.y(), rect.w(), rect.h(),
-                    UiTokens.settingsRowRadius(), Color.makeARGB(90, 10, 12, 16));
-        }
+        // Disabled switches dim their copy only; the card base stays put.
     }
 
     private void drawSlider(Canvas canvas, Row row, UiLayout.Rect rect, int accent) {
@@ -1468,6 +1459,13 @@ public final class SettingsSectionPage {
         float knobY = track.y() + track.h() / 2.0F - UiTokens.SLIDER_KNOB / 2.0F;
         SkiaDraw.drawRoundedRect(canvas, knobX, knobY, UiTokens.SLIDER_KNOB, UiTokens.SLIDER_KNOB,
                 UiTokens.SLIDER_KNOB / 2.0F, Color.makeARGB(255, 255, 255, 255)); // knob: mechanical white
+        // Cut the round head out of the track with a card-coloured gap ring,
+        // then trace the gap with an accent hairline. Knob geometry unchanged.
+        float knobCx = knobX + UiTokens.SLIDER_KNOB / 2.0F;
+        float knobCy = knobY + UiTokens.SLIDER_KNOB / 2.0F;
+        float knobR = UiTokens.SLIDER_KNOB / 2.0F;
+        SkiaDraw.drawRing(canvas, knobCx, knobCy, knobR + s(1.5F), s(3.0F), UiTokens.cardFill());
+        SkiaDraw.drawRing(canvas, knobCx, knobCy, knobR + s(3.5F), s(1.0F), accent);
     }
 
     /** Sliders rendered as a right-side input field instead of a drag track. */
