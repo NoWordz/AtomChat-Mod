@@ -13,19 +13,24 @@ import com.atom.chat.config.AtomChatConfig;
  *
  * <p>Two kinds of presets coexist:</p>
  * <ul>
- *   <li><b>Look presets</b> ({@code frosted}, {@code modern}) only move the
+ *   <li><b>Look presets</b> ({@code frosted}, {@code modern}) move only the
  *       surface-style knobs (opacity, blur, bezel, card tint). Colours are a
- *       personal choice a re-skin of the chrome has no business overwriting.</li>
+ *       personal choice a re-skin of the chrome has no business overwriting —
+ *       with one exception: the frosted tile doubles as the factory-default
+ *       reset and writes the shipped palette back too.</li>
  *   <li><b>Colour presets</b> ({@link #MINIMAL} … {@link #VIVID}) are full
- *       re-skins: they write all twelve colour fields plus the look values and
- *       the corner style they were designed around.</li>
+ *       re-skins: they write all twelve colour fields plus the look values.
+ *       The corner style is deliberately not a preset knob — it has its own
+ *       segmented setting on the appearance page, so no preset touches it.</li>
  * </ul>
  *
  * <p>Either way the write is one-shot: hand-tuning a colour afterwards simply
  * wins, and picking the same preset again restores its snapshot. No deadlock.
- * The shipped frosted default also stays reachable — it is what an empty
- * {@code themeName} means, and picking the frosted tile restores its look
- * values without touching colours.</p>
+ * The shipped look stays reachable under the name "Default" (formerly
+ * "frosted"): it is what an empty {@code themeName} means, and picking that
+ * tile restores every colour and look field from
+ * {@link AtomChatConfig#DEFAULT} — a real trip back to the factory values,
+ * which hand-tuning alone could never return to.</p>
  *
  * <p>Pure Java — unit tests cover the mappings.</p>
  */
@@ -57,6 +62,10 @@ public final class ThemeService {
      * One colour preset: the twelve colour fields plus the look values and the
      * corner style the palette was designed around. All values ARGB, surfaces
      * opaque — the frosted preset is the only translucent look.
+     *
+     * <p>{@code cornerStyle} is a <em>drawing reference only</em> (preview
+     * cards render each palette with its native corner scale); applying a
+     * preset never writes it — the corner style is an independently set knob.</p>
      */
     public record Preset(String id, int accent,
                          int ownBubble, int bubbleText,
@@ -79,7 +88,9 @@ public final class ThemeService {
             config.panelOutlineColor = panelOutlineColor;
             config.secondaryCapsuleBg = capsuleBg;
             config.secondaryCapsuleText = capsuleText;
-            config.cornerStyle = cornerStyle;
+            // cornerStyle deliberately NOT written: it is an independent
+            // setting now (appearance page segmented control), not a preset
+            // side effect.
         }
     }
 
@@ -195,8 +206,10 @@ public final class ThemeService {
     /**
      * Writes the preset's appearance values into the config. The caller
      * persists. Unknown ids are ignored so a hand-edited themeName can never
-     * scramble the settings. Both look presets keep the panel outline — it is
-     * the mod's signature, only the surface style changes.
+     * scramble the settings. The modern look keeps the panel outline — it is
+     * the mod's signature, only the surface style changes. The frosted tile
+     * is the full factory reset: every colour and look field goes back to its
+     * shipped value (see {@link #applyFactoryDefaults}).
      */
     public static void apply(AtomChatConfig config, String themeId) {
         switch (themeId == null ? "" : themeId) {
@@ -207,13 +220,7 @@ public final class ThemeService {
                 config.cardTint = 1.0F;
                 config.cardColor = 0xFF222831;
             }
-            case FROSTED -> {
-                config.panelOpacity = 0.93F;
-                config.blurEnabled = true;
-                config.panelOutline = true;
-                config.cardTint = 0.235F;
-                config.cardColor = 0xFFFFFFFF;
-            }
+            case FROSTED -> applyFactoryDefaults(config);
             default -> {
                 Preset preset = byId(themeId);
                 if (preset == null) {
@@ -229,5 +236,36 @@ public final class ThemeService {
             }
         }
         config.themeName = themeId;
+    }
+
+    /**
+     * Restores every look-and-feel field to its factory value: the twelve
+     * colour fields, panel opacity, card tint, the outline toggle and blur.
+     * The values come from {@link AtomChatConfig#DEFAULT} — the config class's
+     * own field initialisers — so there is exactly one source of truth and a
+     * shipped-default change updates the reset automatically.
+     *
+     * <p>Not touched on purpose: the independent knobs ({@code cornerStyle},
+     * panel size/scale, wallpapers, everything outside the theme snapshot) and
+     * the {@code themeName} stamp, which the caller sets.</p>
+     */
+    public static void applyFactoryDefaults(AtomChatConfig config) {
+        AtomChatConfig def = AtomChatConfig.DEFAULT;
+        config.accentColor = def.accentColor;
+        config.ownBubbleColor = def.ownBubbleColor;
+        config.bubbleTextColor = def.bubbleTextColor;
+        config.otherBubbleColor = def.otherBubbleColor;
+        config.otherBubbleTextColor = def.otherBubbleTextColor;
+        config.panelBgColor = def.panelBgColor;
+        config.textPrimaryColor = def.textPrimaryColor;
+        config.textSecondaryColor = def.textSecondaryColor;
+        config.cardColor = def.cardColor;
+        config.panelOutlineColor = def.panelOutlineColor;
+        config.secondaryCapsuleBg = def.secondaryCapsuleBg;
+        config.secondaryCapsuleText = def.secondaryCapsuleText;
+        config.panelOpacity = def.panelOpacity;
+        config.blurEnabled = def.blurEnabled;
+        config.panelOutline = def.panelOutline;
+        config.cardTint = def.cardTint;
     }
 }

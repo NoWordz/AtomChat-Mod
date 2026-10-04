@@ -47,7 +47,7 @@ import java.util.Map;
  * hit-testing and measurement can never disagree.</p>
  */
 public final class SettingsSectionPage {
-    public enum RowKind { HERO, SWITCH, SLIDER, COLOR, INFO, BLOCKED, LABEL, ACTION, THEMES }
+    public enum RowKind { HERO, SWITCH, SLIDER, COLOR, INFO, BLOCKED, LABEL, ACTION, THEMES, CORNERS }
 
     public record Row(RowKind kind, SettingsItem item, SettingsSlider slider,
                       SettingsColor color, SettingsCatalog.InfoRow info, PlayerRef player,
@@ -86,6 +86,10 @@ public final class SettingsSectionPage {
 
         static Row ofThemes() {
             return new Row(RowKind.THEMES, null, null, null, null, null, null, null);
+        }
+
+        static Row ofCorners() {
+            return new Row(RowKind.CORNERS, null, null, null, null, null, null, null);
         }
     }
 
@@ -220,6 +224,8 @@ public final class SettingsSectionPage {
     /** Dot under the pointer when the theme row was hit; hit() writes it,
      *  perform() consumes it (same click, so no staleness window). */
     private int pressedThemeDot = -1;
+    /** Corner chip armed by hit() for the click perform() will handle. */
+    private int pressedCornerChip = -1;
 
     /** Whether the given destructive action is showing its red confirm state. */
     public boolean actionArmed(String actionId) {
@@ -358,7 +364,7 @@ public final class SettingsSectionPage {
     public static float rowHeight(RowKind kind) {
         return switch (kind) {
             case LABEL -> UiTokens.SETTINGS_LABEL_H;
-            case SLIDER, COLOR, THEMES -> UiTokens.SETTINGS_SLIDER_ROW_H;
+            case SLIDER, COLOR, THEMES, CORNERS -> UiTokens.SETTINGS_SLIDER_ROW_H;
             case HERO -> UiTokens.SETTINGS_HERO_H;
             default -> UiTokens.SETTINGS_ROW_H;
         };
@@ -553,6 +559,10 @@ public final class SettingsSectionPage {
         rows.add(Row.ofThemes());
         addGroup(rows, groupKey(SettingsSection.APPEARANCE), () -> {
             addSwitches(rows, SettingsSection.APPEARANCE, "blur", "outline", "motion");
+            // Corner style is an independent knob now — no preset writes it —
+            // so the segmented control lives in the display group beside the
+            // other chrome switches.
+            rows.add(Row.ofCorners());
             rows.add(Row.ofAction(ACTION_WALLPAPER_PICK, wallpaperPickItem()));
             if (WallpaperStore.isSet()) {
                 rows.add(Row.ofAction(ACTION_WALLPAPER_CLEAR, wallpaperClearItem()));
@@ -765,6 +775,7 @@ public final class SettingsSectionPage {
             case SLIDER -> drawSlider(canvas, row, rect, accent);
             case COLOR -> drawColor(canvas, row, rect, dtMs);
             case THEMES -> drawThemes(canvas, rect);
+            case CORNERS -> drawCorners(canvas, rect, accent);
             case INFO -> drawInfo(canvas, row, rect);
             case BLOCKED -> drawBlocked(canvas, row, rect, hover, buttonFont);
             case ACTION -> drawAction(canvas, row, rect, hover);
@@ -875,6 +886,68 @@ public final class SettingsSectionPage {
 
     /** Index of the theme dot under the pointer, or -1. Geometry matches the
      *  renderer (same swatch strip); 0 = frosted, 1..6 = colour presets. */
+    // Corner-style segmented control: three capsule chips (small / medium /
+    // large) on their own row. Independent knob — no preset writes it — so
+    // this row is the only in-game writer.
+    private static final String[] CORNER_STYLES = {"small", "medium", "large"};
+    private static final String[] CORNER_KEYS = {
+            "atomchat.settings.appearance.corners.small",
+            "atomchat.settings.appearance.corners.medium",
+            "atomchat.settings.appearance.corners.large",
+    };
+    private static final float CORNER_CHIP_W = UiTokens.s(64);
+    private static final float CORNER_CHIP_H = UiTokens.s(24);
+    private static final float CORNER_CHIP_GAP = UiTokens.s(8);
+
+    /** Geometry of one corner chip; mirrors the hit test in {@link #cornerChipAt}. */
+    private static UiLayout.Rect cornerChipRect(UiLayout.Rect rect, int index) {
+        return new UiLayout.Rect(
+                rect.x() + UiTokens.SETTINGS_ROW_PAD + index * (CORNER_CHIP_W + CORNER_CHIP_GAP),
+                rect.y() + s(34), CORNER_CHIP_W, CORNER_CHIP_H);
+    }
+
+    /** Corner chip under the pointer, or -1. Geometry mirrors {@link #cornerChipRect}. */
+    private static int cornerChipAt(UiLayout.Rect rect, float vmx, float vmy) {
+        for (int i = 0; i < CORNER_STYLES.length; i++) {
+            UiLayout.Rect chip = cornerChipRect(rect, i);
+            if (vmx >= chip.x() && vmx <= chip.right() && vmy >= chip.y() && vmy <= chip.bottom()) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    /** Title line on top, three capsule chips below; the selected one wears
+     *  the accent as a hairline outline plus a faint tint. */
+    private void drawCorners(Canvas canvas, UiLayout.Rect rect, int accent) {
+        Font titleFont = FontManager.font(UiTokens.SETTINGS_TILE_TITLE);
+        SkiaFontRenderer.drawText(canvas, titleFont,
+                tr("atomchat.settings.appearance.corners"),
+                rect.x() + UiTokens.SETTINGS_ROW_PAD,
+                SkiaFontRenderer.centerBaselineY(titleFont, rect.y() + s(18)),
+                textPrimary());
+
+        String current = AtomChatConfig.get().cornerStyle;
+        Font chipFont = FontManager.font(UiTokens.SETTINGS_TILE_SUB);
+        for (int i = 0; i < CORNER_STYLES.length; i++) {
+            UiLayout.Rect chip = cornerChipRect(rect, i);
+            boolean selected = CORNER_STYLES[i].equals(current);
+            int accentRgb = accent & 0x00FFFFFF;
+            SkiaDraw.drawRoundedRect(canvas, chip.x(), chip.y(), chip.w(), chip.h(),
+                    chip.h() / 2.0F,
+                    selected ? Color.makeARGB(36, (accentRgb >> 16) & 0xFF,
+                            (accentRgb >> 8) & 0xFF, accentRgb & 0xFF)
+                             : Color.makeARGB(40, 255, 255, 255));
+            if (selected) {
+                SkiaDraw.drawEdgeHighlight(canvas, chip.x(), chip.y(), chip.w(), chip.h(),
+                        chip.h() / 2.0F, s(1.2F), accent);
+            }
+            SkiaFontRenderer.drawTextCentered(canvas, chipFont,
+                    tr(CORNER_KEYS[i]), chip.x() + chip.w() / 2.0F, chip.y() + chip.h() / 2.0F,
+                    selected ? accent : sec(200));
+        }
+    }
+
     private int themeDotAt(UiLayout.Rect rect, float vmx, float vmy) {
         float cy = swatchCy(rect);
         if (vmy < cy - UiTokens.s(16) || vmy > cy + UiTokens.s(16)) {
@@ -1374,8 +1447,11 @@ public final class SettingsSectionPage {
         Font buttonFont = FontManager.font(UiTokens.FONT_QUOTE);
         for (int i = 0; i < rows.size(); i++) {
             UiLayout.Rect rect = rowRect(rows, i, scrollY, layout);
-            if (rows.get(i).kind() == RowKind.THEMES) {
+            RowKind kind = rows.get(i).kind();
+            if (kind == RowKind.THEMES) {
                 pressedThemeDot = themeDotAt(rect, vmx, vmy);
+            } else if (kind == RowKind.CORNERS) {
+                pressedCornerChip = cornerChipAt(rect, vmx, vmy);
             }
             RowHit hit = new RowHit(rows.get(i), i, rect.x(), rect.y(), rect.w(), rect.h(),
                     actionX(rows.get(i), rect, buttonFont));
@@ -1655,6 +1731,17 @@ public final class SettingsSectionPage {
                     BlockList.setBlocked(hit.row().player(), false);
                 }
             }
+            case CORNERS -> {
+                // pressedCornerChip was computed by hit() for this same click.
+                int chip = pressedCornerChip;
+                pressedCornerChip = -1;
+                if (chip < 0) {
+                    return;
+                }
+                AtomChatConfig config = AtomChatConfig.get();
+                config.cornerStyle = CORNER_STYLES[chip];
+                AtomChatConfig.save(config);
+            }
             case THEMES -> {
                 // pressedThemeDot was computed by hit() for this same click.
                 int dot = pressedThemeDot;
@@ -1702,6 +1789,7 @@ public final class SettingsSectionPage {
         swatchScale.clear();
         pressedRow = -1;
         pressedSwatch = -1;
+        pressedCornerChip = -1;
         draggingSliderId = null;
         hoveredIndex = -1;
         cancelNumberEdit();

@@ -99,7 +99,7 @@
   "atomchat.settings.appearance.theme": "Theme",
   "atomchat.settings.appearance.cardtint": "Card tint",
   "atomchat.settings.appearance.outlinecolor": "Outline color",
-  "atomchat.settings.theme.frosted": "Frosted glass",
+  "atomchat.settings.theme.frosted": "Default",
   "atomchat.settings.theme.modern": "Modern flat",
   "atomchat.settings.theme.none": "Not applied",
   "atomchat.settings.group.advancedcolors": "Advanced",

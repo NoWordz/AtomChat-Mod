@@ -39,18 +39,6 @@ class ThemeServiceTest {
     }
 
     @Test
-    void lookPresetsNeverTouchCornerStyle() {
-        // Corner style has no slider; only the six colour presets ship one,
-        // because each palette was designed around a specific corner scale.
-        AtomChatConfig config = new AtomChatConfig();
-        config.cornerStyle = "medium";
-        ThemeService.apply(config, ThemeService.MODERN);
-        assertEquals("medium", config.cornerStyle);
-        ThemeService.apply(config, ThemeService.FROSTED);
-        assertEquals("medium", config.cornerStyle);
-    }
-
-    @Test
     void lookPresetsNeverTouchPersonalColours() {
         AtomChatConfig config = new AtomChatConfig();
         config.ownBubbleColor = 0xFF123456;
@@ -62,9 +50,19 @@ class ThemeServiceTest {
         assertEquals(0xFF654321, config.otherBubbleColor);
         assertEquals(0xFFFF00FF, config.textPrimaryColor);
         assertEquals(500.0F, config.panelWidth, 1e-6F);
-        ThemeService.apply(config, ThemeService.FROSTED);
-        assertEquals(0xFF123456, config.ownBubbleColor);
-        assertEquals(0xFFFF00FF, config.textPrimaryColor);
+    }
+
+    /** No preset of any kind moves the corner style — it is an independent
+     *  knob (appearance-page segmented control), never a preset side effect. */
+    @Test
+    void noPresetEverTouchesCornerStyle() {
+        for (String id : new String[]{ThemeService.MODERN, ThemeService.FROSTED,
+                "minimal", "summer", "elegant", "raven", "hub", "vivid"}) {
+            AtomChatConfig config = new AtomChatConfig();
+            config.cornerStyle = "medium";
+            ThemeService.apply(config, id);
+            assertEquals("medium", config.cornerStyle, id);
+        }
     }
 
     @Test
@@ -116,7 +114,6 @@ class ThemeServiceTest {
         assertEquals(0xFFF7F8FA, c.panelBgColor);
         assertEquals(0xFF1A1D21, c.textPrimaryColor);
         assertEquals(0xFFFFFFFF, c.cardColor);
-        assertEquals("small", c.cornerStyle);
 
         c = new AtomChatConfig();
         ThemeService.apply(c, "summer");
@@ -124,7 +121,6 @@ class ThemeServiceTest {
         assertEquals(0xFFFAFCF3, c.panelBgColor);
         assertEquals(0xFF1F2937, c.textPrimaryColor);
         assertEquals(0xFF84CC16, c.ownBubbleColor);
-        assertEquals("medium", c.cornerStyle);
 
         c = new AtomChatConfig();
         ThemeService.apply(c, "elegant");
@@ -132,7 +128,6 @@ class ThemeServiceTest {
         assertEquals(0xFFF5F0E8, c.panelBgColor);
         assertEquals(0xFFE8DDD0, c.cardColor);
         assertEquals(0xFF3D3929, c.textPrimaryColor);
-        assertEquals("medium", c.cornerStyle);
 
         c = new AtomChatConfig();
         ThemeService.apply(c, "raven");
@@ -140,7 +135,6 @@ class ThemeServiceTest {
         assertEquals(0xFF0D1117, c.panelBgColor);
         assertEquals(0xFF161B27, c.cardColor);
         assertEquals(0xFFE6EDF3, c.textPrimaryColor);
-        assertEquals("medium", c.cornerStyle);
 
         c = new AtomChatConfig();
         ThemeService.apply(c, "hub");
@@ -148,7 +142,6 @@ class ThemeServiceTest {
         assertEquals(0xFF0F0F0F, c.panelBgColor);
         assertEquals(0xFF1A1A1A, c.cardColor);
         assertEquals(0xFFF5F5F5, c.textPrimaryColor);
-        assertEquals("small", c.cornerStyle);
 
         c = new AtomChatConfig();
         ThemeService.apply(c, "vivid");
@@ -156,7 +149,6 @@ class ThemeServiceTest {
         assertEquals(0xFFFDF0F4, c.panelBgColor);
         assertEquals(0xFFFBE3EB, c.otherBubbleColor);
         assertEquals(0xFF3D2C35, c.textPrimaryColor);
-        assertEquals("medium", c.cornerStyle);
     }
 
     /** Every colour preset must land visibly away from the shipped defaults on
@@ -181,16 +173,18 @@ class ThemeServiceTest {
         }
     }
 
-    /** All twelve colour fields plus cornerStyle move on a colour preset —
-     *  a preset that leaves a colour at its shipped default is a half re-skin.
+    /** All twelve colour fields move on a colour preset — a preset that
+     *  leaves a colour at its shipped default is a half re-skin.
      *  bubbleTextColor is exempt: minimal/vivid keep white body text in their
      *  own (now accent-coloured) bubbles, which coincides with the shipped
-     *  default white — visually correct, byte-wise identical. */
+     *  default white — visually correct, byte-wise identical. cornerStyle is
+     *  exempt by design: presets never touch it (independent knob). */
     @Test
-    void colourPresetWritesAllTwelveColoursAndCornerStyle() {
+    void colourPresetWritesAllTwelveColours() {
         AtomChatConfig defaults = new AtomChatConfig();
         for (ThemeService.Preset preset : ThemeService.presets()) {
             AtomChatConfig c = new AtomChatConfig();
+            c.cornerStyle = "medium";
             ThemeService.apply(c, preset.id());
             assertNotEquals(defaults.secondaryCapsuleBg, c.secondaryCapsuleBg, preset.id());
             assertNotEquals(defaults.secondaryCapsuleText, c.secondaryCapsuleText, preset.id());
@@ -198,24 +192,61 @@ class ThemeServiceTest {
             assertNotEquals(defaults.otherBubbleTextColor, c.otherBubbleTextColor, preset.id());
             assertNotEquals(defaults.panelOutlineColor, c.panelOutlineColor, preset.id());
             assertNotEquals(defaults.otherBubbleColor, c.otherBubbleColor, preset.id());
-            assertNotEquals(defaults.cornerStyle, c.cornerStyle, preset.id());
+            assertEquals("medium", c.cornerStyle, preset.id());
             // cardColor: vivid/minimal keep white — exactly like the default,
             // and that is fine; the fields above prove the palette moved.
         }
     }
 
-    /** Picking frosted after a colour preset restores its look values but
-     *  never rewrites colours — personal tuning survives. */
+    /** The frosted tile is now the "Default" reset: after drifting away (a
+     *  colour preset plus hand tuning), picking it writes every colour and
+     *  look field back to the factory value — the values a hand edit could
+     *  never return to. Compared against {@link AtomChatConfig#DEFAULT}, the
+     *  single source of factory truth. */
     @Test
-    void frostedAfterColourPresetKeepsColours() {
+    void frostedAfterDriftRestoresEveryFactoryField() {
         AtomChatConfig c = new AtomChatConfig();
-        ThemeService.apply(c, "hub");
+        ThemeService.apply(c, "minimal");
+        // Hand drift on top of the preset: every resettable field off default.
+        c.panelOpacity = 0.5F;
+        c.cardTint = 0.9F;
+        c.panelOutline = false;
+        c.blurEnabled = false;
+        c.accentColor = 0xFF112233;
+        c.ownBubbleColor = 0xFF445566;
         ThemeService.apply(c, ThemeService.FROSTED);
-        assertEquals(0xFFFF9000, c.accentColor);
-        assertEquals(0xFF0F0F0F, c.panelBgColor);
-        assertEquals(0.93F, c.panelOpacity, 1e-6F);
+
+        AtomChatConfig def = AtomChatConfig.DEFAULT;
+        assertEquals(def.accentColor, c.accentColor);
+        assertEquals(def.ownBubbleColor, c.ownBubbleColor);
+        assertEquals(def.bubbleTextColor, c.bubbleTextColor);
+        assertEquals(def.otherBubbleColor, c.otherBubbleColor);
+        assertEquals(def.otherBubbleTextColor, c.otherBubbleTextColor);
+        assertEquals(def.panelBgColor, c.panelBgColor);
+        assertEquals(def.textPrimaryColor, c.textPrimaryColor);
+        assertEquals(def.textSecondaryColor, c.textSecondaryColor);
+        assertEquals(def.cardColor, c.cardColor);
+        assertEquals(def.panelOutlineColor, c.panelOutlineColor);
+        assertEquals(def.secondaryCapsuleBg, c.secondaryCapsuleBg);
+        assertEquals(def.secondaryCapsuleText, c.secondaryCapsuleText);
+        assertEquals(def.panelOpacity, c.panelOpacity, 1e-6F);
+        assertEquals(def.cardTint, c.cardTint, 1e-6F);
+        assertTrue(c.panelOutline);
         assertTrue(c.blurEnabled);
         assertEquals(ThemeService.FROSTED, c.themeName);
+    }
+
+    /** The independent knobs survive the factory reset: corner style and the
+     *  non-look fields (size, scale) are personal, not part of the snapshot. */
+    @Test
+    void frostedResetKeepsIndependentKnobs() {
+        AtomChatConfig c = new AtomChatConfig();
+        c.cornerStyle = "small";
+        c.panelWidth = 500.0F;
+        c.uiScale = 1.25F;
+        ThemeService.apply(c, ThemeService.FROSTED);
+        assertEquals(500.0F, c.panelWidth, 1e-6F);
+        assertEquals(1.25F, c.uiScale, 1e-6F);
     }
 
     /** The no-deadlock rule: after any preset, a hand edit is the last word
