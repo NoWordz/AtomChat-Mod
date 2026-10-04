@@ -1,6 +1,7 @@
 package com.atom.chat.render;
 
 import com.atom.chat.diagnostics.FrameProfile;
+import com.atom.chat.theme.ThemeService;
 import io.github.humbleui.skija.Canvas;
 import io.github.humbleui.skija.Color;
 import io.github.humbleui.skija.Font;
@@ -155,42 +156,59 @@ public final class SkiaFontRenderer {
     }
 
     /**
-     * Flat dark under-copy used by the backing overloads. A legibility aid for
-     * white glyphs sitting directly on the dark frosted panel (names, message
-     * text): the eye reads the union of glyph + 1px dark copy, so thin strokes
-     * keep edge contrast over the busy blurred world. Deliberately a constant
-     * (not derived from the text colour) and deliberately not the styled
-     * drop-shadow of {@code ui.Text} — this one must stay invisible as an
-     * effect and only add contrast.
+     * Soft drop shadow behind text, replacing the old hard 1px-offset dark
+     * under-copy (which read as a smear on light themes). Still a full
+     * pre-pass — the whole block's shadow goes down before any main glyph, so
+     * a line's shadow never darkens the previous line's glyphs — but the copy
+     * is now Skia-blurred (sigma 1.5, offset dy=1) instead of a solid offset
+     * duplicate. Two cached filters, one per surface polarity (a light panel
+     * needs less shadow than a dark one), chosen per frame via
+     * {@link ThemeService#panelIsLight()}; theme switches follow naturally
+     * and nothing is allocated on the draw path.
+     *
+     * <p>Why makeDropShadowOnly and not makeDropShadow: the plain variant
+     * draws the input glyphs too — on a backing pre-pass that would re-paint
+     * the hard copy we are replacing. The Only variant emits just the blurred
+     * coloured shadow; the Paint colour only shapes the alpha mask.</p>
      */
-    private static final int BACKING_COLOR = 0x4D000000;
-    private static final float BACKING_OFFSET = 1.0F;
+    private static final io.github.humbleui.skija.ImageFilter SHADOW_ON_LIGHT =
+            io.github.humbleui.skija.ImageFilter.makeDropShadowOnly(0.0F, 1.0F, 1.5F, 1.5F, 0x33000000);
+    private static final io.github.humbleui.skija.ImageFilter SHADOW_ON_DARK =
+            io.github.humbleui.skija.ImageFilter.makeDropShadowOnly(0.0F, 1.0F, 1.5F, 1.5F, 0x59000000);
+
+    private static io.github.humbleui.skija.ImageFilter backingShadow() {
+        return ThemeService.panelIsLight() ? SHADOW_ON_LIGHT : SHADOW_ON_DARK;
+    }
 
     /**
-     * Draws {@code text} with an optional light dark backing: the text is first
-     * drawn once as a 1px-offset translucent dark copy, then the real glyphs go
-     * on top. Colour-code segments apply to the main pass only; the backing is
-     * a flat wash so coloured text keeps its hue contrast.
+     * Draws {@code text} with a soft backing shadow: the glyph mask first
+     * goes down once as a blurred drop shadow (a full pre-pass), then the
+     * real glyphs go on top. Colour-code segments apply to the main pass
+     * only; the shadow is a flat wash so coloured text keeps its hue.
      */
     public static void drawText(Canvas canvas, Font font, String text, float x, float y, int color, boolean backing) {
         if (backing) {
-            drawText(canvas, font, text, x + BACKING_OFFSET, y + BACKING_OFFSET, BACKING_COLOR);
+            drawTextPass(canvas, font, text, x, y, 0xFF000000, backingShadow());
         }
-        drawTextPlain(canvas, font, text, x, y, color);
+        drawTextPass(canvas, font, text, x, y, color, null);
     }
 
     /**
-     * One flat dark under-copy pass at the fixed backing offset/colour. Used by
-     * rich-text backing pre-passes that manage their own run loop (a whole
-     * block backs down before any main glyph goes on top).
+     * One soft-shadow pass at the glyph positions. Used by rich-text backing
+     * pre-passes that manage their own run loop (a whole block's shadow goes
+     * down before any main glyph goes on top).
      */
     public static void drawBackingText(Canvas canvas, Font font, String text, float x, float y) {
-        drawTextPlain(canvas, font, text, x + BACKING_OFFSET, y + BACKING_OFFSET, BACKING_COLOR);
+        drawTextPass(canvas, font, text, x, y, 0xFF000000, backingShadow());
     }
 
-    private static void drawTextPlain(Canvas canvas, Font font, String text, float x, float y, int color) {
+    private static void drawTextPass(Canvas canvas, Font font, String text, float x, float y, int color,
+                                     io.github.humbleui.skija.ImageFilter shadow) {
         canvas.save();
         try (Paint paint = new Paint().setColor(color)) {
+            if (shadow != null) {
+                paint.setImageFilter(shadow);
+            }
             int currentColor = color;
             float drawX = x;
             for (TextSegment segment : parseColoredText(text)) {
@@ -218,9 +236,9 @@ public final class SkiaFontRenderer {
 
     /**
      * Draws pre-wrapped lines as one block, vertically centered on centerY,
-     * with the same optional light dark backing as
+     * with the same soft backing shadow as
      * {@link #drawText(Canvas, Font, String, float, float, int, boolean)}. The
-     * backing is one full pre-pass so a line's dark copy never lands on the
+     * shadow is one full pre-pass so a line's shadow never lands on the
      * previous line's main glyphs.
      */
     public static void drawLines(Canvas canvas, Font font, java.util.List<String> lines, float x, float centerY, float lineHeight, int color, boolean backing) {
@@ -230,14 +248,18 @@ public final class SkiaFontRenderer {
         float totalH = lines.size() * lineHeight;
         float blockTop = centerY - totalH / 2.0F;
         if (backing) {
-            drawLinesPass(canvas, font, lines, x + BACKING_OFFSET, blockTop + BACKING_OFFSET, lineHeight, BACKING_COLOR);
+            drawLinesPass(canvas, font, lines, x, blockTop, lineHeight, 0xFF000000, backingShadow());
         }
-        drawLinesPass(canvas, font, lines, x, blockTop, lineHeight, color);
+        drawLinesPass(canvas, font, lines, x, blockTop, lineHeight, color, null);
     }
 
-    private static void drawLinesPass(Canvas canvas, Font font, java.util.List<String> lines, float x, float blockTop, float lineHeight, int color) {
+    private static void drawLinesPass(Canvas canvas, Font font, java.util.List<String> lines, float x, float blockTop, float lineHeight, int color,
+                                      io.github.humbleui.skija.ImageFilter shadow) {
         canvas.save();
         try (Paint paint = new Paint()) {
+            if (shadow != null) {
+                paint.setImageFilter(shadow);
+            }
             for (int i = 0; i < lines.size(); i++) {
                 float baseline = centerBaselineY(font, blockTop + (i + 0.5F) * lineHeight);
                 int currentColor = color;

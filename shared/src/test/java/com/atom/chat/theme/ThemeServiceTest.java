@@ -258,4 +258,22 @@ class ThemeServiceTest {
         assertEquals(legacy.themeName, loaded.themeName);
         assertEquals("", loaded.themeName);
     }
+    /** Backing-shadow polarity: relative luminance of the panel background
+     *  (alpha ignored) against the 0.5 threshold picks the shadow strength. */
+    @Test
+    void panelIsLightFollowsPanelBackgroundLuminance() {
+        AtomChatConfig config = new AtomChatConfig();
+        config.panelBgColor = 0xFFFFFFFF;
+        assertTrue(ThemeService.panelIsLight(config), "pure white panel is light");
+        config.panelBgColor = 0xFF16191F;
+        assertFalse(ThemeService.panelIsLight(config), "shipped dark default is dark");
+        config.panelBgColor = 0xEE16191F;
+        assertFalse(ThemeService.panelIsLight(config), "alpha is ignored, only RGB counts");
+        config.panelBgColor = 0xFF808080;
+        assertFalse(ThemeService.panelIsLight(config),
+                "mid grey linearises to ~0.216 luminance - dark side of the 0.5 threshold");
+        config.panelBgColor = 0xFFCCCCCC;
+        assertTrue(ThemeService.panelIsLight(config),
+                "light grey linearises to ~0.604 luminance - light side of the 0.5 threshold");
+    }
 }

@@ -67,9 +67,9 @@ public final class RichTextRenderer {
      * or carry a click event. When {@code addClickable} is true and a run has a
      * click or hover event, its line-box rectangle is appended to {@code sink}.
      *
-     * <p>With {@code backing} the whole block first goes down as one flat dark
-     * under-copy pre-pass (see {@code SkiaFontRenderer#drawBackingText}) before
-     * any main glyph is drawn — one full pre-pass keeps a run's backing from
+     * <p>With {@code backing} the whole block first goes down as one soft
+     * shadow pre-pass (see {@code SkiaFontRenderer#drawBackingText}) before
+     * any main glyph is drawn — one full pre-pass keeps a run's shadow from
      * darkening the previous run's glyphs.
      */
     public static void drawLines(Canvas canvas, Font font, List<RichLine> lines,
@@ -88,8 +88,8 @@ public final class RichTextRenderer {
 
     /**
      * One full pass over all lines and runs at the given block top. The
-     * backing pass ({@code mainPass} false) draws every run as the flat dark
-     * under-copy and never underlines or records spans; the main pass behaves
+     * shadow pass ({@code mainPass} false) draws every run as the soft
+     * drop shadow and never underlines or records spans; the main pass behaves
      * exactly as before.
      */
     private static void drawRunsPass(Canvas canvas, Font font, List<RichLine> lines,

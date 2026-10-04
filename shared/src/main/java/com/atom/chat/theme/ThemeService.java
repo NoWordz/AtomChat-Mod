@@ -166,6 +166,33 @@ public final class ThemeService {
     }
 
     /**
+     * Whether the panel surface reads as light. Text backing shadows are
+     * tuned per surface polarity: on a light panel a whisper of shadow
+     * grounds dark glyphs, on a dark panel the same filter needs more alpha
+     * to lift white glyphs off the frosted world. Reads the live config's
+     * panel background (alpha ignored) as relative luminance — the WCAG sRGB
+     * linearisation with the 0.2126/0.7152/0.0722 weights — against a 0.5
+     * threshold. Mid-grey (#808080, linear ≈ 0.216) counts as dark: a surface
+     * that dark never carries black text anyway.
+     */
+    public static boolean panelIsLight() {
+        return panelIsLight(AtomChatConfig.get());
+    }
+
+    /** Luminance test against an explicit config (the unit-test seam). */
+    public static boolean panelIsLight(AtomChatConfig config) {
+        int rgb = config.panelBgColor & 0xFFFFFF;
+        float r = srgbToLinear(((rgb >>> 16) & 0xFF) / 255.0F);
+        float g = srgbToLinear(((rgb >>> 8) & 0xFF) / 255.0F);
+        float b = srgbToLinear((rgb & 0xFF) / 255.0F);
+        return 0.2126F * r + 0.7152F * g + 0.0722F * b >= 0.5F;
+    }
+
+    private static float srgbToLinear(float c) {
+        return c <= 0.04045F ? c / 12.92F : (float) Math.pow((c + 0.055F) / 1.055F, 2.4);
+    }
+
+    /**
      * Writes the preset's appearance values into the config. The caller
      * persists. Unknown ids are ignored so a hand-edited themeName can never
      * scramble the settings. Both look presets keep the panel outline — it is
