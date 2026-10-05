@@ -2073,13 +2073,17 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
             // instead of being overlapped by the next button in the row.
             int[] order = {0, 3, 1, 2};
             int last = -1;
-            if (inputButtonHovered(layout.imageBtn.x(), layout.imageBtn.y(), mouseX, mouseY)) {
+            if (inputButtonHovered(layout.imageBtn.x(), layout.imageBtn.y(),
+                    UiTokens.COMPOSER_KEY_SIZE, UiTokens.COMPOSER_KEY_SIZE, mouseX, mouseY)) {
                 last = 0;
-            } else if (inputButtonHovered(layout.phraseBtn.x(), layout.phraseBtn.y(), mouseX, mouseY)) {
+            } else if (inputButtonHovered(layout.phraseBtn.x(), layout.phraseBtn.y(),
+                    UiTokens.COMPOSER_KEY_SIZE, UiTokens.COMPOSER_KEY_SIZE, mouseX, mouseY)) {
                 last = 3;
-            } else if (inputButtonHovered(layout.emojiBtn.x(), layout.emojiBtn.y(), mouseX, mouseY)) {
+            } else if (inputButtonHovered(layout.emojiBtn.x(), layout.emojiBtn.y(),
+                    UiTokens.COMPOSER_KEY_SIZE, UiTokens.COMPOSER_KEY_SIZE, mouseX, mouseY)) {
                 last = 1;
-            } else if (inputButtonHovered(layout.sendBtn.x(), layout.sendBtn.y(), mouseX, mouseY)) {
+            } else if (inputButtonHovered(layout.sendBtn.x(), layout.sendBtn.y(),
+                    UiTokens.BUTTON_W, UiTokens.BUTTON_H, mouseX, mouseY)) {
                 last = 2;
             }
             if (last >= 0) {
@@ -2460,7 +2464,8 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
     }
 
     private void drawIconButton(Canvas canvas, float bx, float by, int id, int mouseX, int mouseY) {
-        boolean hover = inputButtonHovered(bx, by, mouseX, mouseY);
+        boolean hover = inputButtonHovered(bx, by, UiTokens.COMPOSER_KEY_SIZE,
+                UiTokens.COMPOSER_KEY_SIZE, mouseX, mouseY);
         boolean pressed = buttonPressed(id);
         boolean pressedHeld = pressedButtonHeld == id;
         buttonHover[id] = UiMotion.approach(buttonHover[id], hover ? 1.0F : 0.0F, frameDt, UiMotion.HOVER_MS);
@@ -2471,9 +2476,10 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
         scale.update(hover, pressedHeld, frameDt, Animations.enabled());
         canvas.save();
         if (scale.scale() != 1.0F) {
-            canvas.translate(bx + UiTokens.BUTTON_W / 2.0F, by + UiTokens.BUTTON_H / 2.0F);
+            float keyHalf = UiTokens.COMPOSER_KEY_SIZE / 2.0F;
+            canvas.translate(bx + keyHalf, by + keyHalf);
             canvas.scale(scale.scale(), scale.scale());
-            canvas.translate(-(bx + UiTokens.BUTTON_W / 2.0F), -(by + UiTokens.BUTTON_H / 2.0F));
+            canvas.translate(-(bx + keyHalf), -(by + keyHalf));
         }
         // Same art language as the header buttons: the icon sits on the composer,
         // and a hover draws an inset rounded wash in the accent. No standing
@@ -2485,7 +2491,8 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
         if (wash > 0.01F) {
             float inset = UiTokens.s(4);
             SkiaDraw.drawRoundedRect(canvas, bx + inset, by + inset,
-                    UiTokens.BUTTON_W - inset * 2.0F, UiTokens.BUTTON_H - inset * 2.0F,
+                    UiTokens.COMPOSER_KEY_SIZE - inset * 2.0F,
+                    UiTokens.COMPOSER_KEY_SIZE - inset * 2.0F,
                     UiTokens.radius(8), UiTokens.cardHover(wash));
         }
         // Active states take the accent colour: the emoji button while its
@@ -2501,15 +2508,21 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
         canvas.restore();
     }
 
-    /** True when the pointer is inside a composer button rect (virtual coords). */
-    private boolean inputButtonHovered(float bx, float by, int mouseX, int mouseY) {
+    /**
+     * True when the pointer is inside a composer button rect (virtual coords).
+     * The box is passed in because the row carries two shapes: the square
+     * composer keys and the wider Send capsule.
+     */
+    private boolean inputButtonHovered(float bx, float by, float w, float h,
+                                       int mouseX, int mouseY) {
         float vmx = toVirtualX(mouseX);
         float vmy = toVirtualY(mouseY);
-        return vmx >= bx && vmx <= bx + UiTokens.BUTTON_W && vmy >= by && vmy <= by + UiTokens.BUTTON_H;
+        return vmx >= bx && vmx <= bx + w && vmy >= by && vmy <= by + h;
     }
 
     private void drawSendButton(Canvas canvas, float bx, float by, int mouseX, int mouseY) {
-        boolean hover = inputButtonHovered(bx, by, mouseX, mouseY);
+        boolean hover = inputButtonHovered(bx, by, UiTokens.BUTTON_W, UiTokens.BUTTON_H,
+                mouseX, mouseY);
         boolean pressed = buttonPressed(2);
         boolean pressedHeld = pressedButtonHeld == 2;
         buttonHover[2] = UiMotion.approach(buttonHover[2], hover ? 1.0F : 0.0F, frameDt, UiMotion.HOVER_MS);
@@ -2528,7 +2541,8 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
             SkiaDraw.drawRoundedRect(canvas, bx, by, UiTokens.BUTTON_W, UiTokens.BUTTON_H, UiTokens.BUTTON_RADIUS,
                     Color.makeARGB((int) Math.min(160, overlay), 255, 255, 255));
         }
-        drawIcon(canvas, ICON_SEND_PATH, bx, by, textPrimary());
+        drawIcon(canvas, ICON_SEND_PATH, bx, by, UiTokens.BUTTON_W, UiTokens.BUTTON_H,
+                textPrimary());
         canvas.restore();
     }
 
@@ -2538,8 +2552,17 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
      * rendered icon size so every icon keeps the same optical line weight.
      */
     private void drawIcon(Canvas canvas, io.github.humbleui.skija.Path icon, float bx, float by, int color) {
-        drawIconCentered(canvas, icon, bx + UiTokens.BUTTON_W / 2.0F, by + UiTokens.BUTTON_H / 2.0F,
-                s(18), color);
+        drawIcon(canvas, icon, bx, by, UiTokens.COMPOSER_KEY_SIZE, UiTokens.COMPOSER_KEY_SIZE, color);
+    }
+
+    /**
+     * Draws one of the inline SVG-path toolbar icons, centred in the box it is
+     * given. The stroke width follows the rendered glyph size, so both button
+     * families keep the same optical line weight.
+     */
+    private void drawIcon(Canvas canvas, io.github.humbleui.skija.Path icon, float bx, float by,
+                          float boxW, float boxH, int color) {
+        drawIconCentered(canvas, icon, bx + boxW / 2.0F, by + boxH / 2.0F, s(18), color);
     }
 
     /** Draws an icon centered on an arbitrary point; used by toolbar and menus. */

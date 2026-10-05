@@ -69,15 +69,17 @@ public final class UiTokens {
     }
 
     /**
-     * Selected pill: the theme accent painted opaque. The accent IS the theme
-     * colour and the user picked it to be seen, so the selected cell is stated
-     * outright rather than tinted. A translucent version leaves the pill's
-     * colour dependent on whatever surface sits under it (panel, card, a
-     * scrolling row) and reads as a washed-out smudge on a light panel.
+     * Selected pill: the accent held back to a translucent wash rather than
+     * painted solid. Solid accent reads as a filled block stamped on the surface;
+     * at this alpha the surface picks up the theme colour instead, which is the
+     * same relationship the hover wash has with it, just far stronger - so the
+     * selected cell is unmistakably ahead of a hovered one without becoming a
+     * slab. This is the value the pill shipped with before it was briefly made
+     * opaque.
      */
     public static int accentFill() {
         int rgb = com.atom.chat.config.AtomChatConfig.get().accentColor & 0xFFFFFF;
-        return io.github.humbleui.skija.Color.makeARGB(255,
+        return io.github.humbleui.skija.Color.makeARGB(162,
                 (rgb >> 16) & 0xFF, (rgb >> 8) & 0xFF, rgb & 0xFF);
     }
 
@@ -143,21 +145,31 @@ public final class UiTokens {
     // Input bar. INPUT_HEIGHT is the one-line baseline; the bar grows upward by
     // one line height while the text wraps onto a second line and never beyond
     // INPUT_MAX_LINES — past that the text scrolls inside the fixed box.
-    public static final float INPUT_HEIGHT = s(76);
+    public static final float INPUT_HEIGHT = s(82);
     public static final int INPUT_MAX_LINES = 2;
     public static final float INPUT_BAR_PAD = s(12);
+    // The button row is taller than BUTTON_H because the square composer keys
+    // are s(36) while the Send capsule stays s(30). The bar itself grows by the
+    // same amount so the text keeps the breathing room it had when the row was
+    // only s(30) tall.
+    public static final float INPUT_ROW_H = s(36);
     public static final float INPUT_ROW_PAD = s(8);
     public static final float INPUT_TEXT_X = s(14);
     public static final float PANEL_BOTTOM_PAD = s(14);
 
-    // Composer row buttons (image / emoji / phrase / send share one row). Square
-    // on purpose: this is the header action button's geometry (s(36) box, s(4)
-    // to the bar edge and between neighbours, s(8) radius), so the two button
-    // families read as one language. NOT the old s(56)x s(30) lozenge.
-    public static final float BUTTON_W = s(36);
-    public static final float BUTTON_H = s(36);
-    public static final float BUTTON_RADIUS = s(8);
-    public static final float BUTTON_GAP = s(4);
+    // Composer row. Two button families share one row and deliberately do NOT
+    // share a width: the three keys (image / emoji / phrase) are square, copying
+    // the header action button's insets and radius (s(4) to the bar edge and
+    // between neighbours, s(8) radius, s(18) glyph), while Send keeps the wider
+    // accent capsule it has always had. Their HEIGHT is the same, so the two
+    // shapes sit on one line rather than one being visibly short.
+    public static final float BUTTON_W = s(56);
+    public static final float BUTTON_H = s(30);
+    public static final float BUTTON_RADIUS = s(9);
+    public static final float BUTTON_GAP = s(6);
+    /** Square side of one composer key; equals BUTTON_H by design (see above). */
+    public static final float COMPOSER_KEY_SIZE = s(30);
+    public static final float COMPOSER_KEY_GAP = s(4);
 
     // Fonts. Body/input/name/quote were bumped one notch (r15 legibility pass):
     // on 2K/4K panels the physical glyph size was diluted by uiDensity, so the

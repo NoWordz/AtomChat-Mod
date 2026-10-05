@@ -895,12 +895,17 @@ public final class SettingsSectionPage {
                 // fading in over the same 90ms the toolbar buttons use.
                 // Rows press-scale around their centre and hit-tests keep using
                 // unscaled coordinates, like the message entrance.
+                //
+                // compact, not row(): row() pins its hover target to 1.0, so the
+                // row would sit perfectly still under the pointer - the same
+                // no-op the conversation rows had. compact also keeps the lift
+                // inside the row gap, which control's 1.08 would not.
                 PressScale press = row.kind() == RowKind.LABEL ? null
-                        : interactive ? rowPress.computeIfAbsent(i, k -> PressScale.row())
+                        : interactive ? rowPress.computeIfAbsent(i, k -> PressScale.compact())
                         : rowPress.get(i);
                 if (press != null) {
                     if (interactive) {
-                        press.update(false, i == pressedRow, dt, Animations.enabled());
+                        press.update(i == hovered, i == pressedRow, dt, Animations.enabled());
                     }
                     press.begin(canvas, rect.x() + rect.w() / 2.0F, rect.y() + rect.h() / 2.0F);
                 }

@@ -30,7 +30,13 @@ class UiLayoutTest {
         // Button row is vertically aligned and mirrors padding on both sides.
         assertEquals(l.imageBtn.y(), l.emojiBtn.y(), EPS, "buttons share one row");
         assertEquals(l.imageBtn.y(), l.sendBtn.y(), EPS, "send button on the same row");
-        assertEquals(l.imageBtn.h(), l.sendBtn.h(), EPS, "send button same size");
+        // The row carries two shapes on one line: three square composer keys and
+        // the wider Send capsule. They share a height and a row axis, not a
+        // width - asserting equal width here is what pinned Send to the square
+        // key size, which is not the design.
+        assertEquals(l.imageBtn.h(), l.emojiBtn.h(), EPS, "composer keys same height");
+        assertEquals(l.imageBtn.h(), l.phraseBtn.h(), EPS, "phrase key same height");
+        assertTrue(l.sendBtn.w() > l.imageBtn.w(), "send is the wider capsule");
         assertEquals(l.imageBtn.x() - l.inputBar.x(), l.inputBar.right() - l.sendBtn.right(), EPS,
                 "button row padding mirrors left/right");
         assertEquals(l.imageBtn.x() - l.inputBar.x(), UiTokens.INPUT_ROW_PAD, EPS, "row uses INPUT_ROW_PAD");
