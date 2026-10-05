@@ -292,7 +292,6 @@ public final class ConversationListPage {
         float dt = Math.min(50.0F, Math.max(1.0F, now - lastFrameMs));
         lastFrameMs = now;
         List<Row> rows = rows();
-        float listTop = layout.list.y() + UiTokens.ROOT_CONTENT_GAP;
         int hovered = -1;
         float emptyTop = 0.0F;
         // Decided from the data, not from what happens to be on screen — a
@@ -301,10 +300,12 @@ public final class ConversationListPage {
         canvas.save();
         try {
             SkiaDraw.clip(canvas, layout.list.x(), layout.list.y(), layout.list.w(), layout.list.h(), 0.0F);
-            float y = listTop;
+            float y = contentTop(layout, scrollY);
             for (int i = 0; i < rows.size(); i++) {
                 Row row = rows.get(i);
                 float h = row.kind() == RowKind.DIVIDER ? DIVIDER_H : ROW_H;
+                // Culled in the same scrolled space the cards are drawn in, so a
+                // row leaves the loop exactly when it leaves the viewport.
                 if (y + h >= layout.list.y() && y <= layout.list.bottom()) {
                     if (row.kind() == RowKind.DIVIDER) {
                         drawDivider(canvas, layout.list.x(), y, layout.list.w(), h);
@@ -384,7 +385,18 @@ public final class ConversationListPage {
     }
 
     /**
-     * Card rect for the row at {@code index}, whose band starts at {@code y}.
+     * Top edge of the row band once the page scroll is applied. Both the draw
+     * loop and {@link #hit} start their running offset here rather than each
+     * subtracting the scroll themselves, so the rows they see can never drift
+     * apart by an offset.
+     */
+    private static float contentTop(UiLayout layout, float scrollY) {
+        return layout.list.y() + UiTokens.ROOT_CONTENT_GAP - scrollY;
+    }
+
+    /**
+     * Card rect for the row at {@code index}, whose band starts at {@code y} on
+     * the scrolled axis (see {@link #contentTop}).
      * The draw loop and {@link #hit} both take their geometry from this one
      * object rather than each building it, so a card can never be drawn
      * somewhere it cannot be clicked, and the horizontal inset is defined once.
@@ -406,7 +418,7 @@ public final class ConversationListPage {
      */
     public RowHit hit(float vmx, float vmy, UiLayout layout, float scrollY) {
         List<Row> rows = rows();
-        float y = layout.list.y() + UiTokens.ROOT_CONTENT_GAP;
+        float y = contentTop(layout, scrollY);
         for (int i = 0; i < rows.size(); i++) {
             Row row = rows.get(i);
             boolean divider = row.kind() == RowKind.DIVIDER;
