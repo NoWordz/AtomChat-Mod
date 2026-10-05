@@ -56,6 +56,34 @@ public final class ConversationListPage {
     private static final float AVATAR_RADIUS = UiTokens.s(12);
     private static final float ICON_INSET = UiTokens.s(10);
     private static final float DIVIDER_H = UiTokens.SETTINGS_LABEL_H;
+    /**
+     * Luminance weights of the Rec. 709 primaries, repeated on all three
+     * output rows so the colour matrix maps every channel to the same grey.
+     * Named because the values are the documentation: the matrix is
+     * otherwise an opaque block of sixteen numbers.
+     */
+    private static final float[] BLOCKED_LUMA = {
+            0.2126F, 0.7152F, 0.0722F, 0, 0,
+            0.2126F, 0.7152F, 0.0722F, 0, 0,
+            0.2126F, 0.7152F, 0.0722F, 0, 0,
+            0, 0, 0, 1, 0
+    };
+    /**
+     * Greyscale filter and layer paint for blocked rows, built once instead
+     * of per row per frame. Both are immutable once constructed and shared by
+     * every row, which is what makes one static pair safe: the filter only
+     * wraps the constant matrix above and the paint never has its colour or
+     * filter mutated afterwards, so no row can observe another row's state.
+     * Deliberately never closed. Skija's managed handles are reclaimed by a
+     * Cleaner once unreachable, and closing a shared instance would leave the
+     * next frame drawing through a freed native pointer. Process lifetime is
+     * the intended lifetime, the same contract AppIcons' paths and
+     * SkiaDraw.SHADOW_PAINT already rely on.
+     */
+    private static final ColorFilter BLOCKED_FILTER =
+            ColorFilter.makeMatrix(new ColorMatrix(BLOCKED_LUMA));
+    private static final Paint BLOCKED_LAYER =
+            new Paint().setColorFilter(BLOCKED_FILTER);
 
     /**
      * Player-card order, hoisted out of {@link #rows()} so the comparator chain
@@ -281,8 +309,12 @@ public final class ConversationListPage {
                     if (row.kind() == RowKind.DIVIDER) {
                         drawDivider(canvas, layout.list.x(), y, layout.list.w(), h);
                     } else {
-                        boolean over = vmx >= layout.list.x() && vmx <= layout.list.right()
-                                && vmy >= y && vmy <= y + ROW_H;
+                        // One geometry object satisfies both readers: the hover
+                        // test and the draw take the rect from the same value, so
+                        // a card can never be drawn somewhere it cannot be
+                        // clicked, and the horizontal inset lives in one place.
+                        RowHit rect = rowRect(i, layout, y);
+                        boolean over = rect.contains(vmx, vmy);
                         if (over) {
                             hovered = i;
                         }
@@ -290,7 +322,7 @@ public final class ConversationListPage {
                         // is what made the highlight snap in instead of fading.
                         boolean pulsing = pressedRow == i
                                 && System.currentTimeMillis() - pressedRowAtMs < ROW_PULSE_MS;
-                        drawRow(canvas, row, layout.list.x(), y, layout.list.w(),
+                        drawRow(canvas, row, rect.x(), y, rect.w(),
                                 i == hoverRowIndex ? rowHover : 0.0F, i, over, pulsing, dt);
                         if (row.kind() == RowKind.PUBLIC) {
                             emptyTop = y + h + ROW_GAP;
@@ -338,21 +370,51 @@ public final class ConversationListPage {
                 Math.max(0.0F, rightX - textX), UiTokens.s(1), UiTokens.s(0.5F), lineColor);
     }
 
-    /** Hit-tests rows using the same geometry as render. */
+    /**
+     * Left edge of a card: the list inset on both sides by the clearance the
+     * hover bounce needs, or the rounded ends get sheared flat by the clip.
+     */
+    private static float cardX(UiLayout layout) {
+        return layout.list.x() + UiTokens.ROW_CLIP_INSET;
+    }
+
+    /** Width of a card; see {@link #cardX}. */
+    private static float cardW(UiLayout layout) {
+        return layout.list.w() - UiTokens.ROW_CLIP_INSET * 2.0F;
+    }
+
+    /**
+     * Card rect for the row at {@code index}, whose band starts at {@code y}.
+     * The draw loop and {@link #hit} both take their geometry from this one
+     * object rather than each building it, so a card can never be drawn
+     * somewhere it cannot be clicked, and the horizontal inset is defined once.
+     * Inset horizontally only, on purpose: the band is already ROW_GAP clear of
+     * its neighbours, and ROW_H is what the card's own content is centred
+     * against, so insetting the height would move the text rather than protect
+     * it.
+     */
+    private RowHit rowRect(int index, UiLayout layout, float y) {
+        List<Row> rows = rows();
+        return new RowHit(rows.get(index), index, cardX(layout), y, cardW(layout), ROW_H);
+    }
+
+    /**
+     * Hit-tests cards through {@link #rowRect}; dividers are not interactive.
+     * The band keeps a running offset instead of asking rowRect for every index,
+     * because hit() runs on every mouse move and a per-index prefix sum would
+     * make that quadratic in the row count.
+     */
     public RowHit hit(float vmx, float vmy, UiLayout layout, float scrollY) {
         List<Row> rows = rows();
-        float listTop = layout.list.y() + UiTokens.ROOT_CONTENT_GAP;
-        float y = listTop;
+        float y = layout.list.y() + UiTokens.ROOT_CONTENT_GAP;
         for (int i = 0; i < rows.size(); i++) {
             Row row = rows.get(i);
-            float h = row.kind() == RowKind.DIVIDER ? DIVIDER_H : ROW_H;
-            if (row.kind() != RowKind.DIVIDER) {
-                RowHit hit = new RowHit(row, i, layout.list.x(), y, layout.list.w(), ROW_H);
-                if (hit.contains(vmx, vmy)) {
-                    return hit;
-                }
+            boolean divider = row.kind() == RowKind.DIVIDER;
+            RowHit hit = rowRect(i, layout, y);
+            if (!divider && hit.contains(vmx, vmy)) {
+                return hit;
             }
-            y += h + ROW_GAP;
+            y += (divider ? DIVIDER_H : ROW_H) + ROW_GAP;
         }
         return null;
     }
@@ -412,15 +474,14 @@ public final class ConversationListPage {
     }
 
     private void drawBlockedRow(Canvas canvas, Row row, float x, float y, float w, float hoverAlpha) {
-        float[] matrix = {
-                0.2126F, 0.7152F, 0.0722F, 0, 0,
-                0.2126F, 0.7152F, 0.0722F, 0, 0,
-                0.2126F, 0.7152F, 0.0722F, 0, 0,
-                0, 0, 0, 1, 0
-        };
+        // The filter and its paint are class constants (see BLOCKED_LAYER), so
+        // this path allocates no native handle at all. saveLayer still pushes a
+        // stack entry of its own, so the pairing below is unchanged: two
+        // pushes, two pops, with the outer save balanced in a finally so a
+        // throw out of the layer cannot leak the matrix.
         canvas.save();
-        try (Paint layer = new Paint().setColorFilter(ColorFilter.makeMatrix(new ColorMatrix(matrix)))) {
-            canvas.saveLayer(Rect.makeXYWH(x - 1, y - 1, w + 2, ROW_H + 2), layer);
+        try {
+            canvas.saveLayer(Rect.makeXYWH(x - 1, y - 1, w + 2, ROW_H + 2), BLOCKED_LAYER);
             UiCards.drawCard(canvas, x, y, w, ROW_H, UiTokens.settingsRowRadius(), hoverAlpha);
             drawRowContent(canvas, row, x, y, w);
             canvas.restore();

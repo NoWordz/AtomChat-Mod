@@ -11,6 +11,7 @@ import com.atom.chat.ui.AppIcons;
 import com.atom.chat.ui.UiLayout;
 import com.atom.chat.ui.PressScale;
 import com.atom.chat.ui.UiMotion;
+import com.atom.chat.ui.UiSpring;
 import com.atom.chat.ui.UiTokens;
 import io.github.humbleui.skija.Canvas;
 import it.unimi.dsi.fastutil.objects.Object2IntMap;
@@ -106,6 +107,61 @@ public final class ProfilePage {
     private final float[] menuItemHover = new float[2];
     /** Per-item menu bounce, indexed like {@link #menuItemHover}. */
     private final PressScale[] menuItemScale = {PressScale.control(), PressScale.control()};
+    /**
+     * Overshoot peak of {@link PressScale#control()}, the spring the avatar
+     * menu's rows run on. Padding that keeps a row capsule inside its container
+     * has to be evaluated at the peak rather than at the spring's nominal
+     * target, because the draw path scales the capsule about its own centre.
+     *
+     * <p>Peak of {@link UiSpring#newBounceSpring()} when it springs back to the
+     * 1.08 hover target from the 0.92 press target: 1.104871, against a resting
+     * 1.0. Evaluated at the released peak on purpose, because the page never
+     * feeds a press today (see the {@code pressed = false} note in
+     * {@link #render}) so only the 1.08 hover target is reachable right now -
+     * padding is the cheap half of this fix, and taking the peak here means
+     * wiring press tracking later cannot silently reopen the overflow.
+     */
+    private static final float CONTROL_RELEASE_PEAK = 1.104871F;
+    /**
+     * Insets a full-width info row from the scroll clip on each side. The rows
+     * are drawn exactly the clip's width, so the compact lift has nowhere to
+     * grow and the clip shears the rounded corners flat. s(12) = 15px covers the
+     * 1.053961 release peak: (1.053961 - 1) * 370 / 2 = 9.98px a side on the
+     * default panel, so 5px of slack. The cost is 30px of a 370px row, which on
+     * a row that already pads its text by 14px reads as far less.
+     */
+    private static final float INFO_ROW_INSET = s(12);
+    /**
+     * Base padding for the avatar menu's row capsule, the hover language the
+     * bubble context menu uses. The horizontal half is width-derived in
+     * {@link #menuItemInset}: a wider menu is scaled further out by the same
+     * spring, so a constant padding cannot hold at every width.
+     */
+    private static final float MENU_ITEM_INSET = s(4);
+    /** Margin the derived menu padding keeps past the spring peak. */
+    private static final float MENU_ITEM_CLEARANCE = s(1);
+
+    /**
+     * Padding between the avatar menu's edge and a hovered row capsule. The
+     * capsule is scaled about the menu's centre, so at scale {@code k} its outer
+     * edge lands at {@code menuW/2 - (menuW/2 - inset) * k} in the menu's own
+     * frame; staying inside the menu needs {@code inset >= (k - 1) * menuW /
+     * (2k)}. That is proportional to {@code menuW}, and the menu width is
+     * derived from the label text, so the padding has to be derived too: a
+     * constant padding still spills on a long label, which is exactly how the
+     * English "Change avatar" row overflowed. The written form is the approved
+     * shape, evaluated at the release peak and given a pixel of clearance so the
+     * capsule edge reads as clear of the card edge instead of tangent to it.
+     */
+    private static float menuItemInset(float menuW) {
+        float derived = MENU_ITEM_INSET
+                + (CONTROL_RELEASE_PEAK - 1.0F) * (menuW - s(8)) / 2.0F
+                + MENU_ITEM_CLEARANCE;
+        // A label long enough to make the derived padding eat the capsule would
+        // otherwise draw a negative width; the rows keep at least s(8) of pill.
+        return Math.max(MENU_ITEM_INSET, Math.min(derived, menuW / 2.0F - s(8)));
+    }
+
     private static int accentColor() {
         return com.atom.chat.config.AtomChatConfig.get().accentColor;
     }
@@ -133,7 +189,7 @@ public final class ProfilePage {
 
     /** Copy button docked right after the row label, back-button hover style. */
     private UiLayout.Rect copyButtonRect(UiLayout layout, int index, float scrollY) {
-        UiLayout.Rect row = rowRect(layout, index, scrollY);
+        UiLayout.Rect row = rowCardRect(layout, index, scrollY);
         Font labelFont = FontManager.font(UiTokens.PROFILE_ROW_FONT);
         float labelW = SkiaFontRenderer.getStringWidth(labelFont, infoRows().get(index).label());
         float size = s(22);
@@ -515,6 +571,18 @@ public final class ProfilePage {
     }
 
     /**
+     * The card an info row draws as, inset from {@link #rowRect} on both sides
+     * by the room the hover lift needs. One geometry satisfies the hit test and
+     * the draw, so a row can never be drawn where it cannot be clicked and the
+     * label keeps exactly {@link UiTokens#PROFILE_ROW_PAD} of the card's edge.
+     */
+    private UiLayout.Rect rowCardRect(UiLayout layout, int index, float scrollY) {
+        UiLayout.Rect row = rowRect(layout, index, scrollY);
+        return new UiLayout.Rect(row.x() + INFO_ROW_INSET, row.y(),
+                row.w() - INFO_ROW_INSET * 2.0F, row.h());
+    }
+
+    /**
      * The local avatar menu (change/clear); anchored under the avatar itself
      * and wide enough for its longest label — the fixed conversation-menu
      * width truncates "Change avatar".
@@ -639,7 +707,7 @@ public final class ProfilePage {
         int hovered = -1;
         List<InfoRow> rows = infoRows();
         for (int i = 0; i < rows.size(); i++) {
-            boolean over = rowRect(layout, i, scrollY).contains(vmx, vmy);
+            boolean over = rowCardRect(layout, i, scrollY).contains(vmx, vmy);
             if (over) {
                 hovered = i;
             }
@@ -757,7 +825,7 @@ public final class ProfilePage {
         Font labelFont = FontManager.font(UiTokens.PROFILE_ROW_FONT);
         Font valueFont = FontManager.font(UiTokens.PROFILE_ROW_VALUE_FONT);
         for (int i = 0; i < rows.size(); i++) {
-            UiLayout.Rect row = rowRect(layout, i, scrollY);
+            UiLayout.Rect row = rowCardRect(layout, i, scrollY);
             if (row.bottom() < layout.list.y() || row.y() > layout.list.bottom()) {
                 continue;
             }
@@ -769,6 +837,10 @@ public final class ProfilePage {
             PressScale rowPress = rowScale.computeIfAbsent(i, k -> PressScale.compact());
             rowPress.update(rowHover > 0.01F && i == hoverRowIndex, false, lastDtMs,
                     Animations.enabled());
+            // The card is inset from the clip on both sides, so the hover lift has
+            // somewhere to grow instead of being sheared flat by the scroll clip.
+            // Card, hover test and text all move with it, which is what keeps the
+            // label exactly PROFILE_ROW_PAD from the surface it sits on.
             rowPress.begin(canvas, row.x() + row.w() / 2.0F, row.y() + row.h() / 2.0F);
             try {
                 SkiaDraw.drawRoundedRect(canvas, row.x(), row.y(), row.w(), row.h(),
@@ -830,9 +902,9 @@ public final class ProfilePage {
             canvas.scale(sc, sc);
             canvas.translate(-(menu.x() + menu.w() / 2.0F), -menu.y());
             SkiaDraw.drawRoundedShadow(canvas, menu.x(), menu.y(), menu.w(), menu.h(),
-                    s(10), s(8), Color.makeARGB(100, 0, 0, 0));
+                    UiTokens.radius(10), s(8), Color.makeARGB(100, 0, 0, 0));
             SkiaDraw.drawRoundedRect(canvas, menu.x(), menu.y(), menu.w(), menu.h(),
-                    s(10), Color.makeARGB(245, 35, 39, 47));
+                    UiTokens.radius(10), Color.makeARGB(245, 35, 39, 47));
             for (int i = 0; i < labels.length; i++) {
                 float rowY = menu.y() + i * rowH;
                 float cy = rowY + rowH / 2.0F;
@@ -841,10 +913,12 @@ public final class ProfilePage {
                 menuItemScale[i].begin(canvas, menu.x() + menu.w() / 2.0F, cy);
                 try {
                     if (menuItemHover[i] > 0.01F) {
-                        // Uniform s(4) inset on every side of the row capsule, the
-                        // exact hover language of the bubble context menu.
-                        SkiaDraw.drawRoundedRect(canvas, menu.x() + s(4), rowY + s(4),
-                                menu.w() - s(8), rowH - s(8),
+                        // Padding is width-derived (see menuItemInset): the capsule
+                        // is scaled about the menu centre, so a constant padding
+                        // converges to a fixed non-zero spill as the menu widens.
+                        float inset = menuItemInset(menu.w());
+                        SkiaDraw.drawRoundedRect(canvas, menu.x() + inset, rowY + MENU_ITEM_INSET,
+                                menu.w() - inset * 2.0F, rowH - MENU_ITEM_INSET * 2.0F,
                                 s(6), Color.makeARGB((int) (55.0F * menuItemHover[i]), 255, 255, 255));
                     }
                     boolean rowEnabled = i == 0 || clearEnabled;

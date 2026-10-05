@@ -195,19 +195,76 @@ public final class QuickPhrasePanel {
                 p.getWidth() - UiTokens.EMOJI_PANEL_PAD * 2.0F, rowH());
     }
 
-    /** Icon-button hit square: centre ± s(14), deliberately generous. */
-    private static Rect btnRect(Rect row, int btn) {
-        float cx = row.getRight() - (btn == 0 ? s(44) : s(20));
-        return Rect.makeXYWH(cx - s(14), row.getTop(), s(28), row.getHeight());
+    // The two icon keys, as distances from the row's right edge. The centres
+    // are the original layout; the width in between is derived from them rather
+    // than picked, so the two hit rects can only meet at their midpoint.
+    private static final float ICON_DELETE_FROM_RIGHT = s(20);
+    private static final float ICON_EDIT_FROM_RIGHT = s(44);
+
+    /** Which icon key a caller means: 0 = edit, 1 = delete. */
+    private static int iconIndex(int btn) {
+        return btn == 0 ? 0 : 1;
+    }
+
+    /** Where one icon key is drawn: the only definition of those two centres. */
+    private static float iconCenterX(Rect row, int btn) {
+        return row.getRight()
+                - (iconIndex(btn) == 0 ? ICON_EDIT_FROM_RIGHT : ICON_DELETE_FROM_RIGHT);
+    }
+
+    /**
+     * Hit rect of one icon key. The two rects are adjacent and meet exactly at
+     * the midpoint of their centres, so no band resolves to the wrong action.
+     * They used to be s(28) wide around centres s(24) apart, which overlapped
+     * by s(5); delete is tested first, so a click in that band deleted the
+     * phrase even with the pointer visually on the edit glyph.
+     */
+    private static Rect iconEdit(Rect row, int btn) {
+        return iconHitRect(row, iconIndex(btn));
+    }
+
+    private static Rect iconHitRect(Rect row, int btn) {
+        float boundary = (iconCenterX(row, 0) + iconCenterX(row, 1)) / 2.0F;
+        float left = btn == 0 ? boundary - s(24) : boundary;
+        float right = btn == 0 ? boundary : boundary + s(24);
+        return Rect.makeXYWH(left, row.getTop(), right - left, row.getHeight());
     }
 
     private int maxScroll() {
         return Math.max(0, rowCount() - VISIBLE_ROWS);
     }
 
-    /** skija's types.Rect has no contains(float,float); hand-rolled here. */
+    /**
+     * skija's types.Rect has no contains(float,float); hand-rolled here. Bounds
+     * are half open: right and bottom are exclusive, so two rects that meet at
+     * an edge split the space between them instead of both claiming the edge
+     * (which is what let the edit key answer for the delete key at x == edge).
+     */
     private static boolean contains(Rect r, float x, float y) {
-        return x >= r.getLeft() && x <= r.getRight() && y >= r.getTop() && y <= r.getBottom();
+        return x >= r.getLeft() && x < r.getRight() && y >= r.getTop() && y < r.getBottom();
+    }
+
+    /**
+     * Which icon key the pointer is on: 0 = edit, 1 = delete, -1 = neither.
+     * Click, hover and draw all read this one function, so the two paths cannot
+     * drift apart the way two hand-written copies of the same rect did.
+     */
+    private static int iconUnder(Rect row, float x, float y) {
+        for (int btn = 0; btn < 2; btn++) {
+            if (contains(iconEdit(row, btn), x, y)) {
+                return btn;
+            }
+        }
+        return -1;
+    }
+
+    /**
+     * Which icon key the last {@link #hover} landed on: 0 = edit, 1 = delete,
+     * -1 = neither. One accessor for the hover path, so a test can ask both
+     * paths the same question and compare the answers.
+     */
+    int hoveredIconButton() {
+        return hoveredBtn < 0 ? -1 : hoveredBtn % 2;
     }
 
     /** Cell key of one edit/delete key, from btnHover's composite index. */
@@ -271,7 +328,10 @@ public final class QuickPhrasePanel {
     }
 
     public void update(long frameDt) {
-        anim = UiMotion.approach(anim, open ? 1.0F : 0.0F, frameDt, UiMotion.POPUP_MS);
+        // Animations.ms, not the raw token: the settings switch collapses this
+        // panel the way it already collapses the emoji panel, instead of leaving
+        // a 110 ms pop behind with decorative motion off.
+        anim = UiMotion.approach(anim, open ? 1.0F : 0.0F, frameDt, Animations.ms(UiMotion.POPUP_MS));
         if (anim < 0.01F && !open) {
             anim = 0.0F;
         }
@@ -431,13 +491,10 @@ public final class QuickPhrasePanel {
             }
             switch (rowKind(position)) {
                 case ROW_LOCAL -> {
-                    if (contains(btnRect(r, 1), (float) mx, (float) my)) {
-                        pulseCell(iconCellKey(position * 2 + 1));
-                        return new Action(Action.DELETE, position);
-                    }
-                    if (contains(btnRect(r, 0), (float) mx, (float) my)) {
-                        pulseCell(iconCellKey(position * 2));
-                        return new Action(Action.EDIT, position);
+                    int btn = iconUnder(r, (float) mx, (float) my);
+                    if (btn >= 0) {
+                        pulseCell(iconCellKey(position * 2 + btn));
+                        return new Action(btn == 0 ? Action.EDIT : Action.DELETE, position);
                     }
                     pulseCell(position);
                     return new Action(Action.INSERT, position);
@@ -497,10 +554,9 @@ public final class QuickPhrasePanel {
                 hoveredRow = index;
                 rowHover.putIfAbsent(index, 0.0F);
                 if (kind == ROW_LOCAL) {
-                    if (contains(btnRect(r, 1), vmx, vmy)) {
-                        hoveredBtn = index * 2 + 1;
-                    } else if (contains(btnRect(r, 0), vmx, vmy)) {
-                        hoveredBtn = index * 2;
+                    int btn = iconUnder(r, vmx, vmy);
+                    if (btn >= 0) {
+                        hoveredBtn = index * 2 + btn;
                     }
                 }
                 if (hoveredBtn >= 0) {
@@ -639,7 +695,7 @@ public final class QuickPhrasePanel {
         // Icon buttons last so hover/delete never sit under the text.
         Path[] icons = {AppIcons.ICON_EDIT_PATH, AppIcons.ICON_CLOSE_PATH};
         for (int b = 0; b < 2; b++) {
-            Rect hit = btnRect(r, b);
+            Rect hit = iconEdit(r, b);
             float bx = (hit.getLeft() + hit.getRight()) / 2.0F;
             float by = (hit.getTop() + hit.getBottom()) / 2.0F;
             // Each icon key is a cell of its own, so it bounces inside the row it
@@ -724,5 +780,24 @@ public final class QuickPhrasePanel {
 
     private static String tr(String key) {
         return Component.translatable(key).getString();
+    }
+
+    // ---- test entry points (nothing in the mod calls these) ----
+
+    /** Rows the panel scrolls through; the test picks a row inside this count. */
+    static int visibleRows() {
+        return VISIBLE_ROWS;
+    }
+
+    /** Geometry of the two icon keys as the shipped code computes it. */
+    static float[] iconHitGeometry(Rect row) {
+        Rect edit = iconEdit(row, 0);
+        Rect delete = iconEdit(row, 1);
+        return new float[] {
+                edit.getLeft(), edit.getRight(),
+                delete.getLeft(), delete.getRight(),
+                iconCenterX(row, 0), iconCenterX(row, 1),
+                row.getBottom(), delete.getBottom(), delete.getTop()
+        };
     }
 }

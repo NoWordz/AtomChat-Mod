@@ -25,18 +25,40 @@ class UiLayoutTest {
 
         // Buttons never overlap each other.
         assertTrue(l.imageBtn.right() <= l.emojiBtn.x() + EPS, "image/emoji do not overlap");
-        assertTrue(l.emojiBtn.right() <= l.sendBtn.x() + EPS, "emoji/send do not overlap");
+        assertTrue(l.emojiBtn.right() <= l.phraseBtn.x() + EPS, "emoji/phrase do not overlap");
+        assertTrue(l.phraseBtn.right() <= l.sendBtn.x() + EPS, "phrase/send do not overlap");
 
-        // Button row is vertically aligned and mirrors padding on both sides.
-        assertEquals(l.imageBtn.y(), l.emojiBtn.y(), EPS, "buttons share one row");
-        assertEquals(l.imageBtn.y(), l.sendBtn.y(), EPS, "send button on the same row");
-        // The row carries two shapes on one line: three square composer keys and
-        // the wider Send capsule. They share a height and a row axis, not a
-        // width - asserting equal width here is what pinned Send to the square
-        // key size, which is not the design.
+        // The row carries two families on one line: three square action keys and
+        // the wider Send capsule. They share the row AXIS and the action square,
+        // never a box. Asserting that Send's height equalled a key's is what
+        // pinned the composer keys to the capsule's s(30) and let them drift away
+        // from the header button, so the contract stated here is the real one:
+        // keys are square, they take ACTION_BUTTON_SIZE, and Send is neither.
+        assertEquals(l.imageBtn.y(), l.emojiBtn.y(), EPS, "keys share one row");
+        assertEquals(l.imageBtn.y(), l.phraseBtn.y(), EPS, "phrase key shares the row");
+        float keyAxis = l.imageBtn.y() + l.imageBtn.h() / 2.0F;
+        assertEquals(keyAxis, l.sendBtn.y() + l.sendBtn.h() / 2.0F, EPS,
+                "send capsule centred on the key row axis");
+        assertEquals(l.imageBtn.w(), l.imageBtn.h(), EPS, "composer key is square");
         assertEquals(l.imageBtn.h(), l.emojiBtn.h(), EPS, "composer keys same height");
         assertEquals(l.imageBtn.h(), l.phraseBtn.h(), EPS, "phrase key same height");
+        assertEquals(UiTokens.ACTION_BUTTON_SIZE, l.imageBtn.w(), EPS,
+                "key side comes from the shared action button token");
+        assertEquals(UiTokens.ACTION_BUTTON_SIZE, l.imageBtn.h(), EPS,
+                "key side comes from the shared action button token");
+        // Send is the wider capsule and deliberately shorter than the square.
         assertTrue(l.sendBtn.w() > l.imageBtn.w(), "send is the wider capsule");
+        assertTrue(l.sendBtn.h() < l.imageBtn.h(), "send is shorter than the action square");
+        assertEquals(UiTokens.BUTTON_W, l.sendBtn.w(), EPS, "send keeps BUTTON_W");
+        assertEquals(UiTokens.BUTTON_H, l.sendBtn.h(), EPS, "send keeps BUTTON_H");
+        // The taller family owns the row band, and the bar's top pad is the gap
+        // between the row and the bar edge; the shorter capsule centres inside.
+        assertEquals(l.inputBar.y() + UiTokens.INPUT_ROW_PAD, l.imageBtn.y(), EPS,
+                "the row's top gap is the bar's top pad");
+        assertEquals(l.inputBar.y() + UiTokens.INPUT_ROW_PAD + UiTokens.INPUT_ROW_H, l.imageBtn.bottom(), EPS,
+                "the taller family fills the row band");
+        assertEquals(l.imageBtn.y() - l.sendBtn.y(), l.sendBtn.bottom() - l.imageBtn.bottom(), EPS,
+                "the shorter capsule is inset equally at both ends of the band");
         assertEquals(l.imageBtn.x() - l.inputBar.x(), l.inputBar.right() - l.sendBtn.right(), EPS,
                 "button row padding mirrors left/right");
         assertEquals(l.imageBtn.x() - l.inputBar.x(), UiTokens.INPUT_ROW_PAD, EPS, "row uses INPUT_ROW_PAD");
@@ -58,7 +80,10 @@ class UiLayoutTest {
 
     @Test
     void grownInputBarYieldsListHeight() {
-        float lineH = 29.0F; // one wrapped line of the input font
+        // One wrapped line of the input font, measured on the shipped bundled
+        // font. The old 29.0 here was a Latin fallback measurement; see
+        // UiTokens.INPUT_LINE_H_REF for the arithmetic behind 36.2.
+        float lineH = UiTokens.INPUT_LINE_H_REF;
         UiLayout base = UiLayout.of(24, 100, 525, 975);
 
         for (float extra : new float[]{0.0F, lineH * 0.5F, lineH}) {
@@ -76,9 +101,89 @@ class UiLayoutTest {
             assertEquals(base.list.h() - extra, grown.list.h(), EPS, "list yields the extra height");
             assertEquals(grown.inputBar.y(), grown.list.bottom(), EPS,
                     "list bottom meets the grown bar top, no overlap");
-            // Buttons ride up with the bar's top edge.
-            assertEquals(grown.inputBar.y() + UiTokens.INPUT_ROW_PAD, grown.sendBtn.y(), EPS,
-                    "button row pinned to the bar top");
+            // Both families ride up with the bar's top edge, on one shared axis.
+            assertEquals(grown.inputBar.y() + UiTokens.INPUT_ROW_PAD, grown.imageBtn.y(), EPS,
+                    "action row pinned to the bar top");
+            assertEquals(grown.imageBtn.y() + grown.imageBtn.h() / 2.0F,
+                    grown.sendBtn.y() + grown.sendBtn.h() / 2.0F, EPS,
+                    "both families still share the row axis, extra " + extra);
+        }
+    }
+
+    /**
+     * The approved baseline for the whole action family: the header drew its
+     * button at s(36) = 45 px before the token existed, and 45 is what the
+     * composer keys were moved onto. Written down here because nothing in the
+     * suite pinned the header family's size at all, which is how the two
+     * families drifted apart under a green build.
+     */
+    private static final float HEADER_BASELINE_SIDE = 45.0F;
+
+    /**
+     * The cross-family link the suite was missing: the header's action button and
+     * the composer keys must be one size. The header rect is built in each
+     * screen's {@code backButton()} (it needs the header card's own y), not in
+     * UiLayout, so a shared-side test cannot compare the two rects; what is
+     * checkable from here is the token both sides read, which is why this pins
+     * the token, its approved value, and UiLayout's use of it.
+     */
+    @Test
+    void headerActionAndComposerKeysShareOneSquare() {
+        // The token carries the header's old local s(36), unchanged.
+        assertEquals(HEADER_BASELINE_SIDE, UiTokens.ACTION_BUTTON_SIZE, EPS,
+                "the action square is the approved 45 px baseline");
+        UiLayout l = UiLayout.of(24, 100, 525, 975);
+        // Every composer key is that one square, so the header button and the
+        // keys are the same size by construction rather than by coincidence.
+        assertEquals(UiTokens.ACTION_BUTTON_SIZE, l.imageBtn.w(), EPS, "image key is the action square");
+        assertEquals(UiTokens.ACTION_BUTTON_SIZE, l.imageBtn.h(), EPS, "image key is the action square");
+        assertEquals(UiTokens.ACTION_BUTTON_SIZE, l.emojiBtn.w(), EPS, "emoji key is the action square");
+        assertEquals(UiTokens.ACTION_BUTTON_SIZE, l.emojiBtn.h(), EPS, "emoji key is the action square");
+        assertEquals(UiTokens.ACTION_BUTTON_SIZE, l.phraseBtn.w(), EPS, "phrase key is the action square");
+        assertEquals(UiTokens.ACTION_BUTTON_SIZE, l.phraseBtn.h(), EPS, "phrase key is the action square");
+        // And the fourth button is not: Send stayed the wider capsule.
+        assertTrue(l.sendBtn.w() > UiTokens.ACTION_BUTTON_SIZE, "send is wider than the action square");
+        assertTrue(l.sendBtn.h() < UiTokens.ACTION_BUTTON_SIZE, "send is shorter than the action square");
+        // The action square is the taller family, so it owns the row band and the
+        // row grew with it; a taller BUTTON_H would fail here.
+        assertEquals(UiTokens.ACTION_BUTTON_SIZE, UiTokens.INPUT_ROW_H, EPS,
+                "the action square is the taller family, so it owns the row band");
+    }
+
+    /**
+     * Recurrence guard for the clipped placeholder. The input text is clipped at
+     * the bar's inner bottom edge, so a band that no longer holds the whole line
+     * block plus its descenders cuts the text silently - the shipped font reports
+     * INPUT_LINE_H_REF (36.2 px), while the old test file hardcoded 29.0 and
+     * therefore could not notice. Both real states are checked: one line, and the
+     * two lines INPUT_MAX_LINES allows, each with the bar grown by its own line.
+     */
+    @Test
+    void inputTextBlockKeepsItsMarginsAtBothEnds() {
+        float lineH = UiTokens.INPUT_LINE_H_REF;
+        float margin = (UiTokens.INPUT_TEXT_BAND - lineH) / 2.0F;
+        assertTrue(margin > 0.0F, "the band leaves the line box room at both ends");
+        for (int lines = 1; lines <= UiTokens.INPUT_MAX_LINES; lines++) {
+            float extra = (lines - 1) * lineH;
+            UiLayout l = UiLayout.of(24, 100, 525, 975, extra);
+            float clipTop = l.inputTextCenterY - lineH / 2.0F;
+            float clipBottom = l.inputBar.bottom() - UiTokens.INPUT_ROW_PAD;
+            // The band is the token plus the bar's own growth, so the tokens and
+            // the layout formula cannot disagree about the room the text has.
+            assertEquals(UiTokens.INPUT_TEXT_BAND + extra, clipBottom - l.imageBtn.bottom(), EPS,
+                    "the text band measures what the token says, " + lines + " line(s)");
+            // Top: the first line's box stays clear of the action row above it.
+            assertEquals(margin, clipTop - l.imageBtn.bottom(), EPS,
+                    "top margin, " + lines + " line(s)");
+            // Bottom: the last line's descender stays clear of the bar's inner
+            // edge by the same margin, so the block reads as centred in its band.
+            float lastBottom = l.inputTextCenterY + extra + lineH / 2.0F;
+            assertEquals(margin, clipBottom - lastBottom, EPS,
+                    "bottom margin, " + lines + " line(s)");
+            assertTrue(clipTop >= l.imageBtn.bottom(),
+                    "the line never touches the action row, " + lines + " line(s)");
+            assertTrue(clipBottom >= lastBottom,
+                    "the descender never crosses the bar's inner edge, " + lines + " line(s)");
         }
     }
 

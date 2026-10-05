@@ -101,36 +101,39 @@ public final class UiLayout {
 
             float rowLeft = inputBar.x + UiTokens.INPUT_ROW_PAD;
             float rowRight = inputBar.x + inputBar.w - UiTokens.INPUT_ROW_PAD;
-            // The row axis is the centre of the first s(30) band inside the
-            // padding, so the taller square keys grow symmetrically around the
-            // line the shorter Send capsule sits on. Everything anchored here
-            // keeps the left and right insets mirrored, which is the equality
-            // UiLayoutTest asserts.
-            float rowCenterY = inputBar.y + UiTokens.INPUT_ROW_PAD + UiTokens.BUTTON_H / 2.0F;
-            // Both families centre on rowCenterY. Centring each on its own box
-            // instead put the two shapes 3.75 apart on the same row, which is
-            // exactly the misalignment UiLayoutTest's "buttons share one row"
-            // assertion catches.
-            float keyTop = rowCenterY - UiTokens.COMPOSER_KEY_SIZE / 2.0F;
+            // One axis for two heights. The row is as tall as its taller family
+            // (the action square), and the shorter Send capsule centres on that
+            // axis, so the two shapes read as one line instead of each being
+            // pinned to the other's top edge. Anchoring the axis to the taller
+            // family also keeps INPUT_ROW_PAD as the real gap between the row and
+            // the bar's top edge whatever either family measures.
+            float rowCenterY = inputBar.y + UiTokens.INPUT_ROW_PAD + UiTokens.INPUT_ROW_H / 2.0F;
+            float keyTop = rowCenterY - UiTokens.ACTION_BUTTON_SIZE / 2.0F;
             float sendTop = rowCenterY - UiTokens.BUTTON_H / 2.0F;
             this.imageBtn = new Rect(rowLeft, keyTop,
-                    UiTokens.COMPOSER_KEY_SIZE, UiTokens.COMPOSER_KEY_SIZE);
+                    UiTokens.ACTION_BUTTON_SIZE, UiTokens.ACTION_BUTTON_SIZE);
             this.emojiBtn = new Rect(
-                    rowLeft + UiTokens.COMPOSER_KEY_SIZE + UiTokens.COMPOSER_KEY_GAP,
-                    keyTop, UiTokens.COMPOSER_KEY_SIZE, UiTokens.COMPOSER_KEY_SIZE);
+                    rowLeft + UiTokens.ACTION_BUTTON_SIZE + UiTokens.COMPOSER_KEY_GAP,
+                    keyTop, UiTokens.ACTION_BUTTON_SIZE, UiTokens.ACTION_BUTTON_SIZE);
             this.phraseBtn = new Rect(
-                    rowLeft + (UiTokens.COMPOSER_KEY_SIZE + UiTokens.COMPOSER_KEY_GAP) * 2.0F,
-                    keyTop, UiTokens.COMPOSER_KEY_SIZE, UiTokens.COMPOSER_KEY_SIZE);
+                    rowLeft + (UiTokens.ACTION_BUTTON_SIZE + UiTokens.COMPOSER_KEY_GAP) * 2.0F,
+                    keyTop, UiTokens.ACTION_BUTTON_SIZE, UiTokens.ACTION_BUTTON_SIZE);
             // Send keeps the wider, shorter capsule and is centred on the same
             // axis; rowRight has already given up INPUT_ROW_PAD, so subtracting
             // only BUTTON_W leaves exactly that much on the right.
             this.sendBtn = new Rect(rowRight - UiTokens.BUTTON_W, sendTop,
                     UiTokens.BUTTON_W, UiTokens.BUTTON_H);
 
-            // Measured from the row's own height rather than from a button's, so
-            // the text cannot be pushed down by a change to either family's size
-            // (which is what put the placeholder on the bar's bottom edge).
-            this.inputTextCenterY = inputBar.y + UiTokens.INPUT_ROW_H + UiTokens.s(20);
+            // The first line's centre sits at the middle of the text band, built
+            // from the band's own parts (row pad, row band, half the band) rather
+            // than from a button's height, so neither family can push it by
+            // measuring differently. That reference is pinned to the bar's top
+            // while the bar grows upward, so a second line lands where the first
+            // one was and the first one rides up; INPUT_HEIGHT carries the row's
+            // growth, which keeps the whole block on the screen pixels it has
+            // always occupied.
+            this.inputTextCenterY = inputBar.y + UiTokens.INPUT_ROW_PAD
+                    + UiTokens.INPUT_ROW_H + UiTokens.INPUT_TEXT_BAND / 2.0F;
         } else {
             this.replyBar = new Rect(0, 0, 0, 0);
             this.inputBar = new Rect(0, 0, 0, 0);

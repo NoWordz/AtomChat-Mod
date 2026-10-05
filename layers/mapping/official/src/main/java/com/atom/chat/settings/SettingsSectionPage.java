@@ -45,8 +45,8 @@ import java.util.Map;
  * rows (optionally linking out) and the blocked-player list.
  *
  * <p>Row geometry comes from {@link #rows(SettingsSection)} for order and
- * {@link #rowRect(List, int, float, UiLayout)} for position, so rendering,
- * hit-testing and measurement can never disagree.</p>
+ * {@link #rowRect(SettingsSection, List, int, float, UiLayout)} for position,
+ * so rendering, hit-testing and measurement can never disagree.</p>
  */
 public final class SettingsSectionPage {
     public enum RowKind { HERO, SWITCH, SLIDER, COLOR, INFO, BLOCKED, LABEL, ACTION, THEMES }
@@ -216,17 +216,18 @@ public final class SettingsSectionPage {
             new SectionChip("teleport", "atomchat.settings.group.chat.teleport"));
     /** Crossfade duration of a chip switch. */
     private static final long CHIP_SWITCH_MS = 110L;
-    /** Height of the reserved chip band above the scrolling rows. */
-
     /** Active chip index per section id (chip-less sections never read it). */
     private final Map<String, Integer> activeChip = new HashMap<>();
     /** Chip id a switch crossfade is coming from; null when settled. */
     private String chipSwitchFromId;
     private long chipSwitchAtMs;
 
-    // The chip row mirrors BottomTabBar: equal cells from the layout rect,
-    // a sliding selection capsule on the shared tab clock, a pure-colour
-    // hover wash, and PressScale.control() on the label.
+    // The chip row reuses BottomTabBar's cell geometry and clock: equal cells
+    // from the layout rect, a sliding selection capsule, a pure-colour hover
+    // wash. The bounce is compact(), like the tab capsules; unlike them it
+    // wraps the label only, because the capsule is one shared shape that
+    // slides between cells and a per-cell hover spring on it would fight the
+    // slide.
     private final Animator chipIndicator = new Animator(Easing::easeInOutCubic);
     private final Map<Integer, Float> chipHover = new HashMap<>();
     private final Map<Integer, PressScale> chipScale = new HashMap<>();
@@ -370,9 +371,10 @@ public final class SettingsSectionPage {
     }
 
     /**
-     * Theme picker row: seven dots (frosted + six colour presets) drawn in a
-     * horizontal strip, each filled with its preset accent; the active one
-     * gets a ring. Replaces the old parked theme_cycle action card.
+     * Theme picker row: seven mini-panel preview cards (frosted + six colour
+     * presets) in a horizontal strip, each drawn in its own preset palette;
+     * the active one wears an accent edge. Replaces the old parked theme_cycle
+     * action card.
      */
     private static final int THEME_CARD_COUNT = 1 + ThemeService.presets().length;
 
@@ -393,7 +395,8 @@ public final class SettingsSectionPage {
 
     private final Map<String, ToggleSwitch> switches = new HashMap<>();
     private final Map<Integer, Float> rowHover = new HashMap<>();
-    /** Per-row press bounce (rows press 0.98; hover never scales a row). */
+    /** Per-row press bounce: compact(), so a row lifts 1.04 on hover and
+     *  dips 0.95 while pressed. */
     private final Map<Integer, PressScale> rowPress = new HashMap<>();
     /** Row index under an active press for the bounce; -1 = none. */
     private int pressedRow = -1;
@@ -481,7 +484,7 @@ public final class SettingsSectionPage {
         }
         Font subFont = FontManager.font(UiTokens.SETTINGS_TILE_SUB);
         String text = descriptionText(row);
-        float maxWidth = descriptionMaxWidth(row, layout.list.w());
+        float maxWidth = descriptionMaxWidth(row, rowCardWidth(layout));
         if (text.isEmpty() || maxWidth <= 0.0F
                 || SkiaFontRenderer.getStringWidth(subFont, text) <= maxWidth) {
             return base;
@@ -754,13 +757,35 @@ public final class SettingsSectionPage {
         return layout.list.y() + UiTokens.ROOT_CONTENT_GAP + chipBarHeight(section);
     }
 
+    /**
+     * Horizontal clearance between a row card and the scroll clip. A card used
+     * to be drawn at the clip's full width, so the hover bounce grew it
+     * straight into the clip and the clip sheared the rounded ends flat on
+     * every hover. The compact bounce peaks at 1.05396 (UiSpring's bounce
+     * tune), so on a 490px card the lift is 13.2px per side at the peak and
+     * 9.8px at the nominal 1.04; the shared token clears both. The clip itself
+     * stays full width: it is the scroll viewport, the card is what gets
+     * inset.
+     *
+     * <p>Read from {@link UiTokens#ROW_CLIP_INSET} rather than restated: the
+     * conversation rows and the profile info rows have the identical defect at
+     * the identical value, and three private copies is how they drift.</p>
+     */
+    private static final float ROW_CLIP_INSET = UiTokens.ROW_CLIP_INSET;
+
+    /** Width one row card gets: the list minus the clip clearance on both sides. */
+    private static float rowCardWidth(UiLayout layout) {
+        return layout.list.w() - ROW_CLIP_INSET * 2.0F;
+    }
+
     private UiLayout.Rect rowRect(SettingsSection section, List<Row> rows, int index,
                                   float scrollY, UiLayout layout) {
         float y = contentTop(layout, section) - scrollY;
         for (int i = 0; i < index; i++) {
             y += rowHeight(rows.get(i), layout) + UiTokens.SETTINGS_ROW_GAP;
         }
-        return new UiLayout.Rect(layout.list.x(), y, layout.list.w(), rowHeight(rows.get(index), layout));
+        return new UiLayout.Rect(layout.list.x() + ROW_CLIP_INSET, y,
+                rowCardWidth(layout), rowHeight(rows.get(index), layout));
     }
 
     private static UiLayout.Rect sliderTrackRect(UiLayout.Rect row) {
@@ -898,8 +923,9 @@ public final class SettingsSectionPage {
                 //
                 // compact, not row(): row() pins its hover target to 1.0, so the
                 // row would sit perfectly still under the pointer - the same
-                // no-op the conversation rows had. compact also keeps the lift
-                // inside the row gap, which control's 1.08 would not.
+                // no-op the conversation rows had. compact also holds the lift
+                // down: the tall theme row would spend 8.6px per side of the
+                // s(8) = 10px row gap under control, 5.8px under compact.
                 PressScale press = row.kind() == RowKind.LABEL ? null
                         : interactive ? rowPress.computeIfAbsent(i, k -> PressScale.compact())
                         : rowPress.get(i);
@@ -930,10 +956,12 @@ public final class SettingsSectionPage {
         }
     }
 
-    /** The section chip row, built exactly like the bottom tab bar: equal cells
-     *  from {@code layout.chipBar}, a solid translucent-white capsule for the
-     *  selection (sliding on the tab clock), a pure-colour hover wash, and the
-     *  shared PressScale on the label. */
+    /** The section chip row, sharing the bottom tab bar's cell geometry: equal
+     *  cells from {@code layout.chipBar}, the accent capsule for the selection
+     *  (sliding on the tab clock), a pure-colour hover wash, and a compact
+     *  bounce on the label. Unlike the tab bar the bounce never wraps the
+     *  capsule: that capsule is one shared shape sliding between cells, so a
+     *  per-cell hover spring on it would fight the slide. */
     private void drawChipBar(Canvas canvas, UiLayout layout, SettingsSection section,
                              int accent, float dtMs) {
         List<SectionChip> chips = chips(section);
@@ -1019,7 +1047,9 @@ public final class SettingsSectionPage {
             } else {
                 chipHover.put(i, next);
             }
-            chipScale.computeIfAbsent(i, key -> PressScale.control())
+            // compact: the chip row is a set of adjacent equal cells, the case
+            // PressScale.compact() exists for.
+            chipScale.computeIfAbsent(i, key -> PressScale.compact())
                     .update(over, over && pressedChip == i, dtMs, Animations.enabled());
         }
     }
@@ -1334,7 +1364,10 @@ public final class SettingsSectionPage {
         float h = UiTokens.THEME_CARD_H;
         float radius = UiTokens.s(10) * preview.cornerFactor();
 
-        PressScale press = themeCardScale.computeIfAbsent(index, k -> PressScale.control());
+        // compact: the cards are separated by THEME_CARD_GAP and packed against
+        // the strip's own clip, so the trimmed lift is what keeps the gap and
+        // the rounded edges visible.
+        PressScale press = themeCardScale.computeIfAbsent(index, k -> PressScale.compact());
         press.update(themeCardAt(rect, pointerX, pointerY, themeStripScroll) == index,
                 themeStripPressed && pressedThemeCard == index, dtMs, Animations.enabled());
         press.begin(canvas, x + w / 2.0F, y + h / 2.0F);
@@ -1400,10 +1433,11 @@ public final class SettingsSectionPage {
         for (int i = 0; i < color.swatchCount(); i++) {
             float scx = swatchX(rect, i);
             int swatch = color.swatchColor(i);
-            // One bounce spring per swatch (keyed row+index): hover 1.03,
-            // press 0.97, spring back on release. Hit-tests stay unscaled.
+            // One bounce spring per swatch (keyed row+index), compact: the
+            // swatches sit one step apart and this scale runs inside the row's
+            // own bounce, so the two compound. Hit-tests stay unscaled.
             PressScale ps = swatchScale.computeIfAbsent(swatchKey(swatchRowIndex, i),
-                    k -> PressScale.control());
+                    k -> PressScale.compact());
             ps.update(i == hoveredSwatch, i == pressedSwatch, dtMs, Animations.enabled());
             ps.begin(canvas, scx, cy);
             try {
@@ -1549,8 +1583,9 @@ public final class SettingsSectionPage {
     }
 
     /**
-     * Group heading: title-weight text centred between two rules of the same
-     * colour, so it reads as a section divider rather than a stray caption.
+     * Group heading: bold title aligned to the card's text column with a faint
+     * rule underneath, so it reads as a section divider rather than a stray
+     * caption. A foldable group's chevron sits at the right edge.
      */
     private void drawLabel(Canvas canvas, Row row, UiLayout.Rect rect) {
         // Plan A: left-aligned bold group title with a faint full-width rule

@@ -5,7 +5,7 @@ import net.minecraft.text.ClickEvent;
 import net.minecraft.text.MutableText;
 import net.minecraft.text.Style;
 import net.minecraft.text.Text;
-import net.minecraft.text.TextVisitFactory;
+import net.minecraft.util.Formatting;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -34,23 +34,75 @@ public final class RichText {
 
     public static RichText of(Text text) {
         List<RichRun> out = new ArrayList<>();
+        // getWithStyle visits effective-style string segments, including the root
+        // style on every child; literal section-sign codes inside a segment are
+        // parsed separately below, which is what keeps an unrecognised or a
+        // trailing one instead of swallowing it.
+        for (Text part : text.getWithStyle(Style.EMPTY)) {
+            appendLegacyParsed(out, part.getString(), part.getStyle(), part.getStyle());
+        }
+        return new RichText(mergeRuns(out), text.getStyle());
+    }
+
+    private static void appendLegacyParsed(List<RichRun> out, String raw, Style baseStyle, Style style) {
         StringBuilder current = new StringBuilder();
-        Style[] currentStyle = new Style[1];
-        TextVisitFactory.visitFormatted(text, Style.EMPTY, (index, style, codePoint) -> {
-            if (currentStyle[0] != null && !currentStyle[0].equals(style)) {
+        for (int i = 0; i < raw.length(); i++) {
+            char ch = raw.charAt(i);
+            if (ch == '§' && i + 1 < raw.length()) {
+                char code = raw.charAt(i + 1);
                 if (current.length() > 0) {
-                    out.add(new RichRun(current.toString(), currentStyle[0]));
+                    out.add(new RichRun(current.toString(), style));
                     current.setLength(0);
                 }
+                Formatting cf = Formatting.byCode(code);
+                if (cf == null) {
+                    // Unknown code: preserve it literally instead of swallowing it.
+                    current.append(ch).append(code);
+                } else {
+                    style = applySectionCode(style, baseStyle, cf);
+                }
+                i++;
+            } else {
+                current.append(ch);
             }
-            currentStyle[0] = style;
-            current.appendCodePoint(codePoint);
-            return true;
-        });
-        if (current.length() > 0) {
-            out.add(new RichRun(current.toString(), currentStyle[0]));
         }
-        return new RichText(out, text.getStyle());
+        if (current.length() > 0) {
+            out.add(new RichRun(current.toString(), style));
+        }
+    }
+
+    private static Style applySectionCode(Style style, Style baseStyle, Formatting cf) {
+        return switch (cf) {
+            case RESET -> baseStyle;
+            case BOLD -> style.withBold(true);
+            case ITALIC -> style.withItalic(true);
+            case UNDERLINE -> style.withUnderline(true);
+            case STRIKETHROUGH -> style.withStrikethrough(true);
+            case OBFUSCATED -> style.withObfuscated(true);
+            default -> style.withColor(cf);
+        };
+    }
+
+    /**
+     * Joins neighbours that carry the same effective style. Flattening a tree and
+     * re-reading its section codes both cut a run wherever a code appears, so
+     * without this the run list would describe how the text was assembled instead
+     * of how it looks.
+     */
+    private static List<RichRun> mergeRuns(List<RichRun> runs) {
+        if (runs.size() <= 1) {
+            return runs;
+        }
+        List<RichRun> merged = new ArrayList<>();
+        for (RichRun run : runs) {
+            if (!merged.isEmpty() && merged.get(merged.size() - 1).style().equals(run.style())) {
+                RichRun last = merged.remove(merged.size() - 1);
+                merged.add(new RichRun(last.text() + run.text(), last.style()));
+            } else {
+                merged.add(run);
+            }
+        }
+        return merged;
     }
 
     public static RichText literal(String text) {

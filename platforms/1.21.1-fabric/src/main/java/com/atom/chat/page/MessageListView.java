@@ -460,7 +460,9 @@ public final class MessageListView {
         ChatMessage startMsg = reverse ? selectionFocusMessage : selectionAnchorMessage;
         ChatMessage endMsg = reverse ? selectionAnchorMessage : selectionFocusMessage;
         int startLine = reverse ? selectionFocusLine : selectionAnchorLine;
-        int startChar = reverse ? selectionAnchorChar : selectionFocusChar;
+        // Start and end must take opposite operands of reverse, otherwise they
+        // collapse onto one value and every cut on that line looks empty.
+        int startChar = reverse ? selectionFocusChar : selectionAnchorChar;
         int endLine = reverse ? selectionAnchorLine : selectionFocusLine;
         int endChar = reverse ? selectionAnchorChar : selectionFocusChar;
 

@@ -633,10 +633,12 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
 
     /**
      * Shared hit rect for the world-chat header's SVG back button. It is fixed
-     * to the left edge of the header card and vertically centered.
+     * to the left edge of the header card and vertically centered. The side comes
+     * from ACTION_BUTTON_SIZE, the same token the composer keys use, so the
+     * header button and those keys stay one size instead of drifting apart.
      */
     private UiLayout.Rect backButton() {
-        float size = s(36);
+        float size = UiTokens.ACTION_BUTTON_SIZE;
         UiLayout.Rect header = layout().header;
         float y = header.y() + (header.h() - size) / 2.0F;
         return new UiLayout.Rect(header.x() + s(4), y, size, size);
@@ -2075,13 +2077,13 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
             int[] order = {0, 3, 1, 2};
             int last = -1;
             if (inputButtonHovered(layout.imageBtn.x(), layout.imageBtn.y(),
-                    UiTokens.COMPOSER_KEY_SIZE, UiTokens.COMPOSER_KEY_SIZE, mouseX, mouseY)) {
+                    UiTokens.ACTION_BUTTON_SIZE, UiTokens.ACTION_BUTTON_SIZE, mouseX, mouseY)) {
                 last = 0;
             } else if (inputButtonHovered(layout.phraseBtn.x(), layout.phraseBtn.y(),
-                    UiTokens.COMPOSER_KEY_SIZE, UiTokens.COMPOSER_KEY_SIZE, mouseX, mouseY)) {
+                    UiTokens.ACTION_BUTTON_SIZE, UiTokens.ACTION_BUTTON_SIZE, mouseX, mouseY)) {
                 last = 3;
             } else if (inputButtonHovered(layout.emojiBtn.x(), layout.emojiBtn.y(),
-                    UiTokens.COMPOSER_KEY_SIZE, UiTokens.COMPOSER_KEY_SIZE, mouseX, mouseY)) {
+                    UiTokens.ACTION_BUTTON_SIZE, UiTokens.ACTION_BUTTON_SIZE, mouseX, mouseY)) {
                 last = 1;
             } else if (inputButtonHovered(layout.sendBtn.x(), layout.sendBtn.y(),
                     UiTokens.BUTTON_W, UiTokens.BUTTON_H, mouseX, mouseY)) {
@@ -2465,8 +2467,8 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
     }
 
     private void drawIconButton(Canvas canvas, float bx, float by, int id, int mouseX, int mouseY) {
-        boolean hover = inputButtonHovered(bx, by, UiTokens.COMPOSER_KEY_SIZE,
-                UiTokens.COMPOSER_KEY_SIZE, mouseX, mouseY);
+        boolean hover = inputButtonHovered(bx, by, UiTokens.ACTION_BUTTON_SIZE,
+                UiTokens.ACTION_BUTTON_SIZE, mouseX, mouseY);
         boolean pressed = buttonPressed(id);
         boolean pressedHeld = pressedButtonHeld == id;
         buttonHover[id] = UiMotion.approach(buttonHover[id], hover ? 1.0F : 0.0F, frameDt, UiMotion.HOVER_MS);
@@ -2477,7 +2479,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
         scale.update(hover, pressedHeld, frameDt, Animations.enabled());
         canvas.save();
         if (scale.scale() != 1.0F) {
-            float keyHalf = UiTokens.COMPOSER_KEY_SIZE / 2.0F;
+            float keyHalf = UiTokens.ACTION_BUTTON_SIZE / 2.0F;
             canvas.translate(bx + keyHalf, by + keyHalf);
             canvas.scale(scale.scale(), scale.scale());
             canvas.translate(-(bx + keyHalf), -(by + keyHalf));
@@ -2492,8 +2494,8 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
         if (wash > 0.01F) {
             float inset = UiTokens.s(4);
             SkiaDraw.drawRoundedRect(canvas, bx + inset, by + inset,
-                    UiTokens.COMPOSER_KEY_SIZE - inset * 2.0F,
-                    UiTokens.COMPOSER_KEY_SIZE - inset * 2.0F,
+                    UiTokens.ACTION_BUTTON_SIZE - inset * 2.0F,
+                    UiTokens.ACTION_BUTTON_SIZE - inset * 2.0F,
                     UiTokens.radius(8), UiTokens.cardHover(wash));
         }
         // Active states take the accent colour: the emoji button while its
@@ -2553,7 +2555,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
      * rendered icon size so every icon keeps the same optical line weight.
      */
     private void drawIcon(Canvas canvas, io.github.humbleui.skija.Path icon, float bx, float by, int color) {
-        drawIcon(canvas, icon, bx, by, UiTokens.COMPOSER_KEY_SIZE, UiTokens.COMPOSER_KEY_SIZE, color);
+        drawIcon(canvas, icon, bx, by, UiTokens.ACTION_BUTTON_SIZE, UiTokens.ACTION_BUTTON_SIZE, color);
     }
 
     /**

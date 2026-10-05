@@ -141,35 +141,81 @@ public final class UiTokens {
         return radius(16);
     }
     public static final float HEADER_PAD_X = s(20);
-
-    // Input bar. INPUT_HEIGHT is the one-line baseline; the bar grows upward by
-    // one line height while the text wraps onto a second line and never beyond
-    // INPUT_MAX_LINES — past that the text scrolls inside the fixed box.
-    public static final float INPUT_HEIGHT = s(82);
-    public static final int INPUT_MAX_LINES = 2;
-    public static final float INPUT_BAR_PAD = s(12);
-    // The button row is taller than BUTTON_H because the square composer keys
-    // are s(36) while the Send capsule stays s(30). The bar itself grows by the
-    // same amount so the text keeps the breathing room it had when the row was
-    // only s(30) tall.
-    public static final float INPUT_ROW_H = s(36);
-    public static final float INPUT_ROW_PAD = s(8);
-    public static final float INPUT_TEXT_X = s(14);
-    public static final float PANEL_BOTTOM_PAD = s(14);
+    /**
+     * Square side of every chrome action button: the header's back / filter
+     * button and, by this one token, each of the three composer keys. The header
+     * used to carry the number as a local s(36) inside each screen's
+     * {@code backButton()}, which this file's own rule forbids, and nothing
+     * compared it to the composer keys - so the keys drifted onto the Send
+     * capsule's s(30) and the two families stopped matching. One token owns the
+     * square, so they can only move together now.
+     *
+     * <p>Send is deliberately NOT this size: it keeps the wider, shorter
+     * BUTTON_W x BUTTON_H capsule it has always been.</p>
+     */
+    public static final float ACTION_BUTTON_SIZE = s(36);
 
     // Composer row. Two button families share one row and deliberately do NOT
-    // share a width: the three keys (image / emoji / phrase) are square, copying
-    // the header action button's insets and radius (s(4) to the bar edge and
-    // between neighbours, s(8) radius, s(18) glyph), while Send keeps the wider
-    // accent capsule it has always had. Their HEIGHT is the same, so the two
-    // shapes sit on one line rather than one being visibly short.
+    // share a box: the three keys (image / emoji / phrase) are square and take
+    // the header action button's own side, with that button's insets and radius
+    // (s(4) between neighbours, s(8) radius, s(18) glyph), while Send keeps the
+    // wider accent capsule it has always had. Their heights differ by design -
+    // s(36) against s(30) - so the row is as tall as the taller family and both
+    // are centred on that row's axis: Send sits s(3) inside the key band top and
+    // bottom instead of on a line of its own.
     public static final float BUTTON_W = s(56);
     public static final float BUTTON_H = s(30);
     public static final float BUTTON_RADIUS = s(9);
     public static final float BUTTON_GAP = s(6);
-    /** Square side of one composer key; equals BUTTON_H by design (see above). */
-    public static final float COMPOSER_KEY_SIZE = s(30);
     public static final float COMPOSER_KEY_GAP = s(4);
+
+    // Input bar. INPUT_HEIGHT is the one-line baseline; the bar grows upward by
+    // one line height while the text wraps onto a second line and never beyond
+    // INPUT_MAX_LINES - past that the text scrolls inside the fixed box.
+    public static final int INPUT_MAX_LINES = 2;
+    public static final float INPUT_BAR_PAD = s(12);
+    public static final float INPUT_ROW_PAD = s(8);
+    /**
+     * Height of the button row band. The taller family owns it, which is what
+     * lets two heights share one axis: the shorter capsule centres inside the
+     * taller family's band and the row's top gap stays INPUT_ROW_PAD whatever
+     * either family measures. Derived from the two families rather than restated
+     * so a change to either one carries the row, the bar below it and the text
+     * with it - the row was once pinned to BUTTON_H while the keys were a
+     * different size, and the placeholder paid for it.
+     */
+    public static final float INPUT_ROW_H = Math.max(ACTION_BUTTON_SIZE, BUTTON_H);
+    /**
+     * Vertical band the input text owns: from the bottom of the button row to
+     * the bar's inner bottom edge. s(36) = 45 px, which centres one line box of
+     * the shipped font ({@link #INPUT_LINE_H_REF}, 36.2 px) in it with 4.4 px
+     * above and below. The line is centred in this band, so the two clearances
+     * stay equal, and the band must keep that headroom: a band squeezed down to
+     * the line box is exactly what let a taller button row eat the descenders.
+     *
+     * <p>This is the band's own number, not the key side; the two land on the
+     * same value at this scale and are free to move apart.</p>
+     */
+    public static final float INPUT_TEXT_BAND = s(36);
+    /**
+     * One line box of FONT_INPUT on the shipped bundled font, in real pixels.
+     * Its hhea metrics are 1.448 em (ascent 1160, descent 288 per 1000 upem) and
+     * FONT_INPUT is s(20) = 25 px, so descent-to-ascent is 36.2 px. UiLayout is
+     * pure and cannot ask Skia for this, so the measurement is pinned here and
+     * the tests use it to prove the band still clears a full line and its
+     * descenders. A Latin fallback font reports about 29, which is how the size
+     * of this box went unnoticed while the composer was clipping text.
+     */
+    public static final float INPUT_LINE_H_REF = 36.2F;
+    /**
+     * One-line bar height, built from its parts instead of restated: the row pad
+     * above the row, the row band, the text band, and the row pad below it. A
+     * taller button family therefore grows the bar by exactly its own growth, so
+     * the text keeps the clearance (and the screen position) it already had.
+     */
+    public static final float INPUT_HEIGHT = INPUT_ROW_PAD * 2.0F + INPUT_ROW_H + INPUT_TEXT_BAND;
+    public static final float INPUT_TEXT_X = s(14);
+    public static final float PANEL_BOTTOM_PAD = s(14);
 
     // Fonts. Body/input/name/quote were bumped one notch (r15 legibility pass):
     // on 2K/4K panels the physical glyph size was diluted by uiDensity, so the
@@ -279,6 +325,20 @@ public final class UiTokens {
     public static final float TAB_BAR_H = TAB_ICON_SIZE + 2.0F * (TAB_CAPSULE_PAD + TAB_EDGE_PAD);
     /** Vertical inset between the root content list and content rows/controls. */
     public static final float ROOT_CONTENT_GAP = s(10);
+    /**
+     * Horizontal clearance a hover-scaled card leaves to the list clip on each
+     * side. A card drawn exactly as wide as the clip has zero room, so the
+     * bounce spring shears its rounded ends flat against the clip edge.
+     *
+     * <p>Sized for the real spring peak, never the nominal hover target: a card
+     * released from the press dip overshoots to 1.05396, so a row grows
+     * (1.05396 - 1) * listW / 2 per side. Against the default 520-wide list that
+     * is 14.03px, so the smallest sufficient inset is 13.31px - this is the
+     * smallest clean token above it. Budgeting the peak rather than the 1.04
+     * hover target costs a few pixels of width today and means wiring a real
+     * press signal later cannot silently reopen the shear.</p>
+     */
+    public static final float ROW_CLIP_INSET = s(12);
 
     // Settings home: a 2-column tile grid. Tile width is derived from the list
     // width ((listW - TILE_GAP) / 2 = 188.75 at the default 420 panel), so the
