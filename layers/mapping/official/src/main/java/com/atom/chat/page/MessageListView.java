@@ -22,7 +22,6 @@ import com.atom.chat.ui.Animations;
 import com.atom.chat.ui.ScrollController;
 import com.atom.chat.ui.UiMotion;
 import com.atom.chat.ui.UiSpring;
-import com.atom.chat.ui.PressScale;
 import com.atom.chat.ui.UiTokens;
 import io.github.humbleui.skija.Canvas;
 import io.github.humbleui.skija.Color;
@@ -121,10 +120,6 @@ public final class MessageListView {
 
     /** Message highlighted by a notification jump, and when it stops. */
     private ChatMessage highlightMessage;
-    /** Row under an active press, for the 0.98 press bounce; -1 = none. */
-    private int pressedIndex = -1;
-    /** One bounce spring for the pressed row; rows never scale on hover. */
-    private final PressScale rowPress = PressScale.row();
     private long lastFrameMs = System.currentTimeMillis();
     private long highlightUntil;
 
@@ -144,10 +139,6 @@ public final class MessageListView {
         highlightUntil = message == null ? 0L : System.currentTimeMillis() + HIGHLIGHT_MS;
     }
 
-    /** Arms the message-row press bounce (mouse-down) or clears it (-1). */
-    public void setPressedIndex(int index) {
-        pressedIndex = index;
-    }
 
     /**
      * Content-space Y offset of a message inside the list. Mirrors the cursor
@@ -225,11 +216,6 @@ public final class MessageListView {
             pruneEntranceSettled(now);
             float dtMs = Math.min(50.0F, Math.max(1.0F, now - lastFrameMs));
             lastFrameMs = now;
-            // Row press bounce: integrate once per frame. Stepping the shared
-            // spring inside the loop below ran it once per row with the target
-            // flipping between 0.98 and 1.0 each time, which collapsed the
-            // bounce into a hard cut.
-            rowPress.update(false, pressedIndex >= 0, dtMs, Animations.enabled());
             float cursorY = y;
             for (int mi = 0; mi < messages.size(); mi++) {
                 ChatMessage msg = messages.get(mi);
@@ -285,19 +271,8 @@ public final class MessageListView {
                         }
                     }
                     drawJumpHighlight(canvas, msg, x, cursorY, width, h);
-                    // Row press bounce: 0.98 around the row centre while the
-                    // press is held; hit-tests stay in unscaled space, like the
-                    // entrance slide above. The spring itself is stepped once
-                    // per frame above the loop.
-                    rowPress.begin(canvas, x + width / 2.0F, cursorY + messageHeight(msg, width, grouped) / 2.0F);
-                    int spanStart;
-                    MessageHit hit;
-                    try {
-                        spanStart = clickableSpans.size();
-                        hit = drawMessage(canvas, msg, x, cursorY, width, hits.size(), grouped);
-                    } finally {
-                        canvas.restore();
-                    }
+                    int spanStart = clickableSpans.size();
+                    MessageHit hit = drawMessage(canvas, msg, x, cursorY, width, hits.size(), grouped);
                     // Clickable spans are recorded in content space (like hits
                     // before conversion); convert them to screen space so later
                     // hit-testing can compare them directly against the mouse.

@@ -55,6 +55,7 @@ import com.atom.chat.ui.ShellHeader;
 import com.atom.chat.ui.UiLayout;
 import com.atom.chat.ui.EmojiPanel;
 import com.atom.chat.ui.PanelBackground;
+import com.atom.chat.ui.PressScale;
 import com.atom.chat.ui.QuickPhrasePanel;
 import com.atom.chat.ui.SpringAnim;
 import com.atom.chat.ui.UiMotion;
@@ -499,6 +500,11 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
     private boolean blurDrawnThisFrame;
     private int pressedButton = -1;
     private long pressTime;
+    /** Button under a held press, for the icon-row press scale; -1 = none. */
+    private int pressedButtonHeld = -1;
+    /** Per-button press/hover scale (image / emoji / send / phrase), draw-only. */
+    private final PressScale[] iconButtonScale = {PressScale.control(), PressScale.control(),
+            PressScale.control(), PressScale.control()};
 
     // Per-frame animation state (smooth hover/popup transitions)
     private final float[] buttonHover = new float[4];
@@ -2058,10 +2064,41 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
             }
         }
         if (!readOnly) {
-            drawIconButton(canvas, layout.imageBtn.x(), layout.imageBtn.y(), 0, mouseX, mouseY);
-            drawIconButton(canvas, layout.phraseBtn.x(), layout.phraseBtn.y(), 3, mouseX, mouseY);
-            drawIconButton(canvas, layout.emojiBtn.x(), layout.emojiBtn.y(), 1, mouseX, mouseY);
-            drawSendButton(canvas, layout.sendBtn.x(), layout.sendBtn.y(), mouseX, mouseY);
+            // Draw the pointer's button last: its scale-up then reads as growth
+            // instead of being overlapped by the next button in the row.
+            int[] order = {0, 3, 1, 2};
+            int last = -1;
+            if (inputButtonHovered(layout.imageBtn.x(), layout.imageBtn.y(), mouseX, mouseY)) {
+                last = 0;
+            } else if (inputButtonHovered(layout.phraseBtn.x(), layout.phraseBtn.y(), mouseX, mouseY)) {
+                last = 3;
+            } else if (inputButtonHovered(layout.emojiBtn.x(), layout.emojiBtn.y(), mouseX, mouseY)) {
+                last = 1;
+            } else if (inputButtonHovered(layout.sendBtn.x(), layout.sendBtn.y(), mouseX, mouseY)) {
+                last = 2;
+            }
+            if (last >= 0) {
+                int at = 0;
+                for (int i = 0; i < order.length; i++) {
+                    if (order[i] == last) {
+                        at = i;
+                        break;
+                    }
+                }
+                int tmp = order[at];
+                for (int i = at; i < order.length - 1; i++) {
+                    order[i] = order[i + 1];
+                }
+                order[order.length - 1] = tmp;
+            }
+            for (int id : order) {
+                switch (id) {
+                    case 0 -> drawIconButton(canvas, layout.imageBtn.x(), layout.imageBtn.y(), 0, mouseX, mouseY);
+                    case 3 -> drawIconButton(canvas, layout.phraseBtn.x(), layout.phraseBtn.y(), 3, mouseX, mouseY);
+                    case 1 -> drawIconButton(canvas, layout.emojiBtn.x(), layout.emojiBtn.y(), 1, mouseX, mouseY);
+                    default -> drawSendButton(canvas, layout.sendBtn.x(), layout.sendBtn.y(), mouseX, mouseY);
+                }
+            }
         }
 
         // Input text: rendered by Skia at fixed density; the hidden EditBox is the
@@ -2418,36 +2455,66 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
     }
 
     private void drawIconButton(Canvas canvas, float bx, float by, int id, int mouseX, int mouseY) {
-        float vmx = toVirtualX(mouseX);
-        float vmy = toVirtualY(mouseY);
-        boolean hover = vmx >= bx && vmx <= bx + UiTokens.BUTTON_W && vmy >= by && vmy <= by + UiTokens.BUTTON_H;
+        boolean hover = inputButtonHovered(bx, by, mouseX, mouseY);
+        boolean pressed = buttonPressed(id);
+        boolean pressedHeld = pressedButtonHeld == id;
         buttonHover[id] = UiMotion.approach(buttonHover[id], hover ? 1.0F : 0.0F, frameDt, UiMotion.HOVER_MS);
-        int fill = Math.min(255, (int) (70 + buttonHover[id] * 45.0F + (buttonPressed(id) ? 50 : 0)));
+        // Press/hover scale matches the bottom tab bar and the emoji cells
+        // (1.08 hover, 0.92 held); the spring keeps running until it settles,
+        // so the release overshoot is drawn even after the pointer is up. The
+        // press flash and accent tint below stay exactly as they were.
+        PressScale scale = iconButtonScale[id];
+        scale.update(hover, pressedHeld, frameDt, Animations.enabled());
+        canvas.save();
+        if (scale.scale() != 1.0F) {
+            canvas.translate(bx + UiTokens.BUTTON_W / 2.0F, by + UiTokens.BUTTON_H / 2.0F);
+            canvas.scale(scale.scale(), scale.scale());
+            canvas.translate(-(bx + UiTokens.BUTTON_W / 2.0F), -(by + UiTokens.BUTTON_H / 2.0F));
+        }
+        int fill = Math.min(255, (int) (70 + buttonHover[id] * 45.0F + (pressed ? 50 : 0)));
         SkiaDraw.drawRoundedRect(canvas, bx, by, UiTokens.BUTTON_W, UiTokens.BUTTON_H, UiTokens.BUTTON_RADIUS, Color.makeARGB(fill, 255, 255, 255));
         // Active states take the accent colour: the emoji button while its
         // panel is open (a toggle), any button for a moment after a press.
         boolean activeTint = (id == 1 && emojiPanel.isOpen()) || (id == 3 && quickPhrasePanel.isOpen())
-                || buttonPressed(id);
+                || pressed;
         io.github.humbleui.skija.Path icon = switch (id) {
             case 0 -> ICON_IMAGE_PATH;
             case 3 -> ICON_PHRASE_PATH;
             default -> ICON_EMOJI_PATH;
         };
         drawIcon(canvas, icon, bx, by, activeTint ? accent() : textPrimary());
+        canvas.restore();
+    }
+
+    /** True when the pointer is inside a composer button rect (virtual coords). */
+    private boolean inputButtonHovered(float bx, float by, int mouseX, int mouseY) {
+        float vmx = toVirtualX(mouseX);
+        float vmy = toVirtualY(mouseY);
+        return vmx >= bx && vmx <= bx + UiTokens.BUTTON_W && vmy >= by && vmy <= by + UiTokens.BUTTON_H;
     }
 
     private void drawSendButton(Canvas canvas, float bx, float by, int mouseX, int mouseY) {
-        float vmx = toVirtualX(mouseX);
-        float vmy = toVirtualY(mouseY);
-        boolean hover = vmx >= bx && vmx <= bx + UiTokens.BUTTON_W && vmy >= by && vmy <= by + UiTokens.BUTTON_H;
+        boolean hover = inputButtonHovered(bx, by, mouseX, mouseY);
+        boolean pressed = buttonPressed(2);
+        boolean pressedHeld = pressedButtonHeld == 2;
         buttonHover[2] = UiMotion.approach(buttonHover[2], hover ? 1.0F : 0.0F, frameDt, UiMotion.HOVER_MS);
+        // Same press/hover scale as the icon buttons and the bottom tab bar.
+        PressScale scale = iconButtonScale[2];
+        scale.update(hover, pressedHeld, frameDt, Animations.enabled());
+        canvas.save();
+        if (scale.scale() != 1.0F) {
+            canvas.translate(bx + UiTokens.BUTTON_W / 2.0F, by + UiTokens.BUTTON_H / 2.0F);
+            canvas.scale(scale.scale(), scale.scale());
+            canvas.translate(-(bx + UiTokens.BUTTON_W / 2.0F), -(by + UiTokens.BUTTON_H / 2.0F));
+        }
         SkiaDraw.drawRoundedRect(canvas, bx, by, UiTokens.BUTTON_W, UiTokens.BUTTON_H, UiTokens.BUTTON_RADIUS, accent());
-        float overlay = buttonHover[2] * 55.0F + (buttonPressed(2) ? 90.0F : 0.0F);
+        float overlay = buttonHover[2] * 55.0F + (pressed ? 90.0F : 0.0F);
         if (overlay > 0.5F) {
             SkiaDraw.drawRoundedRect(canvas, bx, by, UiTokens.BUTTON_W, UiTokens.BUTTON_H, UiTokens.BUTTON_RADIUS,
                     Color.makeARGB((int) Math.min(160, overlay), 255, 255, 255));
         }
         drawIcon(canvas, ICON_SEND_PATH, bx, by, textPrimary());
+        canvas.restore();
     }
 
     /**
@@ -4068,6 +4135,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
             // back to open and the button can never toggle the panel off.
             if (button == 0 && layout.emojiBtn.contains((float) mx, (float) my)) {
                 pressButton(1);
+                pressedButtonHeld = 1;
                 inputFocused = true;
                 closePhrasePanel();
                 emojiPanel.toggle();
@@ -4077,6 +4145,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
             // Quick-phrase toggle: same pre-dismiss ordering as the emoji button.
             if (button == 0 && layout.phraseBtn.contains((float) mx, (float) my)) {
                 pressButton(3);
+                pressedButtonHeld = 3;
                 inputFocused = true;
                 emojiPanel.close();
                 if (quickPhrasePanel.isOpen()) {
@@ -4158,6 +4227,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
             // geometry comes from UiLayout so hits can never drift from the drawing.
             if (button == 0 && layout.imageBtn.contains((float) mx, (float) my)) {
                 pressButton(0);
+                pressedButtonHeld = 0;
                 inputFocused = true;
                 pickAndUploadImage();
                 return true;
@@ -4166,6 +4236,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
             // in a row. The panel still closes on any outside click or the toggle button.
             if (button == 0 && layout.sendBtn.contains((float) mx, (float) my)) {
                 pressButton(2);
+                pressedButtonHeld = 2;
                 if (quickPhrasePanel.isEditing()) {
                     // In phrase-edit mode the send button commits the phrase.
                     endPhraseEdit(true);
@@ -4219,12 +4290,6 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
             for (MessageListView.MessageHit hit : messageListView.hits()) {
                 if (my < hit.y() || my > hit.bottom()) {
                     continue;
-                }
-                // Row press bounce: arm on a left press inside the bubble.
-                if (button == 0
-                        && mx >= hit.bubbleX() && mx <= hit.bubbleX() + hit.bubbleWidth()
-                        && my >= hit.bubbleY() && my <= hit.bubbleBottom()) {
-                    messageListView.setPressedIndex(hit.index());
                 }
                 if (button == 1 && hit.avatarSize() > 0F
                         && mx >= hit.avatarX() && mx <= hit.avatarX() + hit.avatarSize()
@@ -4338,8 +4403,11 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
             if (!isWorldChatPage()) {
                 return false;
             }
+            // The composer buttons live in THIS handler, so their held-press state
+            // is cleared here: parked in RootPageInput.onRelease it never ran (the two
+            // guards are opposites) and the button stayed squashed at 0.92.
+            pressedButtonHeld = -1;
             if (button == 0) {
-                messageListView.setPressedIndex(-1);
                 float mx = toVirtualX(mouseX);
                 float my = toVirtualY(mouseY);
                 boolean wasSelecting = messageListView.isSelecting();

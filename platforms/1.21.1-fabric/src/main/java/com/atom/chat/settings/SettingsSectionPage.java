@@ -1602,17 +1602,18 @@ public final class SettingsSectionPage {
         float knobY = track.y() + track.h() / 2.0F - UiTokens.SLIDER_KNOB / 2.0F;
         SkiaDraw.drawRoundedRect(canvas, knobX, knobY, UiTokens.SLIDER_KNOB, UiTokens.SLIDER_KNOB,
                 UiTokens.SLIDER_KNOB / 2.0F, Color.makeARGB(255, 255, 255, 255)); // knob: mechanical white
-        // Cut the round head out of the track with a card-coloured gap ring,
-        // then trace the gap with an accent hairline. Both rings sit INSIDE
-        // the original knob radius - hairline outer edge flush with it - so
-        // the visual head never exceeds the pre-cutout diameter. The ring is
-        // the card surface pre-mixed over the panel (opaque): a translucent
-        // cardFill only tinted the track instead of cutting it.
+        // The white head sits directly on the track; the only ring kept is an
+        // accent trace at the rim, outer edge essentially flush with the head
+        // radius. The stroke is deliberately thicker than a hairline: on the
+        // captured frame the old s(1.0) stroke worked out to only ~1.5 device
+        // pixels, so the same accent that reads as a solid band in the track
+        // fill degenerated into a jagged line around a circle. The thick
+        // card-coloured cut-out ring that used to separate head from track
+        // read as a dark halo on light panels and is gone.
         float knobCx = knobX + UiTokens.SLIDER_KNOB / 2.0F;
         float knobCy = knobY + UiTokens.SLIDER_KNOB / 2.0F;
         float knobR = UiTokens.SLIDER_KNOB / 2.0F;
-        SkiaDraw.drawRing(canvas, knobCx, knobCy, knobR - s(2.5F), s(3.0F), UiTokens.cardCutout());
-        SkiaDraw.drawRing(canvas, knobCx, knobCy, knobR - s(0.5F), s(1.0F), accent);
+        SkiaDraw.drawRing(canvas, knobCx, knobCy, knobR - s(0.5F), s(1.8F), accent);
     }
 
     /** Sliders rendered as a right-side input field instead of a drag track. */
