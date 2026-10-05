@@ -322,13 +322,16 @@ public final class NotificationBanner {
     private void drawRoundButton(Canvas canvas, float x, float y, float size, float hover) {
         AtomChatConfig config = AtomChatConfig.get();
         SkiaDraw.drawRoundedRect(canvas, x, y, size, size, size / 2.0F, config.accentColor);
+        // The hover wash rides on the accent fill, so it takes the colour that
+        // reads against the accent rather than plain white (the composer send
+        // button does the same).
         float wash = hover * 55.0F;
         if (wash > 0.5F) {
             SkiaDraw.drawRoundedRect(canvas, x, y, size, size, size / 2.0F,
-                    Color.makeARGB((int) wash, 255, 255, 255));
+                    UiTokens.contrastOn(config.accentColor));
         }
         drawIconCentered(canvas, sendPath(), x + size / 2.0F, y + size / 2.0F, UiTokens.s(12),
-                config.textPrimaryColor);
+                UiTokens.contrastOn(config.accentColor));
     }
 
     private static void drawIconCentered(Canvas canvas, Path icon, float cx, float cy, float size, int color) {

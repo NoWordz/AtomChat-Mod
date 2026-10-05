@@ -215,11 +215,25 @@ public final class ThemeService {
 
     /** Luminance test against an explicit config (the unit-test seam). */
     public static boolean panelIsLight(AtomChatConfig config) {
-        int rgb = config.panelBgColor & 0xFFFFFF;
-        float r = srgbToLinear(((rgb >>> 16) & 0xFF) / 255.0F);
-        float g = srgbToLinear(((rgb >>> 8) & 0xFF) / 255.0F);
-        float b = srgbToLinear((rgb & 0xFF) / 255.0F);
-        return 0.2126F * r + 0.7152F * g + 0.0722F * b >= 0.5F;
+        return relativeLuminance(config.panelBgColor) >= 0.5F;
+    }
+
+    /**
+     * WCAG relative luminance of an sRGB colour, alpha ignored. One
+     * implementation for every polarity question: the panel surface above,
+     * and {@link com.atom.chat.ui.UiTokens#contrastOn} for what to paint on
+     * top of a filled shape.
+     */
+    public static float relativeLuminance(int argb) {
+        float r = srgbToLinear(((argb >>> 16) & 0xFF) / 255.0F);
+        float g = srgbToLinear(((argb >>> 8) & 0xFF) / 255.0F);
+        float b = srgbToLinear((argb & 0xFF) / 255.0F);
+        return 0.2126F * r + 0.7152F * g + 0.0722F * b;
+    }
+
+    /** Whether a colour is light enough to need dark content on top of it. */
+    public static boolean colorIsLight(int argb) {
+        return relativeLuminance(argb) >= 0.5F;
     }
 
     private static float srgbToLinear(float c) {

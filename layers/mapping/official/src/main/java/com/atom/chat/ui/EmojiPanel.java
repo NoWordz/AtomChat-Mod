@@ -290,6 +290,10 @@ public final class EmojiPanel {
             float tabStripW = pw - tabInset * 2.0F;
             float tabW = tabStripW / labels.length;
             float indicator = tabIndicatorAnim.getValue();
+            // The capsule and the active label are accent-coloured; this panel
+            // has no accent parameter, so read it from the live config like the
+            // rest of the file does.
+            int accent = com.atom.chat.config.AtomChatConfig.get().accentColor;
             // The active pill keeps a uniform s(4) inset on every side of its tab
             // slot, and the whole strip is inset so it never crowds the panel's
             // rounded border (Apple-style calculated spacing).
@@ -297,7 +301,7 @@ public final class EmojiPanel {
             // bottom length makes the label's visual centre line up with the
             // pill's centre (the text baseline is drawn slightly low).
             SkiaDraw.drawRoundedRect(canvas, tabStripX + indicator * tabW + s(4), py + s(6),
-                    tabW - s(8), UiTokens.EMOJI_TAB_H - s(8), s(8), Color.makeARGB(90, 255, 255, 255));
+                    tabW - s(8), UiTokens.EMOJI_TAB_H - s(8), s(8), accent);
             for (int t = 0; t < labels.length; t++) {
                 float hov = tabHover[t];
                 if (hov > 0.01F) {
@@ -306,11 +310,14 @@ public final class EmojiPanel {
                     float hw = tabW - s(8);
                     float hh = UiTokens.EMOJI_TAB_H - s(8);
                     SkiaDraw.drawRoundedRect(canvas, hx, hy, hw, hh, s(8),
-                            Color.makeARGB((int) (45.0F * hov), 255, 255, 255));
+                            UiTokens.cardHover(hov));
                 }
                 float tx = tabStripX + t * tabW;
+                // The active label sits on the accent capsule, so it takes the
+                // colour that reads against the accent, not the panel text colour.
                 SkiaFontRenderer.drawTextCentered(canvas, tabFont, labels[t],
-                        tx + tabW / 2.0F, py + UiTokens.EMOJI_TAB_H / 2.0F + s(2), textPrimary());
+                        tx + tabW / 2.0F, py + UiTokens.EMOJI_TAB_H / 2.0F + s(2),
+                        t == tab ? UiTokens.contrastOn(accent) : textPrimary());
             }
 
             // Content area (clipped, scrollable). Switching tabs plays an opaque
