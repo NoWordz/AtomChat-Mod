@@ -7,6 +7,7 @@ import com.atom.chat.config.AtomChatConfig;
 import com.atom.chat.font.FontManager;
 import com.atom.chat.image.ImageLoader;
 import com.atom.chat.image.PlayerAvatar;
+import com.atom.chat.render.Animator;
 import com.atom.chat.render.Easing;
 import com.atom.chat.render.SkiaDraw;
 import com.atom.chat.render.SkiaFontRenderer;
@@ -216,16 +217,21 @@ public final class SettingsSectionPage {
     /** Crossfade duration of a chip switch. */
     private static final long CHIP_SWITCH_MS = 110L;
     /** Height of the reserved chip band above the scrolling rows. */
-    private static final float CHIP_BAR_H = UiTokens.s(44);
-    private static final float CHIP_PILL_H = UiTokens.s(26);
-    private static final float CHIP_PILL_GAP = UiTokens.s(8);
-    private static final float CHIP_PILL_PAD = UiTokens.s(10);
 
     /** Active chip index per section id (chip-less sections never read it). */
     private final Map<String, Integer> activeChip = new HashMap<>();
     /** Chip id a switch crossfade is coming from; null when settled. */
     private String chipSwitchFromId;
     private long chipSwitchAtMs;
+
+    // The chip row mirrors BottomTabBar: equal cells from the layout rect,
+    // a sliding selection capsule on the shared tab clock, a pure-colour
+    // hover wash, and PressScale.control() on the label.
+    private final Animator chipIndicator = new Animator(Easing::easeInOutCubic);
+    private final Map<Integer, Float> chipHover = new HashMap<>();
+    private final Map<Integer, PressScale> chipScale = new HashMap<>();
+    private int pressedChip = -1;
+    private int lastChipIndex = -1;
     /** Hover row of the interactive (incoming) layer, fed to rowHover decay. */
     private int lastInteractiveHover = -1;
 
@@ -256,34 +262,33 @@ public final class SettingsSectionPage {
 
     /** Reserved band height above the rows (zero for chip-less sections). */
     public float chipBarHeight(SettingsSection section) {
-        return chips(section).isEmpty() ? 0.0F : CHIP_BAR_H;
+        return chips(section).isEmpty() ? 0.0F : chipBarHeight();
     }
 
-    /** Chip index under the pointer, or -1. Geometry mirrors {@link #drawChipBar}. */
+    /** The chip bar's height, from the same tokens {@link UiLayout} uses. */
+    private static float chipBarHeight() {
+        return UiTokens.CHIP_PILL_H + UiTokens.TAB_EDGE_PAD * 2.0F;
+    }
+
+
+    /** Chip index under the pointer, or -1 (equal cells, like the tab bar). */
     public int chipAt(SettingsSection section, float vmx, float vmy, UiLayout layout) {
         List<SectionChip> sectionChips = chips(section);
-        if (sectionChips.isEmpty()) {
+        if (sectionChips.isEmpty() || layout.chipBar.w() <= 0.0F) {
             return -1;
         }
-        float pillY = layout.list.y() + (CHIP_BAR_H - CHIP_PILL_H) / 2.0F;
-        if (vmy < pillY || vmy > pillY + CHIP_PILL_H) {
-            return -1;
-        }
-        Font font = FontManager.font(UiTokens.SETTINGS_TILE_SUB);
-        float x = layout.list.x() + UiTokens.SETTINGS_ROW_PAD;
+        float cellW = layout.chipBar.w() / sectionChips.size();
+        float inset = UiTokens.TAB_EDGE_PAD;
         for (int i = 0; i < sectionChips.size(); i++) {
-            float w = chipWidth(font, sectionChips.get(i));
-            if (vmx >= x && vmx <= x + w) {
+            UiLayout.Rect cell = layout.chipRect(i, sectionChips.size());
+            float cx = layout.chipBar.x() + cellW * (i + 0.5F);
+            float cy = layout.chipBar.y() + layout.chipBar.h() / 2.0F;
+            if (Math.abs(vmx - cx) <= cell.w() / 2.0F + inset
+                    && Math.abs(vmy - cy) <= cell.h() / 2.0F + inset) {
                 return i;
             }
-            x += w + CHIP_PILL_GAP;
         }
         return -1;
-    }
-
-    private static float chipWidth(Font font, SectionChip chip) {
-        return SkiaFontRenderer.getStringWidth(font, tr(chip.labelKey()))
-                + CHIP_PILL_PAD * 2.0F;
     }
 
     /**
@@ -815,7 +820,8 @@ public final class SettingsSectionPage {
         }
 
         if (barH > 0.0F) {
-            drawChipBar(canvas, layout, section, accent);
+            updateChipMotion(layout, section, dt);
+            drawChipBar(canvas, layout, section, accent, dt);
         }
 
         int hovered = lastInteractiveHover;
@@ -919,31 +925,92 @@ public final class SettingsSectionPage {
         }
     }
 
-    /** The segmented chip row: one pill per group, the active one tinted and
-     *  traced by the accent, same language as the old corner chips. */
+    /** The section chip row, built exactly like the bottom tab bar: equal cells
+     *  from {@code layout.chipBar}, a solid translucent-white capsule for the
+     *  selection (sliding on the tab clock), a pure-colour hover wash, and the
+     *  shared PressScale on the label. */
     private void drawChipBar(Canvas canvas, UiLayout layout, SettingsSection section,
-                             int accent) {
-        List<SectionChip> sectionChips = chips(section);
+                             int accent, float dtMs) {
+        List<SectionChip> chips = chips(section);
+        if (chips.isEmpty() || layout.chipBar.w() <= 0.0F) {
+            return;
+        }
         Font font = FontManager.font(UiTokens.SETTINGS_TILE_SUB);
-        float pillY = layout.list.y() + (CHIP_BAR_H - CHIP_PILL_H) / 2.0F;
-        float x = layout.list.x() + UiTokens.SETTINGS_ROW_PAD;
         int activeIndex = activeChipIndex(section);
-        int accentRgb = accent & 0x00FFFFFF;
-        for (int i = 0; i < sectionChips.size(); i++) {
-            SectionChip chip = sectionChips.get(i);
-            float w = chipWidth(font, chip);
-            boolean selected = i == activeIndex;
-            SkiaDraw.drawRoundedRect(canvas, x, pillY, w, CHIP_PILL_H, CHIP_PILL_H / 2.0F,
-                    selected ? Color.makeARGB(36, (accentRgb >> 16) & 0xFF,
-                            (accentRgb >> 8) & 0xFF, accentRgb & 0xFF)
-                            : Color.makeARGB(40, 255, 255, 255));
-            if (selected) {
-                SkiaDraw.drawEdgeHighlight(canvas, x, pillY, w, CHIP_PILL_H,
-                        CHIP_PILL_H / 2.0F, s(1.2F), accent);
+        int count = chips.size();
+        float inset = UiTokens.TAB_EDGE_PAD;
+        float cellW = layout.chipBar.w() / count;
+
+        // Selection capsule: solid translucent white, sliding between cells on
+        // the same clock the bottom tab bar uses.
+        UiLayout.Rect first = layout.chipRect(0, count);
+        float capsuleX = layout.chipBar.x() + chipIndicator.getValue() * cellW + inset;
+        SkiaDraw.drawRoundedRect(canvas, capsuleX, first.y(), first.w(), first.h(),
+                UiTokens.radius(8), Color.makeARGB(90, 255, 255, 255));
+
+        // Hover wash: the same capsule, pure colour, fading in and out.
+        for (int i = 0; i < count; i++) {
+            Float hov = chipHover.get(i);
+            if (hov == null || hov <= 0.01F) {
+                continue;
             }
-            SkiaFontRenderer.drawTextCentered(canvas, font, tr(chip.labelKey()),
-                    x + w / 2.0F, pillY + CHIP_PILL_H / 2.0F, selected ? accent : sec(200));
-            x += w + CHIP_PILL_GAP;
+            UiLayout.Rect cell = layout.chipRect(i, count);
+            SkiaDraw.drawRoundedRect(canvas, cell.x(), cell.y(), cell.w(), cell.h(),
+                    UiTokens.radius(8), UiTokens.cardHover(hov));
+        }
+
+        // Labels last; the press scale wraps the label only, never the capsule.
+        for (int i = 0; i < count; i++) {
+            UiLayout.Rect cell = layout.chipRect(i, count);
+            boolean selected = i == activeIndex;
+            Font labelFont = selected
+                    ? FontManager.boldFont(UiTokens.SETTINGS_TILE_SUB) : font;
+            float cx = cell.x() + cell.w() / 2.0F;
+            float cy = cell.y() + cell.h() / 2.0F;
+            PressScale scale = chipScale.get(i);
+            if (scale != null) {
+                scale.begin(canvas, cx, cy);
+            }
+            try {
+                SkiaFontRenderer.drawTextCentered(canvas, labelFont,
+                        tr(chips.get(i).labelKey()), cx, cy,
+                        selected ? textPrimary() : sec(200));
+            } finally {
+                if (scale != null) {
+                    canvas.restore();
+                }
+            }
+        }
+    }
+
+    /** Advances the chip hover washes, press springs and the selection slide.
+     *  Same cadence as {@code BottomTabBar.update}: once per frame. */
+    public void updateChipMotion(UiLayout layout, SettingsSection section, float dtMs) {
+        List<SectionChip> chips = chips(section);
+        if (chips.isEmpty() || layout.chipBar.w() <= 0.0F) {
+            return;
+        }
+        int activeIndex = activeChipIndex(section);
+        if (lastChipIndex < 0) {
+            chipIndicator.setValue(activeIndex);
+        } else if (activeIndex != lastChipIndex) {
+            chipIndicator.animateTo(UiMotion.TAB_MS, activeIndex);
+        }
+        lastChipIndex = activeIndex;
+        chipIndicator.update(dtMs);
+
+        int hovered = chipAt(section, pointerX, pointerY, layout);
+        for (int i = 0; i < chips.size(); i++) {
+            boolean over = i == hovered;
+            float next = UiMotion.approach(chipHover.getOrDefault(i, 0.0F),
+                    over ? 1.0F : 0.0F, dtMs, UiMotion.HOVER_MS);
+            if (next < 0.01F && !over) {
+                chipHover.remove(i);
+            } else {
+                chipHover.put(i, next);
+            }
+            chipScale.computeIfAbsent(i, key -> PressScale.control())
+                    .update(over, over && pressedChip == i, dtMs, Animations.enabled());
         }
     }
 
@@ -989,6 +1056,11 @@ public final class SettingsSectionPage {
     /** Arms the row press bounce (mouse-down) or clears it (-1 on release). */
     public void setPressedRow(int index) {
         pressedRow = index;
+    }
+
+    /** Arms the chip press bounce (mouse-down) or clears it (-1 on release). */
+    public void setPressedChip(int index) {
+        pressedChip = index;
     }
 
     /** Arms the colour-swatch press bounce or clears it (-1 on release). */

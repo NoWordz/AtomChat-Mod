@@ -30,6 +30,12 @@ public final class UiLayout {
     public final Rect header;
     /** Bottom tab bar (root pages only; zero-size on detail pages). */
     public final Rect tabBar;
+    /**
+     * Section-chip bar on a settings detail page; zero-size elsewhere. Same
+     * "one row of equal cells inside a padded bar" shape as {@link #tabBar}, so
+     * the chips inherit the shell's spacing instead of inventing their own.
+     */
+    public final Rect chipBar;
     public final Rect list;
     public final Rect replyBar;
     public final Rect inputBar;
@@ -76,6 +82,14 @@ public final class UiLayout {
                 panelW - UiTokens.LIST_PAD_X * 2.0F,
                 Math.max(0.0F, bottomOfContent - listTop));
 
+        // Section chips share the tab bar's shape: a full-width bar of equal
+        // cells with TAB_EDGE_PAD inside, so chip spacing and alignment come
+        // from the same tokens the bottom tabs use. Detail pages only.
+        this.chipBar = mode == Mode.DETAIL
+                ? new Rect(this.list.x(), this.list.y(), this.list.w(),
+                UiTokens.CHIP_PILL_H + UiTokens.TAB_EDGE_PAD * 2.0F)
+                : new Rect(0, 0, 0, 0);
+
         if (mode == Mode.CHAT) {
             float replyY = inputY - this.replyH;
             this.replyBar = this.replyH > 0.0F
@@ -105,6 +119,21 @@ public final class UiLayout {
             this.phraseBtn = new Rect(0, 0, 0, 0);
             this.inputTextCenterY = 0.0F;
         }
+    }
+
+    /**
+     * One equal cell inside {@link #chipBar}, inset on all four sides exactly
+     * like the bottom tab bar's capsule. Rendering and hit-testing both call
+     * this, so a chip can never drift from where it is drawn.
+     */
+    public Rect chipRect(int index, int count) {
+        if (index < 0 || count <= 0 || chipBar.w() <= 0.0F) {
+            return new Rect(0, 0, 0, 0);
+        }
+        float cellW = chipBar.w() / count;
+        float inset = UiTokens.TAB_EDGE_PAD;
+        return new Rect(chipBar.x() + cellW * index + inset, chipBar.y() + inset,
+                cellW - inset * 2.0F, chipBar.h() - inset * 2.0F);
     }
 
     public static UiLayout of(float panelX, float panelY, float panelW, float panelH) {

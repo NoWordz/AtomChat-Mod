@@ -3871,6 +3871,8 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
                 if (button == 0) {
                     int chip = settingsSectionPage.chipAt(topNav().section(), mx, my, pageLayout);
                     if (chip >= 0) {
+                        // Same press-bounce arming the bottom tab bar uses.
+                        settingsSectionPage.setPressedChip(chip);
                         settingsSectionPage.selectChip(topNav().section(), chip);
                         return true;
                     }
@@ -4028,6 +4030,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
             settingsSectionPage.endThemeStrip();
             settingsSectionPage.endSliderDrag();
             settingsSectionPage.setPressedRow(-1);
+            settingsSectionPage.setPressedChip(-1);
             settingsSectionPage.setPressedSwatch(-1);
             bottomTabBar.setPressedTab(-1);
             if (button == 0 && listScroll().isDragging()) {

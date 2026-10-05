@@ -224,6 +224,8 @@ public final class UiTokens {
     // The pill is full-cell wide; the icon sits on the pill's vertical centre,
     // and the pill keeps s(8) breathing room from the bar edge on all sides.
     public static final float TAB_EDGE_PAD = s(8);
+    /** Height of a section-chip capsule (same as the settings row controls). */
+    public static final float CHIP_PILL_H = s(26);
     public static final float TAB_CAPSULE_PAD = s(4);
     public static final float TAB_ICON_SIZE = s(24);
     public static final float TAB_BAR_H = TAB_ICON_SIZE + 2.0F * (TAB_CAPSULE_PAD + TAB_EDGE_PAD);
