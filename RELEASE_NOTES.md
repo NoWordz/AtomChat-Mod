@@ -1,5 +1,49 @@
 # Release Notes
 
+## v0.2.15
+
+本版把界面整体重做了一遍：文字更大、动效改成弹簧、外观设置新增六套配色，设置页也重新排过。三个发布目标（Fabric 1.21.1 / NeoForge 1.21.1 / Forge 1.20.1）同步。
+
+**新增**
+
+- **六套配色主题**：极简、夏日、典雅、黑鸦、枢纽、活力，在外观设置里点一下即换。
+- **主题预览卡**：主题那一行现在是可横向滑动的迷你面板卡，每张按自己的配色画出来，点一下选中。
+
+**更改**
+
+- **正文字号变大**，2K / 4K 面板上不再发虚。
+- **面板开合改成弹簧动画**，落定更快、不再弹过头。
+- **开关、表情格、底部标签、颜色色板都有悬停与按下缩放**，按下去有反馈。
+- **设置页重新排过**：首页先进分类，分区内容用页内标签切换，圆角改为连续滑条。
+- **「磨砂」主题改名为「默认」**，点它会恢复出厂配色。
+- 消息气泡不再有按下弹跳；发送按钮与表情、图标、常用语按钮统一了按压缩放。
+
+**修复**
+
+- 设置页切换标签时标签条被内容遮住。
+- 滑块旋钮的描边过细，在默认主题下看着有锯齿。
+
+----
+
+**Added**
+
+- **Six colour themes**: minimal, summer, elegant, raven, hub and vivid — one tap in the appearance settings.
+- **Theme preview cards**: the theme row scrolls sideways as mini panel cards drawn in their own palettes; tap to pick.
+
+**Changed**
+
+- **Larger body text**, so it stays crisp on 2K and 4K panels.
+- **The panel opens and closes on a spring**, landing faster without overshooting.
+- **Hover and press feedback on toggles, emote cells, the bottom tabs and colour swatches.**
+- **The settings pages are rearranged**: a category menu first, in-page tabs inside a section, and the corner radius on a continuous slider.
+- **"Frosted" is now "Default"** and restores the factory colours.
+- Message bubbles no longer bounce on press; the send button now shares the press scale of the image, emoji and phrase buttons.
+
+**Fixed**
+
+- The chip bar being covered by content while switching settings tabs.
+- The slider knob's hairline being too thin, which looked jagged on the default theme.
+
 ## v0.2.14
 
 本版放开本地表情的数量限制：默认不限量，想限量的玩家可以自己设上限。三个发布目标（Fabric 1.21.1 / NeoForge 1.21.1 / Forge 1.20.1）同步。

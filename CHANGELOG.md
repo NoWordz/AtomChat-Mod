@@ -1,5 +1,59 @@
 # Changelog
 
+## v0.2.15
+
+> 本版是界面改版版：文字、动效、主题与整个设置页都重做了一遍，末尾两条修掉改版过程中自己引入的毛病。
+
+**新增**
+
+- **主题颜色预设**：外观设置新增六个配色（极简 / 夏日 / 典雅 / 黑鸦 / 枢纽 / 活力），每个预设写入完整的十二色快照，选中即生效。
+- **主题预览卡**：主题选择从圆点改为横向滚动的迷你面板卡，每张按各自主题的配色与圆角绘制面板底、标题条、气泡与输入条；滚轮滑动，点击选中，选中的一张带强调色描边。
+- 调试开关下，面板模糊在场景静止时改为最多每 500ms 刷新一次（镜头移动或面板动画期间维持原有频率）。
+
+**更改**
+
+- **正文字号提升**：正文与输入框 20、发送者名 17、引用 16（原 16 / 14 / 13），2K / 4K 面板上经缩放的文字仍清晰。
+- **文字阴影改为柔和投影**，深浅跟随面板明暗（按亮度判定），替换原先在浅色主题下发脏的 1px 硬投影。
+- **面板开合改用弹簧动画**：约 0.18s 落定、无可见过冲；消息入场改为轻微回弹的缓动。
+- **可点控件加上悬停与按下缩放**（悬停 1.08、按下 0.92），含开关、表情格、表情包格、底部标签与颜色色板；设置行按 0.95 的按下反馈。
+- **设置页重组**：设置首页先进分类，分区内容改用页内分段标签切换；圆角从三档改为连续半径滑条。
+- **卡片装饰统一为一套**：柔和投影、卡片底色、按面板明暗选择的描边与悬停覆盖。
+- **「磨砂」主题卡改名为「默认」**，并真正执行恢复出厂配色（十二色与面板参数一起复位）。
+- 滑块旋钮外圈改为强调色描边，色板与「+」格加上跟随主题的细描边。
+- **取消消息行的按下弹跳**：表情 / 图标 / 常用语 / 发送这一排按钮保留与底部标签一致的按压与悬停缩放。
+- **滑块旋钮去掉裁切环**，只留外圈强调色描边；默认主题下描边加粗，消除细线上的锯齿感。
+
+**修复**
+
+- 切换设置分区标签时，行区域的裁剪泄漏会遮住标签胶囊条。
+- 滑块旋钮的描边过细，在默认主题下呈锯齿状。
+
+----
+
+**Added**
+
+- **Colour theme presets**: six palettes (minimal / summer / elegant / raven / hub / vivid) in the appearance settings, each writing a full twelve-colour snapshot on selection.
+- **Theme preview cards**: the theme row is now a horizontally scrolling strip of mini panel cards, each drawn in its own palette and corner scale (panel ground, title bar, bubbles, composer strip); wheel to scroll, tap to select, accent hairline on the selected one.
+- Under the debug switch, panel blur refreshes at most once per 500ms while the scene is still (the every-2-frames cadence stays during camera movement or panel animation).
+
+**Changed**
+
+- **Larger body text**: body and input 20, sender name 17, quote 16 (was 16 / 14 / 13), so text survives uiDensity dilution on 2K and 4K panels.
+- **Text backing is now a soft drop shadow** whose strength follows the panel polarity (WCAG luminance), replacing the 1px hard under-copy that smeared on light themes.
+- **Panel open and close ride a spring**: settled in about 0.18s with no visible overshoot; message entrance uses a gentle easeOutBack.
+- **Hover and press scale on every interactive control** (hover 1.08, press 0.92): toggles, emoji and emote cells, bottom tabs and colour swatches; settings rows press to 0.95.
+- **Settings rework**: the home tile opens a category menu, sections switch through in-page segmented chips, and the corner style is a continuous radius slider instead of three presets.
+- **One shared card treatment**: soft shadow, card fill, polarity-picked border and hover wash.
+- **The "frosted" theme tile is now "Default"** and really resets the factory colours and panel values.
+- Slider knobs trace an accent outline, and colour swatches and the "+" cell gained a theme-adaptive hairline.
+- **Message rows no longer bounce on press**; the image / emoji / phrase / send row keeps the same press and hover scale as the bottom tabs.
+- **The slider knob's cut-out ring is gone**, leaving only the accent trace, which is thicker so it no longer looks jagged on the default theme.
+
+**Fixed**
+
+- A row-clip leak that hid the chip bar while a settings section switched tabs.
+- The slider knob's hairline being too thin, which read as aliasing on the default theme.
+
 ## v0.2.14
 
 > 本版放开本地表情的数量限制，并给想限量的玩家一个配置项。三个发布目标（Fabric 1.21.1 / NeoForge 1.21.1 / Forge 1.20.1）同步。
