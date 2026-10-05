@@ -30,6 +30,24 @@ public final class ShellHeader {
     public record HeaderAction(UiLayout.Rect rect, float hover, io.github.humbleui.skija.Path icon, int color) {
     }
 
+    // One bounce per header button. Static because the whole class is: the
+    // screen owns the press hit-test and arms it here, so render keeps its
+    // signature and this class stays free of input handling.
+    private static final PressScale BACK_SCALE = PressScale.compact();
+    private static final PressScale ACTION_SCALE = PressScale.compact();
+    private static boolean backPressedNow;
+    private static boolean actionPressedNow;
+
+    /** Arms the back arrow's press bounce; consumed by the next render. */
+    public static void armBackPress() {
+        backPressedNow = true;
+    }
+
+    /** Arms the trailing action's press bounce; consumed by the next render. */
+    public static void armActionPress() {
+        actionPressedNow = true;
+    }
+
     public static void render(Canvas canvas, UiLayout.Rect header, String title, boolean showBack,
                               UiLayout.Rect backButton, float backHover, int textPrimary) {
         render(canvas, header, title, showBack, backButton, backHover, textPrimary, null, null);
@@ -55,13 +73,19 @@ public final class ShellHeader {
                 UiTokens.headerRadius(), UiTokens.cardFill());
 
         if (showBack && backButton != null) {
-            drawIconButton(canvas, backButton, backHover,
+            boolean pressed = backPressedNow;
+            backPressedNow = false;
+            drawIconButton(canvas, backButton, backHover, pressed, BACK_SCALE,
                     AppIcons.ICON_BACK_PATH, textPrimary);
         }
         if (action != null && action.rect() != null && action.icon() != null) {
-            drawIconButton(canvas, action.rect(), action.hover(), action.icon(), action.color());
+            boolean pressed = actionPressedNow;
+            actionPressedNow = false;
+            drawIconButton(canvas, action.rect(), action.hover(), pressed, ACTION_SCALE,
+                    action.icon(), action.color());
+        } else {
+            ACTION_SCALE.update(false, false, 16.0F, true);
         }
-
         Font titleFont = FontManager.font(UiTokens.FONT_TITLE);
         SkiaFontRenderer.drawTextCentered(canvas, titleFont, title,
                 header.x() + header.w() / 2.0F,
@@ -87,7 +111,17 @@ public final class ShellHeader {
 
     /** Hover wash + centred icon, the shared header-button recipe. */
     private static void drawIconButton(Canvas canvas, UiLayout.Rect rect, float hover,
+                                       boolean pressed, PressScale scale,
                                        io.github.humbleui.skija.Path icon, int color) {
+        scale.update(hover > 0.01F, pressed, 16.0F, Animations.enabled());
+        float cx = rect.x() + rect.w() / 2.0F;
+        float cy = rect.y() + rect.h() / 2.0F;
+        canvas.save();
+        if (scale.scale() != 1.0F) {
+            canvas.translate(cx, cy);
+            canvas.scale(scale.scale(), scale.scale());
+            canvas.translate(-cx, -cy);
+        }
         if (hover > 0.01F) {
             float inset = UiTokens.s(4);
             float x = rect.x() + inset;
@@ -101,6 +135,7 @@ public final class ShellHeader {
                 rect.x() + rect.w() / 2.0F,
                 rect.y() + rect.h() / 2.0F,
                 UiTokens.s(18), color);
+        canvas.restore();
     }
 
     private static void drawIconCentered(Canvas canvas, io.github.humbleui.skija.Path icon,

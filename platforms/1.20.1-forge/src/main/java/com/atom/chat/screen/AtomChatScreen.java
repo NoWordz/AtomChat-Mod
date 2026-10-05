@@ -4129,6 +4129,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
             // resetTransientWorldUi() runs inside popPage() after any slide-out
             // animation so the world page still looks intact while it leaves.
             if (button == 0 && isBackButtonHit(mx, my)) {
+                ShellHeader.armBackPress();
                 popPage();
                 return true;
             }
@@ -4136,6 +4137,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
             // Feed filter cycle: only on the public page (the private header
             // has no filter slot even though the geometry exists).
             if (button == 0 && topPage() == AppPage.WORLD_CHAT && isFilterButtonHit(mx, my)) {
+                ShellHeader.armActionPress();
                 cycleWorldFilter();
                 return true;
             }
