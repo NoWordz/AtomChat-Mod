@@ -2479,15 +2479,8 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
         // so the shadow does not fatten with the button.
         SkiaDraw.drawRoundedShadow(canvas, bx, by, UiTokens.BUTTON_W, UiTokens.BUTTON_H,
                 UiTokens.BUTTON_RADIUS, UiTokens.s(8), UiTokens.CHROME_SHADOW);
-        // The fill follows the panel's polarity: a white block is invisible on a
-        // light panel, so that case gets a black block instead.
-        int fill = UiTokens.controlFill(buttonHover[id]);
-        SkiaDraw.drawRoundedRect(canvas, bx, by, UiTokens.BUTTON_W, UiTokens.BUTTON_H,
-                UiTokens.BUTTON_RADIUS, fill);
-        if (pressed) {
-            SkiaDraw.drawRoundedRect(canvas, bx, by, UiTokens.BUTTON_W, UiTokens.BUTTON_H,
-                    UiTokens.BUTTON_RADIUS, UiTokens.controlPressFlash(true));
-        }
+        int fill = Math.min(255, (int) (70 + buttonHover[id] * 45.0F + (pressed ? 50 : 0)));
+        SkiaDraw.drawRoundedRect(canvas, bx, by, UiTokens.BUTTON_W, UiTokens.BUTTON_H, UiTokens.BUTTON_RADIUS, Color.makeARGB(fill, 255, 255, 255));
         // Active states take the accent colour: the emoji button while its
         // panel is open (a toggle), any button for a moment after a press.
         boolean activeTint = (id == 1 && emojiPanel.isOpen()) || (id == 3 && quickPhrasePanel.isOpen())
@@ -2497,9 +2490,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
             case 3 -> ICON_PHRASE_PATH;
             default -> ICON_EMOJI_PATH;
         };
-        // A tinted (active) icon carries the accent; otherwise the glyph has to
-        // read on the fill we just painted, not on the panel behind it.
-        drawIcon(canvas, icon, bx, by, activeTint ? accent() : UiTokens.contrastOn(fill));
+        drawIcon(canvas, icon, bx, by, activeTint ? accent() : textPrimary());
         canvas.restore();
     }
 
@@ -2524,15 +2515,13 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
             canvas.scale(scale.scale(), scale.scale());
             canvas.translate(-(bx + UiTokens.BUTTON_W / 2.0F), -(by + UiTokens.BUTTON_H / 2.0F));
         }
-        int accentFill = accent();
-        SkiaDraw.drawRoundedRect(canvas, bx, by, UiTokens.BUTTON_W, UiTokens.BUTTON_H,
-                UiTokens.BUTTON_RADIUS, accentFill);
+        SkiaDraw.drawRoundedRect(canvas, bx, by, UiTokens.BUTTON_W, UiTokens.BUTTON_H, UiTokens.BUTTON_RADIUS, accent());
         float overlay = buttonHover[2] * 55.0F + (pressed ? 90.0F : 0.0F);
         if (overlay > 0.5F) {
             SkiaDraw.drawRoundedRect(canvas, bx, by, UiTokens.BUTTON_W, UiTokens.BUTTON_H, UiTokens.BUTTON_RADIUS,
                     Color.makeARGB((int) Math.min(160, overlay), 255, 255, 255));
         }
-        drawIcon(canvas, ICON_SEND_PATH, bx, by, UiTokens.contrastOn(accentFill));
+        drawIcon(canvas, ICON_SEND_PATH, bx, by, textPrimary());
         canvas.restore();
     }
 

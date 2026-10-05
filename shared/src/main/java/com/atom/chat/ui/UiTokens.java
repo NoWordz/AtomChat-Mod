@@ -55,63 +55,9 @@ public final class UiTokens {
                 (rgb >> 16) & 0xFF, (rgb >> 8) & 0xFF, rgb & 0xFF);
     }
 
-    /**
-     * Hover wash on a card surface; {@code weight} 0..1.
-     *
-     * <p>The wash has to move the surface away from the panel, so its direction
-     * follows the panel's polarity: white lifts a dark panel, black sinks a
-     * light one. A plain white overlay — what this used to be — is invisible on
-     * a light panel, which is exactly where the white themes live. The weight
-     * is the same either way, so the feedback stays one language across the
-     * whole tint axis even though its direction flips.</p>
-     */
+    /** Hover wash on a card surface; {@code weight} 0..1. White at every tint position. */
     public static int cardHover(float weight) {
-        int alpha = (int) (45.0F * weight);
-        return com.atom.chat.theme.ThemeService.panelIsLight()
-                ? io.github.humbleui.skija.Color.makeARGB(alpha, 0, 0, 0)
-                : io.github.humbleui.skija.Color.makeARGB(alpha, 255, 255, 255);
-    }
-
-    /**
-     * Content colour to paint on top of a filled accent shape (the selected
-     * tab and chip capsules, the send button). Picked from the fill's own
-     * luminance rather than the panel's: a theme's accent can be pale enough
-     * to need dark glyphs on a dark panel, or deep enough to need white ones on
-     * a light panel.
-     */
-    public static int contrastOn(int fill) {
-        return com.atom.chat.theme.ThemeService.colorIsLight(fill)
-                ? io.github.humbleui.skija.Color.makeARGB(255, 28, 25, 1)
-                : io.github.humbleui.skija.Color.makeARGB(255, 255, 255, 255);
-    }
-
-    /**
-     * Base fill of a control that has no surface of its own — the composer's
-     * image / emoji / phrase buttons. It follows the same polarity rule as
-     * {@link #cardHover}: a translucent white block is invisible on a light
-     * panel, so a light panel gets a translucent black block instead and the
-     * glyphs on it follow from the same contrast question. {@code hoverWeight}
-     * is 0..1 and fades, so the pointer response stays continuous.
-     *
-     * <p>The press flash is always white and rides on top of whatever this
-     * returns; see {@link #controlPressFlash}. It has to be, because the base
-     * block on a light panel is black and adding more black there would read as
-     * nothing at all.</p>
-     */
-    public static int controlFill(float hoverWeight) {
-        float weight = Math.max(0.0F, Math.min(1.0F, hoverWeight));
-        int alpha = (int) (70.0F + weight * 45.0F);
-        return com.atom.chat.theme.ThemeService.panelIsLight()
-                ? io.github.humbleui.skija.Color.makeARGB(alpha, 0, 0, 0)
-                : io.github.humbleui.skija.Color.makeARGB(alpha, 255, 255, 255);
-    }
-
-    /**
-     * Press flash laid over {@link #controlFill}: white in both polarities, so
-     * the held state always reads as a lift rather than a disappearance.
-     */
-    public static int controlPressFlash(boolean pressed) {
-        return io.github.humbleui.skija.Color.makeARGB(pressed ? 50 : 0, 255, 255, 255);
+        return io.github.humbleui.skija.Color.makeARGB((int) (45.0F * weight), 255, 255, 255);
     }
 
     /**
