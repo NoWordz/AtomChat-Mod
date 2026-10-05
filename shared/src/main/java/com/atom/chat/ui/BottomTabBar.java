@@ -102,7 +102,22 @@ public final class BottomTabBar {
         float capsuleH = bar.h() - inset * 2.0F;
         float capsuleW = cellWidth - inset * 2.0F;
 
+        // The indicator IS the selected cell index, animated: it carries the
+        // fractional slide between cells, so the pill is placed from it directly
+        // and drawn exactly once. Adding a per-cell offset on top of it would
+        // push the pill a whole cell right for every tab but the first.
         float indicator = indicatorAnim.getValue();
+        float capsuleX = bar.x() + indicator * cellWidth + inset;
+        float capsuleCenterX = capsuleX + capsuleW / 2.0F;
+        float barCenterY = bar.y() + bar.h() / 2.0F;
+
+        // One bounce drives the whole selected capsule, glyph included - the
+        // capsule has no per-cell identity of its own while it slides.
+        canvas.save();
+        applyBounce(canvas, tabScale[selectedIndex].scale(), capsuleCenterX, barCenterY);
+        SkiaDraw.drawRoundedRect(canvas, capsuleX, bar.y() + inset, capsuleW, capsuleH, radius,
+                UiTokens.accentFill());
+        canvas.restore();
 
         for (int i = 0; i < 3; i++) {
             float cellCenterX = bar.x() + cellWidth * (i + 0.5F);
@@ -110,15 +125,7 @@ public final class BottomTabBar {
             float scale = tabScale[i].scale();
 
             canvas.save();
-            if (scale != 1.0F) {
-                canvas.translate(cellCenterX, cellCenterY);
-                canvas.scale(scale, scale);
-                canvas.translate(-cellCenterX, -cellCenterY);
-            }
-
-            float capsuleX = bar.x() + indicator * cellWidth + inset;
-            SkiaDraw.drawRoundedRect(canvas, capsuleX, bar.y() + inset, capsuleW, capsuleH, radius,
-                    UiTokens.accentFill());
+            applyBounce(canvas, scale, cellCenterX, cellCenterY);
 
             // Hover is the accent-derived wash that fades in/out, never a vertical
             // gradient. The selected cell is skipped: a wash over the accent pill
@@ -137,6 +144,19 @@ public final class BottomTabBar {
                     UiTokens.TAB_ICON_SIZE, iconColor);
 
             canvas.restore();
+        }
+    }
+
+    /**
+     * Centred scale around (cx, cy). Emitted only when the scale actually moved,
+     * so an idle frame adds no canvas state — and every call is paired by the
+     * caller's own {@code save}/{@code restore}.
+     */
+    private static void applyBounce(Canvas canvas, float scale, float cx, float cy) {
+        if (scale != 1.0F) {
+            canvas.translate(cx, cy);
+            canvas.scale(scale, scale);
+            canvas.translate(-cx, -cy);
         }
     }
 

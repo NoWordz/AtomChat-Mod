@@ -104,7 +104,11 @@ public final class UiLayout {
             float rowY = inputBar.y + UiTokens.INPUT_ROW_PAD;
             this.imageBtn = new Rect(rowLeft, rowY, UiTokens.BUTTON_W, UiTokens.BUTTON_H);
             this.emojiBtn = new Rect(rowLeft + UiTokens.BUTTON_W + UiTokens.BUTTON_GAP, rowY, UiTokens.BUTTON_W, UiTokens.BUTTON_H);
-            this.sendBtn = new Rect(rowRight - UiTokens.BUTTON_W, rowY, UiTokens.BUTTON_W, UiTokens.BUTTON_H);
+            // Send keeps the same right inset as the text column and the row
+            // padding, so its right edge lines up with the other buttons' rhythm
+            // instead of being flush with the bar.
+            this.sendBtn = new Rect(rowRight - UiTokens.BUTTON_W - UiTokens.INPUT_ROW_PAD, rowY,
+                    UiTokens.BUTTON_W, UiTokens.BUTTON_H);
             this.phraseBtn = new Rect(rowLeft + (UiTokens.BUTTON_W + UiTokens.BUTTON_GAP) * 2.0F,
                     rowY, UiTokens.BUTTON_W, UiTokens.BUTTON_H);
 

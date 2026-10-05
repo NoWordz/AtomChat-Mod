@@ -69,16 +69,15 @@ public final class UiTokens {
     }
 
     /**
-     * Selected pill: the accent held back to a translucent wash rather than
-     * painted solid. Solid accent reads as a filled block stamped on the
-     * surface; at this alpha it reads as the surface picking up the theme
-     * colour, which is the same relationship the hover wash has with it, just
-     * far stronger — so the selected cell is unmistakably ahead of a hovered
-     * one without becoming a slab.
+     * Selected pill: the theme accent painted opaque. The accent IS the theme
+     * colour and the user picked it to be seen, so the selected cell is stated
+     * outright rather than tinted. A translucent version leaves the pill's
+     * colour dependent on whatever surface sits under it (panel, card, a
+     * scrolling row) and reads as a washed-out smudge on a light panel.
      */
     public static int accentFill() {
         int rgb = com.atom.chat.config.AtomChatConfig.get().accentColor & 0xFFFFFF;
-        return io.github.humbleui.skija.Color.makeARGB(162,
+        return io.github.humbleui.skija.Color.makeARGB(255,
                 (rgb >> 16) & 0xFF, (rgb >> 8) & 0xFF, rgb & 0xFF);
     }
 
@@ -151,11 +150,14 @@ public final class UiTokens {
     public static final float INPUT_TEXT_X = s(14);
     public static final float PANEL_BOTTOM_PAD = s(14);
 
-    // Buttons (image / emoji / send share one row and one size)
-    public static final float BUTTON_W = s(56);
-    public static final float BUTTON_H = s(30);
-    public static final float BUTTON_RADIUS = s(9);
-    public static final float BUTTON_GAP = s(6);
+    // Composer row buttons (image / emoji / phrase / send share one row). Square
+    // on purpose: this is the header action button's geometry (s(36) box, s(4)
+    // to the bar edge and between neighbours, s(8) radius), so the two button
+    // families read as one language. NOT the old s(56)x s(30) lozenge.
+    public static final float BUTTON_W = s(36);
+    public static final float BUTTON_H = s(36);
+    public static final float BUTTON_RADIUS = s(8);
+    public static final float BUTTON_GAP = s(4);
 
     // Fonts. Body/input/name/quote were bumped one notch (r15 legibility pass):
     // on 2K/4K panels the physical glyph size was diluted by uiDensity, so the
