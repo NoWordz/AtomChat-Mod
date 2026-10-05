@@ -35,6 +35,19 @@ public final class PressScale {
         return new PressScale(1.08F, 0.92F);
     }
 
+    /**
+     * Controls packed against a container edge or against each other — the
+     * bottom bar's capsules, the composer buttons. The full 1.08 would push a
+     * capsule past the bar it sits in and close the gap to its neighbour, so
+     * the hover lift is trimmed to a size that stays inside its own cell. The
+     * dip keeps most of the control value: the press is the moment the user is
+     * looking straight at the control, and it shrinks the shape rather than
+     * growing it, so it cannot overflow anything.
+     */
+    public static PressScale compact() {
+        return new PressScale(1.04F, 0.95F);
+    }
+
     /** Rows: press-only 0.95, hover does not scale. */
     public static PressScale row() {
         return new PressScale(1.0F, 0.95F);

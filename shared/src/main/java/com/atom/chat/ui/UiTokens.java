@@ -68,10 +68,17 @@ public final class UiTokens {
                 (rgb >> 16) & 0xFF, (rgb >> 8) & 0xFF, rgb & 0xFF);
     }
 
-    /** Selected pill: the accent at full strength. */
+    /**
+     * Selected pill: the accent held back to a translucent wash rather than
+     * painted solid. Solid accent reads as a filled block stamped on the
+     * surface; at this alpha it reads as the surface picking up the theme
+     * colour, which is the same relationship the hover wash has with it, just
+     * far stronger — so the selected cell is unmistakably ahead of a hovered
+     * one without becoming a slab.
+     */
     public static int accentFill() {
         int rgb = com.atom.chat.config.AtomChatConfig.get().accentColor & 0xFFFFFF;
-        return io.github.humbleui.skija.Color.makeARGB(255,
+        return io.github.humbleui.skija.Color.makeARGB(162,
                 (rgb >> 16) & 0xFF, (rgb >> 8) & 0xFF, rgb & 0xFF);
     }
 

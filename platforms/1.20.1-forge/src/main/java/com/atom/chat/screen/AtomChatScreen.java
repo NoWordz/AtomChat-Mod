@@ -53,7 +53,6 @@ import com.atom.chat.ui.Animations;
 import com.atom.chat.ui.BottomTabBar;
 import com.atom.chat.ui.ScrollController;
 import com.atom.chat.ui.ShellHeader;
-import com.atom.chat.ui.UiCards;
 import com.atom.chat.ui.UiLayout;
 import com.atom.chat.ui.EmojiPanel;
 import com.atom.chat.ui.PanelBackground;
@@ -499,8 +498,10 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
     /** Button under a held press, for the icon-row press scale; -1 = none. */
     private int pressedButtonHeld = -1;
     /** Per-button press/hover scale (image / emoji / send / phrase), draw-only. */
-    private final PressScale[] iconButtonScale = {PressScale.control(), PressScale.control(),
-            PressScale.control(), PressScale.control()};
+    // compact, not control: these four share one row with a s(6) gap, and the
+    // full 1.08 hover would push each button into its neighbour.
+    private final PressScale[] iconButtonScale = {PressScale.compact(), PressScale.compact(),
+            PressScale.compact(), PressScale.compact()};
 
     // Per-frame animation state (smooth hover/popup transitions)
     private final float[] buttonHover = new float[4];
@@ -2464,10 +2465,9 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
         boolean pressed = buttonPressed(id);
         boolean pressedHeld = pressedButtonHeld == id;
         buttonHover[id] = UiMotion.approach(buttonHover[id], hover ? 1.0F : 0.0F, frameDt, UiMotion.HOVER_MS);
-        // Press/hover scale matches the bottom tab bar and the emoji cells
-        // (1.08 hover, 0.92 held); the spring keeps running until it settles,
-        // so the release overshoot is drawn even after the pointer is up. The
-        // press flash and accent tint below stay exactly as they were.
+        // Same bounce spring as every other control; the spring keeps running
+        // until it settles, so the release overshoot is drawn even after the
+        // pointer is up.
         PressScale scale = iconButtonScale[id];
         scale.update(hover, pressedHeld, frameDt, Animations.enabled());
         canvas.save();
@@ -2476,26 +2476,18 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
             canvas.scale(scale.scale(), scale.scale());
             canvas.translate(-(bx + UiTokens.BUTTON_W / 2.0F), -(by + UiTokens.BUTTON_H / 2.0F));
         }
-        // The button is the card surface plus a hairline, the same pair the
-        // content cards use. No shadow: a shadow has to sit behind an opaque
-        // shape to read as elevation, and this shape is translucent whenever the
-        // card-opacity slider is off the top, which is exactly when the shadow
-        // would show through it. The hairline does the separating instead, and
-        // it fades with the fill because both come from the card colour.
-        SkiaDraw.drawRoundedRect(canvas, bx, by, UiTokens.BUTTON_W, UiTokens.BUTTON_H,
-                UiTokens.BUTTON_RADIUS, UiTokens.cardFill());
-        SkiaDraw.drawEdgeHighlight(canvas, bx, by, UiTokens.BUTTON_W, UiTokens.BUTTON_H,
-                UiTokens.BUTTON_RADIUS, UiTokens.s(1.0F), UiCards.hairlineColor());
-        // Pointer feedback is accent-derived, never white: on the light themes a
-        // white wash over a pale panel is the one thing that cannot be seen.
-        int hoverWash = UiTokens.cardHover(buttonHover[id]);
-        if (buttonHover[id] > 0.01F) {
-            SkiaDraw.drawRoundedRect(canvas, bx, by, UiTokens.BUTTON_W, UiTokens.BUTTON_H,
-                    UiTokens.BUTTON_RADIUS, hoverWash);
-        }
-        if (pressed) {
-            SkiaDraw.drawRoundedRect(canvas, bx, by, UiTokens.BUTTON_W, UiTokens.BUTTON_H,
-                    UiTokens.BUTTON_RADIUS, UiTokens.cardHover(0.45F));
+        // Same art language as the header buttons: the icon sits on the composer,
+        // and a hover draws an inset rounded wash in the accent. No standing
+        // plate and no hairline - a plate would make the row read as three cards,
+        // and the hairline was only there to separate that plate from the panel.
+        float hoverWash = buttonHover[id];
+        float pressedWash = pressed ? 1.0F : 0.0F;
+        float wash = Math.max(hoverWash, pressedWash);
+        if (wash > 0.01F) {
+            float inset = UiTokens.s(4);
+            SkiaDraw.drawRoundedRect(canvas, bx + inset, by + inset,
+                    UiTokens.BUTTON_W - inset * 2.0F, UiTokens.BUTTON_H - inset * 2.0F,
+                    UiTokens.radius(8), UiTokens.cardHover(wash));
         }
         // Active states take the accent colour: the emoji button while its
         // panel is open (a toggle), any button for a moment after a press.

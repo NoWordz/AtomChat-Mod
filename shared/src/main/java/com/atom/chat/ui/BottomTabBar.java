@@ -31,7 +31,9 @@ public final class BottomTabBar {
     private final Animator indicatorAnim = new Animator(Easing::easeInOutCubic);
     private final float[] tabHover = new float[3];
     /** Per-tab press/hover bounce; hit-testing stays unscaled, this is draw-only. */
-    private final PressScale[] tabScale = {PressScale.control(), PressScale.control(), PressScale.control()};
+    // compact, not control: a capsule 1.08 would poke past the bar it sits in
+    // and close the gap to the next cell.
+    private final PressScale[] tabScale = {PressScale.compact(), PressScale.compact(), PressScale.compact()};
     /** Tab index under an active press, for the bounce; -1 = none. */
     private int pressedTab = -1;
 
@@ -97,48 +99,44 @@ public final class BottomTabBar {
         // pads. With no label, the icon sits on the pill's vertical centre.
         float inset = UiTokens.TAB_EDGE_PAD;
         float radius = UiTokens.radius(8);
-        float capsuleY = bar.y() + inset;
         float capsuleH = bar.h() - inset * 2.0F;
         float capsuleW = cellWidth - inset * 2.0F;
 
-        // Selected capsule is the accent at full strength, pure colour, no
-        // gradient. Translucent white used to sit here and disappeared on the
-        // light themes, where the surface under it is already white.
-        float capsuleX = bar.x() + indicatorAnim.getValue() * cellWidth + inset;
-        SkiaDraw.drawRoundedRect(canvas, capsuleX, capsuleY, capsuleW, capsuleH, radius,
-                UiTokens.accentFill());
-
-        // Hover is the accent-derived wash that fades in/out, never a vertical
-        // gradient. The selected cell is skipped: a wash over a solid accent
-        // would only dull it.
-        for (int i = 0; i < 3; i++) {
-            if (i == selectedIndex) {
-                continue;
-            }
-            float hov = tabHover[i];
-            if (hov <= 0.01F) {
-                continue;
-            }
-            float x = bar.x() + cellWidth * i + inset;
-            SkiaDraw.drawRoundedRect(canvas, x, capsuleY, capsuleW, capsuleH, radius,
-                    UiTokens.cardHover(hov));
-        }
+        float indicator = indicatorAnim.getValue();
 
         for (int i = 0; i < 3; i++) {
             float cellCenterX = bar.x() + cellWidth * (i + 0.5F);
-            float iconCenterY = bar.y() + bar.h() / 2.0F;
+            float cellCenterY = bar.y() + bar.h() / 2.0F;
+            float scale = tabScale[i].scale();
+
+            canvas.save();
+            if (scale != 1.0F) {
+                canvas.translate(cellCenterX, cellCenterY);
+                canvas.scale(scale, scale);
+                canvas.translate(-cellCenterX, -cellCenterY);
+            }
+
+            float capsuleX = bar.x() + indicator * cellWidth + inset;
+            SkiaDraw.drawRoundedRect(canvas, capsuleX, bar.y() + inset, capsuleW, capsuleH, radius,
+                    UiTokens.accentFill());
+
+            // Hover is the accent-derived wash that fades in/out, never a vertical
+            // gradient. The selected cell is skipped: a wash over the accent pill
+            // would only dull it.
+            if (i != selectedIndex && tabHover[i] > 0.01F) {
+                float x = bar.x() + cellWidth * i + inset;
+                SkiaDraw.drawRoundedRect(canvas, x, bar.y() + inset, capsuleW, capsuleH, radius,
+                        UiTokens.cardHover(tabHover[i]));
+            }
+
             // The selected glyph sits on the accent capsule, so it takes what
             // reads against the accent rather than the panel's text colour.
             int iconColor = i == selectedIndex
                     ? UiTokens.onAccent(UiTokens.accentFill()) : textPrimary;
-            // Icon-only bounce around the glyph centre; the pill wash stays put.
-            tabScale[i].begin(canvas, cellCenterX, iconCenterY);
-            try {
-                drawIconCentered(canvas, ICONS[i], cellCenterX, iconCenterY,
-                        UiTokens.TAB_ICON_SIZE, iconColor);
-            } finally {
-                canvas.restore();
-            }
+            drawIconCentered(canvas, ICONS[i], cellCenterX, cellCenterY,
+                    UiTokens.TAB_ICON_SIZE, iconColor);
+
+            canvas.restore();
         }
     }
 
