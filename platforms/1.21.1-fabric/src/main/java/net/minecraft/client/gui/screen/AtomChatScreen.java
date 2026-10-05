@@ -2471,6 +2471,11 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
             canvas.scale(scale.scale(), scale.scale());
             canvas.translate(-(bx + UiTokens.BUTTON_W / 2.0F), -(by + UiTokens.BUTTON_H / 2.0F));
         }
+        // Floating control inside the composer: the chrome tier, matching the
+        // composer, header and tab bar. Drawn outside the press-scale transform
+        // so the shadow does not fatten with the button.
+        SkiaDraw.drawRoundedShadow(canvas, bx, by, UiTokens.BUTTON_W, UiTokens.BUTTON_H,
+                UiTokens.BUTTON_RADIUS, UiTokens.s(8), UiTokens.CHROME_SHADOW);
         int fill = Math.min(255, (int) (70 + buttonHover[id] * 45.0F + (pressed ? 50 : 0)));
         SkiaDraw.drawRoundedRect(canvas, bx, by, UiTokens.BUTTON_W, UiTokens.BUTTON_H, UiTokens.BUTTON_RADIUS, Color.makeARGB(fill, 255, 255, 255));
         // Active states take the accent colour: the emoji button while its
