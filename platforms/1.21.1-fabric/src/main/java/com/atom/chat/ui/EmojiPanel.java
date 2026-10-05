@@ -297,9 +297,9 @@ public final class EmojiPanel {
             // bottom length makes the label's visual centre line up with the
             // pill's centre (the text baseline is drawn slightly low).
             SkiaDraw.drawRoundedRect(canvas, tabStripX + indicator * tabW + s(4), py + s(6),
-                    tabW - s(8), UiTokens.EMOJI_TAB_H - s(8), s(8), Color.makeARGB(90, 255, 255, 255));
+                    tabW - s(8), UiTokens.EMOJI_TAB_H - s(8), s(8), UiTokens.accentFill());
             for (int t = 0; t < labels.length; t++) {
-                float hov = tabHover[t];
+                float hov = t == tab ? 0.0F : tabHover[t];
                 if (hov > 0.01F) {
                     float hx = tabStripX + t * tabW + s(4);
                     float hy = py + s(6);
@@ -309,8 +309,11 @@ public final class EmojiPanel {
                             Color.makeARGB((int) (45.0F * hov), 255, 255, 255));
                 }
                 float tx = tabStripX + t * tabW;
+                // The active label sits on the accent capsule, so it takes the
+                // colour that reads against the accent, not the panel text colour.
                 SkiaFontRenderer.drawTextCentered(canvas, tabFont, labels[t],
-                        tx + tabW / 2.0F, py + UiTokens.EMOJI_TAB_H / 2.0F + s(2), textPrimary());
+                        tx + tabW / 2.0F, py + UiTokens.EMOJI_TAB_H / 2.0F + s(2),
+                        t == tab ? UiTokens.onAccent(UiTokens.accentFill()) : textPrimary());
             }
 
             // Content area (clipped, scrollable). Switching tabs plays an opaque

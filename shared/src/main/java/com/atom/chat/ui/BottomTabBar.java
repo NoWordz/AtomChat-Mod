@@ -101,16 +101,20 @@ public final class BottomTabBar {
         float capsuleH = bar.h() - inset * 2.0F;
         float capsuleW = cellWidth - inset * 2.0F;
 
-        // Selected capsule is the same pure-color pill as the emoji page tabs:
-        // solid translucent white, no gradient. It slides between cells.
+        // Selected capsule is the accent at full strength, pure colour, no
+        // gradient. Translucent white used to sit here and disappeared on the
+        // light themes, where the surface under it is already white.
         float capsuleX = bar.x() + indicatorAnim.getValue() * cellWidth + inset;
         SkiaDraw.drawRoundedRect(canvas, capsuleX, capsuleY, capsuleW, capsuleH, radius,
-                Color.makeARGB(90, 255, 255, 255));
+                UiTokens.accentFill());
 
-        // Hover is also a pure-color pill that fades in/out, never a vertical
-        // gradient. Draw it on top so hovering the selected tab keeps the same
-        // solid language with only a subtle brightness lift.
+        // Hover is the accent-derived wash that fades in/out, never a vertical
+        // gradient. The selected cell is skipped: a wash over a solid accent
+        // would only dull it.
         for (int i = 0; i < 3; i++) {
+            if (i == selectedIndex) {
+                continue;
+            }
             float hov = tabHover[i];
             if (hov <= 0.01F) {
                 continue;
@@ -123,9 +127,10 @@ public final class BottomTabBar {
         for (int i = 0; i < 3; i++) {
             float cellCenterX = bar.x() + cellWidth * (i + 0.5F);
             float iconCenterY = bar.y() + bar.h() / 2.0F;
-            // The selected tab's glyph takes the accent colour (on selection,
-            // not hover) so the tab state reads twice: pill + tinted icon.
-            int iconColor = i == selectedIndex ? accent : textPrimary;
+            // The selected glyph sits on the accent capsule, so it takes what
+            // reads against the accent rather than the panel's text colour.
+            int iconColor = i == selectedIndex
+                    ? UiTokens.onAccent(UiTokens.accentFill()) : textPrimary;
             // Icon-only bounce around the glyph centre; the pill wash stays put.
             tabScale[i].begin(canvas, cellCenterX, iconCenterY);
             try {

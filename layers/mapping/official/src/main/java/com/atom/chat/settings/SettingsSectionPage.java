@@ -941,15 +941,20 @@ public final class SettingsSectionPage {
         float inset = UiTokens.TAB_EDGE_PAD;
         float cellW = layout.chipBar.w() / count;
 
-        // Selection capsule: solid translucent white, sliding between cells on
-        // the same clock the bottom tab bar uses.
+        // Selection capsule: the accent at full strength, sliding between cells
+        // on the same clock the bottom tab bar uses. Translucent white used to
+        // sit here and disappeared on the light themes.
         UiLayout.Rect first = layout.chipRect(0, count);
         float capsuleX = layout.chipBar.x() + chipIndicator.getValue() * cellW + inset;
         SkiaDraw.drawRoundedRect(canvas, capsuleX, first.y(), first.w(), first.h(),
-                UiTokens.radius(8), Color.makeARGB(90, 255, 255, 255));
+                UiTokens.radius(8), UiTokens.accentFill());
 
-        // Hover wash: the same capsule, pure colour, fading in and out.
+        // Hover wash: the accent-derived wash, fading in and out. The selected
+        // cell is skipped - a wash over a solid accent would only dull it.
         for (int i = 0; i < count; i++) {
+            if (i == activeIndex) {
+                continue;
+            }
             Float hov = chipHover.get(i);
             if (hov == null || hov <= 0.01F) {
                 continue;
@@ -974,7 +979,7 @@ public final class SettingsSectionPage {
             try {
                 SkiaFontRenderer.drawTextCentered(canvas, labelFont,
                         tr(chips.get(i).labelKey()), cx, cy,
-                        selected ? textPrimary() : sec(200));
+                        selected ? UiTokens.onAccent(UiTokens.accentFill()) : sec(200));
             } finally {
                 if (scale != null) {
                     canvas.restore();

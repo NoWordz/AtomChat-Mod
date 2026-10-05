@@ -55,9 +55,54 @@ public final class UiTokens {
                 (rgb >> 16) & 0xFF, (rgb >> 8) & 0xFF, rgb & 0xFF);
     }
 
-    /** Hover wash on a card surface; {@code weight} 0..1. White at every tint position. */
+    /**
+     * Hover wash on a surface; {@code weight} 0..1. Derived from the theme's
+     * accent, not from white: a white wash is invisible wherever the surface
+     * under it is already light, and every theme's accent is a colour the user
+     * picked to be seen. The weight is an alpha, so the whole tint axis keeps
+     * one feedback strength and the direction never has to flip.
+     */
     public static int cardHover(float weight) {
-        return io.github.humbleui.skija.Color.makeARGB((int) (45.0F * weight), 255, 255, 255);
+        int rgb = com.atom.chat.config.AtomChatConfig.get().accentColor & 0xFFFFFF;
+        return io.github.humbleui.skija.Color.makeARGB((int) (45.0F * weight),
+                (rgb >> 16) & 0xFF, (rgb >> 8) & 0xFF, rgb & 0xFF);
+    }
+
+    /** Selected pill: the accent at full strength. */
+    public static int accentFill() {
+        int rgb = com.atom.chat.config.AtomChatConfig.get().accentColor & 0xFFFFFF;
+        return io.github.humbleui.skija.Color.makeARGB(255,
+                (rgb >> 16) & 0xFF, (rgb >> 8) & 0xFF, rgb & 0xFF);
+    }
+
+    /**
+     * Fill for a control that floats on the panel and carries a shadow — the
+     * composer's image / emoji / phrase buttons.
+     *
+     * <p>It cannot be {@link #cardFill()}: that one follows the card-opacity
+     * slider, and the moment the slider leaves the top the button turns
+     * translucent, the shadow shows through it, and the button greys out. It
+     * cannot be a translucent white either, which is what it used to be and is
+     * invisible on a light panel. A control has to stay visible at every
+     * opacity setting, so this takes the card colour at full alpha: the button
+     * keeps the card's hue and never lets the shadow through.</p>
+     */
+    public static int controlSurface() {
+        int rgb = com.atom.chat.config.AtomChatConfig.get().cardColor & 0xFFFFFF;
+        return io.github.humbleui.skija.Color.makeARGB(255,
+                (rgb >> 16) & 0xFF, (rgb >> 8) & 0xFF, rgb & 0xFF);
+    }
+
+    /**
+     * Content colour that reads on top of a filled accent shape. Picked from the
+     * fill's own luminance, not the panel's: a theme's accent can be pale
+     * enough to need dark glyphs on a dark panel, or deep enough to need white
+     * ones on a light panel, so the panel tells us nothing about it.
+     */
+    public static int onAccent(int fill) {
+        return com.atom.chat.theme.ThemeService.colorIsLight(fill)
+                ? io.github.humbleui.skija.Color.makeARGB(255, 28, 25, 1)
+                : io.github.humbleui.skija.Color.makeARGB(255, 255, 255, 255);
     }
 
     /**

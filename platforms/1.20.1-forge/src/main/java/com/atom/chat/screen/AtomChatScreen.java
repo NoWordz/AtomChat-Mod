@@ -2480,8 +2480,24 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
         // so the shadow does not fatten with the button.
         SkiaDraw.drawRoundedShadow(canvas, bx, by, UiTokens.BUTTON_W, UiTokens.BUTTON_H,
                 UiTokens.BUTTON_RADIUS, UiTokens.s(8), UiTokens.CHROME_SHADOW);
-        int fill = Math.min(255, (int) (70 + buttonHover[id] * 45.0F + (pressed ? 50 : 0)));
-        SkiaDraw.drawRoundedRect(canvas, bx, by, UiTokens.BUTTON_W, UiTokens.BUTTON_H, UiTokens.BUTTON_RADIUS, Color.makeARGB(fill, 255, 255, 255));
+        // Opaque on purpose, and deliberately not cardFill(): that one follows the
+        // card-opacity slider, and any position but the top turns the button
+        // translucent so the shadow behind it shows through and greys it out.
+        // A control has to be visible at every opacity, so this keeps the card
+        // hue at full alpha.
+        SkiaDraw.drawRoundedRect(canvas, bx, by, UiTokens.BUTTON_W, UiTokens.BUTTON_H,
+                UiTokens.BUTTON_RADIUS, UiTokens.controlSurface());
+        // Pointer feedback is accent-derived, never white: on the light themes a
+        // white wash over a pale panel is the one thing that cannot be seen.
+        int hoverWash = UiTokens.cardHover(buttonHover[id]);
+        if (buttonHover[id] > 0.01F) {
+            SkiaDraw.drawRoundedRect(canvas, bx, by, UiTokens.BUTTON_W, UiTokens.BUTTON_H,
+                    UiTokens.BUTTON_RADIUS, hoverWash);
+        }
+        if (pressed) {
+            SkiaDraw.drawRoundedRect(canvas, bx, by, UiTokens.BUTTON_W, UiTokens.BUTTON_H,
+                    UiTokens.BUTTON_RADIUS, UiTokens.cardHover(0.45F));
+        }
         // Active states take the accent colour: the emoji button while its
         // panel is open (a toggle), any button for a moment after a press.
         boolean activeTint = (id == 1 && emojiPanel.isOpen()) || (id == 3 && quickPhrasePanel.isOpen())
