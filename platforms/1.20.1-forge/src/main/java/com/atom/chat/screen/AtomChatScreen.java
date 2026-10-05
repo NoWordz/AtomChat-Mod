@@ -3978,6 +3978,10 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
             if (topPage() == AppPage.CHAT_LIST) {
                 ConversationListPage.RowHit hit = conversationListPage.hit(mx, my, pageLayout, pageScroll.getScrollY());
                 if (hit != null) {
+                    // Arm the pressed dip on the row that was actually hit; the
+                    // page times the pulse itself because opening the chat ends
+                    // the interaction before any release could arrive.
+                    conversationListPage.pulseRow(hit.index());
                     if (hit.row().kind() == ConversationListPage.RowKind.PUBLIC && button == 0) {
                         openWorldChat();
                         return true;

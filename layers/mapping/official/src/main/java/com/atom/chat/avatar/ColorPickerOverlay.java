@@ -6,6 +6,7 @@ import com.atom.chat.render.SkiaDraw;
 import com.atom.chat.render.SkiaFontRenderer;
 import com.atom.chat.ui.Animations;
 import com.atom.chat.ui.AppIcons;
+import com.atom.chat.ui.PressScale;
 import com.atom.chat.ui.UiLayout;
 import com.atom.chat.ui.UiMotion;
 import com.atom.chat.ui.UiTokens;
@@ -46,6 +47,11 @@ public final class ColorPickerOverlay {
 
     private float btnHoverCheck;
     private float btnHoverClose;
+    /** One bounce per control: the two drag knobs, then cancel and confirm. */
+    private final PressScale svKnobScale = PressScale.control();
+    private final PressScale hueKnobScale = PressScale.control();
+    private final PressScale cancelScale = PressScale.control();
+    private final PressScale confirmScale = PressScale.control();
     /** Hit box of the copyable hex value; refreshed while rendering. */
     private float hexHitX;
     private float hexHitY;
@@ -154,6 +160,20 @@ public final class ColorPickerOverlay {
         float dx = vmx - cx;
         float dy = vmy - btnCy(panel);
         return dx * dx + dy * dy <= r * r;
+    }
+
+    /** SV-square hit box. The bounce is draw-only, so this stays unscaled. */
+    private boolean overSv(float vmx, float vmy, UiLayout.Rect panel) {
+        Rect sv = svRect(panel);
+        return vmx >= sv.getLeft() && vmx <= sv.getRight()
+                && vmy >= sv.getTop() && vmy <= sv.getBottom();
+    }
+
+    /** Hue-bar hit box, including the grab margin the click already tolerates. */
+    private boolean overHue(float vmx, float vmy, UiLayout.Rect panel) {
+        Rect bar = hueRect(panel);
+        return vmx >= bar.getLeft() && vmx <= bar.getRight()
+                && vmy >= bar.getTop() - s(6) && vmy <= bar.getBottom() + s(6);
     }
 
     // ------------------------------ hex input -------------------------------
@@ -309,15 +329,14 @@ public final class ColorPickerOverlay {
             blurInput();
         }
         Rect sv = svRect(panel);
-        if (vmx >= sv.getLeft() && vmx <= sv.getRight() && vmy >= sv.getTop() && vmy <= sv.getBottom()) {
+        if (overSv(vmx, vmy, panel)) {
             sat = clamp01((vmx - sv.getLeft()) / sv.getWidth());
             bri = clamp01(1.0F - (vmy - sv.getTop()) / sv.getHeight());
             dragMode = 0;
             return;
         }
         Rect hueBar = hueRect(panel);
-        if (vmx >= hueBar.getLeft() && vmx <= hueBar.getRight()
-                && vmy >= hueBar.getTop() - s(6) && vmy <= hueBar.getBottom() + s(6)) {
+        if (overHue(vmx, vmy, panel)) {
             hue = clamp01((vmx - hueBar.getLeft()) / hueBar.getWidth());
             dragMode = 1;
         }
@@ -447,9 +466,15 @@ public final class ColorPickerOverlay {
             // SV cursor.
             float px = sv.getLeft() + sat * sv.getWidth();
             float py = sv.getTop() + (1.0F - bri) * sv.getHeight();
+            // Only the knob bounces. The square under it is the drag surface, and
+            // scaling that would slide the colour under the pointer mid-gesture.
+            svKnobScale.update(overSv(vmx, vmy, panel), dragMode == 0, dt, Animations.enabled());
+            svKnobScale.begin(canvas, px, py);
             try (Paint cursor = new Paint().setColor(0xFFFFFFFF).setMode(PaintMode.STROKE)
                     .setStrokeWidth(s(2)).setAntiAlias(true)) {
                 canvas.drawOval(Rect.makeXYWH(px - s(7), py - s(7), s(14), s(14)), cursor);
+            } finally {
+                canvas.restore();
             }
             canvas.restore();
 
@@ -463,10 +488,16 @@ public final class ColorPickerOverlay {
                 canvas.drawRect(hueBar, p);
             }
             float hx = hueBar.getLeft() + hue * hueBar.getWidth();
+            float hueCy = hueBar.getTop() + hueBar.getHeight() / 2.0F;
+            // Same rule as the SV knob: the rainbow track is the drag surface and
+            // stays put while the knob breathes.
+            hueKnobScale.update(overHue(vmx, vmy, panel), dragMode == 1, dt, Animations.enabled());
+            hueKnobScale.begin(canvas, hx, hueCy);
             try (Paint cursor = new Paint().setColor(0xFFFFFFFF).setMode(PaintMode.STROKE)
                     .setStrokeWidth(s(2)).setAntiAlias(true)) {
-                canvas.drawOval(Rect.makeXYWH(hx - s(6), hueBar.getTop() + hueBar.getHeight() / 2.0F - s(6),
-                        s(12), s(12)), cursor);
+                canvas.drawOval(Rect.makeXYWH(hx - s(6), hueCy - s(6), s(12), s(12)), cursor);
+            } finally {
+                canvas.restore();
             }
             canvas.restore();
 
@@ -508,11 +539,27 @@ public final class ColorPickerOverlay {
                         Color.makeARGB(alpha, 235, 238, 245));
             }
 
-            // Confirm / cancel round buttons.
-            drawRoundButton(canvas, cancelCx(panel), btnCy(panel),
-                    AppIcons.ICON_CLOSE_PATH, btnHoverClose, alpha);
-            drawRoundButton(canvas, confirmCx(panel), btnCy(panel),
-                    AppIcons.ICON_CHECK_PATH, btnHoverCheck, alpha);
+            // Confirm / cancel round buttons. A click here applies or discards at
+            // once and never holds a press, so these only breathe on hover.
+            float cxCancel = cancelCx(panel);
+            float cxConfirm = confirmCx(panel);
+            float cyButtons = btnCy(panel);
+            cancelScale.update(inButton(vmx, vmy, cxCancel, panel), false, dt, Animations.enabled());
+            confirmScale.update(inButton(vmx, vmy, cxConfirm, panel), false, dt, Animations.enabled());
+            cancelScale.begin(canvas, cxCancel, cyButtons);
+            try {
+                drawRoundButton(canvas, cxCancel, cyButtons,
+                        AppIcons.ICON_CLOSE_PATH, btnHoverClose, alpha);
+            } finally {
+                canvas.restore();
+            }
+            confirmScale.begin(canvas, cxConfirm, cyButtons);
+            try {
+                drawRoundButton(canvas, cxConfirm, cyButtons,
+                        AppIcons.ICON_CHECK_PATH, btnHoverCheck, alpha);
+            } finally {
+                canvas.restore();
+            }
         } finally {
             canvas.restore();
         }

@@ -10,7 +10,9 @@ import com.atom.chat.image.PlayerAvatar;
 import com.atom.chat.render.SkiaDraw;
 import com.atom.chat.render.SkiaFontRenderer;
 import com.atom.chat.settings.SettingsSectionPage;
+import com.atom.chat.ui.Animations;
 import com.atom.chat.ui.AppIcons;
+import com.atom.chat.ui.PressScale;
 import com.atom.chat.ui.UiCards;
 import com.atom.chat.ui.UiLayout;
 import com.atom.chat.ui.UiMotion;
@@ -39,7 +41,9 @@ import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * QQ-style conversation list root page: Public is always first, then every
@@ -65,6 +69,24 @@ public final class ConversationListPage {
             .thenComparing(r -> r.latest() == null ? r.title().toLowerCase(java.util.Locale.ROOT) : "");
 
     private final PageHost host;
+
+    /**
+     * One bounce spring per row index. {@link #rowHover} gets away with one
+     * shared scalar because only one row can carry the wash at a time, but a
+     * spring has to hold its own value while it settles, so rows cannot share
+     * one - hence a map grown on demand instead of a scalar field.
+     */
+    private final Map<Integer, PressScale> rowScale = new HashMap<>();
+    /**
+     * Row of the last click, still inside the pressed phase of its bounce. A row
+     * click opens the conversation immediately, so no release ever reaches this
+     * page; the dip is therefore a one-shot pulse timed here rather than a state
+     * the shell has to hold - the same model {@code EmojiPanel} uses for its
+     * cells, which have the same fire-and-forget click.
+     */
+    private int pressedRow = -1;
+    private long pressedRowAtMs;
+    private static final long ROW_PULSE_MS = 110;
     private float rowHover;
     /** Row the current {@link #rowHover} alpha belongs to; fades out on exit. */
     private int hoverRowIndex = -1;
@@ -266,8 +288,10 @@ public final class ConversationListPage {
                         }
                         // Animated value only — see drawRow; forcing 1 while hovered
                         // is what made the highlight snap in instead of fading.
+                        boolean pulsing = pressedRow == i
+                                && System.currentTimeMillis() - pressedRowAtMs < ROW_PULSE_MS;
                         drawRow(canvas, row, layout.list.x(), y, layout.list.w(),
-                                i == hoverRowIndex ? rowHover : 0.0F, i);
+                                i == hoverRowIndex ? rowHover : 0.0F, i, over, pulsing, dt);
                         if (row.kind() == RowKind.PUBLIC) {
                             emptyTop = y + h + ROW_GAP;
                         }
@@ -333,12 +357,51 @@ public final class ConversationListPage {
         return null;
     }
 
-    /** Draws one row; {@code hoverAlpha} is the animated 0..1 highlight. */
-    private void drawRow(Canvas canvas, Row row, float x, float y, float w, float hoverAlpha, int index) {
-        if (row.blocked()) {
-            drawBlockedRow(canvas, row, x, y, w, hoverAlpha);
-        } else {
-            drawNormalRow(canvas, row, x, y, w, hoverAlpha);
+    /**
+     * Arms the pressed dip for one row. Called by the screen from the same
+     * unscaled {@link #hit} the click used, so the spring can never land on a
+     * neighbouring row.
+     */
+    public void pulseRow(int index) {
+        pressedRow = index;
+        pressedRowAtMs = System.currentTimeMillis();
+    }
+
+    /**
+     * Draws one row; {@code hoverAlpha} is the animated 0..1 highlight and
+     * {@code hovered} is this frame's unscaled hit - the bounce is draw-only,
+     * so {@link #hit} keeps testing the rect the row actually occupies.
+     *
+     * <p>Hover scales this row (compact: 1.04, settling to 0.95 while a press is
+     * held). {@code PressScale.row()} would pin hover to 1.0 and leave the row
+     * motionless, which is what a list needs to avoid between stacked cards -
+     * but a conversation row is the whole target and the list is spaced by
+     * {@link UiTokens#LIST_GAP}, so the lift has room.</p>
+     */
+    private void drawRow(Canvas canvas, Row row, float x, float y, float w, float hoverAlpha,
+                         int index, boolean hovered, boolean pressed, float dtMs) {
+        PressScale bounce = rowScale.computeIfAbsent(index, k -> PressScale.compact());
+        bounce.update(hovered, pressed, dtMs, Animations.enabled());
+        float bounceScale = bounce.scale();
+        // Pivot on the row's own centre so a scaling row never shifts its
+        // neighbours, and pair save/restore through finally so a throw out of
+        // the draw layer cannot leak the matrix into the rest of the frame.
+        canvas.save();
+        try {
+            if (bounceScale != 1.0F) {
+                float cx = x + w / 2.0F;
+                float cy = y + ROW_H / 2.0F;
+                canvas.translate(cx, cy);
+                canvas.scale(bounceScale, bounceScale);
+                canvas.translate(-cx, -cy);
+            }
+            if (row.blocked()) {
+                drawBlockedRow(canvas, row, x, y, w, hoverAlpha);
+            } else {
+                drawNormalRow(canvas, row, x, y, w, hoverAlpha);
+            }
+        } finally {
+            canvas.restore();
         }
     }
 

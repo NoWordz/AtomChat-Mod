@@ -9,6 +9,7 @@ import com.atom.chat.render.SkiaFontRenderer;
 import com.atom.chat.ui.Animations;
 import com.atom.chat.ui.AppIcons;
 import com.atom.chat.ui.UiLayout;
+import com.atom.chat.ui.PressScale;
 import com.atom.chat.ui.UiMotion;
 import com.atom.chat.ui.UiTokens;
 import io.github.humbleui.skija.Canvas;
@@ -84,15 +85,34 @@ public final class ProfilePage {
     private long lastFrameMs = System.currentTimeMillis();
     private float avatarHover;
     private float badgeHover;
+    /**
+     * Bounce for the avatar and its edit badge: both are discrete taps, so
+     * they take the full control lift. Draw-only, like every other scale on
+     * this page - the hit-tests keep using the unscaled rects.
+     */
+    private final PressScale avatarScale = PressScale.control();
+    private final PressScale badgeScale = PressScale.control();
     private float rowHover;
     /** Row the current {@link #rowHover} alpha belongs to; fades out on exit. */
     private int hoverRowIndex = -1;
+    /**
+     * Per-row and per-tile bounce, keyed by index. A full-width row that grew
+     * on hover would read as jitter, so these take the press-only row spring
+     * and their hover target stays 1.0. No pressed control is reported to this
+     * page yet (the shell hands a press window only to the settings page), so
+     * both springs rest at 1.0 until one is.
+     */
+    private final java.util.Map<Integer, PressScale> rowScale = new java.util.HashMap<>();
     private final float[] menuItemHover = new float[2];
+    /** Per-item menu bounce, indexed like {@link #menuItemHover}. */
+    private final PressScale[] menuItemScale = {PressScale.control(), PressScale.control()};
     private static int accentColor() {
         return com.atom.chat.config.AtomChatConfig.get().accentColor;
     }
     /** Per-row/tile copy-button hover alpha (key: row index, 100+i = tile index). */
     private final java.util.Map<Integer, Float> copyHover = new java.util.HashMap<>();
+    /** Copy-button bounce, keyed exactly like {@link #copyHover}. */
+    private final java.util.Map<Integer, PressScale> copyScale = new java.util.HashMap<>();
     /** Copy feedback: which button shows the check and until when. */
     private long copiedUntil;
     private int copiedKey = -1;
@@ -135,59 +155,66 @@ public final class ProfilePage {
         float alpha = copyHover.computeIfAbsent(index, k -> 0.0F);
         alpha = UiMotion.approach(alpha, hovered ? 1.0F : 0.0F, dtMs, UiMotion.HOVER_MS);
         copyHover.put(index, alpha);
-        if (alpha > 0.01F) {
-            float inset = s(3);
-            // Selection language (white 90) rather than the row-wash white 45:
-            // the button sits inside a highlighted row, so a 45-on-45 wash is
-            // invisible — the reason hover feedback looked missing entirely.
-            SkiaDraw.drawRoundedRect(canvas, button.x() + inset, button.y() + inset,
-                    button.w() - inset * 2.0F, button.h() - inset * 2.0F, UiTokens.radius(8),
-                    Color.makeARGB((int) (90.0F * alpha), 255, 255, 255));
-        }
-        int iconColor = Color.makeARGB((int) (210.0F + 45.0F * alpha), 255, 255, 255);
-        float cx = button.x() + button.w() / 2.0F;
-        float cy = button.y() + button.h() / 2.0F;
-        if (copied) {
-            // Check glyph centred, then the hint hugs it with a fixed 4px gap.
-            io.github.humbleui.skija.Path check = com.atom.chat.ui.AppIcons.ICON_CHECK_PATH;
-            Rect b = check.getBounds();
-            float sc = s(12) / Math.max(b.getWidth(), b.getHeight());
+        PressScale copyPress = copyScale.computeIfAbsent(index, k -> PressScale.control());
+        copyPress.update(hovered, false, dtMs, Animations.enabled());
+        copyPress.begin(canvas, button.x() + button.w() / 2.0F, button.y() + button.h() / 2.0F);
+        try {
+            if (alpha > 0.01F) {
+                float inset = s(3);
+                // Selection language (white 90) rather than the row-wash white 45:
+                // the button sits inside a highlighted row, so a 45-on-45 wash is
+                // invisible — the reason hover feedback looked missing entirely.
+                SkiaDraw.drawRoundedRect(canvas, button.x() + inset, button.y() + inset,
+                        button.w() - inset * 2.0F, button.h() - inset * 2.0F, UiTokens.radius(8),
+                        Color.makeARGB((int) (90.0F * alpha), 255, 255, 255));
+            }
+            int iconColor = Color.makeARGB((int) (210.0F + 45.0F * alpha), 255, 255, 255);
+            float cx = button.x() + button.w() / 2.0F;
+            float cy = button.y() + button.h() / 2.0F;
+            if (copied) {
+                // Check glyph centred, then the hint hugs it with a fixed 4px gap.
+                io.github.humbleui.skija.Path check = com.atom.chat.ui.AppIcons.ICON_CHECK_PATH;
+                Rect b = check.getBounds();
+                float sc = s(12) / Math.max(b.getWidth(), b.getHeight());
+                try (Paint paint = new Paint().setAntiAlias(true)
+                        .setColor(accentColor())
+                        .setMode(PaintMode.STROKE)
+                        // The canvas scales after the paint is built: divide the
+                        // stroke by the scale or the glyph draws ~1.4x too thick.
+                        .setStrokeWidth(s(1.8F) / sc)
+                        .setStrokeCap(PaintStrokeCap.ROUND)
+                        .setStrokeJoin(PaintStrokeJoin.ROUND)) {
+                    canvas.save();
+                    canvas.translate(cx - (b.getLeft() + b.getRight()) / 2.0F * sc,
+                            cy - (b.getTop() + b.getBottom()) / 2.0F * sc);
+                    canvas.scale(sc, sc);
+                    canvas.drawPath(check, paint);
+                    canvas.restore();
+                }
+                Font hintFont = FontManager.font(UiTokens.PROFILE_TILE_LABEL_FONT);
+                SkiaFontRenderer.drawText(canvas, hintFont, tr("atomchat.settings.color.copied"),
+                        cx + s(12) / 2.0F + s(4),
+                        SkiaFontRenderer.centerBaselineY(hintFont, cy),
+                        accentColor());
+                return;
+            }
             try (Paint paint = new Paint().setAntiAlias(true)
-                    .setColor(accentColor())
+                    .setColor(iconColor)
                     .setMode(PaintMode.STROKE)
-                    // The canvas scales after the paint is built: divide the
-                    // stroke by the scale or the glyph draws ~1.4x too thick.
-                    .setStrokeWidth(s(1.8F) / sc)
+                    // Same scale compensation as the check glyph above: the canvas
+                    // scale would otherwise fatten the 1.5-unit stroke to ~2.2.
+                    .setStrokeWidth(s(1.5F) / (s(13) / COPY_GLYPH_UNITS))
                     .setStrokeCap(PaintStrokeCap.ROUND)
                     .setStrokeJoin(PaintStrokeJoin.ROUND)) {
                 canvas.save();
-                canvas.translate(cx - (b.getLeft() + b.getRight()) / 2.0F * sc,
-                        cy - (b.getTop() + b.getBottom()) / 2.0F * sc);
+                float sc = s(13) / COPY_GLYPH_UNITS;
+                canvas.translate(cx - COPY_GLYPH_UNITS / 2.0F * sc,
+                        cy - COPY_GLYPH_UNITS / 2.0F * sc);
                 canvas.scale(sc, sc);
-                canvas.drawPath(check, paint);
+                canvas.drawPath(ROW_COPY_ICON, paint);
                 canvas.restore();
             }
-            Font hintFont = FontManager.font(UiTokens.PROFILE_TILE_LABEL_FONT);
-            SkiaFontRenderer.drawText(canvas, hintFont, tr("atomchat.settings.color.copied"),
-                    cx + s(12) / 2.0F + s(4),
-                    SkiaFontRenderer.centerBaselineY(hintFont, cy),
-                    accentColor());
-            return;
-        }
-        try (Paint paint = new Paint().setAntiAlias(true)
-                .setColor(iconColor)
-                .setMode(PaintMode.STROKE)
-                // Same scale compensation as the check glyph above: the canvas
-                // scale would otherwise fatten the 1.5-unit stroke to ~2.2.
-                .setStrokeWidth(s(1.5F) / (s(13) / COPY_GLYPH_UNITS))
-                .setStrokeCap(PaintStrokeCap.ROUND)
-                .setStrokeJoin(PaintStrokeJoin.ROUND)) {
-            canvas.save();
-            float sc = s(13) / COPY_GLYPH_UNITS;
-            canvas.translate(cx - COPY_GLYPH_UNITS / 2.0F * sc,
-                    cy - COPY_GLYPH_UNITS / 2.0F * sc);
-            canvas.scale(sc, sc);
-            canvas.drawPath(ROW_COPY_ICON, paint);
+        } finally {
             canvas.restore();
         }
     }
@@ -604,12 +631,17 @@ public final class ProfilePage {
         boolean overBadge = badge.contains(vmx, vmy);
         avatarHover = UiMotion.approach(avatarHover, overAvatar ? 1.0F : 0.0F, dt, UiMotion.HOVER_MS);
         badgeHover = UiMotion.approach(badgeHover, overBadge ? 1.0F : 0.0F, dt, UiMotion.HOVER_MS);
+        // Every bounce below passes pressed = false: this page is never told
+        // which control is held down, so the hover lift is the only live half
+        // of the language here and the press dip stays dormant.
+        avatarScale.update(overAvatar && subjectIsSelf(), false, dt, Animations.enabled());
+        badgeScale.update(overBadge && subjectIsSelf(), false, dt, Animations.enabled());
         int hovered = -1;
         List<InfoRow> rows = infoRows();
         for (int i = 0; i < rows.size(); i++) {
-            if (rowRect(layout, i, scrollY).contains(vmx, vmy)) {
+            boolean over = rowRect(layout, i, scrollY).contains(vmx, vmy);
+            if (over) {
                 hovered = i;
-                break;
             }
         }
         if (hovered != hoverRowIndex) {
@@ -621,6 +653,7 @@ public final class ProfilePage {
             boolean over = avatarMenuOpen && enabled
                     && menuItemRect(layout, scrollY, i).contains(vmx, vmy);
             menuItemHover[i] = UiMotion.approach(menuItemHover[i], over ? 1.0F : 0.0F, dt, UiMotion.HOVER_MS);
+            menuItemScale[i].update(over, false, dt, Animations.enabled());
         }
         // Popup fade respects the decorative-motion switch like every other
         // overlay: when animations are off the duration is 0 and the menu
@@ -643,35 +676,45 @@ public final class ProfilePage {
         // set (decoded off-thread; the skin shows while the decode is in
         // flight), the real skin otherwise — PlayerAvatar owns that chain.
         UiLayout.Rect avatar = avatarRect(layout, scrollY);
-        Image face = PlayerAvatar.face(subjectUuid(), subjectName());
-        if (face != null) {
-            SkiaDraw.drawRoundedImage(canvas, face, avatar.x(), avatar.y(), avatar.w(), avatar.h(),
-                    avatar.w() / 2.0F, SamplingMode.LINEAR);
-        } else {
-            SkiaDraw.drawRoundedRect(canvas, avatar.x(), avatar.y(), avatar.w(), avatar.h(),
-                    avatar.w() / 2.0F, Color.makeARGB(255, 120, 130, 145));
-        }
-        // Hover feedback regardless of whether an avatar is set: with no
-        // custom avatar the tap opens the picker directly, so the affordance
-        // must not vanish exactly when the avatar is clickable.
-        if (avatarHover > 0.01F && subjectIsSelf()) {
-            SkiaDraw.drawRoundedRect(canvas, avatar.x(), avatar.y(), avatar.w(), avatar.h(),
-                    avatar.w() / 2.0F, Color.makeARGB((int) (40.0F * avatarHover), 255, 255, 255));
+        avatarScale.begin(canvas, avatar.x() + avatar.w() / 2.0F, avatar.y() + avatar.h() / 2.0F);
+        try {
+            Image face = PlayerAvatar.face(subjectUuid(), subjectName());
+            if (face != null) {
+                SkiaDraw.drawRoundedImage(canvas, face, avatar.x(), avatar.y(), avatar.w(), avatar.h(),
+                        avatar.w() / 2.0F, SamplingMode.LINEAR);
+            } else {
+                SkiaDraw.drawRoundedRect(canvas, avatar.x(), avatar.y(), avatar.w(), avatar.h(),
+                        avatar.w() / 2.0F, Color.makeARGB(255, 120, 130, 145));
+            }
+            // Hover feedback regardless of whether an avatar is set: with no
+            // custom avatar the tap opens the picker directly, so the affordance
+            // must not vanish exactly when the avatar is clickable.
+            if (avatarHover > 0.01F && subjectIsSelf()) {
+                SkiaDraw.drawRoundedRect(canvas, avatar.x(), avatar.y(), avatar.w(), avatar.h(),
+                        avatar.w() / 2.0F, Color.makeARGB((int) (40.0F * avatarHover), 255, 255, 255));
+            }
+        } finally {
+            canvas.restore();
         }
 
         // Persistent edit badge at the avatar's bottom-right; only the local
         // player's avatar is editable.
         if (subjectIsSelf()) {
             UiLayout.Rect badge = badgeRect(layout, scrollY);
-            SkiaDraw.drawRoundedRect(canvas, badge.x(), badge.y(), badge.w(), badge.h(),
-                    badge.w() / 2.0F, Color.makeARGB(215, 20, 22, 30));
-            if (badgeHover > 0.01F) {
+            badgeScale.begin(canvas, badge.x() + badge.w() / 2.0F, badge.y() + badge.h() / 2.0F);
+            try {
                 SkiaDraw.drawRoundedRect(canvas, badge.x(), badge.y(), badge.w(), badge.h(),
-                        badge.w() / 2.0F, Color.makeARGB((int) (60.0F * badgeHover), 255, 255, 255));
+                        badge.w() / 2.0F, Color.makeARGB(215, 20, 22, 30));
+                if (badgeHover > 0.01F) {
+                    SkiaDraw.drawRoundedRect(canvas, badge.x(), badge.y(), badge.w(), badge.h(),
+                            badge.w() / 2.0F, Color.makeARGB((int) (60.0F * badgeHover), 255, 255, 255));
+                }
+                drawIconCentered(canvas, AppIcons.ICON_EDIT_PATH,
+                        badge.x() + badge.w() / 2.0F, badge.y() + badge.h() / 2.0F,
+                        UiTokens.PROFILE_EDIT_BADGE * 0.55F, Color.makeARGB(255, 255, 255, 255));
+            } finally {
+                canvas.restore();
             }
-            drawIconCentered(canvas, AppIcons.ICON_EDIT_PATH,
-                    badge.x() + badge.w() / 2.0F, badge.y() + badge.h() / 2.0F,
-                    UiTokens.PROFILE_EDIT_BADGE * 0.55F, Color.makeARGB(255, 255, 255, 255));
         }
 
         // Name under the avatar.
@@ -692,6 +735,9 @@ public final class ProfilePage {
             if (tile.bottom() < layout.list.y() || tile.y() > layout.list.bottom()) {
                 continue;
             }
+            // Tiles have no hit test of their own (onClick owns the avatar, the
+            // badge, the menu and the copy buttons), so they carry no bounce: a
+            // spring here would promise a press the page never handles.
             SkiaDraw.drawRoundedRect(canvas, tile.x(), tile.y(), tile.w(), tile.h(),
                     UiTokens.profileRowRadius(), UiTokens.cardFill());
             SkiaDraw.drawEdgeHighlight(canvas, tile.x(), tile.y(), tile.w(), tile.h(),
@@ -715,31 +761,44 @@ public final class ProfilePage {
             if (row.bottom() < layout.list.y() || row.y() > layout.list.bottom()) {
                 continue;
             }
-            SkiaDraw.drawRoundedRect(canvas, row.x(), row.y(), row.w(), row.h(),
-                    UiTokens.profileRowRadius(), UiTokens.cardFill());
-            SkiaDraw.drawEdgeHighlight(canvas, row.x(), row.y(), row.w(), row.h(),
-                    UiTokens.profileRowRadius(), s(1.2F), UiTokens.CARD_EDGE);
-            if (rowHover > 0.01F && i == hoverRowIndex) {
+            // Info rows are a full-width stack: the lift is compact (1.04) rather
+            // than control's 1.08, which would close the gap to the row above and
+            // below. row() would leave it at rest on hover, which is the motion a
+            // list needs between stacked cards but the wrong answer for a row the
+            // pointer is deliberately resting on.
+            PressScale rowPress = rowScale.computeIfAbsent(i, k -> PressScale.compact());
+            rowPress.update(rowHover > 0.01F && i == hoverRowIndex, false, lastDtMs,
+                    Animations.enabled());
+            rowPress.begin(canvas, row.x() + row.w() / 2.0F, row.y() + row.h() / 2.0F);
+            try {
                 SkiaDraw.drawRoundedRect(canvas, row.x(), row.y(), row.w(), row.h(),
-                        UiTokens.profileRowRadius(), UiTokens.cardHover(rowHover));
-            }
-            float cy = row.y() + row.h() / 2.0F;
-            SkiaFontRenderer.drawText(canvas, labelFont, rows.get(i).label(),
-                    row.x() + UiTokens.PROFILE_ROW_PAD,
-                    SkiaFontRenderer.centerBaselineY(labelFont, cy),
-                    textPrimary());
-            String value = rows.get(i).value();
-            float valueMaxW = row.w() - UiTokens.PROFILE_ROW_PAD * 2
-                    - SkiaFontRenderer.getStringWidth(labelFont, rows.get(i).label());
-            // drawTextRight already centres on cy internally — passing a
-            // pre-converted baseline double-converts and draws the text high.
-            SkiaFontRenderer.drawTextRight(canvas, valueFont,
-                    SkiaFontRenderer.truncate(valueFont, value, Math.max(s(24), valueMaxW)),
-                    row.right() - UiTokens.PROFILE_ROW_PAD,
-                    cy,
-                    textPrimary());
-            if (i < COPY_ROWS) {
-                drawCopyButton(canvas, layout, i, scrollY, lastDtMs);
+                        UiTokens.profileRowRadius(), UiTokens.cardFill());
+                SkiaDraw.drawEdgeHighlight(canvas, row.x(), row.y(), row.w(), row.h(),
+                        UiTokens.profileRowRadius(), s(1.2F), UiTokens.CARD_EDGE);
+                if (rowHover > 0.01F && i == hoverRowIndex) {
+                    SkiaDraw.drawRoundedRect(canvas, row.x(), row.y(), row.w(), row.h(),
+                            UiTokens.profileRowRadius(), UiTokens.cardHover(rowHover));
+                }
+                float cy = row.y() + row.h() / 2.0F;
+                SkiaFontRenderer.drawText(canvas, labelFont, rows.get(i).label(),
+                        row.x() + UiTokens.PROFILE_ROW_PAD,
+                        SkiaFontRenderer.centerBaselineY(labelFont, cy),
+                        textPrimary());
+                String value = rows.get(i).value();
+                float valueMaxW = row.w() - UiTokens.PROFILE_ROW_PAD * 2
+                        - SkiaFontRenderer.getStringWidth(labelFont, rows.get(i).label());
+                // drawTextRight already centres on cy internally — passing a
+                // pre-converted baseline double-converts and draws the text high.
+                SkiaFontRenderer.drawTextRight(canvas, valueFont,
+                        SkiaFontRenderer.truncate(valueFont, value, Math.max(s(24), valueMaxW)),
+                        row.right() - UiTokens.PROFILE_ROW_PAD,
+                        cy,
+                        textPrimary());
+                if (i < COPY_ROWS) {
+                    drawCopyButton(canvas, layout, i, scrollY, lastDtMs);
+                }
+            } finally {
+                canvas.restore();
             }
         }
     }
@@ -776,27 +835,34 @@ public final class ProfilePage {
                     s(10), Color.makeARGB(245, 35, 39, 47));
             for (int i = 0; i < labels.length; i++) {
                 float rowY = menu.y() + i * rowH;
-                if (menuItemHover[i] > 0.01F) {
-                    // Uniform s(4) inset on every side of the row capsule, the
-                    // exact hover language of the bubble context menu.
-                    SkiaDraw.drawRoundedRect(canvas, menu.x() + s(4), rowY + s(4),
-                            menu.w() - s(8), rowH - s(8),
-                            s(6), Color.makeARGB((int) (55.0F * menuItemHover[i]), 255, 255, 255));
-                }
                 float cy = rowY + rowH / 2.0F;
-                boolean rowEnabled = i == 0 || clearEnabled;
-                int labelColor;
-                if (i == 1 && clearArmed) {
-                    labelColor = Color.makeARGB(255, 235, 64, 52);
-                } else if (!rowEnabled) {
-                    labelColor = Color.makeARGB(255, 130, 140, 155);
-                } else {
-                    labelColor = Color.makeARGB(255, 255, 255, 255);
+                // Each item bounces around its own rect centre, so the icon and
+                // label travel with the capsule instead of drifting out of it.
+                menuItemScale[i].begin(canvas, menu.x() + menu.w() / 2.0F, cy);
+                try {
+                    if (menuItemHover[i] > 0.01F) {
+                        // Uniform s(4) inset on every side of the row capsule, the
+                        // exact hover language of the bubble context menu.
+                        SkiaDraw.drawRoundedRect(canvas, menu.x() + s(4), rowY + s(4),
+                                menu.w() - s(8), rowH - s(8),
+                                s(6), Color.makeARGB((int) (55.0F * menuItemHover[i]), 255, 255, 255));
+                    }
+                    boolean rowEnabled = i == 0 || clearEnabled;
+                    int labelColor;
+                    if (i == 1 && clearArmed) {
+                        labelColor = Color.makeARGB(255, 235, 64, 52);
+                    } else if (!rowEnabled) {
+                        labelColor = Color.makeARGB(255, 130, 140, 155);
+                    } else {
+                        labelColor = Color.makeARGB(255, 255, 255, 255);
+                    }
+                    drawIconCentered(canvas, icons[i], menu.x() + s(18), cy,
+                            UiTokens.CONTEXT_ICON_SIZE, labelColor);
+                    SkiaFontRenderer.drawText(canvas, font, labels[i], menu.x() + s(36),
+                            SkiaFontRenderer.centerBaselineY(font, cy), labelColor);
+                } finally {
+                    canvas.restore();
                 }
-                drawIconCentered(canvas, icons[i], menu.x() + s(18), cy,
-                        UiTokens.CONTEXT_ICON_SIZE, labelColor);
-                SkiaFontRenderer.drawText(canvas, font, labels[i], menu.x() + s(36),
-                        SkiaFontRenderer.centerBaselineY(font, cy), labelColor);
             }
             // Close the saveLayer; the finally below closes the outer save().
             // A saveLayer per frame with no matching restore leaks one matrix

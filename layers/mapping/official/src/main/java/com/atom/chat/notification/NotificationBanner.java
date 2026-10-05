@@ -7,6 +7,8 @@ import com.atom.chat.image.PlayerAvatar;
 import com.atom.chat.render.Easing;
 import com.atom.chat.render.SkiaDraw;
 import com.atom.chat.render.SkiaFontRenderer;
+import com.atom.chat.ui.Animations;
+import com.atom.chat.ui.PressScale;
 import com.atom.chat.ui.UiMotion;
 import com.atom.chat.ui.UiTokens;
 import io.github.humbleui.skija.Canvas;
@@ -80,6 +82,8 @@ public final class NotificationBanner {
     /** Hover alphas, identity-keyed: two banners can carry equal data. */
     private final Map<Active, Float> hoverAlphas = new IdentityHashMap<>();
     private final Map<Active, Float> buttonHovers = new IdentityHashMap<>();
+    /** Send-button bounce, identity-keyed for the same reason as the hovers. */
+    private final Map<Active, PressScale> buttonScales = new IdentityHashMap<>();
     private long lastHoverMs;
 
     public record Active(Type type, String sender, String content, long born, ChatMessage message) {
@@ -98,6 +102,7 @@ public final class NotificationBanner {
             Active dropped = banners.remove(banners.size() - 1);
             hoverAlphas.remove(dropped);
             buttonHovers.remove(dropped);
+            buttonScales.remove(dropped);
         }
     }
 
@@ -114,6 +119,7 @@ public final class NotificationBanner {
                 it.remove();
                 hoverAlphas.remove(b);
                 buttonHovers.remove(b);
+                buttonScales.remove(b);
             }
         }
     }
@@ -186,7 +192,12 @@ public final class NotificationBanner {
             }
             float hover = advanceHover(hoverAlphas, b, b == hovered, hoverDt);
             float buttonHover = advanceHover(buttonHovers, b, b == hoveredButton, hoverDt);
-            drawBanner(canvas, b, x, drawY, bannerW, bannerH, alpha, hover, buttonHover);
+            // Advanced before the draw so the bounce lands on the frame it started
+            // in. The banner tracks no press state, so the dip never fires and the
+            // button only breathes on hover.
+            PressScale sendScale = buttonScales.computeIfAbsent(b, k -> PressScale.control());
+            sendScale.update(b == hoveredButton, false, hoverDt, Animations.enabled());
+            drawBanner(canvas, b, x, drawY, bannerW, bannerH, alpha, hover, buttonHover, sendScale);
             hitRects.add(new Hit(b, Rect.makeXYWH(x, drawY, bannerW, bannerH)));
             float btnX = x + bannerW - UiTokens.s(14) - BUTTON_SIZE;
             float btnY = drawY + (bannerH - BUTTON_SIZE) / 2.0F;
@@ -195,6 +206,7 @@ public final class NotificationBanner {
         }
         pruneHovers(hoverAlphas);
         pruneHovers(buttonHovers);
+        pruneHovers(buttonScales);
     }
 
     /** Which banner's send button is under this panel-space point, or {@code null}. */
@@ -231,6 +243,7 @@ public final class NotificationBanner {
         buttonRects.removeIf(h -> h.banner == banner);
         hoverAlphas.remove(banner);
         buttonHovers.remove(banner);
+        buttonScales.remove(banner);
     }
 
     private float advanceHover(Map<Active, Float> alphas, Active b, boolean on, float hoverDtMs) {
@@ -240,9 +253,9 @@ public final class NotificationBanner {
         return next;
     }
 
-    private void pruneHovers(Map<Active, Float> alphas) {
-        if (alphas.size() > MAX_STACK * 2) {
-            alphas.keySet().removeIf(b -> {
+    private void pruneHovers(Map<Active, ?> hoverStates) {
+        if (hoverStates.size() > MAX_STACK * 2) {
+            hoverStates.keySet().removeIf(b -> {
                 for (Active active : banners) {
                     if (active == b) {
                         return false;
@@ -254,7 +267,7 @@ public final class NotificationBanner {
     }
 
     private void drawBanner(Canvas canvas, Active b, float x, float y, float w, float h,
-                            float alpha, float hover, float buttonHover) {
+                            float alpha, float hover, float buttonHover, PressScale sendScale) {
         float radius = UiTokens.radius(12);
         // save() and saveLayer() push two entries; both must be popped. A missing
         // restore here leaked one matrix per frame and, combined with the
@@ -308,7 +321,15 @@ public final class NotificationBanner {
                         SkiaFontRenderer.truncate(bodyFont, preview, textW),
                         textX, SkiaFontRenderer.centerBaselineY(bodyFont, line2Y), config.textSecondaryColor);
 
-                drawRoundButton(canvas, btnX, btnY, BUTTON_SIZE, buttonHover);
+                // The whole control scales: fill, wash and glyph travel together.
+                // begin() keeps its save even at scale 1, so the restore below is
+                // always paired and the frame's save stack stays balanced.
+                sendScale.begin(canvas, btnX + BUTTON_SIZE / 2.0F, btnY + BUTTON_SIZE / 2.0F);
+                try {
+                    drawRoundButton(canvas, btnX, btnY, BUTTON_SIZE, buttonHover);
+                } finally {
+                    canvas.restore();
+                }
             } finally {
                 canvas.restore();
             }

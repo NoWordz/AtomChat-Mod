@@ -14,6 +14,7 @@ import net.minecraft.text.Text;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.function.IntSupplier;
@@ -68,6 +69,20 @@ public final class QuickPhrasePanel {
     private final IntSupplier accent;
     private final Map<Integer, Float> rowHover = new HashMap<>();
     private final Map<Integer, Float> btnHover = new HashMap<>();
+    // Per-cell press/hover bounce, keyed like the hover maps above: one spring per
+    // cell, never shared, so a row, its two icon keys and the add row each bounce
+    // on their own. Hit-testing keeps using the unscaled rects; the scale is
+    // draw-only, exactly like the emoji panel's cells.
+    private final Map<Integer, PressScale> cellScale = new HashMap<>();
+    /** Cell of the last click, still in the pressed phase of its pulse. */
+    private int pressedCellKey = -1;
+    private long pressedCellAtMs;
+    /** How long a click keeps its cell pressed before the spring returns. */
+    private static final long CELL_PULSE_MS = 110;
+    // Scale keys that live above the row positions, so the add row and a row's
+    // edit/delete key can never collide with the row index space.
+    private static final int ADD_CELL_KEY = 1 << 16;
+    private static final int ICON_CELL_KEY = 1 << 17;
     /** Highlight on the "add" row while a new phrase is being composed. */
     private float addHover;
 
@@ -195,6 +210,21 @@ public final class QuickPhrasePanel {
         return x >= r.getLeft() && x <= r.getRight() && y >= r.getTop() && y <= r.getBottom();
     }
 
+    /** Cell key of one edit/delete key, from btnHover's composite index. */
+    private static int iconCellKey(int btnKey) {
+        return ICON_CELL_KEY + btnKey;
+    }
+
+    /**
+     * Rows and the add row are capsules packed against the panel edge and against
+     * each other, so they take the compact tier - the one the project added for
+     * controls with no room to grow into. The edit/delete keys sit alone inside a
+     * row and take the full control bounce.
+     */
+    private static PressScale newCellScale(int key) {
+        return key >= ICON_CELL_KEY ? PressScale.control() : PressScale.compact();
+    }
+
     // ---- state ----
 
     public boolean isOpen() {
@@ -236,6 +266,8 @@ public final class QuickPhrasePanel {
         scroll = 0;
         rowHover.clear();
         btnHover.clear();
+        cellScale.clear();
+        pressedCellKey = -1;
     }
 
     public void update(long frameDt) {
@@ -252,6 +284,40 @@ public final class QuickPhrasePanel {
         for (Map.Entry<Integer, Float> e : btnHover.entrySet()) {
             e.setValue(UiMotion.approach(e.getValue(), e.getKey() == hoveredBtn ? 1.0F : 0.0F,
                     frameDt, UiMotion.HOVER_MS));
+        }
+        // The bounce rides the same per-frame pass as the fades above: one spring
+        // per cell, dropped again once it is at rest away from the pointer.
+        long now = System.currentTimeMillis();
+        boolean pulsing = pressedCellKey >= 0 && now - pressedCellAtMs < CELL_PULSE_MS;
+        int hoveredIconCell = hoveredBtn < 0 ? -1 : iconCellKey(hoveredBtn);
+        int hoveredAddCell = hoverAdd ? ADD_CELL_KEY : -1;
+        Iterator<Map.Entry<Integer, PressScale>> scaleIt = cellScale.entrySet().iterator();
+        while (scaleIt.hasNext()) {
+            Map.Entry<Integer, PressScale> e = scaleIt.next();
+            int key = e.getKey();
+            // An icon under the pointer is the target, so its row holds its resting
+            // size: letting both springs run would compound their growth on the key.
+            boolean over = key == hoveredIconCell || key == hoveredAddCell
+                    || (key == hoveredRow && hoveredBtn < 0);
+            PressScale ps = e.getValue();
+            ps.update(over, pulsing && key == pressedCellKey, frameDt, Animations.enabled());
+            if (!over && ps.isResting()) {
+                scaleIt.remove();
+            }
+        }
+        if (!pulsing) {
+            pressedCellKey = -1;
+        }
+        // The pointer can only hover one of each, so these are the only cells that
+        // can need a spring this frame.
+        if (hoveredRow >= 0 && !cellScale.containsKey(hoveredRow)) {
+            cellScale.put(hoveredRow, newCellScale(hoveredRow));
+        }
+        if (hoveredIconCell >= 0 && !cellScale.containsKey(hoveredIconCell)) {
+            cellScale.put(hoveredIconCell, newCellScale(hoveredIconCell));
+        }
+        if (hoveredAddCell >= 0 && !cellScale.containsKey(hoveredAddCell)) {
+            cellScale.put(hoveredAddCell, newCellScale(hoveredAddCell));
         }
     }
 
@@ -290,6 +356,12 @@ public final class QuickPhrasePanel {
         }
         AtomChatConfig.save(AtomChatConfig.get());
         scroll = Math.max(0, Math.min(maxScroll(), scroll));
+        // Every row below the removed one shifts up, so a highlight or a spring
+        // keyed to a position would otherwise land on a different phrase.
+        rowHover.clear();
+        btnHover.clear();
+        cellScale.clear();
+        pressedCellKey = -1;
     }
 
     /** Commits composer text as a new phrase or an edit of {@code editingIndex}. */
@@ -344,6 +416,7 @@ public final class QuickPhrasePanel {
     public Action click(UiLayout layout, double mx, double my) {
         Rect addRow = addRowRect(layout);
         if (contains(addRow, (float) mx, (float) my)) {
+            pulseCell(ADD_CELL_KEY);
             return new Action(Action.ADD, 0);
         }
         int local = phrases().size();
@@ -359,15 +432,19 @@ public final class QuickPhrasePanel {
             switch (rowKind(position)) {
                 case ROW_LOCAL -> {
                     if (contains(btnRect(r, 1), (float) mx, (float) my)) {
+                        pulseCell(iconCellKey(position * 2 + 1));
                         return new Action(Action.DELETE, position);
                     }
                     if (contains(btnRect(r, 0), (float) mx, (float) my)) {
+                        pulseCell(iconCellKey(position * 2));
                         return new Action(Action.EDIT, position);
                     }
+                    pulseCell(position);
                     return new Action(Action.INSERT, position);
                 }
                 // The server's rows carry no buttons: they can be sent, not edited.
                 case ROW_SERVER -> {
+                    pulseCell(position);
                     return new Action(Action.INSERT_SERVER, position - local - 1);
                 }
                 default -> {
@@ -376,6 +453,20 @@ public final class QuickPhrasePanel {
             }
         }
         return new Action(Action.NONE, 0);
+    }
+
+    /**
+     * Click feedback: hold the cell pressed for a beat, then spring back. The
+     * release that would end a held press never reaches the panel - the screen
+     * acts on the returned {@link Action} straight away - so the press is a
+     * one-shot pulse, like the emoji panel's cells.
+     */
+    private void pulseCell(int key) {
+        pressedCellKey = key;
+        pressedCellAtMs = System.currentTimeMillis();
+        if (!cellScale.containsKey(key)) {
+            cellScale.put(key, newCellScale(key));
+        }
     }
 
     /** Called every frame with the virtual cursor so hover capsules can fade. */
@@ -463,10 +554,35 @@ public final class QuickPhrasePanel {
                     break;
                 }
                 Rect r = rowRect(layout, i);
-                drawRow(canvas, r, font, position);
+                // The bounce wraps the whole cell, capsule, ring and glyphs drawn
+                // together inside one save/restore. The group label is not a target,
+                // so it is the one row that never carries a spring.
+                PressScale ps = rowKind(position) == ROW_HEADER ? null : cellScale.get(position);
+                if (ps != null) {
+                    ps.begin(canvas, r.getLeft() + r.getWidth() / 2.0F, r.getTop() + r.getHeight() / 2.0F);
+                }
+                try {
+                    drawRow(canvas, r, font, position);
+                } finally {
+                    if (ps != null) {
+                        canvas.restore();
+                    }
+                }
             }
 
-            drawAddRow(canvas, layout, font);
+            PressScale addScale = cellScale.get(ADD_CELL_KEY);
+            if (addScale != null) {
+                Rect addRect = addRowRect(layout);
+                addScale.begin(canvas, addRect.getLeft() + addRect.getWidth() / 2.0F,
+                        addRect.getTop() + addRect.getHeight() / 2.0F);
+            }
+            try {
+                drawAddRow(canvas, layout, font);
+            } finally {
+                if (addScale != null) {
+                    canvas.restore();
+                }
+            }
             // Close the saveLayer; the finally below closes the outer save().
             canvas.restore();
         } finally {
@@ -524,14 +640,27 @@ public final class QuickPhrasePanel {
         Path[] icons = {AppIcons.ICON_EDIT_PATH, AppIcons.ICON_CLOSE_PATH};
         for (int b = 0; b < 2; b++) {
             Rect hit = btnRect(r, b);
-            float a = btnHover.getOrDefault(index * 2 + b, 0.0F);
-            if (a > 0.01F) {
-                SkiaDraw.drawRoundedRect(canvas, hit.getLeft() + s(3), hit.getTop() + s(3),
-                        hit.getWidth() - s(6), hit.getHeight() - s(6), s(6),
-                        Color.makeARGB((int) (55.0F * a), 255, 255, 255));
+            float bx = (hit.getLeft() + hit.getRight()) / 2.0F;
+            float by = (hit.getTop() + hit.getBottom()) / 2.0F;
+            // Each icon key is a cell of its own, so it bounces inside the row it
+            // sits in rather than riding the row's spring.
+            PressScale ps = cellScale.get(iconCellKey(index * 2 + b));
+            if (ps != null) {
+                ps.begin(canvas, bx, by);
             }
-            drawIconCentered(canvas, icons[b], (hit.getLeft() + hit.getRight()) / 2.0F,
-                    (hit.getTop() + hit.getBottom()) / 2.0F, UiTokens.CONTEXT_ICON_SIZE, TEXT);
+            try {
+                float a = btnHover.getOrDefault(index * 2 + b, 0.0F);
+                if (a > 0.01F) {
+                    SkiaDraw.drawRoundedRect(canvas, hit.getLeft() + s(3), hit.getTop() + s(3),
+                            hit.getWidth() - s(6), hit.getHeight() - s(6), s(6),
+                            Color.makeARGB((int) (55.0F * a), 255, 255, 255));
+                }
+                drawIconCentered(canvas, icons[b], bx, by, UiTokens.CONTEXT_ICON_SIZE, TEXT);
+            } finally {
+                if (ps != null) {
+                    canvas.restore();
+                }
+            }
         }
     }
 

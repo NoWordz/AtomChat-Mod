@@ -5,6 +5,7 @@ import com.atom.chat.render.SkiaDraw;
 import com.atom.chat.render.SkiaFontRenderer;
 import com.atom.chat.ui.Animations;
 import com.atom.chat.ui.AppIcons;
+import com.atom.chat.ui.PressScale;
 import com.atom.chat.ui.UiLayout;
 import com.atom.chat.ui.UiMotion;
 import com.atom.chat.ui.UiTokens;
@@ -78,6 +79,9 @@ public final class ImageCropper {
 
     private float btnHoverCheck;
     private float btnHoverClose;
+    /** One bounce per round key. The cropper holds no press state to feed them. */
+    private final PressScale cancelScale = PressScale.control();
+    private final PressScale confirmScale = PressScale.control();
 
     public ImageCropper(Callback callback) {
         this.callback = callback;
@@ -400,10 +404,28 @@ public final class ImageCropper {
                 }
             }
 
-            drawRoundButton(canvas, cancelCx(panel), btnCy(panel),
-                    AppIcons.ICON_CLOSE_PATH, btnHoverClose, alpha);
-            drawRoundButton(canvas, confirmCx(panel), btnCy(panel),
-                    AppIcons.ICON_CHECK_PATH, btnHoverCheck, alpha);
+            // Confirm and cancel are the only hover controls here. The frame ring
+            // is not a drag handle and the pan has no discrete knob, so nothing
+            // else scales; the cropper as a whole deliberately stays put.
+            float cxCancel = cancelCx(panel);
+            float cxConfirm = confirmCx(panel);
+            float cyButtons = btnCy(panel);
+            cancelScale.update(inButton(vmx, vmy, cxCancel, panel), false, dt, Animations.enabled());
+            confirmScale.update(inButton(vmx, vmy, cxConfirm, panel), false, dt, Animations.enabled());
+            cancelScale.begin(canvas, cxCancel, cyButtons);
+            try {
+                drawRoundButton(canvas, cxCancel, cyButtons,
+                        AppIcons.ICON_CLOSE_PATH, btnHoverClose, alpha);
+            } finally {
+                canvas.restore();
+            }
+            confirmScale.begin(canvas, cxConfirm, cyButtons);
+            try {
+                drawRoundButton(canvas, cxConfirm, cyButtons,
+                        AppIcons.ICON_CHECK_PATH, btnHoverCheck, alpha);
+            } finally {
+                canvas.restore();
+            }
 
             if (image == null) {
                 Font font = FontManager.font(UiTokens.PROFILE_ROW_FONT);
