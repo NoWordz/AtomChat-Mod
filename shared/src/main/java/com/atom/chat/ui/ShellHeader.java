@@ -33,10 +33,17 @@ public final class ShellHeader {
     // One bounce per header button. Static because the whole class is: the
     // screen owns the press hit-test and arms it here, so render keeps its
     // signature and this class stays free of input handling.
-    private static final PressScale BACK_SCALE = PressScale.compact();
-    private static final PressScale ACTION_SCALE = PressScale.compact();
+    private static final PressScale BACK_SCALE = PressScale.bounce();
+    private static final PressScale ACTION_SCALE = PressScale.bounce();
     private static boolean backPressedNow;
     private static boolean actionPressedNow;
+    /**
+     * WHY: the header is a render-only class with no update channel, so its
+     * springs advance on the nominal 60fps frame step. It is a duration in
+     * milliseconds — wall-clock time does not scale with UI density, which is
+     * why it is a plain constant rather than a {@code UiTokens.s()} value.
+     */
+    private static final float FRAME_DT_MS = 16.0F;
 
     /** Arms the back arrow's press bounce; consumed by the next render. */
     public static void armBackPress() {
@@ -84,7 +91,11 @@ public final class ShellHeader {
             drawIconButton(canvas, action.rect(), action.hover(), pressed, ACTION_SCALE,
                     action.icon(), action.color());
         } else {
-            ACTION_SCALE.update(false, false, 16.0F, true);
+            // No trailing action this frame: let the spring return to rest
+            // under the real motion gate. Width is irrelevant here — the
+            // non-hover/non-press target is 1 — but a positive value keeps
+            // the budget formula total.
+            ACTION_SCALE.update(false, false, FRAME_DT_MS, Animations.enabled(), 1.0F);
         }
         Font titleFont = FontManager.font(UiTokens.FONT_TITLE);
         SkiaFontRenderer.drawTextCentered(canvas, titleFont, title,
@@ -113,7 +124,12 @@ public final class ShellHeader {
     private static void drawIconButton(Canvas canvas, UiLayout.Rect rect, float hover,
                                        boolean pressed, PressScale scale,
                                        io.github.humbleui.skija.Path icon, int color) {
-        scale.update(hover > 0.01F, pressed, 16.0F, Animations.enabled());
+        // The scaled shape is the inset wash, so the width budget is spent on
+        // that surface (rect minus the inset on both sides), not on the outer
+        // hit-test rect. Behaviour is unchanged at the default inset — this is
+        // the semantic width the budget formula asks for.
+        scale.update(hover > 0.01F, pressed, FRAME_DT_MS, Animations.enabled(),
+                rect.w() - 2.0F * UiTokens.EDGE_CONTROL_INSET);
         float cx = rect.x() + rect.w() / 2.0F;
         float cy = rect.y() + rect.h() / 2.0F;
         canvas.save();
@@ -123,7 +139,7 @@ public final class ShellHeader {
             canvas.translate(-cx, -cy);
         }
         if (hover > 0.01F) {
-            float inset = UiTokens.s(4);
+            float inset = UiTokens.EDGE_CONTROL_INSET;
             float x = rect.x() + inset;
             float y = rect.y() + inset;
             float w = rect.w() - inset * 2.0F;

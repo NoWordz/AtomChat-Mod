@@ -31,9 +31,9 @@ public final class BottomTabBar {
     private final Animator indicatorAnim = new Animator(Easing::easeInOutCubic);
     private final float[] tabHover = new float[3];
     /** Per-tab press/hover bounce; hit-testing stays unscaled, this is draw-only. */
-    // compact, not control: a capsule 1.08 would poke past the bar it sits in
-    // and close the gap to the next cell.
-    private final PressScale[] tabScale = {PressScale.compact(), PressScale.compact(), PressScale.compact()};
+    // One width-derived budget: the capsule stays inside its cell because a
+    // tab-width shape only ever travels BUDGET_PX per side, not a fixed ratio.
+    private final PressScale[] tabScale = {PressScale.bounce(), PressScale.bounce(), PressScale.bounce()};
     /** Tab index under an active press, for the bounce; -1 = none. */
     private int pressedTab = -1;
 
@@ -76,10 +76,15 @@ public final class BottomTabBar {
     public void update(float deltaMs, float vmx, float vmy, UiLayout.Rect bar) {
         indicatorAnim.update(deltaMs);
         int hovered = hitTest(vmx, vmy, bar);
+        // The scaled shape is the cell's capsule, so the bounce budget derives
+        // from the capsule width (render draws the same geometry).
+        float capsuleW = bar != null && bar.w() > 0.0F
+                ? bar.w() / 3.0F - UiTokens.TAB_EDGE_PAD * 2.0F
+                : UiTokens.TAB_EDGE_PAD * 2.0F;
         for (int i = 0; i < 3; i++) {
             tabHover[i] = UiMotion.approach(tabHover[i], i == hovered ? 1.0F : 0.0F,
                     deltaMs, UiMotion.HOVER_MS);
-            tabScale[i].update(i == hovered, i == pressedTab, deltaMs, Animations.enabled());
+            tabScale[i].update(i == hovered, i == pressedTab, deltaMs, Animations.enabled(), capsuleW);
         }
     }
 

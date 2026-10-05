@@ -498,10 +498,10 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
     /** Button under a held press, for the icon-row press scale; -1 = none. */
     private int pressedButtonHeld = -1;
     /** Per-button press/hover scale (image / emoji / send / phrase), draw-only. */
-    // compact, not control: these four share one row with a s(6) gap, and the
-    // full 1.08 hover would push each button into its neighbour.
-    private final PressScale[] iconButtonScale = {PressScale.compact(), PressScale.compact(),
-            PressScale.compact(), PressScale.compact()};
+    // One width-budget bounce per key: the 4px per-side budget stays inside
+    // the s(6) gap these four share a row through, at any button width.
+    private final PressScale[] iconButtonScale = {PressScale.bounce(), PressScale.bounce(),
+            PressScale.bounce(), PressScale.bounce()};
 
     // Per-frame animation state (smooth hover/popup transitions)
     private final float[] buttonHover = new float[4];
@@ -641,13 +641,13 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
         float size = UiTokens.ACTION_BUTTON_SIZE;
         UiLayout.Rect header = layout().header;
         float y = header.y() + (header.h() - size) / 2.0F;
-        return new UiLayout.Rect(header.x() + s(4), y, size, size);
+        return new UiLayout.Rect(header.x() + UiTokens.EDGE_CONTROL_INSET, y, size, size);
     }
 
     /** Filter button: the back button's recipe, one slot to its right. */
     private UiLayout.Rect filterButton() {
         UiLayout.Rect back = backButton();
-        return new UiLayout.Rect(back.x() + back.w() + s(4), back.y(), back.w(), back.h());
+        return new UiLayout.Rect(back.x() + back.w() + UiTokens.EDGE_CONTROL_INSET, back.y(), back.w(), back.h());
     }
 
     private boolean isFilterButtonHit(float vmx, float vmy) {
@@ -2475,7 +2475,8 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
         // until it settles, so the release overshoot is drawn even after the
         // pointer is up.
         PressScale scale = iconButtonScale[id];
-        scale.update(hover, pressedHeld, frameDt, Animations.enabled());
+        // The scaled shape is the ACTION_BUTTON_SIZE icon square itself.
+        scale.update(hover, pressedHeld, frameDt, Animations.enabled(), UiTokens.ACTION_BUTTON_SIZE);
         canvas.save();
         if (scale.scale() != 1.0F) {
             float keyHalf = UiTokens.ACTION_BUTTON_SIZE / 2.0F;
@@ -2491,7 +2492,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
         float pressedWash = pressed ? 1.0F : 0.0F;
         float wash = Math.max(hoverWash, pressedWash);
         if (wash > 0.01F) {
-            float inset = UiTokens.s(4);
+            float inset = UiTokens.EDGE_CONTROL_INSET;
             SkiaDraw.drawRoundedRect(canvas, bx + inset, by + inset,
                     UiTokens.ACTION_BUTTON_SIZE - inset * 2.0F,
                     UiTokens.ACTION_BUTTON_SIZE - inset * 2.0F,
@@ -2530,7 +2531,8 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
         buttonHover[2] = UiMotion.approach(buttonHover[2], hover ? 1.0F : 0.0F, frameDt, UiMotion.HOVER_MS);
         // Same press/hover scale as the icon buttons and the bottom tab bar.
         PressScale scale = iconButtonScale[2];
-        scale.update(hover, pressedHeld, frameDt, Animations.enabled());
+        // The scaled shape is the send button itself (BUTTON_W capsule).
+        scale.update(hover, pressedHeld, frameDt, Animations.enabled(), UiTokens.BUTTON_W);
         canvas.save();
         if (scale.scale() != 1.0F) {
             canvas.translate(bx + UiTokens.BUTTON_W / 2.0F, by + UiTokens.BUTTON_H / 2.0F);

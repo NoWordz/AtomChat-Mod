@@ -195,8 +195,9 @@ public final class NotificationBanner {
             // Advanced before the draw so the bounce lands on the frame it started
             // in. The banner tracks no press state, so the dip never fires and the
             // button only breathes on hover.
-            PressScale sendScale = buttonScales.computeIfAbsent(b, k -> PressScale.control());
-            sendScale.update(b == hoveredButton, false, hoverDt, Animations.enabled());
+            PressScale sendScale = buttonScales.computeIfAbsent(b, k -> PressScale.bounce());
+            // The scaled shape is the send button itself (BUTTON_SIZE square).
+            sendScale.update(b == hoveredButton, false, hoverDt, Animations.enabled(), BUTTON_SIZE);
             drawBanner(canvas, b, x, drawY, bannerW, bannerH, alpha, hover, buttonHover, sendScale);
             hitRects.add(new Hit(b, Rect.makeXYWH(x, drawY, bannerW, bannerH)));
             float btnX = x + bannerW - UiTokens.s(14) - BUTTON_SIZE;
@@ -282,7 +283,8 @@ public final class NotificationBanner {
                 AtomChatConfig config = AtomChatConfig.get();
                 SkiaDraw.drawRoundedRect(canvas, x, y, w, h, radius,
                         0xFF000000 | (config.cardColor & 0x00FFFFFF));
-                SkiaDraw.drawEdgeHighlight(canvas, x, y, w, h, radius, UiTokens.s(1.2F), UiTokens.CARD_EDGE);
+                SkiaDraw.drawEdgeHighlight(canvas, x, y, w, h, radius, UiTokens.s(1.0F),
+                        UiTokens.outlineColor(2));
                 if (hover > 0.01F) {
                     SkiaDraw.drawRoundedRect(canvas, x, y, w, h, radius,
                             Color.makeARGB((int) (90.0F * hover), 255, 255, 255));

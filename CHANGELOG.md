@@ -1,5 +1,55 @@
 # Changelog
 
+## v0.2.16
+
+> 本版重做了输入栏按钮，把全界面的悬停 / 按压弹跳统一成「每边 4 像素」的位移预算，并修掉 0.2.15 留下的一批可见缺陷。
+
+**更改**
+
+- **输入栏按钮整组重做**：实心底色、等宽方角、发丝分隔线，悬停与选中色从强调色派生。
+- **输入栏三键、发送键与顶栏按钮统一尺寸**。
+- **分段标签的选中胶囊锚定在当前格子上**，悬停 / 按压时整个格子一起缩放。
+- **悬停 / 按压缩放统一为每边 4 像素的位移预算**：小控件最多放大 6%，宽卡片约 1.6%，按压对称缩小。
+- **卡片在滚动区两侧的内缩从 15 像素收窄到 8**，卡片投影同步收紧。
+- **输入栏按键边距统一为 5 像素**，输入栏整体变矮 10 像素。
+- **设置首页导航方块加内缩**，悬停放大不再切到圆角。
+- **表情面板标签条获得与底部标签一致的悬停 / 按压弹跳**。
+- **颜色「+」格与可折叠标签行获得悬停反馈**。
+- 档案页信息行按住时下沉。
+
+**修复**
+
+- 小控件的悬停没有回弹（弹簧在到达目标的瞬间就锁定）。
+- 浅色主题下悬停高亮完全看不见：高亮色现在按底色对比度自动翻转。
+- 开关在浅色 / 深色面板下都可辨：开启带轮廓、关闭加深、禁用态整体变淡。
+- 会话列表拖动滚动条时内容不动、点击不跟随滚动位置。
+- 设置首页的悬停判定滞后一帧。
+
+----
+
+> This release reworks the composer buttons, unifies hover / press bounce into a 4-pixel-per-side travel budget across the UI, and fixes a batch of visible defects left over from 0.2.15.
+
+**Changed**
+
+- **Composer buttons reworked**: solid fills, equal square keys and hairline separators; hover and selection derive from the accent colour.
+- **The composer keys, Send and the header buttons share one size**.
+- **The section chip's selected pill is anchored to its cell**, and hover / press scales the whole cell.
+- **Hover / press scaling unified to a 4-pixel-per-side travel budget**: small controls grow at most 6%, wide cards about 1.6%, presses mirror inward.
+- **Card inset inside scroll areas narrowed from 15 to 8 pixels** per side, with the card shadow tightened to match.
+- **Composer key inset unified to 5 pixels**; the composer bar is 10 pixels shorter.
+- **Settings home tiles gained an inset**, so the hover lift no longer shears their rounded corners.
+- **The emoji panel tab strip gets the bottom bar's hover / press bounce**.
+- **The colour "+" cell and foldable label rows get hover feedback**.
+- Profile info rows now dip while held.
+
+**Fixed**
+
+- Small controls had no hover bounce (the spring settled the instant it reached its target).
+- Hover highlights were invisible on light themes; the wash now flips by contrast against the surface.
+- Switches read on both light and dark panels: rim when on, darker track when off, dimmed when disabled.
+- Dragging the conversation-list scrollbar moved nothing, and clicks ignored the scroll offset.
+- Settings-home hover lagged one frame.
+
 ## v0.2.15
 
 > 本版是界面改版版：文字、动效、主题与整个设置页都重做了一遍，末尾两条修掉改版过程中自己引入的毛病。

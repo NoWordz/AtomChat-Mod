@@ -48,10 +48,10 @@ public final class ColorPickerOverlay {
     private float btnHoverCheck;
     private float btnHoverClose;
     /** One bounce per control: the two drag knobs, then cancel and confirm. */
-    private final PressScale svKnobScale = PressScale.control();
-    private final PressScale hueKnobScale = PressScale.control();
-    private final PressScale cancelScale = PressScale.control();
-    private final PressScale confirmScale = PressScale.control();
+    private final PressScale svKnobScale = PressScale.bounce();
+    private final PressScale hueKnobScale = PressScale.bounce();
+    private final PressScale cancelScale = PressScale.bounce();
+    private final PressScale confirmScale = PressScale.bounce();
     /** Hit box of the copyable hex value; refreshed while rendering. */
     private float hexHitX;
     private float hexHitY;
@@ -468,7 +468,7 @@ public final class ColorPickerOverlay {
             float py = sv.getTop() + (1.0F - bri) * sv.getHeight();
             // Only the knob bounces. The square under it is the drag surface, and
             // scaling that would slide the colour under the pointer mid-gesture.
-            svKnobScale.update(overSv(vmx, vmy, panel), dragMode == 0, dt, Animations.enabled());
+            svKnobScale.update(overSv(vmx, vmy, panel), dragMode == 0, dt, Animations.enabled(), s(14));
             svKnobScale.begin(canvas, px, py);
             try (Paint cursor = new Paint().setColor(0xFFFFFFFF).setMode(PaintMode.STROKE)
                     .setStrokeWidth(s(2)).setAntiAlias(true)) {
@@ -491,7 +491,7 @@ public final class ColorPickerOverlay {
             float hueCy = hueBar.getTop() + hueBar.getHeight() / 2.0F;
             // Same rule as the SV knob: the rainbow track is the drag surface and
             // stays put while the knob breathes.
-            hueKnobScale.update(overHue(vmx, vmy, panel), dragMode == 1, dt, Animations.enabled());
+            hueKnobScale.update(overHue(vmx, vmy, panel), dragMode == 1, dt, Animations.enabled(), s(12));
             hueKnobScale.begin(canvas, hx, hueCy);
             try (Paint cursor = new Paint().setColor(0xFFFFFFFF).setMode(PaintMode.STROKE)
                     .setStrokeWidth(s(2)).setAntiAlias(true)) {
@@ -544,8 +544,11 @@ public final class ColorPickerOverlay {
             float cxCancel = cancelCx(panel);
             float cxConfirm = confirmCx(panel);
             float cyButtons = btnCy(panel);
-            cancelScale.update(inButton(vmx, vmy, cxCancel, panel), false, dt, Animations.enabled());
-            confirmScale.update(inButton(vmx, vmy, cxConfirm, panel), false, dt, Animations.enabled());
+            // The scaled shapes are the s(18)-radius round buttons themselves.
+            cancelScale.update(inButton(vmx, vmy, cxCancel, panel), false, dt, Animations.enabled(),
+                    s(18) * 2.0F);
+            confirmScale.update(inButton(vmx, vmy, cxConfirm, panel), false, dt, Animations.enabled(),
+                    s(18) * 2.0F);
             cancelScale.begin(canvas, cxCancel, cyButtons);
             try {
                 drawRoundButton(canvas, cxCancel, cyButtons,

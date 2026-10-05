@@ -109,6 +109,17 @@ public final class EmojiPanel {
     private static final long CELL_PULSE_MS = 110;
     /** Hover washes for the tab strip. */
     private final float[] tabHover = new float[3];
+    /**
+     * Per-tab press/hover bounce, the BottomTabBar pattern: one instance per
+     * tab cell, the strip's tab width passed at update, the scale wrapping the
+     * whole tab cell (wash + label), never the label alone.
+     */
+    private final PressScale[] tabScale = {PressScale.bounce(), PressScale.bounce(), PressScale.bounce()};
+    /** Tab of the last click, still in the pressed phase of its pulse. */
+    private int pressedTabKey = -1;
+    private long pressedTabAtMs;
+    /** How long a click keeps its tab pressed before springing back. */
+    private static final long TAB_PULSE_MS = 110;
     // Tab transition: double-layer content slide + sliding indicator.
     private final Animator tabContentAnim = new Animator(Easing::easeInOutCubic);
     private final Animator tabIndicatorAnim = new Animator(Easing::easeInOutCubic);
@@ -206,6 +217,11 @@ public final class EmojiPanel {
             float tabStripW = pw - tabInset * 2.0F;
             float tabW = tabStripW / labels.length;
             int t = (int) ((mx - tabStripX) / tabW);
+            if (t >= 0 && t < labels.length) {
+                // Press feedback on every tab tap, switch or re-tap alike —
+                // the cell pattern: hold pressed for a beat, then rebound.
+                pulseTab(t);
+            }
             if (t >= 0 && t < labels.length && t != tab) {
                 int from = tab;
                 tab = t;
@@ -296,24 +312,42 @@ public final class EmojiPanel {
             // The active pill leaves s(6) above and only s(2) below: the extra
             // bottom length makes the label's visual centre line up with the
             // pill's centre (the text baseline is drawn slightly low).
-            SkiaDraw.drawRoundedRect(canvas, tabStripX + indicator * tabW + s(4), py + s(6),
-                    tabW - s(8), UiTokens.EMOJI_TAB_H - s(8), s(8), UiTokens.accentFill());
+            // The pill rides the selected tab's spring (the BottomTabBar
+            // recipe): while it slides between slots it is still the selected
+            // tab's shape.
+            float pillX = tabStripX + indicator * tabW + s(4);
+            float pillW = tabW - s(8);
+            float pillH = UiTokens.EMOJI_TAB_H - s(8);
+            canvas.save();
+            applyBounce(canvas, tabScale[tab].scale(),
+                    pillX + pillW / 2.0F, py + s(6) + pillH / 2.0F);
+            SkiaDraw.drawRoundedRect(canvas, pillX, py + s(6), pillW, pillH, s(8),
+                    UiTokens.accentFill());
+            canvas.restore();
             for (int t = 0; t < labels.length; t++) {
                 float hov = t == tab ? 0.0F : tabHover[t];
-                if (hov > 0.01F) {
-                    float hx = tabStripX + t * tabW + s(4);
-                    float hy = py + s(6);
-                    float hw = tabW - s(8);
-                    float hh = UiTokens.EMOJI_TAB_H - s(8);
-                    SkiaDraw.drawRoundedRect(canvas, hx, hy, hw, hh, s(8),
-                            Color.makeARGB((int) (45.0F * hov), 255, 255, 255));
+                // The bounce wraps the WHOLE tab cell — wash and label —
+                // around the cell's centre, not the label alone.
+                tabScale[t].begin(canvas, tabStripX + t * tabW + tabW / 2.0F,
+                        py + UiTokens.EMOJI_TAB_H / 2.0F);
+                try {
+                    if (hov > 0.01F) {
+                        float hx = tabStripX + t * tabW + s(4);
+                        float hy = py + s(6);
+                        float hw = tabW - s(8);
+                        float hh = UiTokens.EMOJI_TAB_H - s(8);
+                        SkiaDraw.drawRoundedRect(canvas, hx, hy, hw, hh, s(8),
+                                Color.makeARGB((int) (45.0F * hov), 255, 255, 255));
+                    }
+                    float tx = tabStripX + t * tabW;
+                    // The active label sits on the accent capsule, so it takes the
+                    // colour that reads against the accent, not the panel text colour.
+                    SkiaFontRenderer.drawTextCentered(canvas, tabFont, labels[t],
+                            tx + tabW / 2.0F, py + UiTokens.EMOJI_TAB_H / 2.0F + s(2),
+                            t == tab ? UiTokens.onAccent(UiTokens.accentFill()) : textPrimary());
+                } finally {
+                    canvas.restore();
                 }
-                float tx = tabStripX + t * tabW;
-                // The active label sits on the accent capsule, so it takes the
-                // colour that reads against the accent, not the panel text colour.
-                SkiaFontRenderer.drawTextCentered(canvas, tabFont, labels[t],
-                        tx + tabW / 2.0F, py + UiTokens.EMOJI_TAB_H / 2.0F + s(2),
-                        t == tab ? UiTokens.onAccent(UiTokens.accentFill()) : textPrimary());
             }
 
             // Content area (clipped, scrollable). Switching tabs plays an opaque
@@ -418,7 +452,13 @@ public final class EmojiPanel {
     private void pulseCell(int key) {
         pressedCellKey = key;
         pressedCellAtMs = System.currentTimeMillis();
-        cellScale.computeIfAbsent(key, k -> PressScale.control());
+        cellScale.computeIfAbsent(key, k -> PressScale.bounce());
+    }
+
+    /** Click feedback for a tab cell, the same pulse pattern as the cells. */
+    private void pulseTab(int t) {
+        pressedTabKey = t;
+        pressedTabAtMs = System.currentTimeMillis();
     }
 
     /**
@@ -488,18 +528,20 @@ public final class EmojiPanel {
     }
 
     /**
-     * Fades the tab-strip hover washes. The capsule geometry is the same as the
-     * active pill, so hover follows the exact slots users click.
+     * Fades the tab-strip hover washes and advances the per-tab bounce
+     * springs. The capsule geometry is the same as the active pill, so hover
+     * follows the exact slots users click.
      */
     private void updateTabHover(UiLayout layout, float vmx, float vmy, long frameDt) {
         int hovered = -1;
+        float stripW = 0.0F;
         if (open && overPanel(layout, vmx, vmy)
                 && vmy < panelY(layout) + UiTokens.EMOJI_TAB_H) {
             float px = panelX(layout);
             float pw = panelW();
             float inset = UiTokens.EMOJI_PANEL_PAD;
             float stripX = px + inset;
-            float stripW = pw - inset * 2.0F;
+            stripW = pw - inset * 2.0F;
             if (vmx >= stripX && vmx <= stripX + stripW) {
                 String[] labels = tabLabels();
                 float tabW = stripW / labels.length;
@@ -512,6 +554,19 @@ public final class EmojiPanel {
         for (int i = 0; i < tabHover.length; i++) {
             tabHover[i] = UiMotion.approach(tabHover[i],
                     i == hovered ? 1.0F : 0.0F, frameDt, UiMotion.HOVER_MS);
+        }
+        // The tab bounce rides the same pass: hover lifts the whole tab cell,
+        // the click pulse dips it, and the width is the strip's tab slot —
+        // the BottomTabBar recipe verbatim.
+        long now = System.currentTimeMillis();
+        boolean tabPulsing = pressedTabKey >= 0 && now - pressedTabAtMs < TAB_PULSE_MS;
+        float tabW = stripW > 0.0F ? stripW / tabScale.length : 1.0F;
+        for (int i = 0; i < tabScale.length; i++) {
+            tabScale[i].update(i == hovered, tabPulsing && i == pressedTabKey, frameDt,
+                    Animations.enabled(), tabW);
+        }
+        if (!tabPulsing) {
+            pressedTabKey = -1;
         }
     }
 
@@ -543,7 +598,11 @@ public final class EmojiPanel {
         }
         // The scale bounce rides the same key set: pressed during the click
         // pulse, hover target while the pointer stays, dropped once it is
-        // back at rest away from the pointer.
+        // back at rest away from the pointer. The cell width of the active
+        // grid shapes the budget: eight emoji columns, two wide kaomoji
+        // rows, six for the server emote packs.
+        float cellW = (panelW() - UiTokens.EMOJI_PANEL_PAD * 2.0F)
+                / (tab == 1 ? 2 : tab == 2 ? UiTokens.EMOTE_COLS : UiTokens.EMOJI_COLS);
         long now = System.currentTimeMillis();
         boolean pulsing = pressedCellKey >= 0 && now - pressedCellAtMs < CELL_PULSE_MS;
         Iterator<Map.Entry<Integer, PressScale>> scaleIt = cellScale.entrySet().iterator();
@@ -551,7 +610,8 @@ public final class EmojiPanel {
             Map.Entry<Integer, PressScale> e = scaleIt.next();
             boolean isHovered = e.getKey() == hoveredKey;
             PressScale ps = e.getValue();
-            ps.update(isHovered, pulsing && e.getKey() == pressedCellKey, frameDt, Animations.enabled());
+            ps.update(isHovered, pulsing && e.getKey() == pressedCellKey, frameDt,
+                    Animations.enabled(), cellW);
             if (!isHovered && ps.isResting()) {
                 scaleIt.remove();
             }
@@ -560,7 +620,7 @@ public final class EmojiPanel {
             pressedCellKey = -1;
         }
         if (hoveredKey >= 0 && !cellScale.containsKey(hoveredKey)) {
-            cellScale.put(hoveredKey, PressScale.control());
+            cellScale.put(hoveredKey, PressScale.bounce());
         }
     }
 
@@ -928,6 +988,19 @@ public final class EmojiPanel {
 
     private static int textSecondary() {
         return 0xDCAAAABA;
+    }
+
+    /**
+     * Centred scale around (cx, cy), the BottomTabBar recipe: emitted only
+     * when the scale actually moved, so an idle frame adds no matrix state,
+     * and every call sits inside the caller's own save/restore pair.
+     */
+    private static void applyBounce(Canvas canvas, float scale, float cx, float cy) {
+        if (scale != 1.0F) {
+            canvas.translate(cx, cy);
+            canvas.scale(scale, scale);
+            canvas.translate(-cx, -cy);
+        }
     }
 
     private static float s(float v) {

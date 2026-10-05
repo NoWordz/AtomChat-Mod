@@ -137,9 +137,56 @@ class SpringAnimTest {
     }
 
     /**
-     * The bounce spring lives in the 0.92..1.08 scale domain. The overshoot
-     * must survive the settle snap (that IS the visible bounce) and the ring
-     * tail must still die inside ~350ms instead of wandering.
+     * A small hover travel (1.0 -> 1.04, the lift of a 200px control at the
+     * wide end of the small-trip range) must keep its overshoot. With the
+     * settle velocity threshold too loose the spring is declared settled on
+     * its first crossing of the target — before any overshoot exists — and
+     * small-control hovers land dead flat. The peak must clear the target by
+     * more than the position epsilon (1.04 + 0.0015), which is exactly the
+     * most a pre-peak settle-snap can ever reach.
+     */
+    @Test
+    void smallTravelHoverKeepsItsOvershoot() {
+        SpringAnim s = UiSpring.newBounceSpring();
+        s.snapTo(1.0F);
+        s.setTarget(1.04F);
+        float peak = 0.0F;
+        for (int i = 0; i < 90; i++) {
+            s.update(16L, true);
+            peak = Math.max(peak, s.value());
+        }
+        assertTrue(peak > 1.0415F,
+                "small-travel hover must overshoot past its target, got " + peak);
+    }
+
+    /**
+     * The wide-shape half of the threshold contract: a 490px row's hover
+     * travel is 0.01633 (u - 1 under the 4px budget), and at that travel the
+     * spring settles at the target — first crossing, no visible overshoot.
+     * That is by design, not a lost bounce: the analytic overshoot (x0.163)
+     * is sub-pixel at this travel. The pin keeps the physical fact testable,
+     * so nobody tightens the thresholds to "give wide rows a bounce" without
+     * seeing this go red first.
+     */
+    @Test
+    void wideTravelHoverSettlesAtTarget() {
+        SpringAnim s = UiSpring.newBounceSpring();
+        s.snapTo(1.0F);
+        s.setTarget(1.01633F);
+        float peak = 0.0F;
+        for (int i = 0; i < 90; i++) {
+            s.update(16L, true);
+            peak = Math.max(peak, s.value());
+        }
+        assertTrue(peak <= 1.01633F + 0.001F,
+                "wide-travel hover must not visibly overshoot its target, got " + peak);
+    }
+
+    /**
+     * Driven to 1.08 — beyond any real budget target (the hover cap is
+     * 1.06) — as a pure spring probe. The overshoot must survive the settle
+     * snap (that IS the visible bounce) and the ring tail must still die
+     * inside ~350ms instead of wandering.
      */
     @Test
     void bounceSpringFitsTheScaleDomain() {

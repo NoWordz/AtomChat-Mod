@@ -80,8 +80,8 @@ public final class ImageCropper {
     private float btnHoverCheck;
     private float btnHoverClose;
     /** One bounce per round key. The cropper holds no press state to feed them. */
-    private final PressScale cancelScale = PressScale.control();
-    private final PressScale confirmScale = PressScale.control();
+    private final PressScale cancelScale = PressScale.bounce();
+    private final PressScale confirmScale = PressScale.bounce();
 
     public ImageCropper(Callback callback) {
         this.callback = callback;
@@ -410,8 +410,11 @@ public final class ImageCropper {
             float cxCancel = cancelCx(panel);
             float cxConfirm = confirmCx(panel);
             float cyButtons = btnCy(panel);
-            cancelScale.update(inButton(vmx, vmy, cxCancel, panel), false, dt, Animations.enabled());
-            confirmScale.update(inButton(vmx, vmy, cxConfirm, panel), false, dt, Animations.enabled());
+            // The scaled shapes are the s(24)-radius round keys themselves.
+            cancelScale.update(inButton(vmx, vmy, cxCancel, panel), false, dt, Animations.enabled(),
+                    s(24) * 2.0F);
+            confirmScale.update(inButton(vmx, vmy, cxConfirm, panel), false, dt, Animations.enabled(),
+                    s(24) * 2.0F);
             cancelScale.begin(canvas, cxCancel, cyButtons);
             try {
                 drawRoundButton(canvas, cxCancel, cyButtons,

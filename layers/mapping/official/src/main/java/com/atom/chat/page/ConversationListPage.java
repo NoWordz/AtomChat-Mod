@@ -446,16 +446,15 @@ public final class ConversationListPage {
      * {@code hovered} is this frame's unscaled hit - the bounce is draw-only,
      * so {@link #hit} keeps testing the rect the row actually occupies.
      *
-     * <p>Hover scales this row (compact: 1.04, settling to 0.95 while a press is
-     * held). {@code PressScale.row()} would pin hover to 1.0 and leave the row
-     * motionless, which is what a list needs to avoid between stacked cards -
-     * but a conversation row is the whole target and the list is spaced by
-     * {@link UiTokens#LIST_GAP}, so the lift has room.</p>
+     * <p>Hover scales this row: the width-budget bounce only ever lifts the
+     * row's edge by {@code PressScale.BUDGET_PX}, which the list's
+     * {@link UiTokens#LIST_GAP} spacing has room for, so the row can breathe
+     * where a motionless press-only row would sit dead under the pointer.</p>
      */
     private void drawRow(Canvas canvas, Row row, float x, float y, float w, float hoverAlpha,
                          int index, boolean hovered, boolean pressed, float dtMs) {
-        PressScale bounce = rowScale.computeIfAbsent(index, k -> PressScale.compact());
-        bounce.update(hovered, pressed, dtMs, Animations.enabled());
+        PressScale bounce = rowScale.computeIfAbsent(index, k -> PressScale.bounce());
+        bounce.update(hovered, pressed, dtMs, Animations.enabled(), w);
         float bounceScale = bounce.scale();
         // Pivot on the row's own centre so a scaling row never shifts its
         // neighbours, and pair save/restore through finally so a throw out of

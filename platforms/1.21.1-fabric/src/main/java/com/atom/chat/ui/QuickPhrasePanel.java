@@ -273,13 +273,12 @@ public final class QuickPhrasePanel {
     }
 
     /**
-     * Rows and the add row are capsules packed against the panel edge and against
-     * each other, so they take the compact tier - the one the project added for
-     * controls with no room to grow into. The edit/delete keys sit alone inside a
-     * row and take the full control bounce.
+     * Every cell runs the same width-budget bounce; the width that shapes the
+     * scale is decided per key at update time (row width for rows and the add
+     * row, the icon key's hit width for edit/delete), not at the factory.
      */
     private static PressScale newCellScale(int key) {
-        return key >= ICON_CELL_KEY ? PressScale.control() : PressScale.compact();
+        return PressScale.bounce();
     }
 
     // ---- state ----
@@ -360,7 +359,12 @@ public final class QuickPhrasePanel {
             boolean over = key == hoveredIconCell || key == hoveredAddCell
                     || (key == hoveredRow && hoveredBtn < 0);
             PressScale ps = e.getValue();
-            ps.update(over, pulsing && key == pressedCellKey, frameDt, Animations.enabled());
+            // The scaled shape picks the width: full panel rows (and the add
+            // row, same width) versus the edit/delete keys' s(24) hit cell.
+            float cellW = key >= ICON_CELL_KEY
+                    ? s(24)
+                    : panelW() - UiTokens.EMOJI_PANEL_PAD * 2.0F;
+            ps.update(over, pulsing && key == pressedCellKey, frameDt, Animations.enabled(), cellW);
             if (!over && ps.isResting()) {
                 scaleIt.remove();
             }

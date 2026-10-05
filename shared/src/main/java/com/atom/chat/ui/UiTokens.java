@@ -56,16 +56,38 @@ public final class UiTokens {
     }
 
     /**
-     * Hover wash on a surface; {@code weight} 0..1. Derived from the theme's
-     * accent, not from white: a white wash is invisible wherever the surface
-     * under it is already light, and every theme's accent is a colour the user
-     * picked to be seen. The weight is an alpha, so the whole tint axis keeps
-     * one feedback strength and the direction never has to flip.
+     * Hover wash on a surface; {@code weight} 0..1. Uses the theme's accent
+     * when the accent actually contrasts with the surface under it, and a
+     * polarity-flipped neutral wash when it does not: a pale accent over a
+     * pale card was white-on-white invisible (the "hover does nothing"
+     * report), and no alpha tuning can rescue a wash whose colour matches
+     * the ground. Visibility is decided by the WCAG contrast ratio between
+     * the accent and the card's pre-mixed surface ({@link #cardCutout()}),
+     * with 3:1 — the WCAG graphics-contrast bar — as the pass line. On a
+     * fail the wash flips to black over a light surface / white over a dark
+     * one and its alpha rises 45 → 60 so the flipped neutral still reads at
+     * feedback strength. The weight stays a plain alpha multiplier, so each
+     * polarity keeps one feedback strength along the whole tint axis.
      */
     public static int cardHover(float weight) {
-        int rgb = com.atom.chat.config.AtomChatConfig.get().accentColor & 0xFFFFFF;
-        return io.github.humbleui.skija.Color.makeARGB((int) (45.0F * weight),
-                (rgb >> 16) & 0xFF, (rgb >> 8) & 0xFF, rgb & 0xFF);
+        return cardHover(com.atom.chat.config.AtomChatConfig.get().accentColor,
+                cardCutout(), weight);
+    }
+
+    /**
+     * Contrast-derived hover wash against explicit colours — the unit-test
+     * seam (the {@link com.atom.chat.theme.ThemeService#panelIsLight(com.atom.chat.config.AtomChatConfig)
+     * panelIsLight(config)} pattern): {@code accent} is the configured accent
+     * RGB, {@code base} the opaque surface the wash lands on.
+     */
+    public static int cardHover(int accent, int base, float weight) {
+        float w = Math.max(0.0F, Math.min(1.0F, weight));
+        if (contrastRatio(accent, base) >= 3.0F) {
+            return withAlpha(accent, 45.0F * w);
+        }
+        return com.atom.chat.theme.ThemeService.colorIsLight(base)
+                ? withAlpha(0xFF000000, 60.0F * w)
+                : withAlpha(0xFFFFFFFF, 60.0F * w);
     }
 
     /**
@@ -114,16 +136,50 @@ public final class UiTokens {
         return io.github.humbleui.skija.Color.makeARGB(255, r, g, b);
     }
 
+    /**
+     * Stroke colour for outline tier {@code level} (1..3): the three-level
+     * border hierarchy behind the "borders feel flat" report. Tier 1 is the
+     * page container (strongest), tier 2 card panels and card-level controls,
+     * tier 3 the faintest elements inside a card. The configured panel
+     * outline colour is resolved with the same contrast logic as
+     * {@link #cardHover(int, int, float)}: when it cannot be seen on the
+     * card surface (white outline on a light card) the stroke flips to the
+     * surface's opposite polarity. All three tiers share that resolved
+     * colour and differ only in alpha — 100% / 60% / 30% of the outline's
+     * own alpha — so the hierarchy reads as one border language at three
+     * intensities instead of three unrelated edges. Pending in-game visual
+     * acceptance, tuned blind against the luminance math.
+     */
+    public static int outlineColor(int level) {
+        return outlineColor(level,
+                com.atom.chat.config.AtomChatConfig.get().panelOutlineColor,
+                cardCutout());
+    }
+
+    /**
+     * Explicit-colour seam for tests and for callers whose stroke lands on a
+     * different surface than the card (the page container's tier-1 rim will
+     * pass the panel background here when it migrates to this token).
+     */
+    public static int outlineColor(int level, int outline, int base) {
+        float k = switch (level) {
+            case 1 -> 1.0F;
+            case 2 -> 0.6F;
+            case 3 -> 0.3F;
+            default -> throw new IllegalArgumentException(
+                    "outline level must be 1..3, got " + level);
+        };
+        int resolved = contrastRatio(outline, base) >= 3.0F
+                ? (outline & 0x00FFFFFF)
+                : (com.atom.chat.theme.ThemeService.colorIsLight(base) ? 0x000000 : 0xFFFFFF);
+        return withAlpha(resolved, ((outline >>> 24) & 0xFF) * k);
+    }
+
     // Panel
     public static float panelRadius() {
         return radius(28);
     }
 
-    /**
-     * Inner edge highlight for content cards: a fixed subtle white that reads
-     * as a lit edge on opaque surfaces and disappears on frosted ones.
-     */
-    public static final int CARD_EDGE = io.github.humbleui.skija.Color.makeARGB(30, 255, 255, 255);
     /** Shared drop-shadow colour for floating chrome (header, composer, tab bar). */
     public static final int CHROME_SHADOW = io.github.humbleui.skija.Color.makeARGB(100, 0, 0, 0);
     /**
@@ -154,6 +210,15 @@ public final class UiTokens {
      * BUTTON_W x BUTTON_H capsule it has always been.</p>
      */
     public static final float ACTION_BUTTON_SIZE = s(36);
+    /**
+     * Edge inset the chrome action keys keep to their card, s(4) = 5px on
+     * screen: the header's back button off the header's left edge, the filter
+     * key one slot to its right, and the hover wash every one of these keys
+     * draws inside its own square — ShellHeader's icon buttons and the
+     * composer keys alike. One token owns the whole family so the insets
+     * cannot drift apart again.
+     */
+    public static final float EDGE_CONTROL_INSET = s(4);
 
     // Composer row. Two button families share one row and deliberately do NOT
     // share a box: the three keys (image / emoji / phrase) are square and take
@@ -174,7 +239,12 @@ public final class UiTokens {
     // INPUT_MAX_LINES - past that the text scrolls inside the fixed box.
     public static final int INPUT_MAX_LINES = 2;
     public static final float INPUT_BAR_PAD = s(12);
-    public static final float INPUT_ROW_PAD = s(8);
+    /**
+     * Edge inset of the composer's button row against its bar (left, right and
+     * the gap above the row). Unified with the header keys' own s(4) edge
+     * inset — it was s(8) before the two card-edge insets were reconciled.
+     */
+    public static final float INPUT_ROW_PAD = s(4);
     /**
      * Height of the button row band. The taller family owns it, which is what
      * lets two heights share one axis: the shorter capsule centres inside the
@@ -328,17 +398,19 @@ public final class UiTokens {
     /**
      * Horizontal clearance a hover-scaled card leaves to the list clip on each
      * side. A card drawn exactly as wide as the clip has zero room, so the
-     * bounce spring shears its rounded ends flat against the clip edge.
+     * hover scale shears its rounded ends flat against the clip edge.
      *
-     * <p>Sized for the real spring peak, never the nominal hover target: a card
-     * released from the press dip overshoots to 1.05396, so a row grows
-     * (1.05396 - 1) * listW / 2 per side. Against the default 520-wide list that
-     * is 14.03px, so the smallest sufficient inset is 13.31px - this is the
-     * smallest clean token above it. Budgeting the peak rather than the 1.04
-     * hover target costs a few pixels of width today and means wiring a real
-     * press signal later cannot silently reopen the shear.</p>
+     * <p>8px on screen (s(6.4)): the width-budget bounce spends
+     * {@link PressScale#BUDGET_PX} per side (4px nominal, ~5.24px at the
+     * release peak — the overshoot gain is 1.31x the budget), and the s(4)
+     * card-shadow blur carries its visible tail out to ~6.25px. The two can
+     * graze 8px together, but whatever spills past is the shadow's
+     * near-transparent outer fringe — clipping it is invisible, and the trade
+     * buys the list back 7px of width per side against the old 15px (s(12))
+     * inset, which budgeted the full press-release spring peak as if the
+     * clip were a hard edge that had to survive it unclipped.</p>
      */
-    public static final float ROW_CLIP_INSET = s(12);
+    public static final float ROW_CLIP_INSET = s(6.4F);
 
     // Settings home: a 2-column tile grid. Tile width is derived from the list
     // width ((listW - TILE_GAP) / 2 = 188.75 at the default 420 panel), so the
@@ -425,6 +497,27 @@ public final class UiTokens {
     // blue-grey character while still letting the blur show through.
     public static final float PANEL_BLUR_SIGMA = 30.0F;
     public static final int PANEL_BLUR_TINT = 0xCC16191F;
+
+    /**
+     * WCAG contrast ratio (1..21) between two opaque colours, alpha ignored.
+     * One definition of "can this be seen on that surface" for every
+     * feedback stroke the UI derives — the hover-wash flip and the outline
+     * polarity — so visibility means the same thing everywhere.
+     */
+    private static float contrastRatio(int a, int b) {
+        float la = com.atom.chat.theme.ThemeService.relativeLuminance(a);
+        float lb = com.atom.chat.theme.ThemeService.relativeLuminance(b);
+        float hi = Math.max(la, lb);
+        float lo = Math.min(la, lb);
+        return (hi + 0.05F) / (lo + 0.05F);
+    }
+
+    /** Re-alpha helper: keeps the RGB, replaces the alpha (clamped, rounded). */
+    private static int withAlpha(int rgb, float alpha) {
+        int a = Math.max(0, Math.min(255, Math.round(alpha)));
+        return io.github.humbleui.skija.Color.makeARGB(a,
+                (rgb >>> 16) & 0xFF, (rgb >>> 8) & 0xFF, rgb & 0xFF);
+    }
 
     private UiTokens() {
     }

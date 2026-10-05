@@ -13,11 +13,12 @@ import io.github.humbleui.skija.Color;
  * <ul>
  *   <li>a light drop shadow ({@link UiTokens#CARD_SHADOW}, the lower of the
  *       two elevation tiers — chrome floats on {@link UiTokens#CHROME_SHADOW},
- *       content cards sit on this one),</li>
+ *       content cards sit on this one; blur is s(4) so the tail stays inside
+ *       {@link UiTokens#ROW_CLIP_INSET}),</li>
  *   <li>the configured card fill,</li>
- *   <li>a border picked by panel polarity: a 1px dark hairline on light
- *       panels (where the white lit edge is invisible), the lit white edge on
- *       dark/frosted ones,</li>
+ *   <li>a border at outline tier 2 of the three-level hierarchy
+ *       ({@link UiTokens#outlineColor(int)}) — one stroke width, the level
+ *       speaks through alpha alone,</li>
  *   <li>the hover wash, last.</li>
  * </ul>
  *
@@ -32,13 +33,13 @@ public final class UiCards {
     /** Draws the full card stack; {@code hoverWeight} 0..1. */
     public static void drawCard(Canvas canvas, float x, float y, float w, float h,
                                 float radius, float hoverWeight) {
-        SkiaDraw.drawRoundedShadow(canvas, x, y, w, h, radius, UiTokens.s(6), UiTokens.CARD_SHADOW);
+        SkiaDraw.drawRoundedShadow(canvas, x, y, w, h, radius, UiTokens.s(4), UiTokens.CARD_SHADOW);
         SkiaDraw.drawRoundedRect(canvas, x, y, w, h, radius, UiTokens.cardFill());
-        if (ThemeService.panelIsLight()) {
-            SkiaDraw.drawEdgeHighlight(canvas, x, y, w, h, radius, UiTokens.s(1.0F), hairlineColor());
-        } else {
-            SkiaDraw.drawEdgeHighlight(canvas, x, y, w, h, radius, UiTokens.s(1.2F), UiTokens.CARD_EDGE);
-        }
+        // Tier 2 of the outline hierarchy: one stroke width for every tier,
+        // so a card's rim differs from the page container's (tier 1, 100%)
+        // and from in-card details (tier 3, 30%) by intensity only.
+        SkiaDraw.drawEdgeHighlight(canvas, x, y, w, h, radius, UiTokens.s(1.0F),
+                UiTokens.outlineColor(2));
         if (hoverWeight > 0.01F) {
             SkiaDraw.drawRoundedRect(canvas, x, y, w, h, radius, UiTokens.cardHover(hoverWeight));
         }

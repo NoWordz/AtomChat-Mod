@@ -69,28 +69,33 @@ public final class UiSpring {
      * Hover/press scaling constants — the bounce language of this UI.
      * Stiffness 400 with damping ratio 0.50: the overshoot term
      * exp(-zeta*pi/sqrt(1-zeta^2)) lands near 16% of the travelled distance,
-     * so a control released from 0.92 springs back through its 1.08 hover
-     * target with a ~2.5%-of-scale overshoot — a bounce the eye catches at
-     * arm's length (the earlier 0.58 tune, ~11% of a 0.06 move, snapped
-     * itself flat against the settle thresholds and read as no bounce at
-     * all). Bounce lives ONLY on hover/press scaling and the message
-     * entrance; large surfaces (the panel) travel critically damped (see
-     * {@link #PANEL_STIFFNESS}).
+     * so a capped control released from its 0.94 pressed mirror springs
+     * back through its 1.06 hover target with a ~1.9%-of-scale overshoot —
+     * a bounce the eye catches at arm's length (the earlier 0.58 tune, ~11%
+     * of the move, snapped itself flat against the settle thresholds and
+     * read as no bounce at all). Bounce lives ONLY on hover/press scaling
+     * and the message entrance; large surfaces (the panel) travel
+     * critically damped (see {@link #PANEL_STIFFNESS}).
      *
-     * <p>The scale domain is 0.92..1.08, far narrower than the 0..1 progress
-     * range {@link SpringAnim}'s default settle thresholds assume, so
+     * <p>The scale travels are far narrower than the 0..1 progress range
+     * {@link SpringAnim}'s default settle thresholds assume, so
      * {@link #newBounceSpring()} passes thresholds rescaled to the travel:
-     * 0.0015 position (~2% of an 8% move — tight enough to let the 16%
-     * overshoot peak through), 0.3 velocity. Simulated at 60fps the visible
-     * bounce lands inside ~150ms and the sub-0.5% tail is done in ~290ms,
-     * frame-rate independent.</p>
+     * 0.0015 position, 0.2 velocity. That velocity threshold is what
+     * restores the hover overshoot on small trips (~0.06 and up — the 6%
+     * cap segment, controls up to ~130px wide); wider shapes travel under
+     * 0.02, where the analytic overshoot (x0.163) is already sub-pixel, so
+     * the spring declaring itself settled on the first crossing of the
+     * target is by design — the visible bounce lives in the press-release
+     * segment and in small-control hovers. Simulated at 60fps the visible
+     * bounce and its tail stay inside the 350ms settle budget, frame-rate
+     * independent.</p>
      */
     public static final float BOUNCE_STIFFNESS = 400.0F;
     public static final float BOUNCE_DAMPING_RATIO = 0.50F;
 
     /** A fresh hover/press scale spring at value 1 (no scale). */
     public static SpringAnim newBounceSpring() {
-        return new SpringAnim(BOUNCE_STIFFNESS, BOUNCE_DAMPING_RATIO, 0.0015F, 0.3F);
+        return new SpringAnim(BOUNCE_STIFFNESS, BOUNCE_DAMPING_RATIO, 0.0015F, 0.2F);
     }
 
     /**

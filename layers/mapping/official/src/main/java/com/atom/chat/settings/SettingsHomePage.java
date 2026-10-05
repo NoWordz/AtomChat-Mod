@@ -37,7 +37,6 @@ public final class SettingsHomePage {
     // two tiles can ever drive the same spring; the array fills lazily because
     // PressScale only comes out of its factory methods.
     private final PressScale[] tileScale = new PressScale[sections.length];
-    private int hoveredIndex = -1;
     private long lastFrameMs = System.currentTimeMillis();
 
     public float measureContent(UiLayout layout) {
@@ -48,9 +47,18 @@ public final class SettingsHomePage {
                 + (rows - 1) * UiTokens.SETTINGS_TILE_GAP;
     }
 
-    /** Tile width from the column grid; the tile is square, so this is also its height. */
+    /**
+     * Tile width from the column grid; the tile is square, so this is also its
+     * height. The grid is inset by {@link UiTokens#ROW_CLIP_INSET} on both
+     * sides — the same clearance the settings rows use — because edge tiles
+     * sit flush against the scroll clip and the hover bounce (plus its
+     * overshoot) used to shear their outer rounded corners flat against it.
+     * The clip itself stays full width: it is the scroll viewport, the tile
+     * is what gets inset.
+     */
     public static float tileSide(UiLayout layout) {
-        return (layout.list.w() - (UiTokens.SETTINGS_TILE_COLS - 1) * UiTokens.SETTINGS_TILE_GAP)
+        return (layout.list.w() - 2.0F * UiTokens.ROW_CLIP_INSET
+                - (UiTokens.SETTINGS_TILE_COLS - 1) * UiTokens.SETTINGS_TILE_GAP)
                 / (float) UiTokens.SETTINGS_TILE_COLS;
     }
 
@@ -59,7 +67,7 @@ public final class SettingsHomePage {
         int col = index % UiTokens.SETTINGS_TILE_COLS;
         int row = index / UiTokens.SETTINGS_TILE_COLS;
         return new UiLayout.Rect(
-                layout.list.x() + col * (side + UiTokens.SETTINGS_TILE_GAP),
+                layout.list.x() + UiTokens.ROW_CLIP_INSET + col * (side + UiTokens.SETTINGS_TILE_GAP),
                 layout.list.y() + UiTokens.ROOT_CONTENT_GAP
                         + row * (side + UiTokens.SETTINGS_TILE_GAP) - scrollY,
                 side, side);
@@ -70,7 +78,37 @@ public final class SettingsHomePage {
         float dt = Math.min(50.0F, Math.max(1.0F, now - lastFrameMs));
         lastFrameMs = now;
 
+        // Pointer pass and state updates first, drawing second: computing the
+        // hover/spring targets before the draw loop means this frame's pointer
+        // drives this frame's drawing. The old draw-then-update order lagged
+        // every state change one frame behind.
         int hovered = -1;
+        for (int i = 0; i < sections.length; i++) {
+            UiLayout.Rect tile = tileRect(layout, i, scrollY);
+            if (tile.bottom() < layout.list.y() || tile.y() > layout.list.bottom()) {
+                continue;
+            }
+            if (vmx >= tile.x() && vmx <= tile.right()
+                    && vmy >= tile.y() && vmy <= tile.bottom()) {
+                hovered = i;
+            }
+        }
+        for (int i = 0; i < tileHover.length; i++) {
+            // Animated value only: forcing it to 1 while hovered is what
+            // made the highlight snap in instead of fading in.
+            tileHover[i] = UiMotion.approach(tileHover[i], i == hovered ? 1.0F : 0.0F, dt, UiMotion.HOVER_MS);
+        }
+        // Hover is the only state this page keeps: the screen routes clicks
+        // straight to hit() and never reports a press, so the pressed phase
+        // stays false and the hover lift is the whole bounce.
+        for (int i = 0; i < tileScale.length; i++) {
+            if (tileScale[i] == null) {
+                tileScale[i] = PressScale.bounce();
+            }
+            // The scaled shape is the tile square itself.
+            tileScale[i].update(i == hovered, false, dt, Animations.enabled(), tileSide(layout));
+        }
+
         canvas.save();
         try {
             SkiaDraw.clip(canvas, layout.list.x(), layout.list.y(), layout.list.w(), layout.list.h(), 0.0F);
@@ -79,30 +117,10 @@ public final class SettingsHomePage {
                 if (tile.bottom() < layout.list.y() || tile.y() > layout.list.bottom()) {
                     continue;
                 }
-                boolean over = vmx >= tile.x() && vmx <= tile.right()
-                        && vmy >= tile.y() && vmy <= tile.bottom();
-                if (over) {
-                    hovered = i;
-                }
-                // Animated value only: forcing it to 1 while hovered is what
-                // made the highlight snap in instead of fading in.
                 drawTile(canvas, tile, sections[i], tileHover[i], tileScale[i]);
             }
         } finally {
             canvas.restore();
-        }
-        hoveredIndex = hovered;
-        for (int i = 0; i < tileHover.length; i++) {
-            tileHover[i] = UiMotion.approach(tileHover[i], i == hovered ? 1.0F : 0.0F, dt, UiMotion.HOVER_MS);
-        }
-        // Hover is the only state this page keeps: the screen routes clicks
-        // straight to hit() and never reports a press, so the pressed phase
-        // stays false and the hover lift is the whole bounce.
-        for (int i = 0; i < tileScale.length; i++) {
-            if (tileScale[i] == null) {
-                tileScale[i] = PressScale.compact();
-            }
-            tileScale[i].update(i == hovered, false, dt, Animations.enabled());
         }
     }
 

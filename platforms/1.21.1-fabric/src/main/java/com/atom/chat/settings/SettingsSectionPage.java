@@ -761,11 +761,15 @@ public final class SettingsSectionPage {
      * Horizontal clearance between a row card and the scroll clip. A card used
      * to be drawn at the clip's full width, so the hover bounce grew it
      * straight into the clip and the clip sheared the rounded ends flat on
-     * every hover. The compact bounce peaks at 1.05396 (UiSpring's bounce
-     * tune), so on a 490px card the lift is 13.2px per side at the peak and
-     * 9.8px at the nominal 1.04; s(12) = 15px clears both. The clip itself
-     * stays full width: it is the scroll viewport, the card is what gets
-     * inset.
+     * every hover. The hover lift is now a 4px-per-side pixel budget
+     * ({@link PressScale#BUDGET_PX}) and the release overshoot tops out near
+     * 1.31x that budget, so ~5.3px per side at the peak; the 8px token clears
+     * both with room for the card shadow tail. The clip itself stays full
+     * width: it is the scroll viewport, the card is what gets inset.
+     *
+     * <p>Read from {@link UiTokens#ROW_CLIP_INSET} rather than restated: the
+     * conversation rows and the profile info rows have the identical defect at
+     * the identical value, and three private copies is how they drift.</p>
      */
     private static final float ROW_CLIP_INSET = UiTokens.ROW_CLIP_INSET;
 
@@ -896,7 +900,10 @@ public final class SettingsSectionPage {
                 if (interactive) {
                     drawnRowIndex = i;
                 }
-                boolean over = interactive && row.kind() != RowKind.LABEL
+                // LABEL rows hover only when they fold a group - a plain
+                // heading is not clickable, so it must not answer the pointer.
+                boolean over = interactive
+                        && (row.kind() != RowKind.LABEL || foldableGroup(row.labelKey()) != null)
                         && vmx >= rect.x() && vmx <= rect.right()
                         && vmy >= rect.y() && vmy <= rect.bottom();
                 if (over) {
@@ -917,17 +924,18 @@ public final class SettingsSectionPage {
                 // Rows press-scale around their centre and hit-tests keep using
                 // unscaled coordinates, like the message entrance.
                 //
-                // compact, not row(): row() pins its hover target to 1.0, so the
-                // row would sit perfectly still under the pointer - the same
-                // no-op the conversation rows had. compact also holds the lift
-                // down: the tall theme row would spend 8.6px per side of the
-                // s(8) = 10px row gap under control, 5.8px under compact.
-                PressScale press = row.kind() == RowKind.LABEL ? null
-                        : interactive ? rowPress.computeIfAbsent(i, k -> PressScale.compact())
+                // The width budget keeps a full settings row's lift inside the
+                // s(8) row gap on its own, without a trimmed tier: the edge
+                // travel is capped at BUDGET_PX per side at any row width.
+                // Foldable LABEL rows take a spring too: they toggle whole
+                // colour groups on click and used to sit dead under the
+                // pointer. Plain headings still get none.
+                PressScale press = row.kind() == RowKind.LABEL && foldableGroup(row.labelKey()) == null ? null
+                        : interactive ? rowPress.computeIfAbsent(i, k -> PressScale.bounce())
                         : rowPress.get(i);
                 if (press != null) {
                     if (interactive) {
-                        press.update(i == hovered, i == pressedRow, dt, Animations.enabled());
+                        press.update(i == hovered, i == pressedRow, dt, Animations.enabled(), rect.w());
                     }
                     press.begin(canvas, rect.x() + rect.w() / 2.0F, rect.y() + rect.h() / 2.0F);
                 }
@@ -954,10 +962,10 @@ public final class SettingsSectionPage {
 
     /** The section chip row, sharing the bottom tab bar's cell geometry: equal
      *  cells from {@code layout.chipBar}, the accent capsule for the selection
-     *  (sliding on the tab clock), a pure-colour hover wash, and a compact
-     *  bounce on the label. Unlike the tab bar the bounce never wraps the
-     *  capsule: that capsule is one shared shape sliding between cells, so a
-     *  per-cell hover spring on it would fight the slide. */
+     *  (sliding on the tab clock), a pure-colour hover wash, and a bounce on
+     *  the whole chip cell. Like {@code BottomTabBar}, the per-cell spring
+     *  wraps the entire cell (wash plus label) while the shared capsule rides
+     *  the selected cell's spring: a capsule of its own would fight the slide. */
     private void drawChipBar(Canvas canvas, UiLayout layout, SettingsSection section,
                              int accent, float dtMs) {
         List<SectionChip> chips = chips(section);
@@ -972,28 +980,30 @@ public final class SettingsSectionPage {
 
         // Selection capsule: the accent at full strength, sliding between cells
         // on the same clock the bottom tab bar uses. Translucent white used to
-        // sit here and disappeared on the light themes.
+        // sit here and disappeared on the light themes. The capsule rides the
+        // selected cell's spring (BottomTabBar's pattern), so hovering the
+        // active chip lifts the capsule with it.
         UiLayout.Rect first = layout.chipRect(0, count);
         float capsuleX = layout.chipBar.x() + chipIndicator.getValue() * cellW + inset;
-        SkiaDraw.drawRoundedRect(canvas, capsuleX, first.y(), first.w(), first.h(),
-                UiTokens.radius(8), UiTokens.accentFill());
-
-        // Hover wash: the accent-derived wash, fading in and out. The selected
-        // cell is skipped - a wash over a solid accent would only dull it.
-        for (int i = 0; i < count; i++) {
-            if (i == activeIndex) {
-                continue;
+        PressScale activeScale = chipScale.get(activeIndex);
+        if (activeScale != null) {
+            activeScale.begin(canvas, capsuleX + first.w() / 2.0F, first.y() + first.h() / 2.0F);
+        }
+        try {
+            SkiaDraw.drawRoundedRect(canvas, capsuleX, first.y(), first.w(), first.h(),
+                    UiTokens.radius(8), UiTokens.accentFill());
+        } finally {
+            if (activeScale != null) {
+                canvas.restore();
             }
-            Float hov = chipHover.get(i);
-            if (hov == null || hov <= 0.01F) {
-                continue;
-            }
-            UiLayout.Rect cell = layout.chipRect(i, count);
-            SkiaDraw.drawRoundedRect(canvas, cell.x(), cell.y(), cell.w(), cell.h(),
-                    UiTokens.radius(8), UiTokens.cardHover(hov));
         }
 
-        // Labels last; the press scale wraps the label only, never the capsule.
+        // One pass per cell: the bounce scales the whole chip cell — hover
+        // wash and label together — around the cell's centre, like the tab
+        // bar's cells. Scaling the 15px label alone moved its edge 0.6px and
+        // read as nothing at all. The wash covers the selected cell too: with
+        // the capsule now scaling on hover, an active chip still answers the
+        // pointer instead of going inert.
         for (int i = 0; i < count; i++) {
             UiLayout.Rect cell = layout.chipRect(i, count);
             boolean selected = i == activeIndex;
@@ -1006,6 +1016,11 @@ public final class SettingsSectionPage {
                 scale.begin(canvas, cx, cy);
             }
             try {
+                Float hov = chipHover.get(i);
+                if (hov != null && hov > 0.01F) {
+                    SkiaDraw.drawRoundedRect(canvas, cell.x(), cell.y(), cell.w(), cell.h(),
+                            UiTokens.radius(8), UiTokens.cardHover(hov));
+                }
                 SkiaFontRenderer.drawTextCentered(canvas, labelFont,
                         tr(chips.get(i).labelKey()), cx, cy,
                         selected ? UiTokens.onAccent(UiTokens.accentFill()) : sec(200));
@@ -1043,10 +1058,11 @@ public final class SettingsSectionPage {
             } else {
                 chipHover.put(i, next);
             }
-            // compact: the chip row is a set of adjacent equal cells, the case
-            // PressScale.compact() exists for.
-            chipScale.computeIfAbsent(i, key -> PressScale.compact())
-                    .update(over, over && pressedChip == i, dtMs, Animations.enabled());
+            // The chip row is a set of adjacent equal cells; the width budget
+            // keeps each chip's lift inside its own slot.
+            chipScale.computeIfAbsent(i, key -> PressScale.bounce())
+                    .update(over, over && pressedChip == i, dtMs, Animations.enabled(),
+                            layout.chipRect(i, chips.size()).w());
         }
     }
 
@@ -1118,6 +1134,11 @@ public final class SettingsSectionPage {
             if (Math.abs(vmx - swatchX(rect, i)) <= r + UiTokens.s(4)) {
                 return i;
             }
+        }
+        // The "+" cell right after the last swatch, mirroring colorHit's
+        // geometry so the hover bounce and the hit-test cannot drift apart.
+        if (Math.abs(vmx - swatchX(rect, color.swatchCount())) <= r + UiTokens.s(4)) {
+            return color.swatchCount();
         }
         return -1;
     }
@@ -1360,12 +1381,12 @@ public final class SettingsSectionPage {
         float h = UiTokens.THEME_CARD_H;
         float radius = UiTokens.s(10) * preview.cornerFactor();
 
-        // compact: the cards are separated by THEME_CARD_GAP and packed against
-        // the strip's own clip, so the trimmed lift is what keeps the gap and
-        // the rounded edges visible.
-        PressScale press = themeCardScale.computeIfAbsent(index, k -> PressScale.compact());
+        // The cards are separated by THEME_CARD_GAP and packed against the
+        // strip's own clip; the width budget keeps the gap and the rounded
+        // edges visible. The scaled shape is the card itself (w).
+        PressScale press = themeCardScale.computeIfAbsent(index, k -> PressScale.bounce());
         press.update(themeCardAt(rect, pointerX, pointerY, themeStripScroll) == index,
-                themeStripPressed && pressedThemeCard == index, dtMs, Animations.enabled());
+                themeStripPressed && pressedThemeCard == index, dtMs, Animations.enabled(), w);
         press.begin(canvas, x + w / 2.0F, y + h / 2.0F);
         try {
             SkiaDraw.drawRoundedShadow(canvas, x, y, w, h, radius, s(5), UiTokens.CARD_SHADOW);
@@ -1429,12 +1450,13 @@ public final class SettingsSectionPage {
         for (int i = 0; i < color.swatchCount(); i++) {
             float scx = swatchX(rect, i);
             int swatch = color.swatchColor(i);
-            // One bounce spring per swatch (keyed row+index), compact: the
-            // swatches sit one step apart and this scale runs inside the row's
-            // own bounce, so the two compound. Hit-tests stay unscaled.
+            // One bounce spring per swatch (keyed row+index): the swatches sit
+            // one step apart and this scale runs inside the row's own bounce,
+            // so the two compound. The scaled shape is the 2r swatch square.
+            // Hit-tests stay unscaled.
             PressScale ps = swatchScale.computeIfAbsent(swatchKey(swatchRowIndex, i),
-                    k -> PressScale.compact());
-            ps.update(i == hoveredSwatch, i == pressedSwatch, dtMs, Animations.enabled());
+                    k -> PressScale.bounce());
+            ps.update(i == hoveredSwatch, i == pressedSwatch, dtMs, Animations.enabled(), 2.0F * r);
             ps.begin(canvas, scx, cy);
             try {
                 SkiaDraw.drawRoundedRect(canvas, scx - r, cy - r, 2.0F * r, 2.0F * r, r, swatch);
@@ -1454,12 +1476,26 @@ public final class SettingsSectionPage {
             }
         }
         // "+" cell: opens the custom colour picker (emote-grid plus language).
-        float px = swatchX(rect, color.swatchCount());
-        SkiaDraw.drawRoundedRect(canvas, px - r, cy - r, 2.0F * r, 2.0F * r, r,
-                Color.makeARGB(70, 255, 255, 255));
-        SkiaDraw.drawRing(canvas, px, cy, r + s(0.75F), s(1.0F), UiCards.hairlineColor());
-        drawIconCentered(canvas, AppIcons.ICON_PLUS_PATH, px, cy, s(12),
-                textPrimary());
+        // Same per-cell bounce as the swatches: it is the strip's last hit
+        // target and used to sit dead under the pointer. The press phase keys
+        // off pressedSwatch as well, though the screen opens the picker on
+        // click, so hover is the visible half of the gesture in practice.
+        int plusIndex = color.swatchCount();
+        float px = swatchX(rect, plusIndex);
+        PressScale plus = swatchScale.computeIfAbsent(swatchKey(swatchRowIndex, plusIndex),
+                k -> PressScale.bounce());
+        plus.update(plusIndex == hoveredSwatch, plusIndex == pressedSwatch, dtMs,
+                Animations.enabled(), 2.0F * r);
+        plus.begin(canvas, px, cy);
+        try {
+            SkiaDraw.drawRoundedRect(canvas, px - r, cy - r, 2.0F * r, 2.0F * r, r,
+                    Color.makeARGB(70, 255, 255, 255));
+            SkiaDraw.drawRing(canvas, px, cy, r + s(0.75F), s(1.0F), UiCards.hairlineColor());
+            drawIconCentered(canvas, AppIcons.ICON_PLUS_PATH, px, cy, s(12),
+                    textPrimary());
+        } finally {
+            canvas.restore();
+        }
     }
 
     private static void drawIconCentered(Canvas canvas, io.github.humbleui.skija.Path icon,
@@ -1663,7 +1699,9 @@ public final class SettingsSectionPage {
         control.update(dtMs, item.available() && item.value());
 
         float switchY = rect.y() + (rect.h() - UiTokens.SWITCH_H) / 2.0F;
-        control.render(canvas, switchX, switchY, accent);
+        // The four-arg overload wires the disabled state: an unavailable
+        // switch renders its whole capsule at the control's disabled opacity.
+        control.render(canvas, switchX, switchY, accent, item.available());
 
         Font titleFont = FontManager.font(UiTokens.SETTINGS_TILE_TITLE);
         Font subFont = FontManager.font(UiTokens.SETTINGS_TILE_SUB);
@@ -1679,7 +1717,7 @@ public final class SettingsSectionPage {
                 textPrimary());
         drawWrappedDescription(canvas, rect, subFont, tr(subtitleKey), textX, descMaxW,
                 sec(item.available() ? 200 : 130));
-        // Disabled switches dim their copy only; the card base stays put.
+        // Disabled switches dim their copy and their capsule; the card base stays put.
     }
 
     private void drawSlider(Canvas canvas, Row row, UiLayout.Rect rect, int accent) {

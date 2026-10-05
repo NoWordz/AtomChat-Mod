@@ -151,6 +151,23 @@ class UiLayoutTest {
     }
 
     /**
+     * Approved baseline for the composer row's edge inset, pinned for the same
+     * reason as {@link #HEADER_BASELINE_SIDE}: the header's back / filter keys
+     * sit an inline s(4) = 5 px off their card edge, while this row pad was
+     * s(8) = 10 px — two insets for the same "control tucked into its card"
+     * rule. The unification picked the tighter one. Every other assertion here
+     * reads the constant, so without this pin the pad could drift back and the
+     * suite would stay green.
+     */
+    private static final float EDGE_INSET_BASELINE = 5.0F;
+
+    @Test
+    void composerRowInsetMatchesHeaderEdgeBaseline() {
+        assertEquals(EDGE_INSET_BASELINE, UiTokens.INPUT_ROW_PAD, EPS,
+                "the composer row pad is the approved 5 px edge inset");
+    }
+
+    /**
      * Recurrence guard for the clipped placeholder. The input text is clipped at
      * the bar's inner bottom edge, so a band that no longer holds the whole line
      * block plus its descenders cuts the text silently - the shipped font reports

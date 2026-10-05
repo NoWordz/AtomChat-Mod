@@ -4,6 +4,7 @@ import com.atom.chat.avatar.AvatarStore;
 import com.atom.chat.chat.PlayerRef;
 import com.atom.chat.font.FontManager;
 import com.atom.chat.image.PlayerAvatar;
+import org.lwjgl.glfw.GLFW;
 import com.atom.chat.render.SkiaDraw;
 import com.atom.chat.render.SkiaFontRenderer;
 import com.atom.chat.ui.Animations;
@@ -88,74 +89,78 @@ public final class ProfilePage {
     private float badgeHover;
     /**
      * Bounce for the avatar and its edit badge: both are discrete taps, so
-     * they take the full control lift. Draw-only, like every other scale on
-     * this page - the hit-tests keep using the unscaled rects.
+     * they scale on their own width budget. Draw-only, like every other
+     * scale on this page - the hit-tests keep using the unscaled rects.
      */
-    private final PressScale avatarScale = PressScale.control();
-    private final PressScale badgeScale = PressScale.control();
+    private final PressScale avatarScale = PressScale.bounce();
+    private final PressScale badgeScale = PressScale.bounce();
     private float rowHover;
     /** Row the current {@link #rowHover} alpha belongs to; fades out on exit. */
     private int hoverRowIndex = -1;
     /**
-     * Per-row and per-tile bounce, keyed by index. A full-width row that grew
-     * on hover would read as jitter, so these take the press-only row spring
-     * and their hover target stays 1.0. No pressed control is reported to this
-     * page yet (the shell hands a press window only to the settings page), so
-     * both springs rest at 1.0 until one is.
+     * Per-row bounce, keyed by index. The width budget keeps a full-width
+     * row's lift inside {@link UiTokens#LIST_GAP}-sized gaps. The press half
+     * polls the physical button through GLFW per frame in {@link #drawInfoRows},
+     * not a shell-side press window.
      */
     private final java.util.Map<Integer, PressScale> rowScale = new java.util.HashMap<>();
     private final float[] menuItemHover = new float[2];
     /** Per-item menu bounce, indexed like {@link #menuItemHover}. */
-    private final PressScale[] menuItemScale = {PressScale.control(), PressScale.control()};
+    private final PressScale[] menuItemScale = {PressScale.bounce(), PressScale.bounce()};
     /**
-     * Overshoot peak of {@link PressScale#control()}, the spring the avatar
-     * menu's rows run on. Padding that keeps a row capsule inside its container
-     * has to be evaluated at the peak rather than at the spring's nominal
-     * target, because the draw path scales the capsule about its own centre.
+     * Release-peak gain of the {@link PressScale} bounce over the hover
+     * target's excess above 1. The bounce spring
+     * ({@link UiSpring#newBounceSpring()}) travels from the pressed mirror
+     * {@code 2 - u} back to the hover target {@code u} and overshoots past it
+     * by 15.5446% of that travel — simulated with the real SpringAnim
+     * substeps at 60fps (the old 1.08/0.92-tier figure of 1.104871 reproduces
+     * bit-for-bit), and because the spring is linear the fraction is
+     * scale-invariant, so every width shares this one gain:
+     * {@code peak = 1 + 1.31089 * (u - 1)}.
      *
-     * <p>Peak of {@link UiSpring#newBounceSpring()} when it springs back to the
-     * 1.08 hover target from the 0.92 press target: 1.104871, against a resting
-     * 1.0. Evaluated at the released peak on purpose, because the page never
-     * feeds a press today (see the {@code pressed = false} note in
-     * {@link #render}) so only the 1.08 hover target is reachable right now -
-     * padding is the cheap half of this fix, and taking the peak here means
-     * wiring press tracking later cannot silently reopen the overflow.
+     * <p>Padding that keeps a row capsule inside its container has to be
+     * evaluated at that peak rather than at the nominal target, because the
+     * draw path scales the capsule about the container's centre — see
+     * {@link #controlReleasePeak(float)}.
      */
-    private static final float CONTROL_RELEASE_PEAK = 1.104871F;
-    /**
-     * Insets a full-width info row from the scroll clip on each side. The rows
-     * are drawn exactly the clip's width, so the compact lift has nowhere to
-     * grow and the clip shears the rounded corners flat. s(12) = 15px covers the
-     * 1.053961 release peak: (1.053961 - 1) * 370 / 2 = 9.98px a side on the
-     * default panel, so 5px of slack. The cost is 30px of a 370px row, which on
-     * a row that already pads its text by 14px reads as far less.
-     */
-    private static final float INFO_ROW_INSET = s(12);
+    private static final float CONTROL_RELEASE_PEAK_GAIN = 1.31089F;
     /**
      * Base padding for the avatar menu's row capsule, the hover language the
-     * bubble context menu uses. The horizontal half is width-derived in
-     * {@link #menuItemInset}: a wider menu is scaled further out by the same
-     * spring, so a constant padding cannot hold at every width.
+     * bubble context menu uses. The horizontal half stays width-derived in
+     * {@link #menuItemInset}: under the pixel budget a menu-width control's
+     * release-peak spill is near-constant, but narrow menus ride the 6% cap
+     * and spill proportionally, so the derived form is kept exact at every
+     * width.
      */
     private static final float MENU_ITEM_INSET = s(4);
     /** Margin the derived menu padding keeps past the spring peak. */
     private static final float MENU_ITEM_CLEARANCE = s(1);
 
     /**
+     * Release peak of the bounce spring for a control {@code widthPx} wide:
+     * the width budget sets the hover target
+     * {@code u = 1 + min(BUDGET_PX / (widthPx / 2), BUDGET_PCT)}, the pressed
+     * target mirrors it at {@code 2 - u}, and the overshoot gain turns that
+     * into the peak the padding below is sized against.
+     */
+    private static float controlReleasePeak(float widthPx) {
+        float u = 1.0F + Math.min(PressScale.BUDGET_PX / (widthPx * 0.5F), PressScale.BUDGET_PCT);
+        return 1.0F + CONTROL_RELEASE_PEAK_GAIN * (u - 1.0F);
+    }
+
+    /**
      * Padding between the avatar menu's edge and a hovered row capsule. The
      * capsule is scaled about the menu's centre, so at scale {@code k} its outer
      * edge lands at {@code menuW/2 - (menuW/2 - inset) * k} in the menu's own
      * frame; staying inside the menu needs {@code inset >= (k - 1) * menuW /
-     * (2k)}. That is proportional to {@code menuW}, and the menu width is
-     * derived from the label text, so the padding has to be derived too: a
-     * constant padding still spills on a long label, which is exactly how the
-     * English "Change avatar" row overflowed. The written form is the approved
-     * shape, evaluated at the release peak and given a pixel of clearance so the
-     * capsule edge reads as clear of the card edge instead of tangent to it.
+     * (2k)}. {@code k} is evaluated at the release peak of the menu row's own
+     * width budget ({@link #controlReleasePeak}) and given a pixel of clearance
+     * so the capsule edge reads as clear of the card edge instead of tangent
+     * to it.
      */
     private static float menuItemInset(float menuW) {
         float derived = MENU_ITEM_INSET
-                + (CONTROL_RELEASE_PEAK - 1.0F) * (menuW - s(8)) / 2.0F
+                + (controlReleasePeak(menuW) - 1.0F) * (menuW - s(8)) / 2.0F
                 + MENU_ITEM_CLEARANCE;
         // A label long enough to make the derived padding eat the capsule would
         // otherwise draw a negative width; the rows keep at least s(8) of pill.
@@ -211,8 +216,8 @@ public final class ProfilePage {
         float alpha = copyHover.computeIfAbsent(index, k -> 0.0F);
         alpha = UiMotion.approach(alpha, hovered ? 1.0F : 0.0F, dtMs, UiMotion.HOVER_MS);
         copyHover.put(index, alpha);
-        PressScale copyPress = copyScale.computeIfAbsent(index, k -> PressScale.control());
-        copyPress.update(hovered, false, dtMs, Animations.enabled());
+        PressScale copyPress = copyScale.computeIfAbsent(index, k -> PressScale.bounce());
+        copyPress.update(hovered, false, dtMs, Animations.enabled(), button.w());
         copyPress.begin(canvas, button.x() + button.w() / 2.0F, button.y() + button.h() / 2.0F);
         try {
             if (alpha > 0.01F) {
@@ -572,14 +577,16 @@ public final class ProfilePage {
 
     /**
      * The card an info row draws as, inset from {@link #rowRect} on both sides
-     * by the room the hover lift needs. One geometry satisfies the hit test and
-     * the draw, so a row can never be drawn where it cannot be clicked and the
-     * label keeps exactly {@link UiTokens#PROFILE_ROW_PAD} of the card's edge.
+     * by {@link UiTokens#ROW_CLIP_INSET} so the hover lift (and the press
+     * release peak) has room to grow instead of being sheared flat by the
+     * scroll clip. One geometry satisfies the hit test and the draw, so a row
+     * can never be drawn where it cannot be clicked and the label keeps
+     * exactly {@link UiTokens#PROFILE_ROW_PAD} of the card's edge.
      */
     private UiLayout.Rect rowCardRect(UiLayout layout, int index, float scrollY) {
         UiLayout.Rect row = rowRect(layout, index, scrollY);
-        return new UiLayout.Rect(row.x() + INFO_ROW_INSET, row.y(),
-                row.w() - INFO_ROW_INSET * 2.0F, row.h());
+        return new UiLayout.Rect(row.x() + UiTokens.ROW_CLIP_INSET, row.y(),
+                row.w() - UiTokens.ROW_CLIP_INSET * 2.0F, row.h());
     }
 
     /**
@@ -699,11 +706,14 @@ public final class ProfilePage {
         boolean overBadge = badge.contains(vmx, vmy);
         avatarHover = UiMotion.approach(avatarHover, overAvatar ? 1.0F : 0.0F, dt, UiMotion.HOVER_MS);
         badgeHover = UiMotion.approach(badgeHover, overBadge ? 1.0F : 0.0F, dt, UiMotion.HOVER_MS);
-        // Every bounce below passes pressed = false: this page is never told
-        // which control is held down, so the hover lift is the only live half
-        // of the language here and the press dip stays dormant.
-        avatarScale.update(overAvatar && subjectIsSelf(), false, dt, Animations.enabled());
-        badgeScale.update(overBadge && subjectIsSelf(), false, dt, Animations.enabled());
+        // The avatar, badge, menu and copy bounces keep pressed = false: they
+        // act on mouse-down (picker opens, menu closes or arms, text copies),
+        // so the press half of their scale stays dormant on purpose. The info
+        // rows are the exception — they poll the real left-button state in
+        // drawInfoRows, so no platform shell has to hand this page a press
+        // window the way the settings page gets one.
+        avatarScale.update(overAvatar && subjectIsSelf(), false, dt, Animations.enabled(), avatar.w());
+        badgeScale.update(overBadge && subjectIsSelf(), false, dt, Animations.enabled(), badge.w());
         int hovered = -1;
         List<InfoRow> rows = infoRows();
         for (int i = 0; i < rows.size(); i++) {
@@ -721,7 +731,8 @@ public final class ProfilePage {
             boolean over = avatarMenuOpen && enabled
                     && menuItemRect(layout, scrollY, i).contains(vmx, vmy);
             menuItemHover[i] = UiMotion.approach(menuItemHover[i], over ? 1.0F : 0.0F, dt, UiMotion.HOVER_MS);
-            menuItemScale[i].update(over, false, dt, Animations.enabled());
+            menuItemScale[i].update(over, false, dt, Animations.enabled(),
+                    menuItemRect(layout, scrollY, i).w());
         }
         // Popup fade respects the decorative-motion switch like every other
         // overlay: when animations are off the duration is 0 and the menu
@@ -738,7 +749,7 @@ public final class ProfilePage {
         SkiaDraw.drawRoundedRect(canvas, hero.x(), hero.y(), hero.w(), hero.h(),
                 UiTokens.settingsTileRadius(), UiTokens.cardFill());
         SkiaDraw.drawEdgeHighlight(canvas, hero.x(), hero.y(), hero.w(), hero.h(),
-                UiTokens.settingsTileRadius(), s(1.2F), UiTokens.CARD_EDGE);
+                UiTokens.settingsTileRadius(), s(1.0F), UiTokens.outlineColor(2));
 
         // Avatar: the local custom avatar when the subject is self and one is
         // set (decoded off-thread; the skin shows while the decode is in
@@ -809,7 +820,7 @@ public final class ProfilePage {
             SkiaDraw.drawRoundedRect(canvas, tile.x(), tile.y(), tile.w(), tile.h(),
                     UiTokens.profileRowRadius(), UiTokens.cardFill());
             SkiaDraw.drawEdgeHighlight(canvas, tile.x(), tile.y(), tile.w(), tile.h(),
-                    UiTokens.profileRowRadius(), s(1.2F), UiTokens.CARD_EDGE);
+                    UiTokens.profileRowRadius(), s(1.0F), UiTokens.outlineColor(2));
             float cx = tile.x() + tile.w() / 2.0F;
             String value = SkiaFontRenderer.truncate(valueFont, tiles.get(i).value(),
                     tile.w() - UiTokens.PROFILE_ROW_PAD);
@@ -829,14 +840,24 @@ public final class ProfilePage {
             if (row.bottom() < layout.list.y() || row.y() > layout.list.bottom()) {
                 continue;
             }
-            // Info rows are a full-width stack: the lift is compact (1.04) rather
-            // than control's 1.08, which would close the gap to the row above and
-            // below. row() would leave it at rest on hover, which is the motion a
-            // list needs between stacked cards but the wrong answer for a row the
-            // pointer is deliberately resting on.
-            PressScale rowPress = rowScale.computeIfAbsent(i, k -> PressScale.compact());
-            rowPress.update(rowHover > 0.01F && i == hoverRowIndex, false, lastDtMs,
-                    Animations.enabled());
+            // Info rows are a full-width stack: the width budget keeps the lift
+            // small on a row this wide, so it cannot close the gap to the row
+            // above and below while still breathing under the pointer.
+            // The press half polls the physical button straight from GLFW
+            // every frame instead of taking a shell-side press window — the
+            // same hover-attributed press the settings page gets, without
+            // needing one. Vanilla's own held-button flag cannot be used
+            // here: its only write site is gated on screen == null, so while
+            // this screen owns the input it would read false the whole time.
+            // GLFW is polled, not evented, so it stays truthful under a
+            // screen; and when an AWT dialog takes focus GLFW reports the
+            // button released (synthetic release on focus loss), so the dip
+            // cannot stick behind one.
+            PressScale rowPress = rowScale.computeIfAbsent(i, k -> PressScale.bounce());
+            boolean overRow = rowHover > 0.01F && i == hoverRowIndex;
+            rowPress.update(overRow, overRow && GLFW.glfwGetMouseButton(
+                            Minecraft.getInstance().getWindow().getWindow(), GLFW.GLFW_MOUSE_BUTTON_LEFT) == GLFW.GLFW_PRESS,
+                    lastDtMs, Animations.enabled(), row.w());
             // The card is inset from the clip on both sides, so the hover lift has
             // somewhere to grow instead of being sheared flat by the scroll clip.
             // Card, hover test and text all move with it, which is what keeps the
@@ -846,7 +867,7 @@ public final class ProfilePage {
                 SkiaDraw.drawRoundedRect(canvas, row.x(), row.y(), row.w(), row.h(),
                         UiTokens.profileRowRadius(), UiTokens.cardFill());
                 SkiaDraw.drawEdgeHighlight(canvas, row.x(), row.y(), row.w(), row.h(),
-                        UiTokens.profileRowRadius(), s(1.2F), UiTokens.CARD_EDGE);
+                        UiTokens.profileRowRadius(), s(1.0F), UiTokens.outlineColor(2));
                 if (rowHover > 0.01F && i == hoverRowIndex) {
                     SkiaDraw.drawRoundedRect(canvas, row.x(), row.y(), row.w(), row.h(),
                             UiTokens.profileRowRadius(), UiTokens.cardHover(rowHover));

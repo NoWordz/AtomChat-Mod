@@ -37,7 +37,6 @@ public final class SettingsHomePage {
     // two tiles can ever drive the same spring; the array fills lazily because
     // PressScale only comes out of its factory methods.
     private final PressScale[] tileScale = new PressScale[sections.length];
-    private int hoveredIndex = -1;
     private long lastFrameMs = System.currentTimeMillis();
 
     public float measureContent(UiLayout layout) {
@@ -50,7 +49,13 @@ public final class SettingsHomePage {
 
     /** Tile width from the column grid; the tile is square, so this is also its height. */
     public static float tileSide(UiLayout layout) {
-        return (layout.list.w() - (UiTokens.SETTINGS_TILE_COLS - 1) * UiTokens.SETTINGS_TILE_GAP)
+        // The grid sits ROW_CLIP_INSET inside the list clip on both sides, like
+        // settings rows: drawn flush with the clip the outer tiles' rounded
+        // corners would shear flat against it the moment the hover scale
+        // (4px budget + spring overshoot per side) and the card-shadow tail
+        // spill past the edge.
+        float gridW = layout.list.w() - UiTokens.ROW_CLIP_INSET * 2.0F;
+        return (gridW - (UiTokens.SETTINGS_TILE_COLS - 1) * UiTokens.SETTINGS_TILE_GAP)
                 / (float) UiTokens.SETTINGS_TILE_COLS;
     }
 
@@ -59,7 +64,7 @@ public final class SettingsHomePage {
         int col = index % UiTokens.SETTINGS_TILE_COLS;
         int row = index / UiTokens.SETTINGS_TILE_COLS;
         return new UiLayout.Rect(
-                layout.list.x() + col * (side + UiTokens.SETTINGS_TILE_GAP),
+                layout.list.x() + UiTokens.ROW_CLIP_INSET + col * (side + UiTokens.SETTINGS_TILE_GAP),
                 layout.list.y() + UiTokens.ROOT_CONTENT_GAP
                         + row * (side + UiTokens.SETTINGS_TILE_GAP) - scrollY,
                 side, side);
@@ -70,28 +75,20 @@ public final class SettingsHomePage {
         float dt = Math.min(50.0F, Math.max(1.0F, now - lastFrameMs));
         lastFrameMs = now;
 
+        // Hover test, then state, then draw: the tile paints with the values
+        // this frame produced — updating after the draw left the scale and
+        // the wash one frame behind the pointer.
         int hovered = -1;
-        canvas.save();
-        try {
-            SkiaDraw.clip(canvas, layout.list.x(), layout.list.y(), layout.list.w(), layout.list.h(), 0.0F);
-            for (int i = 0; i < sections.length; i++) {
-                UiLayout.Rect tile = tileRect(layout, i, scrollY);
-                if (tile.bottom() < layout.list.y() || tile.y() > layout.list.bottom()) {
-                    continue;
-                }
-                boolean over = vmx >= tile.x() && vmx <= tile.right()
-                        && vmy >= tile.y() && vmy <= tile.bottom();
-                if (over) {
-                    hovered = i;
-                }
-                // Animated value only: forcing it to 1 while hovered is what
-                // made the highlight snap in instead of fading in.
-                drawTile(canvas, tile, sections[i], tileHover[i], tileScale[i]);
+        for (int i = 0; i < sections.length; i++) {
+            UiLayout.Rect tile = tileRect(layout, i, scrollY);
+            if (tile.bottom() < layout.list.y() || tile.y() > layout.list.bottom()) {
+                continue;
             }
-        } finally {
-            canvas.restore();
+            if (vmx >= tile.x() && vmx <= tile.right()
+                    && vmy >= tile.y() && vmy <= tile.bottom()) {
+                hovered = i;
+            }
         }
-        hoveredIndex = hovered;
         for (int i = 0; i < tileHover.length; i++) {
             tileHover[i] = UiMotion.approach(tileHover[i], i == hovered ? 1.0F : 0.0F, dt, UiMotion.HOVER_MS);
         }
@@ -100,9 +97,26 @@ public final class SettingsHomePage {
         // stays false and the hover lift is the whole bounce.
         for (int i = 0; i < tileScale.length; i++) {
             if (tileScale[i] == null) {
-                tileScale[i] = PressScale.compact();
+                tileScale[i] = PressScale.bounce();
             }
-            tileScale[i].update(i == hovered, false, dt, Animations.enabled());
+            // The scaled shape is the tile square itself.
+            tileScale[i].update(i == hovered, false, dt, Animations.enabled(), tileSide(layout));
+        }
+
+        canvas.save();
+        try {
+            SkiaDraw.clip(canvas, layout.list.x(), layout.list.y(), layout.list.w(), layout.list.h(), 0.0F);
+            for (int i = 0; i < sections.length; i++) {
+                UiLayout.Rect tile = tileRect(layout, i, scrollY);
+                if (tile.bottom() < layout.list.y() || tile.y() > layout.list.bottom()) {
+                    continue;
+                }
+                // Animated value only: forcing it to 1 while hovered is what
+                // made the highlight snap in instead of fading in.
+                drawTile(canvas, tile, sections[i], tileHover[i], tileScale[i]);
+            }
+        } finally {
+            canvas.restore();
         }
     }
 

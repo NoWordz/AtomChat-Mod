@@ -1,5 +1,39 @@
 # Release Notes
 
+## v0.2.16
+
+本版重做了输入栏按钮，把全界面悬停 / 按压的弹跳统一成每边 4 像素的位移预算，并修掉 0.2.15 的一批可见缺陷。三个发布目标（Fabric 1.21.1 / NeoForge 1.21.1 / Forge 1.20.1）同步。
+
+**更改**
+
+- **输入栏按钮整组重做**：实心底色、等宽方角、发丝分隔，悬停与选中色随强调色。
+- **弹跳统一**：悬停 / 按压每边 4 像素，小控件最多放大 6%，按压对称缩小；小件的悬停回弹回来了。
+- **卡片内缩收窄**（15 → 8 像素）、投影收紧；输入栏按键边距统一 5 像素，输入栏变矮。
+- **分段标签、表情面板标签条、颜色「+」格与可折叠标签行**的悬停反馈补齐，导航方块放大不再切圆角。
+- **开关三态可辨**：开有轮廓、关加深、禁用变淡；浅色主题下悬停高亮不再隐形。
+
+**修复**
+
+- 会话列表拖动滚动条时内容不动、点击不跟随。
+- 小控件悬停没有回弹；设置首页悬停滞后一帧。
+
+----
+
+This release reworks the composer buttons, unifies hover / press bounce into a 4-pixel-per-side travel budget, and fixes a batch of visible defects left over from 0.2.15. All three targets (Fabric 1.21.1 / NeoForge 1.21.1 / Forge 1.20.1) ship together.
+
+**Changed**
+
+- **Composer buttons reworked**: solid fills, equal square keys, hairline separators; hover and selection follow the accent colour.
+- **One bounce budget**: 4 pixels per side on hover and press, small controls capped at 6%, presses mirror inward — and the small-control hover bounce is back.
+- **Card insets narrowed** (15 → 8 px) with a tighter shadow; composer key inset unified at 5 px and the bar is shorter.
+- **Hover feedback filled in** for section chips, the emoji tab strip, the colour "+" cell and foldable label rows; settings tiles no longer shear their corners on hover.
+- **Switches read at a glance**: rim when on, darker when off, dimmed when disabled; hover washes no longer vanish on light themes.
+
+**Fixed**
+
+- Dragging the conversation-list scrollbar moved nothing, and clicks ignored the scroll offset.
+- Small controls had no hover bounce; settings-home hover lagged one frame.
+
 ## v0.2.15
 
 本版把界面整体重做了一遍：文字更大、动效改成弹簧、外观设置新增六套配色，设置页也重新排过。三个发布目标（Fabric 1.21.1 / NeoForge 1.21.1 / Forge 1.20.1）同步。
