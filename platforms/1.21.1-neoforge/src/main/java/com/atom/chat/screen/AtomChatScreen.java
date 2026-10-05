@@ -53,6 +53,7 @@ import com.atom.chat.ui.Animations;
 import com.atom.chat.ui.BottomTabBar;
 import com.atom.chat.ui.ScrollController;
 import com.atom.chat.ui.ShellHeader;
+import com.atom.chat.ui.UiCards;
 import com.atom.chat.ui.UiLayout;
 import com.atom.chat.ui.EmojiPanel;
 import com.atom.chat.ui.PanelBackground;
@@ -2474,18 +2475,16 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
             canvas.scale(scale.scale(), scale.scale());
             canvas.translate(-(bx + UiTokens.BUTTON_W / 2.0F), -(by + UiTokens.BUTTON_H / 2.0F));
         }
-        // Floating control inside the composer: the chrome tier, matching the
-        // composer, header and tab bar. Drawn outside the press-scale transform
-        // so the shadow does not fatten with the button.
-        SkiaDraw.drawRoundedShadow(canvas, bx, by, UiTokens.BUTTON_W, UiTokens.BUTTON_H,
-                UiTokens.BUTTON_RADIUS, UiTokens.s(8), UiTokens.CHROME_SHADOW);
-        // Opaque on purpose, and deliberately not cardFill(): that one follows the
-        // card-opacity slider, and any position but the top turns the button
-        // translucent so the shadow behind it shows through and greys it out.
-        // A control has to be visible at every opacity, so this keeps the card
-        // hue at full alpha.
+        // The button is the card surface plus a hairline, the same pair the
+        // content cards use. No shadow: a shadow has to sit behind an opaque
+        // shape to read as elevation, and this shape is translucent whenever the
+        // card-opacity slider is off the top, which is exactly when the shadow
+        // would show through it. The hairline does the separating instead, and
+        // it fades with the fill because both come from the card colour.
         SkiaDraw.drawRoundedRect(canvas, bx, by, UiTokens.BUTTON_W, UiTokens.BUTTON_H,
-                UiTokens.BUTTON_RADIUS, UiTokens.controlSurface());
+                UiTokens.BUTTON_RADIUS, UiTokens.cardFill());
+        SkiaDraw.drawEdgeHighlight(canvas, bx, by, UiTokens.BUTTON_W, UiTokens.BUTTON_H,
+                UiTokens.BUTTON_RADIUS, UiTokens.s(1.0F), UiCards.hairlineColor());
         // Pointer feedback is accent-derived, never white: on the light themes a
         // white wash over a pale panel is the one thing that cannot be seen.
         int hoverWash = UiTokens.cardHover(buttonHover[id]);

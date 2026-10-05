@@ -76,24 +76,6 @@ public final class UiTokens {
     }
 
     /**
-     * Fill for a control that floats on the panel and carries a shadow — the
-     * composer's image / emoji / phrase buttons.
-     *
-     * <p>It cannot be {@link #cardFill()}: that one follows the card-opacity
-     * slider, and the moment the slider leaves the top the button turns
-     * translucent, the shadow shows through it, and the button greys out. It
-     * cannot be a translucent white either, which is what it used to be and is
-     * invisible on a light panel. A control has to stay visible at every
-     * opacity setting, so this takes the card colour at full alpha: the button
-     * keeps the card's hue and never lets the shadow through.</p>
-     */
-    public static int controlSurface() {
-        int rgb = com.atom.chat.config.AtomChatConfig.get().cardColor & 0xFFFFFF;
-        return io.github.humbleui.skija.Color.makeARGB(255,
-                (rgb >> 16) & 0xFF, (rgb >> 8) & 0xFF, rgb & 0xFF);
-    }
-
-    /**
      * Content colour that reads on top of a filled accent shape. Picked from the
      * fill's own luminance, not the panel's: a theme's accent can be pale
      * enough to need dark glyphs on a dark panel, or deep enough to need white
