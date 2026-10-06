@@ -40,9 +40,9 @@ public final class UiTokens {
      * Card/chrome surface fill: the configured card colour with its alpha
      * driven by the card-tint slider (60 at 0% → 255 at 100%). The default
      * white at 0% reproduces the shipped frosted wash exactly; a dark colour
-     * at 100% is the modern flat "black background, white text". Hover stays
-     * a plain white overlay at every position, so one hover language covers
-     * the whole axis.
+     * at 100% is the modern flat "black background, white text". Hover is a
+     * separate language ({@link #cardHover(float)}) that follows the accent
+     * at both ends of the axis.
      */
     public static int cardFill() {
         com.atom.chat.config.AtomChatConfig config = com.atom.chat.config.AtomChatConfig.get();
@@ -56,18 +56,23 @@ public final class UiTokens {
     }
 
     /**
-     * Hover wash on a surface; {@code weight} 0..1. Uses the theme's accent
-     * when the accent actually contrasts with the surface under it, and a
-     * polarity-flipped neutral wash when it does not: a pale accent over a
-     * pale card was white-on-white invisible (the "hover does nothing"
-     * report), and no alpha tuning can rescue a wash whose colour matches
-     * the ground. Visibility is decided by the WCAG contrast ratio between
-     * the accent and the card's pre-mixed surface ({@link #cardCutout()}),
-     * with 3:1 — the WCAG graphics-contrast bar — as the pass line. On a
-     * fail the wash flips to black over a light surface / white over a dark
-     * one and its alpha rises 45 → 60 so the flipped neutral still reads at
-     * feedback strength. The weight stays a plain alpha multiplier, so each
-     * polarity keeps one feedback strength along the whole tint axis.
+     * Hover wash on a surface; {@code weight} 0..1. The wash is always dyed
+     * by the theme's accent — the hue comes from the accent, never from a
+     * neutral — while the surface's polarity decides only the direction of
+     * the shift: over a light card the accent is deepened (lime towards
+     * olive, so the wash visibly darkens), over a dark card it is lifted
+     * (gold towards pale gold, so the wash visibly brightens). The alpha is
+     * constant across themes at 55×weight: identical feedback strength on
+     * light and dark surfaces is an explicit user requirement from the
+     * v0.2.16 field reports, not a tuning accident.
+     *
+     * <p>The previous language — keep the accent when it contrasts with the
+     * surface, otherwise flip to plain black/white — was rejected in real
+     * use: on light themes the flip fired almost always, and hover read as a
+     * neutral grey-black smudge that had lost the theme colour entirely.
+     * Deepening or lifting the accent instead keeps every hover on-theme by
+     * construction, because the polarity only chooses the direction, and the
+     * accent carries the hue through both branches.</p>
      */
     public static int cardHover(float weight) {
         return cardHover(com.atom.chat.config.AtomChatConfig.get().accentColor,
@@ -75,19 +80,19 @@ public final class UiTokens {
     }
 
     /**
-     * Contrast-derived hover wash against explicit colours — the unit-test
-     * seam (the {@link com.atom.chat.theme.ThemeService#panelIsLight(com.atom.chat.config.AtomChatConfig)
+     * Accent-dyed, polarity-adaptive hover wash against explicit colours —
+     * the unit-test seam (the {@link com.atom.chat.theme.ThemeService#panelIsLight(com.atom.chat.config.AtomChatConfig)
      * panelIsLight(config)} pattern): {@code accent} is the configured accent
-     * RGB, {@code base} the opaque surface the wash lands on.
+     * ARGB, {@code base} the opaque surface the wash lands on. Light base
+     * deepens the accent 55% towards black, dark base lifts it 45% towards
+     * white; either way the result ships at a constant alpha of 55×weight.
      */
     public static int cardHover(int accent, int base, float weight) {
         float w = Math.max(0.0F, Math.min(1.0F, weight));
-        if (contrastRatio(accent, base) >= 3.0F) {
-            return withAlpha(accent, 45.0F * w);
-        }
-        return com.atom.chat.theme.ThemeService.colorIsLight(base)
-                ? withAlpha(0xFF000000, 60.0F * w)
-                : withAlpha(0xFFFFFFFF, 60.0F * w);
+        int rgb = com.atom.chat.theme.ThemeService.colorIsLight(base)
+                ? mixRgb(accent, 0x000000, 0.55F)
+                : mixRgb(accent, 0xFFFFFF, 0.45F);
+        return withAlpha(rgb, 55.0F * w);
     }
 
     /**
@@ -137,42 +142,80 @@ public final class UiTokens {
     }
 
     /**
-     * Stroke colour for outline tier {@code level} (1..3): the three-level
-     * border hierarchy behind the "borders feel flat" report. Tier 1 is the
-     * page container (strongest), tier 2 card panels and card-level controls,
-     * tier 3 the faintest elements inside a card. The configured panel
-     * outline colour is resolved with the same contrast logic as
-     * {@link #cardHover(int, int, float)}: when it cannot be seen on the
-     * card surface (white outline on a light card) the stroke flips to the
-     * surface's opposite polarity. All three tiers share that resolved
-     * colour and differ only in alpha — 100% / 60% / 30% of the outline's
-     * own alpha — so the hierarchy reads as one border language at three
-     * intensities instead of three unrelated edges. Pending in-game visual
-     * acceptance, tuned blind against the luminance math.
+     * Polarity-adaptive hairline stroke for card edges: black at alpha 42 on
+     * a light surface, white at alpha 42 on a dark one. This replaces the
+     * three-tier {@code outlineColor} ladder, which at its card tier (alpha
+     * 153 on a user-tuned opaque outline) drew borders so heavy they read as
+     * frames, not edges — the v0.2.16 "borders feel flat / too thick"
+     * report. The hairline language is one strength for every static edge:
+     * whisper-thin (consumers draw it at s(1.0)), polarity-picked, and
+     * identical in alpha on both themes, so a light and a dark theme show
+     * the same edge intensity. The one deliberate exception is
+     * {@link #rim()}, the switch's functional rim, which needs real
+     * visibility while it hugs the accent.
      */
-    public static int outlineColor(int level) {
-        return outlineColor(level,
-                com.atom.chat.config.AtomChatConfig.get().panelOutlineColor,
-                cardCutout());
+    public static int hairline() {
+        return hairline(cardCutout());
     }
 
     /**
-     * Explicit-colour seam for tests and for callers whose stroke lands on a
-     * different surface than the card (the page container's tier-1 rim will
-     * pass the panel background here when it migrates to this token).
+     * The hairline pair as a pure function (the test seam): {@code base} is
+     * the opaque surface the stroke lands on.
      */
-    public static int outlineColor(int level, int outline, int base) {
-        float k = switch (level) {
-            case 1 -> 1.0F;
-            case 2 -> 0.6F;
-            case 3 -> 0.3F;
-            default -> throw new IllegalArgumentException(
-                    "outline level must be 1..3, got " + level);
-        };
-        int resolved = contrastRatio(outline, base) >= 3.0F
-                ? (outline & 0x00FFFFFF)
-                : (com.atom.chat.theme.ThemeService.colorIsLight(base) ? 0x000000 : 0xFFFFFF);
-        return withAlpha(resolved, ((outline >>> 24) & 0xFF) * k);
+    public static int hairline(int base) {
+        return com.atom.chat.theme.ThemeService.colorIsLight(base)
+                ? io.github.humbleui.skija.Color.makeARGB(42, 0, 0, 0)
+                : io.github.humbleui.skija.Color.makeARGB(42, 255, 255, 255);
+    }
+
+    /**
+     * A functional stroke — the visible tier exempt from the hairline
+     * language, for shapes whose outline must stay readable regardless of
+     * theme polarity: the switch's on-rim (a pale accent on a pale card),
+     * the inline number-field border, the swatch selection ring. Alpha 110
+     * is the floor where that job still gets done. Polarity-adaptive like
+     * every stroke: black on light, white on dark.
+     */
+    public static int rim() {
+        return rim(cardCutout());
+    }
+
+    /** The rim pair as a pure function (the test seam). */
+    public static int rim(int base) {
+        return com.atom.chat.theme.ThemeService.colorIsLight(base)
+                ? io.github.humbleui.skija.Color.makeARGB(110, 0, 0, 0)
+                : io.github.humbleui.skija.Color.makeARGB(110, 255, 255, 255);
+    }
+
+    /**
+     * Unfilled half of a slider track, polarity-adaptive: deep grey at alpha
+     * 70 on a light surface, white at alpha 70 on a dark one. The old single
+     * translucent-white track vanished entirely on light themes; splitting
+     * the track into accent-filled + this rest segment keeps the untravelled
+     * half visible on both polarities. The grey is the switch off-track's
+     * own deep grey (30, 30, 34), so the two control families read as one
+     * neutral language.
+     */
+    public static int trackRest() {
+        return trackRest(cardCutout());
+    }
+
+    /** The track-rest pair as a pure function (the test seam). */
+    public static int trackRest(int base) {
+        return com.atom.chat.theme.ThemeService.colorIsLight(base)
+                ? io.github.humbleui.skija.Color.makeARGB(70, 30, 30, 34)
+                : io.github.humbleui.skija.Color.makeARGB(70, 255, 255, 255);
+    }
+
+    /**
+     * Icon colour that follows the secondary text colour: icons that annotate
+     * text (copy glyphs, chevrons) must read as the same ink as the text
+     * beside them, so they take the configured secondary text RGB and only
+     * rebalance its presence through {@code alpha}.
+     */
+    public static int iconSecondary(float alpha) {
+        return withAlpha(
+                com.atom.chat.config.AtomChatConfig.get().textSecondaryColor, alpha);
     }
 
     // Panel
@@ -241,10 +284,14 @@ public final class UiTokens {
     public static final float INPUT_BAR_PAD = s(12);
     /**
      * Edge inset of the composer's button row against its bar (left, right and
-     * the gap above the row). Unified with the header keys' own s(4) edge
-     * inset — it was s(8) before the two card-edge insets were reconciled.
+     * the gap above the row). s(8) = 10 px, the shipped v0.2.15 value: the
+     * v0.2.16 unification with the header keys' tighter s(4) inset squeezed
+     * the row flat against the bar edge, and the roomier inset was restored
+     * by user report. The header keys keep their own s(4)
+     * ({@link #EDGE_CONTROL_INSET}) — the two families are different shapes
+     * and no longer pretend to share one inset.
      */
-    public static final float INPUT_ROW_PAD = s(4);
+    public static final float INPUT_ROW_PAD = s(8);
     /**
      * Height of the button row band. The taller family owns it, which is what
      * lets two heights share one axis: the shorter capsule centres inside the
@@ -402,13 +449,14 @@ public final class UiTokens {
      *
      * <p>8px on screen (s(6.4)): the width-budget bounce spends
      * {@link PressScale#BUDGET_PX} per side (4px nominal, ~5.24px at the
-     * release peak — the overshoot gain is 1.31x the budget), and the s(4)
-     * card-shadow blur carries its visible tail out to ~6.25px. The two can
-     * graze 8px together, but whatever spills past is the shadow's
-     * near-transparent outer fringe — clipping it is invisible, and the trade
-     * buys the list back 7px of width per side against the old 15px (s(12))
-     * inset, which budgeted the full press-release spring peak as if the
-     * clip were a hard edge that had to survive it unclipped.</p>
+     * release peak — the overshoot gain is 1.31x the budget), and the
+     * s(6) card-shadow blur carries its visible tail out to ~9.4px. The two
+     * together overrun 8px — the shadow's tail alone does — but what spills
+     * past is the shadow's near-transparent outer fringe, and clipping it is
+     * invisible; the trade buys the list back 7px of width per side against
+     * the old 15px (s(12)) inset, which budgeted the full press-release
+     * spring peak as if the clip were a hard edge that had to survive it
+     * unclipped.</p>
      */
     public static final float ROW_CLIP_INSET = s(6.4F);
 
@@ -499,17 +547,18 @@ public final class UiTokens {
     public static final int PANEL_BLUR_TINT = 0xCC16191F;
 
     /**
-     * WCAG contrast ratio (1..21) between two opaque colours, alpha ignored.
-     * One definition of "can this be seen on that surface" for every
-     * feedback stroke the UI derives — the hover-wash flip and the outline
-     * polarity — so visibility means the same thing everywhere.
+     * Per-channel RGB mix: {@code t} (0..1) is how much of {@code b} shows
+     * through; alpha is zeroed because every caller re-alphas through
+     * {@link #withAlpha(int, float)}. The mix behind the hover wash's
+     * deepen/lift branches.
      */
-    private static float contrastRatio(int a, int b) {
-        float la = com.atom.chat.theme.ThemeService.relativeLuminance(a);
-        float lb = com.atom.chat.theme.ThemeService.relativeLuminance(b);
-        float hi = Math.max(la, lb);
-        float lo = Math.min(la, lb);
-        return (hi + 0.05F) / (lo + 0.05F);
+    private static int mixRgb(int a, int b, float t) {
+        int ar = (a >>> 16) & 0xFF, ag = (a >>> 8) & 0xFF, ab = a & 0xFF;
+        int br = (b >>> 16) & 0xFF, bg = (b >>> 8) & 0xFF, bb = b & 0xFF;
+        return io.github.humbleui.skija.Color.makeARGB(0,
+                Math.round(ar + (br - ar) * t),
+                Math.round(ag + (bg - ag) * t),
+                Math.round(ab + (bb - ab) * t));
     }
 
     /** Re-alpha helper: keeps the RGB, replaces the alpha (clamped, rounded). */

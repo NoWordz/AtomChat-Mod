@@ -152,19 +152,19 @@ class UiLayoutTest {
 
     /**
      * Approved baseline for the composer row's edge inset, pinned for the same
-     * reason as {@link #HEADER_BASELINE_SIDE}: the header's back / filter keys
-     * sit an inline s(4) = 5 px off their card edge, while this row pad was
-     * s(8) = 10 px — two insets for the same "control tucked into its card"
-     * rule. The unification picked the tighter one. Every other assertion here
-     * reads the constant, so without this pin the pad could drift back and the
-     * suite would stay green.
+     * reason as {@link #HEADER_BASELINE_SIDE}: s(8) = 10 px, the value the
+     * composer shipped with through v0.2.15. v0.2.16 briefly unified it with
+     * the header keys' tighter s(4) = 5 px inset, which squeezed the row flat
+     * against the bar edge; the user reports sent it back. The header keys
+     * keep their own tighter inset — two shapes, two insets, and this pin
+     * keeps the row's roomier one from silently drifting away again.
      */
-    private static final float EDGE_INSET_BASELINE = 5.0F;
+    private static final float EDGE_INSET_BASELINE = 10.0F;
 
     @Test
-    void composerRowInsetMatchesHeaderEdgeBaseline() {
+    void composerRowInsetStaysAtTheShippedTenPx() {
         assertEquals(EDGE_INSET_BASELINE, UiTokens.INPUT_ROW_PAD, EPS,
-                "the composer row pad is the approved 5 px edge inset");
+                "the composer row pad is the shipped 10 px edge inset");
     }
 
     /**

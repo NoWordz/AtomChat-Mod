@@ -11,9 +11,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * Guards for the switch's colour math, on the package-private pure seams
  * extracted from the render path ({@link ToggleSwitch#trackOff(boolean)},
  * {@link ToggleSwitch#onRim(float, float)}, {@link ToggleSwitch#dim(int, float)}):
- * the on-rim is tier 2 of the outline hierarchy faded in with the accent, the
- * off track flips polarity against the card surface (both branches neutral),
- * and the disabled state dims alpha only, to 40%.
+ * the on-rim is the functional alpha-110 stroke ({@link UiTokens#rim(int)},
+ * the one outline exempt from the hairline language) faded in with the
+ * accent, the off track flips polarity against the card surface (both
+ * branches neutral), and the disabled state dims alpha only, to 40%.
  */
 class ToggleSwitchTest {
 
@@ -29,34 +30,34 @@ class ToggleSwitchTest {
                 "light card: near-black at 110 alpha (110, 30, 30, 34)");
     }
 
-    // --- on rim: tier 2 of the outline hierarchy, faded with progress ---
+    // --- on rim: the functional alpha-110 stroke, faded with progress ---
 
-    /** A white tier-2 outline resolved through the explicit-colour seam. */
-    private static final int TIER_2 = UiTokens.outlineColor(2, 0xFFFFFFFF, 0xFF16191F);
+    /** The switch rim resolved through the explicit-base seam (dark card → white). */
+    private static final int RIM = UiTokens.rim(0xFF16191F);
 
     @Test
-    void onRimIsTierTwoOutlineAtFullProgress() {
-        assertEquals(TIER_2, ToggleSwitch.onRim(TIER_2, 1.0F, 1.0F),
-                "the rim at full progress is exactly tier 2 of the outline hierarchy");
+    void onRimIsTheSwitchRimAtFullProgress() {
+        assertEquals(RIM, ToggleSwitch.onRim(RIM, 1.0F, 1.0F),
+                "the rim at full progress is exactly the switch rim token");
     }
 
     @Test
     void onRimFadesInWithProgressAlphaOnly() {
         float p = 0.5F;
-        int half = ToggleSwitch.onRim(TIER_2, p, 1.0F);
-        int expectedAlpha = Math.round(((TIER_2 >>> 24) & 0xFF) * p);
+        int half = ToggleSwitch.onRim(RIM, p, 1.0F);
+        int expectedAlpha = Math.round(((RIM >>> 24) & 0xFF) * p);
         assertEquals(expectedAlpha, (half >>> 24) & 0xFF,
                 "alpha fades with the on progress");
-        assertEquals(TIER_2 & 0x00FFFFFF, half & 0x00FFFFFF,
+        assertEquals(RIM & 0x00FFFFFF, half & 0x00FFFFFF,
                 "the fade is alpha-only, RGB untouched");
     }
 
     @Test
     void onRimCombinesProgressWithTheDisabledOpacity() {
         // p and op multiply: 0.5 progress at 40% disabled opacity leaves 20%
-        // of the tier-2 alpha.
-        int d = ToggleSwitch.onRim(TIER_2, 0.5F, ToggleSwitch.DISABLED_OPACITY);
-        assertEquals(Math.round(((TIER_2 >>> 24) & 0xFF) * 0.2F), (d >>> 24) & 0xFF,
+        // of the rim alpha.
+        int d = ToggleSwitch.onRim(RIM, 0.5F, ToggleSwitch.DISABLED_OPACITY);
+        assertEquals(Math.round(((RIM >>> 24) & 0xFF) * 0.2F), (d >>> 24) & 0xFF,
                 "progress and opacity compose multiplicatively");
     }
 

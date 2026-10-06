@@ -124,7 +124,12 @@ public final class SettingsSectionPage {
         }
     }
 
+    // Fixed link blue: deliberately NOT polarity-adaptive — it is the link's
+    // own identity colour and reads on both light and dark panels.
     private static final int LINK_COLOR = Color.makeARGB(255, 96, 165, 250);
+    // Destructive-confirm red, same reasoning as LINK_COLOR: a fixed danger
+    // hue that must not drift with the theme or the accent.
+    private static final int DANGER_RED = Color.makeARGB(255, 235, 64, 52);
     private static final String LABEL_BLOCKED = "atomchat.settings.privacy.list";
     private static final String LABEL_THIRD_PARTY = "atomchat.settings.about.thirdparty.group";
     private static final String LABEL_MOD_INFO = "atomchat.settings.about.modinfo";
@@ -962,7 +967,8 @@ public final class SettingsSectionPage {
 
     /** The section chip row, sharing the bottom tab bar's cell geometry: equal
      *  cells from {@code layout.chipBar}, the accent capsule for the selection
-     *  (sliding on the tab clock), a pure-colour hover wash, and a bounce on
+     *  (sliding on the tab clock), an accent-tinted hover wash on the
+     *  unselected cells, and a bounce on
      *  the whole chip cell. Like {@code BottomTabBar}, the per-cell spring
      *  wraps the entire cell (wash plus label) while the shared capsule rides
      *  the selected cell's spring: a capsule of its own would fight the slide. */
@@ -1001,9 +1007,10 @@ public final class SettingsSectionPage {
         // One pass per cell: the bounce scales the whole chip cell — hover
         // wash and label together — around the cell's centre, like the tab
         // bar's cells. Scaling the 15px label alone moved its edge 0.6px and
-        // read as nothing at all. The wash covers the selected cell too: with
-        // the capsule now scaling on hover, an active chip still answers the
-        // pointer instead of going inert.
+        // read as nothing at all. The selected cell draws no wash: an active
+        // chip already answers the pointer with the capsule's bounce alone,
+        // and a hover wash stacked on the capsule would only muddy the accent
+        // (user-decided language: hover on a selected cell is bounce-only).
         for (int i = 0; i < count; i++) {
             UiLayout.Rect cell = layout.chipRect(i, count);
             boolean selected = i == activeIndex;
@@ -1017,7 +1024,7 @@ public final class SettingsSectionPage {
             }
             try {
                 Float hov = chipHover.get(i);
-                if (hov != null && hov > 0.01F) {
+                if (!selected && hov != null && hov > 0.01F) {
                     SkiaDraw.drawRoundedRect(canvas, cell.x(), cell.y(), cell.w(), cell.h(),
                             UiTokens.radius(8), UiTokens.cardHover(hov));
                 }
@@ -1408,7 +1415,7 @@ public final class SettingsSectionPage {
                     bubbleH / 2.0F, preview.ownBubble());
             // A faint composer strip balances the lower half of the card.
             SkiaDraw.drawRoundedRect(canvas, x + s(7), y + h - s(19), w - s(14), s(12),
-                    s(4) * preview.cornerFactor(), Color.makeARGB(46, 255, 255, 255));
+                    s(4) * preview.cornerFactor(), UiTokens.hairline());
             if (selected) {
                 SkiaDraw.drawEdgeHighlight(canvas, x, y, w, h, radius, s(1.5F), preview.accent());
             }
@@ -1464,8 +1471,10 @@ public final class SettingsSectionPage {
                 // panels, dark ones on dark panels.
                 SkiaDraw.drawRing(canvas, scx, cy, r + s(0.75F), s(1.0F), UiCards.hairlineColor());
                 if (swatch == color.value()) {
-                    // Selection ring: white outline with a breathing gap.
-                    try (Paint ring = new Paint().setColor(Color.makeARGB(255, 255, 255, 255))
+                    // Selection ring: the functional rim stroke with a breathing
+                    // gap — alpha 110, polarity-picked, so the ring survives pale
+                    // swatches on light panels and dark ones on dark panels.
+                    try (Paint ring = new Paint().setColor(UiTokens.rim())
                             .setMode(PaintMode.STROKE).setStrokeWidth(s(2)).setAntiAlias(true)) {
                         canvas.drawOval(io.github.humbleui.types.Rect.makeXYWH(
                                 scx - r - s(3), cy - r - s(3), 2.0F * (r + s(3)), 2.0F * (r + s(3))), ring);
@@ -1489,7 +1498,7 @@ public final class SettingsSectionPage {
         plus.begin(canvas, px, cy);
         try {
             SkiaDraw.drawRoundedRect(canvas, px - r, cy - r, 2.0F * r, 2.0F * r, r,
-                    Color.makeARGB(70, 255, 255, 255));
+                    UiTokens.trackRest());
             SkiaDraw.drawRing(canvas, px, cy, r + s(0.75F), s(1.0F), UiCards.hairlineColor());
             drawIconCentered(canvas, AppIcons.ICON_PLUS_PATH, px, cy, s(12),
                     textPrimary());
@@ -1599,7 +1608,7 @@ public final class SettingsSectionPage {
                 textPrimary());
         drawWrappedDescription(canvas, rect, subFont, copy.subtitle(), textX,
                 descriptionMaxWidth(row, rect.w()), copy.redConfirm()
-                        ? Color.makeARGB(255, 235, 64, 52)
+                        ? DANGER_RED
                         : sec(copy.available() ? 200 : 130));
         // Same treatment as the link cards' "Open": full-weight, centred —
         // the card's call to action, not a footnote.
@@ -1608,7 +1617,7 @@ public final class SettingsSectionPage {
             SkiaFontRenderer.drawTextRight(canvas, verbFont, copy.verb(),
                     rect.right() - UiTokens.SETTINGS_ROW_PAD,
                     rect.y() + rect.h() / 2.0F,
-                    copy.redConfirm() ? Color.makeARGB(255, 235, 64, 52) : textPrimary());
+                    copy.redConfirm() ? DANGER_RED : textPrimary());
         }
         // Disabled rows dim their text/controls only (the sec(130) copy
         // above); the card base stays put so the list never turns patchy.
@@ -1745,7 +1754,7 @@ public final class SettingsSectionPage {
         float t = knobPosition(slider, dragging);
         float radius = UiTokens.SLIDER_TRACK_H / 2.0F;
         SkiaDraw.drawRoundedRect(canvas, track.x(), track.y(), track.w(), track.h(), radius,
-                Color.makeARGB(70, 255, 255, 255));
+                UiTokens.trackRest());
         float fillW = Math.max(track.h(), track.w() * t);
         SkiaDraw.drawRoundedRect(canvas, track.x(), track.y(), fillW, track.h(), radius, accent);
 
@@ -1806,10 +1815,10 @@ public final class SettingsSectionPage {
 
         float radius = s(8);
         SkiaDraw.drawRoundedRect(canvas, fieldX, fieldY, fieldW, fieldH, radius,
-                Color.makeARGB(60, 255, 255, 255));
+                UiTokens.trackRest());
         try (Paint border = new Paint().setMode(PaintMode.STROKE)
                 .setAntiAlias(true).setStrokeWidth(s(1.5F))
-                .setColor(editing ? accent : Color.makeARGB(110, 255, 255, 255))) {
+                .setColor(editing ? accent : UiTokens.rim())) {
             canvas.drawRRect(io.github.humbleui.types.RRect.makeXYWH(
                     fieldX, fieldY, fieldW, fieldH, radius), border);
         }
@@ -1821,10 +1830,12 @@ public final class SettingsSectionPage {
                 fieldX + s(10),
                 SkiaFontRenderer.centerBaselineY(inputFont, fieldCY),
                 editing ? accent : textPrimary());
-        // Blinking caret while the inline editor owns the keyboard.
+        // Blinking caret while the inline editor owns the keyboard. Same accent
+        // as the text it blinks inside: a fixed white caret would vanish on a
+        // light theme, and the caret is part of the editing text, not chrome.
         if (editing && (System.currentTimeMillis() / 500L) % 2L == 0L) {
             float caretX = fieldX + s(10) + SkiaFontRenderer.getStringWidth(inputFont, shown) + s(2);
-            try (Paint caret = new Paint().setColor(Color.makeARGB(255, 255, 255, 255))
+            try (Paint caret = new Paint().setColor(accent)
                     .setStrokeWidth(s(1.5F)).setAntiAlias(true)) {
                 canvas.drawLine(caretX, fieldCY - s(8), caretX, fieldCY + s(8), caret);
             }
@@ -1903,6 +1914,8 @@ public final class SettingsSectionPage {
             SkiaDraw.drawRoundedImage(canvas, face, rect.x() + UiTokens.SETTINGS_ROW_PAD, avatarY,
                     avatar, avatar, avatar / 2.0F, SamplingMode.LINEAR);
         } else {
+            // Avatar stand-in: an opaque neutral, fixed on purpose — it is a
+            // placeholder face, not a themed surface, and reads on any panel.
             SkiaDraw.drawRoundedRect(canvas, rect.x() + UiTokens.SETTINGS_ROW_PAD, avatarY,
                     avatar, avatar, avatar / 2.0F, Color.makeARGB(255, 120, 130, 145));
         }
@@ -1922,7 +1935,7 @@ public final class SettingsSectionPage {
         float buttonH = s(28);
         float buttonY = rect.y() + (rect.h() - buttonH) / 2.0F;
         SkiaDraw.drawRoundedRect(canvas, buttonX, buttonY, buttonW, buttonH, s(8),
-                Color.makeARGB((int) (70.0F + 45.0F * hover), 255, 255, 255));
+                UiTokens.cardHover(hover));
         SkiaFontRenderer.drawTextCentered(canvas, buttonFont, label,
                 buttonX + buttonW / 2.0F, buttonY + buttonH / 2.0F,
                 textPrimary());

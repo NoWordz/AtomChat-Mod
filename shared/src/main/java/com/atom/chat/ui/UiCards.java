@@ -13,12 +13,14 @@ import io.github.humbleui.skija.Color;
  * <ul>
  *   <li>a light drop shadow ({@link UiTokens#CARD_SHADOW}, the lower of the
  *       two elevation tiers — chrome floats on {@link UiTokens#CHROME_SHADOW},
- *       content cards sit on this one; blur is s(4) so the tail stays inside
- *       {@link UiTokens#ROW_CLIP_INSET}),</li>
+ *       content cards sit on this one; blur is s(6), the v0.2.15 lift that
+ *       v0.2.16 briefly flattened to s(4) — the tail that spills past
+ *       {@link UiTokens#ROW_CLIP_INSET} is its near-transparent fringe),</li>
  *   <li>the configured card fill,</li>
- *   <li>a border at outline tier 2 of the three-level hierarchy
- *       ({@link UiTokens#outlineColor(int)}) — one stroke width, the level
- *       speaks through alpha alone,</li>
+ *   <li>the polarity-adaptive hairline ({@link UiTokens#hairline()}), one
+ *       whisper-thin s(1.0) stroke — the three-tier outline ladder was
+ *       retired: at its card tier it drew borders heavy enough to read as
+ *       frames, not edges,</li>
  *   <li>the hover wash, last.</li>
  * </ul>
  *
@@ -33,13 +35,12 @@ public final class UiCards {
     /** Draws the full card stack; {@code hoverWeight} 0..1. */
     public static void drawCard(Canvas canvas, float x, float y, float w, float h,
                                 float radius, float hoverWeight) {
-        SkiaDraw.drawRoundedShadow(canvas, x, y, w, h, radius, UiTokens.s(4), UiTokens.CARD_SHADOW);
+        SkiaDraw.drawRoundedShadow(canvas, x, y, w, h, radius, UiTokens.s(6), UiTokens.CARD_SHADOW);
         SkiaDraw.drawRoundedRect(canvas, x, y, w, h, radius, UiTokens.cardFill());
-        // Tier 2 of the outline hierarchy: one stroke width for every tier,
-        // so a card's rim differs from the page container's (tier 1, 100%)
-        // and from in-card details (tier 3, 30%) by intensity only.
+        // The hairline language: one stroke width, alpha 42 on both
+        // polarities, so a card edge reads as an edge, not a frame.
         SkiaDraw.drawEdgeHighlight(canvas, x, y, w, h, radius, UiTokens.s(1.0F),
-                UiTokens.outlineColor(2));
+                UiTokens.hairline());
         if (hoverWeight > 0.01F) {
             SkiaDraw.drawRoundedRect(canvas, x, y, w, h, radius, UiTokens.cardHover(hoverWeight));
         }
@@ -49,11 +50,13 @@ public final class UiCards {
      * Theme-adaptive hairline for small round elements (colour swatches, the
      * slider knob's outer trace): a whisper of black on light panels, a
      * whisper of white on dark ones — either way enough to separate a pale
-     * fill from a pale ground and vice versa.
+     * fill from a pale ground and vice versa. Alpha is 42 on both
+     * polarities, unified with {@link UiTokens#hairline()} under the one
+     * hairline language (the dark side used to carry 64).
      */
     public static int hairlineColor() {
         return ThemeService.panelIsLight()
                 ? Color.makeARGB(42, 0, 0, 0)
-                : Color.makeARGB(64, 255, 255, 255);
+                : Color.makeARGB(42, 255, 255, 255);
     }
 }

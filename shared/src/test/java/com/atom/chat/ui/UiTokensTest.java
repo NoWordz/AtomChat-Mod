@@ -3,7 +3,6 @@ package com.atom.chat.ui;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -12,10 +11,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * square — must hold at factor 0, so every {@link UiTokens#radius(float)}
  * call collapses to a hard zero no matter the base radius.
  *
- * <p>Also guards the contrast-derived feedback colours: the hover wash flip
- * ({@link UiTokens#cardHover(int, int, float)}) and the three-tier outline
- * hierarchy ({@link UiTokens#outlineColor(int, int, int)}), both on a dark
- * and a light surface.</p>
+ * <p>Also guards the colour-derivation language on both surface
+ * polarities: the accent-dyed, alpha-constant hover wash
+ * ({@link UiTokens#cardHover(int, int, float)}) and the three stroke pairs —
+ * {@link UiTokens#hairline(int)}, {@link UiTokens#rim(int)} and
+ * {@link UiTokens#trackRest(int)}.</p>
  */
 class UiTokensTest {
 
@@ -55,83 +55,95 @@ class UiTokensTest {
         assertEquals(1.25F, UiTokens.radiusFactor(999f), 1e-6F, "oversized clamps to the maximum");
     }
 
-    // --- cardHover: contrast-derived hover wash ---
+    // --- cardHover: accent-dyed, polarity-adaptive, constant-alpha wash ---
 
     @Test
-    void hoverKeepsAccentWhereContrastAllows() {
-        // The shipped default pair: blue accent over the shipped dark panel.
-        int c = UiTokens.cardHover(0xFF4A90E2, DARK_BASE, 1.0F);
-        assertEquals(0x4A90E2, c & 0x00FFFFFF, "the accent RGB survives");
-        assertEquals(45, c >>> 24, "alpha stays at the classic 45 when the accent contrasts");
+    void hoverDeepensTheAccentOnALightSurface() {
+        // Summer's lime accent over a pale card: every channel drops (the
+        // wash visibly darkens, lime heading towards olive), and green stays
+        // clearly the dominant channel — the hue the user picked survives
+        // the deepening instead of collapsing into neutral grey.
+        int accent = 0xFF84CC16;
+        int c = UiTokens.cardHover(accent, LIGHT_BASE, 1.0F);
+        int r = (c >>> 16) & 0xFF, g = (c >>> 8) & 0xFF, b = c & 0xFF;
+        assertTrue(r < ((accent >>> 16) & 0xFF)
+                && g < ((accent >>> 8) & 0xFF)
+                && b < (accent & 0xFF),
+                "a light surface deepens every accent channel");
+        assertTrue(g - Math.max(r, b) >= 20,
+                "the hue survives: green stays clearly dominant (olive, not grey)");
+        assertEquals(55, c >>> 24, "alpha is the constant 55 at full weight");
     }
 
     @Test
-    void hoverFlipsToDarkWashOnLightSurface() {
-        // A pale accent over a pale card was white-on-white invisible.
-        int c = UiTokens.cardHover(0xFFFFFFFF, LIGHT_BASE, 1.0F);
-        assertEquals(0x000000, c & 0x00FFFFFF, "the wash flips to black");
-        assertEquals(60, c >>> 24, "the flipped wash rises to 60 so it still reads");
+    void hoverLiftsTheAccentOnADarkSurface() {
+        // Raven's gold accent over the shipped dark panel: every channel
+        // rises (the wash visibly brightens) and the gold ordering
+        // red > green > blue survives the lift.
+        int accent = 0xFFE3B341;
+        int c = UiTokens.cardHover(accent, DARK_BASE, 1.0F);
+        int r = (c >>> 16) & 0xFF, g = (c >>> 8) & 0xFF, b = c & 0xFF;
+        assertTrue(r > ((accent >>> 16) & 0xFF)
+                && g > ((accent >>> 8) & 0xFF)
+                && b > (accent & 0xFF),
+                "a dark surface lifts every accent channel");
+        assertTrue(r > g && g > b,
+                "the hue survives: gold stays red > green > blue");
+        assertEquals(55, c >>> 24, "alpha is the constant 55 at full weight");
     }
 
     @Test
-    void hoverFlipsToLightWashOnDarkSurface() {
-        // A near-black accent over the near-black panel is equally invisible.
-        int c = UiTokens.cardHover(0xFF101418, DARK_BASE, 1.0F);
-        assertEquals(0xFFFFFF, c & 0x00FFFFFF, "the wash flips to white");
-        assertEquals(60, c >>> 24);
-    }
-
-    // --- outlineColor: the three-tier border hierarchy ---
-
-    @Test
-    void outlineTiersFallStrictlyOnDarkSurface() {
-        int l1 = UiTokens.outlineColor(1, 0xFFFFFFFF, DARK_BASE);
-        int l2 = UiTokens.outlineColor(2, 0xFFFFFFFF, DARK_BASE);
-        int l3 = UiTokens.outlineColor(3, 0xFFFFFFFF, DARK_BASE);
-        assertEquals(0xFFFFFF, l1 & 0x00FFFFFF,
-                "a white outline contrasts with the dark surface and stays white");
-        assertTrue((l1 >>> 24) > (l2 >>> 24), "tier 1 must be stronger than tier 2");
-        assertTrue((l2 >>> 24) > (l3 >>> 24), "tier 2 must be stronger than tier 3");
+    void hoverAlphaIsIdenticalAcrossThemes() {
+        // The explicit user requirement from the v0.2.16 field reports:
+        // feedback strength must not depend on the theme's polarity. The
+        // old language also flipped low-contrast washes to plain black or
+        // white, which read as a neutral smudge on light themes — the RGB
+        // may follow the polarity, the alpha may not.
+        int light = UiTokens.cardHover(0xFF4A90E2, LIGHT_BASE, 1.0F);
+        int dark = UiTokens.cardHover(0xFF4A90E2, DARK_BASE, 1.0F);
+        assertEquals(light >>> 24, dark >>> 24,
+                "same weight, same alpha, whatever the surface polarity");
     }
 
     @Test
-    void outlineTiersFallStrictlyOnLightSurface() {
-        int l1 = UiTokens.outlineColor(1, 0xFFFFFFFF, LIGHT_BASE);
-        int l2 = UiTokens.outlineColor(2, 0xFFFFFFFF, LIGHT_BASE);
-        int l3 = UiTokens.outlineColor(3, 0xFFFFFFFF, LIGHT_BASE);
-        assertEquals(0x000000, l1 & 0x00FFFFFF,
-                "a white outline on a light surface flips to black");
-        assertTrue((l1 >>> 24) > (l2 >>> 24), "tier 1 must be stronger than tier 2");
-        assertTrue((l2 >>> 24) > (l3 >>> 24), "tier 2 must be stronger than tier 3");
+    void hoverWeightScalesAlphaOnly() {
+        int full = UiTokens.cardHover(0xFF4A90E2, DARK_BASE, 1.0F);
+        int half = UiTokens.cardHover(0xFF4A90E2, DARK_BASE, 0.5F);
+        assertEquals(Math.round(55.0F * 0.5F), half >>> 24,
+                "weight scales the constant 55 linearly");
+        assertEquals(full & 0x00FFFFFF, half & 0x00FFFFFF,
+                "weight is an alpha multiplier only, RGB untouched");
+        assertEquals(UiTokens.cardHover(0xFF4A90E2, DARK_BASE, 1.0F),
+                UiTokens.cardHover(0xFF4A90E2, DARK_BASE, 9.0F),
+                "weight clamps at 1");
+        assertEquals(0, UiTokens.cardHover(0xFF4A90E2, DARK_BASE, -1.0F) >>> 24,
+                "weight clamps at 0");
+    }
+
+    // --- hairline / rim / trackRest: the polarity pairs, alphas pinned ---
+
+    @Test
+    void hairlineIsPolarityAdaptiveAtAlpha42() {
+        assertEquals(0x2A000000, UiTokens.hairline(LIGHT_BASE),
+                "light surface: black hairline at the hairline alpha 42");
+        assertEquals(0x2AFFFFFF, UiTokens.hairline(DARK_BASE),
+                "dark surface: white hairline at the same 42 — one strength on both themes");
     }
 
     @Test
-    void outlineTiersArePairwiseDistinctOnBothSurfaces() {
-        for (int base : new int[]{DARK_BASE, LIGHT_BASE}) {
-            int l1 = UiTokens.outlineColor(1, 0xFFFFFFFF, base);
-            int l2 = UiTokens.outlineColor(2, 0xFFFFFFFF, base);
-            int l3 = UiTokens.outlineColor(3, 0xFFFFFFFF, base);
-            assertTrue(l1 != l2, "tiers 1 and 2 differ (base 0x" + Integer.toHexString(base) + ")");
-            assertTrue(l2 != l3, "tiers 2 and 3 differ");
-            assertTrue(l1 != l3, "tiers 1 and 3 differ");
-        }
+    void rimIsPolarityAdaptiveAtAlpha110() {
+        assertEquals(0x6E000000, UiTokens.rim(LIGHT_BASE),
+                "light surface: black switch rim at the functional alpha 110");
+        assertEquals(0x6EFFFFFF, UiTokens.rim(DARK_BASE),
+                "dark surface: white switch rim at the same 110");
     }
 
     @Test
-    void outlineKeepsHalfTransparentOutlineAtItsOwnAlpha() {
-        // A user-tuned translucent outline keeps its alpha as the tier-1
-        // baseline instead of being forced opaque.
-        int l1 = UiTokens.outlineColor(1, 0x80FFFFFF, DARK_BASE);
-        assertEquals(0x80, l1 >>> 24);
-        assertEquals(0xFFFFFF, l1 & 0x00FFFFFF);
-    }
-
-    @Test
-    void outlineRejectsUnknownLevels() {
-        assertThrows(IllegalArgumentException.class,
-                () -> UiTokens.outlineColor(0, 0xFFFFFFFF, DARK_BASE));
-        assertThrows(IllegalArgumentException.class,
-                () -> UiTokens.outlineColor(4, 0xFFFFFFFF, DARK_BASE));
+    void trackRestIsPolarityAdaptiveAtAlpha70() {
+        assertEquals(0x461E1E22, UiTokens.trackRest(LIGHT_BASE),
+                "light surface: deep grey (30,30,34) rest at 70");
+        assertEquals(0x46FFFFFF, UiTokens.trackRest(DARK_BASE),
+                "dark surface: white rest at the same 70");
     }
 
     // --- layout baselines ---
@@ -142,7 +154,7 @@ class UiTokensTest {
      * the {@code ROW_CLIP_INSET} javadoc budget note both quote 8px against
      * the ~5.24px release peak, so a silent retune of s(6.4) would leave the
      * documented budget arithmetic false without failing anything. Same pin
-     * pattern as the INPUT_ROW_PAD 5px baseline in UiLayoutTest.
+     * pattern as the INPUT_ROW_PAD 10px baseline in UiLayoutTest.
      */
     @Test
     void rowClipInsetStaysAtTheShippedEightPx() {

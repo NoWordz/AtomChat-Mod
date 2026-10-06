@@ -222,14 +222,18 @@ public final class ProfilePage {
         try {
             if (alpha > 0.01F) {
                 float inset = s(3);
-                // Selection language (white 90) rather than the row-wash white 45:
-                // the button sits inside a highlighted row, so a 45-on-45 wash is
-                // invisible — the reason hover feedback looked missing entirely.
+                // Unified hover language: the accent-dyed, polarity-adaptive
+                // cardHover wash (same family as the row it sits in). The old
+                // white-90 wash was a light-theme-only habit that lost the theme
+                // colour on hover.
                 SkiaDraw.drawRoundedRect(canvas, button.x() + inset, button.y() + inset,
                         button.w() - inset * 2.0F, button.h() - inset * 2.0F, UiTokens.radius(8),
-                        Color.makeARGB((int) (90.0F * alpha), 255, 255, 255));
+                        UiTokens.cardHover(alpha));
             }
-            int iconColor = Color.makeARGB((int) (210.0F + 45.0F * alpha), 255, 255, 255);
+            // The icon follows the secondary text ink (explicit user call): the
+            // hue comes with the text colour setting, alpha only rebalances its
+            // presence across the hover.
+            int iconColor = UiTokens.iconSecondary(210.0F + 45.0F * alpha);
             float cx = button.x() + button.w() / 2.0F;
             float cy = button.y() + button.h() / 2.0F;
             if (copied) {
@@ -748,7 +752,7 @@ public final class ProfilePage {
         SkiaDraw.drawRoundedRect(canvas, hero.x(), hero.y(), hero.w(), hero.h(),
                 UiTokens.settingsTileRadius(), UiTokens.cardFill());
         SkiaDraw.drawEdgeHighlight(canvas, hero.x(), hero.y(), hero.w(), hero.h(),
-                UiTokens.settingsTileRadius(), s(1.0F), UiTokens.outlineColor(2));
+                UiTokens.settingsTileRadius(), s(1.0F), UiTokens.hairline());
 
         // Avatar: the local custom avatar when the subject is self and one is
         // set (decoded off-thread; the skin shows while the decode is in
@@ -761,6 +765,8 @@ public final class ProfilePage {
                 SkiaDraw.drawRoundedImage(canvas, face, avatar.x(), avatar.y(), avatar.w(), avatar.h(),
                         avatar.w() / 2.0F, SamplingMode.LINEAR);
             } else {
+                // Fixed neutral placeholder for an absent face (content colour,
+                // not chrome): reads on both polarities, so it stays literal.
                 SkiaDraw.drawRoundedRect(canvas, avatar.x(), avatar.y(), avatar.w(), avatar.h(),
                         avatar.w() / 2.0F, Color.makeARGB(255, 120, 130, 145));
             }
@@ -768,6 +774,8 @@ public final class ProfilePage {
             // custom avatar the tap opens the picker directly, so the affordance
             // must not vanish exactly when the avatar is clickable.
             if (avatarHover > 0.01F && subjectIsSelf()) {
+                // Image scrim, not a card wash: the white lift sits on the avatar
+                // bitmap itself, whose polarity no theme token knows about.
                 SkiaDraw.drawRoundedRect(canvas, avatar.x(), avatar.y(), avatar.w(), avatar.h(),
                         avatar.w() / 2.0F, Color.makeARGB((int) (40.0F * avatarHover), 255, 255, 255));
             }
@@ -781,6 +789,9 @@ public final class ProfilePage {
             UiLayout.Rect badge = badgeRect(layout, scrollY);
             badgeScale.begin(canvas, badge.x() + badge.w() / 2.0F, badge.y() + badge.h() / 2.0F);
             try {
+                // Badge is a fixed dark glass chip over an arbitrary avatar
+                // bitmap: the fixed dark base plus white glyph/overlay is the
+                // polarity-independent scrim language, so it stays literal.
                 SkiaDraw.drawRoundedRect(canvas, badge.x(), badge.y(), badge.w(), badge.h(),
                         badge.w() / 2.0F, Color.makeARGB(215, 20, 22, 30));
                 if (badgeHover > 0.01F) {
@@ -819,7 +830,7 @@ public final class ProfilePage {
             SkiaDraw.drawRoundedRect(canvas, tile.x(), tile.y(), tile.w(), tile.h(),
                     UiTokens.profileRowRadius(), UiTokens.cardFill());
             SkiaDraw.drawEdgeHighlight(canvas, tile.x(), tile.y(), tile.w(), tile.h(),
-                    UiTokens.profileRowRadius(), s(1.0F), UiTokens.outlineColor(2));
+                    UiTokens.profileRowRadius(), s(1.0F), UiTokens.hairline());
             float cx = tile.x() + tile.w() / 2.0F;
             String value = SkiaFontRenderer.truncate(valueFont, tiles.get(i).value(),
                     tile.w() - UiTokens.PROFILE_ROW_PAD);
@@ -866,7 +877,7 @@ public final class ProfilePage {
                 SkiaDraw.drawRoundedRect(canvas, row.x(), row.y(), row.w(), row.h(),
                         UiTokens.profileRowRadius(), UiTokens.cardFill());
                 SkiaDraw.drawEdgeHighlight(canvas, row.x(), row.y(), row.w(), row.h(),
-                        UiTokens.profileRowRadius(), s(1.0F), UiTokens.outlineColor(2));
+                        UiTokens.profileRowRadius(), s(1.0F), UiTokens.hairline());
                 if (rowHover > 0.01F && i == hoverRowIndex) {
                     SkiaDraw.drawRoundedRect(canvas, row.x(), row.y(), row.w(), row.h(),
                             UiTokens.profileRowRadius(), UiTokens.cardHover(rowHover));
@@ -923,6 +934,9 @@ public final class ProfilePage {
             canvas.translate(-(menu.x() + menu.w() / 2.0F), -menu.y());
             SkiaDraw.drawRoundedShadow(canvas, menu.x(), menu.y(), menu.w(), menu.h(),
                     UiTokens.radius(10), s(8), Color.makeARGB(100, 0, 0, 0));
+            // Fixed dark popup surface (35,39,47), the shared language of every
+            // popup (bubble menu, emoji/phrase panels): popups keep their own
+            // fixed polarity, so no theme token applies.
             SkiaDraw.drawRoundedRect(canvas, menu.x(), menu.y(), menu.w(), menu.h(),
                     UiTokens.radius(10), Color.makeARGB(245, 35, 39, 47));
             for (int i = 0; i < labels.length; i++) {
@@ -937,11 +951,17 @@ public final class ProfilePage {
                         // is scaled about the menu centre, so a constant padding
                         // converges to a fixed non-zero spill as the menu widens.
                         float inset = menuItemInset(menu.w());
+                        // White on the menu's fixed dark surface — the popup's own
+                        // fixed-polarity hover language, shared with the emoji and
+                        // quick-phrase panels.
                         SkiaDraw.drawRoundedRect(canvas, menu.x() + inset, rowY + MENU_ITEM_INSET,
                                 menu.w() - inset * 2.0F, rowH - MENU_ITEM_INSET * 2.0F,
                                 s(6), Color.makeARGB((int) (55.0F * menuItemHover[i]), 255, 255, 255));
                     }
                     boolean rowEnabled = i == 0 || clearEnabled;
+                    // Literal ink colours on the fixed dark menu: armed red is the
+                    // destructive-confirm language, grey the disabled state, white
+                    // the resting label — none of them follow the theme.
                     int labelColor;
                     if (i == 1 && clearArmed) {
                         labelColor = Color.makeARGB(255, 235, 64, 52);

@@ -284,10 +284,11 @@ public final class NotificationBanner {
                 SkiaDraw.drawRoundedRect(canvas, x, y, w, h, radius,
                         0xFF000000 | (config.cardColor & 0x00FFFFFF));
                 SkiaDraw.drawEdgeHighlight(canvas, x, y, w, h, radius, UiTokens.s(1.0F),
-                        UiTokens.outlineColor(2));
+                        UiTokens.hairline());
                 if (hover > 0.01F) {
+                    // Same hover family as every card: accent-tinted, polarity-adaptive.
                     SkiaDraw.drawRoundedRect(canvas, x, y, w, h, radius,
-                            Color.makeARGB((int) (90.0F * hover), 255, 255, 255));
+                            UiTokens.cardHover(hover));
                 }
 
                 float padX = UiTokens.s(14);

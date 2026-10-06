@@ -49,6 +49,21 @@ public final class EmojiPanel {
         void pickEmoteFile();
     }
 
+    // Fixed dark-grey skin. The emoji panel is deliberately a small world of
+    // its own that does NOT follow the theme: its base, shadows and its
+    // its selected-pill white are constants of this skin, not UiTokens values
+    // (user-approved exception to the theme colour language). Every hover wash
+    // in here stays white-based for the same reason — on this fixed dark base
+    // a white wash always brightens, which is the correct hover direction on
+    // this surface regardless of the user's theme polarity. The remove-button
+    // red (214, 48, 48) below is a functional colour of the skin, kept as-is.
+    private static final int SKIN_PANEL_BG = Color.makeARGB(245, 35, 39, 47);
+    private static final int SKIN_PANEL_SHADOW = Color.makeARGB(100, 0, 0, 0);
+    /** Selected tab pill: translucent white, the v0.2.15 shipped value. */
+    private static final int SKIN_PILL_FILL = Color.makeARGB(90, 255, 255, 255);
+    /** Disabled "+"-slot glyph: dimmed white of the skin. */
+    private static final int SKIN_DIM_TEXT = Color.makeARGB(90, 255, 255, 255);
+
     private static final String[] TAB_KEYS = {
             "atomchat.emoji.tab.emoji",
             "atomchat.emoji.tab.kaomoji",
@@ -289,8 +304,8 @@ public final class EmojiPanel {
             canvas.scale(sc, sc);
             canvas.translate(-cx, -cy);
             canvas.translate(0.0F, (1.0F - anim) * s(10));
-            SkiaDraw.drawRoundedRect(canvas, px, py, pw, ph, UiTokens.radius(14), Color.makeARGB(245, 35, 39, 47));
-            SkiaDraw.drawRoundedShadow(canvas, px, py, pw, ph, UiTokens.radius(14), s(8), Color.makeARGB(100, 0, 0, 0));
+            SkiaDraw.drawRoundedRect(canvas, px, py, pw, ph, UiTokens.radius(14), SKIN_PANEL_BG);
+            SkiaDraw.drawRoundedShadow(canvas, px, py, pw, ph, UiTokens.radius(14), s(8), SKIN_PANEL_SHADOW);
 
             // Tabs: the active pill slides between slots when the tab changes.
             tabIndicatorAnim.update(frameDt);
@@ -322,7 +337,7 @@ public final class EmojiPanel {
             applyBounce(canvas, tabScale[tab].scale(),
                     pillX + pillW / 2.0F, py + s(6) + pillH / 2.0F);
             SkiaDraw.drawRoundedRect(canvas, pillX, py + s(6), pillW, pillH, s(8),
-                    UiTokens.accentFill());
+                    SKIN_PILL_FILL);
             canvas.restore();
             for (int t = 0; t < labels.length; t++) {
                 float hov = t == tab ? 0.0F : tabHover[t];
@@ -340,11 +355,12 @@ public final class EmojiPanel {
                                 Color.makeARGB((int) (45.0F * hov), 255, 255, 255));
                     }
                     float tx = tabStripX + t * tabW;
-                    // The active label sits on the accent capsule, so it takes the
-                    // colour that reads against the accent, not the panel text colour.
+                    // Every label — active or not — is plain text ink: the pill is a
+                    // translucent white wash on the fixed dark skin (v0.2.15), not an
+                    // accent fill, so there is no onAccent contrast problem to solve.
                     SkiaFontRenderer.drawTextCentered(canvas, tabFont, labels[t],
                             tx + tabW / 2.0F, py + UiTokens.EMOJI_TAB_H / 2.0F + s(2),
-                            t == tab ? UiTokens.onAccent(UiTokens.accentFill()) : textPrimary());
+                            textPrimary());
                 } finally {
                     canvas.restore();
                 }
@@ -915,7 +931,7 @@ public final class EmojiPanel {
         }
         Font addFont = FontManager.font(UiTokens.FONT_EMOJI);
         SkiaFontRenderer.drawTextCentered(canvas, addFont, "+", ex + colW / 2.0F, ey + cell / 2.0F,
-                disabled ? Color.makeARGB(90, 255, 255, 255) : textPrimary());
+                disabled ? SKIN_DIM_TEXT : textPrimary());
     }
 
     /**

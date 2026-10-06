@@ -1,5 +1,43 @@
 # Changelog
 
+## v0.2.17
+
+> 本版把悬停高亮统一成「强调色染色 + 明暗自适应」的一种语言，边框回到发丝感，并修掉 0.2.16 引入的几处视觉回归。
+
+**更改**
+
+- **悬停高亮统一为强调色染色**：亮色界面下是带主题色的加深、暗色界面下是带主题色的提亮，强度全主题一致，不再出现灰色悬停。
+- **选中态悬停不再变色，只保留弹跳**（底栏标签、分段标签、表情标签三处行为从此一致）。
+- **卡片边框回到发丝感**（浓度较 0.2.16 明显调淡），卡片投影恢复柔和。
+- **表情面板回到固定深灰皮肤**：选中标签恢复白色胶囊，不随主题（有意例外）。
+- 滑条未填充轨道与内嵌数字输入框改为明暗自适应，浅色主题下可见。
+- 档案页复制图标跟随文字色；发送按钮图标按强调色底自动取墨色。
+- 色板选中环、主题卡描边、通知横幅悬停并入统一颜色语言。
+
+**修复**
+
+- 发送按钮与输入栏边框的间距恢复（0.2.16 被误减半）。
+- 夏日、典雅等浅色主题下悬停高亮偏灰、看不清的问题。
+
+----
+
+> This release unifies hover highlights into one accent-tinted, polarity-adaptive language, returns the borders to a hairline feel, and fixes several visual regressions introduced by 0.2.16.
+
+**Changed**
+
+- **Hover highlights are accent-tinted across the UI**: a theme-coloured deepen on light surfaces and a theme-coloured lift on dark ones, at one strength on every theme — no more grey washes.
+- **Hovering a selected chip no longer changes its colour**; the bounce is the feedback (bottom tabs, section chips and emoji tabs now behave identically).
+- **Card borders are back to a hairline** (noticeably lighter than 0.2.16), and the card shadow is soft again.
+- **The emoji panel returns to its fixed dark-grey skin**: the selected tab pill is translucent white again, not theme-following (a deliberate exception).
+- Slider unfilled tracks and inline number fields are polarity-adaptive, so they stay visible on light themes.
+- The profile copy glyph follows the text colour; the Send glyph picks its ink from the accent fill.
+- Swatch selection rings, theme-card edges and the notification banner hover join the unified colour language.
+
+**Fixed**
+
+- The Send button's clearance to the composer border is restored (0.2.16 had halved it).
+- Hover highlights turning grey and hard to read on light themes such as summer and elegant.
+
 ## v0.2.16
 
 > 本版重做了输入栏按钮，把全界面的悬停 / 按压弹跳统一成「每边 4 像素」的位移预算，并修掉 0.2.15 留下的一批可见缺陷。

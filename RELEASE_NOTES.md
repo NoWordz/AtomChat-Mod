@@ -1,5 +1,33 @@
 # Release Notes
 
+## v0.2.17
+
+本版把悬停高亮统一成「强调色染色 + 明暗自适应」的一种语言，边框回到发丝感，并修掉 0.2.16 引入的几处视觉回归。三个发布目标同步。
+
+**更改**
+
+- **悬停统一为强调色染色**：亮界面加深、暗界面提亮，都带主题色，强度全主题一致；选中态悬停只保留弹跳。
+- **边框回发丝感**，卡片投影恢复柔和；表情面板回到固定深灰皮肤（选中标签白胶囊）。
+- 滑条轨道、内嵌输入框浅色主题下可见；复制图标跟文字色、发送图标自动取墨色。
+
+**修复**
+
+- 发送按钮与输入栏边框的间距恢复；浅色主题悬停偏灰、看不清的问题。
+
+----
+
+This release unifies hover highlights into one accent-tinted, polarity-adaptive language, returns borders to a hairline feel, and fixes the visual regressions 0.2.16 introduced. All three targets ship together.
+
+**Changed**
+
+- **One hover language**: theme-coloured, brightening or deepening with the panel, one strength on every theme; hovering a selected chip is bounce-only.
+- **Borders back to hairlines**, soft card shadow again; the emoji panel returns to its fixed dark skin with the white selected pill.
+- Slider tracks and inline fields stay visible on light themes; the copy glyph follows the text colour and the Send glyph picks its ink automatically.
+
+**Fixed**
+
+- The Send button's border clearance is restored; hover washes no longer turn grey or invisible on light themes.
+
 ## v0.2.16
 
 本版重做了输入栏按钮，把全界面悬停 / 按压的弹跳统一成每边 4 像素的位移预算，并修掉 0.2.15 的一批可见缺陷。三个发布目标（Fabric 1.21.1 / NeoForge 1.21.1 / Forge 1.20.1）同步。

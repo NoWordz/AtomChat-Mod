@@ -2546,8 +2546,11 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
             SkiaDraw.drawRoundedRect(canvas, bx, by, UiTokens.BUTTON_W, UiTokens.BUTTON_H, UiTokens.BUTTON_RADIUS,
                     Color.makeARGB((int) Math.min(160, overlay), 255, 255, 255));
         }
+        // Icon ink derives from the solid accent fill it sits on (same language
+        // as the selected bottom tab), not from the panel's text colour: a pale
+        // accent capsule needs dark glyphs even on a dark panel.
         drawIcon(canvas, ICON_SEND_PATH, bx, by, UiTokens.BUTTON_W, UiTokens.BUTTON_H,
-                textPrimary());
+                UiTokens.onAccent(accent()));
         canvas.restore();
     }
 
@@ -2712,6 +2715,9 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
         try (Paint layer = new Paint()) {
             layer.setColor(Color.makeARGB((int) (255.0F * jumpLatestAnim), 0, 0, 0));
             canvas.saveLayer(Rect.makeXYWH(x - s(4), y - s(4), size + s(8), size + s(8)), layer);
+            // Fixed dark floating pill (the jump FAB floats over arbitrary
+            // message content, whose polarity no theme token knows), same fixed
+            // polarity family as the popups; hover lifts the grey a notch.
             int bg = hover ? Color.makeARGB(245, 70, 76, 90) : Color.makeARGB(235, 52, 58, 70);
             SkiaDraw.drawRoundedRect(canvas, x, y, size, size, size / 2.0F, bg);
             SkiaDraw.drawRoundedShadow(canvas, x, y, size, size, size / 2.0F, s(6), Color.makeARGB(80, 0, 0, 0));
@@ -2815,6 +2821,8 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
             canvas.translate(menuX + menuW / 2.0F, menuY);
             canvas.scale(sc, sc);
             canvas.translate(-(menuX + menuW / 2.0F), -menuY);
+            // Fixed dark popup surface (35,39,47) — the shared language of every
+            // popup (avatar menu, emoji/phrase panels): fixed polarity by design.
             SkiaDraw.drawRoundedRect(canvas, menuX, menuY, menuW, menuH, UiTokens.radius(10), Color.makeARGB(245, 35, 39, 47));
             SkiaDraw.drawRoundedShadow(canvas, menuX, menuY, menuW, menuH, UiTokens.radius(10), s(8), Color.makeARGB(100, 0, 0, 0));
             Font menuFont = FontManager.font(UiTokens.FONT_BUTTON);
