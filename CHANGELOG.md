@@ -1,5 +1,23 @@
 # Changelog
 
+## v0.3.0 后续小修补
+
+> 0.3.0 部署后的用户反馈小修补轮（引用胶囊取色 + 软阴影范围），暂并入 0.3.0，不升版本号、不推送。
+
+**修复**
+
+- **引用胶囊文字改为跟随胶囊主题色**：不再取气泡文字色，避免黑鸦主题下用户名近黑字压在深灰胶囊、典雅主题下纯白字压在浅沙胶囊而不可读。
+- **软阴影范围重排**：系统消息、引用胶囊、时间分割线、图片占位胶囊与发送者名字带保留文字软阴影；自身 / 他人气泡正文一律去影。阴影明暗改为按文字所在表面的底色判定，不再一律随面板。
+- **`[图片]` 占位绿自适应**：按胶囊底色实测对比度择优（深胶囊用亮绿、浅胶囊用深绿），浅色主题下不再隐形。
+
+----
+
+**Fixed**
+
+- **Quote-capsule text now follows the capsule theme colour** instead of the bubble text colour, fixing the unreadable names (near-black on dark in raven, white on sand in elegant).
+- **Soft-shadow scope rebalanced**: system messages, quote pills, time dividers, image placeholders and the sender name band keep the text shadow; bubble body text (own and others) has none. The shadow's light/dark polarity follows the surface the text sits on rather than the panel.
+- **[Image] placeholder green adapts by measured contrast** with the capsule tint (bright on dark, deep on light), so it no longer disappears on pale themes.
+
 ## v0.3.0
 
 > 本版重做了整套界面动效与个人档案页，统一了卡片与描边语言，加入双轴缩放与自适应边框，并把许可换为 Apache-2.0。

@@ -16,8 +16,10 @@ import com.atom.chat.render.Easing;
 import com.atom.chat.render.RichTextRenderer;
 import com.atom.chat.render.SkiaDraw;
 import com.atom.chat.render.SkiaFontRenderer;
+import com.atom.chat.render.TextSurface;
 import com.atom.chat.text.RichText;
 import com.atom.chat.text.RichTextLayout.RichLine;
+import com.atom.chat.theme.ThemeService;
 import com.atom.chat.ui.Animations;
 import com.atom.chat.ui.ScrollController;
 import com.atom.chat.ui.UiMotion;
@@ -695,7 +697,7 @@ public final class MessageListView {
         SkiaDraw.drawRoundedRect(canvas, pillX, pillY, pillW, pillH, UiTokens.radius(10),
                 secondaryCapsuleBg());
         SkiaFontRenderer.drawTextCentered(canvas, font, time, x + width / 2.0F, pillY + pillH / 2.0F,
-                secondaryCapsuleText());
+                secondaryCapsuleText(), TextSurface.CAPSULE.shadowed(), secondaryCapsuleBg());
     }
 
     /**
@@ -850,13 +852,12 @@ public final class MessageListView {
         }
         SkiaDraw.drawRoundedRect(canvas, bubbleX, bubbleTop, bubbleWidth, bubbleHeight, UiTokens.BUBBLE_RADIUS, msg.isOwn() ? ownBubble() : otherBubble());
         drawMessageSelection(canvas, msg, richLines, bubbleX + UiTokens.BUBBLE_PAD, bubbleTop + bubbleHeight / 2.0F, lineHeight, font);
-        // backing=true: bubble text keeps the soft drop shadow it has always
-        // had. The flag reads like a name-only concern, but the shadow block
-        // is now one filtered layer for the whole block (see
-        // RichTextRenderer#drawShadowPass), so covering the bubble here is
-        // cheaper than the per-run layers it replaced, not costlier.
+        // No backing shadow on bubble text (TextSurface.BUBBLE): the soft shadow
+        // is reserved for the capsule family and the name band. A bubble fill and
+        // its text colour are chosen as a pair by the theme author, so the shadow
+        // adds no legibility the pair does not already intend.
         RichTextRenderer.drawLines(canvas, font, richLines, bubbleX + UiTokens.BUBBLE_PAD, bubbleTop + bubbleHeight / 2.0F,
-                lineHeight, bubbleText(msg), clickableSpans, true, true);
+                lineHeight, bubbleText(msg), clickableSpans, true, TextSurface.BUBBLE.shadowed());
         drawDuplicateBadge(canvas, msg, bubbleX, bubbleWidth, bubbleTop, bubbleHeight);
 
         float bottom = bubbleTop + bubbleHeight;
@@ -884,8 +885,11 @@ public final class MessageListView {
         SkiaDraw.drawRoundedRect(canvas, bubbleX, bubbleTop, bubbleWidth, bubbleHeight, UiTokens.radius(10),
                 secondaryCapsuleBg());
         drawMessageSelection(canvas, msg, richLines, bubbleX + UiTokens.BUBBLE_PAD, bubbleTop + bubbleHeight / 2.0F, lineHeight, font);
+        // Capsule text takes a backing shadow (TextSurface.CAPSULE); the shadow
+        // polarity follows the capsule tint, not the panel.
         RichTextRenderer.drawLines(canvas, font, richLines, bubbleX + UiTokens.BUBBLE_PAD, bubbleTop + bubbleHeight / 2.0F,
-                lineHeight, secondaryCapsuleText(), clickableSpans, true);
+                lineHeight, secondaryCapsuleText(), clickableSpans, true, TextSurface.CAPSULE.shadowed(),
+                secondaryCapsuleBg());
         float bottom = bubbleTop + bubbleHeight;
         return new MessageHit(msg, index, x, y, maxWidth, bottom, 0.0F, 0.0F, 0.0F, bubbleTop, bubbleX, bubbleWidth, bottom);
     }
@@ -920,19 +924,48 @@ public final class MessageListView {
         float centerBaselineY = SkiaFontRenderer.centerBaselineY(quoteFont, pillY + UiTokens.QUOTE_HEIGHT / 2.0F);
         boolean imageQuote = msg.getQuoteText() != null
                 && Cicodes.isImagePlaceholder(msg.getQuoteText());
+        // Quote text takes the capsule family colour, matching the capsule tint
+        // it sits on (a bubble-family colour would go dark-on-dark in raven and
+        // white-on-sand in elegant — the two reported defects). A backing shadow
+        // keeps it legible over the tint; polarity from the capsule background.
+        int quoteText = secondaryCapsuleText();
+        int capsuleBg = secondaryCapsuleBg();
         if (imageQuote) {
-            // Only the [图片]/[Image] placeholder is green; the quoted player's
-            // name and the colon stay in the normal primary colour.
+            // Only the [图片]/[Image] placeholder is a status green; the quoted
+            // player's name and the colon stay in the normal capsule colour.
             String fullNamePart = name + ": ";
             float placeholderW = SkiaFontRenderer.getStringWidth(quoteFont, msg.getQuoteText());
             String namePart = Cicodes.truncateToWidth(quoteFont, fullNamePart, Math.max(0.0F, textMaxW - placeholderW));
-            SkiaFontRenderer.drawText(canvas, quoteFont, namePart, textStartX, centerBaselineY, bubbleText(msg));
+            SkiaFontRenderer.drawText(canvas, quoteFont, namePart, textStartX, centerBaselineY, quoteText,
+                    TextSurface.CAPSULE.shadowed(), capsuleBg);
             float namePartW = SkiaFontRenderer.getStringWidth(quoteFont, namePart);
             SkiaFontRenderer.drawText(canvas, quoteFont, msg.getQuoteText(), textStartX + namePartW,
-                    centerBaselineY, Color.makeARGB(255, 85, 255, 85));
+                    centerBaselineY, placeholderGreen(capsuleBg), TextSurface.CAPSULE.shadowed(), capsuleBg);
         } else {
-            SkiaFontRenderer.drawText(canvas, quoteFont, display, textStartX, centerBaselineY, bubbleText(msg));
+            SkiaFontRenderer.drawText(canvas, quoteFont, display, textStartX, centerBaselineY, quoteText,
+                    TextSurface.CAPSULE.shadowed(), capsuleBg);
         }
+    }
+
+    /**
+     * Status green for the [图片]/[Image] placeholder, adapted to the capsule
+     * tint it sits on: the bright green is invisible on a pale capsule, so a
+     * dark capsule keeps it and a light capsule gets a deep green. Picks by
+     * measured contrast rather than a fixed light/dark threshold — the
+     * crossover between the two greens is not the midpoint, so a mid-tone
+     * capsule would be badly served by either fixed branch.
+     */
+    private static int placeholderGreen(int capsuleBg) {
+        int bright = Color.makeARGB(255, 85, 255, 85);
+        int deep = Color.makeARGB(255, 22, 101, 52);
+        return contrast(bright, capsuleBg) >= contrast(deep, capsuleBg) ? bright : deep;
+    }
+
+    /** WCAG contrast ratio between two colours; alpha is ignored. */
+    private static float contrast(int a, int b) {
+        float la = ThemeService.relativeLuminance(a);
+        float lb = ThemeService.relativeLuminance(b);
+        return (Math.max(la, lb) + 0.05F) / (Math.min(la, lb) + 0.05F);
     }
 
     /**
@@ -963,7 +996,7 @@ public final class MessageListView {
         // it to the cap-height baseline, matching the old drawText helper.
         float centerY = rowY + UiTokens.NAME_BAND / 2.0F;
         RichTextRenderer.drawLines(canvas, nameFont, lines, x, centerY, lineHeight, textPrimary(),
-                clickableSpans, true, true);
+                clickableSpans, true, TextSurface.NAME_BAND.shadowed());
     }
 
     /**
@@ -1082,7 +1115,8 @@ public final class MessageListView {
         SkiaDraw.drawRoundedRect(canvas, pillX, pillTop, pillW, pillH, UiTokens.radius(10),
                 secondaryCapsuleBg());
         SkiaFontRenderer.drawTextCentered(canvas, font, placeholder,
-                pillX + pillW / 2.0F, pillTop + pillH / 2.0F, Color.makeARGB(255, 85, 255, 85));
+                pillX + pillW / 2.0F, pillTop + pillH / 2.0F,
+                placeholderGreen(secondaryCapsuleBg()), TextSurface.CAPSULE.shadowed(), secondaryCapsuleBg());
         drawDuplicateBadge(canvas, msg, pillX, pillW, pillTop, pillH);
         float bottom = pillTop + pillH;
         return new MessageHit(msg, index, x, y, maxWidth, bottom, avatarX, avatarY, avatarSize, pillTop, pillX, pillW, bottom);

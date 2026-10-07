@@ -12,9 +12,11 @@
 
 | 平台 | 实例目录 | 部署 jar md5 |
 |---|---|---|
-| Fabric 1.21.1 | `1.21.1-CCB` | `541d5a1e146a62b6a42f439257a2a8e4` |
-| NeoForge 1.21.1 | `Mechanomania-航空学` | `0c7e860a9061bada2dc9f5bdf0c822b4` |
-| Forge 1.20.1 | `1.20.1-main` / `Go Fishing` / `元素觉醒1.4.6` | `a968a07c2f848c04381549044db53186` |
+| Fabric 1.21.1 | `1.21.1-CCB` | `5b9f90800eaaab68acbbb1acaf5c8e42` |
+| NeoForge 1.21.1 | `Mechanomania-航空学` | `ae3cfc32467598e352142eef8db9615d` |
+| Forge 1.20.1 | `1.20.1-main` / `Go Fishing` / `元素觉醒1.4.6` | `f54da52f49443af30274c8dabd53f5b0` |
+
+上表为**工作区未提交构建**（引用胶囊取色修复 + 胶囊族软阴影 + [图片] 占位绿自适应，v0.3.0 之后的小修补轮），待真机验收后再决定是否随下一版提交。
 
 实例都在 `D:\Myworld\.minecraft\versions\<实例>\mods\`；配置文件在 `<实例>\config\atomchat\atomchat-client.json`。
 

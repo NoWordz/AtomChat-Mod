@@ -177,8 +177,29 @@ public final class SkiaFontRenderer {
      * baseline (see centerBaselineY) so it matches every other centered label.
      */
     public static void drawTextCentered(Canvas canvas, Font font, String text, float centerX, float centerY, int color) {
+        drawTextCentered(canvas, font, text, centerX, centerY, color, false);
+    }
+
+    /**
+     * Centered variant with the optional soft backing shadow, for capsule
+     * labels (time dividers, image placeholders) whose surface tint can sit
+     * close to the text colour. See {@link #drawText(Canvas, Font, String,
+     * float, float, int, boolean)}.
+     */
+    public static void drawTextCentered(Canvas canvas, Font font, String text, float centerX, float centerY,
+                                        int color, boolean backing) {
         drawText(canvas, font, text, centerX - getStringWidth(font, text) / 2.0F,
-                centerBaselineY(font, centerY), color);
+                centerBaselineY(font, centerY), color, backing);
+    }
+
+    /**
+     * Centered variant whose shadow polarity comes from {@code shadowSurfaceArgb}
+     * — pass the capsule tint the label sits on, not the panel's polarity.
+     */
+    public static void drawTextCentered(Canvas canvas, Font font, String text, float centerX, float centerY,
+                                        int color, boolean backing, int shadowSurfaceArgb) {
+        drawText(canvas, font, text, centerX - getStringWidth(font, text) / 2.0F,
+                centerBaselineY(font, centerY), color, backing, shadowSurfaceArgb);
     }
 
     /**
@@ -222,7 +243,21 @@ public final class SkiaFontRenderer {
      * is linear in the glyph mask) at a fraction of the layers.
      */
     public static io.github.humbleui.skija.ImageFilter backingShadow() {
-        return ThemeService.panelIsLight() ? SHADOW_ON_LIGHT : SHADOW_ON_DARK;
+        return backingShadowFor(ThemeService.panelIsLight());
+    }
+
+    /**
+     * The soft-shadow filter chosen by the polarity of the surface the text
+     * actually sits on — a capsule tint can differ in luminance from the panel,
+     * so capsule text must ask this with the capsule background, not the panel's
+     * polarity. Same two cached filters; nothing is allocated on the draw path.
+     */
+    public static io.github.humbleui.skija.ImageFilter backingShadowFor(int surfaceArgb) {
+        return backingShadowFor(ThemeService.colorIsLight(surfaceArgb));
+    }
+
+    private static io.github.humbleui.skija.ImageFilter backingShadowFor(boolean surfaceIsLight) {
+        return surfaceIsLight ? SHADOW_ON_LIGHT : SHADOW_ON_DARK;
     }
 
     /**
@@ -234,6 +269,18 @@ public final class SkiaFontRenderer {
     public static void drawText(Canvas canvas, Font font, String text, float x, float y, int color, boolean backing) {
         if (backing) {
             drawTextPass(canvas, font, text, x, y, 0xFF000000, backingShadow());
+        }
+        drawTextPass(canvas, font, text, x, y, color, null);
+    }
+
+    /**
+     * As above, but the shadow's polarity comes from {@code shadowSurfaceArgb}
+     * — the tint the text sits on (a capsule background), not the panel's.
+     */
+    public static void drawText(Canvas canvas, Font font, String text, float x, float y, int color,
+                                boolean backing, int shadowSurfaceArgb) {
+        if (backing) {
+            drawTextPass(canvas, font, text, x, y, 0xFF000000, backingShadowFor(shadowSurfaceArgb));
         }
         drawTextPass(canvas, font, text, x, y, color, null);
     }

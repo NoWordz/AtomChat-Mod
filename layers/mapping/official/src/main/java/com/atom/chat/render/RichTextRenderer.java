@@ -75,30 +75,48 @@ public final class RichTextRenderer {
     public static void drawLines(Canvas canvas, Font font, List<RichLine> lines,
                                  float x, float centerY, float lineHeight, int fallbackColor,
                                  List<ClickableSpan> sink, boolean addClickable, boolean backing) {
+        // Panel polarity by default (the sender name band); irrelevant when
+        // backing is false (the bubble body), which draws no shadow at all.
+        drawLines(canvas, font, lines, x, centerY, lineHeight, fallbackColor, sink, addClickable,
+                backing, SkiaFontRenderer.backingShadow());
+    }
+
+    /**
+     * Capsule variant: the shadow's polarity comes from {@code shadowSurfaceArgb}
+     * (the tint the text sits on), not the panel — a hand-tuned capsule colour
+     * need not share the panel's polarity.
+     */
+    public static void drawLines(Canvas canvas, Font font, List<RichLine> lines,
+                                 float x, float centerY, float lineHeight, int fallbackColor,
+                                 List<ClickableSpan> sink, boolean addClickable, boolean backing,
+                                 int shadowSurfaceArgb) {
+        drawLines(canvas, font, lines, x, centerY, lineHeight, fallbackColor, sink, addClickable,
+                backing, SkiaFontRenderer.backingShadowFor(shadowSurfaceArgb));
+    }
+
+    private static void drawLines(Canvas canvas, Font font, List<RichLine> lines,
+                                  float x, float centerY, float lineHeight, int fallbackColor,
+                                  List<ClickableSpan> sink, boolean addClickable, boolean backing,
+                                  io.github.humbleui.skija.ImageFilter shadow) {
         if (lines == null || lines.isEmpty()) {
             return;
         }
         float totalH = lines.size() * lineHeight;
         float blockTop = centerY - totalH / 2.0F;
         if (backing) {
-            drawRunsPass(canvas, font, lines, x, blockTop, lineHeight, fallbackColor, sink, false, false);
+            drawShadowPass(canvas, font, lines, x, blockTop, lineHeight, shadow);
         }
-        drawRunsPass(canvas, font, lines, x, blockTop, lineHeight, fallbackColor, sink, addClickable, true);
+        drawRunsPass(canvas, font, lines, x, blockTop, lineHeight, fallbackColor, sink, addClickable);
     }
 
     /**
-     * One full pass over all lines and runs at the given block top. The
-     * shadow pass ({@code mainPass} false) draws every run as the soft
-     * drop shadow and never underlines or records spans; the main pass behaves
-     * exactly as before.
+     * One full pass over all lines and runs at the given block top, drawing
+     * every run and recording its underline and (when {@code addClickable})
+     * clickable span.
      */
     private static void drawRunsPass(Canvas canvas, Font font, List<RichLine> lines,
                                      float x, float blockTop, float lineHeight, int fallbackColor,
-                                     List<ClickableSpan> sink, boolean addClickable, boolean mainPass) {
-        if (!mainPass) {
-            drawShadowPass(canvas, font, lines, x, blockTop, lineHeight);
-            return;
-        }
+                                     List<ClickableSpan> sink, boolean addClickable) {
         for (int i = 0; i < lines.size(); i++) {
             RichLine line = lines.get(i);
             float lineCenterY = blockTop + (i + 0.5F) * lineHeight;
@@ -137,7 +155,8 @@ public final class RichTextRenderer {
      * same flat wash through the non-backing drawText overload.
      */
     private static void drawShadowPass(Canvas canvas, Font font, List<RichLine> lines,
-                                       float x, float blockTop, float lineHeight) {
+                                       float x, float blockTop, float lineHeight,
+                                       io.github.humbleui.skija.ImageFilter shadow) {
         // Layer bounds before the first glyph: widest line horizontally, first
         // and last baseline vertically — padded like drawTextPass pads a run.
         float maxLineW = 0.0F;
@@ -155,7 +174,7 @@ public final class RichTextRenderer {
         canvas.save();
         try {
             try (Paint layer = new Paint()) {
-                layer.setImageFilter(SkiaFontRenderer.backingShadow());
+                layer.setImageFilter(shadow);
                 canvas.saveLayer(io.github.humbleui.types.Rect.makeXYWH(
                         x - pad, topBaseline + metrics.getAscent() - pad,
                         maxLineW + pad * 2.0F,
