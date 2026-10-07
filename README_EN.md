@@ -24,7 +24,7 @@
   <a href="https://github.com/E33EPUS/AtomChat/actions/workflows/build.yml"><img alt="Build" src="https://github.com/E33EPUS/AtomChat/actions/workflows/build.yml/badge.svg?branch=main"></a>
 </p>
 
-> **v0.2.9 is out** · [Download the JAR](https://github.com/E33EPUS/AtomChat/releases) · [Wiki](https://github.com/E33EPUS/AtomChat/wiki)
+> **v0.3.0 is out** · [Download the JAR](https://github.com/E33EPUS/AtomChat/releases) · [Wiki](https://github.com/E33EPUS/AtomChat/wiki)
 
 > [!WARNING]
 > **Windows x64 only for now.** The JAR bundles only the Windows x64 Skija native, so the chat panel cannot start on Linux or macOS. See [Known limitations](#known-limitations).
@@ -73,7 +73,7 @@ The mod is **client-side only**: it works without a server install (images go to
 - 🔗 **Rich text & context menus** — names and bodies carry colors, underlines, click and hover events: `/tell`, coordinates, FTB accept / deny and external links are all clickable, bare URLs become links; the context menu offers copy / quote / save / @ / whisper / teleport / block
 - 👥 **Whispers & conversation list** — the list is ordered public → online → recent offline with real IDs, skin avatars, presence dots and unread badges; whispers run over `/msg` with per-conversation drafts and scroll positions; a separate profile page shows player details
 - 🔔 **Notifications** — being @mentioned, quoted or whispered pops a banner at the top of the panel (click to jump to the message and highlight it) with an original synthesized cue; switches and volume live in Settings → Chat → Notifications
-- 🎨 **Appearance** — one-tap theme presets (frosted / modern) plus every interface colour exposed (panel / bubbles / text / cards / outline / accent) with live previews; background blur, panel width 400–600, UI scale x0.75–x1.50, corner style, message entry animation; a custom wallpaper is downscaled to a 1024 px longest side
+- 🎨 **Appearance** — nine theme presets (frosted + eight palettes, including the translucent "Dusk" and "Mint") in one tap plus every interface colour exposed (panel / bubbles / text / cards / outline / accent) with live previews; background blur, panel width 400–600, UI scale x0.75–x1.50, content scale x0.80–x1.50, corner radius, navigation animation style (slide / zoom) and message entry animation; a custom wallpaper is downscaled to a 1024 px longest side
 - 🧹 **Chat hygiene** — public feed filter (all / system only / players only, view-only); drag across several messages and copy them all with Ctrl+C; repeated messages merge with a counter; same-sender runs within five minutes pack tightly; timed dividers; a visual block list
 - ⚙️ **Settings & persistence** — a Windows-11 style 2×2 tile home (Appearance / Chat / Privacy & blocking / About); every option applies and persists instantly, no restart; chat history can optionally be saved per server / world and restored on rejoin
 

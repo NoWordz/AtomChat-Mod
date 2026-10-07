@@ -1,5 +1,7 @@
 # AtomChat Design
 
+> 当前实现进度、版本、部署与待办见 [STATUS.md](STATUS.md)；本文件记录设计意图，个别数值（如面板默认尺寸）会随迭代变化。
+
 ## Goal
 
 Build a high-quality, highly customizable phone-app-style chat UI for Minecraft, distinct from E33Chat. The vanilla chat box remains visible normally; pressing the chat key opens AtomChat and hides the vanilla chat HUD.
