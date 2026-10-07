@@ -1,9 +1,7 @@
 package com.atom.chat.ui;
 
 import com.atom.chat.render.SkiaDraw;
-import com.atom.chat.theme.ThemeService;
 import io.github.humbleui.skija.Canvas;
-import io.github.humbleui.skija.Color;
 
 /**
  * The one card primitive for settings surfaces. Every content card — settings
@@ -20,7 +18,8 @@ import io.github.humbleui.skija.Color;
  *   <li>the polarity-adaptive hairline ({@link UiTokens#hairline()}), one
  *       whisper-thin s(1.0) stroke — the three-tier outline ladder was
  *       retired: at its card tier it drew borders heavy enough to read as
- *       frames, not edges,</li>
+ *       frames, not edges; the card's depth is the two shadow tiers plus
+ *       this hairline alone,</li>
  *   <li>the hover wash, last.</li>
  * </ul>
  *
@@ -35,8 +34,33 @@ public final class UiCards {
     /** Draws the full card stack; {@code hoverWeight} 0..1. */
     public static void drawCard(Canvas canvas, float x, float y, float w, float h,
                                 float radius, float hoverWeight) {
-        SkiaDraw.drawRoundedShadow(canvas, x, y, w, h, radius, UiTokens.s(6), UiTokens.CARD_SHADOW);
-        SkiaDraw.drawRoundedRect(canvas, x, y, w, h, radius, UiTokens.cardFill());
+        drawCard(canvas, x, y, w, h, radius, hoverWeight, UiTokens.CARD_SHADOW, UiTokens.s(6));
+    }
+
+    /**
+     * Draws the full card stack with an explicit shadow tier; {@code hoverWeight}
+     * 0..1. Content cards keep the default above; floating chrome (the
+     * notification banner) passes the heavier {@link UiTokens#CHROME_SHADOW} at
+     * s(8) — the blur/alpha family the shell header and tab bar ride at.
+     */
+    public static void drawCard(Canvas canvas, float x, float y, float w, float h,
+                                float radius, float hoverWeight, int shadowColor, float shadowBlur) {
+        drawCard(canvas, x, y, w, h, radius, hoverWeight, shadowColor, shadowBlur,
+                UiTokens.cardFill());
+    }
+
+    /**
+     * The full stack with the base fill explicit too. A surface that floats
+     * above message text keeps an opaque base — a translucent
+     * {@link UiTokens#cardFill()} would let the messages bleed through — so the
+     * banner passes its fixed opaque card colour here; every other surface
+     * keeps {@link UiTokens#cardFill()} through the overloads above.
+     */
+    public static void drawCard(Canvas canvas, float x, float y, float w, float h,
+                                float radius, float hoverWeight, int shadowColor, float shadowBlur,
+                                int baseFill) {
+        SkiaDraw.drawRoundedShadow(canvas, x, y, w, h, radius, shadowBlur, shadowColor);
+        SkiaDraw.drawRoundedRect(canvas, x, y, w, h, radius, baseFill);
         // The hairline language: one stroke width, alpha 42 on both
         // polarities, so a card edge reads as an edge, not a frame.
         SkiaDraw.drawEdgeHighlight(canvas, x, y, w, h, radius, UiTokens.s(1.0F),
@@ -44,19 +68,5 @@ public final class UiCards {
         if (hoverWeight > 0.01F) {
             SkiaDraw.drawRoundedRect(canvas, x, y, w, h, radius, UiTokens.cardHover(hoverWeight));
         }
-    }
-
-    /**
-     * Theme-adaptive hairline for small round elements (colour swatches, the
-     * slider knob's outer trace): a whisper of black on light panels, a
-     * whisper of white on dark ones — either way enough to separate a pale
-     * fill from a pale ground and vice versa. Alpha is 42 on both
-     * polarities, unified with {@link UiTokens#hairline()} under the one
-     * hairline language (the dark side used to carry 64).
-     */
-    public static int hairlineColor() {
-        return ThemeService.panelIsLight()
-                ? Color.makeARGB(42, 0, 0, 0)
-                : Color.makeARGB(42, 255, 255, 255);
     }
 }

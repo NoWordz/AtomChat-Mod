@@ -24,7 +24,9 @@ package com.atom.chat.ui;
 public final class UiSpring {
     /**
      * Panel open/close. Stiffness 1200 with damping ratio 1.0 (critically
-     * damped).
+     * damped). Historical: the shell's panel progress has since moved back to
+     * the exponential clock ({@link UiMotion#PANEL_OPEN_TAU_MS}); the factory
+     * stays because {@code SpringAnimTest} pins these semantics.
      *
      * <p>Panel open/close is spatial fast-travel: the brief is "get out of the
      * way fast, arrive dead" — so critical damping, no overshoot at all

@@ -30,6 +30,8 @@ import com.atom.chat.avatar.AvatarImage;
 import com.atom.chat.avatar.AvatarStore;
 import com.atom.chat.avatar.ColorPickerOverlay;
 import com.atom.chat.avatar.ImageCropper;
+import com.atom.chat.banner.BannerImage;
+import com.atom.chat.banner.BannerStore;
 import com.atom.chat.image.OwnPlayerAvatarSource;
 import com.atom.chat.page.ConversationListPage;
 import com.atom.chat.page.MessageListView;
@@ -40,7 +42,6 @@ import com.atom.chat.mixin.MouseHandlerAccessor;
 import com.atom.chat.render.Animator;
 import com.atom.chat.render.BlurMotionGate;
 import com.atom.chat.render.ClickableSpan;
-import com.atom.chat.render.Easing;
 import com.atom.chat.render.PanelBlurRenderer;
 import com.atom.chat.render.RichTextRenderer;
 import com.atom.chat.render.SkiaDraw;
@@ -56,11 +57,10 @@ import com.atom.chat.ui.ShellHeader;
 import com.atom.chat.ui.UiLayout;
 import com.atom.chat.ui.EmojiPanel;
 import com.atom.chat.ui.PanelBackground;
+import com.atom.chat.ui.MenuPopup;
 import com.atom.chat.ui.PressScale;
 import com.atom.chat.ui.QuickPhrasePanel;
-import com.atom.chat.ui.SpringAnim;
 import com.atom.chat.ui.UiMotion;
-import com.atom.chat.ui.UiSpring;
 import com.atom.chat.ui.UiTokens;
 import com.atom.chat.ui.input.InputHandler;
 import com.atom.chat.ui.input.InputRouter;
@@ -147,6 +147,10 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
                 if (WallpaperStore.setPng(pngBytes)) {
                     WallpaperImage.release();
                 }
+            } else if ("banner".equals(targetId)) {
+                if (BannerStore.setPng(pngBytes)) {
+                    BannerImage.release();
+                }
             }
         }
 
@@ -170,10 +174,59 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
         }
 
         @Override
+        public void openBannerPicker() {
+            pickBannerFile();
+        }
+
+        @Override
+        public void clearBanner() {
+            // Delete image = off: the file goes, the accent gradient returns.
+            BannerStore.clear();
+            BannerImage.release();
+        }
+
+        @Override
         public void copyText(String text) {
             copyToClipboard(text);
         }
+
+        @Override
+        public void beginSignatureEdit() {
+            // The quick-phrase editor's borrow, pointed at the signature: park
+            // the composer draft, load the current signature into the field
+            // (the IME carrier) and focus it. The page flips into its editing
+            // draw once the field is primed.
+            signatureSavedComposer = inputGetText();
+            String sig = AtomChatConfig.get().playerSignature;
+            inputSetText(sig == null ? "" : sig);
+            inputFocused = true;
+            setFocused(input);
+            if (input != null) {
+                input.setFocused(true);
+            }
+            setCaretAtEnd();
+            profilePage.beginSignatureEdit();
+        }
+
+        @Override
+        public void endSignatureEdit(boolean commit) {
+            if (commit) {
+                String text = inputGetText();
+                if (text.length() > 256) {
+                    // Same cap as a quick phrase: a longer signature could
+                    // never be typed within Minecraft's chat limit anyway.
+                    text = text.substring(0, 256);
+                }
+                AtomChatConfig cfg = AtomChatConfig.get();
+                cfg.playerSignature = text;
+                AtomChatConfig.save(cfg);
+            }
+            inputSetText(signatureSavedComposer);
+            setCaretAtEnd();
+        }
     }, avatarStore);
+    /** Composer text parked while the profile page borrows the field. */
+    private String signatureSavedComposer = "";
     private final SettingsHomePage settingsHomePage = new SettingsHomePage();
     private final SettingsSectionPage settingsSectionPage = new SettingsSectionPage();
     /** Per-chip scroll memory ("section:chip" -> offset); the detail
@@ -219,6 +272,14 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
                 default -> "tp";
             };
             TeleportCommands.reset();
+            AtomChatConfig.save(cfg);
+        } else if ("page_nav_style".equals(actionId)) {
+            // Style pick: tap cycles SLIDE <-> ZOOM and saves, like the
+            // teleport-mode cycle above. Takes effect on the next nav.
+            AtomChatConfig cfg = AtomChatConfig.get();
+            cfg.pageNavStyle = cfg.pageNavStyle == AtomChatConfig.PageNavStyle.ZOOM
+                    ? AtomChatConfig.PageNavStyle.SLIDE
+                    : AtomChatConfig.PageNavStyle.ZOOM;
             AtomChatConfig.save(cfg);
         } else if ("history_clear".equals(actionId)) {
             // Wipes the current session (and the world's saved file when
@@ -269,6 +330,36 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
             }
             this.client.execute(() -> imageCropper.open(file, true, 0.0F, 0.0F, "avatar"));
         }, "AtomChat-AvatarPicker");
+        worker.setDaemon(true);
+        worker.start();
+    }
+
+    /**
+     * Picks a profile banner off-thread and crops it to the banner card's
+     * aspect before storing; the crop result lands via
+     * {@link ImageCropper.Callback#onConfirm} on the render thread, like every
+     * other store write.
+     */
+    private void pickBannerFile() {
+        KeyMapping.releaseAll();
+        if (this.client.mouseHandler != null) {
+            ((MouseHandlerAccessor) this.client.mouseHandler).atomchat$setActiveButton(0);
+        }
+        Thread worker = new Thread(() -> {
+            Path file = FilePicker.pickImage(this::suppressAutoIconify, this::restoreAutoIconify,
+                    BannerStore::isSupportedName);
+            refocusWindow();
+            if (file == null) {
+                return;
+            }
+            this.client.execute(() -> {
+                // Crop at the profile banner card's aspect so what you frame is
+                // what the card shows (cover-fit has nothing left to do).
+                UiLayout l = listLayout();
+                float bannerW = Math.max(1.0F, l.list.w() - UiTokens.ROW_CLIP_INSET * 2.0F);
+                imageCropper.open(file, false, bannerW, UiTokens.PROFILE_BANNER_H, "banner");
+            });
+        }, "AtomChat-BannerPicker");
         worker.setDaemon(true);
         worker.start();
     }
@@ -373,6 +464,9 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
 
     // Per-cell hover fade for the bubble context menu rows.
     private final float[] contextMenuHover = new float[4];
+    /** Per-row menu bounce, indexed like {@link #contextMenuHover}. */
+    private final PressScale[] contextMenuScale = {PressScale.bounce(), PressScale.bounce(),
+            PressScale.bounce(), PressScale.bounce()};
 
     // Root tab transition. The bottom bar owns the shared Animator; the screen
     // keeps the from/to slot indexes and reuses the same Animator for the root
@@ -382,18 +476,47 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
     private int rootTabFrom = -1;
     private int rootTabTo = -1;
 
-    // Page push/pop transition (root <-> world chat). The world page slides
-    // horizontally over a static root page; the navigation entry changes only
-    // after the animation settles so the active page stays consistent.
-    private final Animator pageNavAnim = new Animator(Easing::easeInOutCubic);
+    // Page push/pop transition (root <-> detail). The navigation entry changes
+    // only after the animation settles so the active page stays consistent.
+    // No tween clock: the SLIDE style rides navSlideProgress and the ZOOM
+    // style rides the serial state machine below — both exponential
+    // (UiMotion.expApproach), so the motion starts at full speed and decays
+    // instead of the eased tween's acceleration notch.
+    private float navSlideProgress;
     private NavPage pageNavFrom;
     private NavPage pageNavTo;
     private boolean pageNavPopPending;
-    /** Melodify-style page enter: 0.94 -> 1 on a bounce spring, fade ~120ms. */
-    private static final float PAGE_ENTER_SCALE_FROM = 0.94F;
-    private static final long PAGE_ENTER_FADE_MS = 120L;
-    private final SpringAnim pageNavScale = UiSpring.newBounceSpring();
-    private long pageNavStartMs;
+    /** Resolved once per nav in {@link #startPageNav}: zoom only for
+     *  root<->detail pairs while the config style is ZOOM. */
+    private boolean pageNavZoom;
+    /**
+     * Melodify-style serial zoom phases: the leaving page shrinks out first
+     * (EXIT, alpha 1 -> 0 at scale 1.0 -> 0.9), then the arriving page
+     * settles in (ENTER, alpha 0 -> 1 at scale 1.1 -> 1.0) — never two
+     * half-transparent pages composited at once.
+     */
+    private static final int NAV_ZOOM_EXIT = 0;
+    private static final int NAV_ZOOM_ENTER = 1;
+    private int navZoomPhase = NAV_ZOOM_ENTER;
+    private float navExitAlpha;
+    private float navEnterAlpha;
+
+    // Root tab content transition, following the configured page-nav style
+    // like the root<->detail push: ZOOM = the same serial shrink-out/settle
+    // state machine, staged inside the list area; SLIDE = the two-page push
+    // driven by the same exponential family. The capsule shares the tab bar's
+    // animator as its value holder and is advanced from the same clock in
+    // {@link #stepRootNav}, so pill and pages always land together.
+    /** Resolved once per switch in {@link #switchRoot}: ZOOM while the config style is ZOOM. */
+    private boolean rootTabZoom;
+    /** Serial zoom phases for the tab content, mirroring {@link #navZoomPhase}. */
+    private static final int ROOT_ZOOM_EXIT = 0;
+    private static final int ROOT_ZOOM_ENTER = 1;
+    private int rootZoomPhase = ROOT_ZOOM_ENTER;
+    private float rootZoomExitAlpha;
+    private float rootZoomEnterAlpha;
+    /** Exponential 0->1 clock of the SLIDE tab push; the page-nav twin is {@link #navSlideProgress}. */
+    private float rootTabProgress;
 
     /** Hover wash behind the unified header back arrow. */
     private float backButtonHover;
@@ -411,9 +534,9 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
 
     // Animation state — durations live in UiMotion so every transition is tuned
     // in one place and none of them can drift back to a sluggish value. The
-    // panel slide is the one exception: it rides the spring language
-    // (UiSpring/SpringAnim) so opening lands fast and dead — near-critically
-    // damped, no bounce.
+    // panel open/close rides the same exponential clock (PANEL_OPEN_TAU_MS on
+    // the way in, the shorter PANEL_CLOSE_TAU_MS on the way out), so its shape
+    // and fade resolve on one timeline per direction.
     // Toolbar icons are kept as inline SVG path data (not assets): three tiny
     // paths are cheaper than a resource pipeline, stay crisp at every scale,
     // and are trivial to recolour for hover/pressed/theme states. The paths use
@@ -477,18 +600,25 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
             io.github.humbleui.skija.Path.makeFromSVGString(ICON_JUMP_DOWN_SVG);
 
     private static final int GLFW_KEY_V = 86;
-    /** Open-animation slide distance, in virtual px. The blur pre-pass offsets
-     * its capture rect by the same amount, so the two must stay in step. */
-    private static final float OPEN_SLIDE_PX = 10.0F;
+    /** Open-animation shape floor for the ZOOM style: the panel grows
+     * 0.94 -> 1 around its centre. The blur pre-pass reads the same mapping
+     * through panelOpenScale/panelOpenSlidePx, so the capture rect and the
+     * painted rect can never drift apart mid-flight. */
+    private static final float OPEN_MIN_SCALE = 0.94F;
     /** Slack around the panel in the fade layer, so bezel/shadow are not clipped. */
     private static final float LAYER_CHROME = 32.0F;
     private final long openStart = System.currentTimeMillis();
     private boolean closing;
-    /** Panel open/close progress (0 hidden, 1 open); slightly overshoots both ends. */
-    private float panelProgress = 1.0F;
-    /** Spring behind panelProgress; the tuned feel lives in UiSpring.PANEL_*. */
-    private final SpringAnim panelSpring = UiSpring.newPanelSpring();
-    /** Wall-clock timestamp of the previous frame — the spring consumes real dt. */
+    /**
+     * Panel open/close progress (0 hidden, 1 open). Rides
+     * {@link UiMotion#expApproach} at {@link UiMotion#PANEL_OPEN_TAU_MS}
+     * opening and the shorter {@link UiMotion#PANEL_CLOSE_TAU_MS} closing —
+     * the same exponential family as the page nav, not the old spring:
+     * full-speed start, decaying tail, exact snap at the target, never
+     * overshoots.
+     */
+    private float panelProgress = 0.0F;
+    /** Wall-clock timestamp of the previous frame — the progress clock consumes real dt. */
     private long lastFrameNanos = System.nanoTime();
     /** Composer height seen by the previous blur-gate frame, for change detection. */
     private float lastBlurInputExtraH;
@@ -705,6 +835,12 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
     }
 
     private void pushNav(NavPage page) {
+        // Leaving the profile page must not carry a live signature edit into
+        // the next page: abort (never commit on navigation) before anything
+        // else touches the borrowed field.
+        if (profilePage.isSignatureEditing()) {
+            profilePage.endSignatureEdit(false);
+        }
         saveCurrentDraft();
         AppPage fromPage = topPage();
         if (page.page() == AppPage.WORLD_CHAT) {
@@ -726,7 +862,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
             pageNavFrom = null;
             pageNavTo = null;
             pageNavPopPending = false;
-            pageNavAnim.setValue(0.0F);
+            navSlideProgress = 0.0F;
         }
         navigation.push(page);
         ChatStore.setPublicActive(page.page() == AppPage.WORLD_CHAT);
@@ -743,6 +879,11 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
 
     @Override
     public void popPage() {
+        // Same rule as pushNav: a live signature edit never survives
+        // navigation, and it aborts (no commit) when the page goes away.
+        if (profilePage.isSignatureEditing()) {
+            profilePage.endSignatureEdit(false);
+        }
         if (navigation.size() <= 1) {
             return;
         }
@@ -791,7 +932,45 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
     }
 
     private boolean pageNavActive() {
-        return pageNavFrom != null && pageNavTo != null && !pageNavAnim.isDone();
+        if (pageNavFrom == null || pageNavTo == null) {
+            return false;
+        }
+        if (pageNavZoom) {
+            return !(navZoomPhase == NAV_ZOOM_ENTER && navEnterAlpha >= 0.999F);
+        }
+        return navSlideProgress < 0.999F;
+    }
+
+    /**
+     * Advances the serial zoom: the leaving page drains to alpha 0 (handing
+     * over to ENTER at 0.02), then the arriving page fills to 1. With
+     * decorative motion off the tau is 0 and both phases snap in one frame.
+     * Sequential ifs on purpose: a fast exit can hand over to the enter
+     * phase within the same step.
+     */
+    private void stepZoomNav(float dtMs) {
+        float tau = Animations.enabled() ? UiMotion.PAGE_NAV_TAU_MS : 0.0F;
+        if (navZoomPhase == NAV_ZOOM_EXIT) {
+            navExitAlpha = UiMotion.expApproach(navExitAlpha, 0.0F, dtMs, tau);
+            if (navExitAlpha <= 0.02F) {
+                navExitAlpha = 0.0F;
+                navZoomPhase = NAV_ZOOM_ENTER;
+            }
+        }
+        if (navZoomPhase == NAV_ZOOM_ENTER && navEnterAlpha < 1.0F) {
+            navEnterAlpha = UiMotion.expApproach(navEnterAlpha, 1.0F, dtMs, tau);
+        }
+    }
+
+    /**
+     * Advances the SLIDE progress on the same exponential language as the
+     * zoom ({@link #stepZoomNav}): full-speed start, decaying tail, no eased
+     * tween's acceleration notch. With decorative motion off the tau is 0
+     * and the progress snaps in one frame.
+     */
+    private void stepSlideNav(float dtMs) {
+        float tau = Animations.enabled() ? UiMotion.PAGE_SLIDE_TAU_MS : 0.0F;
+        navSlideProgress = UiMotion.expApproach(navSlideProgress, 1.0F, dtMs, tau);
     }
 
     private void startPageNav(NavPage from, NavPage to, boolean popPending) {
@@ -799,12 +978,36 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
         pageNavFrom = from;
         pageNavTo = to;
         pageNavPopPending = popPending;
-        pageNavAnim.setValue(0.0F);
-        pageNavAnim.animateTo(Animations.ms(UiMotion.PAGE_NAV_MS), 1.0F);
-        // Pushes enter with the scale+fade; pops keep the slide-out.
-        if (!popPending) {
-            startPageEnter();
+        // The style is resolved once per nav so push and pop can never
+        // disagree mid-flight: root<->detail pairs follow the config (both
+        // directions — a pop mirrors its push), detail<->detail pairs always
+        // slide (sibling translation, no depth).
+        AtomChatConfig.PageNavStyle style = pageNavStyle(from, to);
+        pageNavZoom = style == AtomChatConfig.PageNavStyle.ZOOM;
+        if (pageNavZoom) {
+            // The zoom runs on its own two-phase clock (UiMotion.expApproach,
+            // Melodify's M3 step); pageNavActive() reads the state machine.
+            navZoomPhase = NAV_ZOOM_EXIT;
+            navExitAlpha = 1.0F;
+            navEnterAlpha = 0.0F;
+        } else {
+            // The slide rides the exponential progress; the Animations gate
+            // sits inside stepSlideNav's tau, so decorative-motion-off snaps
+            // there.
+            navSlideProgress = 0.0F;
         }
+    }
+
+    /**
+     * Nav style for a from->to pair: root<->detail hops use the configured
+     * style in both directions (pop included, so the return matches its
+     * push); detail<->detail hops are always a slide.
+     */
+    private static AtomChatConfig.PageNavStyle pageNavStyle(NavPage from, NavPage to) {
+        if (from.isRoot() == to.isRoot()) {
+            return AtomChatConfig.PageNavStyle.SLIDE;
+        }
+        return AtomChatConfig.get().pageNavStyle;
     }
 
     private void finishPageNav() {
@@ -814,54 +1017,23 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
         pageNavFrom = null;
         pageNavTo = null;
         pageNavPopPending = false;
-        pageNavAnim.setValue(0.0F);
+        navSlideProgress = 0.0F;
     }
 
     /**
-     * Arms the Melodify-style enter for a push: the page starts at 0.94 scale
-     * on a bounce spring and fades in over ~120ms. With decorative motion off
-     * both channels snap, so the switch lands immediately.
+     * True when a zoom layer has nothing left to composite: the scale is back
+     * at 1 and the layer is fully opaque. A full-panel saveLayer behind an
+     * identity transform is pure overdraw, so the nav branch and the settled
+     * shell panel skip the layer entirely in that state (motion off lands here
+     * from frame one).
      */
-    private void startPageEnter() {
-        if (Animations.enabled()) {
-            pageNavScale.snapTo(PAGE_ENTER_SCALE_FROM);
-            pageNavScale.setTarget(1.0F);
-            pageNavStartMs = System.currentTimeMillis();
-        } else {
-            pageNavScale.snapTo(1.0F);
-            pageNavStartMs = System.currentTimeMillis() - PAGE_ENTER_FADE_MS;
-        }
+    private static boolean navLayerSkippable(float alpha, float scale) {
+        return alpha >= 0.999F && Math.abs(scale - 1.0F) < 0.001F;
     }
 
-    private void updatePageEnter(float frameDt) {
-        pageNavScale.update(frameDt, Animations.enabled());
-    }
-
-    /** Enter fade: 0 -> 1 over {@link #PAGE_ENTER_FADE_MS}, ease-out. */
-    private float pageEnterAlpha() {
-        if (!Animations.enabled()) {
-            return 1.0F;
-        }
-        float t = Math.min(1.0F, (System.currentTimeMillis() - pageNavStartMs)
-                / (float) PAGE_ENTER_FADE_MS);
-        return Easing.easeOutQuad(t);
-    }
-
-    /**
-     * True once the enter transform has nothing left to show: the scale is
-     * back at 1 and the fade is complete. A fully-opaque full-panel
-     * saveLayer behind an identity transform is pure overdraw, so the enter
-     * branch skips the layer entirely in that state (motion off lands here
-     * from frame one; with motion on, every frame after the ~120ms fade).
-     */
-    private boolean pageEnterDone() {
-        return Math.abs(pageNavScale.value() - 1.0F) < 1e-3F && pageEnterAlpha() >= 0.999F;
-    }
-
-    /** Centers the enter scale around the panel middle. Draw-only: hit-tests
+    /** Centers a nav scale around the panel middle. Draw-only: hit-tests
      *  keep unscaled coordinates, like every other transform in this screen. */
-    private void applyEnterScale(Canvas canvas, UiLayout.Rect panelRect) {
-        float scale = pageNavScale.value();
+    private static void applyNavScale(Canvas canvas, UiLayout.Rect panelRect, float scale) {
         if (scale == 1.0F) {
             return;
         }
@@ -895,7 +1067,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
     }
 
     private float pageNavDx(float travel) {
-        float progress = pageNavAnim.getValue();
+        float progress = navSlideProgress;
         // Push: the incoming page enters from the right (travel -> 0).
         // Pop: the outgoing page leaves to the right (0 -> travel).
         // The old code decided by pageNavTo.isRoot(), which broke detail<->detail
@@ -929,6 +1101,12 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
         if (!root.isRoot()) {
             return;
         }
+        // Tab switches are the one navigation path that never runs pushNav or
+        // popPage, so the signature edit aborts here too (arriving OR leaving
+        // the profile tab).
+        if (profilePage.isSignatureEditing()) {
+            profilePage.endSignatureEdit(false);
+        }
         AppPage from = topPage();
         // Leaving the profile root falls back to the local player's page; the
         // injected subject (open-profile-for-other-player) is transient.
@@ -946,17 +1124,29 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
             ChatStore.setPublicActive(false);
             return;
         }
-        // If a previous root transition is still running, snap the shared
-        // indicator to the current page before starting a new slide.
-        if (!rootTabAnim.isDone() && from.isRoot()) {
-            rootTabAnim.setValue(rootIndex(from));
+        // If a previous tab transition is still running, snap it before
+        // re-arming: the clocks below always start from rest.
+        if (rootTransitionActive() && from.isRoot()) {
+            clearRootTransition();
         }
         navigation.replaceWithRoot(NavPage.of(root));
         ChatStore.setPublicActive(false);
         if (from.isRoot() && from != root) {
             rootTabFrom = rootIndex(from);
             rootTabTo = rootIndex(root);
-            bottomTabBar.setSelectedIndex(rootTabTo);
+            // The content transition follows the configured page-nav style,
+            // resolved once per switch so it can't change mid-flight; the
+            // capsule is pinned to the source tab and travels from the same
+            // clock in stepRootNav.
+            rootTabZoom = AtomChatConfig.get().pageNavStyle == AtomChatConfig.PageNavStyle.ZOOM;
+            if (rootTabZoom) {
+                rootZoomPhase = ROOT_ZOOM_EXIT;
+                rootZoomExitAlpha = 1.0F;
+                rootZoomEnterAlpha = 0.0F;
+            } else {
+                rootTabProgress = 0.0F;
+            }
+            rootTabAnim.setValue(rootTabFrom);
         } else {
             clearRootTransition();
             bottomTabBar.setSelectedImmediate(rootIndex(root));
@@ -1108,23 +1298,29 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
 
     @Override
     public void render(GuiGraphics context, int mouseX, int mouseY, float delta) {
-        // Spring-driven panel progress. The dt clamp (<=50ms) lives inside the
-        // spring; with decorative motion off update() snaps to the target, so
-        // the disabled path and the close completion both go through isSettled().
+        // Panel progress on the exponential clock (same family as the page
+        // nav): expApproach clamps dt to 50ms internally and snaps exactly to
+        // the target, so the equality below is the settle test — with
+        // decorative motion off tau=0 lands this frame, closing included.
         long nowNanos = System.nanoTime();
         float frameDtMs = Math.max(0.0F, Math.min(50.0F, (nowNanos - lastFrameNanos) / 1_000_000.0F));
         lastFrameNanos = nowNanos;
-        panelSpring.setTarget(closing ? 0.0F : 1.0F);
-        panelSpring.update(frameDtMs, Animations.enabled());
-        panelProgress = panelSpring.value();
-        if (closing && panelSpring.isSettled()) {
+        float panelTarget = closing ? 0.0F : 1.0F;
+        float panelTau = !Animations.enabled() ? 0.0F
+                : closing ? UiMotion.PANEL_CLOSE_TAU_MS : UiMotion.PANEL_OPEN_TAU_MS;
+        panelProgress = UiMotion.expApproach(panelProgress, panelTarget, frameDtMs, panelTau);
+        boolean panelSettled = panelProgress == panelTarget;
+        // Closing is cut at 6% left: past that the panel is a subpixel sliver
+        // and the exponential tail would only delay setScreen(null) (see
+        // PANEL_CLOSE_TAU_MS for why the close runs a shorter tau at all).
+        if (closing && (panelSettled || panelProgress < 0.06F)) {
             this.client.setScreen(null);
             return;
         }
         // Feed the blur cadence gate: camera or panel-chrome motion keeps the
         // every-2-frames blur refresh; a still scene drops to the slow fallback
         // (see BlurMotionGate). The pre-pass below asks the gate per frame.
-        boolean chromeAnimating = !panelSpring.isSettled()
+        boolean chromeAnimating = !panelSettled
                 || Math.abs(inputExtraH - lastBlurInputExtraH) > 0.01F;
         BlurMotionGate.noteFrame(System.currentTimeMillis(),
                 client.player != null ? client.player.getYRot() : 0.0F,
@@ -1149,12 +1345,20 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
             preUi = () -> {
                 try {
                     float strokeWidth = s(3);
-                    float slide = (panelProgress - 1.0F) * OPEN_SLIDE_PX;
-                    float vx = panelX() + strokeWidth + slide;
-                    float vy = panelY() + strokeWidth;
-                    float vw = panelWidth() - strokeWidth * 2.0F;
-                    float vh = panelHeight() - strokeWidth * 2.0F;
-                    float vRadius = UiTokens.panelRadius() - strokeWidth;
+                    // The capture rect must be the rect drawPhone paints: the
+                    // inset panel rect carried through the same open transform
+                    // (zoom around the panel centre, then the slide offset).
+                    float scale = panelOpenScale(panelProgress);
+                    float slide = panelOpenSlidePx(panelProgress);
+                    float insetW = panelWidth() - strokeWidth * 2.0F;
+                    float insetH = panelHeight() - strokeWidth * 2.0F;
+                    float cx = panelX() + panelWidth() / 2.0F;
+                    float cy = panelY() + panelHeight() / 2.0F;
+                    float vx = cx + slide - insetW * scale / 2.0F;
+                    float vy = cy - insetH * scale / 2.0F;
+                    float vw = insetW * scale;
+                    float vh = insetH * scale;
+                    float vRadius = (UiTokens.panelRadius() - strokeWidth) * scale;
                     double density = uiDensity();
                     double scaleFactor = this.client.getWindow().getGuiScale();
                     float gx = (float) (vx * density / scaleFactor);
@@ -1186,10 +1390,14 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
         // The hidden EditBox stays positioned so the IME floating window anchors
         // correctly; its text/cursor are drawn by Skia above. The suggestion popup
         // still renders through the vanilla pipeline on top. Root pages do not
-        // show the composer, so none of this may run outside WORLD_CHAT.
-        if (!closing && input != null && isWorldChatPage()) {
+        // show the composer, so none of this may run outside WORLD_CHAT — the
+        // one exception is the signature editor, which borrows the field on the
+        // profile page and needs the anchor to follow it (the suggestor stays
+        // composer-only).
+        if (!closing && input != null
+                && (isWorldChatPage() || profilePage.isSignatureEditing())) {
             positionInputField(layout());
-            if (chatInputSuggestor != null) {
+            if (isWorldChatPage() && chatInputSuggestor != null) {
                 chatInputSuggestor.render(context, mouseX, mouseY);
             }
         }
@@ -1247,6 +1455,32 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
     private void positionInputField(UiLayout layout) {
         double density = uiDensity();
         double scaleFactor = this.client.getWindow().getGuiScale();
+        // While the signature editor borrows the field, the IME anchor parks on
+        // the signature row instead of the docked input bar: x keeps the same
+        // vanilla-prefix-width compensation, but the Skia side measures the
+        // prefix in the signature font, and y/width/height come from the edit
+        // row's own geometry (top of the line = baseline minus the row's line
+        // height). The page answers null when not editing, and then the
+        // composer path below runs exactly as before.
+        ProfilePage.SignatureAnchor signAnchor =
+                profilePage.signatureImeAnchor(listLayout(), listScroll().getScrollY());
+        if (signAnchor != null) {
+            String current = inputGetText();
+            int caret = caretIndex();
+            String wholePrefix = current.substring(0, Math.min(caret, current.length()));
+            Font signFont = FontManager.font(UiTokens.PROFILE_SIGN_FONT);
+            float skiaSignPrefixVirtual = SkiaFontRenderer.getStringWidth(signFont, wholePrefix);
+            int desiredGuiX = (int) Math.round((signAnchor.textX() + skiaSignPrefixVirtual)
+                    * density / scaleFactor);
+            int vanillaWholePrefixGuiWidth = this.client.font.width(wholePrefix);
+            input.setX(desiredGuiX - vanillaWholePrefixGuiWidth);
+            input.setY((int) Math.round(
+                    (signAnchor.baselineY() - signAnchor.lineH()) * density / scaleFactor));
+            input.setWidth((int) Math.max(10.0F,
+                    Math.round(signAnchor.textMaxW() * density / scaleFactor)));
+            input.setHeight((int) Math.round(signAnchor.lineH() * density / scaleFactor));
+            return;
+        }
         // The hidden EditBox is what anchors the native IME composition window.
         // EditBox computes its screen caret as fieldX + vanilla-font prefix
         // width, while AtomChat draws the committed text with Skia. Shift the
@@ -1630,22 +1864,47 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
         float x = panelX();
         float y = panelY();
         float progress = panelProgress;
-        // Same offset the blur pre-pass offsets its capture rect by (render()).
-        float slide = (progress - 1.0F) * OPEN_SLIDE_PX;
+        // The one open transform, shared with the blur pre-pass's capture rect
+        // (panelOpenScale/panelOpenSlidePx): ZOOM grows around the panel
+        // centre, SLIDE pushes in from the left. Same mapping on both sides or
+        // the blurred region drifts off the panel mid-flight.
+        float scale = panelOpenScale(progress);
+        float slide = panelOpenSlidePx(progress);
+        // Settled state: expApproach snaps to its target, so progress never
+        // lingers in [0.999, 1) — past this point the fade is fully opaque and
+        // scale/slide are exactly 1/0, so the full-panel layer is pure
+        // overdraw and the panel draws directly (same call as the nav branch).
+        if (navLayerSkippable(Math.max(0.0F, Math.min(1.0F, progress)), scale)) {
+            int probeBefore = canvas.getSaveCount();
+            drawPanel(canvas, x, y, worldSnapshot, mouseX, mouseY, delta);
+            drawNotificationBanners(canvas, mouseX, mouseY);
+            probeCanvasLeak("drawPanel+banners", probeBefore, canvas);
+            return;
+        }
         canvas.save();
         try (Paint layer = new Paint()) {
-            // Spring overshoot pushes progress past [0,1]; the fade alpha must clamp.
+            // expApproach never overshoots; the clamp keeps the fade safe anyway.
             float fade = Math.max(0.0F, Math.min(1.0F, progress));
             layer.setColor(Color.makeARGB((int) (255.0F * fade), 0, 0, 0));
-            // The layer must cover the panel at BOTH ends of the slide, otherwise
-            // the fade layer clips the bezel while the panel is still OPEN_SLIDE_PX
-            // to the left of its resting place.
-            float layerX = Math.min(x, x + slide) - LAYER_CHROME;
-            float layerW = panelWidth() + LAYER_CHROME * 2.0F + Math.abs(slide);
-            canvas.saveLayer(Rect.makeXYWH(layerX, y - LAYER_CHROME, layerW, panelHeight() + LAYER_CHROME * 2.0F), layer);
-            canvas.translate(slide, 0.0F);
-            // The world snapshot sits inside the saveLayer/translate stack so it
-            // fades in with the panel and slides with it — no special handling.
+            // The layer must cover the scaled panel plus its slide excursion
+            // (LAYER_CHROME slack for the bezel/shadow), otherwise the fade
+            // clips the bezel while the panel is still in flight.
+            float w = panelWidth() * scale;
+            float h = panelHeight() * scale;
+            float cx = x + panelWidth() / 2.0F;
+            float cy = y + panelHeight() / 2.0F;
+            float left = cx - w / 2.0F;
+            float top = cy - h / 2.0F;
+            float layerX = Math.min(left, left + slide) - LAYER_CHROME;
+            float layerW = w + LAYER_CHROME * 2.0F + Math.abs(slide);
+            canvas.saveLayer(Rect.makeXYWH(layerX, top - LAYER_CHROME, layerW, h + LAYER_CHROME * 2.0F), layer);
+            // Scale around the panel centre, then slide: the exact transform
+            // the capture-rect math above mirrors.
+            canvas.translate(cx + slide, cy);
+            canvas.scale(scale, scale);
+            canvas.translate(-cx, -cy);
+            // The world snapshot sits inside the saveLayer/transform stack so it
+            // fades in with the panel and rides the same motion — no special handling.
             int probeBefore = canvas.getSaveCount();
             drawPanel(canvas, x, y, worldSnapshot, mouseX, mouseY, delta);
             drawNotificationBanners(canvas, mouseX, mouseY);
@@ -1715,6 +1974,11 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
 
     @Override
     public void removed() {
+        // Hygiene on screen teardown: release the borrowed field so the parked
+        // composer draft state cannot outlive the page that borrowed it.
+        if (profilePage.isSignatureEditing()) {
+            profilePage.endSignatureEdit(false);
+        }
         saveCurrentDraft();
         if (topPage() == AppPage.PRIVATE_CHAT) {
             PrivateChatStore.clearActive();
@@ -1821,9 +2085,23 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
         float vmx = toVirtualX(mouseX);
         float vmy = toVirtualY(mouseY);
         boolean navRunning = pageNavActive();
+        // Open save-point for the moving page during a nav: the zoom layer's
+        // paint (restore + close) or the slide save (restore only). The
+        // settings/profile branches close it before their early returns; the
+        // chat page closes it after the shared tail below.
+        Paint navMovingLayer = null;
+        boolean navMovingSlide = false;
+        // Set inside the nav branch when the moving side is the zoom's
+        // invisible phase; the chat fall-through below then skips its draws
+        // (drawing without the layer would composite onto the visible side).
+        boolean navMovingHidden = false;
         if (navRunning) {
-            pageNavAnim.update(frameDt);
-            if (pageNavAnim.isDone()) {
+            if (pageNavZoom) {
+                stepZoomNav(frameDt);
+            } else {
+                stepSlideNav(frameDt);
+            }
+            if (!pageNavActive()) {
                 finishPageNav();
                 if (topPage().isRoot()) {
                     drawRootScreen(canvas, mouseX, mouseY, topPage());
@@ -1842,7 +2120,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
                 NavPage fromPage = pageNavFrom;
                 NavPage toPage = pageNavTo;
                 float travel = layout.list.w();
-                float progress = pageNavAnim.getValue();
+                float progress = navSlideProgress;
                 float fromDx = popping ? travel * progress : -travel * progress;
                 float toDx = popping ? -travel * (1.0F - progress) : travel * (1.0F - progress);
                 suppressHeader = true;
@@ -1859,15 +2137,20 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
                     NavPage chatPage = fromPage.page() == AppPage.PROFILE_DETAIL ? toPage : fromPage;
                     float baseDx = popping ? -travel * (1.0F - progress) : -travel * progress;
                     UiLayout.Rect panelRect = layout.rect();
+                    // Rounded panel clips: the sliding pages follow the panel
+                    // corner radius, matching the bezel instead of biting it
+                    // with hard square edges.
                     canvas.save();
-                    SkiaDraw.clip(canvas, panelRect.x(), panelRect.y(), panelRect.w(), panelRect.h(), 0.0F);
+                    SkiaDraw.clip(canvas, panelRect.x(), panelRect.y(), panelRect.w(), panelRect.h(),
+                            UiTokens.panelRadius());
                     canvas.translate(baseDx, 0.0F);
                     layout = updateInputLayout(layout);
                     drawChatPageBody(canvas, layout, mouseX, mouseY, chatPage);
                     canvas.restore();
 
                     canvas.save();
-                    SkiaDraw.clip(canvas, panelRect.x(), panelRect.y(), panelRect.w(), panelRect.h(), 0.0F);
+                    SkiaDraw.clip(canvas, panelRect.x(), panelRect.y(), panelRect.w(), panelRect.h(),
+                            UiTokens.panelRadius());
                     canvas.translate(pageNavDx(travel), 0.0F);
                     drawProfileDetail(canvas, mouseX, mouseY);
                     canvas.restore();
@@ -1877,9 +2160,9 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
                     drawMessageLayerForNav(canvas, layout, fromPage, fromDx);
                     drawMessageLayerForNav(canvas, layout, toPage, toDx);
                     UiLayout.Rect bar = layout.inputBar;
-                    SkiaDraw.drawRoundedShadow(canvas, bar.x(), bar.y(), bar.w(), bar.h(),
-                            UiTokens.radius(18), s(8), UiTokens.CHROME_SHADOW);
-                    SkiaDraw.drawRoundedRect(canvas, bar.x(), bar.y(), bar.w(), bar.h(), UiTokens.radius(18),
+                    SkiaDraw.drawChromeShadow(canvas, bar.x(), bar.y(), bar.w(), bar.h(),
+                            UiTokens.chromeRadius());
+                    SkiaDraw.drawRoundedRect(canvas, bar.x(), bar.y(), bar.w(), bar.h(), UiTokens.chromeRadius(),
                             UiTokens.cardFill());
                 }
                 suppressHeader = false;
@@ -1897,53 +2180,146 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
                 NavPage navRoot = pageNavTo.isRoot() ? pageNavTo : pageNavFrom;
                 NavPage moving = pageNavTo.isRoot() ? pageNavFrom : pageNavTo;
                 float travel = layout.rect().w();
-                float progress = pageNavAnim.getValue();
+                float progress = navSlideProgress;
                 boolean pushing = !pageNavTo.isRoot();
-                // Melodify enter applies to the pages that own their whole
-                // drawing lifecycle (settings section/category, profile); a
-                // chat push keeps the paired slide into the shared tail. Pops
-                // never enter: pageNavTo is then the destination (e.g. the
-                // category page under a sliding-out section), and the stale
-                // pageNavStartMs would hard-cut at alpha 1 behind a fully
-                // opaque saveLayer.
-                boolean enter = pushing && !pageNavPopPending
-                        && (moving.page() == AppPage.SETTINGS_SECTION
-                        || moving.page() == AppPage.PROFILE_DETAIL);
-                // On an enter the root stays put beneath the scaling page.
-                float rootDx = enter ? 0.0F
-                        : pushing ? -travel * progress : -travel * (1.0F - progress);
+                // One eased clock, two paired layers. ZOOM gives the change
+                // depth: the moving page grows 0.94 -> 1 while fading in while
+                // the page underneath sinks 1 -> 0.96 and dims; a pop runs the
+                // same channels in reverse so the return matches its push (the
+                // old code slid every pop, whatever the style). SLIDE keeps
+                // the horizontal push. The fixed chrome (header, bezel) never
+                // joins the transforms.
+                boolean zoom = pageNavZoom;
+                // Melodify's serial zoom: while EXIT runs only the leaving
+                // page is composited (shrinking 1.0 -> 0.9 as it fades);
+                // while ENTER runs only the arriving page (settling
+                // 1.1 -> 1.0 as it fades in). The invisible side gets alpha
+                // 0 and is skipped below, so the phases never stack into a
+                // double-exposure. Slides keep the paired translation.
+                float movingAlpha;
+                float movingScale;
+                float rootAlpha;
+                float rootScale;
+                if (zoom) {
+                    if (navZoomPhase == NAV_ZOOM_EXIT) {
+                        float a = navExitAlpha;
+                        float s = 0.9F + a * 0.1F;
+                        if (pushing) {
+                            rootAlpha = a;
+                            rootScale = s;
+                            movingAlpha = 0.0F;
+                            movingScale = 1.0F;
+                        } else {
+                            movingAlpha = a;
+                            movingScale = s;
+                            rootAlpha = 0.0F;
+                            rootScale = 1.0F;
+                        }
+                    } else {
+                        float a = navEnterAlpha;
+                        float s = 1.1F - a * 0.1F;
+                        if (pushing) {
+                            movingAlpha = a;
+                            movingScale = s;
+                            rootAlpha = 0.0F;
+                            rootScale = 1.0F;
+                        } else {
+                            rootAlpha = a;
+                            rootScale = s;
+                            movingAlpha = 0.0F;
+                            movingScale = 1.0F;
+                        }
+                    }
+                } else {
+                    // The slide's alpha/scale channels are unused (it
+                    // translates); keeping the assignment local to the else
+                    // would leave them unassigned for the branch above.
+                    movingAlpha = pushing ? progress : 1.0F - progress;
+                    movingScale = pushing ? 0.94F + 0.06F * progress : 1.0F - 0.06F * progress;
+                    rootAlpha = pushing ? 1.0F - 0.5F * progress : 0.5F + 0.5F * progress;
+                    rootScale = pushing ? 1.0F - 0.04F * progress : 0.96F + 0.04F * progress;
+                }
+                float rootDx = pushing ? -travel * progress : -travel * (1.0F - progress);
                 UiLayout.Rect panelRect = layout.rect();
+                // Bottom layer: on a zoom it sinks and dims inside its own
+                // saveLayer (the layer bounds double as the panel clip); on a
+                // slide it just translates. save and saveLayer each push their
+                // own entry, so a zoom pairs two restores below; a skipped
+                // layer or a slide leaves just the plain save to pop. During
+                // the zoom phase where the root is the invisible side, both
+                // the layer and the draw are skipped.
+                boolean rootVisible = !zoom || rootAlpha > 0.001F;
                 canvas.save();
-                SkiaDraw.clip(canvas, panelRect.x(), panelRect.y(), panelRect.w(), panelRect.h(), 0.0F);
-                canvas.translate(rootDx, 0.0F);
-                drawRootScreen(canvas, mouseX, mouseY, navRoot.page());
+                Paint rootLayer = null;
+                if (zoom) {
+                    if (rootVisible && !navLayerSkippable(rootAlpha, rootScale)) {
+                        rootLayer = new Paint().setAlphaf(rootAlpha);
+                        canvas.saveLayer(Rect.makeXYWH(panelRect.x(), panelRect.y(),
+                                panelRect.w(), panelRect.h()), rootLayer);
+                        // The layer bounds clip square, so round the layer's
+                        // content to the panel radius right away — the scaled
+                        // page must not paint into the bezel's corners.
+                        SkiaDraw.clip(canvas, panelRect.x(), panelRect.y(), panelRect.w(), panelRect.h(),
+                                UiTokens.panelRadius());
+                        applyNavScale(canvas, panelRect, rootScale);
+                    }
+                } else {
+                    SkiaDraw.clip(canvas, panelRect.x(), panelRect.y(), panelRect.w(), panelRect.h(),
+                            UiTokens.panelRadius());
+                    canvas.translate(rootDx, 0.0F);
+                }
+                if (rootVisible) {
+                    drawRootScreen(canvas, mouseX, mouseY, navRoot.page());
+                }
+                if (rootLayer != null) {
+                    // The zoom's saveLayer sits on top of the plain save; pop
+                    // it first so each entry pairs with its own restore.
+                    canvas.restore();
+                }
                 canvas.restore();
+                if (rootLayer != null) {
+                    rootLayer.close();
+                }
 
-                Paint enterLayer = null;
-                if (enter && !pageEnterDone()) {
-                    // A translucent offscreen layer gives the page its fade
-                    // while the spring drives the scale; the layer and its
-                    // paint are closed by the branch that finishes drawing.
-                    updatePageEnter(frameDt);
-                    enterLayer = new Paint().setAlphaf(pageEnterAlpha());
-                    canvas.saveLayer(Rect.makeXYWH(panelRect.x(), panelRect.y(),
-                            panelRect.w(), panelRect.h()), enterLayer);
-                    applyEnterScale(canvas, panelRect);
-                } else if (!enter) {
+                // Moving layer: on a zoom it fades+scales inside a saveLayer;
+                // on a slide it translates under a plain save. Exactly one
+                // save-point is opened here — the settings/profile branches
+                // close it before returning, the chat page falls through and
+                // closes it after the shared tail below. While the moving
+                // side is the zoom's invisible phase, no layer opens and the
+                // draws below are skipped (drawing without the layer would
+                // composite straight onto the visible side).
+                boolean movingVisible = !zoom || movingAlpha > 0.001F;
+                navMovingHidden = zoom && !movingVisible;
+                if (zoom) {
+                    if (movingVisible && !navLayerSkippable(movingAlpha, movingScale)) {
+                        navMovingLayer = new Paint().setAlphaf(movingAlpha);
+                        canvas.saveLayer(Rect.makeXYWH(panelRect.x(), panelRect.y(),
+                                panelRect.w(), panelRect.h()), navMovingLayer);
+                        // Same rounded layer clip as the root side above.
+                        SkiaDraw.clip(canvas, panelRect.x(), panelRect.y(), panelRect.w(), panelRect.h(),
+                                UiTokens.panelRadius());
+                        applyNavScale(canvas, panelRect, movingScale);
+                    }
+                } else {
                     canvas.save();
-                    SkiaDraw.clip(canvas, panelRect.x(), panelRect.y(), panelRect.w(), panelRect.h(), 0.0F);
+                    SkiaDraw.clip(canvas, panelRect.x(), panelRect.y(), panelRect.w(), panelRect.h(),
+                            UiTokens.panelRadius());
                     canvas.translate(pageNavDx(travel), 0.0F);
+                    navMovingSlide = true;
                 }
                 // A settings sub-page has no composer tail to draw into the
                 // open layer, so it renders and closes its own layer here. The
                 // chat page leaves the layer open for the shared tail below.
                 if (moving.page() == AppPage.SETTINGS_SECTION) {
-                    drawSettingsSection(canvas, mouseX, mouseY, moving.section());
-                    if (enterLayer != null) {
+                    if (movingVisible) {
+                        drawSettingsSection(canvas, mouseX, mouseY, moving.section());
+                    }
+                    if (navMovingLayer != null) {
                         canvas.restore();
-                        enterLayer.close();
-                    } else if (!enter) {
-                        // The slide branch opened a save; the snapped enter
+                        navMovingLayer.close();
+                    } else if (navMovingSlide) {
+                        // The slide branch opened a save; a skipped zoom layer
                         // opened nothing, so it must not pop past it.
                         canvas.restore();
                     }
@@ -1956,11 +2332,13 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
                     return;
                 }
                 if (moving.page() == AppPage.PROFILE_DETAIL) {
-                    drawProfileDetail(canvas, mouseX, mouseY);
-                    if (enterLayer != null) {
+                    if (movingVisible) {
+                        drawProfileDetail(canvas, mouseX, mouseY);
+                    }
+                    if (navMovingLayer != null) {
                         canvas.restore();
-                        enterLayer.close();
-                    } else if (!enter) {
+                        navMovingLayer.close();
+                    } else if (navMovingSlide) {
                         // Same pairing as the settings branch above.
                         canvas.restore();
                     }
@@ -2001,14 +2379,21 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
         // exactly the height the bar gains.
         layout = updateInputLayout(layout);
 
-        drawChatPageBody(canvas, layout, mouseX, mouseY, topNav());
+        if (!navMovingHidden) {
+            drawChatPageBody(canvas, layout, mouseX, mouseY, topNav());
 
-        emojiPanel.render(canvas, layout, toVirtualX(mouseX), toVirtualY(mouseY), frameDt);
-        quickPhrasePanel.render(canvas, layout, toVirtualX(mouseX), toVirtualY(mouseY), frameDt);
-        drawContextMenu(canvas, toVirtualX(mouseX), toVirtualY(mouseY));
+            emojiPanel.render(canvas, layout, toVirtualX(mouseX), toVirtualY(mouseY), frameDt);
+            quickPhrasePanel.render(canvas, layout, toVirtualX(mouseX), toVirtualY(mouseY), frameDt);
+            drawContextMenu(canvas, toVirtualX(mouseX), toVirtualY(mouseY));
+        }
 
         if (navRunning) {
-            canvas.restore();
+            if (navMovingLayer != null) {
+                canvas.restore();
+                navMovingLayer.close();
+            } else if (navMovingSlide) {
+                canvas.restore();
+            }
             suppressHeader = false;
             // Fixed status-bar header: it never slides with the page bodies.
             if (!pageNavTo.isRoot()) {
@@ -2047,7 +2432,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
         if (replyTarget != null) {
             UiLayout.Rect reply = layout.replyBar;
             float replyH = s(26);
-            SkiaDraw.drawRoundedRect(canvas, reply.x(), reply.y(), reply.w(), replyH, UiTokens.radius(8), Color.makeARGB(90, 74, 144, 226));
+            SkiaDraw.drawRoundedRect(canvas, reply.x(), reply.y(), reply.w(), replyH, UiTokens.radius(8), UiTokens.quoteAccent(accent()));
             Font replyFont = FontManager.font(UiTokens.FONT_NAME);
             String replyLabel = tr("atomchat.reply.to", messageSenderName(replyTarget),
                     abbreviate(replyTarget.getContentText(), 26));
@@ -2060,15 +2445,15 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
         // card never has message content underneath it.
         UiLayout.Rect bar = layout.inputBar;
         boolean readOnly = isPrivateReadOnly();
-        SkiaDraw.drawRoundedShadow(canvas, bar.x(), bar.y(), bar.w(), bar.h(), UiTokens.radius(18), s(8), UiTokens.CHROME_SHADOW);
-        SkiaDraw.drawRoundedRect(canvas, bar.x(), bar.y(), bar.w(), bar.h(), UiTokens.radius(18), UiTokens.cardFill());
+        SkiaDraw.drawChromeShadow(canvas, bar.x(), bar.y(), bar.w(), bar.h(), UiTokens.chromeRadius());
+        SkiaDraw.drawRoundedRect(canvas, bar.x(), bar.y(), bar.w(), bar.h(), UiTokens.chromeRadius(), UiTokens.cardFill());
         if (quickPhrasePanel.isEditing()) {
             // The composer is borrowed as the phrase editor: ring it with the
             // accent so the mode is unmistakable.
             try (Paint border = new Paint().setMode(PaintMode.STROKE).setAntiAlias(true)
                     .setColor(accent()).setStrokeWidth(s(1.5F))) {
                 canvas.drawRRect(io.github.humbleui.types.RRect.makeXYWH(
-                        bar.x(), bar.y(), bar.w(), bar.h(), UiTokens.radius(18)), border);
+                        bar.x(), bar.y(), bar.w(), bar.h(), UiTokens.chromeRadius()), border);
             }
         }
         if (!readOnly) {
@@ -2198,9 +2583,10 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
     }
 
     /**
-     * White phone-style ring around the panel. Drawn last on both world-chat
-     * and root pages so no component can sit on top of the clean edge. Part
-     * of the frosted look — the opaque modern preset turns it off.
+     * Ring around the panel. Drawn last on both world-chat and root pages so
+     * no component can sit on top of the clean edge. Painted with the user's
+     * {@code panelOutlineColor} verbatim — a hand-picked ring is always
+     * respected, even when its contrast against the panel is low.
      */
     private void drawBezel(Canvas canvas, UiLayout layout) {
         if (!AtomChatConfig.get().panelOutline) {
@@ -2268,6 +2654,18 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
         colorPicker.render(canvas, layout.rect(), vmx, vmy, accent());
     }
 
+    /**
+     * Feeds the signature editor the borrowed field's live text and focus
+     * state, once per profile-page frame — the page draws the line but the
+     * field (and the IME behind it) lives here.
+     */
+    private void syncProfileSignatureDraft() {
+        if (profilePage.isSignatureEditing()) {
+            boolean focused = inputFocused && input != null && input.isFocused();
+            profilePage.setSignatureDraft(inputGetText(), focused);
+        }
+    }
+
     /** Body of a pushed profile detail page (another player's profile). */
     private void drawProfileDetail(Canvas canvas, int mouseX, int mouseY) {
         UiLayout layout = detailLayout();
@@ -2275,6 +2673,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
         float vmy = toVirtualY(mouseY);
         detailScroll.setContent(profilePage.measureContent(layout), layout.list.h());
         detailScroll.updateAnimation(System.currentTimeMillis());
+        syncProfileSignatureDraft();
         profilePage.render(canvas, layout, vmx, vmy, detailScroll.getScrollY());
         drawScrollbar(canvas, layout, vmx, vmy, detailScroll);
     }
@@ -2293,6 +2692,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
         float vmx = toVirtualX(mouseX);
         float vmy = toVirtualY(mouseY);
         bottomTabBar.update(frameDt, vmx, vmy, root.tabBar);
+        stepRootNav(frameDt);
         if (!suppressHeader) {
             ShellHeader.render(canvas, root.header, shellTitleFor(rootPage), false, null, 0.0F,
                     textPrimary());
@@ -2314,15 +2714,16 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
             drawRootPageBody(canvas, layout, rootPage, 0.0F);
             return;
         }
-        float progress = rootSlideProgress();
-        if (progress >= 0.999F) {
-            clearRootTransition();
-            drawRootPageBody(canvas, layout, rootPage, 0.0F);
+        if (rootTabZoom) {
+            drawRootPageZoom(canvas, layout, rootPage);
             return;
         }
         // Full-width opaque push, same language as the emoji tab content
         // transition: the outgoing page leaves in the direction of travel while
-        // the incoming page enters from that side.
+        // the incoming page enters from that side. The progress is the same
+        // exponential clock that positions the capsule (stepRootNav), so pill
+        // and pages land together without the eased tween's notch.
+        float progress = rootTabProgress;
         canvas.save();
         try {
             SkiaDraw.clip(canvas, layout.list.x(), layout.list.y(),
@@ -2338,6 +2739,40 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
         }
     }
 
+    /**
+     * Melodify serial zoom between root tabs, staged inside the list area:
+     * the leaving tab shrinks out (scale 1.0 -> 0.9 while fading), then the
+     * arriving tab settles (1.1 -> 1.0 while fading in) — one page composited
+     * at a time, never two half-transparent pages stacked. The clip is square
+     * on purpose: the list sits inside the panel's rounded corners, so the
+     * hard edges never show; a rounded clip here would bite into the first
+     * and last rows.
+     */
+    private void drawRootPageZoom(Canvas canvas, UiLayout layout, AppPage rootPage) {
+        UiLayout.Rect list = layout.list;
+        boolean exiting = rootZoomPhase == ROOT_ZOOM_EXIT;
+        float alpha = exiting ? rootZoomExitAlpha : rootZoomEnterAlpha;
+        float scale = exiting ? 0.9F + alpha * 0.1F : 1.1F - alpha * 0.1F;
+        AppPage page = exiting ? rootPageForIndex(rootTabFrom) : rootPage;
+        if (alpha <= 0.001F || navLayerSkippable(alpha, scale)) {
+            return;
+        }
+        canvas.save();
+        try (Paint layer = new Paint().setAlphaf(alpha)) {
+            canvas.saveLayer(Rect.makeXYWH(list.x(), list.y(), list.w(), list.h()), layer);
+            SkiaDraw.clip(canvas, list.x(), list.y(), list.w(), list.h(), 0.0F);
+            applyNavScale(canvas, list, scale);
+            drawRootPageBody(canvas, layout, page, 0.0F);
+            // save() and saveLayer() pushed two entries; both must be popped.
+            // This restore pairs with the layer, the finally's with the plain
+            // save — one restore short leaked the outer save every frame (the
+            // 0.2.4 banner leak's shape, capped only by the frame-end guard).
+            canvas.restore();
+        } finally {
+            canvas.restore();
+        }
+    }
+
     /** Renders any root page body at an optional horizontal offset inside the root layout. */
     private void drawRootPageBody(Canvas canvas, UiLayout layout, AppPage page, float dx) {
         canvas.save();
@@ -2345,7 +2780,10 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
         try {
             switch (page) {
                 case CHAT_LIST -> conversationListPage.render(canvas, layout, rootMouseX, rootMouseY, rootScroll.getScrollY());
-                case PROFILE -> profilePage.render(canvas, layout, rootMouseX, rootMouseY, rootScroll.getScrollY());
+                case PROFILE -> {
+                    syncProfileSignatureDraft();
+                    profilePage.render(canvas, layout, rootMouseX, rootMouseY, rootScroll.getScrollY());
+                }
                 case SETTINGS -> settingsHomePage.render(canvas, layout, rootMouseX, rootMouseY,
                         rootScroll.getScrollY());
                 case WORLD_CHAT, PRIVATE_CHAT ->
@@ -2357,8 +2795,13 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
     }
 
     private boolean rootTransitionActive() {
-        return rootTabFrom >= 0 && rootTabTo >= 0
-                && rootTabFrom != rootTabTo && !rootTabAnim.isDone();
+        if (rootTabFrom < 0 || rootTabTo < 0 || rootTabFrom == rootTabTo) {
+            return false;
+        }
+        if (rootTabZoom) {
+            return !(rootZoomPhase == ROOT_ZOOM_ENTER && rootZoomEnterAlpha >= 0.999F);
+        }
+        return rootTabProgress < 0.999F;
     }
 
     private void clearRootTransition() {
@@ -2366,14 +2809,41 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
         rootTabTo = -1;
     }
 
-    private float rootSlideProgress() {
-        int from = rootTabFrom;
-        int to = rootTabTo;
-        if (from < 0 || to < 0 || from == to) {
-            return 1.0F;
+    /**
+     * Advances the tab transition, style-aware like the page nav. The capsule
+     * shares the tab bar's animator as its value holder and is written from
+     * the same clock as the content: on a slide the pill position is the
+     * progress mapped across the from->to cells (perfect lockstep), on a zoom
+     * it keeps its own exponential travel at the zoom tau so it lands as the
+     * enter phase settles. A transition that completes here is cleared at
+     * once, so the same frame already draws the settled page.
+     */
+    private void stepRootNav(float dtMs) {
+        if (!rootTransitionActive()) {
+            return;
         }
-        float pos = rootTabAnim.getValue();
-        return Mth.clamp((from - pos) / (float) (from - to), 0.0F, 1.0F);
+        boolean enabled = Animations.enabled();
+        if (rootTabZoom) {
+            float tau = enabled ? UiMotion.PAGE_NAV_TAU_MS : 0.0F;
+            if (rootZoomPhase == ROOT_ZOOM_EXIT) {
+                rootZoomExitAlpha = UiMotion.expApproach(rootZoomExitAlpha, 0.0F, dtMs, tau);
+                if (rootZoomExitAlpha <= 0.02F) {
+                    rootZoomExitAlpha = 0.0F;
+                    rootZoomPhase = ROOT_ZOOM_ENTER;
+                }
+            }
+            if (rootZoomPhase == ROOT_ZOOM_ENTER && rootZoomEnterAlpha < 1.0F) {
+                rootZoomEnterAlpha = UiMotion.expApproach(rootZoomEnterAlpha, 1.0F, dtMs, tau);
+            }
+            rootTabAnim.setValue(UiMotion.expApproach(rootTabAnim.getValue(), rootTabTo, dtMs, tau));
+        } else {
+            float tau = enabled ? UiMotion.PAGE_SLIDE_TAU_MS : 0.0F;
+            rootTabProgress = UiMotion.expApproach(rootTabProgress, 1.0F, dtMs, tau);
+            rootTabAnim.setValue(rootTabFrom + (rootTabTo - rootTabFrom) * rootTabProgress);
+        }
+        if (!rootTransitionActive()) {
+            clearRootTransition();
+        }
     }
 
     private AppPage rootPageForIndex(int index) {
@@ -2677,12 +3147,12 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
         }
 
         float w = trackW + controller.getScrollEmphasis() * s(3);
-        int ar = (accent() >> 16) & 0xFF;
-        int ag = (accent() >> 8) & 0xFF;
-        int ab = accent() & 0xFF;
-        int r = (int) (255 + (ar - 255) * controller.getScrollActive());
-        int g = (int) (255 + (ag - 255) * controller.getScrollActive());
-        int bch = (int) (255 + (ab - 255) * controller.getScrollActive());
+        // The thumb rides the accent channel the whole way — a static white
+        // thumb vanishes on light panels, so the idle low-alpha state reads
+        // accent too, same emphasis language as the docked bar's active tab.
+        int r = (accent() >> 16) & 0xFF;
+        int g = (accent() >> 8) & 0xFF;
+        int bch = accent() & 0xFF;
         int alpha = Mth.clamp((int) ((170 + 60 * controller.getScrollEmphasis())
                 * controller.getScrollBarAlpha()), 0, 255);
         int color = (alpha << 24) | (r << 16) | (g << 8) | bch;
@@ -2720,8 +3190,11 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
             // polarity family as the popups; hover lifts the grey a notch.
             int bg = hover ? Color.makeARGB(245, 70, 76, 90) : Color.makeARGB(235, 52, 58, 70);
             SkiaDraw.drawRoundedRect(canvas, x, y, size, size, size / 2.0F, bg);
-            SkiaDraw.drawRoundedShadow(canvas, x, y, size, size, size / 2.0F, s(6), Color.makeARGB(80, 0, 0, 0));
-            drawIconCentered(canvas, ICON_JUMP_DOWN_PATH, x + size / 2.0F, y + size / 2.0F, s(18), textPrimary());
+            SkiaDraw.drawRoundedShadow(canvas, x, y, size, size, size / 2.0F, s(8), UiTokens.CHROME_SHADOW);
+            // Glyph pinned white like the pill itself: the pill is fixed dark,
+            // so a themed text colour would go dark-on-dark on light themes.
+            drawIconCentered(canvas, ICON_JUMP_DOWN_PATH, x + size / 2.0F, y + size / 2.0F, s(18),
+                    Color.makeARGB(255, 255, 255, 255));
             canvas.restore();
         } finally {
             canvas.restore();
@@ -2812,6 +3285,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
             boolean overRow = vmx >= menuX && vmx <= menuX + menuW
                     && vmy >= rowY && vmy <= rowY + rowH;
             contextMenuHover[row] = UiMotion.approach(contextMenuHover[row], overRow ? 1.0F : 0.0F, frameDt, UiMotion.HOVER_MS);
+            MenuPopup.updateRowBounce(contextMenuScale[row], overRow, frameDt, menuW);
         }
         canvas.save();
         try (Paint layer = new Paint()) {
@@ -2821,50 +3295,53 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
             canvas.translate(menuX + menuW / 2.0F, menuY);
             canvas.scale(sc, sc);
             canvas.translate(-(menuX + menuW / 2.0F), -menuY);
-            // Fixed dark popup surface (35,39,47) — the shared language of every
-            // popup (avatar menu, emoji/phrase panels): fixed polarity by design.
-            SkiaDraw.drawRoundedRect(canvas, menuX, menuY, menuW, menuH, UiTokens.radius(10), Color.makeARGB(245, 35, 39, 47));
-            SkiaDraw.drawRoundedShadow(canvas, menuX, menuY, menuW, menuH, UiTokens.radius(10), s(8), Color.makeARGB(100, 0, 0, 0));
+            // The one right-click-menu language (MenuPopup owns the plate for
+            // every menu in the mod): fixed dark surface (35,39,47), radius
+            // and shadow tokens. Fixed polarity by design.
+            MenuPopup.drawSurface(canvas, menuX, menuY, menuW, menuH);
             Font menuFont = FontManager.font(UiTokens.FONT_BUTTON);
             for (int row = 0; row < rows; row++) {
                 float rowY = menuY + row * rowH;
                 float hov = contextMenuHover[row];
-                if (hov > 0.01F) {
-                    // Uniform s(4) inset on every side of the row capsule so it
-                    // never looks top-heavy against the menu edges.
-                    SkiaDraw.drawRoundedRect(canvas, menuX + s(4), rowY + s(4), menuW - s(8), rowH - s(8),
-                            s(6), Color.makeARGB((int) (55.0F * hov), 255, 255, 255));
-                }
-                String label;
-                io.github.humbleui.skija.Path icon;
-                if (playerMenu) {
-                    label = playerCardContextLabel(row);
-                    icon = playerCardContextIcon(row);
-                } else if (avatarMenu) {
-                    label = avatarContextLabel(row);
-                    icon = avatarContextIcon(row);
-                } else {
-                    label = bubbleContextLabel(row, imageMessage);
-                    icon = bubbleContextIcon(row, imageMessage);
-                }
-                // Overlay surfaces keep the fixed overlay palette: they sit on
-                // their own opaque dark cards and must not follow the
-                // interface text colour setting.
-                int textColor = Color.makeARGB(255, 255, 255, 255);
-                if (playerMenu && row == 1 && !isOnlinePlayer(contextPlayer != null ? contextPlayer : lastContextPlayer)) {
-                    textColor = Color.makeARGB(110, 255, 255, 255);
-                } else if (avatarMenu && row == 2) {
-                    ChatMessage avatarMsg = contextMessage != null ? contextMessage : lastContextMessage;
-                    if (avatarMsg != null) {
-                        PlayerRef avatarPlayer = PlayerRef.of(avatarMsg.getSenderUuid(), avatarMsg.getProfileName());
-                        if (avatarPlayer != null && !isOnlinePlayer(avatarPlayer)) {
-                            textColor = Color.makeARGB(110, 255, 255, 255);
+                // One bounce per row, the shared menu language: wash, icon and
+                // label all travel with the row's own PressScale, centred on
+                // the row like the profile avatar menu's items.
+                MenuPopup.beginRowBounce(canvas, contextMenuScale[row], menuX + menuW / 2.0F, rowY + rowH / 2.0F);
+                try {
+                    MenuPopup.drawRowWash(canvas, menuX, rowY, menuW, rowH, hov);
+                    String label;
+                    io.github.humbleui.skija.Path icon;
+                    if (playerMenu) {
+                        label = playerCardContextLabel(row);
+                        icon = playerCardContextIcon(row);
+                    } else if (avatarMenu) {
+                        label = avatarContextLabel(row);
+                        icon = avatarContextIcon(row);
+                    } else {
+                        label = bubbleContextLabel(row, imageMessage);
+                        icon = bubbleContextIcon(row, imageMessage);
+                    }
+                    // Overlay surfaces keep the fixed overlay palette: they sit on
+                    // their own opaque dark cards and must not follow the
+                    // interface text colour setting.
+                    int textColor = Color.makeARGB(255, 255, 255, 255);
+                    if (playerMenu && row == 1 && !isOnlinePlayer(contextPlayer != null ? contextPlayer : lastContextPlayer)) {
+                        textColor = Color.makeARGB(110, 255, 255, 255);
+                    } else if (avatarMenu && row == 2) {
+                        ChatMessage avatarMsg = contextMessage != null ? contextMessage : lastContextMessage;
+                        if (avatarMsg != null) {
+                            PlayerRef avatarPlayer = PlayerRef.of(avatarMsg.getSenderUuid(), avatarMsg.getProfileName());
+                            if (avatarPlayer != null && !isOnlinePlayer(avatarPlayer)) {
+                                textColor = Color.makeARGB(110, 255, 255, 255);
+                            }
                         }
                     }
+                    drawIconCentered(canvas, icon, menuX + s(18), rowY + rowH / 2.0F, UiTokens.CONTEXT_ICON_SIZE, textColor);
+                    SkiaFontRenderer.drawText(canvas, menuFont, label, menuX + s(36),
+                            SkiaFontRenderer.centerBaselineY(menuFont, rowY + rowH / 2.0F), textColor);
+                } finally {
+                    MenuPopup.endRowBounce(canvas);
                 }
-                drawIconCentered(canvas, icon, menuX + s(18), rowY + rowH / 2.0F, UiTokens.CONTEXT_ICON_SIZE, textColor);
-                SkiaFontRenderer.drawText(canvas, menuFont, label, menuX + s(36),
-                        SkiaFontRenderer.centerBaselineY(menuFont, rowY + rowH / 2.0F), textColor);
             }
             canvas.restore();
         }
@@ -3067,9 +3544,23 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
         }
     }
 
+    /**
+     * True while the open/close progress is still in flight. The panel is
+     * drawn through the open transform (zoom/slide) but hit tests run on the
+     * settled virtual layout, so a click mid-animation would land somewhere
+     * other than where it looks — swallowed whole until the panel settles,
+     * same rule as the page nav's navMovingHidden.
+     */
+    private boolean panelInFlight() {
+        return panelProgress != (closing ? 0.0F : 1.0F);
+    }
+
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double verticalAmount) {
         // 1.20.1 has no horizontal scroll delta; the router only reads vertical.
+        if (panelInFlight()) {
+            return true;
+        }
         if (inputRouter.scroll(mouseX, mouseY, 0.0, verticalAmount)) {
             return true;
         }
@@ -3088,6 +3579,9 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
                     (int) mouseX, (int) mouseY,
                     (int) toVirtualX(mouseX), (int) toVirtualY(mouseY), button);
         }
+        if (panelInFlight()) {
+            return true;
+        }
         if (inputRouter.click(mouseX, mouseY, button)) {
             return true;
         }
@@ -3096,6 +3590,9 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
 
     @Override
     public boolean mouseDragged(double mouseX, double mouseY, int button, double dragX, double dragY) {
+        if (panelInFlight()) {
+            return true;
+        }
         if (inputRouter.drag(mouseX, mouseY, button, dragX, dragY)) {
             return true;
         }
@@ -3104,6 +3601,9 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
 
     @Override
     public boolean mouseReleased(double mouseX, double mouseY, int button) {
+        if (panelInFlight()) {
+            return true;
+        }
         if (inputRouter.release(mouseX, mouseY, button)) {
             return true;
         }
@@ -3489,24 +3989,37 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
     }
 
     private float panelWidth() {
-        return Math.min(UiTokens.s(AtomChatConfig.get().panelWidth), vw() - 32.0F);
+        return Math.min(UiTokens.s(AtomChatConfig.get().panelWidth) / contentScale(), vw() - 32.0F);
     }
 
     private float panelHeight() {
-        return Math.min(UiTokens.s(AtomChatConfig.get().panelHeight), vh() - 32.0F);
+        return Math.min(UiTokens.s(AtomChatConfig.get().panelHeight) / contentScale(), vh() - 32.0F);
     }
 
     // Virtual UI space: independent of vanilla GUI scale, anchored at 1080p.
     /**
-     * Design density: the 1080p-anchored base times the AtomChat UI scale.
-     * Every virtual-coordinate conversion in this screen funnels through here,
-     * so scaling this one value scales the whole panel — fonts, icons, hit
-     * rects and the blur pre-pass included — without touching UiTokens.
+     * Content-only zoom axis, clamped to the config's slider span [0.8, 1.5].
+     * Multiplies the density (so every inner token's pixel size) while
+     * panelWidth/panelHeight divide their virtual size by the same factor:
+     * the two cancel exactly on the panel frame, so the box's pixel size
+     * tracks uiScale only and the content inside zooms.
+     */
+    private float contentScale() {
+        return Math.max(0.8F, Math.min(AtomChatConfig.get().contentScale, 1.5F));
+    }
+
+    /**
+     * Design density: the 1080p-anchored base times the AtomChat UI scale
+     * times the content zoom. Every virtual-coordinate conversion in this
+     * screen funnels through here, so scaling this one value scales the whole
+     * virtual space — fonts, icons, hit rects and the blur pre-pass included
+     * — without touching UiTokens. The panel frame opts back out via the
+     * division in panelWidth/panelHeight/panelX.
      */
     private float uiDensity() {
         var window = this.client.getWindow();
         float base = Math.max(1.0F, window.getHeight() / 1080.0F);
-        return base * Math.max(0.5F, AtomChatConfig.get().uiScale);
+        return base * Math.max(0.5F, AtomChatConfig.get().uiScale) * contentScale();
     }
 
     private float vw() {
@@ -3517,12 +4030,36 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
         return this.client.getWindow().getHeight() / uiDensity();
     }
 
+    /**
+     * The anchor is part of the panel frame, whose pixel size is
+     * contentScale-invariant, so the physical left margin must be too: the
+     * virtual constant divides back out against the density's content factor.
+     */
     private float panelX() {
-        return UiTokens.PANEL_ANCHOR_X;
+        return UiTokens.PANEL_ANCHOR_X / contentScale();
     }
 
     private float panelY() {
         return (vh() - panelHeight()) / 2.0F;
+    }
+
+    /**
+     * The one progress→shape mapping of the open/close animation, shared by
+     * drawPhone and the blur pre-pass — the capture rect must stay identical
+     * to the painted rect or the blurred region drifts off the panel
+     * mid-flight. ZOOM follows {@link AtomChatConfig.PageNavStyle#ZOOM} and
+     * grows the panel around its centre; SLIDE pushes it in from the left.
+     */
+    private float panelOpenScale(float progress) {
+        return AtomChatConfig.get().pageNavStyle == AtomChatConfig.PageNavStyle.ZOOM
+                ? OPEN_MIN_SCALE + (1.0F - OPEN_MIN_SCALE) * progress
+                : 1.0F;
+    }
+
+    private float panelOpenSlidePx(float progress) {
+        return AtomChatConfig.get().pageNavStyle == AtomChatConfig.PageNavStyle.SLIDE
+                ? (progress - 1.0F) * s(24)
+                : 0.0F;
     }
 
     /**
@@ -3763,6 +4300,20 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
                 }
                 return true;
             }
+            // The profile signature editor borrows the composer field exactly
+            // like the quick-phrase editor: Esc cancels, Enter commits,
+            // everything else falls through to the normal chain (typing, IME
+            // and backspace keep working on the borrowed field).
+            if (profilePage.isSignatureEditing()) {
+                if (keyCode == 256) {
+                    profilePage.endSignatureEdit(false);
+                } else if (keyCode == 257 || keyCode == 335) {
+                    profilePage.endSignatureEdit(true);
+                } else {
+                    return false;
+                }
+                return true;
+            }
             // The quick-phrase panel borrows the composer field for text input,
             // so its key handling is narrow: while editing, Esc cancels and
             // Enter commits; everything else falls through to the normal
@@ -3992,6 +4543,9 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
                 }
                 if (button == 0) {
                     profilePage.onClick(mx, my, detailLayout(), detailScroll.getScrollY());
+                } else if (button == 1) {
+                    // Right-click on the banner card clears the custom banner.
+                    profilePage.onRightClick(mx, my, detailLayout(), detailScroll.getScrollY());
                 }
                 return true;
             }
@@ -4009,6 +4563,10 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
             }
             if (topPage() == AppPage.PROFILE && button == 0) {
                 profilePage.onClick(mx, my, pageLayout, pageScroll.getScrollY());
+            }
+            if (topPage() == AppPage.PROFILE && button == 1) {
+                // Right-click on the banner card clears the custom banner.
+                profilePage.onRightClick(mx, my, pageLayout, pageScroll.getScrollY());
             }
             if (topPage() == AppPage.CHAT_LIST) {
                 ConversationListPage.RowHit hit = conversationListPage.hit(mx, my, pageLayout, pageScroll.getScrollY());
@@ -4125,6 +4683,12 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
             if (isWorldChatPage()) {
                 return false;
             }
+            // The profile signature editor borrows the composer field: while it
+            // is active, key events fall through to the focused field (Esc and
+            // Enter are handled earlier by ModalInput, so they never get here).
+            if (profilePage.isSignatureEditing()) {
+                return false;
+            }
             // Root pages have no world-chat composer keyboard handling yet. The
             // vanilla chat key still opens the World Chat page from any root page:
             // replace with CHAT_LIST then push WORLD_CHAT so back returns to the
@@ -4140,6 +4704,12 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
 
         @Override
         public boolean onChar(char chr, int modifiers) {
+            // The signature editor borrows the composer field: typed characters
+            // must reach it. Only possible on a root page, where the default
+            // behaviour below is to swallow them.
+            if (profilePage.isSignatureEditing()) {
+                return false;
+            }
             // Root pages do not own the composer, so typing must not reach the
             // hidden ChatScreen chat field.
             return !isWorldChatPage();

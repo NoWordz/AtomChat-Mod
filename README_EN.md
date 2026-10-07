@@ -17,7 +17,7 @@
   <img alt="OS" src="https://img.shields.io/badge/OS-Windows%20x64-lightgrey">
   <img alt="Java" src="https://img.shields.io/badge/Java-17%2B-yellow">
   <img alt="Version" src="https://img.shields.io/github/v/release/E33EPUS/AtomChat?sort=semver">
-  <img alt="License" src="https://img.shields.io/badge/License-MIT-brightgreen">
+  <img alt="License" src="https://img.shields.io/badge/License-Apache--2.0-brightgreen">
 </p>
 
 <p align="center">
@@ -126,7 +126,7 @@ Hosted media is kept for 7 days by default (`retentionDays`, `0` = forever) and 
 
 **Why is a message shown in gray?** When the client cannot be sure a line is player chat it conservatively falls back to gray system text — common with nickname plugins using unrecognized formats.
 
-**Can I put it in a modpack?** Yes. The code is MIT and needs no extra permission; if you redistribute the JAR, keep the third-party notices in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+**Can I put it in a modpack?** Yes. The code is Apache-2.0 and needs no extra permission; if you redistribute the JAR, keep the third-party notices in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 ## More documentation
 
@@ -150,6 +150,6 @@ The source lives on **a single branch**: code every target can use sits in `shar
 
 ## License
 
-[AtomChat's own code](LICENSE) is MIT. The distributed JAR bundles Skija (Java bindings), HumbleUI types, FlatLaf and the Skia native library, each under its own license — full texts in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+[AtomChat's own code](LICENSE) is Apache-2.0. The distributed JAR bundles Skija (Java bindings), HumbleUI types, FlatLaf and the Skia native library, each under its own license — full texts in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 Copyright © 2026 E33EPUS

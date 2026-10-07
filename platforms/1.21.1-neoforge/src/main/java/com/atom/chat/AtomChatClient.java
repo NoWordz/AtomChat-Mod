@@ -1,5 +1,6 @@
 package com.atom.chat;
 
+import com.atom.chat.banner.BannerStore;
 import com.atom.chat.chat.ChatStore;
 import com.atom.chat.chat.PrivateChatStore;
 import com.atom.chat.chat.PrivateEchoTracker;
@@ -61,6 +62,8 @@ public class AtomChatClient {
         CacheDirs.migrateFromOldConfigPaths();
         WallpaperStore.init(
                 net.neoforged.fml.loading.FMLPaths.CONFIGDIR.get().resolve("atomchat/wallpaper"));
+        BannerStore.init(
+                net.neoforged.fml.loading.FMLPaths.CONFIGDIR.get().resolve("atomchat"));
         ImageLoader.get().init(CacheDirs.imageCacheDir());
         com.atom.chat.net.PackNetClient.install();
         com.atom.chat.net.AvatarCompanionClient.init();

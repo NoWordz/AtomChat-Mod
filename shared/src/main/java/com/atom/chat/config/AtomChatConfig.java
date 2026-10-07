@@ -12,8 +12,8 @@ import java.nio.file.Path;
 public class AtomChatConfig {
     public static final AtomChatConfig DEFAULT = new AtomChatConfig();
 
-    public float panelWidth = 440.0F;
-    public float panelHeight = 780.0F;
+    public float panelWidth = 480.0F;
+    public float panelHeight = 860.0F;
     /** Rounded panel background blur (raw GL + core shader, outside Skia). */
     public boolean blurEnabled = true;
     /**
@@ -25,6 +25,23 @@ public class AtomChatConfig {
     public boolean animationEnabled = true;
     /** QQ-style horizontal slide + fade when a message first enters the viewport. */
     public boolean messageEntryAnimation = true;
+    /**
+     * Page transition style for the nav push/pop. {@code SLIDE} keeps the
+     * horizontal push, geometry-symmetric with every pop. {@code ZOOM} runs
+     * Melodify's serial two-phase zoom: the leaving page fades out while
+     * shrinking 1.0 -> 0.9, then the arriving page fades in while settling
+     * 1.1 -> 1.0 — the phases never overlap into a double-exposure, and a
+     * pop swaps the two pages' roles while keeping the same phase order, so
+     * a return matches its push (single clock, see
+     * {@code UiMotion.PAGE_NAV_TAU_MS}). Detail<->detail hops (public <->
+     * private chat) always slide whatever this says. Gson persists the enum
+     * by name; the retired boolean toggle's key is simply dropped by the
+     * next save, no migration needed.
+     */
+    public PageNavStyle pageNavStyle = PageNavStyle.ZOOM;
+
+    /** Nav transition styles, read by {@link #pageNavStyle}. */
+    public enum PageNavStyle { SLIDE, ZOOM }
     /** Double-clicking another player's avatar performs the QQ-style poke shake. */
     public boolean avatarPokeEnabled = true;
     /**
@@ -47,6 +64,15 @@ public class AtomChatConfig {
      * statics and could not change at runtime.
      */
     public float uiScale = 1.0F;
+    /**
+     * Content-only zoom for the two-axis panel sizing: multiplies the UI
+     * density inside the panel (text, rows, paddings) while the panel's outer
+     * frame keeps its pixel size — the shell divides the panel's virtual size
+     * by this factor to compensate, so bigger content never grows the frame.
+     * Unlike {@link #uiScale} it never touches the canvas transform; it is
+     * clamped to the slider span on load (see {@link #clampContentScale()}).
+     */
+    public float contentScale = 1.0F;
     /** Dumps avatar sampling PNGs to {@code <config>/atomchat/debug/} for color debugging. */
     public boolean debug = false;
     public int accentColor = 0xFF4A90E2;
@@ -63,6 +89,23 @@ public class AtomChatConfig {
     public int cardColor = 0xFFFFFFFF;
     /** Global blocked-player real names, persisted locally. */
     public java.util.List<String> blockedPlayers = new java.util.ArrayList<>();
+    /**
+     * This client's profile signature (QQ 个性签名), shown centred under the
+     * name on the own profile page and edited inline there (Enter commits,
+     * Esc cancels). Local-only: it is never synced to other clients, so other
+     * players' profiles show the placeholder line instead. Empty = unset.
+     */
+    public String playerSignature = "";
+
+    /**
+     * Master switch for the custom profile banner
+     * ({@code <config>/atomchat/banner.png}). When false the banner file, even
+     * if present, is ignored and the profile falls back to the accent
+     * gradient. The file itself is the everyday on/off — deleting it turns the
+     * custom banner off the same way; this flag exists so the image can be
+     * parked without losing it.
+     */
+    public boolean customBannerEnabled = true;
 
     /**
      * Client-side chat templates (e33chat parity), e.g. {@code "<{name}> {content}"}.
@@ -85,15 +128,17 @@ public class AtomChatConfig {
     public String teleportCommandMode = "auto";
     /**
      * Corner radius for the surrounding chrome (panel, cards, pills, popups —
-     * chat bubbles excluded on purpose), on the reference-px scale the UI
-     * draws at: {@code 28} is the shipped default, {@code 0} means square
-     * corners on every surface, the slider tops out at {@code s(28)}.
+     * chat bubbles excluded on purpose), in 1080p-basis pixels: the value
+     * scales with the whole UI density (vanilla scale × uiScale ×
+     * contentScale), so it is not pinned to physical pixels. {@code 20} is
+     * the shipped default (factor 1, cards round at s(16)), {@code 0} means
+     * square corners on every surface, the slider tops out at {@code s(20)}.
      * Replaces the old three-step {@code cornerStyle}, which lives on only
      * for the one-time file migration below and is never read or written
      * afterwards. Presets and the factory-default reset deliberately leave
      * this knob alone.
      */
-    public float cornerRadius = 28f;
+    public float cornerRadius = 20f;
     /**
      * Legacy three-step corner style ({@code large}/{@code medium}/
      * {@code small}). Migration source only: {@link #load()} folds it into
@@ -101,10 +146,20 @@ public class AtomChatConfig {
      * written again (Gson omits nulls from the saved file).
      */
     public String cornerStyle = null;
+    /**
+     * Whether {@code cornerRadius} is already on the 1080p-basis scale. A file
+     * written before that scale existed carries no such key, so Gson leaves
+     * this at {@code false} — the marker for "legacy, still needs
+     * {@link #migratePixelRadius()}". A fresh config is stamped true on its way
+     * out of {@link #load()}, so only a pre-1080p file can arrive here unset.
+     * Value-based detection cannot do the job: the old scale's span overlaps
+     * the new one, so a stored 20 or 10 is a legal value under both readings.
+     */
+    public boolean pixelRadiusMigrated = false;
 
     /**
      * One-time migration of an old config file: the three-step style maps
-     * onto the continuous radius (large=28 / medium=18 / small=10), then the
+     * onto the continuous radius (large=28 / medium=14 / small=10), then the
      * legacy field is dropped. Idempotent by the null check — a config that
      * already migrated (or was never legacy) is untouched.
      */
@@ -118,6 +173,42 @@ public class AtomChatConfig {
             default -> 28f;
         };
         cornerStyle = null;
+    }
+
+    /**
+     * Migration of the radius semantics: the knob used to be on the
+     * reference-px scale (old default {@code 28}, factor radius/28) and is now
+     * in 1080p-basis pixels (factor radius/20). The scales differ by
+     * 28 / 20 = 1.4, so the stored value is divided by it — that preserves the
+     * drawn FACTOR for every stored value, not just the default: 28 lands on
+     * 20, the legacy "medium" 14 on 10 and "small" 10 on ~7.14, and the old
+     * slider's whole span 0..s(28)=35 lands exactly on the new 0..s(20)=25.
+     * Rescaling only the 28 default would silently thicken every hand-dragged
+     * radius by 40% (a dragged 14 would read factor 0.7 instead of 0.5).
+     *
+     * <p>Guarded by {@link #pixelRadiusMigrated}, not by the value: dividing
+     * is not idempotent over the span the two scales share, and {@link #load()}
+     * runs this again on every screen open. Runs after
+     * {@link #migrateCornerStyle()} so a legacy "large" file is on the old
+     * scale by the time it gets here. Values past the new slider span (0..s(20))
+     * still clamp into it, for hand-edited files.</p>
+     */
+    void migratePixelRadius() {
+        if (!pixelRadiusMigrated) {
+            cornerRadius /= 1.4F;
+            pixelRadiusMigrated = true;
+        }
+        cornerRadius = Math.max(0.0F, Math.min(cornerRadius,
+                com.atom.chat.ui.UiTokens.s(20)));
+    }
+    /**
+     * Clamps {@link #contentScale} into the slider span [0.8, 1.5], the same
+     * range the shell's virtual-size compensation assumes — a hand-edited
+     * config file must not push the content zoom outside it. Runs in
+     * {@link #load()} right after {@link #migratePixelRadius()}.
+     */
+    void clampContentScale() {
+        contentScale = Math.max(0.8F, Math.min(contentScale, 1.5F));
     }
     /**
      * Card/chrome surface tint, 0..1. At 0 the surfaces are the frosted
@@ -278,17 +369,52 @@ public class AtomChatConfig {
         }
     }
 
+    /**
+     * pageNavStyle is the config's first enum field, and Gson throws on an
+     * unknown enum name — one hand-edited "slide" (lowercase) would fail the
+     * whole load(), fall back to a fresh default instance and immediately
+     * overwrite the file, wiping every saved option with it. Normalizing the
+     * value in the JSON tree first keeps a bad edit scoped to the one key.
+     */
+    private static String sanitizePageNavStyle(String json) {
+        try {
+            com.google.gson.JsonObject obj = GSON.fromJson(json, com.google.gson.JsonObject.class);
+            if (obj == null || !obj.has("pageNavStyle")
+                    || !obj.get("pageNavStyle").isJsonPrimitive()) {
+                return json;
+            }
+            String raw = obj.get("pageNavStyle").getAsString();
+            obj.addProperty("pageNavStyle", PageNavStyle.valueOf(raw.trim().toUpperCase(java.util.Locale.ROOT)).name());
+            return obj.toString();
+        } catch (Exception e) {
+            // Not JSON, or an unrecognizable style: drop the key so the load
+            // proceeds with the field default instead of failing entirely.
+            try {
+                com.google.gson.JsonObject obj = GSON.fromJson(json, com.google.gson.JsonObject.class);
+                if (obj != null) {
+                    obj.remove("pageNavStyle");
+                    return obj.toString();
+                }
+            } catch (Exception ignored) {
+                // Fall through: the caller's catch logs it and uses defaults.
+            }
+            return json;
+        }
+    }
+
     private static AtomChatConfig load() {
         Path path = com.atom.chat.platform.Platform.configDir().resolve("atomchat/atomchat-client.json");
         if (Files.exists(path)) {
             try {
                 String json = Files.readString(path, StandardCharsets.UTF_8);
-                AtomChatConfig config = GSON.fromJson(json, AtomChatConfig.class);
+                AtomChatConfig config = GSON.fromJson(sanitizePageNavStyle(json), AtomChatConfig.class);
                 if (config != null) {
                     if (config.blockedPlayers == null) {
                         config.blockedPlayers = new java.util.ArrayList<>();
                     }
                     config.migrateCornerStyle();
+                    config.migratePixelRadius();
+                    config.clampContentScale();
                     // Write the merged instance straight back: options added in
                     // newer builds are absent from an older file, and Gson drops
                     // unknown keys — so without this a new option could never be
@@ -303,6 +429,11 @@ public class AtomChatConfig {
             }
         }
         AtomChatConfig config = new AtomChatConfig();
+        // A brand-new config is already on the 1080p-basis scale, so it must be
+        // stamped as migrated before it is written — otherwise the field's own
+        // "unset means legacy" default would make the next load() divide the
+        // fresh 20 down to ~14.3.
+        config.pixelRadiusMigrated = true;
         seedGuiTip(config);
         save(config);
         return config;

@@ -103,7 +103,7 @@ The mod sends no telemetry and no personal data; uploads only happen when you pi
 
 **Why is a message shown in gray?** When the client cannot be sure a line is player chat it conservatively falls back to gray system text — common with nickname plugins using unrecognized formats.
 
-**Can I put it in a modpack?** Yes. The code is MIT and needs no extra permission; if you redistribute the JAR, keep the third-party notices from the GitHub repository.
+**Can I put it in a modpack?** Yes. The code is Apache-2.0 and needs no extra permission; if you redistribute the JAR, keep the third-party notices from the GitHub repository.
 
 ## Links
 

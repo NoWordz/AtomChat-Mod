@@ -9,6 +9,7 @@ import com.atom.chat.render.SkiaDraw;
 import com.atom.chat.render.SkiaFontRenderer;
 import com.atom.chat.ui.Animations;
 import com.atom.chat.ui.PressScale;
+import com.atom.chat.ui.UiCards;
 import com.atom.chat.ui.UiMotion;
 import com.atom.chat.ui.UiTokens;
 import io.github.humbleui.skija.Canvas;
@@ -269,7 +270,7 @@ public final class NotificationBanner {
 
     private void drawBanner(Canvas canvas, Active b, float x, float y, float w, float h,
                             float alpha, float hover, float buttonHover, PressScale sendScale) {
-        float radius = UiTokens.radius(12);
+        float radius = UiTokens.cardRadius();
         // save() and saveLayer() push two entries; both must be popped. A missing
         // restore here leaked one matrix per frame and, combined with the
         // per-frame density scale, flung the whole panel off screen in 0.2.4.
@@ -278,18 +279,16 @@ public final class NotificationBanner {
             layer.setColor(Color.makeARGB((int) (255.0F * alpha), 0, 0, 0));
             canvas.saveLayer(Rect.makeXYWH(x - UiTokens.s(8), y - UiTokens.s(8), w + UiTokens.s(16), h + UiTokens.s(16)), layer);
             try {
-                // Card language: opaque card fill + inner edge highlight, exactly
-                // like conversation cards and settings rows.
+                // Card language on floating chrome: the fixed opaque card fill
+                // over a chrome-level shadow (the blur/alpha family the shell
+                // header and tab bar use), because a banner floats above the
+                // page like they do — not the lighter content-card shadow. The
+                // stack itself is UiCards', with the shadow tier and the opaque
+                // base passed explicitly.
                 AtomChatConfig config = AtomChatConfig.get();
-                SkiaDraw.drawRoundedRect(canvas, x, y, w, h, radius,
+                UiCards.drawCard(canvas, x, y, w, h, radius, hover,
+                        UiTokens.CHROME_SHADOW, UiTokens.s(8),
                         0xFF000000 | (config.cardColor & 0x00FFFFFF));
-                SkiaDraw.drawEdgeHighlight(canvas, x, y, w, h, radius, UiTokens.s(1.0F),
-                        UiTokens.hairline());
-                if (hover > 0.01F) {
-                    // Same hover family as every card: accent-tinted, polarity-adaptive.
-                    SkiaDraw.drawRoundedRect(canvas, x, y, w, h, radius,
-                            UiTokens.cardHover(hover));
-                }
 
                 float padX = UiTokens.s(14);
                 float avatarSize = UiTokens.s(28);
@@ -304,6 +303,12 @@ public final class NotificationBanner {
                     SkiaDraw.drawRoundedRect(canvas, avatarX, avatarY, avatarSize, avatarSize,
                             avatarSize / 2.0F, Color.makeARGB(255, 120, 130, 145));
                 }
+                // Hairline rim hugging the avatar's outer edge (face or
+                // placeholder): polarity-adaptive UiTokens.rim separates the
+                // circle from the banner card behind it. Same ring language
+                // as the swatches.
+                SkiaDraw.drawRing(canvas, avatarX + avatarSize / 2.0F, avatarY + avatarSize / 2.0F,
+                        avatarSize / 2.0F + UiTokens.s(0.75F), UiTokens.s(1.0F), UiTokens.rim());
 
                 float btnX = x + w - padX - BUTTON_SIZE;
                 float btnY = y + (h - BUTTON_SIZE) / 2.0F;

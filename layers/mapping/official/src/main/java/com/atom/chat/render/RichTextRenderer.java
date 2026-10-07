@@ -95,6 +95,10 @@ public final class RichTextRenderer {
     private static void drawRunsPass(Canvas canvas, Font font, List<RichLine> lines,
                                      float x, float blockTop, float lineHeight, int fallbackColor,
                                      List<ClickableSpan> sink, boolean addClickable, boolean mainPass) {
+        if (!mainPass) {
+            drawShadowPass(canvas, font, lines, x, blockTop, lineHeight);
+            return;
+        }
         for (int i = 0; i < lines.size(); i++) {
             RichLine line = lines.get(i);
             float lineCenterY = blockTop + (i + 0.5F) * lineHeight;
@@ -104,11 +108,6 @@ public final class RichTextRenderer {
             for (RichText.RichRun run : line.runs()) {
                 String text = run.text();
                 if (text.isEmpty()) {
-                    continue;
-                }
-                if (!mainPass) {
-                    SkiaFontRenderer.drawBackingText(canvas, font, text, runX, baseline);
-                    runX += SkiaFontRenderer.getStringWidth(font, text);
                     continue;
                 }
                 int color = effectiveColor(run.style(), fallbackColor);
@@ -124,6 +123,62 @@ public final class RichTextRenderer {
                 }
                 runX += runWidth;
             }
+        }
+    }
+
+    /**
+     * The shadow pre-pass as one filtered layer. Per-run {@code drawBackingText}
+     * calls made every run push its own ImageFilter saveLayer — the overdraw
+     * {@code SkiaFontRenderer#drawTextPass} itself documents — one per run of
+     * every backing-backed block (sender names) per frame. The drop shadow is
+     * linear in the glyph mask, so blurring the runs' combined mask once inside
+     * a single layer composites exactly like one layer per run; the layer below
+     * is the exact union of those per-run bounds. Shadow glyphs go down as the
+     * same flat wash through the non-backing drawText overload.
+     */
+    private static void drawShadowPass(Canvas canvas, Font font, List<RichLine> lines,
+                                       float x, float blockTop, float lineHeight) {
+        // Layer bounds before the first glyph: widest line horizontally, first
+        // and last baseline vertically — padded like drawTextPass pads a run.
+        float maxLineW = 0.0F;
+        for (RichLine line : lines) {
+            float lineW = 0.0F;
+            for (RichText.RichRun run : line.runs()) {
+                lineW += SkiaFontRenderer.getStringWidth(font, run.text());
+            }
+            maxLineW = Math.max(maxLineW, lineW);
+        }
+        float pad = 8.0F;
+        FontMetrics metrics = font.getMetrics();
+        float topBaseline = SkiaFontRenderer.centerBaselineY(font, blockTop + 0.5F * lineHeight);
+        float bottomBaseline = SkiaFontRenderer.centerBaselineY(font, blockTop + (lines.size() - 0.5F) * lineHeight);
+        canvas.save();
+        try {
+            try (Paint layer = new Paint()) {
+                layer.setImageFilter(SkiaFontRenderer.backingShadow());
+                canvas.saveLayer(io.github.humbleui.types.Rect.makeXYWH(
+                        x - pad, topBaseline + metrics.getAscent() - pad,
+                        maxLineW + pad * 2.0F,
+                        (bottomBaseline - topBaseline) + (metrics.getDescent() - metrics.getAscent()) + pad * 2.0F), layer);
+                for (int i = 0; i < lines.size(); i++) {
+                    RichLine line = lines.get(i);
+                    float baseline = SkiaFontRenderer.centerBaselineY(font, blockTop + (i + 0.5F) * lineHeight);
+                    float runX = x;
+                    for (RichText.RichRun run : line.runs()) {
+                        String text = run.text();
+                        if (text.isEmpty()) {
+                            continue;
+                        }
+                        SkiaFontRenderer.drawText(canvas, font, text, runX, baseline, 0xFF000000);
+                        runX += SkiaFontRenderer.getStringWidth(font, text);
+                    }
+                }
+            } finally {
+                // Exactly one restore per saveLayer, before the bare save's own.
+                canvas.restore();
+            }
+        } finally {
+            canvas.restore();
         }
     }
 

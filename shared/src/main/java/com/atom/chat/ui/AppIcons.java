@@ -123,6 +123,24 @@ public final class AppIcons {
     private static final String ICON_PLUS_SVG = "M10 4.5 L10 15.5 M4.5 10 L15.5 10";
     public static final Path ICON_PLUS_PATH = Path.makeFromSVGString(ICON_PLUS_SVG);
 
+    // Profile stat-tile glyphs, same 20x20 open line language as the shell
+    // icons, rendered small at the tile's left edge.
+    // Ping: three ascending signal bars.
+    private static final String ICON_SIGNAL_SVG =
+            "M5 15.5V12 M10 15.5V8.5 M15 15.5V5";
+    // Session: a clock — the face circle plus two round-capped hands.
+    private static final String ICON_CLOCK_SVG =
+            "M10 3a7 7 0 1 0 0 14a7 7 0 1 0 0-14"
+            + " M10 6.8V10l2.6 1.8";
+    // Stats: a rising trend line with the arrowhead kept as one corner.
+    private static final String ICON_STATS_SVG =
+            "M4 15.5L8.5 11L11.5 13.5L16 7.5"
+            + " M12.8 7.5H16V10.7";
+
+    public static final Path ICON_SIGNAL_PATH = Path.makeFromSVGString(ICON_SIGNAL_SVG);
+    public static final Path ICON_CLOCK_PATH = Path.makeFromSVGString(ICON_CLOCK_SVG);
+    public static final Path ICON_STATS_PATH = Path.makeFromSVGString(ICON_STATS_SVG);
+
     private AppIcons() {
     }
 }

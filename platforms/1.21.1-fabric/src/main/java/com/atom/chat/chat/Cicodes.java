@@ -59,14 +59,21 @@ public final class Cicodes {
     }
 
     public static String truncateToWidth(Font font, String text, float maxW) {
-        if (SkiaFontRenderer.getStringWidth(font, text) <= maxW) {
+        if (text == null || SkiaFontRenderer.getStringWidth(font, text) <= maxW) {
             return text;
         }
-        String t = text;
-        while (t.length() > 1 && SkiaFontRenderer.getStringWidth(font, t + "…") > maxW) {
-            t = t.substring(0, t.length() - 1);
+        if (maxW <= 0.0F) {
+            // Zero/negative budget: the old per-char walk still left one char
+            // plus ellipsis, while SkiaFontRenderer.truncate hands back the
+            // untouched text — keep the old answer so a squeezed quote pill
+            // never regains its spill.
+            return text.substring(0, 1) + "…";
         }
-        return t + "…";
+        // Binary search over the prefix (O(log n) measurements): the old walk
+        // re-shaped a fresh "t + …" string per character trimmed, which both
+        // allocated O(n) strings per call and flushed WIDTH_CACHE with keys
+        // that could never hit.
+        return SkiaFontRenderer.truncate(font, text, maxW);
     }
 
     /** Minecraft language lookup, same rule as the screen's tr(). */

@@ -12,6 +12,7 @@ import com.atom.chat.ui.QuickPhrasePanel;
 import com.atom.chat.ui.ScrollController;
 import com.atom.chat.ui.UiLayout;
 import com.atom.chat.ui.UiMotion;
+import com.atom.chat.ui.UiTokens;
 import io.github.humbleui.skija.Bitmap;
 import io.github.humbleui.skija.Canvas;
 import io.github.humbleui.skija.Surface;
@@ -27,6 +28,7 @@ import java.util.UUID;
 import java.util.function.Consumer;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -187,6 +189,146 @@ class OffscreenRenderTest {
                     .anyMatch(row -> row.kind() == SettingsSectionPage.RowKind.LABEL);
         }
         assertTrue(anyLabel, "no settings section produces a group label row, so the chevron path is uncovered");
+    }
+
+    /**
+     * The about page's third-party rows render as ONE merged card (the
+     * owner's single-card + hairline language). Everything asserted here
+     * runs through public geometry only — rows(), hit(), measureContent(),
+     * render() — so the test cannot drift from the renderer's own walk:
+     * adjacent children of the card must touch (no row gap between them,
+     * while the seam above the other merged card — the hero down to the
+     * modinfo heading — keeps its gap as the control), the hover and
+     * card-bounce path must draw and balance the canvas, and folding the
+     * group must shrink the scroll height by exactly the card's content —
+     * three row heights plus the one gap the card still keeps to the next
+     * section — before the children leave the list and the hit-test.
+     */
+    @Test
+    void thirdPartyAboutRowsTileOneCardAndFoldCleanly() throws Exception {
+        try (Panel panel = new Panel()) {
+            UiLayout layout = UiLayout.ofDetail(PANEL_X, PANEL_Y, PANEL_W, PANEL_H);
+            SettingsSectionPage page = new SettingsSectionPage();
+            float cx = layout.list.x() + layout.list.w() / 2.0F;
+
+            // The third-party block, straight from the public row feed.
+            List<SettingsSectionPage.Row> rows = page.rows(SettingsSection.ABOUT);
+            int labelIdx = -1;
+            int modInfoIdx = -1;
+            for (int i = 0; i < rows.size(); i++) {
+                SettingsSectionPage.Row row = rows.get(i);
+                if (row.kind() != SettingsSectionPage.RowKind.LABEL) {
+                    continue;
+                }
+                if ("atomchat.settings.about.thirdparty.group".equals(row.labelKey())) {
+                    labelIdx = i;
+                } else if ("atomchat.settings.about.modinfo".equals(row.labelKey())) {
+                    modInfoIdx = i;
+                }
+            }
+            assertTrue(labelIdx >= 0, "about feed lost its third-party label");
+            assertTrue(modInfoIdx >= 0, "about feed lost its modinfo heading");
+            int childFrom = labelIdx + 1;
+            int childTo = childFrom;
+            while (childTo < rows.size()
+                    && rows.get(childTo).kind() != SettingsSectionPage.RowKind.LABEL) {
+                childTo++;
+            }
+            assertEquals(3, childTo - childFrom, "third-party card is three Skija/Skia/FlatLaf rows");
+
+            // Map every row's vertical slot by walking the hit-test down the
+            // list's centre line — the same geometry the renderer and the
+            // click path use. hit() is pure geometry (no viewport cull), so
+            // scanning from scroll 0 over the full measure reaches every row
+            // even where the about list outgrows the viewport.
+            float scrollY = 0.0F;
+            java.util.Map<Integer, float[]> slots = new java.util.HashMap<>();
+            float scanTo = layout.list.y() + page.measureContent(layout, SettingsSection.ABOUT)
+                    + UiTokens.SETTINGS_ROW_GAP;
+            for (float y = layout.list.y(); y <= scanTo; y += 0.5F) {
+                final float probeY = y;
+                SettingsSectionPage.RowHit hit = page.hit(cx, probeY, layout, SettingsSection.ABOUT, scrollY);
+                if (hit == null) {
+                    continue;
+                }
+                float[] slot = slots.computeIfAbsent(hit.index(), k -> new float[]{probeY, probeY});
+                slot[1] = probeY;
+            }
+
+            // Inside the card the children tile contiguously: the hairline
+            // divider owns the seam, so the hit-test must cross from one row
+            // to the next with no null gap.
+            for (int i = childFrom; i + 1 < childTo; i++) {
+                float[] above = slots.get(i);
+                float[] below = slots.get(i + 1);
+                assertTrue(above != null && below != null,
+                        "third-party child row " + i + " is not hit-testable at scroll 0");
+                assertTrue(below[0] - above[1] <= 1.01F,
+                        "gap between merged-card children " + above[1] + " -> " + below[0]);
+            }
+            // Control: the seam from the hero down to the modinfo heading
+            // walks the same list but keeps the ordinary row gap. Both about
+            // headings (modinfo AND third party) head a merged card of their
+            // own — SettingsSectionPage.isAboutCardChild takes GROUP_MOD_INFO
+            // as well — so the only seam that survives is the one between a
+            // card and the row outside it; a pair INSIDE either card is
+            // deliberately at zero (that is what the tiling above asserts).
+            float[] heroSlot = slots.get(0);
+            float[] modHeadSlot = slots.get(modInfoIdx);
+            assertTrue(heroSlot != null && modHeadSlot != null,
+                    "hero or modinfo heading is not hit-testable at scroll 0");
+            assertTrue(modHeadSlot[0] - heroSlot[1] > 1.5F,
+                    "control gap missing between the hero and the modinfo heading");
+
+            // The render pass does clip to the viewport, so scroll just
+            // enough to bring the whole card on screen, then park the pointer
+            // on the card's middle row: the hover wash and the whole-card
+            // bounce path must draw, paint, and balance the canvas.
+            scrollY = Math.max(0.0F, slots.get(childTo - 1)[1]
+                    - layout.list.bottom() + UiTokens.SETTINGS_ROW_GAP);
+            assertTrue(slots.get(childFrom)[0] - scrollY >= layout.list.y() - 0.5F,
+                    "card top scrolled off the viewport; list too short for the card");
+            float[] middle = slots.get(childFrom + 1);
+            final float cardScrollY = scrollY;
+            final float hoverY = (middle[0] + middle[1]) / 2.0F - cardScrollY;
+            panel.paintedFrame("third-party card hover",
+                    canvas -> page.render(canvas, layout, SettingsSection.ABOUT, cx, hoverY, cardScrollY, ACCENT));
+
+            // Fold the group the way a click does, then ride the fold out
+            // frame by frame: every animated frame must balance the canvas,
+            // and the card must vanish (children leave list and hit-test)
+            // with the scroll height giving back exactly the card's content.
+            float measureBefore = page.measureContent(layout, SettingsSection.ABOUT);
+            float[] labelSlot = slots.get(labelIdx);
+            SettingsSectionPage.RowHit labelHit = page.hit(cx, (labelSlot[0] + labelSlot[1]) / 2.0F,
+                    layout, SettingsSection.ABOUT, 0.0F);
+            assertTrue(labelHit != null
+                    && labelHit.row().kind() == SettingsSectionPage.RowKind.LABEL,
+                    "third-party label is not hit-testable");
+            page.perform(labelHit);
+            for (int frame = 0; frame < 90; frame++) {
+                final int n = frame;
+                panel.frame("third-party fold frame " + n,
+                        canvas -> page.render(canvas, layout, SettingsSection.ABOUT, -1.0F, -1.0F, cardScrollY, ACCENT));
+                Thread.sleep(16);
+            }
+            boolean anyThirdPartyLeft = page.rows(SettingsSection.ABOUT).stream()
+                    .anyMatch(row -> row.info() != null
+                            && row.info().titleKey().startsWith("atomchat.settings.about.thirdparty"));
+            assertFalse(anyThirdPartyLeft, "folded third-party rows still feed the list");
+            float measureAfter = page.measureContent(layout, SettingsSection.ABOUT);
+            // The children's own heights (measured through rowHeight, which
+            // includes headless font wrap) plus the single trailing gap to
+            // the next section — a per-row-card layout would give back three
+            // gaps instead of one.
+            float childrenHeight = 0.0F;
+            for (int i = childFrom; i < childTo; i++) {
+                childrenHeight += page.rowHeight(rows.get(i), layout);
+            }
+            assertEquals(childrenHeight + UiTokens.SETTINGS_ROW_GAP,
+                    measureBefore - measureAfter, 1.0F,
+                    "folded card must give back its content plus exactly one gap");
+        }
     }
 
     @Test

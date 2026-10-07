@@ -18,10 +18,13 @@ import com.atom.chat.config.AtomChatConfig;
  *       personal choice a re-skin of the chrome has no business overwriting —
  *       with one exception: the frosted tile doubles as the factory-default
  *       reset and writes the shipped palette back too.</li>
- *   <li><b>Colour presets</b> ({@link #MINIMAL} … {@link #VIVID}) are full
+ *   <li><b>Colour presets</b> ({@link #MINIMAL} … {@link #MINT}) are full
  *       re-skins: they write all twelve colour fields plus the look values.
- *       The corner style is deliberately not a preset knob — it has its own
- *       segmented setting on the appearance page, so no preset touches it.</li>
+ *       Most are opaque by design; a translucent preset ({@link #DUSK},
+ *       {@link #MINT}) ships its own {@code panelOpacity} and asks for the
+ *       background blur to sit behind the tint. The corner style is
+ *       deliberately not a preset knob — it has its own slider on the
+ *       appearance page, so no preset touches it.</li>
  * </ul>
  *
  * <p>Either way the write is one-shot: hand-tuning a colour afterwards simply
@@ -61,11 +64,22 @@ public final class ThemeService {
     /**
      * One colour preset: the twelve colour fields plus the look values and the
      * corner style the palette was designed around. All values ARGB, surfaces
-     * opaque — the frosted preset is the only translucent look.
+     * opaque unless the preset carries an explicit {@code panelOpacity} —
+     * the frosted preset and the translucent presets (dusk, mint) are the
+     * translucent looks.
+     *
+     * <p>{@code panelOpacity} / {@code blurEnabled} are the preset's look
+     * vote: {@code null} means the preset does not manage the knob and the
+     * standard colour-preset look block applies (full opacity, blur off —
+     * blur under a solid surface is invisible work). A non-null
+     * {@code panelOpacity} is written to the config and turns the preset
+     * translucent; a translucent preset asks for the background blur so the
+     * tint has something to sit on ({@code PanelBackground.tintFor} composes
+     * the two).</p>
      *
      * <p>{@code cornerStyle} is a <em>drawing reference only</em> (preview
      * cards render each palette with its native corner scale); applying a
-     * preset never writes it — the corner style is an independently set knob.</p>
+     * preset never writes it — the corner radius is an independently set knob.</p>
      */
     public record Preset(String id, int accent,
                          int ownBubble, int bubbleText,
@@ -73,6 +87,7 @@ public final class ThemeService {
                          int panelBg, int textPrimary, int textSecondary,
                          int card, int panelOutlineColor,
                          int capsuleBg, int capsuleText,
+                         Float panelOpacity, Boolean blurEnabled,
                          String cornerStyle) {
         /** Writes the snapshot into the config. The caller persists. */
         public void applyTo(AtomChatConfig config) {
@@ -100,56 +115,77 @@ public final class ThemeService {
             0xFF3B82F6, 0xFFFFFFFF,
             0xFFF1F2F6, 0xFF1A1D21,
             0xFFF7F8FA, 0xFF1A1D21, 0xFF6B7280,
-            0xFFFFFFFF, 0xFFE5E7EB,
+            0xFFFFFFFF, 0xFF6B7280,
             0xFFECEEF2, 0xFF6B7280,
-            "small");
-    /** 夏日 — same white base dressed with a lime accent and pale green capsules. */
+            null, null, "small");
+    /** 青柠 (id "summer", shown as 夏日 before) — same white base dressed with a lime accent and pale green capsules. */
     public static final Preset SUMMER = new Preset("summer",
             0xFF84CC16,
             0xFF84CC16, 0xFF1A2E05,
             0xFFEFF5E3, 0xFF1F2937,
             0xFFFAFCF3, 0xFF1F2937, 0xFF6B7280,
-            0xFFFFFFFF, 0xFFE2ECD0,
+            0xFFFFFFFF, 0xFF6B7280,
             0xFFEBF2DC, 0xFF4D7C0F,
-            "medium");
+            null, null, "medium");
     /** 典雅 — Claude beige: warm paper panel, sand cards, terracotta accent. */
     public static final Preset ELEGANT = new Preset("elegant",
             0xFFD97757,
             0xFFD97757, 0xFFFFFFFF,
             0xFFEFE8DC, 0xFF3D3929,
             0xFFF5F0E8, 0xFF3D3929, 0xFF8A8377,
-            0xFFE8DDD0, 0xFFE0D5C3,
+            0xFFE8DDD0, 0xFF8A8377,
             0xFFEAE1D3, 0xFF7A7264,
-            "medium");
+            null, null, "medium");
     /** 黑鸦 — deep black-blue night, gold accent, GitHub-dark surfaces. */
     public static final Preset RAVEN = new Preset("raven",
             0xFFE3B341,
             0xFFE3B341, 0xFF1C1901,
             0xFF1F2630, 0xFFE6EDF3,
             0xFF0D1117, 0xFFE6EDF3, 0xFF8B949E,
-            0xFF161B27, 0xFF30363D,
+            0xFF161B27, 0xFF8B949E,
             0xFF2A313C, 0xFF8B949E,
-            "medium");
+            null, null, "medium");
     /** 枢纽 — pure black terminal with the orange accent; sharp corners, no softness. */
     public static final Preset HUB = new Preset("hub",
             0xFFFF9000,
             0xFFFF9000, 0xFF1A0E00,
-            0xFF1F1F1F, 0xFFF5F5F5,
-            0xFF0F0F0F, 0xFFF5F5F5, 0xFF9CA3AF,
-            0xFF1A1A1A, 0xFF2B2B2B,
-            0xFF262626, 0xFF9CA3AF,
-            "small");
+            0xFF111111, 0xFFF5F5F5,
+            0xFF0A0A0A, 0xFFFFFFFF, 0xFF9CA3AF,
+            0xFF141414, 0xFF9CA3AF,
+            0xFF161616, 0xFFD4D4D4,
+            null, null, "small");
     /** 活力 — pale pink background, punchy pink accent, everything else stays soft white. */
     public static final Preset VIVID = new Preset("vivid",
             0xFFE85A8A,
             0xFFE85A8A, 0xFFFFFFFF,
             0xFFFBE3EB, 0xFF3D2C35,
             0xFFFDF0F4, 0xFF3D2C35, 0xFF9A7F8C,
-            0xFFFFFFFF, 0xFFF6D5E0,
+            0xFFFFFFFF, 0xFF9A7F8C,
             0xFFF9DCE7, 0xFFB04A70,
-            "medium");
+            null, null, "medium");
+    /** 薄暮 — grey-blue dusk with a violet cast: translucent smoky panel over
+     *  the blurred world, lavender accent and bubbles, near-white text. */
+    public static final Preset DUSK = new Preset("dusk",
+            0xFFA78BFA,
+            0xFFA78BFA, 0xFFFFFFFF,
+            0xFF333950, 0xFFECEEF4,
+            0xFF232633, 0xFFF2F3F7, 0xFF9BA0B5,
+            0xFF2B2E3D, 0xFF9BA0B5,
+            0xFF313548, 0xFFC9CDE0,
+            0.88F, true, "large");
+    /** 薄荷 — deep teal-green base worn translucent, mint accent and bubble,
+     *  dark teal text on the bright mint surfaces. */
+    public static final Preset MINT = new Preset("mint",
+            0xFF5EEAD4,
+            0xFF5EEAD4, 0xFF082620,
+            0xFF1B3B34, 0xFFE7F5F0,
+            0xFF0F2622, 0xFFEFFAF6, 0xFF9DB8AF,
+            0xFF16332D, 0xFF9DB8AF,
+            0xFF1E423A, 0xFFBFE8DC,
+            0.9F, true, "large");
 
-    private static final Preset[] COLOR_PRESETS = {MINIMAL, SUMMER, ELEGANT, RAVEN, HUB, VIVID};
+    private static final Preset[] COLOR_PRESETS =
+            {MINIMAL, SUMMER, ELEGANT, RAVEN, HUB, VIVID, DUSK, MINT};
 
     /** The colour presets in picker order (the frosted tile is rendered separately). */
     public static Preset[] presets() {
@@ -262,10 +298,14 @@ public final class ThemeService {
                 if (preset == null) {
                     return;
                 }
-                // Colour presets are opaque by design — blur under a solid
-                // surface is invisible work. One look block, then the palette.
-                config.panelOpacity = 1.0F;
-                config.blurEnabled = false;
+                // One look block, then the palette. Presets without a look
+                // vote stay opaque — blur under a solid surface is invisible
+                // work. A translucent preset (dusk, mint) writes its own
+                // opacity and asks for the blur behind the tint
+                // (PanelBackground.tintFor composes the two).
+                config.panelOpacity = preset.panelOpacity() != null
+                        ? preset.panelOpacity() : 1.0F;
+                config.blurEnabled = Boolean.TRUE.equals(preset.blurEnabled());
                 config.panelOutline = true;
                 config.cardTint = 1.0F;
                 preset.applyTo(config);

@@ -50,15 +50,18 @@ public final class EmojiPanel {
     }
 
     // Fixed dark-grey skin. The emoji panel is deliberately a small world of
-    // its own that does NOT follow the theme: its base, shadows and its
-    // its selected-pill white are constants of this skin, not UiTokens values
-    // (user-approved exception to the theme colour language). Every hover wash
+    // its own that does NOT follow the theme: its selected-pill white and its
+    // hover washes are constants of this skin, not UiTokens values
+    // (user-approved exception to the theme colour language); the base plate
+    // and the drop shadow ride the shared fixed-dark tokens
+    // (UiTokens.SKIN_PANEL / CHROME_SHADOW) so every fixed dark popup draws
+    // the same plate. Every hover wash
     // in here stays white-based for the same reason — on this fixed dark base
     // a white wash always brightens, which is the correct hover direction on
     // this surface regardless of the user's theme polarity. The remove-button
     // red (214, 48, 48) below is a functional colour of the skin, kept as-is.
-    private static final int SKIN_PANEL_BG = Color.makeARGB(245, 35, 39, 47);
-    private static final int SKIN_PANEL_SHADOW = Color.makeARGB(100, 0, 0, 0);
+    private static final int SKIN_PANEL_BG = UiTokens.SKIN_PANEL;
+    private static final int SKIN_PANEL_SHADOW = UiTokens.CHROME_SHADOW;
     /** Selected tab pill: translucent white, the v0.2.15 shipped value. */
     private static final int SKIN_PILL_FILL = Color.makeARGB(90, 255, 255, 255);
     /** Disabled "+"-slot glyph: dimmed white of the skin. */

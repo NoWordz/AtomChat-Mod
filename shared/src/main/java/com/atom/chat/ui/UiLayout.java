@@ -99,15 +99,22 @@ public final class UiLayout {
             this.inputBar = new Rect(panelX + UiTokens.LIST_PAD_X, inputY,
                     panelW - UiTokens.LIST_PAD_X * 2.0F, inputH);
 
-            float rowLeft = inputBar.x + UiTokens.INPUT_ROW_PAD;
+            // Two families, two spacing systems, one row. The three square keys
+            // belong to the header action family and take that family's edge
+            // inset: EDGE_CONTROL_INSET off the bar's left edge and off its top,
+            // exactly like the back / filter keys sit in the header card. Send
+            // deliberately keeps its own designed gap instead — INPUT_ROW_PAD
+            // between the capsule and the bar's right edge, kept from the
+            // shipped design rather than unified with the keys.
+            float rowLeft = inputBar.x + UiTokens.EDGE_CONTROL_INSET;
             float rowRight = inputBar.x + inputBar.w - UiTokens.INPUT_ROW_PAD;
             // One axis for two heights. The row is as tall as its taller family
             // (the action square), and the shorter Send capsule centres on that
             // axis, so the two shapes read as one line instead of each being
             // pinned to the other's top edge. Anchoring the axis to the taller
-            // family also keeps INPUT_ROW_PAD as the real gap between the row and
-            // the bar's top edge whatever either family measures.
-            float rowCenterY = inputBar.y + UiTokens.INPUT_ROW_PAD + UiTokens.INPUT_ROW_H / 2.0F;
+            // family keeps EDGE_CONTROL_INSET as the real gap between the key
+            // band and the bar's top edge whatever either family measures.
+            float rowCenterY = inputBar.y + UiTokens.EDGE_CONTROL_INSET + UiTokens.INPUT_ROW_H / 2.0F;
             float keyTop = rowCenterY - UiTokens.ACTION_BUTTON_SIZE / 2.0F;
             float sendTop = rowCenterY - UiTokens.BUTTON_H / 2.0F;
             this.imageBtn = new Rect(rowLeft, keyTop,
@@ -125,14 +132,15 @@ public final class UiLayout {
                     UiTokens.BUTTON_W, UiTokens.BUTTON_H);
 
             // The first line's centre sits at the middle of the text band, built
-            // from the band's own parts (row pad, row band, half the band) rather
-            // than from a button's height, so neither family can push it by
+            // from the band's own parts (key inset, row band, half the band) —
+            // the band starts directly under the key band — rather than from a
+            // button's height, so neither family can push it by
             // measuring differently. That reference is pinned to the bar's top
             // while the bar grows upward, so a second line lands where the first
             // one was and the first one rides up; INPUT_HEIGHT carries the row's
             // growth, which keeps the whole block on the screen pixels it has
             // always occupied.
-            this.inputTextCenterY = inputBar.y + UiTokens.INPUT_ROW_PAD
+            this.inputTextCenterY = inputBar.y + UiTokens.EDGE_CONTROL_INSET
                     + UiTokens.INPUT_ROW_H + UiTokens.INPUT_TEXT_BAND / 2.0F;
         } else {
             this.replyBar = new Rect(0, 0, 0, 0);

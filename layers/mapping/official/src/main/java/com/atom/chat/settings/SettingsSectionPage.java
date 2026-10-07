@@ -132,12 +132,19 @@ public final class SettingsSectionPage {
     private static final int DANGER_RED = Color.makeARGB(255, 235, 64, 52);
     private static final String LABEL_BLOCKED = "atomchat.settings.privacy.list";
     private static final String LABEL_THIRD_PARTY = "atomchat.settings.about.thirdparty.group";
+    /** Fold-group id of the third-party block; its children render merged
+     *  into ONE card (see {@link #isAboutCardChild}). */
+    private static final String GROUP_THIRD_PARTY = "thirdparty";
     private static final String LABEL_MOD_INFO = "atomchat.settings.about.modinfo";
+    /** Fold-group id of the mod-info block; it shares the third-party
+     *  block's merged-card language (see {@link #isAboutCardChild}). */
+    private static final String GROUP_MOD_INFO = "modinfo";
     private static final String LABEL_ADVANCED = "atomchat.settings.group.advanced";
     private static final String LABEL_APPEARANCE_ADVANCED = "atomchat.settings.group.advancedcolors";
     private static final String ACTION_WALLPAPER_PICK = "wallpaper_pick";
     private static final String ACTION_WALLPAPER_CLEAR = "wallpaper_clear";
     private static final String ACTION_TELEPORT_MODE = "teleport_mode";
+    private static final String ACTION_PAGE_NAV_STYLE = "page_nav_style";
     private static final String ACTION_HISTORY_CLEAR = "history_clear";
     private static final String ACTION_CACHE_CLEAR = "cache_clear";
     private static final String ACTION_TEST_SOUND = "test_sound";
@@ -174,6 +181,19 @@ public final class SettingsSectionPage {
         return new SettingsItem("teleport_mode",
                 "atomchat.settings.chat.teleport",
                 "atomchat.settings.chat.teleport.desc",
+                () -> true, v -> {
+        });
+    }
+
+    /**
+     * Page transition card: subtitle shows the current slide/zoom style;
+     * tapping cycles between the two and saves (the handler lives on the
+     * screen, like every other action card).
+     */
+    private SettingsItem pageNavStyleItem() {
+        return new SettingsItem("page_nav_style",
+                "atomchat.settings.appearance.page_nav_style",
+                "atomchat.settings.appearance.page_nav_style.desc",
                 () -> true, v -> {
         });
     }
@@ -333,6 +353,25 @@ public final class SettingsSectionPage {
      *  colour rows tucked away until asked for. */
     private final java.util.Set<String> collapsedColorGroups =
             new java.util.HashSet<>(java.util.List.of("appearance_advanced"));
+    /**
+     * Time constant of the fold animation: a group's children neither pop in
+     * nor pop out any more, they grow/shrink behind an exponential settle at
+     * the same 50ms tau the ZOOM page-nav phases use (~170ms to visually
+     * land), so folding reads as one continuous motion of the same family.
+     */
+    private static final float GROUP_FOLD_TAU_MS = 50.0F;
+    /** Live expansion of each fold group, group id → 0..1 (1 = fully
+     *  expanded). Stepped every frame toward the target the collapsed set
+     *  names; rows of a group scale their height, alpha and hit bounds by
+     *  this value. Groups not yet in the map answer their target directly
+     *  (see {@link #expansionOf}), so the very first frame never animates
+     *  from a wrong default. */
+    private final Map<String, Float> groupExpansion = new HashMap<>();
+    /** Below this expansion a group child is fully invisible and untaggable
+     *  (no draw, no hit); the row list itself only drops the children once
+     *  the value snaps to exactly 0, so the scroll height converges without
+     *  a visible end-of-animation jump. */
+    private static final float GROUP_FOLD_MIN_DRAWN = 0.01F;
     /** Whether the given destructive action is showing its red confirm state. */
     public boolean actionArmed(String actionId) {
         return actionId != null && actionId.equals(armedActionId)
@@ -367,16 +406,16 @@ public final class SettingsSectionPage {
             return "blocked";
         }
         if (LABEL_MOD_INFO.equals(labelKey)) {
-            return "modinfo";
+            return GROUP_MOD_INFO;
         }
         if (LABEL_THIRD_PARTY.equals(labelKey)) {
-            return "thirdparty";
+            return GROUP_THIRD_PARTY;
         }
         return null;
     }
 
     /**
-     * Theme picker row: seven mini-panel preview cards (frosted + six colour
+     * Theme picker row: nine mini-panel preview cards (frosted + eight colour
      * presets) in a horizontal strip, each drawn in its own preset palette;
      * the active one wears an accent edge. Replaces the old parked theme_cycle
      * action card.
@@ -403,6 +442,12 @@ public final class SettingsSectionPage {
     /** Per-row press bounce: compact(), so a row lifts 1.04 on hover and
      *  dips 0.95 while pressed. */
     private final Map<Integer, PressScale> rowPress = new HashMap<>();
+    /** Press springs of the merged about-page cards, keyed by each card's
+     *  first row index — modinfo and third-party today; the map keeps the
+     *  same reset() contract as the other per-row spring maps. Each card
+     *  carries the one bounce: its child rows scale together, never each
+     *  alone. */
+    private final Map<Integer, PressScale> aboutCardPress = new HashMap<>();
     /** Row index under an active press for the bounce; -1 = none. */
     private int pressedRow = -1;
     /** Per-swatch bounce scales, keyed by {@link #swatchKey}. */
@@ -525,6 +570,12 @@ public final class SettingsSectionPage {
             String mode = AtomChatConfig.get().teleportCommandMode;
             subtitle = tr("atomchat.settings.chat.teleport." + (mode == null ? "auto" : mode));
             verb = tr("atomchat.settings.action.cycle");
+        } else if (ACTION_PAGE_NAV_STYLE.equals(row.actionId())) {
+            subtitle = tr(AtomChatConfig.get().pageNavStyle
+                    == AtomChatConfig.PageNavStyle.ZOOM
+                    ? "atomchat.settings.appearance.page_nav_style.zoom"
+                    : "atomchat.settings.appearance.page_nav_style.slide");
+            verb = tr("atomchat.settings.action.cycle");
         } else if (ACTION_HISTORY_CLEAR.equals(row.actionId())) {
             subtitle = tr(AtomChatConfig.get().chatHistoryEnabled
                     ? "atomchat.settings.chat.history.clear.desc.saved"
@@ -605,13 +656,17 @@ public final class SettingsSectionPage {
 
     /**
      * Adds a collapsible group: the label is always present; the children are
-     * only added while the group is expanded. Non-foldable labels (null id)
-     * always show their children.
+     * added while the group is expanded <em>or still folding shut</em> — the
+     * live expansion above 0 keeps them in the list so their heights shrink
+     * through {@link #rowAdvance} frame by frame instead of vanishing. Once
+     * the expansion snaps to 0 the children leave the list for good.
+     * Non-foldable labels (null id) always show their children.
      */
     private void addGroup(List<Row> rows, String labelKey, Runnable children) {
         rows.add(Row.ofLabel(labelKey));
         String id = foldableGroup(labelKey);
-        if (id == null || !collapsedColorGroups.contains(id)) {
+        if (id == null || !collapsedColorGroups.contains(id)
+                || expansionOf(id) > 0.0F) {
             children.run();
         }
     }
@@ -665,19 +720,22 @@ public final class SettingsSectionPage {
 
     /** One chip of the appearance page. The theme chip carries the preview
      *  strip, the corner knob and the folded colour palette; display holds the
-     *  chrome switches plus the wallpaper cards; adjust the four sliders. */
+     *  chrome switches plus the wallpaper cards; adjust the five sliders. */
     private List<Row> appearanceRows(String chip) {
         List<Row> rows = new ArrayList<>();
         switch (chip == null ? "theme" : chip) {
             case "display" -> {
                 addSwitches(rows, SettingsSection.APPEARANCE, "blur", "outline", "motion");
+                // Style pick where the old zoom-enter switch used to sit: the
+                // subtitle shows the live value, a tap cycles SLIDE <-> ZOOM.
+                rows.add(Row.ofAction(ACTION_PAGE_NAV_STYLE, pageNavStyleItem()));
                 rows.add(Row.ofAction(ACTION_WALLPAPER_PICK, wallpaperPickItem()));
                 if (WallpaperStore.isSet()) {
                     rows.add(Row.ofAction(ACTION_WALLPAPER_CLEAR, wallpaperClearItem()));
                 }
             }
             case "adjust" -> addSliders(rows, SettingsSection.APPEARANCE,
-                    "opacity", "width", "scale", "cardtint");
+                    "opacity", "width", "scale", "contentscale", "cardtint");
             default -> {
                 // Theme strip first - one tap to a whole new look.
                 rows.add(Row.ofThemes());
@@ -744,16 +802,131 @@ public final class SettingsSectionPage {
 
     // ----------------------------------------------------------------- layout
 
+    /**
+     * Fold group the row at {@code index} belongs to: the nearest foldable
+     * label <em>strictly above</em> it (a group's children always sit directly
+     * under their label, and {@link #addGroup} emits that pair atomically),
+     * or null for rows outside any foldable group. The exclusive bound keeps
+     * the label itself out of its own group — the heading must stay at full
+     * height and full alpha at every expansion. A foldable heading also never
+     * belongs to the group above it: adjacent groups would otherwise file the
+     * lower heading under the upper one, and collapsing the upper group would
+     * fold the lower heading — its own fold toggle with it — away for good
+     * (the about page's modinfo -> thirdparty -> advanced run hits exactly
+     * that). Deriving membership from the list itself keeps rendering,
+     * hit-testing and measurement in lockstep without tagging rows.
+     */
+    private static String owningGroup(List<Row> rows, int index) {
+        if (index >= 0 && index < rows.size() && rows.get(index).kind() == RowKind.LABEL
+                && foldableGroup(rows.get(index).labelKey()) != null) {
+            return null;
+        }
+        String group = null;
+        for (int i = 0; i < index && i < rows.size(); i++) {
+            Row row = rows.get(i);
+            if (row.kind() == RowKind.LABEL) {
+                group = foldableGroup(row.labelKey());
+            }
+        }
+        return group;
+    }
+
+    /** Live expansion of the group owning row {@code index}; 1.0 outside
+     *  groups. Every geometry consumer (row advance, rect, hit-test, draw)
+     *  funnels through here, so a folding group can never disagree with
+     *  itself. */
+    private float rowExpansion(List<Row> rows, int index) {
+        String group = owningGroup(rows, index);
+        return group == null ? 1.0F : expansionOf(group);
+    }
+
+    /** Expansion of one fold group: the live animated value, or the state
+     *  the collapsed set names for a group that has never animated. */
+    private float expansionOf(String group) {
+        Float value = groupExpansion.get(group);
+        return value != null ? value
+                : (collapsedColorGroups.contains(group) ? 0.0F : 1.0F);
+    }
+
+    /**
+     * One frame of the fold animation: registers unknown fold groups of the
+     * current rows at their target (no first-frame slide from a wrong
+     * default), then steps every known group toward its target — the
+     * collapsed set is the single source of truth for the direction.
+     */
+    private void stepGroupExpansions(List<Row> rows, float dtMs) {
+        for (Row row : rows) {
+            if (row.kind() == RowKind.LABEL) {
+                String id = foldableGroup(row.labelKey());
+                if (id != null) {
+                    groupExpansion.putIfAbsent(id,
+                            collapsedColorGroups.contains(id) ? 0.0F : 1.0F);
+                }
+            }
+        }
+        for (Map.Entry<String, Float> entry : groupExpansion.entrySet()) {
+            float target = collapsedColorGroups.contains(entry.getKey()) ? 0.0F : 1.0F;
+            entry.setValue(UiMotion.expApproach(entry.getValue(), target, dtMs,
+                    GROUP_FOLD_TAU_MS));
+        }
+    }
+
+    /**
+     * Vertical slot the row at {@code index} occupies: its height times the
+     * owning group's expansion plus the row gap below it, scaled by the
+     * <em>following</em> row's expansion. Owning the gap to the next row is
+     * what keeps the fold continuous at both ends: a child's leading gap
+     * grows with the child itself, the gap to the next section is owned by
+     * the child while it is still in the list (full — the next section keeps
+     * its breathing room) and by that section after the children leave (full
+     * — same value), and the label's gap to its first child opens and closes
+     * with that child instead of holding a phantom gap under a folded
+     * heading. At expansion 1 every factor is 1: the plain
+     * {@code rowHeight + gap} walk.
+     */
+    /**
+     * True when the row at {@code index} is a child of one of the about
+     * page's merged-card fold groups (mod info, third party). Those children
+     * render as one merged card ({@link #drawAboutCard}), so {@link
+     * #rowAdvance} collapses the gap between two of them and the draw pass
+     * routes the whole run through the card. Membership comes from the row
+     * list itself (via {@link #owningGroup}), like every other geometry
+     * consumer.
+     */
+    private static boolean isAboutCardChild(List<Row> rows, int index) {
+        String group = owningGroup(rows, index);
+        return GROUP_THIRD_PARTY.equals(group) || GROUP_MOD_INFO.equals(group);
+    }
+
+    private float rowAdvance(List<Row> rows, int index, UiLayout layout) {
+        float expansion = rowExpansion(rows, index);
+        float nextExpansion = index + 1 < rows.size() ? rowExpansion(rows, index + 1) : 1.0F;
+        // Two children of a merged about card sit contiguously — the hairline
+        // divider owns the seam inside the card — so the inter-row gap
+        // between them is zero. Measurement, rects and the hit-test all walk
+        // this method, so the card's geometry cannot drift apart.
+        float gap = UiTokens.SETTINGS_ROW_GAP * nextExpansion;
+        if (index + 1 < rows.size()
+                && isAboutCardChild(rows, index)
+                && isAboutCardChild(rows, index + 1)) {
+            gap = 0.0F;
+        }
+        return rowHeight(rows.get(index), layout) * expansion + gap;
+    }
+
     public float measureContent(UiLayout layout, SettingsSection section) {
         List<Row> rows = rows(section);
         if (rows.isEmpty()) {
             return UiTokens.ROOT_CONTENT_GAP + chipBarHeight(section);
         }
         float total = UiTokens.ROOT_CONTENT_GAP + chipBarHeight(section);
-        for (Row row : rows) {
-            total += rowHeight(row, layout);
+        for (int i = 0; i < rows.size(); i++) {
+            // Same walk as rowAdvance (the card's zero child-gap lives there),
+            // except the last row: nothing follows it, so no gap either way.
+            total += i < rows.size() - 1
+                    ? rowAdvance(rows, i, layout)
+                    : rowHeight(rows.get(i), layout) * rowExpansion(rows, i);
         }
-        total += (rows.size() - 1) * UiTokens.SETTINGS_ROW_GAP;
         return total;
     }
 
@@ -787,10 +960,10 @@ public final class SettingsSectionPage {
                                   float scrollY, UiLayout layout) {
         float y = contentTop(layout, section) - scrollY;
         for (int i = 0; i < index; i++) {
-            y += rowHeight(rows.get(i), layout) + UiTokens.SETTINGS_ROW_GAP;
+            y += rowAdvance(rows, i, layout);
         }
         return new UiLayout.Rect(layout.list.x() + ROW_CLIP_INSET, y,
-                rowCardWidth(layout), rowHeight(rows.get(index), layout));
+                rowCardWidth(layout), rowHeight(rows.get(index), layout) * rowExpansion(rows, index));
     }
 
     private static UiLayout.Rect sliderTrackRect(UiLayout.Rect row) {
@@ -821,6 +994,12 @@ public final class SettingsSectionPage {
         pointerY = vmy;
 
         List<Row> rows = rows(section);
+        // Fold animation clock: advances every group's expansion toward the
+        // state the collapsed set names, before drawing consumes it. The row
+        // list above was built against last frame's values; at the one moment
+        // that matters (the snap to 0) those rows contribute exactly zero
+        // height, so membership and geometry never visibly disagree.
+        stepGroupExpansions(rows, dt);
         // Chip switch crossfade: the outgoing rows fade out while sliding up
         // and away, the incoming rows fade in while sliding up into place.
         boolean chipFading = chipSwitchFromId != null && Animations.enabled()
@@ -897,9 +1076,34 @@ public final class SettingsSectionPage {
             }
             canvas.translate(0.0F, dy);
             for (int i = 0; i < rows.size(); i++) {
+                // The about page's modinfo and third-party children each
+                // render as ONE merged card (the owner's single-card +
+                // hairline language): the first child draws the whole block,
+                // the rest are already on the canvas behind it.
+                if (isAboutCardChild(rows, i)) {
+                    if (i > 0 && isAboutCardChild(rows, i - 1)) {
+                        continue;
+                    }
+                    int end = i;
+                    while (end < rows.size() && isAboutCardChild(rows, end)) {
+                        end++;
+                    }
+                    hovered = drawAboutCard(canvas, layout, section, rows,
+                            i, end, scrollY, vmx, vmy, buttonFont, accent, dt,
+                            interactive, hovered);
+                    i = end - 1; // the loop's own i++ lands past the card
+                    continue;
+                }
                 Row row = rows.get(i);
                 UiLayout.Rect rect = rowRect(section, rows, i, scrollY, layout);
                 if (rect.bottom() < layout.list.y() || rect.y() > layout.list.bottom()) {
+                    continue;
+                }
+                // Below the fold's draw floor a group child takes no part in
+                // anything: not drawn, not hovered, not press-tracked. Its
+                // slot is near-zero already, so nothing below shifts.
+                float expansion = rowExpansion(rows, i);
+                if (expansion < GROUP_FOLD_MIN_DRAWN) {
                     continue;
                 }
                 if (interactive) {
@@ -938,19 +1142,44 @@ public final class SettingsSectionPage {
                 PressScale press = row.kind() == RowKind.LABEL && foldableGroup(row.labelKey()) == null ? null
                         : interactive ? rowPress.computeIfAbsent(i, k -> PressScale.bounce())
                         : rowPress.get(i);
-                if (press != null) {
-                    if (interactive) {
-                        press.update(i == hovered, i == pressedRow, dt, Animations.enabled(), rect.w());
-                    }
-                    press.begin(canvas, rect.x() + rect.w() / 2.0F, rect.y() + rect.h() / 2.0F);
+                if (press != null && interactive) {
+                    press.update(i == hovered, i == pressedRow, dt, Animations.enabled(), rect.w());
                 }
+                canvas.save();
+                Paint foldFade = null;
                 try {
-                    drawRow(canvas, row, rect, rowHover.getOrDefault(i, 0.0F),
-                            buttonFont, accent, dt);
-                } finally {
+                    if (expansion < 0.995F) {
+                        // Fold fade-in: the child's content rises from up to
+                        // s(4) below its slot while fading with the expansion,
+                        // the same settle the chip crossfade's incoming layer
+                        // rides (its (1-t)*s(3)); both ends of the fold are
+                        // exactly the resting layout. The padded saveLayer
+                        // keeps press overshoot and shadow tail inside the
+                        // fade instead of punching through at full weight.
+                        canvas.translate(0.0F, UiTokens.s(4) * (1.0F - expansion));
+                        float pad = UiTokens.s(12);
+                        foldFade = new Paint().setAlphaf(expansion);
+                        canvas.saveLayer(io.github.humbleui.types.Rect.makeXYWH(
+                                rect.x() - pad, rect.y() - pad,
+                                rect.w() + pad * 2.0F, rect.h() + pad * 2.0F), foldFade);
+                    }
                     if (press != null) {
+                        press.begin(canvas, rect.x() + rect.w() / 2.0F, rect.y() + rect.h() / 2.0F);
+                    }
+                    try {
+                        drawRow(canvas, row, rect, rowHover.getOrDefault(i, 0.0F),
+                                buttonFont, accent, dt);
+                    } finally {
+                        if (press != null) {
+                            canvas.restore();
+                        }
+                    }
+                } finally {
+                    if (foldFade != null) {
+                        foldFade.close();
                         canvas.restore();
                     }
+                    canvas.restore();
                 }
             }
         } finally {
@@ -1093,6 +1322,14 @@ public final class SettingsSectionPage {
         }
         UiCards.drawCard(canvas, rect.x(), rect.y(), rect.w(), rect.h(),
                 UiTokens.settingsRowRadius(), hover);
+        drawRowContent(canvas, row, rect, hover, buttonFont, accent, dtMs);
+    }
+
+    /** Everything a non-label row draws <em>inside</em> its card surface.
+     *  Split from {@link #drawRow} so the merged third-party card can lay
+     *  its child rows on one shared surface instead of a card each. */
+    private void drawRowContent(Canvas canvas, Row row, UiLayout.Rect rect, float hover,
+                                Font buttonFont, int accent, float dtMs) {
         switch (row.kind()) {
             case HERO -> drawHero(canvas, rect);
             case SWITCH -> drawSwitch(canvas, row, rect, accent, dtMs);
@@ -1105,6 +1342,138 @@ public final class SettingsSectionPage {
             default -> {
             }
         }
+    }
+
+    /**
+     * One of the about page's merged-card blocks (mod info, third party):
+     * ONE card holding every child row of the fold group — the owner's
+     * single-card + hairline language, the same structure {@code
+     * ProfilePage.drawInfoRows} uses for its info card. Rows sit
+     * contiguously inside the card ({@link #rowAdvance} zeroes the gap
+     * between two children of this group), separated by a 1px hairline
+     * divider indented to the row pad; each row washes on hover (per-row
+     * alpha, clipped to the card's rounding); and the whole card rides one
+     * {@link PressScale#bounce()} keyed on the pointer being anywhere in the
+     * card, wrapped begin/try/finally around the entire draw. The rows carry
+     * no press scale of their own — INFO rows have no press semantics, and
+     * per-row lifts would read as separate cards, not one surface.
+     * Hit-tests keep unscaled coordinates: clicking a row still resolves to
+     * that row's {@link RowHit} (link rows open their URI), the card's
+     * bounce is draw-only.
+     *
+     * @param start index of the card's first child row
+     * @param end   exclusive bound (the row after the card's last child)
+     * @return the row index under the pointer if it lies on a card child,
+     *         else the caller's running {@code hovered} state
+     */
+    private int drawAboutCard(Canvas canvas, UiLayout layout, SettingsSection section,
+                              List<Row> rows, int start, int end, float scrollY,
+                              float vmx, float vmy, Font buttonFont, int accent,
+                              float dt, boolean interactive, int hovered) {
+        float expansion = rowExpansion(rows, start);
+        // Below the fold's draw floor the whole card takes no part in
+        // anything, same as a lone group child in the row loop.
+        if (expansion < GROUP_FOLD_MIN_DRAWN) {
+            return hovered;
+        }
+        UiLayout.Rect first = rowRect(section, rows, start, scrollY, layout);
+        UiLayout.Rect last = rowRect(section, rows, end - 1, scrollY, layout);
+        // The children tile the card contiguously at every expansion (their
+        // heights and the advances between them both scale with the group),
+        // so the union of first and last row rect IS the card, folded state
+        // included.
+        UiLayout.Rect card = new UiLayout.Rect(first.x(), first.y(), first.w(),
+                last.bottom() - first.y());
+        if (card.bottom() < layout.list.y() || card.y() > layout.list.bottom()) {
+            return hovered;
+        }
+        // Hover = the pointer anywhere in the merged card; the pressed half
+        // follows the armed row (any child), mirroring the per-row spring
+        // contract where press is armed wherever the press landed.
+        boolean cardOver = interactive
+                && vmx >= card.x() && vmx <= card.right()
+                && vmy >= card.y() && vmy <= card.bottom();
+        PressScale press = interactive
+                ? aboutCardPress.computeIfAbsent(start, k -> PressScale.bounce())
+                : aboutCardPress.get(start);
+        if (press != null && interactive) {
+            press.update(cardOver, pressedRow >= start && pressedRow < end,
+                    dt, Animations.enabled(), card.w());
+        }
+        canvas.save();
+        Paint foldFade = null;
+        try {
+            if (expansion < 0.995F) {
+                // Same fold settle the per-row path rides: the card rises
+                // from up to s(4) below its slot while fading with the group
+                // expansion; the padded saveLayer keeps press overshoot and
+                // shadow tail inside the fade.
+                canvas.translate(0.0F, UiTokens.s(4) * (1.0F - expansion));
+                float fadePad = UiTokens.s(12);
+                foldFade = new Paint().setAlphaf(expansion);
+                canvas.saveLayer(io.github.humbleui.types.Rect.makeXYWH(
+                        card.x() - fadePad, card.y() - fadePad,
+                        card.w() + fadePad * 2.0F, card.h() + fadePad * 2.0F), foldFade);
+            }
+            if (press != null) {
+                press.begin(canvas, card.x() + card.w() / 2.0F,
+                        card.y() + card.h() / 2.0F);
+            }
+            try {
+                UiCards.drawCard(canvas, card.x(), card.y(), card.w(), card.h(),
+                        UiTokens.settingsRowRadius(), 0.0F);
+                canvas.save();
+                try {
+                    // Washes and dividers clip to the card's rounding, so the
+                    // first and last rows' bands never bleed past the corners.
+                    SkiaDraw.clip(canvas, card.x(), card.y(), card.w(), card.h(),
+                            UiTokens.settingsRowRadius());
+                    float pad = UiTokens.SETTINGS_ROW_PAD;
+                    for (int j = start; j < end; j++) {
+                        Row row = rows.get(j);
+                        UiLayout.Rect rect = rowRect(section, rows, j, scrollY, layout);
+                        boolean over = interactive
+                                && vmx >= rect.x() && vmx <= rect.right()
+                                && vmy >= rect.y() && vmy <= rect.bottom();
+                        if (over) {
+                            hovered = j;
+                        }
+                        if (interactive) {
+                            drawnRowIndex = j;
+                        }
+                        hoveredSwatch = -1;
+                        swatchRowIndex = -1;
+                        float rowAlpha = rowHover.getOrDefault(j, 0.0F);
+                        if (rowAlpha > 0.01F) {
+                            SkiaDraw.drawRoundedRect(canvas, rect.x(), rect.y(),
+                                    rect.w(), rect.h(), 0.0F, UiTokens.cardHover(rowAlpha));
+                        }
+                        if (j > start) {
+                            // Hairline divider, 1px at the card-edge alpha,
+                            // indented to the row pad on both sides — it owns
+                            // the seam the inter-row gap gave up.
+                            SkiaDraw.drawRoundedRect(canvas, card.x() + pad, rect.y(),
+                                    card.w() - pad * 2.0F, UiTokens.s(1.0F), 0.0F,
+                                    UiTokens.hairline());
+                        }
+                        drawRowContent(canvas, row, rect, rowAlpha, buttonFont, accent, dt);
+                    }
+                } finally {
+                    canvas.restore();
+                }
+            } finally {
+                if (press != null) {
+                    canvas.restore();
+                }
+            }
+        } finally {
+            if (foldFade != null) {
+                foldFade.close();
+                canvas.restore();
+            }
+            canvas.restore();
+        }
+        return hovered;
     }
 
     /** Map key for a per-swatch bounce spring: row index << 32 | swatch. */
@@ -1323,7 +1692,7 @@ public final class SettingsSectionPage {
     /**
      * Theme strip: title + current-preset name on the caption line, then the
      * horizontally scrollable preview cards - Default (drawn with the factory
-     * palette), then the six colour presets. Every card is a pure-code mini
+     * palette), then the eight colour presets. Every card is a pure-code mini
      * panel in its theme's own colours; the selected card wears an accent
      * hairline and the whole strip scrolls by wheel or drag.
      */
@@ -1396,7 +1765,7 @@ public final class SettingsSectionPage {
                 themeStripPressed && pressedThemeCard == index, dtMs, Animations.enabled(), w);
         press.begin(canvas, x + w / 2.0F, y + h / 2.0F);
         try {
-            SkiaDraw.drawRoundedShadow(canvas, x, y, w, h, radius, s(5), UiTokens.CARD_SHADOW);
+            SkiaDraw.drawRoundedShadow(canvas, x, y, w, h, radius, s(6), UiTokens.CARD_SHADOW);
             SkiaDraw.drawRoundedRect(canvas, x, y, w, h, radius, preview.panelBg());
             // Title bar strip + its accent dot.
             float barH = s(12);
@@ -1414,8 +1783,17 @@ public final class SettingsSectionPage {
             SkiaDraw.drawRoundedRect(canvas, x + s(23), y + s(50), w - s(30), bubbleH,
                     bubbleH / 2.0F, preview.ownBubble());
             // A faint composer strip balances the lower half of the card.
+            // Mirrors the real composer's surface construction (cardFill():
+            // card colour at the card-tint alpha over the panel) but derives
+            // from THIS preview's own card colour — the global cardCutout()
+            // reads the live theme's config and recoloured every tile's strip
+            // whenever a dark theme was active. Over the card's own panelBg
+            // ground the composite equals the cardCutout weight of this card.
+            float composerTint = Math.max(0.0F, Math.min(1.0F,
+                    AtomChatConfig.get().cardTint));
             SkiaDraw.drawRoundedRect(canvas, x + s(7), y + h - s(19), w - s(14), s(12),
-                    s(4) * preview.cornerFactor(), UiTokens.hairline());
+                    s(4) * preview.cornerFactor(),
+                    UiTokens.withAlpha(preview.card(), 255.0F * composerTint));
             if (selected) {
                 SkiaDraw.drawEdgeHighlight(canvas, x, y, w, h, radius, s(1.5F), preview.accent());
             }
@@ -1469,7 +1847,7 @@ public final class SettingsSectionPage {
                 SkiaDraw.drawRoundedRect(canvas, scx - r, cy - r, 2.0F * r, 2.0F * r, r, swatch);
                 // Theme-adaptive hairline: pale swatches stay visible on light
                 // panels, dark ones on dark panels.
-                SkiaDraw.drawRing(canvas, scx, cy, r + s(0.75F), s(1.0F), UiCards.hairlineColor());
+                SkiaDraw.drawRing(canvas, scx, cy, r + s(0.75F), s(1.0F), UiTokens.hairline());
                 if (swatch == color.value()) {
                     // Selection ring: the functional rim stroke with a breathing
                     // gap — alpha 110, polarity-picked, so the ring survives pale
@@ -1499,7 +1877,7 @@ public final class SettingsSectionPage {
         try {
             SkiaDraw.drawRoundedRect(canvas, px - r, cy - r, 2.0F * r, 2.0F * r, r,
                     UiTokens.trackRest());
-            SkiaDraw.drawRing(canvas, px, cy, r + s(0.75F), s(1.0F), UiCards.hairlineColor());
+            SkiaDraw.drawRing(canvas, px, cy, r + s(0.75F), s(1.0F), UiTokens.hairline());
             drawIconCentered(canvas, AppIcons.ICON_PLUS_PATH, px, cy, s(12),
                     textPrimary());
         } finally {
@@ -1646,9 +2024,9 @@ public final class SettingsSectionPage {
                 textX, SkiaFontRenderer.centerBaselineY(font, cy), textColor);
 
         if (group != null) {
-            boolean collapsed = collapsedColorGroups.contains(group);
             float chevron = s(7);
-            drawChevron(canvas, rightX - chevron / 2.0F, cy, chevron, collapsed, textColor);
+            drawChevron(canvas, rightX - chevron / 2.0F, cy, chevron,
+                    expansionOf(group), textColor);
         }
 
         float lineY = rect.bottom() - s(5);
@@ -1656,25 +2034,31 @@ public final class SettingsSectionPage {
                 Math.max(0.0F, rightX - textX), s(1), s(0.5F), lineColor);
     }
 
-    /** Small fold indicator: right-pointing when collapsed, down when open.
-     *  No explicit contour close: fill mode auto-closes, and Path.close() is
-     *  the resource-release method (contour close is closePath()) — calling it
-     *  inside the block frees the native path before drawPath runs (crashed). */
+    /** Small fold indicator: one right-pointing triangle — the collapsed
+     *  glyph — rotating 90° clockwise around its centre with the group's
+     *  expansion, landing exactly on the old down-pointing glyph at 1 (the
+     *  two static triangles this replaces were those two endpoints; a 90°
+     *  turn maps the first onto the second vertex-for-vertex, so the fold
+     *  reads as one motion with the rows growing beneath). Skija's Canvas
+     *  has no rotate-about-point overload (0.116.8: rotate(float) only), so
+     *  the pivot is a translate-rotate-translate-back. No explicit contour
+     *  close: fill mode auto-closes, and Path.close() is the resource-release
+     *  method (contour close is closePath()) — calling it inside the block
+     *  frees the native path before drawPath runs (crashed). */
     private static void drawChevron(Canvas canvas, float cx, float cy, float size,
-                                    boolean collapsed, int color) {
+                                    float expansion, int color) {
         try (io.github.humbleui.skija.Path path = new io.github.humbleui.skija.Path();
              Paint paint = new Paint()) {
-            if (collapsed) {
-                path.moveTo(cx - size / 2.0F, cy - size);
-                path.lineTo(cx - size / 2.0F, cy + size);
-                path.lineTo(cx + size / 2.0F, cy);
-            } else {
-                path.moveTo(cx - size, cy - size / 2.0F);
-                path.lineTo(cx + size, cy - size / 2.0F);
-                path.lineTo(cx, cy + size / 2.0F);
-            }
+            path.moveTo(cx - size / 2.0F, cy - size);
+            path.lineTo(cx - size / 2.0F, cy + size);
+            path.lineTo(cx + size / 2.0F, cy);
             paint.setColor(color);
+            canvas.save();
+            canvas.translate(cx, cy);
+            canvas.rotate(90.0F * expansion);
+            canvas.translate(-cx, -cy);
             canvas.drawPath(path, paint);
+            canvas.restore();
         }
     }
 
@@ -1919,6 +2303,11 @@ public final class SettingsSectionPage {
             SkiaDraw.drawRoundedRect(canvas, rect.x() + UiTokens.SETTINGS_ROW_PAD, avatarY,
                     avatar, avatar, avatar / 2.0F, Color.makeARGB(255, 120, 130, 145));
         }
+        // Hairline rim hugging the avatar's outer edge (face or placeholder):
+        // polarity-adaptive UiTokens.rim separates the circle from the row
+        // card behind it. Same ring language as the swatches.
+        SkiaDraw.drawRing(canvas, rect.x() + UiTokens.SETTINGS_ROW_PAD + avatar / 2.0F, avatarY + avatar / 2.0F,
+                avatar / 2.0F + s(0.75F), s(1.0F), UiTokens.rim());
 
         String name = row.player() != null ? row.player().realName() : "";
         Font nameFont = FontManager.font(UiTokens.SETTINGS_TILE_TITLE);
@@ -1947,6 +2336,10 @@ public final class SettingsSectionPage {
         List<Row> rows = rows(section);
         Font buttonFont = FontManager.font(UiTokens.FONT_QUOTE);
         for (int i = 0; i < rows.size(); i++) {
+            // Folded-away children are not clickable, same floor as drawing.
+            if (rowExpansion(rows, i) < GROUP_FOLD_MIN_DRAWN) {
+                continue;
+            }
             UiLayout.Rect rect = rowRect(section, rows, i, scrollY, layout);
             RowKind kind = rows.get(i).kind();
             RowHit hit = new RowHit(rows.get(i), i, rect.x(), rect.y(), rect.w(), rect.h(),
@@ -1965,6 +2358,10 @@ public final class SettingsSectionPage {
         for (int i = 0; i < rows.size(); i++) {
             Row row = rows.get(i);
             if (row.kind() != RowKind.SLIDER) {
+                continue;
+            }
+            // Folded-away children are not draggable, same floor as drawing.
+            if (rowExpansion(rows, i) < GROUP_FOLD_MIN_DRAWN) {
                 continue;
             }
             UiLayout.Rect rect = rowRect(section, rows, i, scrollY, layout);
@@ -2268,6 +2665,7 @@ public final class SettingsSectionPage {
         lastInteractiveHover = -1;
         rowHover.clear();
         rowPress.clear();
+        aboutCardPress.clear();
         swatchScale.clear();
         pressedRow = -1;
         pressedSwatch = -1;

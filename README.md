@@ -17,7 +17,7 @@
   <img alt="OS" src="https://img.shields.io/badge/OS-Windows%20x64-lightgrey">
   <img alt="Java" src="https://img.shields.io/badge/Java-17%2B-yellow">
   <img alt="Version" src="https://img.shields.io/github/v/release/E33EPUS/AtomChat?sort=semver">
-  <img alt="License" src="https://img.shields.io/badge/License-MIT-brightgreen">
+  <img alt="License" src="https://img.shields.io/badge/License-Apache--2.0-brightgreen">
 </p>
 
 <p align="center">
@@ -126,7 +126,7 @@ AtomChat 把原版聊天屏改造成一个独立的「手机 App」风格聊天�
 
 **为什么某条消息显示成灰色？** 客户端无法确定它是玩家消息时会保守归为系统灰字（常见于昵称插件使用了无法解析的格式）。
 
-**可以放进整合包吗？** 可以。AtomChat 代码为 MIT，无需额外授权；若分发 JAR，请保留 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) 中的第三方声明。
+**可以放进整合包吗？** 可以。AtomChat 代码为 Apache-2.0，无需额外授权；若分发 JAR，请保留 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) 中的第三方声明。
 
 ## 更多文档
 
@@ -150,6 +150,6 @@ AtomChat 把原版聊天屏改造成一个独立的「手机 App」风格聊天�
 
 ## 许可证
 
-[AtomChat 自身代码](LICENSE)为 MIT。分发的 JAR 中捆绑了 Skija（Java 绑定）、HumbleUI types、FlatLaf 与 Skia 原生库，各自保留其许可证，完整文本见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
+[AtomChat 自身代码](LICENSE)为 Apache-2.0。分发的 JAR 中捆绑了 Skija（Java 绑定）、HumbleUI types、FlatLaf 与 Skia 原生库，各自保留其许可证，完整文本见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
 
 Copyright © 2026 E33EPUS

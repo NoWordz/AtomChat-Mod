@@ -20,9 +20,8 @@ public final class SkiaDraw {
     }
 
     public static void drawRoundedRect(Canvas canvas, float x, float y, float width, float height, float radius, int color) {
-        try (Paint paint = new Paint().setColor(color).setAntiAlias(true)) {
-            canvas.drawRRect(RRect.makeXYWH(x, y, width, height, radius), paint);
-        }
+        canvas.drawRRect(RRect.makeXYWH(x, y, width, height, radius),
+                SHARED_PAINT.setColor(color).setMode(PaintMode.FILL));
     }
 
     /**
@@ -35,6 +34,19 @@ public final class SkiaDraw {
      */
     private static final java.util.Map<Float, MaskFilter> BLUR_FILTERS = new java.util.HashMap<>();
     private static final Paint SHADOW_PAINT = new Paint().setAntiAlias(true);
+
+    /**
+     * Shared mutable paint for the rounded-rect / ring / edge / image
+     * primitives: each used to build (and close) a fresh native Paint per
+     * call, dozens per frame across the whole UI. Every property a draw needs
+     * is set immediately before it — mode and stroke width ride over from the
+     * previous call, so fill paths must set FILL back explicitly. Same
+     * one-native-handle-for-life, render-thread-only trade as SHADOW_PAINT.
+     * The RRect/Rect arguments stay per-call factories on purpose: the pinned
+     * types artifact (io.github.humbleui:types:0.1.1) declares Rect/RRect
+     * fields final with no setters, so those are not reusable.
+     */
+    private static final Paint SHARED_PAINT = new Paint().setAntiAlias(true);
 
     public static void drawRoundedShadow(Canvas canvas, float x, float y, float width, float height, float radius, float blur, int color) {
         MaskFilter filter = BLUR_FILTERS.get(blur);
@@ -50,14 +62,27 @@ public final class SkiaDraw {
     }
 
     /**
+     * Two-tier shadow for the floating panel chrome (shell header, composer,
+     * bottom tab bar): a tight inner pass that hugs the surface plus a wider,
+     * fainter outer spread — the pair reads as hovering where a single blur
+     * reads as pasted on. One helper so the two passes can never drift apart
+     * between call sites; colours and blurs come from the UiTokens chrome
+     * pair. Render-thread only, like the rest of the draw path.
+     */
+    public static void drawChromeShadow(Canvas canvas, float x, float y, float width, float height, float radius) {
+        drawRoundedShadow(canvas, x, y, width, height, radius,
+                com.atom.chat.ui.UiTokens.s(6), com.atom.chat.ui.UiTokens.CHROME_SHADOW_INNER);
+        drawRoundedShadow(canvas, x, y, width, height, radius,
+                com.atom.chat.ui.UiTokens.s(12), com.atom.chat.ui.UiTokens.CHROME_SHADOW_OUTER);
+    }
+
+    /**
      * Stroke-only circle centred on (cx, cy) — the outline-ring primitive the
      * slider knob's cut-out trace and the colour-swatch hairlines share.
      */
     public static void drawRing(Canvas canvas, float cx, float cy, float radius, float strokeWidth, int color) {
-        try (Paint paint = new Paint().setColor(color).setAntiAlias(true)
-                .setMode(PaintMode.STROKE).setStrokeWidth(strokeWidth)) {
-            canvas.drawOval(Rect.makeXYWH(cx - radius, cy - radius, radius * 2.0F, radius * 2.0F), paint);
-        }
+        canvas.drawOval(Rect.makeXYWH(cx - radius, cy - radius, radius * 2.0F, radius * 2.0F),
+                SHARED_PAINT.setColor(color).setMode(PaintMode.STROKE).setStrokeWidth(strokeWidth));
     }
 
     /**
@@ -68,13 +93,11 @@ public final class SkiaDraw {
      */
     public static void drawEdgeHighlight(Canvas canvas, float x, float y, float width, float height,
                                          float radius, float strokeWidth, int color) {
-        try (Paint paint = new Paint().setColor(color).setAntiAlias(true)
-                .setMode(PaintMode.STROKE).setStrokeWidth(strokeWidth)) {
-            float inset = strokeWidth * 0.5F;
-            canvas.drawRRect(RRect.makeXYWH(x + inset, y + inset,
-                    Math.max(0.0F, width - strokeWidth), Math.max(0.0F, height - strokeWidth),
-                    Math.max(0.0F, radius - inset)), paint);
-        }
+        float inset = strokeWidth * 0.5F;
+        canvas.drawRRect(RRect.makeXYWH(x + inset, y + inset,
+                        Math.max(0.0F, width - strokeWidth), Math.max(0.0F, height - strokeWidth),
+                        Math.max(0.0F, radius - inset)),
+                SHARED_PAINT.setColor(color).setMode(PaintMode.STROKE).setStrokeWidth(strokeWidth));
     }
 
     public static void drawRoundedImage(Canvas canvas, Image image, float x, float y, float width, float height, float radius) {
@@ -89,6 +112,46 @@ public final class SkiaDraw {
         try {
             canvas.clipRRect(RRect.makeXYWH(x, y, width, height, radius), ClipMode.INTERSECT, true);
             Rect src = Rect.makeXYWH(0, 0, image.getWidth(), image.getHeight());
+            Rect dst = Rect.makeXYWH(x, y, width, height);
+            // drawImageRect folds the paint's colour/alpha into the image, so
+            // the shared paint must go back to the fresh-Paint default
+            // (opaque black) instead of inheriting the last fill's colour.
+            canvas.drawImageRect(image, src, dst, mode,
+                    SHARED_PAINT.setColor(0xFF000000).setMode(PaintMode.FILL), false);
+        } finally {
+            canvas.restore();
+        }
+    }
+
+    /**
+     * Draws an image into a rounded rect with a centred cover crop (scale to
+     * cover, never stretch): the source rect is the largest centred window
+     * with the destination's aspect, so a photo fills the whole surface and
+     * the overflow is cropped evenly on both axes. Used by the profile banner,
+     * whose aspect depends on the panel width and is therefore unknown to the
+     * decode cache.
+     */
+    public static void drawImageCover(Canvas canvas, Image image, float x, float y, float width, float height,
+                                      float radius, SamplingMode mode) {
+        if (image == null || width <= 0.0F || height <= 0.0F) {
+            return;
+        }
+        canvas.save();
+        try {
+            clip(canvas, x, y, width, height, radius);
+            float srcW;
+            float srcH;
+            if (image.getWidth() * height > image.getHeight() * width) {
+                // Image is proportionally wider: crop the sides.
+                srcH = image.getHeight();
+                srcW = srcH * width / height;
+            } else {
+                // Image is proportionally taller (or exact): crop top/bottom.
+                srcW = image.getWidth();
+                srcH = srcW * height / width;
+            }
+            Rect src = Rect.makeXYWH((image.getWidth() - srcW) / 2.0F,
+                    (image.getHeight() - srcH) / 2.0F, srcW, srcH);
             Rect dst = Rect.makeXYWH(x, y, width, height);
             try (Paint paint = new Paint().setAntiAlias(true)) {
                 canvas.drawImageRect(image, src, dst, mode, paint, false);

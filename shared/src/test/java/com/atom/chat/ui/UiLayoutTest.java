@@ -51,17 +51,22 @@ class UiLayoutTest {
         assertTrue(l.sendBtn.h() < l.imageBtn.h(), "send is shorter than the action square");
         assertEquals(UiTokens.BUTTON_W, l.sendBtn.w(), EPS, "send keeps BUTTON_W");
         assertEquals(UiTokens.BUTTON_H, l.sendBtn.h(), EPS, "send keeps BUTTON_H");
-        // The taller family owns the row band, and the bar's top pad is the gap
-        // between the row and the bar edge; the shorter capsule centres inside.
-        assertEquals(l.inputBar.y() + UiTokens.INPUT_ROW_PAD, l.imageBtn.y(), EPS,
-                "the row's top gap is the bar's top pad");
-        assertEquals(l.inputBar.y() + UiTokens.INPUT_ROW_PAD + UiTokens.INPUT_ROW_H, l.imageBtn.bottom(), EPS,
+        // The taller family owns the row band, and the bar's top gap is the
+        // header family's edge inset; the shorter capsule centres inside.
+        assertEquals(l.inputBar.y() + UiTokens.EDGE_CONTROL_INSET, l.imageBtn.y(), EPS,
+                "the keys' top gap is the header family's edge inset");
+        assertEquals(l.inputBar.y() + UiTokens.EDGE_CONTROL_INSET + UiTokens.INPUT_ROW_H, l.imageBtn.bottom(), EPS,
                 "the taller family fills the row band");
         assertEquals(l.imageBtn.y() - l.sendBtn.y(), l.sendBtn.bottom() - l.imageBtn.bottom(), EPS,
                 "the shorter capsule is inset equally at both ends of the band");
-        assertEquals(l.imageBtn.x() - l.inputBar.x(), l.inputBar.right() - l.sendBtn.right(), EPS,
-                "button row padding mirrors left/right");
-        assertEquals(l.imageBtn.x() - l.inputBar.x(), UiTokens.INPUT_ROW_PAD, EPS, "row uses INPUT_ROW_PAD");
+        // Two gap families by design: the square keys sit at the header's
+        // EDGE_CONTROL_INSET off the bar's left edge, while the Send capsule
+        // keeps its own designed INPUT_ROW_PAD on the right — the row does
+        // not mirror any more, and that is the contract.
+        assertEquals(UiTokens.EDGE_CONTROL_INSET, l.imageBtn.x() - l.inputBar.x(), EPS,
+                "keys sit at the header family's edge inset");
+        assertEquals(UiTokens.INPUT_ROW_PAD, l.inputBar.right() - l.sendBtn.right(), EPS,
+                "send keeps its designed right gap");
 
         // Breathing space below the input bar.
         assertEquals(panel.bottom() - l.inputBar.bottom(), UiTokens.PANEL_BOTTOM_PAD, EPS, "bottom breathing space");
@@ -102,8 +107,8 @@ class UiLayoutTest {
             assertEquals(grown.inputBar.y(), grown.list.bottom(), EPS,
                     "list bottom meets the grown bar top, no overlap");
             // Both families ride up with the bar's top edge, on one shared axis.
-            assertEquals(grown.inputBar.y() + UiTokens.INPUT_ROW_PAD, grown.imageBtn.y(), EPS,
-                    "action row pinned to the bar top");
+            assertEquals(grown.inputBar.y() + UiTokens.EDGE_CONTROL_INSET, grown.imageBtn.y(), EPS,
+                    "action row pinned to the bar top at the header inset");
             assertEquals(grown.imageBtn.y() + grown.imageBtn.h() / 2.0F,
                     grown.sendBtn.y() + grown.sendBtn.h() / 2.0F, EPS,
                     "both families still share the row axis, extra " + extra);
@@ -151,20 +156,45 @@ class UiLayoutTest {
     }
 
     /**
-     * Approved baseline for the composer row's edge inset, pinned for the same
-     * reason as {@link #HEADER_BASELINE_SIDE}: s(8) = 10 px, the value the
-     * composer shipped with through v0.2.15. v0.2.16 briefly unified it with
-     * the header keys' tighter s(4) = 5 px inset, which squeezed the row flat
-     * against the bar edge; the user reports sent it back. The header keys
-     * keep their own tighter inset — two shapes, two insets, and this pin
-     * keeps the row's roomier one from silently drifting away again.
+     * Approved baseline for the header family's edge inset: s(4) = 5 px, the
+     * gap the header's back / filter keys keep to their card. The composer's
+     * square keys joined that family, so their left and top gap against the
+     * bar is this number — the v0.2.15-era 10 px row pad no longer insets the
+     * keys. The Send capsule deliberately does NOT follow: it keeps the
+     * s(8) = 10 px side gap of its own shipped design.
      */
-    private static final float EDGE_INSET_BASELINE = 10.0F;
+    private static final float HEADER_EDGE_INSET_BASELINE = 5.0F;
 
     @Test
-    void composerRowInsetStaysAtTheShippedTenPx() {
-        assertEquals(EDGE_INSET_BASELINE, UiTokens.INPUT_ROW_PAD, EPS,
-                "the composer row pad is the shipped 10 px edge inset");
+    void squareKeysSitAtTheHeaderInsetSendKeepsItsDesignedGap() {
+        UiLayout l = UiLayout.of(24, 100, 525, 975);
+        // The square keys are the header family: left and top gap both equal
+        // EDGE_CONTROL_INSET, the approved 5 px the header keys sit at.
+        assertEquals(UiTokens.EDGE_CONTROL_INSET, l.imageBtn.x() - l.inputBar.x(), EPS,
+                "keys' left gap is the header edge inset");
+        assertEquals(UiTokens.EDGE_CONTROL_INSET, l.imageBtn.y() - l.inputBar.y(), EPS,
+                "keys' top gap is the header edge inset");
+        assertEquals(HEADER_EDGE_INSET_BASELINE, l.imageBtn.y() - l.inputBar.y(), EPS,
+                "the header family's inset is the approved 5 px baseline");
+        // Send keeps its designed spacing: the 10 px right gap it shipped with,
+        // and centring on the row band axis rather than the keys' inset.
+        assertEquals(UiTokens.INPUT_ROW_PAD, l.inputBar.right() - l.sendBtn.right(), EPS,
+                "send's right gap stays the shipped 10 px");
+        float axis = l.inputBar.y() + UiTokens.EDGE_CONTROL_INSET + UiTokens.INPUT_ROW_H / 2.0F;
+        assertEquals(axis - UiTokens.BUTTON_H / 2.0F, l.sendBtn.y(), EPS,
+                "send stays centred on the row band axis");
+        // Its top gap is therefore the band centring plus the keys' inset:
+        // (INPUT_ROW_H - BUTTON_H)/2 + EDGE_CONTROL_INSET = 3.75 + 5 = 8.75 px.
+        assertEquals((UiTokens.INPUT_ROW_H - UiTokens.BUTTON_H) / 2.0F + UiTokens.EDGE_CONTROL_INSET,
+                l.sendBtn.y() - l.inputBar.y(), EPS,
+                "send's top gap is 8.75 px: band centring over the key inset");
+        // The bar's height is the new parts: key inset above, row band, text
+        // band, Send-family pad below — 5 + 45 + 45 + 10 = 105.
+        assertEquals(UiTokens.EDGE_CONTROL_INSET + UiTokens.INPUT_ROW_H
+                + UiTokens.INPUT_TEXT_BAND + UiTokens.INPUT_ROW_PAD, UiTokens.INPUT_HEIGHT, EPS,
+                "INPUT_HEIGHT is built from the two families' parts");
+        assertEquals(105.0F, UiTokens.INPUT_HEIGHT, EPS,
+                "one-line bar baseline is 105 px (was 110)");
     }
 
     /**

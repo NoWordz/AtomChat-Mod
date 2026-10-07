@@ -6,10 +6,11 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Guards for the continuous corner-radius knob: the 28 reference reproduces
- * the shipped default look, the slider maximum is exactly 1.25x, and 0 — pure
- * square — must hold at factor 0, so every {@link UiTokens#radius(float)}
- * call collapses to a hard zero no matter the base radius.
+ * Guards for the continuous corner-radius knob: the knob is in real screen
+ * pixels, so the {@code 20} default reproduces the shipped default look
+ * (factor 1), the slider maximum is exactly 1.25x, and 0 — pure square — must
+ * hold at factor 0, so every {@link UiTokens#radius(float)} call collapses to
+ * a hard zero no matter the base radius.
  *
  * <p>Also guards the colour-derivation language on both surface
  * polarities: the accent-dyed, alpha-constant hover wash
@@ -28,8 +29,8 @@ class UiTokensTest {
     void zeroRadiusIsSquareEverywhere() {
         assertEquals(0.0F, UiTokens.radiusFactor(0f), 0.0F);
         // The full radius path collapses to a hard zero for every base the UI
-        // draws with (chrome 18, cards 12, pills 8...).
-        for (float base : new float[]{3f, 8f, 12f, 18f, 28f}) {
+        // draws with (panel 28, cards 16, pills 8...).
+        for (float base : new float[]{3f, 8f, 16f, 28f}) {
             assertEquals(0.0F, UiTokens.s(base) * UiTokens.radiusFactor(0f), 0.0F,
                     "radius(" + base + ") must be 0 at cornerRadius 0");
         }
@@ -37,15 +38,16 @@ class UiTokensTest {
 
     @Test
     void referenceRadiusIsTheShippedLook() {
-        assertEquals(1.0F, UiTokens.radiusFactor(28f), 1e-6F,
-                "28 is the shipped default (the old large)");
-        assertEquals(UiTokens.s(12), UiTokens.s(12) * UiTokens.radiusFactor(28f), 1e-4F);
+        assertEquals(1.0F, UiTokens.radiusFactor(20f), 1e-6F,
+                "20px is the shipped default (factor = cornerRadius / 20)");
+        assertEquals(UiTokens.s(16), UiTokens.s(16) * UiTokens.radiusFactor(20f), 1e-4F,
+                "at the default the card family rounds at exactly s(16) = 20px");
     }
 
     @Test
     void sliderMaximumIsOnePointTwoFive() {
-        assertEquals(1.25F, UiTokens.radiusFactor(UiTokens.s(28)), 1e-6F,
-                "s(28) is the slider maximum");
+        assertEquals(1.25F, UiTokens.radiusFactor(UiTokens.s(20)), 1e-6F,
+                "s(20) is the slider maximum");
     }
 
     @Test
@@ -53,6 +55,10 @@ class UiTokensTest {
         assertTrue(UiTokens.radiusFactor(-5f) >= 0.0F, "negative clamps to square");
         assertEquals(0.0F, UiTokens.radiusFactor(-5f), 0.0F, "negative clamps to exactly 0");
         assertEquals(1.25F, UiTokens.radiusFactor(999f), 1e-6F, "oversized clamps to the maximum");
+        // The old reference-px default 28 would be factor 1.4 in the new
+        // pixel formula — past the shipped ceiling, so it must clamp.
+        assertEquals(1.25F, UiTokens.radiusFactor(28f), 1e-6F,
+                "the old 28 default overshoots and clamps to the maximum");
     }
 
     // --- cardHover: accent-dyed, polarity-adaptive, constant-alpha wash ---

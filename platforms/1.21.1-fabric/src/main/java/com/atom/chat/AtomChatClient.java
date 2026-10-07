@@ -1,5 +1,6 @@
 package com.atom.chat;
 
+import com.atom.chat.banner.BannerStore;
 import com.atom.chat.config.AtomChatConfig;
 import com.atom.chat.image.ImageLoader;
 import com.atom.chat.notification.NotificationBanner;
@@ -42,6 +43,9 @@ public class AtomChatClient implements ClientModInitializer {
         WallpaperStore.init(
                 net.fabricmc.loader.api.FabricLoader.getInstance().getConfigDir()
                         .resolve("atomchat/wallpaper"));
+        BannerStore.init(
+                net.fabricmc.loader.api.FabricLoader.getInstance().getConfigDir()
+                        .resolve("atomchat"));
         ImageLoader.get().init(CacheDirs.imageCacheDir());
         com.atom.chat.net.AvatarCompanionClient.init();
         com.atom.chat.net.MediaCompanionClient.init();

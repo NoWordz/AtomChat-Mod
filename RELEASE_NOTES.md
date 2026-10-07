@@ -1,5 +1,65 @@
 # Release Notes
 
+## v0.3.0
+
+本版重做了整套界面动效与个人档案页，统一了卡片与描边语言，加入双轴缩放与自适应边框，并把许可换为 Apache-2.0。三个发布目标（Fabric 1.21.1 / NeoForge 1.21.1 / Forge 1.20.1）同步。
+
+**新增**
+
+- **导航动画风格**单项选择（滑动 / 缩放，默认缩放），标签页与页面切换共用。
+- **新主题「薄暮」「薄荷」**（半透明面板），主题总数增至九张。
+- **自定义壁纸 / 头图 / 头像裁剪**，图片本地托管。
+- **「内容缩放」滑条**：手机大小不变，内部文字与按钮随其缩放。
+
+**更改**
+
+- **动效照指数趋近重做**：页面切换、开屏与关屏统一为帧率无关的启动快、落定稳；开屏跟随导航风格（缩放 0.94 放大 / 滑动横入），关屏更快。
+- **个人档案页按 QQ 主页重做**：可自定义头图（带裁剪）、头像跨压头图下沿、统计瓦片、信息大卡与身份卡，头像与头图加大。
+- **整卡语言统一**（关于页第三方、mod 信息、档案信息区与身份卡），行间发丝分割、整卡缩放；悬停高亮统一为强调色染色。
+- 输入栏按钮整组重做，弹跳统一为每边 4 像素；界面外框改双层外阴影。
+- **描边完全按所选颜色绘制**（不再自动换成灰），许可换为 **Apache-2.0**。
+
+**修复**
+
+- 个性签名无法输入、头像描边被裁一段、自定义头图底部亮带。
+- 自定义壁纸后「背景模糊」副标题显示成键名。
+- 浅色主题下滚动条 / 滑条轨道 / 内嵌输入框不可见；深色主题下浅色预览卡串色。
+- 轮廓设为纯黑却显示为灰。
+
+**性能**
+
+- 渲染热路径低风险优化：缓存字体测量与阴影滤镜，去掉每帧重复计算。
+
+----
+
+This release rebuilds the interface motion and the profile page, unifies the card and border language, adds dual-axis scaling and adaptive outlines, and moves the license to Apache-2.0. All three targets (Fabric 1.21.1 / NeoForge 1.21.1 / Forge 1.20.1) ship together.
+
+**Added**
+
+- **Navigation animation style** single choice (slide / zoom, default zoom), shared by tabs and page pushes.
+- **Two new themes "Dusk" and "Mint"** (translucent panels); nine themes in total.
+- **Custom wallpaper / banner / avatar cropping**, images hosted locally.
+- **"Content scale" slider**: the phone frame keeps its size while the contents scale.
+
+**Changed**
+
+- **Motion rebuilt on an exponential approach**: transitions, open and close are frame-rate independent, fast to start and settled at the end; opening follows the navigation style (zoom from 0.94 / slide in from the side) and closing is faster.
+- **The profile page is rebuilt after the QQ home page**: a customisable banner (with cropping), an avatar straddling its edge, stat tiles, one merged info card and an identity card; avatar and banner are larger.
+- **One card language** (about's third-party list, mod info, profile info block and identity card) with hairline dividers and whole-card scaling; hover highlights are one accent-tinted language.
+- The composer buttons are rebuilt with a 4-pixel travel bounce; the panel frame gets a two-pass shadow.
+- **The outline is drawn in exactly the picked colour** (no automatic substitution); the license is now **Apache-2.0**.
+
+**Fixed**
+
+- The signature could not be typed into, the avatar ring was clipped, and a custom banner's lower edge showed a bright band.
+- With a custom wallpaper set, the blur switch's subtitle showed a raw key name.
+- Scrollbars, slider tracks and inline fields were invisible on light themes; light preview cards picked up a dark tint on dark themes.
+- An outline set to pure black showed as grey.
+
+**Performance**
+
+- Low-risk hot-path work: cached font measurement and shadow filters, removed per-frame recomputation.
+
 ## v0.2.17
 
 本版把悬停高亮统一成「强调色染色 + 明暗自适应」的一种语言，边框回到发丝感，并修掉 0.2.16 引入的几处视觉回归。三个发布目标同步。

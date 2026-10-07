@@ -398,7 +398,9 @@ public final class ColorPickerOverlay {
             float cw = cardW(panel);
             float ch = cardH();
             SkiaDraw.drawRoundedShadow(canvas, cx, cy, cw, ch, s(14), s(8),
-                    Color.makeARGB((int) (0.45F * alpha), 0, 0, 0));
+                    // No whole-card alpha layer here: every element
+                    // scales its own alpha by the fade, the shadow too.
+                    UiTokens.withAlpha(UiTokens.CHROME_SHADOW, 100.0F * anim));
             SkiaDraw.drawRoundedRect(canvas, cx, cy, cw, ch, s(14),
                     Color.makeARGB((int) (0.96F * alpha), 32, 36, 46));
 

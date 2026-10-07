@@ -7,7 +7,7 @@
   "authors": [
     "E33EPUS"
   ],
-  "license": "MIT",
+  "license": "Apache-2.0",
   "environment": "*",
   "icon": "assets/atomchat/logo.png",
   "contact": {

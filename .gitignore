@@ -8,3 +8,6 @@ logs/
 .vscode/
 
 .worktrees/
+
+# Subagent review/intermediate artifacts (never shipped)
+.review-*

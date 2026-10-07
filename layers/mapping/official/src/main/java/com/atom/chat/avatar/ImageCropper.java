@@ -449,7 +449,10 @@ public final class ImageCropper {
     private void drawRoundButton(Canvas canvas, float cx, float cy, Path icon, float hover, int alpha) {
         float r = s(24);
         SkiaDraw.drawRoundedShadow(canvas, cx - r, cy - r, 2.0F * r, 2.0F * r, r, s(6),
-                Color.makeARGB((int) (0.4F * alpha), 0, 0, 0));
+                // The button fades itself (no alpha layer above it),
+                // so the shadow rides the same fade instead of
+                // hard-cutting at the last frame.
+                UiTokens.withAlpha(UiTokens.CHROME_SHADOW, 100.0F * alpha / 255.0F));
         SkiaDraw.drawRoundedRect(canvas, cx - r, cy - r, 2.0F * r, 2.0F * r, r,
                 Color.makeARGB((int) (0.92F * alpha), 35, 39, 47));
         if (hover > 0.01F) {

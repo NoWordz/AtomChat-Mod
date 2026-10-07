@@ -1,5 +1,6 @@
 package com.atom.chat.ui;
 
+import com.atom.chat.config.AtomChatConfig;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -84,5 +85,39 @@ class UiMotionTest {
                 "message entrance needs >= 200ms to read as a fade, got " + UiMotion.MESSAGE_MS);
         assertTrue(UiMotion.MESSAGE_MS <= 300,
                 "message entrance must not drag, got " + UiMotion.MESSAGE_MS);
+    }
+
+    @Test
+    void pageNavTimingFollowsTheStyle() {
+        // The slide keeps the snappy 140ms tween window; the zoom is the
+        // Melodify serial two-phase settle driven by expApproach at a 50ms
+        // tau per phase (no tween window at all).
+        assertEquals(140L, UiMotion.PAGE_NAV_MS,
+                "slide nav keeps the 140ms window");
+        assertEquals(50.0F, UiMotion.PAGE_NAV_TAU_MS,
+                "zoom nav runs each phase at the 50ms Melodify tau");
+    }
+
+    @Test
+    void expApproachIsExponentialAndFrameRateIndependent() {
+        // tau 0 snaps (the decorative-motion-off path).
+        assertEquals(1.0F, UiMotion.expApproach(0.0F, 1.0F, 16.0F, 0.0F),
+                "tau 0 snaps to the target");
+        // Two 8ms steps close exactly as much as one 16ms step.
+        float one = UiMotion.expApproach(0.0F, 1.0F, 16.0F, 50.0F);
+        float two = UiMotion.expApproach(0.0F, 1.0F, 8.0F, 50.0F);
+        two = UiMotion.expApproach(two, 1.0F, 8.0F, 50.0F);
+        assertEquals(one, two, 1e-6F,
+                "frame-rate independent: 16ms once == 8ms twice");
+        // Peak speed at the start, decaying forever: the first step covers
+        // more distance than the second.
+        float first = UiMotion.expApproach(0.0F, 1.0F, 16.0F, 50.0F);
+        float second = UiMotion.expApproach(first, 1.0F, 16.0F, 50.0F);
+        assertTrue(first > second - first + 1e-6F,
+                "first step travels more than the second");
+        // Snaps once within 0.001 of the target.
+        float nearly = 0.9995F;
+        assertEquals(1.0F, UiMotion.expApproach(nearly, 1.0F, 16.0F, 50.0F),
+                "converges by snapping inside the 0.001 epsilon");
     }
 }

@@ -597,6 +597,11 @@ public final class ConversationListPage {
         } else {
             SkiaDraw.drawRoundedRect(canvas, x, y, size, size, size / 2.0F, Color.makeARGB(255, 120, 130, 145));
         }
+        // Hairline rim hugging the avatar's outer edge (face or placeholder):
+        // polarity-adaptive UiTokens.rim separates the circle from the row
+        // card behind it. Same ring language as the swatches.
+        SkiaDraw.drawRing(canvas, x + size / 2.0F, y + size / 2.0F,
+                size / 2.0F + UiTokens.s(0.75F), UiTokens.s(1.0F), UiTokens.rim());
     }
 
     private static String previewText(Row row) {
@@ -669,14 +674,12 @@ public final class ConversationListPage {
     }
 
     private static String truncateToWidth(Font font, String text, float maxW) {
-        if (text.isEmpty() || maxW <= 0.0F || SkiaFontRenderer.getStringWidth(font, text) <= maxW) {
-            return text;
-        }
-        String t = text;
-        while (t.length() > 1 && SkiaFontRenderer.getStringWidth(font, t + "…") > maxW) {
-            t = t.substring(0, t.length() - 1);
-        }
-        return t + "…";
+        // Binary search in SkiaFontRenderer: the old per-char walk re-shaped a
+        // fresh "t + …" string per character trimmed for every list row, every
+        // frame, and its unique keys flushed WIDTH_CACHE on the way through.
+        // Edge answers match the old walk exactly (empty text and a
+        // zero/negative budget both come back untouched).
+        return SkiaFontRenderer.truncate(font, text, maxW);
     }
 
     private static void drawIconCentered(Canvas canvas, Path icon, float cx, float cy,

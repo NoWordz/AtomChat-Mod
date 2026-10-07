@@ -10,11 +10,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * Guards for the switch's colour math, on the package-private pure seams
  * extracted from the render path ({@link ToggleSwitch#trackOff(boolean)},
- * {@link ToggleSwitch#onRim(float, float)}, {@link ToggleSwitch#dim(int, float)}):
- * the on-rim is the functional alpha-110 stroke ({@link UiTokens#rim(int)},
- * the one outline exempt from the hairline language) faded in with the
- * accent, the off track flips polarity against the card surface (both
- * branches neutral), and the disabled state dims alpha only, to 40%.
+ * {@link ToggleSwitch#dim(int, float)}): the off track flips polarity
+ * against the card surface (both branches neutral), and the disabled state
+ * dims alpha only, to 40%. The on state is the bare accent track — the rim
+ * stroke was retired at the owner's request.
  */
 class ToggleSwitchTest {
 
@@ -28,37 +27,6 @@ class ToggleSwitchTest {
                 "dark card: solid dim grey (255, 58, 58, 62)");
         assertEquals(0x6E1E1E22, light,
                 "light card: near-black at 110 alpha (110, 30, 30, 34)");
-    }
-
-    // --- on rim: the functional alpha-110 stroke, faded with progress ---
-
-    /** The switch rim resolved through the explicit-base seam (dark card → white). */
-    private static final int RIM = UiTokens.rim(0xFF16191F);
-
-    @Test
-    void onRimIsTheSwitchRimAtFullProgress() {
-        assertEquals(RIM, ToggleSwitch.onRim(RIM, 1.0F, 1.0F),
-                "the rim at full progress is exactly the switch rim token");
-    }
-
-    @Test
-    void onRimFadesInWithProgressAlphaOnly() {
-        float p = 0.5F;
-        int half = ToggleSwitch.onRim(RIM, p, 1.0F);
-        int expectedAlpha = Math.round(((RIM >>> 24) & 0xFF) * p);
-        assertEquals(expectedAlpha, (half >>> 24) & 0xFF,
-                "alpha fades with the on progress");
-        assertEquals(RIM & 0x00FFFFFF, half & 0x00FFFFFF,
-                "the fade is alpha-only, RGB untouched");
-    }
-
-    @Test
-    void onRimCombinesProgressWithTheDisabledOpacity() {
-        // p and op multiply: 0.5 progress at 40% disabled opacity leaves 20%
-        // of the rim alpha.
-        int d = ToggleSwitch.onRim(RIM, 0.5F, ToggleSwitch.DISABLED_OPACITY);
-        assertEquals(Math.round(((RIM >>> 24) & 0xFF) * 0.2F), (d >>> 24) & 0xFF,
-                "progress and opacity compose multiplicatively");
     }
 
     // --- disabled: alpha-only dim to 40% ---

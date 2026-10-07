@@ -1,7 +1,7 @@
 # Third-Party Notices
 
 AtomChat distributes a Minecraft mod JAR that bundles third-party libraries.
-AtomChat's own code is MIT licensed (see LICENSE); each bundled component keeps
+AtomChat's own code is Apache-2.0 licensed (see LICENSE); each bundled component keeps
 its own copyright and license. This file collects the required notices.
 
 ## Bundled components

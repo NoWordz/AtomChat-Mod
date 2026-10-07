@@ -17,8 +17,11 @@ public final class UiTokens {
      * popups. Chat bubbles are deliberately excluded (their radius is part of
      * the message identity), so bubble draws keep using {@link #BUBBLE_RADIUS}.
      * Driven by the continuous {@code cornerRadius} config knob through
-     * {@link #radiusFactor(float)}: 0 gives hard 0-radius (pure square) calls
-     * on every surface.
+     * {@link #radiusFactor(float)}: the knob is in 1080p-basis pixels and
+     * rides the whole uiDensity (vanilla scale × uiScale × contentScale),
+     * so the drawn radius scales with it rather than staying pinned to
+     * physical pixels — the default {@code 20} is factor 1, while 0 gives
+     * hard 0-radius (pure square) calls on every surface.
      */
     public static float radius(float v) {
         return s(v) * radiusFactor(
@@ -26,14 +29,39 @@ public final class UiTokens {
     }
 
     /**
-     * Radius multiplier for a configured corner radius: {@code 0} is square
-     * (factor 0 everywhere), the {@code 28} reference is the shipped default
-     * look (factor 1, the old "large"), the slider maximum {@code s(28)} is
-     * 1.25. Values outside 0..s(28) clamp.
+     * Radius multiplier for a configured corner radius. The knob is in
+     * 1080p-basis pixels (it scales with the UI density, not pinned to
+     * physical pixels): {@code factor = cornerRadius / 20}, so the {@code 20}
+     * default is factor 1 and {@code 0} is square (factor 0 everywhere). The
+     * product clamps to the shipped 0..1.25 span, which is also where the
+     * slider maximum {@code s(20)} lands at the default scale.
+     *
+     * <p>The denominator was {@code 28} while the knob was on the reference-px
+     * scale; a config file from that era is rescaled once on load, so its
+     * stored 28 arrives here as 20 (see
+     * {@code AtomChatConfig#migratePixelRadius()}).</p>
      */
     public static float radiusFactor(float cornerRadius) {
-        float r = Math.max(0.0F, Math.min(cornerRadius, s(28)));
-        return r / 28f;
+        return Math.max(0.0F, Math.min(cornerRadius / 20f, 1.25F));
+    }
+
+    /**
+     * Shared card-family radius: every content card (settings tiles, settings
+     * rows, profile rows, notification banners) rounds at this one base, so
+     * the slider moves them all together. At the default knob it reproduces
+     * s(16) in 1080p-basis pixels.
+     */
+    public static float cardRadius() {
+        return radius(16);
+    }
+
+    /**
+     * Floating-chrome radius: the composer input bar and the bottom tab bar
+     * round at this one tier, one step looser than the card family, so the two
+     * bars cannot drift apart. One token owns them both.
+     */
+    public static float chromeRadius() {
+        return radius(18);
     }
 
     /**
@@ -120,6 +148,16 @@ public final class UiTokens {
         return com.atom.chat.theme.ThemeService.colorIsLight(fill)
                 ? io.github.humbleui.skija.Color.makeARGB(255, 28, 25, 1)
                 : io.github.humbleui.skija.Color.makeARGB(255, 255, 255, 255);
+    }
+
+    /**
+     * The reply / quote pill tint: the accent held at the alpha the old
+     * hardcoded blue (74, 144, 226)@90 shipped with. The composer's reply
+     * bar and the quoted-message surfaces draw this one derived colour, so
+     * a reply reads as the theme's own accent instead of a foreign blue.
+     */
+    public static int quoteAccent(int accent) {
+        return withAlpha(accent, 90.0F);
     }
 
     /**
@@ -223,14 +261,32 @@ public final class UiTokens {
         return radius(28);
     }
 
-    /** Shared drop-shadow colour for floating chrome (header, composer, tab bar). */
+    /**
+     * Single-tier drop-shadow colour for floating chrome. The panel bars
+     * (header, composer, tab bar) have moved to the two-tier pair below
+     * ({@link #CHROME_SHADOW_INNER} / {@link #CHROME_SHADOW_OUTER} via
+     * {@code SkiaDraw.drawChromeShadow}); this one stays for the small floaters
+     * that keep the single-pass language (jump FAB, quick-phrase panel).
+     */
     public static final int CHROME_SHADOW = io.github.humbleui.skija.Color.makeARGB(100, 0, 0, 0);
+    /** Two-tier chrome shadow, inner pass: tight blur hugging the surface. */
+    public static final int CHROME_SHADOW_INNER = io.github.humbleui.skija.Color.makeARGB(70, 0, 0, 0);
+    /** Two-tier chrome shadow, outer pass: wider, softer spread. */
+    public static final int CHROME_SHADOW_OUTER = io.github.humbleui.skija.Color.makeARGB(45, 0, 0, 0);
     /**
      * The lighter elevation tier for content cards (settings rows, tiles,
      * preview cards): low alpha, small blur — enough to lift a card off the
      * panel without the weight of floating chrome.
      */
     public static final int CARD_SHADOW = io.github.humbleui.skija.Color.makeARGB(38, 0, 0, 0);
+    /**
+     * Unified base colour of every fixed dark popup plate — the context menus
+     * and the emoji / quick-phrase panels. These float above arbitrary content
+     * whose polarity no theme token knows, so they do not follow the theme:
+     * they all share this one fixed dark surface, and the plate constants
+     * elsewhere reference this token so the family cannot drift apart.
+     */
+    public static final int SKIN_PANEL = io.github.humbleui.skija.Color.makeARGB(245, 35, 39, 47);
     public static final float PANEL_ANCHOR_X = s(24);
     public static final float PANEL_TOP_GAP = s(8);
 
@@ -264,13 +320,16 @@ public final class UiTokens {
     public static final float EDGE_CONTROL_INSET = s(4);
 
     // Composer row. Two button families share one row and deliberately do NOT
-    // share a box: the three keys (image / emoji / phrase) are square and take
-    // the header action button's own side, with that button's insets and radius
-    // (s(4) between neighbours, s(8) radius, s(18) glyph), while Send keeps the
-    // wider accent capsule it has always had. Their heights differ by design -
-    // s(36) against s(30) - so the row is as tall as the taller family and both
-    // are centred on that row's axis: Send sits s(3) inside the key band top and
-    // bottom instead of on a line of its own.
+    // share a box - or an edge inset. The three keys (image / emoji / phrase)
+    // are square and belong to the header action family: the header button's
+    // own side, radius and s(4) edge inset (EDGE_CONTROL_INSET), so they sit
+    // against the bar's left edge and top exactly like the back / filter keys
+    // sit in the header card. Send keeps the wider accent capsule it has
+    // always had, and with it the roomier s(8) side gap of its own design
+    // (INPUT_ROW_PAD) instead of the key family's tighter inset. Their heights
+    // differ by design - s(36) against s(30) - so the row is as tall as the
+    // taller family and both are centred on that row's axis: Send sits s(3)
+    // inside the key band top and bottom instead of on a line of its own.
     public static final float BUTTON_W = s(56);
     public static final float BUTTON_H = s(30);
     public static final float BUTTON_RADIUS = s(9);
@@ -283,19 +342,20 @@ public final class UiTokens {
     public static final int INPUT_MAX_LINES = 2;
     public static final float INPUT_BAR_PAD = s(12);
     /**
-     * Edge inset of the composer's button row against its bar (left, right and
-     * the gap above the row). s(8) = 10 px, the shipped v0.2.15 value: the
-     * v0.2.16 unification with the header keys' tighter s(4) inset squeezed
-     * the row flat against the bar edge, and the roomier inset was restored
-     * by user report. The header keys keep their own s(4)
-     * ({@link #EDGE_CONTROL_INSET}) — the two families are different shapes
-     * and no longer pretend to share one inset.
+     * The composer's Send-side breathing room: the gap between the Send
+     * capsule and the bar's right edge, and the bar's bottom pad below the
+     * text band. s(8) = 10 px, the value the capsule shipped with through
+     * v0.2.15 and keeps by design. It is NOT the square keys' edge inset any
+     * more: the keys joined the header family and sit at
+     * {@link #EDGE_CONTROL_INSET} (s(4)) off the bar's left edge and top,
+     * so this token now owns only the capsule's side gap and the bar's
+     * bottom pad.
      */
     public static final float INPUT_ROW_PAD = s(8);
     /**
      * Height of the button row band. The taller family owns it, which is what
      * lets two heights share one axis: the shorter capsule centres inside the
-     * taller family's band and the row's top gap stays INPUT_ROW_PAD whatever
+     * taller family's band and the row's top gap stays EDGE_CONTROL_INSET whatever
      * either family measures. Derived from the two families rather than restated
      * so a change to either one carries the row, the bar below it and the text
      * with it - the row was once pinned to BUTTON_H while the keys were a
@@ -325,12 +385,15 @@ public final class UiTokens {
      */
     public static final float INPUT_LINE_H_REF = 36.2F;
     /**
-     * One-line bar height, built from its parts instead of restated: the row pad
-     * above the row, the row band, the text band, and the row pad below it. A
-     * taller button family therefore grows the bar by exactly its own growth, so
-     * the text keeps the clearance (and the screen position) it already had.
+     * One-line bar height, built from its parts instead of restated: the key
+     * inset above the row ({@link #EDGE_CONTROL_INSET} — the header family's
+     * own inset, now that the keys belong to it), the row band, the text
+     * band, and the row pad below it ({@link #INPUT_ROW_PAD}, the Send
+     * family's gap, which also owns the bar's bottom). A taller button
+     * family therefore grows the bar by exactly its own growth, so the text
+     * keeps the clearance (and the screen position) it already had.
      */
-    public static final float INPUT_HEIGHT = INPUT_ROW_PAD * 2.0F + INPUT_ROW_H + INPUT_TEXT_BAND;
+    public static final float INPUT_HEIGHT = EDGE_CONTROL_INSET + INPUT_ROW_H + INPUT_TEXT_BAND + INPUT_ROW_PAD;
     public static final float INPUT_TEXT_X = s(14);
     public static final float PANEL_BOTTOM_PAD = s(14);
 
@@ -457,6 +520,11 @@ public final class UiTokens {
      * the old 15px (s(12)) inset, which budgeted the full press-release
      * spring peak as if the clip were a hard edge that had to survive it
      * unclipped.</p>
+     *
+     * <p>This is also the profile page's horizontal card margin: the banner
+     * card, stat tiles, info card and identity card all sit at this inset
+     * from the list edges, so the whole UI reads as one margin language
+     * instead of the profile column carrying its own.</p>
      */
     public static final float ROW_CLIP_INSET = s(6.4F);
 
@@ -471,7 +539,7 @@ public final class UiTokens {
      */
     public static final float SETTINGS_TILE_GAP = s(10);
     public static float settingsTileRadius() {
-        return radius(12);
+        return cardRadius();
     }
     public static final float SETTINGS_TILE_ICON = s(34);
     public static final float SETTINGS_TILE_TITLE = s(15);
@@ -497,7 +565,7 @@ public final class UiTokens {
     public static final float SETTINGS_ROW_GAP = s(8);
     public static final float SETTINGS_ROW_PAD = s(14);
     public static float settingsRowRadius() {
-        return radius(12);
+        return cardRadius();
     }
     /** Group heading inside a section (e.g. the blocked-players list title). */
     public static final float SETTINGS_LABEL_H = s(32);
@@ -506,20 +574,73 @@ public final class UiTokens {
     /** Avatar inside a blocked-player row. */
     public static final float SETTINGS_ROW_AVATAR = s(36);
 
-    // Profile page: hero identity card (large circular avatar with an edit
-    // badge) above an info-card list of copyable rows.
-    public static final float PROFILE_AVATAR = s(96);
-    public static final float PROFILE_AVATAR_HERO_H = s(180);
+    // Profile page (QQ-home redesign, banner-card pass): a hero banner CARD
+    // inset from the panel edges with the circular avatar straddling its
+    // bottom edge, the name and the signature line under it, the stat-tile
+    // row, the info rows merged into one card and a bottom identity card that
+    // grows to fill whatever list height is left.
+    /** Gap between the list top and the banner card's top edge, s(14). */
+    public static final float PROFILE_BANNER_MARGIN_TOP = s(14);
+    /**
+     * Hero banner card height, s(160) = 200 px. The card carries the custom
+     * banner photo cover-cropped (own profile), the enlarged pixelated skin
+     * face (someone else's profile) or the accent -> panelBg fallback
+     * gradient, and melts into the panel through a bottom gradient, so the
+     * avatar ring below reads on a quiet ground.
+     */
+    public static final float PROFILE_BANNER_H = s(160);
+    /**
+     * Circular avatar side, s(76) = 95 px. Its centre sits exactly on the
+     * banner card's bottom edge (half over the banner, half in the content
+     * area — the QQ look), so the banner-bottom -> tile-top span carries half
+     * of it.
+     */
+    public static final float PROFILE_AVATAR = s(76);
+    /**
+     * Width of the panelBg divider ring drawn around the avatar, s(2): an
+     * opaque panel-coloured circle one ring wider than the bitmap sits
+     * underneath it, which is what separates the avatar from the busy banner
+     * behind it. The rim stroke (the outer edge language) sits OUTSIDE this
+     * divider ring — divider in, rim out.
+     */
+    public static final float PROFILE_AVATAR_RING = s(2);
+    /** Baseline distance from the avatar's bottom edge to the name baseline. */
+    public static final float PROFILE_NAME_BAND = s(24);
+    /** Signature font: the small secondary line centred under the name. */
+    public static final float PROFILE_SIGN_FONT = s(13);
+    /** Baseline distance from the name baseline to the signature baseline. */
+    public static final float PROFILE_SIGN_BAND = s(20);
+    /** Space from the signature baseline down to the stat-tile row top. */
+    public static final float PROFILE_SIGN_TO_TILES = s(14);
+    /**
+     * Total banner-bottom -> tile-top span, derived from its parts rather than
+     * restated: the avatar's lower half hangs into the content by
+     * {@link #PROFILE_AVATAR} / 2, then the name band, the signature band and
+     * the signature-to-tiles gap. measureContent and every rect builder read
+     * this, so moving one part moves the whole stack.
+     */
+    public static final float PROFILE_HERO_BELOW_H = PROFILE_AVATAR / 2.0F
+            + PROFILE_NAME_BAND + PROFILE_SIGN_BAND + PROFILE_SIGN_TO_TILES;
     public static final float PROFILE_EDIT_BADGE = s(28);
     public static final float PROFILE_NAME_FONT = s(20);
-    public static final float PROFILE_ROW_H = s(48);
+    /** Info row height, compacted from s(48) in the QQ-home pass. */
+    public static final float PROFILE_ROW_H = s(42);
     public static final float PROFILE_ROW_PAD = s(14);
     public static float profileRowRadius() {
-        return radius(12);
+        return cardRadius();
     }
     public static final float PROFILE_ROW_FONT = s(15);
     public static final float PROFILE_ROW_VALUE_FONT = s(13);
-    public static final float PROFILE_TILE_H = s(62);
+    /**
+     * Base height of the bottom identity card: card pad above and below ONE
+     * UUID row. The card is content-sized now — it no longer swallows the
+     * remaining list height and the page ends where the card ends. ProfilePage
+     * adds the blocked marker row (row gap + row) on top when the subject is
+     * on the block list.
+     */
+    public static final float PROFILE_IDCARD_MIN_H =
+            PROFILE_ROW_PAD * 2.0F + PROFILE_ROW_H;
+    public static final float PROFILE_TILE_H = s(50);
     public static final float PROFILE_TILE_GAP = s(10);
     public static final float PROFILE_TILE_VALUE_FONT = s(17);
     public static final float PROFILE_TILE_LABEL_FONT = s(11);
@@ -561,8 +682,10 @@ public final class UiTokens {
                 Math.round(ab + (bb - ab) * t));
     }
 
-    /** Re-alpha helper: keeps the RGB, replaces the alpha (clamped, rounded). */
-    private static int withAlpha(int rgb, float alpha) {
+    /** Re-alpha helper: keeps the RGB, replaces the alpha (clamped, rounded).
+     *  Public for overlays whose every element multiplies its own alpha
+     *  by the open/close progress and has no whole-card alpha layer. */
+    public static int withAlpha(int rgb, float alpha) {
         int a = Math.max(0, Math.min(255, Math.round(alpha)));
         return io.github.humbleui.skija.Color.makeARGB(a,
                 (rgb >>> 16) & 0xFF, (rgb >>> 8) & 0xFF, rgb & 0xFF);

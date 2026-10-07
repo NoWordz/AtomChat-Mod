@@ -12,11 +12,9 @@ import io.github.humbleui.skija.Color;
  *
  * <p>Three visual states, tuned for the "switch is hard to see" report:</p>
  * <ul>
- *   <li><b>On</b> — the accent track plus the functional rim
- *       ({@link UiTokens#rim()}, alpha 110), so even a pale accent on a
- *       pale card keeps a visible rim while it is on. The rim is the one
- *       stroke exempt from the hairline language: it hugs a moving knob and
- *       must carry real visibility of its own.</li>
+ *   <li><b>On</b> — the accent track alone. The alpha-110 rim stroke was
+ *       retired at the owner's request; the deep neutral off-track beside
+ *       it keeps the two states legible without any outline.</li>
  *   <li><b>Off</b> — a clearly deeper track than the old white-mist one:
  *       solid dim grey on dark cards (the old translucent white read as
  *       fog, not a track), dark grey at high alpha on light cards (where
@@ -124,15 +122,6 @@ public final class ToggleSwitch {
             SkiaDraw.drawRoundedRect(canvas, x, y, UiTokens.SWITCH_W, UiTokens.SWITCH_H,
                     UiTokens.SWITCH_H / 2.0F, dim(SkiaDraw.lerpColor(trackOff(), accent, p), op));
 
-            // On-state rim: the functional alpha-110 stroke, faded in with
-            // the same progress as the accent so the rim belongs to the on
-            // state (off relies on its deep track instead of a rim).
-            if (p > 0.01F) {
-                SkiaDraw.drawEdgeHighlight(canvas, x, y, UiTokens.SWITCH_W, UiTokens.SWITCH_H,
-                        UiTokens.SWITCH_H / 2.0F, UiTokens.s(1.0F),
-                        onRim(UiTokens.rim(), p, op));
-            }
-
             float travel = UiTokens.SWITCH_W - UiTokens.SWITCH_KNOB - UiTokens.SWITCH_INSET * 2.0F;
             float knobX = x + UiTokens.SWITCH_INSET + travel * p;
             float knobY = y + (UiTokens.SWITCH_H - UiTokens.SWITCH_KNOB) / 2.0F;
@@ -165,19 +154,8 @@ public final class ToggleSwitch {
     }
 
     /**
-     * On-state rim colour: the functional alpha-110 stroke, faded in with the
-     * accent's own progress (and the disabled opacity). The rim colour
-     * arrives as a parameter so this stays a pure function — package-private
-     * for contract tests, which resolve the rim through the explicit-base
-     * seam instead of the config-reading no-arg overload.
-     */
-    static int onRim(int tier2, float onProgress, float opacity) {
-        return dim(tier2, onProgress * opacity);
-    }
-
-    /**
-     * Alpha-only dim (the disabled state); RGB untouched. Package-private for
-     * contract tests.
+     * Alpha-only dim (the disabled state); RGB untouched. Package-private
+     * for contract tests.
      */
     static int dim(int color, float opacity) {
         int a = Math.round(((color >>> 24) & 0xFF) * opacity);

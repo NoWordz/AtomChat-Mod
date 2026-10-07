@@ -57,7 +57,8 @@ class ThemeServiceTest {
     @Test
     void noPresetEverTouchesCornerStyle() {
         for (String id : new String[]{ThemeService.MODERN, ThemeService.FROSTED,
-                "minimal", "summer", "elegant", "raven", "hub", "vivid"}) {
+                "minimal", "summer", "elegant", "raven", "hub", "vivid",
+                "dusk", "mint"}) {
             AtomChatConfig config = new AtomChatConfig();
             config.cornerStyle = "medium";
             ThemeService.apply(config, id);
@@ -94,8 +95,8 @@ class ThemeServiceTest {
     // ------------------------------------------------------------- colour presets
 
     @Test
-    void sixColourPresetsShip() {
-        assertEquals(6, ThemeService.presets().length);
+    void eightColourPresetsShip() {
+        assertEquals(8, ThemeService.presets().length);
         for (ThemeService.Preset preset : ThemeService.presets()) {
             assertEquals(preset, ThemeService.byId(preset.id()));
         }
@@ -139,9 +140,11 @@ class ThemeServiceTest {
         c = new AtomChatConfig();
         ThemeService.apply(c, "hub");
         assertEquals(0xFFFF9000, c.accentColor);
-        assertEquals(0xFF0F0F0F, c.panelBgColor);
-        assertEquals(0xFF1A1A1A, c.cardColor);
-        assertEquals(0xFFF5F5F5, c.textPrimaryColor);
+        assertEquals(0xFF0A0A0A, c.panelBgColor);
+        assertEquals(0xFF141414, c.cardColor);
+        assertEquals(0xFFFFFFFF, c.textPrimaryColor);
+        assertEquals(0xFF161616, c.secondaryCapsuleBg);
+        assertEquals(0xFFD4D4D4, c.secondaryCapsuleText);
 
         c = new AtomChatConfig();
         ThemeService.apply(c, "vivid");
@@ -149,13 +152,35 @@ class ThemeServiceTest {
         assertEquals(0xFFFDF0F4, c.panelBgColor);
         assertEquals(0xFFFBE3EB, c.otherBubbleColor);
         assertEquals(0xFF3D2C35, c.textPrimaryColor);
+
+        c = new AtomChatConfig();
+        ThemeService.apply(c, "dusk");
+        assertEquals(0xFFA78BFA, c.accentColor);
+        assertEquals(0xFF232633, c.panelBgColor);
+        assertEquals(0xFF2B2E3D, c.cardColor);
+        assertEquals(0xFFF2F3F7, c.textPrimaryColor);
+        assertEquals(0.88F, c.panelOpacity, 1e-6F);
+        assertTrue(c.blurEnabled);
+
+        c = new AtomChatConfig();
+        ThemeService.apply(c, "mint");
+        assertEquals(0xFF5EEAD4, c.accentColor);
+        assertEquals(0xFF0F2622, c.panelBgColor);
+        assertEquals(0xFF16332D, c.cardColor);
+        assertEquals(0xFFEFFAF6, c.textPrimaryColor);
+        assertEquals(0.9F, c.panelOpacity, 1e-6F);
+        assertTrue(c.blurEnabled);
     }
 
     /** Every colour preset must land visibly away from the shipped defaults on
-     *  the four fields that define its identity, and always writes the full
-     *  opaque look block (blur under a solid surface is invisible work). */
+     *  the fields that define its identity, and writes the look block its
+     *  snapshot declares: the standard opaque treatment (blur under a solid
+     *  surface is invisible work) unless the preset ships its own translucent
+     *  look (dusk, mint). hub is exempt from the textPrimary comparison — the
+     *  terminal look is pure white on pure black, which coincides with the
+     *  shipped default white (visually correct, byte-wise identical). */
     @Test
-    void colourPresetsDifferFromShippedDefaultsAndAreOpaque() {
+    void colourPresetsDifferFromShippedDefaultsAndLandTheirLook() {
         AtomChatConfig defaults = new AtomChatConfig();
         for (ThemeService.Preset preset : ThemeService.presets()) {
             AtomChatConfig c = new AtomChatConfig();
@@ -163,10 +188,14 @@ class ThemeServiceTest {
             assertEquals(ThemeService.byId(preset.id()).accent(), c.accentColor);
             assertNotEquals(defaults.accentColor, c.accentColor, preset.id());
             assertNotEquals(defaults.panelBgColor, c.panelBgColor, preset.id());
-            assertNotEquals(defaults.textPrimaryColor, c.textPrimaryColor, preset.id());
+            if (!"hub".equals(preset.id())) {
+                assertNotEquals(defaults.textPrimaryColor, c.textPrimaryColor, preset.id());
+            }
             assertNotEquals(defaults.ownBubbleColor, c.ownBubbleColor, preset.id());
-            assertEquals(1.0F, c.panelOpacity, 1e-6F, preset.id());
-            assertFalse(c.blurEnabled, preset.id());
+            Float votedOpacity = preset.panelOpacity();
+            assertEquals(votedOpacity == null ? 1.0F : votedOpacity.floatValue(),
+                    c.panelOpacity, 1e-6F, preset.id());
+            assertEquals(Boolean.TRUE.equals(preset.blurEnabled()), c.blurEnabled, preset.id());
             assertTrue(c.panelOutline, preset.id());
             assertEquals(1.0F, c.cardTint, 1e-6F, preset.id());
             assertEquals(preset.id(), c.themeName);
@@ -333,5 +362,21 @@ class ThemeServiceTest {
         config.panelBgColor = 0xFFCCCCCC;
         assertTrue(ThemeService.panelIsLight(config),
                 "light grey linearises to ~0.604 luminance - light side of the 0.5 threshold");
+    }
+
+    /** Every shipped preset's outline must be legible against its own panel:
+     *  |relativeLuminance(outline) - relativeLuminance(panelBg)| >= 0.22.
+     *  drawBezel now paints the configured outline verbatim (no runtime
+     *  fallback), so this is purely a palette-design guard against shipping
+     *  a preset whose ring melts into its panel. */
+    @Test
+    void presetOutlinesStayLegibleAgainstTheirPanel() {
+        final float outlineLegibilityContrast = 0.22F;
+        for (ThemeService.Preset preset : ThemeService.presets()) {
+            float contrast = Math.abs(ThemeService.relativeLuminance(preset.panelOutlineColor())
+                    - ThemeService.relativeLuminance(preset.panelBg()));
+            assertTrue(contrast >= outlineLegibilityContrast,
+                    preset.id() + " outline contrast " + contrast);
+        }
     }
 }

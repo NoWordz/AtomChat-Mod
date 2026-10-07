@@ -164,18 +164,26 @@ public final class SettingsCatalog {
                             () -> AtomChatConfig.get().uiScale,
                             v -> AtomChatConfig.get().uiScale = v,
                             v -> "x" + String.format(java.util.Locale.ROOT, "%.2f", v)),
+                    new SettingsSlider("contentscale",
+                            "atomchat.settings.appearance.contentscale",
+                            0.80F, 1.50F, 0.05F,
+                            () -> AtomChatConfig.get().contentScale,
+                            v -> AtomChatConfig.get().contentScale = v,
+                            v -> Math.round(v * 100.0F) + "%"),
                     new SettingsSlider("cardtint",
                             "atomchat.settings.appearance.cardtint",
                             0.00F, 1.00F, 0.05F,
                             () -> AtomChatConfig.get().cardTint,
                             v -> AtomChatConfig.get().cardTint = v,
                             v -> Math.round(v * 100.0F) + "%"),
-                    // Continuous corner radius, 0 = square corners everywhere.
+                    // Continuous corner radius in 1080p-basis pixels (it
+                    // scales with the UI density rather than staying pinned
+                    // to physical pixels), 0 = square corners everywhere.
                     // Replaces the old three-step cornerStyle chips; presets
                     // and the factory reset never write it.
                     new SettingsSlider("corner_radius",
                             "atomchat.settings.appearance.corners",
-                            0.0F, UiTokens.s(28), 1.0F,
+                            0.0F, UiTokens.s(20), 1.0F,
                             () -> AtomChatConfig.get().cornerRadius,
                             v -> AtomChatConfig.get().cornerRadius = v,
                             v -> Math.round(v) + " px"));
@@ -353,8 +361,8 @@ public final class SettingsCatalog {
         return List.of(
                 new InfoRow("atomchat.settings.about.version", AtomChat.version(),
                         "https://github.com/E33EPUS/AtomChat/releases"),
-                new InfoRow("atomchat.settings.about.license", "MIT",
-                        "https://opensource.org/licenses/MIT"),
+                new InfoRow("atomchat.settings.about.license", "Apache-2.0",
+                        "https://www.apache.org/licenses/LICENSE-2.0"),
                 new InfoRow("atomchat.settings.about.repo", "E33EPUS/AtomChat",
                         "https://github.com/E33EPUS/AtomChat"));
     }

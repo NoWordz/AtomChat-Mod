@@ -24,6 +24,20 @@ public final class SkiaFontRenderer {
     /** Per-codepoint+size cache of resolved fallback fonts (emoji / chars missing from the primary). */
     private static final java.util.Map<String, Font> FALLBACK_FONT_CACHE = new java.util.HashMap<>();
 
+    /**
+     * Primary-font glyph hits per Font instance: a set bit means the primary
+     * carries the codepoint, so the hot path skips the JNI getUTF32Glyph
+     * probe. Draw and measure each walk every codepoint (twice: the run outer
+     * loop and the run-split inner loop), so a CJK-heavy frame used to
+     * re-probe the same glyphs thousands of times per frame. Keyed by
+     * instance, not size: {@code boldFont(size)} and {@code font(size)} are
+     * different faces that must not share answers. FontManager caches its
+     * Font objects for the process lifetime, so the map holds a handful of
+     * entries; render-thread only, like FALLBACK_FONT_CACHE.
+     */
+    private static final java.util.Map<Font, java.util.BitSet> PRIMARY_GLYPH_HITS =
+            new java.util.IdentityHashMap<>();
+
     private SkiaFontRenderer() {
     }
 
@@ -32,24 +46,49 @@ public final class SkiaFontRenderer {
      * in this UI: every label measures itself every frame (and truncation
      * measures repeatedly), each measurement walks the string code point by
      * code point resolving font fallbacks. Labels repeat across frames, so a
-     * small LRU removes most of that work. Keyed by the font's size because
-     * {@link com.atom.chat.font.FontManager} hands out one shared Font per size.
+     * small LRU removes most of that work. Two levels — the font's size, then
+     * the text — so a cache hit never builds a key: the old
+     * {@code text + "@" + size} concat allocated a fresh string on every
+     * measurement, hit or miss. Keyed by the font's size (not the instance),
+     * exactly like the old key. That is an inherited trade-off, not a claim
+     * that a size has one face: regular and bold of a size are distinct Fonts
+     * (FontManager caches them in separate maps) with different metrics, so
+     * they share a bucket and whichever measures first leaves a few pixels of
+     * drift to the other. PRIMARY_GLYPH_HITS keys by instance because its
+     * fallback answers are per-face truth.
      */
     private static final int WIDTH_CACHE_MAX = 4096;
-    private static final java.util.Map<String, Float> WIDTH_CACHE = java.util.Collections
-            .synchronizedMap(new java.util.LinkedHashMap<>(256, 0.75F, true) {
-                @Override
-                protected boolean removeEldestEntry(java.util.Map.Entry<String, Float> eldest) {
-                    return size() > WIDTH_CACHE_MAX;
-                }
-            });
+    private static final java.util.Map<Float, java.util.Map<String, Float>> WIDTH_CACHE =
+            java.util.Collections.synchronizedMap(new java.util.LinkedHashMap<>());
+
+    /** The per-size bucket for {@code font}, created (and the map swept) on first use. */
+    private static java.util.Map<String, Float> widthCacheFor(Font font) {
+        java.util.Map<String, Float> cache = WIDTH_CACHE.get(font.getSize());
+        if (cache != null) {
+            return cache;
+        }
+        // Wholesale clear past 16 sizes, like BLUR_FILTERS: call sites use a
+        // handful of UiTokens sizes, so this never trips in practice — it only
+        // keeps a pathological caller of arbitrary sizes bounded.
+        if (WIDTH_CACHE.size() >= 16) {
+            WIDTH_CACHE.clear();
+        }
+        cache = java.util.Collections.synchronizedMap(new java.util.LinkedHashMap<>(256, 0.75F, true) {
+            @Override
+            protected boolean removeEldestEntry(java.util.Map.Entry<String, Float> eldest) {
+                return size() > WIDTH_CACHE_MAX;
+            }
+        });
+        WIDTH_CACHE.put(font.getSize(), cache);
+        return cache;
+    }
 
     public static float getStringWidth(Font font, String text) {
         if (text == null || text.isEmpty()) {
             return 0.0F;
         }
-        String key = text + "@" + font.getSize();
-        Float cached = WIDTH_CACHE.get(key);
+        java.util.Map<String, Float> cache = widthCacheFor(font);
+        Float cached = cache.get(text);
         if (cached != null) {
             return cached;
         }
@@ -62,7 +101,7 @@ public final class SkiaFontRenderer {
                 width += measureRuns(font, segment.text);
             }
         }
-        WIDTH_CACHE.put(key, width);
+        cache.put(text, width);
         FrameProfile.layout(startedAt);
         return width;
     }
@@ -176,7 +215,13 @@ public final class SkiaFontRenderer {
     private static final io.github.humbleui.skija.ImageFilter SHADOW_ON_DARK =
             io.github.humbleui.skija.ImageFilter.makeDropShadowOnly(0.0F, 1.0F, 1.5F, 1.5F, 0x59000000);
 
-    private static io.github.humbleui.skija.ImageFilter backingShadow() {
+    /**
+     * The soft-shadow filter behind drawText/drawBackingText, public for
+     * rich-text pre-passes that manage their own run loop: one filtered layer
+     * around the whole block composites exactly like per-run layers (the blur
+     * is linear in the glyph mask) at a fraction of the layers.
+     */
+    public static io.github.humbleui.skija.ImageFilter backingShadow() {
         return ThemeService.panelIsLight() ? SHADOW_ON_LIGHT : SHADOW_ON_DARK;
     }
 
@@ -315,7 +360,16 @@ public final class SkiaFontRenderer {
      * otherwise render as tofu even though Segoe UI Symbol has them.
      */
     private static Font fontFor(Font primary, int codepoint) {
+        java.util.BitSet known = PRIMARY_GLYPH_HITS.get(primary);
+        if (known != null && known.get(codepoint)) {
+            return primary;
+        }
         if (primary.getUTF32Glyph(codepoint) != 0) {
+            if (known == null) {
+                known = new java.util.BitSet();
+                PRIMARY_GLYPH_HITS.put(primary, known);
+            }
+            known.set(codepoint);
             return primary;
         }
         String key = codepoint + "@" + (int) primary.getSize();

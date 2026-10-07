@@ -594,8 +594,8 @@ public final class QuickPhrasePanel {
             canvas.scale(sc, sc);
             canvas.translate(-cx, -cy);
             canvas.translate(0.0F, (1.0F - anim) * s(10));
-            SkiaDraw.drawRoundedRect(canvas, px, py, pw, ph, UiTokens.radius(14), Color.makeARGB(245, 35, 39, 47));
-            SkiaDraw.drawRoundedShadow(canvas, px, py, pw, ph, UiTokens.radius(14), s(8), Color.makeARGB(100, 0, 0, 0));
+            SkiaDraw.drawRoundedRect(canvas, px, py, pw, ph, UiTokens.radius(14), UiTokens.SKIN_PANEL);
+            SkiaDraw.drawRoundedShadow(canvas, px, py, pw, ph, UiTokens.radius(14), s(8), UiTokens.CHROME_SHADOW);
 
             Font font = FontManager.font(UiTokens.FONT_BUTTON);
             List<String> list = phrases();
@@ -663,8 +663,12 @@ public final class QuickPhrasePanel {
             // only the edit/delete buttons are missing, because there are none.
             if (rowHover.getOrDefault(position, 0.0F) > 0.01F) {
                 float fade = rowHover.getOrDefault(position, 0.0F);
-                SkiaDraw.drawRoundedRect(canvas, r.getLeft() + s(4), r.getTop() + s(4),
-                        r.getWidth() - s(8), r.getHeight() - s(8), s(6),
+                // Row wash in MenuPopup's row language: the horizontal inset
+                // derives from the row's own bounce budget (so the capsule
+                // survives its press scale), the vertical one stays s(4).
+                float inset = MenuPopup.rowInset(r.getWidth());
+                SkiaDraw.drawRoundedRect(canvas, r.getLeft() + inset, r.getTop() + s(4),
+                        r.getWidth() - inset * 2.0F, r.getHeight() - s(8), s(6),
                         Color.makeARGB((int) (55.0F * fade), 255, 255, 255));
             }
             String theirs = SkiaFontRenderer.truncate(font, rowTextAt(position), r.getWidth() - s(24));
@@ -676,8 +680,10 @@ public final class QuickPhrasePanel {
         float rowA = rowHover.getOrDefault(index, 0.0F);
         boolean editing = editingIndex == index;
         if (rowA > 0.01F) {
-            SkiaDraw.drawRoundedRect(canvas, r.getLeft() + s(4), r.getTop() + s(4),
-                    r.getWidth() - s(8), r.getHeight() - s(8), s(6),
+            // Same MenuPopup row-wash inset as the server rows above.
+            float inset = MenuPopup.rowInset(r.getWidth());
+            SkiaDraw.drawRoundedRect(canvas, r.getLeft() + inset, r.getTop() + s(4),
+                    r.getWidth() - inset * 2.0F, r.getHeight() - s(8), s(6),
                     Color.makeARGB((int) (55.0F * rowA), 255, 255, 255));
         }
         if (editing) {
@@ -733,8 +739,10 @@ public final class QuickPhrasePanel {
                 r.getWidth() - s(8), r.getHeight() - s(8), s(6),
                 Color.makeARGB((int) (28.0F + 27.0F * addHover), 255, 255, 255));
         if (addHover > 0.01F) {
-            SkiaDraw.drawRoundedRect(canvas, r.getLeft() + s(4), r.getTop() + s(4),
-                    r.getWidth() - s(8), r.getHeight() - s(8), s(6),
+            // Same MenuPopup row-wash inset as the phrase rows above.
+            float inset = MenuPopup.rowInset(r.getWidth());
+            SkiaDraw.drawRoundedRect(canvas, r.getLeft() + inset, r.getTop() + s(4),
+                    r.getWidth() - inset * 2.0F, r.getHeight() - s(8), s(6),
                     Color.makeARGB((int) (55.0F * addHover), 255, 255, 255));
         }
         if (active) {

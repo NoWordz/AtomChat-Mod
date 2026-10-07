@@ -72,10 +72,11 @@ public final class ShellHeader {
         if (header == null || header.w() <= 0.0F || header.h() <= 0.0F) {
             return;
         }
-        // Floating chrome: same elevation language as the menus (shadow behind
-        // an opaque-ish surface), unlike the edge-highlighted content cards.
-        SkiaDraw.drawRoundedShadow(canvas, header.x(), header.y(), header.w(), header.h(),
-                UiTokens.headerRadius(), UiTokens.s(8), UiTokens.CHROME_SHADOW);
+        // Floating chrome: same elevation language as the menus (two-tier
+        // shadow behind an opaque-ish surface), unlike the edge-highlighted
+        // content cards.
+        SkiaDraw.drawChromeShadow(canvas, header.x(), header.y(), header.w(), header.h(),
+                UiTokens.headerRadius());
         SkiaDraw.drawRoundedRect(canvas, header.x(), header.y(), header.w(), header.h(),
                 UiTokens.headerRadius(), UiTokens.cardFill());
 

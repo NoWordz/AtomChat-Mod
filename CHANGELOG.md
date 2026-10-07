@@ -1,5 +1,83 @@
 # Changelog
 
+## v0.3.0
+
+> 本版重做了整套界面动效与个人档案页，统一了卡片与描边语言，加入双轴缩放与自适应边框，并把许可换为 Apache-2.0。
+
+**新增**
+
+- 新增「导航动画风格」单选：滑动 / 缩放，标签页与页面切换共用同一风格（默认缩放）。
+- 新增主题预设「薄暮」（灰蓝紫半透明）与「薄荷」（深青绿半透明），主题总数增至九张。
+- 新增自定义壁纸、自定义头图与头像裁剪，图片本地托管、走系统文件选择器。
+- 新增「内容缩放」滑条：手机外框尺寸不变，内部文字、按钮与卡片随之缩放。
+- 设置页的折叠分组获得展开动画。
+
+**更改**
+
+- 页面切换与开屏动画改为指数趋近实现：帧率无关、起步快、落定稳，缩放为两阶段串行而非两层半透明叠加。
+- 开屏动画跟随导航风格：缩放风格由 0.94 放大落定，滑动风格横向滑入，整体节奏放缓不再急促。
+- 关闭动画加快：关屏使用更短的时长并提前收尾。
+- 个人档案页按 QQ 主页重做：可自定义头图（带裁剪）、头像跨压头图下沿、统计瓦片、信息大卡与身份卡，头像与头图整体加大。
+- 全站「整卡」语言统一：关于页第三方组件、mod 信息、档案信息区与身份卡并入整卡，行间发丝分割、整卡缩放、行内高亮。
+- 悬停高亮统一为强调色染色 + 明暗自适应；卡片边框回到发丝感。
+- 输入栏按钮整组重做，弹跳统一为每边 4 像素的位移预算。
+- 描边完全按所选颜色绘制，不再自动替换成灰。
+- 界面外框改为双层外阴影，圆角与卡片内缩统一。
+- 许可换为 Apache-2.0。
+
+**修复**
+
+- 个性签名无法输入文字（非聊天页吞掉按键）。
+- 自定义头图底部被渐变遮罩洗出一条亮带。
+- 自定义壁纸后「背景模糊」开关的副标题显示成原始键名。
+- 浅色主题下滚动条、滑条轨道与内嵌输入框不可见。
+- 深色主题下浅色预览卡的下栏串色。
+- 头像描边被裁掉一段。
+- 轮廓设为纯黑却显示为灰。
+
+**性能**
+
+- 渲染热路径低风险优化：缓存字体测量与阴影滤镜，去掉每帧重复计算与临时对象。
+
+----
+
+> This release rebuilds the whole interface motion and the profile page, unifies the card and border language, adds dual-axis scaling and adaptive outlines, and moves the license to Apache-2.0.
+
+**Added**
+
+- New "navigation animation style" single choice: slide / zoom, shared by tab switching and page pushes (default zoom).
+- New themes "Dusk" (grey-violet, translucent) and "Mint" (deep teal, translucent); nine themes in total.
+- Custom wallpaper, custom banner and avatar cropping, with images hosted locally through the system file picker.
+- New "content scale" slider: the phone frame keeps its size while text, buttons and cards inside it scale.
+- Fold groups in settings now animate open.
+
+**Changed**
+
+- Page transitions and the panel open animation now use an exponential approach: frame-rate independent, fast to start, settled at the end; zoom runs as two serial phases instead of two half-transparent layers.
+- The open animation follows the navigation style: zoom scales in from 0.94, slide enters from the side, and the overall pacing is calmer.
+- Closing is faster: the panel uses a shorter duration and settles early.
+- The profile page is rebuilt after the QQ home page: a customisable banner (with cropping), an avatar straddling its lower edge, stat tiles, one merged info card and an identity card; avatar and banner are larger.
+- One card language across the UI: the about page's third-party components, mod info, profile info block and identity card are merged cards with hairline dividers, whole-card scaling and per-row highlights.
+- Hover highlights are one accent-tinted, polarity-adaptive language; card borders return to a hairline.
+- The composer buttons are rebuilt, with the press bounce unified on a 4-pixel travel budget per side.
+- The outline is drawn in exactly the picked colour, with no automatic substitution.
+- The panel frame gets a two-pass drop shadow, with unified corner radius and card inset.
+- The license is now Apache-2.0.
+
+**Fixed**
+
+- The profile signature could not be typed into (non-chat pages swallowed the keys).
+- A custom banner's lower edge was washed into a bright band by a gradient.
+- With a custom wallpaper set, the blur switch's subtitle showed a raw key name.
+- Scrollbars, slider tracks and inline fields were invisible on light themes.
+- The lower half of light theme preview cards picked up a dark tint on dark themes.
+- The avatar ring was clipped on one side.
+- An outline set to pure black showed as grey.
+
+**Performance**
+
+- Low-risk hot-path work: cached font measurement and shadow filters, removed per-frame recomputation and temporary objects.
+
 ## v0.2.17
 
 > 本版把悬停高亮统一成「强调色染色 + 明暗自适应」的一种语言，边框回到发丝感，并修掉 0.2.16 引入的几处视觉回归。

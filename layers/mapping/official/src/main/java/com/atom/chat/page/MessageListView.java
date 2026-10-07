@@ -97,6 +97,35 @@ public final class MessageListView {
                 }
             };
 
+    /**
+     * Bubble classification keyed by (message id, image-receive switch). The
+     * kind runs ImageCode's regex over the raw text, and measure + draw used
+     * to re-run it for every message every frame. Content is immutable per id
+     * (merge copies share the id), so only the config bit can change the
+     * answer; it is part of the key, so a settings toggle reclassifies on the
+     * next frame. Same LRU shape as layoutCache.
+     */
+    private static final int KIND_CACHE_MAX = 512;
+    private final Map<Long, BubbleKind> kindCache =
+            new LinkedHashMap<>(128, 0.75F, true) {
+                @Override
+                protected boolean removeEldestEntry(Map.Entry<Long, BubbleKind> eldest) {
+                    return size() > KIND_CACHE_MAX;
+                }
+            };
+
+    /** Cached {@link #kindOf}; see {@link #kindCache}. */
+    private BubbleKind kindOfCached(ChatMessage msg) {
+        long key = msg.getId() * 2L + (AtomChatConfig.get().imageMessagesEnabled ? 1L : 0L);
+        BubbleKind cached = kindCache.get(key);
+        if (cached != null) {
+            return cached;
+        }
+        BubbleKind kind = kindOf(msg);
+        kindCache.put(key, kind);
+        return kind;
+    }
+
     private ChatMessage selectionAnchorMessage;
     private ChatMessage selectionFocusMessage;
     private int selectionAnchorLine = -1;
@@ -460,6 +489,8 @@ public final class MessageListView {
         ChatMessage startMsg = reverse ? selectionFocusMessage : selectionAnchorMessage;
         ChatMessage endMsg = reverse ? selectionAnchorMessage : selectionFocusMessage;
         int startLine = reverse ? selectionFocusLine : selectionAnchorLine;
+        // Start and end must take opposite operands of reverse, otherwise they
+        // collapse onto one value and every cut on that line looks empty.
         int startChar = reverse ? selectionFocusChar : selectionAnchorChar;
         int endLine = reverse ? selectionAnchorLine : selectionFocusLine;
         int endChar = reverse ? selectionAnchorChar : selectionFocusChar;
@@ -611,6 +642,11 @@ public final class MessageListView {
             SkiaDraw.drawRoundedRect(canvas, avatarX, avatarY, UiTokens.AVATAR_SIZE, UiTokens.AVATAR_SIZE,
                     UiTokens.AVATAR_SIZE / 2.0F, Color.makeARGB(255, 120, 130, 145));
         }
+        // Hairline rim hugging the avatar's outer edge (face or placeholder):
+        // polarity-adaptive UiTokens.rim separates the circle from whatever
+        // bubble or panel sits behind it. Same ring language as the swatches.
+        SkiaDraw.drawRing(canvas, avatarX + UiTokens.AVATAR_SIZE / 2.0F, avatarY + UiTokens.AVATAR_SIZE / 2.0F,
+                UiTokens.AVATAR_SIZE / 2.0F + UiTokens.s(0.75F), UiTokens.s(1.0F), UiTokens.rim());
     }
 
     /** Clock pill height between messages (see {@link #dividerBefore}). */
@@ -753,7 +789,7 @@ public final class MessageListView {
         Font font = FontManager.font(UiTokens.FONT_BODY);
         float bubbleMaxWidth = maxWidth - UiTokens.BUBBLE_RETRACT;
         String raw = msg.getRawText();
-        BubbleKind kind = kindOf(msg);
+        BubbleKind kind = kindOfCached(msg);
         if (kind == BubbleKind.IMAGE_PLACEHOLDER) {
             return drawImagePlaceholderMessage(canvas, msg, x, y, maxWidth, index, grouped);
         }
@@ -763,10 +799,6 @@ public final class MessageListView {
         }
         float textMaxWidth = bubbleMaxWidth - UiTokens.BUBBLE_PAD * 2.0F;
         List<RichLine> richLines = wrappedLines(msg, font, textMaxWidth);
-        List<String> lines = new ArrayList<>();
-        for (RichLine line : richLines) {
-            lines.add(line.getPlainText());
-        }
         // The bubble must hug the longest visible line. Using the single-line
         // width of the whole message collapsed multi-line messages (e.g. a hard
         // newline between two short lines) to a pill only as wide as the bubble
@@ -783,7 +815,7 @@ public final class MessageListView {
             bubbleWidth = bubbleMaxWidth;
         }
         float lineHeight = SkiaFontRenderer.getHeight(font);
-        float textHeight = Math.max(lineHeight, lines.size() * lineHeight);
+        float textHeight = Math.max(lineHeight, richLines.size() * lineHeight);
 
         // Layout formula: name band (first of group only) -> quote pill -> bubble.
         boolean hasQuote = msg.getQuoteName() != null;
@@ -791,7 +823,9 @@ public final class MessageListView {
         float band = grouped ? 0.0F : UiTokens.NAME_BAND;
         float bubbleTop = y + band + quoteH;
         float bubbleHeight = textHeight + UiTokens.BUBBLE_PAD_Y;
-        float nameOffset = UiTokens.AVATAR_SIZE + UiTokens.AVATAR_GAP;
+        // Bubble offset from the list edge; includes the avatar's edge inset so
+        // the avatar-bubble gap stays AVATAR_GAP after the avatar moved inward.
+        float nameOffset = UiTokens.AVATAR_SIZE + UiTokens.AVATAR_GAP + avatarEdgeInset();
         float bubbleX = msg.isOwn() ? x + maxWidth - bubbleWidth - nameOffset : x + nameOffset;
 
         float avatarX = 0.0F;
@@ -800,7 +834,8 @@ public final class MessageListView {
         if (!grouped) {
             // Name hugs the bubble's outer edge: right-aligned for own, left for others.
             drawMessageName(canvas, msg, y, bubbleX, bubbleX + bubbleWidth);
-            avatarX = msg.isOwn() ? x + maxWidth - UiTokens.AVATAR_SIZE : x;
+            avatarX = msg.isOwn() ? x + maxWidth - UiTokens.AVATAR_SIZE - avatarEdgeInset()
+                    : x + avatarEdgeInset();
             avatarY = y + s(4);
             avatarSize = UiTokens.AVATAR_SIZE;
             // Poke animation: QQ-style wobble — the avatar rocks around its centre
@@ -814,7 +849,12 @@ public final class MessageListView {
             drawQuotePill(canvas, msg, x, maxWidth, y + band, msg.isOwn());
         }
         SkiaDraw.drawRoundedRect(canvas, bubbleX, bubbleTop, bubbleWidth, bubbleHeight, UiTokens.BUBBLE_RADIUS, msg.isOwn() ? ownBubble() : otherBubble());
-        drawMessageSelection(canvas, msg, lines, bubbleX + UiTokens.BUBBLE_PAD, bubbleTop + bubbleHeight / 2.0F, lineHeight, font);
+        drawMessageSelection(canvas, msg, richLines, bubbleX + UiTokens.BUBBLE_PAD, bubbleTop + bubbleHeight / 2.0F, lineHeight, font);
+        // backing=true: bubble text keeps the soft drop shadow it has always
+        // had. The flag reads like a name-only concern, but the shadow block
+        // is now one filtered layer for the whole block (see
+        // RichTextRenderer#drawShadowPass), so covering the bubble here is
+        // cheaper than the per-run layers it replaced, not costlier.
         RichTextRenderer.drawLines(canvas, font, richLines, bubbleX + UiTokens.BUBBLE_PAD, bubbleTop + bubbleHeight / 2.0F,
                 lineHeight, bubbleText(msg), clickableSpans, true, true);
         drawDuplicateBadge(canvas, msg, bubbleX, bubbleWidth, bubbleTop, bubbleHeight);
@@ -830,12 +870,8 @@ public final class MessageListView {
     private MessageHit drawSystemMessage(Canvas canvas, ChatMessage msg, float x, float y, float maxWidth, int index) {
         Font font = FontManager.font(UiTokens.FONT_QUOTE);
         List<RichLine> richLines = wrappedLines(msg, font, maxWidth - UiTokens.BUBBLE_PAD * 2.0F);
-        List<String> lines = new ArrayList<>();
-        for (RichLine line : richLines) {
-            lines.add(line.getPlainText());
-        }
         float lineHeight = SkiaFontRenderer.getHeight(font);
-        float textHeight = Math.max(lineHeight, lines.size() * lineHeight);
+        float textHeight = Math.max(lineHeight, richLines.size() * lineHeight);
         float bubbleHeight = textHeight + UiTokens.SYSTEM_BUBBLE_PAD_Y;
         float lineMax = 0.0F;
         for (RichLine line : richLines) {
@@ -847,7 +883,7 @@ public final class MessageListView {
         // System capsules share the secondary capsule family (configurable).
         SkiaDraw.drawRoundedRect(canvas, bubbleX, bubbleTop, bubbleWidth, bubbleHeight, UiTokens.radius(10),
                 secondaryCapsuleBg());
-        drawMessageSelection(canvas, msg, lines, bubbleX + UiTokens.BUBBLE_PAD, bubbleTop + bubbleHeight / 2.0F, lineHeight, font);
+        drawMessageSelection(canvas, msg, richLines, bubbleX + UiTokens.BUBBLE_PAD, bubbleTop + bubbleHeight / 2.0F, lineHeight, font);
         RichTextRenderer.drawLines(canvas, font, richLines, bubbleX + UiTokens.BUBBLE_PAD, bubbleTop + bubbleHeight / 2.0F,
                 lineHeight, secondaryCapsuleText(), clickableSpans, true);
         float bottom = bubbleTop + bubbleHeight;
@@ -871,8 +907,11 @@ public final class MessageListView {
         // Align the quote's outer edge with the bubble's outer edge, not with
         // the avatar. The bubble uses AVATAR_GAP as the horizontal gap to the
         // avatar, so the quote must use the same token.
-        float pillX = own ? x + maxWidth - UiTokens.AVATAR_SIZE - UiTokens.AVATAR_GAP - pillW
-                : x + UiTokens.AVATAR_SIZE + UiTokens.AVATAR_GAP;
+        // Same edge inset as the avatar so the pill stays aligned with the
+        // shifted bubble's outer edge.
+        float pillX = own ? x + maxWidth - UiTokens.AVATAR_SIZE - UiTokens.AVATAR_GAP
+                - avatarEdgeInset() - pillW
+                : x + avatarEdgeInset() + UiTokens.AVATAR_SIZE + UiTokens.AVATAR_GAP;
         // Quote pill shares the secondary capsule family (configurable), so it
         // reads as the same family as system messages and time dividers.
         SkiaDraw.drawRoundedRect(canvas, pillX, pillY, pillW, UiTokens.QUOTE_HEIGHT, s(6), secondaryCapsuleBg());
@@ -951,7 +990,9 @@ public final class MessageListView {
 
     private MessageHit drawImageMessage(Canvas canvas, ChatMessage msg, String raw, String imageUrl,
                                         float x, float y, float maxWidth, int index, boolean grouped) {
-        float nameOffset = UiTokens.AVATAR_SIZE + UiTokens.AVATAR_GAP;
+        // Bubble offset from the list edge; includes the avatar's edge inset so
+        // the avatar-bubble gap stays AVATAR_GAP after the avatar moved inward.
+        float nameOffset = UiTokens.AVATAR_SIZE + UiTokens.AVATAR_GAP + avatarEdgeInset();
         boolean hasQuote = msg.getQuoteName() != null;
         float quoteH = hasQuote ? UiTokens.QUOTE_HEIGHT + UiTokens.QUOTE_GAP : 0.0F;
         float band = grouped ? 0.0F : UiTokens.NAME_BAND;
@@ -967,7 +1008,8 @@ public final class MessageListView {
         if (!grouped) {
             // Name hugs the bubble's outer edge, exactly like a text bubble.
             drawMessageName(canvas, msg, y, bubbleX, bubbleX + imageW);
-            avatarX = msg.isOwn() ? x + maxWidth - UiTokens.AVATAR_SIZE : x;
+            avatarX = msg.isOwn() ? x + maxWidth - UiTokens.AVATAR_SIZE - avatarEdgeInset()
+                    : x + avatarEdgeInset();
             avatarY = y + s(4);
             avatarSize = UiTokens.AVATAR_SIZE;
             drawAvatarWithPoke(canvas, msg, index, avatarX, avatarY);
@@ -1017,7 +1059,9 @@ public final class MessageListView {
         float pillW = Math.min(maxWidth - UiTokens.BUBBLE_RETRACT, textW + UiTokens.BUBBLE_PAD * 2.0F);
         float lineHeight = SkiaFontRenderer.getHeight(font);
         float pillH = lineHeight + UiTokens.SYSTEM_BUBBLE_PAD_Y;
-        float nameOffset = UiTokens.AVATAR_SIZE + UiTokens.AVATAR_GAP;
+        // Bubble offset from the list edge; includes the avatar's edge inset so
+        // the avatar-bubble gap stays AVATAR_GAP after the avatar moved inward.
+        float nameOffset = UiTokens.AVATAR_SIZE + UiTokens.AVATAR_GAP + avatarEdgeInset();
         float pillX = msg.isOwn() ? x + maxWidth - pillW - nameOffset : x + nameOffset;
         float pillTop = y + band + quoteH;
 
@@ -1026,7 +1070,8 @@ public final class MessageListView {
         float avatarSize = 0.0F;
         if (!grouped) {
             drawMessageName(canvas, msg, y, pillX, pillX + pillW);
-            avatarX = msg.isOwn() ? x + maxWidth - UiTokens.AVATAR_SIZE : x;
+            avatarX = msg.isOwn() ? x + maxWidth - UiTokens.AVATAR_SIZE - avatarEdgeInset()
+                    : x + avatarEdgeInset();
             avatarY = y + s(4);
             avatarSize = UiTokens.AVATAR_SIZE;
             drawAvatarWithPoke(canvas, msg, index, avatarX, avatarY);
@@ -1073,7 +1118,7 @@ public final class MessageListView {
         }
         float quoteH = msg.getQuoteName() != null ? UiTokens.QUOTE_HEIGHT + UiTokens.QUOTE_GAP : 0.0F;
         float band = grouped ? 0.0F : UiTokens.NAME_BAND;
-        BubbleKind kind = kindOf(msg);
+        BubbleKind kind = kindOfCached(msg);
         if (kind == BubbleKind.IMAGE_PLACEHOLDER) {
             Font font = FontManager.font(UiTokens.FONT_QUOTE);
             return band + quoteH
@@ -1095,7 +1140,7 @@ public final class MessageListView {
     public List<MessageTextLine> textLinesForHit(MessageHit hit) {
         List<MessageTextLine> out = new ArrayList<>();
         ChatMessage msg = hit.message();
-        BubbleKind kind = kindOf(msg);
+        BubbleKind kind = kindOfCached(msg);
         if (kind == BubbleKind.IMAGE || kind == BubbleKind.IMAGE_PLACEHOLDER) {
             return out;
         }
@@ -1150,12 +1195,19 @@ public final class MessageListView {
     /**
      * Draws the active selection highlight for one message before its text is
      * drawn, so the glyphs stay readable above the blue block. The range may
-     * start or end in another message.
+     * start or end in another message. Takes the wrapped lines and flattens
+     * them to plain text only once a selection exists — without one the whole
+     * list draws through here every frame and the plain copies used to be
+     * built and thrown away unread.
      */
-    private void drawMessageSelection(Canvas canvas, ChatMessage msg, List<String> lines, float textX,
+    private void drawMessageSelection(Canvas canvas, ChatMessage msg, List<RichLine> richLines, float textX,
                                       float centerY, float lineHeight, Font font) {
-        if (lines.isEmpty() || !hasSelection()) {
+        if (richLines.isEmpty() || !hasSelection()) {
             return;
+        }
+        List<String> lines = new ArrayList<>(richLines.size());
+        for (RichLine line : richLines) {
+            lines.add(line.getPlainText());
         }
         int[] range = selectionRangeFor(msg, lines.size());
         if (range == null) {
@@ -1275,6 +1327,17 @@ public final class MessageListView {
 
     private static float s(float v) {
         return UiTokens.s(v);
+    }
+
+    /**
+     * Breathing gap between the avatar and the list edge: the rim ring extends
+     * s(1.25) past the avatar box (radius s(0.75) plus half the s(1.0) stroke),
+     * so the avatar sits s(1.5) inside the list clip and the full circle stays
+     * visible. Bubbles shift with it (nameOffset) so the avatar-bubble gap is
+     * still AVATAR_GAP.
+     */
+    private static float avatarEdgeInset() {
+        return s(1.5F);
     }
 
     /** Minecraft language lookup for all AtomChat UI copy. */
