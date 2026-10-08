@@ -13,6 +13,7 @@ import com.atom.chat.ui.AppIcons;
 import com.atom.chat.ui.ActionFeedback;
 import com.atom.chat.ui.ActionToast;
 import com.atom.chat.image.ImageLoader;
+import com.atom.chat.image.ImagePreviewOverlay;
 import com.atom.chat.image.ImageSaver;
 import com.atom.chat.image.ImageUploader;
 import com.atom.chat.net.MediaCompanionClient;
@@ -165,6 +166,12 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
     });
     /** Modal HSV colour picker opened from the settings colour rows. */
     private final ColorPickerOverlay colorPicker = new ColorPickerOverlay(this::copyToClipboard);
+    /**
+     * Full-panel preview of a chat picture, opened by clicking an image bubble
+     * whose bitmap is already in hand. The third modal: while it is open,
+     * {@link ModalInput} hands it every event.
+     */
+    private final ImagePreviewOverlay imagePreview = new ImagePreviewOverlay();
     private final ProfilePage profilePage = new ProfilePage(new ProfilePage.Handler() {
         @Override
         public void openAvatarPicker() {
@@ -510,8 +517,8 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
     private NavPage pageNavFrom;
     private NavPage pageNavTo;
     private boolean pageNavPopPending;
-    /** Resolved once per nav in {@link #startPageNav}: zoom only for
-     *  root<->detail pairs while the config style is ZOOM. */
+    /** Resolved once per nav in {@link #startPageNav} by {@link #pageNavStyle()}:
+     *  true exactly while the configured style is ZOOM, for every page pair. */
     private boolean pageNavZoom;
     /**
      * Melodify-style serial zoom phases: the leaving page shrinks out first
@@ -1014,10 +1021,9 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
         pageNavTo = to;
         pageNavPopPending = popPending;
         // The style is resolved once per nav so push and pop can never
-        // disagree mid-flight: root<->detail pairs follow the config (both
-        // directions — a pop mirrors its push), detail<->detail pairs always
-        // slide (sibling translation, no depth).
-        AtomChatConfig.PageNavStyle style = pageNavStyle(from, to);
+        // disagree mid-flight, and every pair goes through the one resolver
+        // (pageNavStyle) — no page kind carries an animation rule of its own.
+        AtomChatConfig.PageNavStyle style = pageNavStyle();
         pageNavZoom = style == AtomChatConfig.PageNavStyle.ZOOM;
         if (pageNavZoom) {
             // The zoom runs on its own two-phase clock (UiMotion.expApproach,
@@ -1034,14 +1040,17 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
     }
 
     /**
-     * Nav style for a from->to pair: root<->detail hops use the configured
-     * style in both directions (pop included, so the return matches its
-     * push); detail<->detail hops are always a slide.
+     * The one resolution path for every page switch: root tabs, root<->detail,
+     * detail<->detail, pushes, pops and the banner-driven jumps all read the
+     * configured style here, in both directions (a pop mirrors its push).
+     *
+     * <p>The pair used to be split by kind — root<->detail followed the config
+     * while detail<->detail was pinned to SLIDE — which made the setting read
+     * as "does nothing" on the public<->private and chat<->profile hops and put
+     * a second, invisible rule next to the config field. No pair is special
+     * any more: the style is whatever {@link AtomChatConfig#pageNavStyle} says.
      */
-    private static AtomChatConfig.PageNavStyle pageNavStyle(NavPage from, NavPage to) {
-        if (from.isRoot() == to.isRoot()) {
-            return AtomChatConfig.PageNavStyle.SLIDE;
-        }
+    static AtomChatConfig.PageNavStyle pageNavStyle() {
         return AtomChatConfig.get().pageNavStyle;
     }
 
@@ -1170,10 +1179,11 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
             rootTabFrom = rootIndex(from);
             rootTabTo = rootIndex(root);
             // The content transition follows the configured page-nav style,
-            // resolved once per switch so it can't change mid-flight; the
-            // capsule is pinned to the source tab and travels from the same
-            // clock in stepRootNav.
-            rootTabZoom = AtomChatConfig.get().pageNavStyle == AtomChatConfig.PageNavStyle.ZOOM;
+            // resolved once per switch through the same resolver the push/pop
+            // path uses (one rule for every switch) so it can't change
+            // mid-flight; the capsule is pinned to the source tab and travels
+            // from the same clock in stepRootNav.
+            rootTabZoom = pageNavStyle() == AtomChatConfig.PageNavStyle.ZOOM;
             if (rootTabZoom) {
                 rootZoomPhase = ROOT_ZOOM_EXIT;
                 rootZoomExitAlpha = 1.0F;
@@ -1814,7 +1824,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
         // Modals own the top layer; a banner painted over them would be visible
         // but unclickable (ModalInput swallows the click), so hide it until the
         // modal closes. The 4s queue lifetime still lets it reappear.
-        if (imageCropper.isActive() || colorPicker.isActive()) {
+        if (imageCropper.isActive() || colorPicker.isActive() || imagePreview.isActive()) {
             return;
         }
         UiLayout.Rect panel = layout().rect();
@@ -2233,9 +2243,11 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
                 navRunning = false;
             } else if (pageNavFrom != null && pageNavTo != null
                     && !pageNavFrom.isRoot() && !pageNavTo.isRoot()) {
-                // Detail-to-detail (public <-> private) full-width push/pop.
-                // The message lists slide; the header/input chrome is drawn
-                // fixed once so the page change reads as a phone push.
+                // Detail-to-detail (public <-> private, chat <-> profile)
+                // full-width push/pop. Same style rule as root<->detail: SLIDE
+                // translates the two pages, ZOOM runs the shared serial
+                // fade+scale. The header/input chrome is drawn fixed once so
+                // the change reads as a page push whatever the style.
                 boolean popping = pageNavPopPending;
                 NavPage fromPage = pageNavFrom;
                 NavPage toPage = pageNavTo;
@@ -2244,8 +2256,69 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
                 float fromDx = popping ? travel * progress : -travel * progress;
                 float toDx = popping ? -travel * (1.0F - progress) : travel * (1.0F - progress);
                 suppressHeader = true;
-                if (fromPage.page() == AppPage.PROFILE_DETAIL
-                        || toPage.page() == AppPage.PROFILE_DETAIL) {
+                // Chat <-> profile detail has no shared chrome to hold fixed
+                // (the profile page has no composer at all), so the whole chat
+                // body travels as one piece; world <-> private has identical
+                // chrome on both sides, so only the two lists move under it.
+                boolean profilePair = fromPage.page() == AppPage.PROFILE_DETAIL
+                        || toPage.page() == AppPage.PROFILE_DETAIL;
+                if (pageNavZoom) {
+                    // ZOOM: one side per phase, on the shared serial clock —
+                    // the same navZoomPhase / navExitAlpha / navEnterAlpha the
+                    // root<->detail push rides, so the setting means the same
+                    // motion on every pair. EXIT drains the page being left
+                    // (alpha 1 -> 0 at scale 1.0 -> 0.9), ENTER settles the
+                    // arriving one (0 -> 1 at 1.1 -> 1.0). The invisible phase
+                    // is skipped outright, so the halves never double-expose,
+                    // and a settled alpha+scale skips the layer (pure overdraw,
+                    // the state decorative-motion-off lands in on frame one).
+                    boolean exiting = navZoomPhase == NAV_ZOOM_EXIT;
+                    NavPage visible = exiting ? fromPage : toPage;
+                    float alpha = exiting ? navExitAlpha : navEnterAlpha;
+                    float scale = exiting ? 0.9F + alpha * 0.1F : 1.1F - alpha * 0.1F;
+                    UiLayout.Rect panelRect = layout.rect();
+                    Paint layer = null;
+                    canvas.save();
+                    if (!navLayerSkippable(alpha, scale)) {
+                        layer = new Paint().setAlphaf(alpha);
+                        canvas.saveLayer(Rect.makeXYWH(panelRect.x(), panelRect.y(),
+                                panelRect.w(), panelRect.h()), layer);
+                    }
+                    // Same rounded panel clip and centre scale as the
+                    // root<->detail zoom: the moving body follows the bezel
+                    // corner radius instead of biting it with square edges.
+                    SkiaDraw.clip(canvas, panelRect.x(), panelRect.y(), panelRect.w(), panelRect.h(),
+                            UiTokens.panelRadius());
+                    applyNavScale(canvas, panelRect, scale);
+                    if (visible.page() == AppPage.PROFILE_DETAIL) {
+                        drawProfileDetail(canvas, mouseX, mouseY);
+                    } else if (profilePair) {
+                        // The chat side keeps its composer with it, exactly as
+                        // in the slide below: this pair has no shared chrome to
+                        // hold fixed.
+                        layout = updateInputLayout(layout);
+                        drawChatPageBody(canvas, layout, mouseX, mouseY, visible);
+                    } else {
+                        // World <-> private: identical chrome, so only the list
+                        // content moves (offsets are the zoom layer's, not a
+                        // translation).
+                        drawMessageLayerForNav(canvas, layout, visible, 0.0F);
+                    }
+                    if (layer != null) {
+                        canvas.restore();
+                        layer.close();
+                    }
+                    canvas.restore();
+                    if (!profilePair) {
+                        // The shared composer surface stays put, matching the
+                        // slide: it never leaves the frame.
+                        UiLayout.Rect bar = layout.inputBar;
+                        SkiaDraw.drawChromeShadow(canvas, bar.x(), bar.y(), bar.w(), bar.h(),
+                                UiTokens.chromeRadius());
+                        SkiaDraw.drawRoundedRect(canvas, bar.x(), bar.y(), bar.w(), bar.h(),
+                                UiTokens.chromeRadius(), UiTokens.cardFill());
+                    }
+                } else if (profilePair) {
                     // Chat <-> profile detail: full-width page push. The whole
                     // chat body (messages, reply bar, composer) slides as one
                     // piece under the incoming profile page — the lists-only
@@ -2505,6 +2578,8 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
             emojiPanel.render(canvas, layout, toVirtualX(mouseX), toVirtualY(mouseY), frameDt);
             quickPhrasePanel.render(canvas, layout, toVirtualX(mouseX), toVirtualY(mouseY), frameDt);
             drawContextMenu(canvas, toVirtualX(mouseX), toVirtualY(mouseY));
+            // Last inside the panel: a modal over the page it was opened from.
+            imagePreview.render(canvas, layout.rect(), toVirtualX(mouseX), toVirtualY(mouseY));
         }
 
         if (navRunning) {
@@ -4455,10 +4530,19 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
         }
     }
 
-    /** The avatar cropper and the colour picker are modals: while active, each owns every event. */
+    /**
+     * The picture preview, the avatar cropper and the colour picker are modals:
+     * while active, each owns every event.
+     */
     private final class ModalInput implements InputHandler {
         @Override
         public boolean onClick(double mouseX, double mouseY, int button) {
+            // The picture preview: a click on the picture keeps it open, a click
+            // on the dim backdrop or the close key dismisses it.
+            if (imagePreview.isActive()) {
+                imagePreview.onClick(toVirtualX(mouseX), toVirtualY(mouseY), layout().rect());
+                return true;
+            }
             // The avatar cropper is modal: while it is open it owns every click.
             if (imageCropper.isActive()) {
                 imageCropper.onClick(toVirtualX(mouseX), toVirtualY(mouseY), layout().rect());
@@ -4474,6 +4558,12 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
 
         @Override
         public boolean onDrag(double mouseX, double mouseY, int button, double dragX, double dragY) {
+            // The preview has nothing to drag (this version has no pan or zoom),
+            // but the drag is still its own: the list underneath must not start
+            // a text selection behind the modal.
+            if (imagePreview.isActive()) {
+                return true;
+            }
             // Pan the avatar-crop image while the modal cropper is open.
             if (imageCropper.isActive()) {
                 imageCropper.onDrag(toVirtualX(mouseX), toVirtualY(mouseY), layout().rect());
@@ -4488,6 +4578,9 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
 
         @Override
         public boolean onRelease(double mouseX, double mouseY, int button) {
+            if (imagePreview.isActive()) {
+                return true;
+            }
             if (imageCropper.isActive()) {
                 imageCropper.endDrag();
                 return true;
@@ -4501,6 +4594,11 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
 
         @Override
         public boolean onScroll(double mouseX, double mouseY, double horizontalAmount, double verticalAmount) {
+            // Consumed so the wheel never scrolls the list behind the preview
+            // (the preview itself has no zoom in this version).
+            if (imagePreview.isActive()) {
+                return true;
+            }
             // Wheel zooms the crop image around the circle centre while active.
             if (imageCropper.isActive()) {
                 imageCropper.onScroll(layout().rect(), verticalAmount);
@@ -4515,6 +4613,13 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
 
         @Override
         public boolean onKey(int keyCode, int scanCode, int modifiers) {
+            // The preview is modal: Esc dismisses it, every other key is swallowed.
+            if (imagePreview.isActive()) {
+                if (keyCode == 256) {
+                    imagePreview.close();
+                }
+                return true;
+            }
             // The cropper is modal: Esc cancels it, every other key is swallowed.
             if (imageCropper.isActive()) {
                 if (keyCode == 256) {
@@ -4581,6 +4686,10 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
 
         @Override
         public boolean onChar(char chr, int modifiers) {
+            // Nothing typed reaches the composer while the preview is up.
+            if (imagePreview.isActive()) {
+                return true;
+            }
             // The colour picker's hex input swallows typed characters while active.
             if (colorPicker.isActive()) {
                 colorPicker.onChar(chr);
@@ -5160,6 +5269,24 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
                 if (messageListView.loadEarlierHitAt(mx, my)) {
                     messageListView.requestLoadEarlier();
                     return true;
+                }
+                // A press on a picture whose bitmap is already loaded opens the
+                // preview. imageHitAt answers only for a bubble the last frame
+                // resolved an image for, so the loading plate and the [图片]
+                // capsule fall through to the ordinary row handling below.
+                MessageListView.MessageHit imageHit = messageListView.imageHitAt(mx, my);
+                if (imageHit != null) {
+                    // The bitmap comes from the cache the bubble drew from, so
+                    // opening the preview downloads nothing a second time.
+                    Image bitmap = ImageLoader.get().get(imageHit.imageUrl(), true);
+                    if (bitmap != null) {
+                        imagePreview.open(bitmap);
+                        // This press belongs to the modal now: nothing was armed
+                        // for a clickable span or a selection on the way here.
+                        pendingClickSpan = null;
+                        pendingClickMoved = false;
+                        return true;
+                    }
                 }
             }
 

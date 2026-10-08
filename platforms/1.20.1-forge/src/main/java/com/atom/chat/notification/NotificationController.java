@@ -3,6 +3,7 @@ package com.atom.chat.notification;
 import com.atom.chat.AtomChat;
 import com.atom.chat.chat.ChatMessage;
 import com.atom.chat.config.AtomChatConfig;
+import com.atom.chat.text.RichText;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.resources.sounds.SimpleSoundInstance;
 import net.minecraft.core.registries.Registries;
@@ -135,11 +136,19 @@ public final class NotificationController {
         boolean canQueue = NotificationBanner.enabled(type)
                 && client != null && client.level != null;
         if (canQueue) {
+            // The banner takes the message's rich parts, not their plain text: the
+            // sender name's team colour and every coloured run of the body reach
+            // the banner rows. The plain sender stays as the fallback for a
+            // message whose rich sender part is empty (a system line), which is
+            // what the old string path enqueued.
             String sender = message.getSenderName();
             if (sender == null || sender.isBlank()) {
                 sender = message.getProfileName();
             }
-            NotificationBanner.INSTANCE.enqueue(type, sender, message.getDisplayText(), message);
+            RichText senderRich = message.getSenderRich();
+            NotificationBanner.INSTANCE.enqueue(type,
+                    senderRich.isEmpty() ? RichText.literal(sender == null ? "" : sender) : senderRich,
+                    message.getContentRich(), message);
         }
     }
 

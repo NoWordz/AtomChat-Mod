@@ -72,13 +72,25 @@ public final class MessageListView {
 
     public record MessageHit(ChatMessage message, int index, float x, float y, float maxWidth, float bottom,
                              float avatarX, float avatarY, float avatarSize, float bubbleY, float bubbleX,
-                             float bubbleWidth, float bubbleBottom) {
+                             float bubbleWidth, float bubbleBottom, String imageUrl) {
+    }
+
+    /** Url → decoded bitmap. Production is the shared cache; tests inject one. */
+    @FunctionalInterface
+    public interface ImageLookup {
+        /**
+         * @param visible whether this call may start a download — the message
+         *                list's draw is viewport-gated, so it passes true (the
+         *                same contract as {@link ImageLoader#get(String, boolean)}).
+         */
+        Image get(String url, boolean visible);
     }
 
     private static final long MESSAGE_ANIM_MS = UiMotion.MESSAGE_MS;
     private static final long ENTRANCE_SETTLE_GUARD_MS = 5000L;
 
     private final Host host;
+    private final ImageLookup images;
 
     private final List<MessageHit> hits = new ArrayList<>();
     private final List<ClickableSpan> clickableSpans = new ArrayList<>();
@@ -189,7 +201,18 @@ public final class MessageListView {
     private long highlightUntil;
 
     public MessageListView(Host host) {
+        this(host, ImageLoader.get()::get);
+    }
+
+    /**
+     * Test seam: the same view with an injected bitmap source, so the branch a
+     * click depends on — "this bubble's bitmap is in hand" versus "it is still
+     * loading" — can be driven without a network, a disk cache or a real
+     * download. Production always goes through {@link #MessageListView(Host)}.
+     */
+    MessageListView(Host host, ImageLookup images) {
         this.host = host;
+        this.images = images;
     }
 
     // ------------------------------------------------------------------ public api
@@ -354,7 +377,8 @@ public final class MessageListView {
                     // Hits are hit-tested in screen space; drawing happens in content space.
                     hits.add(new MessageHit(hit.message(), hit.index(), hit.x(), hit.y() - scroll.getScrollY(), hit.maxWidth(),
                             hit.bottom() - scroll.getScrollY(), hit.avatarX(), hit.avatarY() - scroll.getScrollY(), hit.avatarSize(),
-                            hit.bubbleY() - scroll.getScrollY(), hit.bubbleX(), hit.bubbleWidth(), hit.bubbleBottom() - scroll.getScrollY()));
+                            hit.bubbleY() - scroll.getScrollY(), hit.bubbleX(), hit.bubbleWidth(), hit.bubbleBottom() - scroll.getScrollY(),
+                            hit.imageUrl()));
                 } else {
                     // Left the viewport: drop the start timestamp only. The
                     // settled marker is deliberately kept so scrolling back up
@@ -452,6 +476,32 @@ public final class MessageListView {
     /** Hit geometry from the most recent {@link #draw}; valid for the same frame. */
     public List<MessageHit> hits() {
         return hits;
+    }
+
+    /**
+     * The picture a click at (mx,my) opens, or null. Pure geometry over the
+     * last frame's hits: the row must carry a url (the frame found its bitmap)
+     * and the point must be inside the picture's own rect — not the row, and not
+     * the name band above the bubble. A bubble whose image is still downloading,
+     * the [图片] capsule and every text bubble therefore answer nothing.
+     *
+     * <p>Screen space, like every other hit test here: the coordinates are the
+     * ones the screen already converts its mouse position into.
+     */
+    public MessageHit imageHitAt(float mx, float my) {
+        for (MessageHit hit : hits) {
+            if (hit.imageUrl() == null) {
+                continue;
+            }
+            if (mx < hit.bubbleX() || mx > hit.bubbleX() + hit.bubbleWidth()) {
+                continue;
+            }
+            if (my < hit.bubbleY() || my > hit.bubbleBottom()) {
+                continue;
+            }
+            return hit;
+        }
+        return null;
     }
 
     public boolean hasSelection() {
@@ -1023,7 +1073,10 @@ public final class MessageListView {
         drawDuplicateBadge(canvas, msg, bubbleX, bubbleWidth, bubbleTop, bubbleHeight);
 
         float bottom = bubbleTop + bubbleHeight;
-        return new MessageHit(msg, index, x, y, maxWidth, bottom, avatarX, avatarY, avatarSize, bubbleTop, bubbleX, bubbleWidth, bottom);
+        // No picture on a text row, so the hit carries no url: a click can never
+        // open a preview from here.
+        return new MessageHit(msg, index, x, y, maxWidth, bottom, avatarX, avatarY, avatarSize, bubbleTop, bubbleX, bubbleWidth,
+                bottom, null);
     }
 
     /**
@@ -1053,7 +1106,8 @@ public final class MessageListView {
                 lineHeight, secondaryCapsuleText(), clickableSpans, true, TextSurface.CAPSULE.shadowed(),
                 secondaryCapsuleBg());
         float bottom = bubbleTop + bubbleHeight;
-        return new MessageHit(msg, index, x, y, maxWidth, bottom, 0.0F, 0.0F, 0.0F, bubbleTop, bubbleX, bubbleWidth, bottom);
+        return new MessageHit(msg, index, x, y, maxWidth, bottom, 0.0F, 0.0F, 0.0F, bubbleTop, bubbleX, bubbleWidth, bottom,
+                null);
     }
 
     /**
@@ -1297,7 +1351,7 @@ public final class MessageListView {
         if (hasQuote) {
             drawQuotePill(canvas, msg, x, maxWidth, y + band, msg.isOwn());
         }
-        Image image = ImageLoader.get().get(imageUrl, true);
+        Image image = images.get(imageUrl, true);
         if (image != null) {
             // No bubble fill behind a loaded image: a transparent PNG/GIF must
             // show the panel behind it, not a grey plate. The rounded clip in
@@ -1319,7 +1373,12 @@ public final class MessageListView {
         drawDuplicateBadge(canvas, msg, bubbleX, imageW, bubbleTop, imageH);
 
         float bottom = bubbleTop + imageH;
-        return new MessageHit(msg, index, x, y, maxWidth, bottom, avatarX, avatarY, avatarSize, bubbleTop, bubbleX, imageW, bottom);
+        // The url travels on the hit only when the frame found the bitmap: a
+        // bubble still showing its loading plate must not answer a click, or the
+        // preview would open empty (and the still-downloading image would be
+        // fetched a second time).
+        return new MessageHit(msg, index, x, y, maxWidth, bottom, avatarX, avatarY, avatarSize, bubbleTop, bubbleX, imageW,
+                bottom, image != null ? imageUrl : null);
     }
 
     /**
@@ -1366,7 +1425,10 @@ public final class MessageListView {
                 placeholderGreen(secondaryCapsuleBg()), TextSurface.CAPSULE.shadowed(), secondaryCapsuleBg());
         drawDuplicateBadge(canvas, msg, pillX, pillW, pillTop, pillH);
         float bottom = pillTop + pillH;
-        return new MessageHit(msg, index, x, y, maxWidth, bottom, avatarX, avatarY, avatarSize, pillTop, pillX, pillW, bottom);
+        // The capsule stands in for a picture that is deliberately not shown, so
+        // it never carries a url and never opens a preview.
+        return new MessageHit(msg, index, x, y, maxWidth, bottom, avatarX, avatarY, avatarSize, pillTop, pillX, pillW, bottom,
+                null);
     }
 
     private float measureContentHeight(List<ChatMessage> messages, float width, int from) {

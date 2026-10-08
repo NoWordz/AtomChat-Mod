@@ -1910,47 +1910,97 @@ public final class SettingsSectionPage {
     }
 
     /**
-     * About-page hero: the logo on a white plate (the source PNG has no alpha,
-     * so it needs a light ground) beside the wordmark. The plate/image split is
-     * deliberate — a future art-text logo only has to replace
-     * {@link #heroImage()}, nothing else in the card moves.
+     * About-page hero: the bundled fluid art drawn across the whole card,
+     * rounded, with the de-keyed red mark centred on the cool band the art
+     * reserves for it. No version or licence copy lives here — that is the
+     * mod-info card below — and no wordmark either: the shell header already
+     * titles the page.
+     *
+     * <p>Three decisions shape this. The art is a static shipped PNG, because
+     * the fluid language cannot be redrawn per frame at this size and a baked
+     * asset keeps the hero at one {@code drawImageRect}. The crop is a centred
+     * cover crop, not a stretch, because the card's aspect follows the panel
+     * width — stretching would smear the ribbons and squash the mark. And the
+     * mark is drawn over the art rather than baked into it, so the red stays
+     * crisp at every ui density and the emblem keeps scaling off one number,
+     * {@link UiTokens#SETTINGS_HERO_PLATE} (now the emblem's side; it used to
+     * be the white plate's, and that plate is gone with the white ground).</p>
      */
     private void drawHero(Canvas canvas, UiLayout.Rect rect) {
-        UiCards.drawCard(canvas, rect.x(), rect.y(), rect.w(), rect.h(),
-                UiTokens.settingsRowRadius(), 0.0F);
-        Image hero = heroImage();
-        float plate = UiTokens.SETTINGS_HERO_PLATE;
-        float plateX = rect.x() + UiTokens.SETTINGS_ROW_PAD;
-        float plateY = rect.y() + (rect.h() - plate) / 2.0F;
-        float plateR = s(12);
-        SkiaDraw.drawRoundedRect(canvas, plateX, plateY, plate, plate, plateR, Color.makeARGB(255, 250, 250, 250));
-        if (hero != null) {
-            float inset = s(7);
-            SkiaDraw.drawRoundedImage(canvas, hero, plateX + inset, plateY + inset,
-                    plate - inset * 2.0F, plate - inset * 2.0F, plateR - inset, SamplingMode.LINEAR);
+        float radius = UiTokens.settingsRowRadius();
+        Image art = heroImage();
+        if (art == null) {
+            // No art on the classpath: keep the old card-and-wordmark hero, so
+            // a packaging mistake degrades to a plain header, never to an
+            // empty band.
+            UiCards.drawCard(canvas, rect.x(), rect.y(), rect.w(), rect.h(), radius, 0.0F);
+            Font heroFont = FontManager.font(UiTokens.SETTINGS_HERO_FONT);
+            SkiaFontRenderer.drawText(canvas, heroFont, tr("atomchat.screen.title"),
+                    rect.x() + UiTokens.SETTINGS_ROW_PAD,
+                    SkiaFontRenderer.centerBaselineY(heroFont, rect.y() + rect.h() / 2.0F),
+                    textPrimary());
+            return;
         }
-        Font heroFont = FontManager.font(UiTokens.SETTINGS_HERO_FONT);
-        SkiaFontRenderer.drawText(canvas, heroFont, tr("atomchat.screen.title"),
-                plateX + plate + s(14),
-                SkiaFontRenderer.centerBaselineY(heroFont, rect.y() + rect.h() / 2.0F),
-                textPrimary());
+        SkiaDraw.drawRoundedShadow(canvas, rect.x(), rect.y(), rect.w(), rect.h(),
+                radius, s(6), UiTokens.CARD_SHADOW);
+        SkiaDraw.drawImageCover(canvas, art, rect.x(), rect.y(), rect.w(), rect.h(),
+                radius, SamplingMode.LINEAR);
+        Image mark = heroLogo();
+        if (mark != null) {
+            UiLayout.Rect logo = heroLogoRect(rect);
+            SkiaDraw.drawRoundedImage(canvas, mark, logo.x(), logo.y(), logo.w(), logo.h(),
+                    0.0F, SamplingMode.LINEAR);
+        }
+    }
+
+    /**
+     * The square the emblem occupies inside a hero card: centred on both axes
+     * and sized off the hero's own emblem token, so it scales with the row
+     * rather than with the panel width and never lands off the art's reserved
+     * cool band. Pure geometry — a test can pin it without a canvas.
+     */
+    static UiLayout.Rect heroLogoRect(UiLayout.Rect hero) {
+        float side = UiTokens.SETTINGS_HERO_PLATE;
+        return new UiLayout.Rect(hero.x() + (hero.w() - side) / 2.0F,
+                hero.y() + (hero.h() - side) / 2.0F, side, side);
     }
 
     private static Image heroImage;
+    private static Image heroLogo;
 
-    /** The bundled {@code logo.png}, decoded once and cached for the session. */
+    /** The bundled hero art, decoded once and cached for the session. */
     private static Image heroImage() {
         if (heroImage != null) {
             return heroImage;
         }
-        try (var stream = SettingsSectionPage.class.getResourceAsStream("/assets/atomchat/logo.png")) {
+        heroImage = loadBundled("/assets/atomchat/about_hero.png");
+        return heroImage;
+    }
+
+    /**
+     * The bundled logo with its white ground keyed out to alpha, decoded once.
+     * Separate from {@code logo.png} (which stays the mod icon and keeps its
+     * white ground, because the loader's icon slot wants one).
+     */
+    private static Image heroLogo() {
+        if (heroLogo != null) {
+            return heroLogo;
+        }
+        heroLogo = loadBundled("/assets/atomchat/logo_mark.png");
+        return heroLogo;
+    }
+
+    /** Decodes a bundled PNG, or null when it is missing or unreadable. */
+    private static Image loadBundled(String path) {
+        try (var stream = SettingsSectionPage.class.getResourceAsStream(path)) {
             if (stream != null) {
-                heroImage = Image.makeFromEncoded(stream.readAllBytes());
+                return Image.makeFromEncoded(stream.readAllBytes());
             }
         } catch (Exception ignored) {
-            // No logo: the plate draws empty and the card still reads fine.
+            // Missing art is a packaging mistake, not a crash: the caller
+            // falls back to the card-and-wordmark shape.
         }
-        return heroImage;
+        return null;
     }
 
     /**

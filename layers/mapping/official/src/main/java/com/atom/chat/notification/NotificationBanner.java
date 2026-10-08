@@ -5,8 +5,10 @@ import com.atom.chat.config.AtomChatConfig;
 import com.atom.chat.font.FontManager;
 import com.atom.chat.image.PlayerAvatar;
 import com.atom.chat.render.Easing;
+import com.atom.chat.render.RichTextRenderer;
 import com.atom.chat.render.SkiaDraw;
 import com.atom.chat.render.SkiaFontRenderer;
+import com.atom.chat.text.RichText;
 import com.atom.chat.ui.Animations;
 import com.atom.chat.ui.PressScale;
 import com.atom.chat.ui.UiCards;
@@ -25,6 +27,7 @@ import io.github.humbleui.skija.Path;
 import io.github.humbleui.skija.SamplingMode;
 import io.github.humbleui.types.Rect;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.Style;
 
 import java.util.ArrayList;
 import java.util.IdentityHashMap;
@@ -73,6 +76,22 @@ public final class NotificationBanner {
     private static final float BUTTON_SIZE = UiTokens.s(26);
     /** iOS-style drop-in travel distance. */
     private static final float DROP_TRAVEL = UiTokens.s(14);
+
+    /**
+     * The type label's semantic colours, replicated from the HUD: quote is the
+     * blue {@link com.atom.chat.text.ChatTextRewriter} stamps on the vanilla
+     * chat's rewritten {@code [引用]} marker and whisper the magenta it stamps on
+     * {@code [私聊]}. Both HUD constants are private, hence the copies — the two
+     * surfaces must agree on the number, or the same event reads as two
+     * different signals. A mention has no HUD colour of its own and takes the
+     * theme accent instead: the ink the shell already uses for its own emphasis.
+     */
+    private static final int TYPE_QUOTE_RGB = 0x4A90E2;
+    private static final int TYPE_WHISPER_RGB = 0xFF55FF;
+    /** Colourless gap between the type label and the sender; takes the row's fallback ink. */
+    private static final String TITLE_GAP = "  ";
+    /** One-glyph truncation marker, colourless like {@link #TITLE_GAP}. */
+    private static final String ELLIPSIS = "…";
 
     /**
      * Vertical padding above the title row and below the body row. Published,
@@ -157,7 +176,15 @@ public final class NotificationBanner {
     private final Map<Active, PressScale> buttonScales = new IdentityHashMap<>();
     private long lastHoverMs;
 
-    public record Active(Type type, String sender, String content, long born, ChatMessage message) {
+    /**
+     * One live banner. The two text parts are {@link RichText} rather than plain
+     * strings: the capture path hands over the runs sliced out of the original
+     * line, so an explicitly coloured sender or a multi-coloured body survives
+     * all the way to the draw call. Nothing here can flatten that to a string
+     * again — {@link #drawBanner} reads the runs. {@code message} stays for the
+     * avatar and for the jump target.
+     */
+    public record Active(Type type, RichText sender, RichText content, long born, ChatMessage message) {
     }
 
     private record Hit(Active banner, Rect rect) {
@@ -166,15 +193,52 @@ public final class NotificationBanner {
     private NotificationBanner() {
     }
 
-    public void enqueue(Type type, String sender, String content, ChatMessage message) {
+    /**
+     * Enqueues a banner from rich parts: the seam the capture path uses. Explicit
+     * run colours (a team-coloured sender, a multi-coloured body) travel through
+     * untouched; only colourless runs take the float surface's ink at draw time.
+     * A {@code null} part is normalised to an empty {@link RichText} so the draw
+     * path never has to null-check.
+     */
+    public void enqueue(Type type, RichText senderRich, RichText contentRich, ChatMessage message) {
         long now = System.currentTimeMillis();
-        banners.add(0, new Active(type, sender, content, now, message));
+        banners.add(0, new Active(type, literalOrEmpty(senderRich), literalOrEmpty(contentRich), now, message));
         while (banners.size() > MAX_STACK) {
             Active dropped = banners.remove(banners.size() - 1);
             hoverAlphas.remove(dropped);
             buttonHovers.remove(dropped);
             buttonScales.remove(dropped);
         }
+    }
+
+    /**
+     * Plain-string entry, kept for callers that hold no rich parts. The message's
+     * own rich sender and body are preferred when it carries them: this signature
+     * predates the rich parts, and a caller on it must not silently lose the
+     * wire's colours.
+     */
+    public void enqueue(Type type, String sender, String content, ChatMessage message) {
+        enqueue(type,
+                richOrLiteral(message != null ? message.getSenderRich() : null, sender),
+                richOrLiteral(message != null ? message.getContentRich() : null, content),
+                message);
+    }
+
+    /** The newest banner, for tests: the render and hit paths never read the stack directly. */
+    Active newest() {
+        return banners.isEmpty() ? null : banners.get(0);
+    }
+
+    private static RichText literalOrEmpty(RichText rich) {
+        return rich != null ? rich : RichText.empty();
+    }
+
+    /** Keeps a non-empty rich part; anything else becomes the plain literal. */
+    private static RichText richOrLiteral(RichText rich, String plain) {
+        if (rich != null && !rich.isEmpty()) {
+            return rich;
+        }
+        return RichText.literal(plain == null ? "" : plain);
     }
 
     /**
@@ -367,6 +431,103 @@ public final class NotificationBanner {
         return new Rows(top + titleH / 2.0F, top + titleH + TEXT_LINE_GAP + bodyH / 2.0F);
     }
 
+    /**
+     * The title row: the type label dyed with its HUD semantic colour (see
+     * {@link #TYPE_QUOTE_RGB}), a colourless two-space gap and the sender exactly
+     * as the wire sent it. A sender run that carries an explicit colour keeps it;
+     * the rest take the row's fallback ink. An empty sender leaves the label
+     * alone rather than a dangling gap, as the plain-string version did.
+     */
+    static RichText titleRich(Type type, RichText sender) {
+        RichText label = RichText.of(Component.literal(tr(typeKey(type)))
+                .setStyle(Style.EMPTY.withColor(typeLabelColor(type))));
+        if (sender == null || sender.isEmpty()) {
+            return label;
+        }
+        return RichText.concat(RichText.concat(label, RichText.literal(TITLE_GAP)), sender);
+    }
+
+    /** The colour each type's label is dyed; see {@link #TYPE_QUOTE_RGB}. */
+    static int typeLabelColor(Type type) {
+        return switch (type) {
+            case MENTION -> AtomChatConfig.get().accentColor;
+            case QUOTE -> 0xFF000000 | TYPE_QUOTE_RGB;
+            case WHISPER -> 0xFF000000 | TYPE_WHISPER_RGB;
+        };
+    }
+
+    /**
+     * The body row: the message's own runs with newlines flattened to spaces, so
+     * the single-line row cannot spill into the gap below it. Flattening rewrites
+     * through {@link RichText#slice}, never through the joined string, so every
+     * run keeps its style.
+     */
+    static RichText bodyRich(RichText content) {
+        if (content == null || content.isEmpty()) {
+            return RichText.empty();
+        }
+        String plain = content.getString();
+        if (plain.indexOf('\n') < 0) {
+            return content;
+        }
+        RichText out = RichText.empty();
+        int start = 0;
+        for (int i = 0; i < plain.length(); i++) {
+            if (plain.charAt(i) == '\n') {
+                out = RichText.concat(RichText.concat(out, content.slice(start, i)), RichText.literal(" "));
+                start = i + 1;
+            }
+        }
+        return RichText.concat(out, content.slice(start, plain.length()));
+    }
+
+    /**
+     * Draws one single-line rich row through {@link RichTextRenderer}: each run
+     * takes its own explicit colour and only colourless runs take
+     * {@code fallbackColor}.
+     */
+    private static void drawRichRow(Canvas canvas, Font font, RichText text,
+                                    float x, float centerY, float maxWidth, int fallbackColor) {
+        RichText clipped = truncateRich(font, text, maxWidth);
+        if (clipped.isEmpty()) {
+            return;
+        }
+        RichTextRenderer.drawLines(canvas, font,
+                RichTextRenderer.wrapFor(clipped, font, Float.MAX_VALUE),
+                x, centerY, SkiaFontRenderer.getHeight(font), fallbackColor, null, false);
+    }
+
+    /**
+     * Truncates a rich row to {@code maxWidth} with an ellipsis, keeping every
+     * kept run's style — the same rule the quote capsule's own truncator follows,
+     * so a cut row is never flattened back into a plain string. The ellipsis is
+     * colourless and takes the row's fallback ink; code-point stepping never
+     * splits a surrogate pair.
+     */
+    static RichText truncateRich(Font font, RichText text, float maxWidth) {
+        String plain = text.getString();
+        if (SkiaFontRenderer.getStringWidth(font, plain) <= maxWidth) {
+            return text;
+        }
+        if (maxWidth <= 0.0F) {
+            return RichText.concat(text.slice(0, 1), RichText.literal(ELLIPSIS));
+        }
+        float ellipsisW = SkiaFontRenderer.getStringWidth(font, ELLIPSIS);
+        int end = 0;
+        int i = 0;
+        while (i < plain.length()) {
+            int next = i + Character.charCount(plain.codePointAt(i));
+            if (SkiaFontRenderer.getStringWidth(font, plain.substring(0, next)) + ellipsisW > maxWidth) {
+                break;
+            }
+            i = next;
+            end = next;
+        }
+        return end <= 0
+                ? RichText.literal(ELLIPSIS)
+                : RichText.concat(text.slice(0, end), RichText.literal(ELLIPSIS));
+    }
+
     private void drawBanner(Canvas canvas, Active b, float x, float y, float w, float h,
                             float alpha, float hover, float buttonHover, PressScale sendScale) {
         float radius = UiTokens.cardRadius();
@@ -425,18 +586,16 @@ public final class NotificationBanner {
                 Rows rows = textRows(y, h);
                 Font titleFont = FontManager.boldFont(UiTokens.FONT_NAME);
                 Font bodyFont = FontManager.font(UiTokens.FONT_QUOTE);
-                String typeLabel = tr(typeKey(b.type()));
-                String title = typeLabel + (b.sender() != null && !b.sender().isBlank() ? "  " + b.sender() : "");
-                SkiaFontRenderer.drawText(canvas, titleFont,
-                        SkiaFontRenderer.truncate(titleFont, title, textW),
-                        textX, SkiaFontRenderer.centerBaselineY(titleFont, rows.title()),
-                        UiTokens.onFloatSurface(fill));
-
-                String preview = b.content() == null ? "" : b.content().replace('\n', ' ');
-                SkiaFontRenderer.drawText(canvas, bodyFont,
-                        SkiaFontRenderer.truncate(bodyFont, preview, textW),
-                        textX, SkiaFontRenderer.centerBaselineY(bodyFont, rows.body()),
-                        UiTokens.onFloatSurfaceSecondary(fill));
+                // Both rows are drawn as rich runs, never as a concatenated
+                // string: the label keeps its HUD semantic colour, the sender and
+                // the body keep every colour the wire gave them, and only
+                // colourless runs take the float surface's own ink. Truncation
+                // happens on the runs too, so a cut row still shows the styles of
+                // the text it kept.
+                drawRichRow(canvas, titleFont, titleRich(b.type(), b.sender()),
+                        textX, rows.title(), textW, UiTokens.onFloatSurface(fill));
+                drawRichRow(canvas, bodyFont, bodyRich(b.content()),
+                        textX, rows.body(), textW, UiTokens.onFloatSurfaceSecondary(fill));
 
                 // The whole control scales: fill, wash and glyph travel together.
                 // begin() keeps its save even at scale 1, so the restore below is
