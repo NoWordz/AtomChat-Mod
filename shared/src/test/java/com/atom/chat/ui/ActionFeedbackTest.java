@@ -71,7 +71,7 @@ class ActionFeedbackTest {
 
     @Test
     void alphaRampsInAndFadesOut() {
-        ActionFeedback.Entry e = new ActionFeedback.Entry("k", ActionFeedback.Outcome.SUCCESS, 1000L);
+        ActionFeedback.Entry e = new ActionFeedback.Entry("k", null, ActionFeedback.Outcome.SUCCESS, 1000L);
         assertEquals(0.0F, e.alpha(1000L), 1e-6F, "starts transparent");
         assertTrue(e.alpha(1000L + ActionFeedback.APPEAR_MS) > 0.9F, "opaque after appearing");
         assertTrue(e.alpha(1000L + 2000L + 100L) < 0.5F, "fading out in the exit window");

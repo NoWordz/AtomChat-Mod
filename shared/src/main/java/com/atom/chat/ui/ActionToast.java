@@ -58,7 +58,7 @@ public final class ActionToast {
             if (alpha <= 0.0F) {
                 continue;
             }
-            String label = translator.text(entry.key());
+            String label = entry.label() != null ? entry.label() : translator.text(entry.key());
             float textW = SkiaFontRenderer.getStringWidth(font, label);
             float w = Math.min(panelW - UiTokens.s(32), textW + PAD_X * 2.0F + ICON + UiTokens.s(8));
             float x = panelX + (panelW - w) / 2.0F;

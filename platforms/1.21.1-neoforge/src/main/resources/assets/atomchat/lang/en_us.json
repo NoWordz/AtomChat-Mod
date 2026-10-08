@@ -39,6 +39,8 @@
   "atomchat.input.placeholder": "Type a message or drop an image...",
   "atomchat.input.uploading": "Uploading image…",
   "atomchat.image.loading": "Loading image…",
+  "atomchat.feedback.poked": "You poked %s",
+  "atomchat.feedback.pokeReceived": "%s poked you",
   "atomchat.feedback.saved": "Image saved",
   "atomchat.feedback.saveFailed": "Could not save the image",
   "atomchat.feedback.avatarCleared": "Custom avatar removed",

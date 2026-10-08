@@ -58,6 +58,8 @@ public class AtomChat {
 
     private static void onRegisterPayloads(RegisterPayloadHandlersEvent event) {
         com.atom.chat.net.AvatarPayloads.register(event);
+        // Poke companion: a remote poke, rate limited server-side.
+        com.atom.chat.net.PokePayloads.register(event);
         // Server pack distribution (0.2.9): emotes, phrases and the server
         // identity, plus the config screen's snapshot/save pair.
         com.atom.chat.net.PackPayloads.register(event);

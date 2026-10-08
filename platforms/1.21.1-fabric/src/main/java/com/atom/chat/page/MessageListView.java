@@ -163,7 +163,12 @@ public final class MessageListView {
     /** Fade duration of the wash left on a message after a banner jump. */
     private static final long HIGHLIGHT_MS = 1200L;
 
-    private int pokeIndex = -1;
+    /**
+     * Sender whose every visible avatar is wobbling, keyed by UUID rather than
+     * a row index: the same player may appear on several rows, and a row index
+     * would drift onto another message if the list shifts within the wobble.
+     */
+    private java.util.UUID pokeSenderUuid;
     private long pokeStartTime;
 
     /** Message highlighted by a notification jump, and when it stops. */
@@ -624,9 +629,12 @@ public final class MessageListView {
         return -1;
     }
 
-    /** Arms the avatar poke wobble for one message (double-click side effect). */
-    public void poke(int index, long nowMs) {
-        pokeIndex = index;
+    /**
+     * Arms the avatar poke wobble for every visible message from {@code uuid}
+     * (double-click, or a poke arriving over the companion channel).
+     */
+    public void poke(java.util.UUID uuid, long nowMs) {
+        pokeSenderUuid = uuid;
         pokeStartTime = nowMs;
     }
 
@@ -703,7 +711,8 @@ public final class MessageListView {
      * to a plain draw.
      */
     private void drawAvatarWithPoke(Canvas canvas, ChatMessage msg, int index, float avatarX, float avatarY) {
-        if (pokeIndex == index && pokeStartTime > 0 && Animations.enabled()) {
+        if (pokeSenderUuid != null && pokeStartTime > 0 && Animations.enabled()
+                && pokeSenderUuid.equals(msg.getSenderUuid())) {
             long elapsed = System.currentTimeMillis() - pokeStartTime;
             if (elapsed < 600) {
                 float t = elapsed / 600.0F;
@@ -721,7 +730,7 @@ public final class MessageListView {
                 }
                 return;
             }
-            pokeIndex = -1;
+            pokeSenderUuid = null;
         }
         drawAvatar(canvas, msg, avatarX, avatarY);
     }

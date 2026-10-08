@@ -75,6 +75,7 @@ public final class CompanionMaintenance {
         }
         MediaCompanionServer.forgetPlayer(player);
         AvatarCompanionServer.forgetPlayer(player);
+        PokeCompanionServer.forgetPlayer(player);
     }
 
     /** Applies the configured age and size caps to both hosted stores. */

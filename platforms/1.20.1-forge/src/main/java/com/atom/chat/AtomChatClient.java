@@ -70,6 +70,7 @@ public final class AtomChatClient {
         ImageLoader.get().init(CacheDirs.imageCacheDir());
         com.atom.chat.net.PackNetClient.install();
         com.atom.chat.net.AvatarCompanionClient.init();
+        com.atom.chat.net.PokeCompanionClient.init();
         com.atom.chat.net.MediaCompanionClient.init();
         com.atom.chat.history.ChatHistory.init(FMLPaths.CONFIGDIR.get().resolve("atomchat/history"));
         AtomChat.LOGGER.info("AtomChat client initialized");
@@ -107,6 +108,7 @@ public final class AtomChatClient {
         com.atom.chat.chat.SeenPlayers.clear();
         com.atom.chat.chat.OwnIdentity.reset();
         com.atom.chat.net.MediaCompanionClient.onDisconnect();
+        com.atom.chat.net.PokeCompanionClient.setHandler(null);
         com.atom.chat.net.PackSyncClient.onDisconnect();
         com.atom.chat.net.ConfigScreenClient.onDisconnect();
     }

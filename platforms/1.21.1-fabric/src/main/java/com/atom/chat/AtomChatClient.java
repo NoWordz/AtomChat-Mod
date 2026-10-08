@@ -48,6 +48,7 @@ public class AtomChatClient implements ClientModInitializer {
                         .resolve("atomchat"));
         ImageLoader.get().init(CacheDirs.imageCacheDir());
         com.atom.chat.net.AvatarCompanionClient.init();
+        com.atom.chat.net.PokeCompanionClient.init();
         com.atom.chat.net.MediaCompanionClient.init();
         com.atom.chat.net.PackNetClient.install();
         com.atom.chat.net.ConfigScreenClient.init();
@@ -88,6 +89,7 @@ public class AtomChatClient implements ClientModInitializer {
             com.atom.chat.chat.SeenPlayers.clear();
             com.atom.chat.chat.OwnIdentity.reset();
             com.atom.chat.net.MediaCompanionClient.onDisconnect();
+            com.atom.chat.net.PokeCompanionClient.setHandler(null);
         com.atom.chat.net.PackSyncClient.onDisconnect();
         com.atom.chat.net.ConfigScreenClient.onDisconnect();
         });

@@ -18,6 +18,8 @@ import net.minecraft.util.Identifier;
  */
 public final class NotificationController {
     private static long lastSoundMs = NotificationSoundGate.NEVER;
+    /** Poke cue dedupe, deliberately separate so a poke never mutes a mention. */
+    private static long lastPokeMs = Long.MIN_VALUE;
 
     /**
      * Bundled notification cue. Must match {@code sounds.json}'s local key
@@ -52,6 +54,25 @@ public final class NotificationController {
         // as the second float made the slider change pitch at full volume.
         debug("playTestSound volume=" + volume);
         client.getSoundManager().play(PositionedSoundInstance.master(NOTIFICATION_SOUND, 1.0F, volume));
+    }
+
+    /**
+     * The poke cue: the same bundled pop pitched up, so a poke reads as its own
+     * "hey" without a second asset. Its own clock keeps a poke from muting a
+     * mention cue and vice versa.
+     */
+    public static void playPokeSound() {
+        MinecraftClient client = MinecraftClient.getInstance();
+        if (client == null || client.player == null) {
+            return;
+        }
+        long now = System.currentTimeMillis();
+        if (lastPokeMs != Long.MIN_VALUE && now - lastPokeMs < com.atom.chat.poke.PokeGate.MIN_INTERVAL_MS) {
+            return;
+        }
+        lastPokeMs = now;
+        float volume = Math.max(0.0F, Math.min(1.0F, AtomChatConfig.get().notifyVolume));
+        client.getSoundManager().play(PositionedSoundInstance.master(NOTIFICATION_SOUND, 1.25F, volume));
     }
 
     public static void onMention(ChatMessage message) {

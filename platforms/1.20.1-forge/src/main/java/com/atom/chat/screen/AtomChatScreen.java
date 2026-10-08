@@ -16,6 +16,7 @@ import com.atom.chat.image.ImageLoader;
 import com.atom.chat.image.ImageSaver;
 import com.atom.chat.image.ImageUploader;
 import com.atom.chat.net.MediaCompanionClient;
+import com.atom.chat.net.PokeCompanionClient;
 import com.atom.chat.chat.LocalEcho;
 import com.atom.chat.chat.PlayerRef;
 import com.atom.chat.chat.PrivateChatStore;
@@ -1657,6 +1658,8 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
     @Override
     protected void init() {
         super.init();
+        // Route incoming remote pokes to this screen while it is open.
+        PokeCompanionClient.setHandler(this::onPoked);
         // Swap the vanilla suggestor for our anchored one on the same chat field;
         // ChatScreen's changed listener drives whatever sits in chatInputSuggestor.
         this.chatInputSuggestor = new AtomChatSuggestor(this.client, this, this.input,
@@ -2053,6 +2056,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
 
     @Override
     public void removed() {
+        PokeCompanionClient.setHandler(null);
         // Hygiene on screen teardown: release the borrowed field so the parked
         // composer draft state cannot outlive the page that borrowed it.
         if (profilePage.isSignatureEditing()) {
@@ -3637,6 +3641,50 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
                 System.currentTimeMillis());
     }
 
+    /** Raises an acknowledgement whose text carries an argument (a player name). */
+    private void feedback(String key, String label, boolean success) {
+        actionFeedback.show(key, label, success ? ActionFeedback.Outcome.SUCCESS : ActionFeedback.Outcome.ERROR,
+                System.currentTimeMillis());
+    }
+
+    /**
+     * Pokes {@code target}: the local wobble and cue play either way, and a
+     * real poke is sent when the server negotiated the companion channel. The
+     * wobble plays for the sender immediately; the target's client wobbles when
+     * the server relays it.
+     */
+    private void sendPoke(ChatMessage target) {
+        UUID uuid = target == null ? null : target.getSenderUuid();
+        if (uuid == null) {
+            return;
+        }
+        messageListView.poke(uuid, System.currentTimeMillis());
+        com.atom.chat.notification.NotificationController.playPokeSound();
+        feedback("atomchat.feedback.poked", tr("atomchat.feedback.poked", messageSenderName(target)), true);
+        PokeCompanionClient.send(uuid);
+    }
+
+    /** Incoming poke from {@code from}: wobble that player's row, cue and toast. */
+    private void onPoked(UUID from) {
+        if (from == null || from.equals(client.player == null ? null : client.player.getUUID())) {
+            return;
+        }
+        messageListView.poke(from, System.currentTimeMillis());
+        com.atom.chat.notification.NotificationController.playPokeSound();
+        feedback("atomchat.feedback.pokeReceived", tr("atomchat.feedback.pokeReceived", displayNameFor(from)), true);
+    }
+
+    /** A player's display name from the tab list, falling back to the raw uuid. */
+    private String displayNameFor(UUID uuid) {
+        if (client.getConnection() != null) {
+            net.minecraft.client.multiplayer.PlayerInfo entry = client.getConnection().getPlayerInfo(uuid);
+            if (entry != null) {
+                return entry.getProfile().getName();
+            }
+        }
+        return uuid.toString();
+    }
+
     /**
      * True while the open/close progress is still in flight. The panel is
      * drawn through the open transform (zoom/slide) but hit tests run on the
@@ -5078,7 +5126,10 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
                         && mx >= hit.avatarX() && mx <= hit.avatarX() + hit.avatarSize()
                         && my >= hit.avatarY() && my <= hit.avatarY() + hit.avatarSize()) {
                     long now = System.currentTimeMillis();
-                    boolean pokeEnabled = Animations.avatarPoke() && Animations.enabled();
+                    // Poke is a nudge at *someone else*: your own avatar has no
+                    // one to notify, so it falls straight through to the profile.
+                    boolean pokeEnabled = Animations.avatarPoke() && Animations.enabled()
+                            && !hit.message().isOwn() && hit.message().getSenderUuid() != null;
                     boolean doubleClick = pokeEnabled
                             && lastAvatarClickIndex == hit.index()
                             && now - lastAvatarClickTime < AVATAR_CLICK_WINDOW_MS;
@@ -5086,7 +5137,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
                         // Double click → poke; cancels the pending single click.
                         lastAvatarClickTime = 0;
                         pendingAvatarClickMessage = null;
-                        messageListView.poke(hit.index(), now);
+                        sendPoke(hit.message());
                     } else if (pokeEnabled) {
                         // QQ-style competition window: the single click waits for
                         // the double-click threshold before opening the profile.

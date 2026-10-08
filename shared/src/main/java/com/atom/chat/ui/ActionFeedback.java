@@ -32,11 +32,12 @@ public final class ActionFeedback {
     public static final long EXIT_MS = 150L;
 
     /**
-     * One toast: the action's dedupe key, its outcome and when it was raised.
-     * {@code key} is also the translation key's suffix, so identical actions
-     * (two copies, two cache clears) replace rather than pile up.
+     * One toast: the dedupe {@code key}, an optional already-resolved
+     * {@code label} (for messages that carry an argument, like a poked player's
+     * name), the outcome and when it was raised. Identical keys replace rather
+     * than pile up, so two copies or two cache clears never stack.
      */
-    public record Entry(String key, Outcome outcome, long born) {
+    public record Entry(String key, String label, Outcome outcome, long born) {
         public long holdMs() {
             return outcome == Outcome.ERROR ? ERROR_HOLD_MS : SUCCESS_HOLD_MS;
         }
@@ -68,8 +69,13 @@ public final class ActionFeedback {
      * failure is never pushed out of the visible window by chatter.
      */
     public void show(String key, Outcome outcome, long now) {
+        show(key, null, outcome, now);
+    }
+
+    /** As {@link #show(String, Outcome, long)} with a pre-resolved label. */
+    public void show(String key, String label, Outcome outcome, long now) {
         entries.removeIf(e -> e.key().equals(key));
-        Entry entry = new Entry(key, outcome, now);
+        Entry entry = new Entry(key, label, outcome, now);
         if (outcome == Outcome.ERROR) {
             entries.add(0, entry);
         } else {
