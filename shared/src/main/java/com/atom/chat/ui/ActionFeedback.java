@@ -88,7 +88,13 @@ public final class ActionFeedback {
      * {@link #MAX_VISIBLE}. Expired entries are pruned as a side effect.
      */
     public List<Entry> snapshot(long now) {
+        if (entries.isEmpty()) {
+            return List.of();   // no allocation on the common idle frame
+        }
         entries.removeIf(e -> e.expired(now));
+        if (entries.isEmpty()) {
+            return List.of();
+        }
         List<Entry> ordered = new ArrayList<>(entries.size());
         for (Entry e : entries) {
             if (e.outcome() == Outcome.ERROR) {

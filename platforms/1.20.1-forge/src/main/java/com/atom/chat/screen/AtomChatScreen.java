@@ -1290,7 +1290,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
         if (!window.loadEarlier()) {
             return;
         }
-        float inserted = messageListView.offsetFromWindow(messages, oldStart, list.w());
+        float inserted = messageListView.offsetBetween(messages, oldStart, window.visibleStart(), list.w());
         scroll.scrollTo(scroll.getScrollY() + inserted, false);
     }
 
@@ -1812,20 +1812,21 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
             return;
         }
         UiLayout.Rect panel = layout().rect();
-        // Action feedback sits in the same floating layer, just above any
-        // notification banner: it acknowledges something the player just did,
-        // so it stays in view even when a banner is queued.
-        ActionToast.render(canvas, actionFeedback, panel.x(), panel.w(),
-                panel.y() + s(8), System.currentTimeMillis(), AtomChatScreen::tr);
-        if (!NotificationBanner.INSTANCE.hasActive()) {
-            return;
+        if (NotificationBanner.INSTANCE.hasActive()) {
+            float vmx = toVirtualX(mouseX);
+            float vmy = toVirtualY(mouseY);
+            int probeBefore = canvas.getSaveCount();
+            NotificationBanner.INSTANCE.renderInPanel(canvas, panel.x(), panel.y(), panel.w(), panel.h(),
+                    vmx, vmy);
+            probeCanvasLeak("banner render", probeBefore, canvas);
         }
-        float vmx = toVirtualX(mouseX);
-        float vmy = toVirtualY(mouseY);
-        int probeBefore = canvas.getSaveCount();
-        NotificationBanner.INSTANCE.renderInPanel(canvas, panel.x(), panel.y(), panel.w(), panel.h(),
-                vmx, vmy);
-        probeCanvasLeak("banner render", probeBefore, canvas);
+        // Action feedback draws last, so it sits above a queued banner in the
+        // same floating layer: it acknowledges something the player just did and
+        // must stay in view. Drop it lower when a banner is present so the two
+        // stacks do not overlap.
+        float toastTop = panel.y() + s(8) + (NotificationBanner.INSTANCE.hasActive() ? s(56) : 0.0F);
+        ActionToast.render(canvas, actionFeedback, panel.x(), panel.w(),
+                toastTop, System.currentTimeMillis(), AtomChatScreen::tr);
     }
 
     /**
@@ -3660,13 +3661,21 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
         }
         messageListView.poke(uuid, System.currentTimeMillis());
         com.atom.chat.notification.NotificationController.playPokeSound();
-        feedback("atomchat.feedback.poked", tr("atomchat.feedback.poked", messageSenderName(target)), true);
-        PokeCompanionClient.send(uuid);
+        // The toast is truthful about delivery: without the companion channel the
+        // poke is local only (the wobble still plays), so the label says so.
+        boolean sent = PokeCompanionClient.send(uuid);
+        feedback(sent ? "atomchat.feedback.poked" : "atomchat.feedback.pokedLocal",
+                tr(sent ? "atomchat.feedback.poked" : "atomchat.feedback.pokedLocal",
+                        messageSenderName(target)), true);
     }
 
     /** Incoming poke from {@code from}: wobble that player's row, cue and toast. */
     private void onPoked(UUID from) {
         if (from == null || from.equals(client.player == null ? null : client.player.getUUID())) {
+            return;
+        }
+        // A blocked player's poke is dropped like their chat: no cue, no toast.
+        if (com.atom.chat.chat.BlockList.isBlocked(displayNameFor(from))) {
             return;
         }
         messageListView.poke(from, System.currentTimeMillis());

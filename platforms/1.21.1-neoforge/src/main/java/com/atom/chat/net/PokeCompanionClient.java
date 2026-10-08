@@ -40,6 +40,13 @@ public final class PokeCompanionClient {
         if (target == null || client.player == null || client.getConnection() == null) {
             return false;
         }
+        // Never emit an unknown payload at a server that did not negotiate the
+        // channel: same guard as the avatar companion, so a vanilla server
+        // simply gets no poke.
+        if (!net.neoforged.neoforge.network.registration.NetworkRegistry.hasChannel(
+                client.getConnection(), PokePayloads.PokeC2SPayload.TYPE.id())) {
+            return false;
+        }
         PacketDistributor.sendToServer(new PokePayloads.PokeC2SPayload(target));
         return true;
     }

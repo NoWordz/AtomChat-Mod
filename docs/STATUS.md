@@ -12,11 +12,18 @@
 
 | 平台 | 实例目录 | 部署 jar md5 |
 |---|---|---|
-| Fabric 1.21.1 | `1.21.1-CCB` | `42c9e270` |
-| NeoForge 1.21.1 | `Mechanomania-航空学` | `fd2d6529` |
-| Forge 1.20.1 | `1.20.1-main` / `Go Fishing` / `元素觉醒1.4.6` | `4a3b5677` |
+| Fabric 1.21.1 | `1.21.1-CCB` | `861edecc` |
+| NeoForge 1.21.1 | `Mechanomania-航空学` | `07d66c4c` |
+| Forge 1.20.1 | `1.20.1-main` / `Go Fishing` / `元素觉醒1.4.6` | `3dae9ffb` |
 
-上表是**0.3.0 之后四功能轮（plan `2026-10-08-atomchat-history-toast-poke-hudnotify.md`）的当前构建**：T1 历史折叠已落地（commit `db87113`），T2 操作反馈 Toast / T3 戳一戳远程 / T4 横幅搬屏幕顶 待做。版本号保持 `0.3.0` 不动。
+上表是**0.3.0 之后四功能轮（plan `2026-10-08-atomchat-history-toast-poke-hudnotify.md`）的当前构建**：
+
+- **T1 历史折叠** — `db87113`。内存仍 500 条，列表初始只展示最近 100，顶部「加载更早消息」胶囊每点一次揭 100 并做锚点补偿；公屏与每个私聊各自独立、关面板即忘。
+- **T2 操作反馈 Toast** — `112295d`。清缓存/取消壁纸/清历史/复制/存图/头像头图移除 都有浮动反馈（成功=主题 accent、失败=共享危险红），底层 API 改为结果感知（剪贴板返回 bool、`clearDiskCache` 返回删除数）。
+- **T3 戳一戳** — `ca82d39`。双击头像=变调音效+面板内 Toast+摇头像；定位改发送者 UUID；**拒自己**；服务端权威限流的远程真戳（不弹横幅，未协商通道则静默退回本地）。
+- **T4 通知横幅搬屏幕顶（Skija 同源 HUD）** — **未开始**。需新增三端常驻 Skija HUD owner 并抽 `NotificationQueue`；这条是 0.2.4 事故（saveLayer 泄漏甩飞 UI）的旧路，用户已授权重开但要求逐条核对 `SkiaGraphics.draw` 的 saveBase 护栏。
+
+版本号保持 `0.3.0` 不动。三端测试 669/657/657 全绿 + 守卫 PASS。
 
 > 前一轮（引用胶囊取色 + 胶囊族软阴影 + `[图片]` 占位绿）已随 commit `d8fc806` 入库并验收。
 

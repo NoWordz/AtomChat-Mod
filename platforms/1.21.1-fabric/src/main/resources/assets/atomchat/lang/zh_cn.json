@@ -39,6 +39,7 @@
   "atomchat.input.placeholder": "请输入文本或拖动图片...",
   "atomchat.input.uploading": "图片上传中…",
   "atomchat.image.loading": "图片加载中…",
+  "atomchat.feedback.pokedLocal": "你戳了 %s（仅本地）",
   "atomchat.feedback.poked": "你戳了 %s",
   "atomchat.feedback.pokeReceived": "%s 戳了你",
   "atomchat.feedback.saved": "已保存图片",

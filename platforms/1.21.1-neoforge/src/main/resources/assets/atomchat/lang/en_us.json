@@ -39,6 +39,7 @@
   "atomchat.input.placeholder": "Type a message or drop an image...",
   "atomchat.input.uploading": "Uploading image…",
   "atomchat.image.loading": "Loading image…",
+  "atomchat.feedback.pokedLocal": "You poked %s (locally)",
   "atomchat.feedback.poked": "You poked %s",
   "atomchat.feedback.pokeReceived": "%s poked you",
   "atomchat.feedback.saved": "Image saved",

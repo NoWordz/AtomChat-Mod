@@ -55,7 +55,7 @@ public final class PokeCompanionServer {
     }
 
     /** Drops a disconnected player's timestamp so the map cannot grow forever. */
-    public static void forgetPlayer(UUID uuid) {
+    static void forgetPlayer(UUID uuid) {
         lastPokeMs.remove(uuid);
     }
 }

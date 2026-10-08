@@ -396,6 +396,32 @@ class OffscreenRenderTest {
     }
 
     /**
+     * The reveal's anchor compensation measures a real, non-zero height. This is
+     * the regression guard for the bug where the offset was measured from the
+     * window origin against itself, always returning zero and letting the list
+     * jump when older rows were revealed.
+     */
+    @Test
+    void revealingOlderRowsReportsTheInsertedHeight() {
+        UiLayout layout = UiLayout.of(PANEL_X, PANEL_Y, PANEL_W, PANEL_H);
+        List<ChatMessage> history = new ArrayList<>();
+        for (int i = 0; i < 300; i++) {
+            history.add(new ChatMessage(Text.literal("line " + i), i % 2 == 0));
+        }
+        MessageListView view = new MessageListView(new OffscreenHost(openedAfter(history)));
+        try {
+            // Revealing the block [100, 200) removes 100 rows from the fold, so
+            // the height inserted above the old topmost row is strictly positive.
+            float inserted = view.offsetBetween(history, 100, 200, layout.list.w());
+            assertTrue(inserted > 0.0F, "revealing 100 older rows must insert a positive height");
+            // And measuring an empty range is exactly zero, not a small epsilon.
+            assertEquals(0.0F, view.offsetBetween(history, 200, 200, layout.list.w()), 1e-6F);
+        } finally {
+            view.dispose();
+        }
+    }
+
+    /**
      * The other half of the entrance rule: a message that arrives while the panel
      * is open wraps its row in {@code saveLayer} for the first frames. That is the
      * nesting the 0.2.4 banner leaked a matrix through, so the balance check runs

@@ -79,8 +79,11 @@ public final class ActionToast {
 
     private static void drawRow(Canvas canvas, Font font, ActionFeedback.Entry entry,
                                 float x, float y, float w, float h, String label, float alpha) {
+        // The opaque base is deliberate: this floats over message text, and the
+        // translucent cardFill would let it bleed through (the banner's reason
+        // for the same choice).
         UiCards.drawCard(canvas, x, y, w, h, UiTokens.cardRadius(), 0.0F,
-                UiTokens.CHROME_SHADOW, UiTokens.s(8));
+                UiTokens.CHROME_SHADOW, UiTokens.s(8), UiTokens.cardCutout());
         float cy = y + h / 2.0F;
         float ix = x + PAD_X;
         drawGlyph(canvas, entry.outcome(), ix, cy, alpha);
@@ -104,11 +107,14 @@ public final class ActionToast {
                 .setStrokeCap(PaintStrokeCap.ROUND)
                 .setStrokeJoin(PaintStrokeJoin.ROUND)) {
             canvas.save();
-            canvas.translate(x + ICON / 2.0F - (b.getLeft() + b.getRight()) / 2.0F * sc,
-                    cy - (b.getTop() + b.getBottom()) / 2.0F * sc);
-            canvas.scale(sc, sc);
-            canvas.drawPath(glyph, paint);
-            canvas.restore();
+            try {
+                canvas.translate(x + ICON / 2.0F - (b.getLeft() + b.getRight()) / 2.0F * sc,
+                        cy - (b.getTop() + b.getBottom()) / 2.0F * sc);
+                canvas.scale(sc, sc);
+                canvas.drawPath(glyph, paint);
+            } finally {
+                canvas.restore();
+            }
         }
     }
 

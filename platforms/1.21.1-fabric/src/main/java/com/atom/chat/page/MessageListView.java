@@ -646,13 +646,14 @@ public final class MessageListView {
     }
 
     /**
-     * Content-space offset of {@code index} measured from {@code visibleStart},
-     * so a reveal can compute exactly how much height was inserted above the
-     * previously topmost row and scroll by that much to keep it put.
+     * Content-space height of the rows in {@code [fromIndex, toIndex)}, using the
+     * same divider and grouped-gap arithmetic as {@link #draw}, so a reveal can
+     * scroll by exactly the height it inserted above the previously topmost row.
+     * Indices are absolute; the caller passes the old and new window origins.
      */
-    public float offsetFromWindow(List<ChatMessage> messages, int index, float width) {
-        int from = Math.max(0, Math.min(visibleStart, messages.size()));
-        int limit = Math.max(from, Math.min(index, messages.size()));
+    public float offsetBetween(List<ChatMessage> messages, int fromIndex, int toIndex, float width) {
+        int from = Math.max(0, Math.min(fromIndex, messages.size()));
+        int limit = Math.max(from, Math.min(toIndex, messages.size()));
         float cursor = 0.0F;
         for (int i = from; i < limit; i++) {
             if (dividerBefore(messages, i)) {

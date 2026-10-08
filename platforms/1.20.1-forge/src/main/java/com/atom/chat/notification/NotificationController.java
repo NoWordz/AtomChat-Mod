@@ -19,7 +19,7 @@ import net.minecraftforge.registries.RegisterEvent;
 public final class NotificationController {
     private static long lastSoundMs = NotificationSoundGate.NEVER;
     /** Poke cue dedupe, deliberately separate so a poke never mutes a mention. */
-    private static long lastPokeMs = Long.MIN_VALUE;
+    private static final com.atom.chat.poke.PokeGate POKE_GATE = new com.atom.chat.poke.PokeGate();
 
     /**
      * Bundled notification cue. Must match {@code sounds.json}'s local key
@@ -74,11 +74,9 @@ public final class NotificationController {
         if (client == null || client.player == null) {
             return;
         }
-        long now = System.currentTimeMillis();
-        if (lastPokeMs != Long.MIN_VALUE && now - lastPokeMs < com.atom.chat.poke.PokeGate.MIN_INTERVAL_MS) {
+        if (!POKE_GATE.allow(System.currentTimeMillis())) {
             return;
         }
-        lastPokeMs = now;
         float volume = Math.max(0.0F, Math.min(1.0F, AtomChatConfig.get().notifyVolume));
         client.getSoundManager().play(SimpleSoundInstance.forUI(NOTIFICATION_SOUND, 1.25F, volume));
     }
