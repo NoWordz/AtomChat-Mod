@@ -155,6 +155,18 @@ public final class MessageListView {
     private boolean loadEarlierRequested;
     /** Whether the pointer currently hovers the button (drives its hover wash). */
     private boolean loadEarlierHovered;
+    /**
+     * Hover wash alpha, eased toward {@link #loadEarlierHovered} rather than
+     * switched, so the capsule lights up and fades like the composer keys
+     * instead of snapping between two hard states.
+     */
+    private float loadEarlierHover;
+    /** Same bounce spring as every other control; the shape scaled is the capsule. */
+    private final com.atom.chat.ui.PressScale loadEarlierScale = com.atom.chat.ui.PressScale.bounce();
+    /** Whether the press that armed {@link #loadEarlierRequested} is still held. */
+    private boolean loadEarlierHeld;
+    /** Last frame's real delta, shared by the per-frame animations in {@link #draw}. */
+    private float lastDtMs = 16.0F;
 
     private final Map<ChatMessage, Long> messageEnterStart = new HashMap<>();
     private final Set<ChatMessage> messageEnterSettled = new HashSet<>();
@@ -270,6 +282,7 @@ public final class MessageListView {
             pruneEntranceSettled(now);
             float dtMs = Math.min(50.0F, Math.max(1.0F, now - lastFrameMs));
             lastFrameMs = now;
+            lastDtMs = dtMs;
             float cursorY = y;
             for (int mi = from; mi < messages.size(); mi++) {
                 ChatMessage msg = messages.get(mi);
@@ -367,10 +380,22 @@ public final class MessageListView {
     /**
      * The "load earlier" capsule pinned to the top of the viewport while older
      * rows are folded away. Screen-space, centred, one row tall.
+     *
+     * <p>Same interaction language as every other control: the hover wash eases
+     * in over {@link UiMotion#HOVER_MS} instead of appearing in one frame, and
+     * the capsule rides the shared {@link com.atom.chat.ui.PressScale} bounce on
+     * press and release. Both are decorative, so the master motion switch pins
+     * the wash off and the scale at 1.</p>
      */
     private void drawLoadEarlier(Canvas canvas, float x, float y, float width, int from, int total) {
         if (from <= 0) {
             loadEarlierX = loadEarlierY = loadEarlierW = loadEarlierH = 0.0F;
+            loadEarlierHover = 0.0F;
+            // Settle the spring instead of freezing it: folding the rows away while
+            // the capsule is held would otherwise leave it parked below 1 and pop
+            // the next time it appears.
+            loadEarlierHeld = false;
+            loadEarlierScale.update(false, false, lastDtMs, false, Math.max(1.0F, width));
             return;
         }
         Font font = FontManager.font(UiTokens.FONT_QUOTE);
@@ -384,12 +409,23 @@ public final class MessageListView {
         loadEarlierY = by;
         loadEarlierW = w;
         loadEarlierH = h;
-        SkiaDraw.drawRoundedRect(canvas, bx, by, w, h, h / 2.0F, secondaryCapsuleBg());
-        if (loadEarlierHovered) {
-            SkiaDraw.drawRoundedRect(canvas, bx, by, w, h, h / 2.0F, UiTokens.cardHover(1.0F));
+        // Advanced before the draw so the bounce starts on the frame it began in.
+        loadEarlierHover = UiMotion.approach(loadEarlierHover, loadEarlierHovered ? 1.0F : 0.0F,
+                (long) lastDtMs, UiMotion.HOVER_MS);
+        loadEarlierScale.update(loadEarlierHovered, loadEarlierHeld, lastDtMs,
+                Animations.enabled(), w);
+        loadEarlierScale.begin(canvas, bx + w / 2.0F, by + h / 2.0F);
+        try {
+            SkiaDraw.drawRoundedRect(canvas, bx, by, w, h, h / 2.0F, secondaryCapsuleBg());
+            if (loadEarlierHover > 0.01F) {
+                SkiaDraw.drawRoundedRect(canvas, bx, by, w, h, h / 2.0F,
+                        UiTokens.cardHover(loadEarlierHover));
+            }
+            SkiaFontRenderer.drawTextCentered(canvas, font, label, bx + w / 2.0F, by + h / 2.0F,
+                    secondaryCapsuleText(), true, secondaryCapsuleBg());
+        } finally {
+            canvas.restore();
         }
-        SkiaFontRenderer.drawTextCentered(canvas, font, label, bx + w / 2.0F, by + h / 2.0F,
-                secondaryCapsuleText(), true, secondaryCapsuleBg());
     }
 
     /** Cached wrap; see {@link #layoutCache}. */
@@ -674,6 +710,18 @@ public final class MessageListView {
                 && my >= loadEarlierY && my <= loadEarlierY + loadEarlierH;
     }
 
+    /**
+     * Press/held state of the button, cleared by the host on release.
+     *
+     * <p>Kept explicit rather than inferred from the click: the press must
+     * squash the capsule and the release must let the spring bounce back, and
+     * inferring "pressed" from a one-shot click signal would leave the shape
+     * stuck down after the pointer came up.</p>
+     */
+    public void setLoadEarlierPressed(boolean held) {
+        loadEarlierHeld = held;
+    }
+
     /** Whether a left click at this point lands on the "load earlier" button. */
     public boolean loadEarlierHitAt(float mx, float my) {
         return loadEarlierH > 0.0F
@@ -684,6 +732,7 @@ public final class MessageListView {
     /** One-shot click signal from the button; cleared on read. */
     public void requestLoadEarlier() {
         loadEarlierRequested = true;
+        loadEarlierHeld = true;
     }
 
     public boolean consumeLoadEarlierRequest() {

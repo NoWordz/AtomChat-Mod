@@ -48,6 +48,8 @@ public class AtomChat {
             // snapshot/save pair; both are common-side channels.
             com.atom.chat.net.PackPayloads.register();
             com.atom.chat.net.ConfigPayloads.register();
+            // Simulation harness channel for a single-player session.
+            com.atom.chat.net.TestPayloads.register();
         }));
 
         // Retention and lifecycle housekeeping for the two hosted stores
@@ -63,6 +65,9 @@ public class AtomChat {
             }
         });
         com.atom.chat.net.ConfigScreenServer.register();
+        // Simulation harness for a single-player session: /atomchat test, which
+        // can only be reached with the debug switch on (see the class docs).
+        MinecraftForge.EVENT_BUS.addListener(com.atom.chat.net.TestCompanionServer::onRegisterCommands);
         MinecraftForge.EVENT_BUS.addListener((ServerStartedEvent event) ->
                 com.atom.chat.net.CompanionMaintenance.onServerStarted());
         MinecraftForge.EVENT_BUS.addListener((PlayerEvent.PlayerLoggedOutEvent event) -> {

@@ -2,18 +2,30 @@
 
 ## v0.3.0 后续小修补
 
-> 0.3.0 部署后的用户反馈小修补轮（引用胶囊取色 + 软阴影范围），暂并入 0.3.0，不升版本号、不推送。
+> 0.3.0 部署后的用户反馈小修补轮，暂并入 0.3.0，不升版本号、不推送。
+
+**新增**
+
+- **服务端实验命令 `/atomchat test`**：单人档无法产生提及/引用/私聊横幅，也没有第二个玩家来戳你，而双开客户端会让 debug 日志互相干扰。现在可以让服务端扮演对方：`/atomchat test banner mention|quote|whisper [文本]` 与 `/atomchat test poke [对方名]`。横幅走真实的通知链路（设置开关、音效门、去重都照常生效），戳一戳走完整的网络往返；横幅只弹横幅，不会写进聊天记录。需要先在 AtomChat 设置里打开「调试模式」，权限与 `/atomchat gui` 一致（单机放行，否则 OP 2 级）。
 
 **修复**
 
+- **操作反馈浮窗改到输入栏上方，并补上真正的淡入淡出**：此前锚在面板顶部、且只有文字与图标带透明度（卡片本体是实画），所以看起来"没有淡入淡出"。现在整块卡片一起淡入淡出，从输入栏后方向上滑入（带轻微回弹），过期时下沉淡出；关闭「装饰性动效」后不淡不位移。详情页没有输入栏时贴列表底部。
+- **「加载更早消息」胶囊与「返回最新消息」按钮补上与其他控件同款的交互动效**：悬浮高亮由硬切换改为渐变淡入，按下与松开走同一套回弹弹簧（与底部标签栏、发送键一致）。命中范围仍按未缩放的位置判定。
 - **引用胶囊文字改为跟随胶囊主题色**：不再取气泡文字色，避免黑鸦主题下用户名近黑字压在深灰胶囊、典雅主题下纯白字压在浅沙胶囊而不可读。
 - **软阴影范围重排**：系统消息、引用胶囊、时间分割线、图片占位胶囊与发送者名字带保留文字软阴影；自身 / 他人气泡正文一律去影。阴影明暗改为按文字所在表面的底色判定，不再一律随面板。
 - **`[图片]` 占位绿自适应**：按胶囊底色实测对比度择优（深胶囊用亮绿、浅胶囊用深绿），浅色主题下不再隐形。
 
 ----
 
+**Added**
+
+- **Server-side test command `/atomchat test`**: a single-player session cannot produce a mention / quote / whisper banner, and has no second player to poke you, while running two clients at once muddies the very debug log you are reading. The server can now play the other party: `/atomchat test banner mention|quote|whisper [text]` and `/atomchat test poke [name]`. Banners go through the real notification path (settings toggles, sound gate and dedupe all still apply) and the poke is a full network round-trip. Banners only pop a banner — nothing is written into the chat history. Requires Debug mode in AtomChat settings; permission matches `/atomchat gui` (single-player always, otherwise OP level 2).
+
 **Fixed**
 
+- **Action toasts now rise from just above the composer and actually fade**: they used to be anchored at the panel top, and only the text and glyph carried opacity (the card itself was drawn solid), which is why the fade looked missing. The whole card now fades as one, slides up from behind the composer with a slight bounce, and sinks while fading out; with decorative motion off it neither fades nor moves. Detail pages without a composer anchor to the bottom of the list.
+- **The "load earlier" capsule and the jump-to-latest button gained the same interaction motion as every other control**: the hover highlight eases in instead of switching, and press/release ride the shared bounce spring (same as the bottom tab bar and the send button). Hit-testing still uses the unscaled position.
 - **Quote-capsule text now follows the capsule theme colour** instead of the bubble text colour, fixing the unreadable names (near-black on dark in raven, white on sand in elegant).
 - **Soft-shadow scope rebalanced**: system messages, quote pills, time dividers, image placeholders and the sender name band keep the text shadow; bubble body text (own and others) has none. The shadow's light/dark polarity follows the surface the text sits on rather than the panel.
 - **[Image] placeholder green adapts by measured contrast** with the capsule tint (bright on dark, deep on light), so it no longer disappears on pale themes.

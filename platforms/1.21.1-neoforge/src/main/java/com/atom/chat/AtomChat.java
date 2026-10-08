@@ -45,6 +45,9 @@ public class AtomChat {
             com.atom.chat.net.PackSyncServer.tick(event.getServer());
         });
         com.atom.chat.net.ConfigScreenServer.register();
+        // Simulation harness for a single-player session: /atomchat test, which
+        // can only be reached with the debug switch on (see the class docs).
+        NeoForge.EVENT_BUS.addListener(com.atom.chat.net.TestCompanionServer::onRegisterCommands);
         NeoForge.EVENT_BUS.addListener((ServerStartedEvent event) ->
                 com.atom.chat.net.CompanionMaintenance.onServerStarted());
         NeoForge.EVENT_BUS.addListener((PlayerEvent.PlayerLoggedOutEvent event) -> {
@@ -60,6 +63,8 @@ public class AtomChat {
         com.atom.chat.net.AvatarPayloads.register(event);
         // Poke companion: a remote poke, rate limited server-side.
         com.atom.chat.net.PokePayloads.register(event);
+        // Simulation harness for a single-player session (/atomchat test).
+        com.atom.chat.net.TestPayloads.register(event);
         // Server pack distribution (0.2.9): emotes, phrases and the server
         // identity, plus the config screen's snapshot/save pair.
         com.atom.chat.net.PackPayloads.register(event);

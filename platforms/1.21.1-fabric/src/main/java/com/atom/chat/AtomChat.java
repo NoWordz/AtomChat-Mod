@@ -28,6 +28,10 @@ public class AtomChat implements ModInitializer {
         // Poke companion: a remote poke, rate limited server-side.
         com.atom.chat.net.PokePayloads.register();
         com.atom.chat.net.PokeCompanionServer.register();
+        // Simulation harness for a single-player session: /atomchat test, which
+        // can only be reached with the debug switch on (see the class docs).
+        com.atom.chat.net.TestPayloads.register();
+        com.atom.chat.net.TestCompanionServer.register();
         // Media companion: server-hosted chat images / GIFs, same dual
         // entrypoint pattern and master hosting switch as the avatar side.
         com.atom.chat.net.MediaPayloads.register();

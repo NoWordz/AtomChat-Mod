@@ -7,6 +7,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.resources.sounds.SimpleSoundInstance;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.network.chat.Component;
 import net.minecraft.sounds.SoundEvent;
 import net.minecraftforge.registries.RegisterEvent;
 
@@ -91,6 +92,25 @@ public final class NotificationController {
 
     public static void onWhisper(ChatMessage message) {
         fire(NotificationBanner.Type.WHISPER, message);
+    }
+    /**
+     * Test-command entry: a banner for a message that never existed. It goes
+     * through {@link #fire} unchanged, so the settings toggles, the sound gate
+     * and the dedupe all behave exactly as they would for a captured message —
+     * a tester who disabled a banner still gets nothing, which is the point of
+     * testing the real path rather than a parallel one.
+     *
+     * <p>The synthetic message is deliberately not added to {@link com.atom.chat.chat.ChatStore}:
+     * the banner's jump would have nothing real to land on, but inventing history
+     * rows would outlive the test in the chat list and in the saved history file.</p>
+     */
+    public static void onTestBanner(NotificationBanner.Type type, java.util.UUID senderUuid,
+                                    String senderName, String text) {
+        Component component = Component.literal(text == null ? "" : text);
+        ChatMessage message = new ChatMessage(component, false, false, null, null,
+                senderUuid, senderName, senderName, text);
+        debug("onTestBanner type=" + type + " sender=" + senderName);
+        fire(type, message);
     }
 
     private static void fire(NotificationBanner.Type type, ChatMessage message) {

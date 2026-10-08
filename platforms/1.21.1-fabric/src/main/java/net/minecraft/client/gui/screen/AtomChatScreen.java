@@ -668,6 +668,12 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
     private final float[] buttonHover = new float[4];
     private float contextAnim;
     private float jumpLatestAnim;
+    /** Eased hover of the jump-to-latest FAB, matching the composer keys' fade. */
+    private float jumpLatestHover;
+    /** Bounce spring for the FAB; the scaled shape is the round pill itself. */
+    private final PressScale jumpLatestScale = PressScale.bounce();
+    /** True while the FAB is held down, so the release can bounce back. */
+    private boolean jumpLatestHeld;
     private ChatMessage lastContextMessage;
     private PlayerRef lastContextPlayer;
     private ContextMenuMode lastContextMenuMode = ContextMenuMode.BUBBLE;
@@ -1820,11 +1826,15 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
         }
         // Action feedback draws last, so it sits above a queued banner in the
         // same floating layer: it acknowledges something the player just did and
-        // must stay in view. Drop it lower when a banner is present so the two
-        // stacks do not overlap.
-        float toastTop = panel.y() + s(8) + (NotificationBanner.INSTANCE.hasActive() ? s(56) : 0.0F);
+        // must stay in view. It is anchored where the eye already is — the top
+        // edge of the input bar — and rises up from behind it, rather than
+        // dropping in from the panel top away from the action. Pages without a
+        // composer (detail pages) fall back to the bottom of the list.
+        UiLayout toastLayout = layout();
+        float toastAnchor = toastLayout.inputBar.w() > 0.0F
+                ? toastLayout.inputBar.y() : toastLayout.list.bottom();
         ActionToast.render(canvas, actionFeedback, panel.x(), panel.w(),
-                toastTop, System.currentTimeMillis(), AtomChatScreen::tr);
+                panel.y(), toastAnchor, System.currentTimeMillis(), AtomChatScreen::tr);
     }
 
     /**
@@ -3261,31 +3271,67 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
         ScrollController scroll = currentScroll();
         boolean show = scroll.getMaxScroll() > 0.0F && !scroll.isAtBottom();
         jumpLatestAnim = UiMotion.approach(jumpLatestAnim, show ? 1.0F : 0.0F, frameDt, UiMotion.POPUP_MS);
-        if (jumpLatestAnim < 0.01F) {
-            return;
-        }
         float size = s(38);
         float x = layout.list.right() - size - s(12);
         float y = layout.list.bottom() - size - s(12);
         boolean hover = vmx >= x && vmx <= x + size && vmy >= y && vmy <= y + size;
+        // Same interaction language as every other control: the hover grey is
+        // eased rather than switched, and the pill rides the shared bounce spring
+        // so the press squashes it and the release bounces back. Both are stepped
+        // BEFORE the fade gate below, because the click that presses the pill also
+        // scrolls to the bottom and hides it on the very next frame — behind the
+        // gate the release half of the bounce would never be drawn.
+        jumpLatestHover = UiMotion.approach(jumpLatestHover, hover ? 1.0F : 0.0F,
+                frameDt, UiMotion.HOVER_MS);
+        jumpLatestScale.update(hover, jumpLatestHeld, frameDt, Animations.enabled(), size);
+        if (jumpLatestAnim < 0.01F) {
+            return;
+        }
         canvas.save();
         try (Paint layer = new Paint()) {
             layer.setColor(Color.makeARGB((int) (255.0F * jumpLatestAnim), 0, 0, 0));
             canvas.saveLayer(Rect.makeXYWH(x - s(4), y - s(4), size + s(8), size + s(8)), layer);
-            // Fixed dark floating pill (the jump FAB floats over arbitrary
-            // message content, whose polarity no theme token knows), same fixed
-            // polarity family as the popups; hover lifts the grey a notch.
-            int bg = hover ? Color.makeARGB(245, 70, 76, 90) : Color.makeARGB(235, 52, 58, 70);
-            SkiaDraw.drawRoundedRect(canvas, x, y, size, size, size / 2.0F, bg);
-            SkiaDraw.drawRoundedShadow(canvas, x, y, size, size, size / 2.0F, s(8), UiTokens.CHROME_SHADOW);
-            // Glyph pinned white like the pill itself: the pill is fixed dark,
-            // so a themed text colour would go dark-on-dark on light themes.
-            drawIconCentered(canvas, ICON_JUMP_DOWN_PATH, x + size / 2.0F, y + size / 2.0F, s(18),
-                    Color.makeARGB(255, 255, 255, 255));
+            float cx = x + size / 2.0F;
+            float cy = y + size / 2.0F;
+            jumpLatestScale.begin(canvas, cx, cy);
+            try {
+                // Fixed dark floating pill (the jump FAB floats over arbitrary
+                // message content, whose polarity no theme token knows), same fixed
+                // polarity family as the popups; hover lifts the grey a notch.
+                int bg = lerpArgb(Color.makeARGB(235, 52, 58, 70), Color.makeARGB(245, 70, 76, 90),
+                        jumpLatestHover);
+                SkiaDraw.drawRoundedRect(canvas, x, y, size, size, size / 2.0F, bg);
+                SkiaDraw.drawRoundedShadow(canvas, x, y, size, size, size / 2.0F, s(8), UiTokens.CHROME_SHADOW);
+                // Glyph pinned white like the pill itself: the pill is fixed dark,
+                // so a themed text colour would go dark-on-dark on light themes.
+                drawIconCentered(canvas, ICON_JUMP_DOWN_PATH, cx, cy, s(18),
+                        Color.makeARGB(255, 255, 255, 255));
+            } finally {
+                canvas.restore();
+            }
             canvas.restore();
         } finally {
             canvas.restore();
         }
+    }
+
+    /**
+     * Straight sRGB blend of two opaque ARGB colours, {@code t} in [0,1] — the
+     * hover wash's own interpolation, so a fade can be drawn without stacking a
+     * translucent overlay on a fixed grey.
+     */
+    private static int lerpArgb(int from, int to, float t) {
+        if (t <= 0.0F) {
+            return from;
+        }
+        if (t >= 1.0F) {
+            return to;
+        }
+        int a = (int) (((from >>> 24) & 0xFF) + (((to >>> 24) & 0xFF) - ((from >>> 24) & 0xFF)) * t);
+        int r = (int) (((from >> 16) & 0xFF) + (((to >> 16) & 0xFF) - ((from >> 16) & 0xFF)) * t);
+        int g = (int) (((from >> 8) & 0xFF) + (((to >> 8) & 0xFF) - ((from >> 8) & 0xFF)) * t);
+        int b = (int) ((from & 0xFF) + ((to & 0xFF) - (from & 0xFF)) * t);
+        return Color.makeARGB(a, r, g, b);
     }
 
     private boolean overJumpLatest(UiLayout layout, float vmx, float vmy) {
@@ -3667,7 +3713,13 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
                         messageSenderName(target)), true);
     }
 
-    /** Incoming poke from {@code from}: wobble that player's row, cue and toast. */
+    /**
+     * Incoming poke from {@code from}: wobble that player's row, cue and toast.
+     *
+     * <p>Reachable only for another player, because a poke to yourself is
+     * rejected everywhere upstream — which holds for the real relay and for the
+     * ping-pong poke in the test round-trip alike.</p>
+     */
     private void onPoked(UUID from) {
         if (from == null || from.equals(client.player == null ? null : client.player.getUuid())) {
             return;
@@ -3679,6 +3731,17 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
         messageListView.poke(from, System.currentTimeMillis());
         com.atom.chat.notification.NotificationController.playPokeSound();
         feedback("atomchat.feedback.pokeReceived", tr("atomchat.feedback.pokeReceived", displayNameFor(from)), true);
+    }
+
+    /**
+     * A poke simulated by {@code /atomchat test poke}, addressed to somebody
+     * else. The cue already played on the client side; the wobble and the toast
+     * are what this adds. Deliberately not {@link #onPoked}: that path rejects a
+     * poke from yourself, and the test has to be a full round-trip through the
+     * server to prove the payload decodes, so the sender is always this client.
+     */
+    public void onTestPoked(UUID target, String targetName) {        messageListView.poke(target, System.currentTimeMillis());
+        feedback("atomchat.feedback.pokeReceived", tr("atomchat.feedback.pokeReceived", targetName), true);
     }
 
     /** A player's display name from the tab list, falling back to the raw uuid. */
@@ -5005,6 +5068,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
             // Jump-to-latest bubble sits above the message list and takes priority
             // over ordinary message clicks when it is visible.
             if (button == 0 && overJumpLatest(layout, mx, my)) {
+                jumpLatestHeld = true;
                 currentScroll().scrollToBottom(true);
                 return true;
             }
@@ -5202,6 +5266,11 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
             // is cleared here: parked in RootPageInput.onRelease it never ran (the two
             // guards are opposites) and the button stayed squashed at 0.92.
             pressedButtonHeld = -1;
+            // Same for the folded-history capsule and the jump-to-latest FAB: both
+            // are armed on press and must be released here, or the bounce never
+            // gets its release half.
+            messageListView.setLoadEarlierPressed(false);
+            jumpLatestHeld = false;
             if (button == 0) {
                 float mx = toVirtualX(mouseX);
                 float my = toVirtualY(mouseY);

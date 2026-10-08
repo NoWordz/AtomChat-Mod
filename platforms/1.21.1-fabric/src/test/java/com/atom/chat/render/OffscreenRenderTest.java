@@ -384,6 +384,16 @@ class OffscreenRenderTest {
                 assertTrue(view.loadEarlierHitAt(layout.list.x() + layout.list.w() / 2.0F, layout.list.y() + 18.0F),
                         "the load-earlier button must claim the viewport top while rows are folded");
 
+                // The hover wash eases and the press rides a bounce spring while
+                // the hit rect stays where it was drawn. Painting the pressed and
+                // hovered shape is the part worth exercising here: it runs the
+                // spring and the extra canvas push/pop, which is where an
+                // unbalanced Skija save would surface.
+                view.setLoadEarlierPressed(true);
+                view.setLoadEarlierHovered(layout.list.x() + layout.list.w() / 2.0F, layout.list.y() + 18.0F);
+                panel.paintedFrame("pressed load-earlier button", draw(view, layout, history, scroll));
+                view.setLoadEarlierPressed(false);
+
                 // Fully unfolded: rows start at the very top, so no button.
                 view.setVisibleStart(0);
                 panel.paintedFrame("unfolded message list", draw(view, layout, history, scroll));

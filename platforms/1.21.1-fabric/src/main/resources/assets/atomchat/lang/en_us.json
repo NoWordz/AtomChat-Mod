@@ -261,5 +261,15 @@
   "atomchat.config.section.hosting": "Server hosting",
   "atomchat.config.section.packs": "Server packs",
   "atomchat.config.cooldown_hint": "%s s",
-  "atomchat.config.error.field_range": "\"%s\" must be between %s and %s"
+  "atomchat.config.error.field_range": "\"%s\" must be between %s and %s",
+  "atomchat.command.test.bannerSent": "Sent a simulated %s banner to your client",
+  "atomchat.command.test.pokeSent": "Sent a simulated poke to your client",
+  "atomchat.command.test.debugRequired": "Enable Debug mode in AtomChat settings before using the test command",
+  "atomchat.command.test.noChannel": "That client has no ready AtomChat channel to send a simulated event to",
+  "atomchat.test.kind.mention": "mention",
+  "atomchat.test.kind.quote": "quote",
+  "atomchat.test.kind.whisper": "whisper",
+  "atomchat.test.text.MENTION": "This is a test mention",
+  "atomchat.test.text.QUOTE": "This is a test quote reply",
+  "atomchat.test.text.WHISPER": "This is a test private message"
 }

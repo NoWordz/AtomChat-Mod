@@ -49,6 +49,9 @@ public class AtomChatClient implements ClientModInitializer {
         ImageLoader.get().init(CacheDirs.imageCacheDir());
         com.atom.chat.net.AvatarCompanionClient.init();
         com.atom.chat.net.PokeCompanionClient.init();
+        // Test command receiver: turns a simulated event into the same reaction
+        // the real one produces (/atomchat test on the server side).
+        com.atom.chat.net.TestCompanionClient.init();
         com.atom.chat.net.MediaCompanionClient.init();
         com.atom.chat.net.PackNetClient.install();
         com.atom.chat.net.ConfigScreenClient.init();

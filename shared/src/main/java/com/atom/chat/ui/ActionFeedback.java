@@ -30,6 +30,12 @@ public final class ActionFeedback {
     public static final long ERROR_HOLD_MS = 4000L;
     /** Slide-up-and-fade exit, matching the notification banner. */
     public static final long EXIT_MS = 150L;
+    /**
+     * Rise-in distance. The stack is anchored just above the composer, so the
+     * toast comes up from behind it rather than dropping in from the panel top —
+     * the same travel the notification banner uses, mirrored for a lower anchor.
+     */
+    public static final float ENTER_TRAVEL = UiTokens.s(14);
 
     /**
      * One toast: the dedupe {@code key}, an optional already-resolved
@@ -58,6 +64,43 @@ public final class ActionFeedback {
             }
             long left = totalMs() - age;
             return Math.max(0.0F, Math.min(1.0F, left / (float) EXIT_MS));
+        }
+
+        /**
+         * Top edge of row {@code index} in a stack anchored at {@code bottom},
+         * where index 0 is the entry {@link #snapshot} returns first. Pure so the
+         * stacking direction — nearest the anchor first, climbing upward — is
+         * unit-testable without a canvas.
+         */
+        public static float rowTop(float bottom, int index, float rowH, float gap, float bottomInset) {
+            return bottom - bottomInset - (index + 1) * rowH - index * gap;
+        }
+
+        /**
+         * Opacity with the decorative-motion switch applied. With motion off the
+         * row is simply present or gone: the toast is feedback the player asked
+         * for, so it must still appear — only the fade is what the switch buys.
+         */
+        public float alpha(long now, boolean motion) {
+            return motion ? alpha(now) : (expired(now) ? 0.0F : 1.0F);
+        }
+
+        /**
+         * Downward travel in UI px: eases up into place with a slight overshoot
+         * on the way in ({@code easeOutBack}), then sinks back down while fading
+         * on the way out. Positive is downward, so the row starts below its slot
+         * and rises to it. Zero with motion off.
+         */
+        public float offset(long now, boolean motion) {
+            if (!motion) {
+                return 0.0F;
+            }
+            long age = now - born;
+            if (age <= APPEAR_MS) {
+                return (1.0F - Easing.easeOutBack(age / (float) APPEAR_MS)) * ENTER_TRAVEL;
+            }
+            float gone = Math.max(0.0F, Math.min(1.0F, (age - holdMs()) / (float) EXIT_MS));
+            return gone * gone * ENTER_TRAVEL;
         }
     }
 
