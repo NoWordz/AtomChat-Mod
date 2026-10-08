@@ -39,6 +39,7 @@
   "atomchat.input.placeholder": "Type a message or drop an image...",
   "atomchat.input.uploading": "Uploading image…",
   "atomchat.image.loading": "Loading image…",
+  "atomchat.chat.loadEarlier": "Load earlier (%s)",
   "atomchat.emoji.tab.emoji": "Emoji",
   "atomchat.emoji.tab.kaomoji": "Kaomoji",
   "atomchat.emoji.tab.emote": "Stickers",

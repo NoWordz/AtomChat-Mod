@@ -139,6 +139,23 @@ public final class MessageListView {
     /** Messages list from the most recent draw; used to order cross-message ranges. */
     private List<ChatMessage> currentMessages = List.of();
 
+    /**
+     * First visible row: rows before it are folded behind the "load earlier"
+     * button. Kept as a plain index (not a bare list window) so divider and
+     * grouping decisions still look at the preceding message and the window
+     * boundary never changes how a visible row is laid out.
+     */
+    private int visibleStart;
+    /** Screen-space rect of the "load earlier" button drawn last frame; empty when hidden. */
+    private float loadEarlierX;
+    private float loadEarlierY;
+    private float loadEarlierW;
+    private float loadEarlierH;
+    /** Armed by a click on the button; the host consumes it to reveal one batch. */
+    private boolean loadEarlierRequested;
+    /** Whether the pointer currently hovers the button (drives its hover wash). */
+    private boolean loadEarlierHovered;
+
     private final Map<ChatMessage, Long> messageEnterStart = new HashMap<>();
     private final Set<ChatMessage> messageEnterSettled = new HashSet<>();
     private long lastEntrancePrune;
@@ -225,7 +242,8 @@ public final class MessageListView {
         // recompute would make us miss the follow and leave a growing gap.
         boolean wasAtBottom = scroll.isAtBottom();
         boolean viewportChanged = scroll.viewportChanged(height);
-        scroll.setContent(measureContentHeight(messages, width), height);
+        int from = Math.max(0, Math.min(visibleStart, messages.size()));
+        scroll.setContent(measureContentHeight(messages, width, from), height);
         if (wasAtBottom) {
             if (viewportChanged) {
                 // The list is shrinking/growing in lockstep with the animated
@@ -248,7 +266,7 @@ public final class MessageListView {
             float dtMs = Math.min(50.0F, Math.max(1.0F, now - lastFrameMs));
             lastFrameMs = now;
             float cursorY = y;
-            for (int mi = 0; mi < messages.size(); mi++) {
+            for (int mi = from; mi < messages.size(); mi++) {
                 ChatMessage msg = messages.get(mi);
                 boolean grouped = isCompactGrouped(messages, mi);
                 if (dividerBefore(messages, mi)) {
@@ -335,6 +353,38 @@ public final class MessageListView {
         } finally {
             canvas.restore();
         }
+        // Pinned viewport-top "load earlier" button: only while rows are folded
+        // away. Drawn after the list (so it floats above the first row) and in
+        // screen space, so it never scrolls out of reach.
+        drawLoadEarlier(canvas, x, y, width, from, messages.size());
+    }
+
+    /**
+     * The "load earlier" capsule pinned to the top of the viewport while older
+     * rows are folded away. Screen-space, centred, one row tall.
+     */
+    private void drawLoadEarlier(Canvas canvas, float x, float y, float width, int from, int total) {
+        if (from <= 0) {
+            loadEarlierX = loadEarlierY = loadEarlierW = loadEarlierH = 0.0F;
+            return;
+        }
+        Font font = FontManager.font(UiTokens.FONT_QUOTE);
+        String label = tr("atomchat.chat.loadEarlier", total - from);
+        float textW = SkiaFontRenderer.getStringWidth(font, label);
+        float w = Math.min(width - UiTokens.s(24), textW + UiTokens.QUOTE_PAD_X * 2.0F + UiTokens.s(16));
+        float h = UiTokens.s(24);
+        float bx = x + (width - w) / 2.0F;
+        float by = y + UiTokens.s(6);
+        loadEarlierX = bx;
+        loadEarlierY = by;
+        loadEarlierW = w;
+        loadEarlierH = h;
+        SkiaDraw.drawRoundedRect(canvas, bx, by, w, h, h / 2.0F, secondaryCapsuleBg());
+        if (loadEarlierHovered) {
+            SkiaDraw.drawRoundedRect(canvas, bx, by, w, h, h / 2.0F, UiTokens.cardHover(1.0F));
+        }
+        SkiaFontRenderer.drawTextCentered(canvas, font, label, bx + w / 2.0F, by + h / 2.0F,
+                secondaryCapsuleText(), true, secondaryCapsuleBg());
     }
 
     /** Cached wrap; see {@link #layoutCache}. */
@@ -578,6 +628,59 @@ public final class MessageListView {
     public void poke(int index, long nowMs) {
         pokeIndex = index;
         pokeStartTime = nowMs;
+    }
+
+    // ------------------------------------------------------- history fold window
+
+    /** Index of the first visible row; the host owns this (per conversation). */
+    public void setVisibleStart(int start) {
+        this.visibleStart = Math.max(0, start);
+    }
+
+    /**
+     * Content-space offset of {@code index} measured from {@code visibleStart},
+     * so a reveal can compute exactly how much height was inserted above the
+     * previously topmost row and scroll by that much to keep it put.
+     */
+    public float offsetFromWindow(List<ChatMessage> messages, int index, float width) {
+        int from = Math.max(0, Math.min(visibleStart, messages.size()));
+        int limit = Math.max(from, Math.min(index, messages.size()));
+        float cursor = 0.0F;
+        for (int i = from; i < limit; i++) {
+            if (dividerBefore(messages, i)) {
+                cursor += TIME_DIVIDER_H + UiTokens.LIST_GAP;
+            }
+            cursor += messageHeight(messages.get(i), width, isCompactGrouped(messages, i));
+            cursor += isCompactGrouped(messages, i + 1)
+                    ? MessageGrouping.groupedGap(UiTokens.LIST_GAP, UiTokens.s(2))
+                    : UiTokens.LIST_GAP;
+        }
+        return cursor;
+    }
+
+    /** Whether the pointer is over the folded-history button (drives its hover wash). */
+    public void setLoadEarlierHovered(float mx, float my) {
+        loadEarlierHovered = loadEarlierH > 0.0F
+                && mx >= loadEarlierX && mx <= loadEarlierX + loadEarlierW
+                && my >= loadEarlierY && my <= loadEarlierY + loadEarlierH;
+    }
+
+    /** Whether a left click at this point lands on the "load earlier" button. */
+    public boolean loadEarlierHitAt(float mx, float my) {
+        return loadEarlierH > 0.0F
+                && mx >= loadEarlierX && mx <= loadEarlierX + loadEarlierW
+                && my >= loadEarlierY && my <= loadEarlierY + loadEarlierH;
+    }
+
+    /** One-shot click signal from the button; cleared on read. */
+    public void requestLoadEarlier() {
+        loadEarlierRequested = true;
+    }
+
+    public boolean consumeLoadEarlierRequest() {
+        boolean requested = loadEarlierRequested;
+        loadEarlierRequested = false;
+        return requested;
     }
 
     public Optional<ClickableSpan> clickableSpanAt(float mx, float my) {
@@ -1122,9 +1225,9 @@ public final class MessageListView {
         return new MessageHit(msg, index, x, y, maxWidth, bottom, avatarX, avatarY, avatarSize, pillTop, pillX, pillW, bottom);
     }
 
-    private float measureContentHeight(List<ChatMessage> messages, float width) {
+    private float measureContentHeight(List<ChatMessage> messages, float width, int from) {
         float contentHeight = 0;
-        for (int i = 0; i < messages.size(); i++) {
+        for (int i = from; i < messages.size(); i++) {
             if (dividerBefore(messages, i)) {
                 contentHeight += TIME_DIVIDER_H + UiTokens.LIST_GAP;
             }

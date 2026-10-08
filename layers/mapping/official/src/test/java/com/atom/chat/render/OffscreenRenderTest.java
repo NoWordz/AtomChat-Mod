@@ -363,6 +363,39 @@ class OffscreenRenderTest {
     }
 
     /**
+     * A long conversation is folded: only the newest window is drawn and the
+     * "load earlier" button floats above the first visible row. Guards the two
+     * things the fold changes in the draw path — the traversal starts at the
+     * window origin, and the button is a real, hit-testable rect on the frame.
+     */
+    @Test
+    void longHistoryFoldsBehindTheLoadEarlierButton() {
+        try (Panel panel = new Panel()) {
+            UiLayout layout = UiLayout.of(PANEL_X, PANEL_Y, PANEL_W, PANEL_H);
+            List<ChatMessage> history = new ArrayList<>();
+            for (int i = 0; i < 500; i++) {
+                history.add(new ChatMessage(Component.literal("line " + i), i % 2 == 0));
+            }
+            MessageListView view = new MessageListView(new OffscreenHost(openedAfter(history)));
+            ScrollController scroll = new ScrollController();
+            try {
+                view.setVisibleStart(400);
+                panel.paintedFrame("folded message list", draw(view, layout, history, scroll));
+                assertTrue(view.loadEarlierHitAt(layout.list.x() + layout.list.w() / 2.0F, layout.list.y() + 18.0F),
+                        "the load-earlier button must claim the viewport top while rows are folded");
+
+                // Fully unfolded: rows start at the very top, so no button.
+                view.setVisibleStart(0);
+                panel.paintedFrame("unfolded message list", draw(view, layout, history, scroll));
+                assertFalse(view.loadEarlierHitAt(layout.list.x() + layout.list.w() / 2.0F, layout.list.y() + 18.0F),
+                        "no button once every row is visible");
+            } finally {
+                view.dispose();
+            }
+        }
+    }
+
+    /**
      * The other half of the entrance rule: a message that arrives while the panel
      * is open wraps its row in {@code saveLayer} for the first frames. That is the
      * nesting the 0.2.4 banner leaked a matrix through, so the balance check runs

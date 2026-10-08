@@ -34,6 +34,7 @@ import com.atom.chat.banner.BannerImage;
 import com.atom.chat.banner.BannerStore;
 import com.atom.chat.image.OwnPlayerAvatarSource;
 import com.atom.chat.page.ConversationListPage;
+import com.atom.chat.page.HistoryWindow;
 import com.atom.chat.page.MessageListView;
 import com.atom.chat.page.PageHost;
 import com.atom.chat.page.ProfilePage;
@@ -447,6 +448,12 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
     private final ScrollController worldScroll = new ScrollController();
     /** Per-private-conversation scroll controllers; draft map keys are PlayerRef.key(). */
     private final Map<String, ScrollController> privateScrolls = new HashMap<>();
+    /**
+     * Per-conversation history fold depth (world="", private=PlayerRef.key()).
+     * Not remembered across screen instances: closing the panel forgets how far
+     * a conversation was unfolded, matching the public scroll reset.
+     */
+    private final Map<String, HistoryWindow> historyWindows = new HashMap<>();
     private final Map<String, String> privateDrafts = new HashMap<>();
     /** Draft for the public world channel; kept separately because the hidden
      *  EditBox is shared by every chat page. */
@@ -668,8 +675,13 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
 
     private long lastAvatarClickTime;
     private int lastAvatarClickIndex = -1;
+    /** Latest mouse position in GUI space, refreshed every render for hover-only chrome. */
+    private double lastMouseX;
+    private double lastMouseY;
     /** Single-click→profile competition window (QQ standard), in ms. */
     private static final long AVATAR_CLICK_WINDOW_MS = 300;
+    /** Rows revealed per "load earlier" click (and the initial visible window). */
+    private static final int HISTORY_WINDOW_BATCH = 100;
     private long pendingAvatarClickTime;
     private int pendingAvatarClickIndex = -1;
     private ChatMessage pendingAvatarClickMessage;
@@ -1211,15 +1223,58 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
             return;
         }
         UiLayout.Rect list = layout.list;
+        List<ChatMessage> messages = messagesForNav(page);
+        HistoryWindow window = historyWindowForNav(page, messages.size());
+        messageListView.setVisibleStart(window.visibleStart());
         canvas.save();
         try {
             SkiaDraw.clip(canvas, list.x(), list.y(), list.w(), list.h(), 0.0F);
             canvas.translate(dx, 0.0F);
+            messageListView.setLoadEarlierHovered(toVirtualX(lastMouseX), toVirtualY(lastMouseY));
             messageListView.draw(canvas, list.x(), list.y(), list.w(), list.h(),
-                    messagesForNav(page), scrollForNav(page));
+                    messages, scrollForNav(page));
         } finally {
             canvas.restore();
         }
+        applyLoadEarlierRequest(page, messages, window, list, scrollForNav(page));
+    }
+
+    /** Fold window for a conversation, created on first view and kept across in-place growth. */
+    private HistoryWindow historyWindowForNav(NavPage page, int total) {
+        String key = page.page() == AppPage.PRIVATE_CHAT && page.target() != null
+                ? page.target().key() : "";
+        HistoryWindow window = historyWindows.get(key);
+        if (window == null) {
+            window = new HistoryWindow(total, HISTORY_WINDOW_BATCH);
+            historyWindows.put(key, window);
+        } else {
+            // Follow sends/evictions without collapsing an unfolded history.
+            window.syncTotal(total);
+        }
+        return window;
+    }
+
+    /** Forgets every conversation's fold depth (world switch, history clear, disconnect). */
+    private void resetHistoryWindows() {
+        historyWindows.clear();
+    }
+
+    /**
+     * Reveals one more batch when the button was clicked this frame, then
+     * scrolls by exactly the height the reveal inserted above the row that was
+     * topmost, so the previously visible content does not jump.
+     */
+    private void applyLoadEarlierRequest(NavPage page, List<ChatMessage> messages, HistoryWindow window,
+                                         UiLayout.Rect list, ScrollController scroll) {
+        if (!messageListView.consumeLoadEarlierRequest()) {
+            return;
+        }
+        int oldStart = window.visibleStart();
+        if (!window.loadEarlier()) {
+            return;
+        }
+        float inserted = messageListView.offsetFromWindow(messages, oldStart, list.w());
+        scroll.scrollTo(scroll.getScrollY() + inserted, false);
     }
 
     private String currentPrivateKey() {
@@ -1274,6 +1329,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
      */
     private void resetTransientWorldUi() {
         worldScroll.reset();
+        resetHistoryWindows();
         closeContextMenu();
         lastContextMessage = null;
         lastContextPlayer = null;
@@ -1298,6 +1354,8 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
 
     @Override
     public void render(GuiGraphics context, int mouseX, int mouseY, float delta) {
+        lastMouseX = mouseX;
+        lastMouseY = mouseY;
         // Panel progress on the exponential clock (same family as the page
         // nav): expApproach clamps dt to 50ms internally and snaps exactly to
         // the target, so the equality below is the settle test — with
@@ -2423,9 +2481,14 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
      */
     private void drawChatPageBody(Canvas canvas, UiLayout layout, int mouseX, int mouseY, NavPage page) {
         int probeBefore = canvas.getSaveCount();
+        List<ChatMessage> messages = messagesForNav(page);
+        HistoryWindow window = historyWindowForNav(page, messages.size());
+        messageListView.setVisibleStart(window.visibleStart());
+        messageListView.setLoadEarlierHovered(toVirtualX(mouseX), toVirtualY(mouseY));
         messageListView.draw(canvas, layout.list.x(), layout.list.y(), layout.list.w(), layout.list.h(),
-                messagesForNav(page), scrollForNav(page));
+                messages, scrollForNav(page));
         probeCanvasLeak("messageListView.draw", probeBefore, canvas);
+        applyLoadEarlierRequest(page, messages, window, layout.list, scrollForNav(page));
 
         // Reply bar floats above the input bar. It is drawn after the message
         // list so it always sits on top; the layout keeps an 8px gap below it.
@@ -4913,6 +4976,12 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
             if (button == 0) {
                 pendingClickSpan = messageListView.clickableSpanAt(mx, my).orElse(null);
                 pendingClickMoved = false;
+                // The folded-history button floats over the top of the list, so it
+                // claims the press before any message row beneath it can.
+                if (messageListView.loadEarlierHitAt(mx, my)) {
+                    messageListView.requestLoadEarlier();
+                    return true;
+                }
             }
 
             // Message interactions. Left avatar click only arms the double-click
