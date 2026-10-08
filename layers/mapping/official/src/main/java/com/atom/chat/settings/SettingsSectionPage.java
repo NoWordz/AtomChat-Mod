@@ -128,8 +128,9 @@ public final class SettingsSectionPage {
     // own identity colour and reads on both light and dark panels.
     private static final int LINK_COLOR = Color.makeARGB(255, 96, 165, 250);
     // Destructive-confirm red, same reasoning as LINK_COLOR: a fixed danger
-    // hue that must not drift with the theme or the accent.
-    private static final int DANGER_RED = Color.makeARGB(255, 235, 64, 52);
+    // hue that must not drift with the theme or the accent. One definition, in
+    // UiTokens, shared with the action-feedback toast.
+    private static final int DANGER_RED = UiTokens.dangerColor();
     private static final String LABEL_BLOCKED = "atomchat.settings.privacy.list";
     private static final String LABEL_THIRD_PARTY = "atomchat.settings.about.thirdparty.group";
     /** Fold-group id of the third-party block; its children render merged

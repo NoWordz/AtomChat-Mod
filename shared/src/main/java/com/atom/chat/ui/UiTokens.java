@@ -139,6 +139,17 @@ public final class UiTokens {
     }
 
     /**
+     * Destructive/danger hue, deliberately NOT theme-adaptive: like the link
+     * blue, a danger colour is its own identity and must not drift with the
+     * accent — a mint themed success and a mint themed failure would be
+     * indistinguishable. Shared by the destructive-confirm copy and the action
+     * feedback toast so the two never diverge.
+     */
+    public static int dangerColor() {
+        return io.github.humbleui.skija.Color.makeARGB(255, 235, 64, 52);
+    }
+
+    /**
      * Content colour that reads on top of a filled accent shape. Picked from the
      * fill's own luminance, not the panel's: a theme's accent can be pale
      * enough to need dark glyphs on a dark panel, or deep enough to need white

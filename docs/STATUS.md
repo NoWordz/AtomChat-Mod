@@ -12,11 +12,13 @@
 
 | 平台 | 实例目录 | 部署 jar md5 |
 |---|---|---|
-| Fabric 1.21.1 | `1.21.1-CCB` | `5b9f90800eaaab68acbbb1acaf5c8e42` |
-| NeoForge 1.21.1 | `Mechanomania-航空学` | `ae3cfc32467598e352142eef8db9615d` |
-| Forge 1.20.1 | `1.20.1-main` / `Go Fishing` / `元素觉醒1.4.6` | `f54da52f49443af30274c8dabd53f5b0` |
+| Fabric 1.21.1 | `1.21.1-CCB` | `42c9e270` |
+| NeoForge 1.21.1 | `Mechanomania-航空学` | `fd2d6529` |
+| Forge 1.20.1 | `1.20.1-main` / `Go Fishing` / `元素觉醒1.4.6` | `4a3b5677` |
 
-上表为**工作区未提交构建**（引用胶囊取色修复 + 胶囊族软阴影 + [图片] 占位绿自适应，v0.3.0 之后的小修补轮），待真机验收后再决定是否随下一版提交。
+上表是**0.3.0 之后四功能轮（plan `2026-10-08-atomchat-history-toast-poke-hudnotify.md`）的当前构建**：T1 历史折叠已落地（commit `db87113`），T2 操作反馈 Toast / T3 戳一戳远程 / T4 横幅搬屏幕顶 待做。版本号保持 `0.3.0` 不动。
+
+> 前一轮（引用胶囊取色 + 胶囊族软阴影 + `[图片]` 占位绿）已随 commit `d8fc806` 入库并验收。
 
 实例都在 `D:\Myworld\.minecraft\versions\<实例>\mods\`；配置文件在 `<实例>\config\atomchat\atomchat-client.json`。
 

@@ -480,26 +480,38 @@ public final class ImageLoader {
         return total;
     }
 
-    /** Deletes every cached image file. In-memory images are untouched. */
-    public void clearDiskCache() {
+    /**
+     * Deletes every cached image file. In-memory images are untouched.
+     *
+     * @return the number of cache files deleted, or {@code -1} if the cache
+     *         directory itself could not be enumerated — the caller needs the
+     *         difference to report a truthful result instead of claiming
+     *         success on a locked directory.
+     */
+    public int clearDiskCache() {
         Path dir = diskDir;
         if (dir == null || !Files.isDirectory(dir)) {
-            return;
+            return 0;
         }
+        int deleted = 0;
         try (var stream = Files.list(dir)) {
             for (Path p : (Iterable<Path>) stream::iterator) {
                 if (!p.getFileName().toString().endsWith(".bin")) {
                     continue;
                 }
                 try {
-                    Files.deleteIfExists(p);
+                    if (Files.deleteIfExists(p)) {
+                        deleted++;
+                    }
                 } catch (IOException e) {
                     AtomChat.LOGGER.warn("Failed to delete image cache file {}", p, e);
                 }
             }
         } catch (IOException e) {
             AtomChat.LOGGER.warn("Failed to clear image cache directory {}", dir, e);
+            return -1;
         }
+        return deleted;
     }
 
     private static long sizeOrZero(Path p) {

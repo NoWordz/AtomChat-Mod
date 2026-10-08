@@ -87,7 +87,8 @@ public final class ProfilePage {
          */
         void clearBanner();
 
-        void copyText(String text);
+        /** Copies text; returns whether the clipboard write succeeded. */
+        boolean copyText(String text);
 
         /**
          * Borrows the composer field as the signature editor's IME carrier:
@@ -352,9 +353,12 @@ public final class ProfilePage {
     private boolean onCopyButton(UiLayout layout, float scrollY, float vmx, float vmy) {
         if (copyButtonRect(layout, scrollY).contains(vmx, vmy)) {
             String uuid = subjectUuid() != null ? subjectUuid().toString() : "-";
-            handler.copyText(uuid);
-            copiedKey = UUID_COPY_KEY;
-            copiedUntil = System.currentTimeMillis() + COPIED_FEEDBACK_MS;
+            // Only confirm when the write actually happened: a failed copy used
+            // to still show the success tick.
+            if (handler.copyText(uuid)) {
+                copiedKey = UUID_COPY_KEY;
+                copiedUntil = System.currentTimeMillis() + COPIED_FEEDBACK_MS;
+            }
             return true;
         }
         return false;

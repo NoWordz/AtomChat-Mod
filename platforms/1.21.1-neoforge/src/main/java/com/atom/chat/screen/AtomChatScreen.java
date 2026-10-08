@@ -11,6 +11,8 @@ import com.atom.chat.chat.ChatStore;
 import com.atom.chat.config.AtomChatConfig;
 import com.atom.chat.emote.EmoteStore;
 import com.atom.chat.ui.AppIcons;
+import com.atom.chat.ui.ActionFeedback;
+import com.atom.chat.ui.ActionToast;
 import com.atom.chat.image.ImageLoader;
 import com.atom.chat.image.ImageSaver;
 import com.atom.chat.image.ImageUploader;
@@ -170,8 +172,10 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
 
         @Override
         public void clearAvatar() {
-            avatarStore.clear();
+            boolean removed = avatarStore.clear();
             AvatarImage.release();
+            feedback(removed ? "atomchat.feedback.avatarCleared" : "atomchat.feedback.avatarClearFailed",
+                    removed);
         }
 
         @Override
@@ -182,13 +186,15 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
         @Override
         public void clearBanner() {
             // Delete image = off: the file goes, the accent gradient returns.
-            BannerStore.clear();
+            boolean removed = BannerStore.clear();
             BannerImage.release();
+            feedback(removed ? "atomchat.feedback.bannerCleared" : "atomchat.feedback.bannerClearFailed",
+                    removed);
         }
 
         @Override
-        public void copyText(String text) {
-            copyToClipboard(text);
+        public boolean copyText(String text) {
+            return copyToClipboard(text);
         }
 
         @Override
@@ -258,8 +264,10 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
         if ("wallpaper_pick".equals(actionId)) {
             pickWallpaperFile();
         } else if ("wallpaper_clear".equals(actionId)) {
-            WallpaperStore.clear();
+            boolean removed = WallpaperStore.clear();
             WallpaperImage.release();
+            feedback(removed ? "atomchat.feedback.wallpaperCleared" : "atomchat.feedback.wallpaperClearFailed",
+                    removed);
         } else if ("test_sound".equals(actionId)) {
             com.atom.chat.notification.NotificationController.playTestSound();
         } else if ("teleport_mode".equals(actionId)) {
@@ -287,9 +295,15 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
             // persistence is on). Generation bumped inside: a pending auto-save
             // cannot resurrect what was just deleted.
             com.atom.chat.history.ChatHistory.clearCurrent();
+            resetHistoryWindows();
+            feedback("atomchat.feedback.historyCleared", true);
         } else if ("cache_clear".equals(actionId)) {
             // Image downloads are safe to drop; they are re-fetched on demand.
-            ImageLoader.get().clearDiskCache();
+            // A directory that could not be enumerated reports failure rather
+            // than a success the player cannot trust.
+            int deleted = ImageLoader.get().clearDiskCache();
+            feedback(deleted < 0 ? "atomchat.feedback.cacheClearFailed" : "atomchat.feedback.cacheCleared",
+                    deleted >= 0);
         }
     }
 
@@ -454,6 +468,8 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
      * a conversation was unfolded, matching the public scroll reset.
      */
     private final Map<String, HistoryWindow> historyWindows = new HashMap<>();
+    /** Transient action acknowledgements (cache cleared, copied, save failed). */
+    private final ActionFeedback actionFeedback = new ActionFeedback();
     private final Map<String, String> privateDrafts = new HashMap<>();
     /** Draft for the public world channel; kept separately because the hidden
      *  EditBox is shared by every chat page. */
@@ -1791,10 +1807,15 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
         if (imageCropper.isActive() || colorPicker.isActive()) {
             return;
         }
+        UiLayout.Rect panel = layout().rect();
+        // Action feedback sits in the same floating layer, just above any
+        // notification banner: it acknowledges something the player just did,
+        // so it stays in view even when a banner is queued.
+        ActionToast.render(canvas, actionFeedback, panel.x(), panel.w(),
+                panel.y() + s(8), System.currentTimeMillis(), AtomChatScreen::tr);
         if (!NotificationBanner.INSTANCE.hasActive()) {
             return;
         }
-        UiLayout.Rect panel = layout().rect();
         float vmx = toVirtualX(mouseX);
         float vmy = toVirtualY(mouseY);
         int probeBefore = canvas.getSaveCount();
@@ -3596,14 +3617,23 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
         BlockList.setBlocked(player, !nowBlocked);
     }
 
-    private void copyToClipboard(String text) {
+    private boolean copyToClipboard(String text) {
         try {
             this.client.keyboardHandler.setClipboard(text);
+            return true;
         } catch (Throwable t) {
             // Never let a clipboard failure abort the click handler: it used to
-            // leave the menu stuck open with no clue why.
+            // leave the menu stuck open with no clue why. The boolean lets the
+            // caller show a failure instead of a success.
             AtomChat.LOGGER.warn("Failed to copy message to clipboard", t);
+            return false;
         }
+    }
+
+    /** Raises a transient action acknowledgement in the panel's floating layer. */
+    private void feedback(String key, boolean success) {
+        actionFeedback.show(key, success ? ActionFeedback.Outcome.SUCCESS : ActionFeedback.Outcome.ERROR,
+                System.currentTimeMillis());
     }
 
     /**
@@ -3732,9 +3762,16 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
             }
             ImageSaver.save(url, target).whenComplete((path, throwable) -> {
                 if (throwable != null) {
-                    this.client.execute(() -> showTransientHint(tr("atomchat.input.save_failed")));
+                    // Both surfaces: the composer hint is only visible with an
+                    // empty draft, so the toast carries the failure when a
+                    // draft is present.
+                    this.client.execute(() -> {
+                        showTransientHint(tr("atomchat.input.save_failed"));
+                        feedback("atomchat.feedback.saveFailed", false);
+                    });
                 } else {
                     AtomChat.LOGGER.info("Saved chat image to {}", path);
+                    this.client.execute(() -> feedback("atomchat.feedback.saved", true));
                 }
             });
         }, "AtomChat-ImageSavePicker");
@@ -4352,7 +4389,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
                     } else if (keyCode == 259) {
                         colorPicker.onBackspace();
                     } else if (keyCode == 67 && (modifiers & 2) != 0) {
-                        copyToClipboard(colorPicker.copyHex());
+                        feedback("atomchat.feedback.copied", copyToClipboard(colorPicker.copyHex()));
                     } else if (keyCode == GLFW_KEY_V && (modifiers & 2) != 0) {
                         colorPicker.pasteHex(AtomChatScreen.this.client.keyboardHandler.getClipboard());
                     }
@@ -4892,7 +4929,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
                     if (avatarMenu) {
                         performAvatarMenuAction(row, contextMessage);
                     } else if (row == 0) {
-                        copyToClipboard(contextMessage.getContentText());
+                        feedback("atomchat.feedback.copied", copyToClipboard(contextMessage.getContentText()));
                     } else if (row == 1) {
                         replyTarget = contextMessage;
                         inputFocused = true;
@@ -5180,7 +5217,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
             if (keyCode == 67 && (modifiers & 2) != 0 && messageListView.hasSelection()) {
                 String copied = messageListView.copySelection();
                 if (!copied.isEmpty()) {
-                    client.keyboardHandler.setClipboard(copied);
+                    feedback("atomchat.feedback.copied", copyToClipboard(copied));
                     return true;
                 }
                 return false;
