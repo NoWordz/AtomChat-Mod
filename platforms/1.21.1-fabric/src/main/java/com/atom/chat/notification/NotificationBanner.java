@@ -10,6 +10,7 @@ import com.atom.chat.render.SkiaFontRenderer;
 import com.atom.chat.ui.Animations;
 import com.atom.chat.ui.PressScale;
 import com.atom.chat.ui.UiCards;
+import com.atom.chat.ui.UiLayout;
 import com.atom.chat.ui.UiMotion;
 import com.atom.chat.ui.UiTokens;
 import io.github.humbleui.skija.Canvas;
@@ -46,7 +47,10 @@ import java.util.Map;
  * <p>Visuals follow the shell's own language: the shared float-surface family
  * ({@link com.atom.chat.ui.UiCards#drawFloatSurface}) — an opaque themed fill
  * with ink derived from it, one accent-dyed hover wash and the two-tier chrome
- * shadow the header and tab bar ride — placed on the content column, plus an
+ * shadow the header and tab bar ride — placed on the list's card column (the
+ * content column inset by the same {@link com.atom.chat.ui.UiTokens#ROW_CLIP_INSET}
+ * the conversation list's row cards use, through the one rule in
+ * {@link UiLayout#cardColumnX}), plus an
  * iOS-style drop-in with a slight overshoot and a slide-out on expiry. A round send-style button on the right
  * jumps straight into a reply; the rest of the banner just navigates.
  */
@@ -69,6 +73,65 @@ public final class NotificationBanner {
     private static final float BUTTON_SIZE = UiTokens.s(26);
     /** iOS-style drop-in travel distance. */
     private static final float DROP_TRAVEL = UiTokens.s(14);
+
+    /**
+     * Vertical padding above the title row and below the body row. Published,
+     * together with {@link #TEXT_LINE_GAP}, because they are the parts
+     * {@link #bannerHeight()} is built from: the height is a contract the banner's
+     * test recomputes, not a number nobody can see.
+     */
+    public static final float TEXT_PAD_Y = UiTokens.s(9);
+    /** Gap between the title row and the body row; see {@link #TEXT_PAD_Y}. */
+    public static final float TEXT_LINE_GAP = UiTokens.s(3);
+    /**
+     * Floor under {@link #bannerHeight()}: the leading avatar and the trailing
+     * send button are the tallest things in the bar, so a thin font can never
+     * squeeze it under the controls it is holding.
+     */
+    private static final float MIN_BANNER_H = Math.max(UiTokens.ACTION_BUTTON_SIZE, BUTTON_SIZE);
+
+    /**
+     * Left edge of a banner: the conversation list's card column, published so the
+     * test can bind it to the column the row cards use. The banner is handed the
+     * panel rect rather than a {@link UiLayout} (the screen owns that signature),
+     * so it reads the column from the one rule both surfaces share instead of
+     * rebuilding an equal-looking expression of its own — which is how it came to
+     * wear a {@code max(320, panelW - 24)} width no other surface in the shell
+     * uses.
+     */
+    public static float bannerX(float panelX) {
+        return UiLayout.cardColumnX(panelX);
+    }
+
+    /** Width of a banner; see {@link #bannerX(float)}. */
+    public static float bannerWidth(float panelW) {
+        return UiLayout.cardColumnW(panelW);
+    }
+
+    /**
+     * Height of one banner: the title row's text height, the gap, the body row's
+     * text height and {@link #TEXT_PAD_Y} above and below — never
+     * {@code HEADER_HEIGHT}. Both rows used to be pinned to 32% and 66% of a
+     * header-tall bar, which left a 17px title row and a 16px body row fifteen
+     * pixels apart in a card that was too short to hold them.
+     */
+    public static float bannerHeight() {
+        float rows = TextMetricsHolder.TITLE_H + TEXT_LINE_GAP + TextMetricsHolder.BODY_H;
+        return Math.max(MIN_BANNER_H, rows + TEXT_PAD_Y * 2.0F);
+    }
+
+    /**
+     * Text metrics of the banner's two rows, measured lazily: {@link #bannerHeight()}
+     * runs on the render thread while the panel is open, and holding these in
+     * class-level fields would pull the Skija native library in at class
+     * initialisation — the same reason {@link #sendPath()} sits behind a holder.
+     */
+    private static final class TextMetricsHolder {
+        private static final float TITLE_H =
+                SkiaFontRenderer.textHeight(FontManager.boldFont(UiTokens.FONT_NAME));
+        private static final float BODY_H =
+                SkiaFontRenderer.textHeight(FontManager.font(UiTokens.FONT_QUOTE));
+    }
 
     /** Feather paper plane, same glyph as the composer send button (20x20).
      *  Held lazily so class initialization (client tick) never loads the Skija
@@ -182,17 +245,21 @@ public final class NotificationBanner {
         // made the fade crawl at ~1/90th of its intended speed.
         float hoverDt = Math.min(50.0F, Math.max(1.0F, now - lastHoverMs));
         lastHoverMs = now;
-        // The banner belongs to the content column, not a floating island of its
-        // own: it spans the same width as the header, composer and tab bar, and
-        // sits one full header-clear row below the header card. Its previous
-        // max(320, panelW - 24) width came to 70% of the column on a standard
-        // panel, the one surface in the shell wearing a size no other surface
-        // uses, and its y of panelY + HEADER_HEIGHT + 6 ignored the header's own
-        // PANEL_BOTTOM_PAD and so overlapped the header card by 10px.
-        float bannerW = Math.max(UiTokens.s(120), panelW - UiTokens.LIST_PAD_X * 2.0F);
-        float bannerH = UiTokens.HEADER_HEIGHT;
+        // One column, not an island of its own: the banner spans exactly the
+        // column the conversation list's row cards draw into — x and width from
+        // the one rule both surfaces read (bannerX/bannerWidth, i.e.
+        // UiLayout.cardColumnX/W: the content column inset by ROW_CLIP_INSET per
+        // side). Its old max(320, panelW - 24) width came to 70% of the column on
+        // a standard panel, the one surface in the shell wearing a size no other
+        // surface uses, and its y ignored the header's own PANEL_BOTTOM_PAD and so
+        // overlapped the header card by 10px. The y below is the content column's
+        // own top edge (PANEL_BOTTOM_PAD + HEADER_HEIGHT + PANEL_TOP_GAP).
+        float bannerW = bannerWidth(panelW);
+        // Two single-line rows, so the bar is as tall as the text it holds (see
+        // bannerHeight) rather than as tall as the header's bar.
+        float bannerH = bannerHeight();
         float gap = UiTokens.s(6);
-        float x = panelX + (panelW - bannerW) / 2.0F;
+        float x = bannerX(panelX);
         float y = panelY + UiTokens.PANEL_BOTTOM_PAD + UiTokens.HEADER_HEIGHT + UiTokens.PANEL_TOP_GAP;
 
         for (int i = banners.size() - 1; i >= 0; i--) {
@@ -282,6 +349,24 @@ public final class NotificationBanner {
         }
     }
 
+    /** Vertical centres of a banner's two single-line rows. */
+    private record Rows(float title, float body) {
+    }
+
+    /**
+     * Places the two single-line rows inside a banner of height {@code h} whose
+     * top edge is {@code y}: the block of title + gap + body is centred in the
+     * box, and never comes closer to an edge than {@link #TEXT_PAD_Y}. The parts
+     * are the ones {@link #bannerHeight()} is built from, so the rows and the box
+     * that holds them cannot be sized from different numbers.
+     */
+    private static Rows textRows(float y, float h) {
+        float titleH = TextMetricsHolder.TITLE_H;
+        float bodyH = TextMetricsHolder.BODY_H;
+        float top = y + Math.max(TEXT_PAD_Y, (h - (titleH + TEXT_LINE_GAP + bodyH)) / 2.0F);
+        return new Rows(top + titleH / 2.0F, top + titleH + TEXT_LINE_GAP + bodyH / 2.0F);
+    }
+
     private void drawBanner(Canvas canvas, Active b, float x, float y, float w, float h,
                             float alpha, float hover, float buttonHover, PressScale sendScale) {
         float radius = UiTokens.cardRadius();
@@ -332,24 +417,25 @@ public final class NotificationBanner {
                 float btnY = y + (h - BUTTON_SIZE) / 2.0F;
                 float textX = avatarX + avatarSize + UiTokens.s(10);
                 float textW = Math.max(UiTokens.s(20), btnX - UiTokens.s(8) - textX);
-                // Two lines centred as a block inside the bar rather than pinned
-                // to absolute offsets, so the height (now the header's) cannot
-                // push the preview out of the card.
-                float line1Y = y + h * 0.32F;
-                float line2Y = y + h * 0.66F;
+                // One single-line row each, placed inside the box bannerHeight()
+                // sized for them: the title's row, the gap, the body's row, from
+                // the same parts, so neither row can be pushed out of the card the
+                // way the old h*0.32 / h*0.66 offsets pushed the preview when the
+                // height was the header bar's.
+                Rows rows = textRows(y, h);
                 Font titleFont = FontManager.boldFont(UiTokens.FONT_NAME);
                 Font bodyFont = FontManager.font(UiTokens.FONT_QUOTE);
                 String typeLabel = tr(typeKey(b.type()));
                 String title = typeLabel + (b.sender() != null && !b.sender().isBlank() ? "  " + b.sender() : "");
                 SkiaFontRenderer.drawText(canvas, titleFont,
                         SkiaFontRenderer.truncate(titleFont, title, textW),
-                        textX, SkiaFontRenderer.centerBaselineY(titleFont, line1Y),
+                        textX, SkiaFontRenderer.centerBaselineY(titleFont, rows.title()),
                         UiTokens.onFloatSurface(fill));
 
                 String preview = b.content() == null ? "" : b.content().replace('\n', ' ');
                 SkiaFontRenderer.drawText(canvas, bodyFont,
                         SkiaFontRenderer.truncate(bodyFont, preview, textW),
-                        textX, SkiaFontRenderer.centerBaselineY(bodyFont, line2Y),
+                        textX, SkiaFontRenderer.centerBaselineY(bodyFont, rows.body()),
                         UiTokens.onFloatSurfaceSecondary(fill));
 
                 // The whole control scales: fill, wash and glyph travel together.

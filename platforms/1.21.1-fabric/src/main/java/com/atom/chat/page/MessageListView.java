@@ -1060,6 +1060,14 @@ public final class MessageListView {
      * e33chat-style quote capsule: anchored to the avatar edge (right side for
      * own messages, left for others) with a full-row width budget, truncated
      * with an ellipsis only when exceeding that budget.
+     *
+     * <p>The capsule's name and quoted text are not re-guessed here: the data
+     * layer ({@link ChatMessage#getQuoteNameRich()} / {@link ChatMessage#getQuoteTextRich()})
+     * slices them out of the original line, keeping the wire's explicit run
+     * colours. This method only lays the pieces out around the separators,
+     * truncates the result and draws it through {@link RichTextRenderer}, whose
+     * colourless runs fall back to {@code capsuleText}. When there is no rich
+     * source the plain string pill is drawn unchanged.
      */
     private void drawQuotePill(Canvas canvas, ChatMessage msg, float x, float maxWidth, float pillY, boolean own) {
         Font quoteFont = FontManager.font(UiTokens.FONT_QUOTE);
@@ -1068,8 +1076,35 @@ public final class MessageListView {
         float textMaxW = capW - UiTokens.QUOTE_PAD_X * 2.0F - barW - s(4);
         String name = msg.getQuoteName().startsWith("@") ? msg.getQuoteName() : "@" + msg.getQuoteName();
         String quote = name + ": " + msg.getQuoteText();
-        String display = Cicodes.truncateToWidth(quoteFont, quote, textMaxW);
-        float pillW = Math.min(capW, SkiaFontRenderer.getStringWidth(quoteFont, display) + UiTokens.QUOTE_PAD_X * 2.0F + barW + s(4));
+        boolean imageQuote = msg.getQuoteText() != null
+                && Cicodes.isImagePlaceholder(msg.getQuoteText());
+        // Quote text takes the capsule family colour, matching the capsule tint
+        // it sits on (a bubble-family colour would go dark-on-dark in raven and
+        // white-on-sand in elegant — the two reported defects). A backing shadow
+        // keeps it legible over the tint; polarity from the capsule background.
+        int quoteText = secondaryCapsuleText();
+        int capsuleBg = secondaryCapsuleBg();
+        // Rich path: name and quoted text come from the data layer, already sliced
+        // out of the original line, so an explicitly coloured @Name or quoted text
+        // keeps its colour and only colourless runs fall back to the capsule
+        // colour here. This method owns the layout, the @/": " separators, the
+        // truncation and the RichTextRenderer call — nothing else. The [图片]
+        // placeholder keeps the plain path, which draws it in the status green.
+        RichText pillRich = imageQuote ? null : quoteRichLine(msg);
+        List<RichLine> pillLines = pillRich != null
+                ? RichTextRenderer.wrapFor(truncateRich(quoteFont, pillRich, textMaxW), quoteFont, Float.MAX_VALUE)
+                : null;
+        String display = pillRich != null ? null : Cicodes.truncateToWidth(quoteFont, quote, textMaxW);
+        float textW;
+        if (pillLines != null) {
+            textW = 0.0F;
+            for (RichLine line : pillLines) {
+                textW = Math.max(textW, RichTextRenderer.width(quoteFont, line));
+            }
+        } else {
+            textW = SkiaFontRenderer.getStringWidth(quoteFont, display);
+        }
+        float pillW = Math.min(capW, textW + UiTokens.QUOTE_PAD_X * 2.0F + barW + s(4));
         // Align the quote's outer edge with the bubble's outer edge, not with
         // the avatar. The bubble uses AVATAR_GAP as the horizontal gap to the
         // avatar, so the quote must use the same token.
@@ -1083,15 +1118,13 @@ public final class MessageListView {
         SkiaDraw.drawRoundedRect(canvas, pillX, pillY, pillW, UiTokens.QUOTE_HEIGHT, s(6), secondaryCapsuleBg());
         SkiaDraw.drawRoundedRect(canvas, pillX + UiTokens.QUOTE_PAD_X, pillY + s(3), barW, UiTokens.QUOTE_HEIGHT - s(6), barW / 2.0F, accent());
         float textStartX = pillX + UiTokens.QUOTE_PAD_X + barW + s(4);
-        float centerBaselineY = SkiaFontRenderer.centerBaselineY(quoteFont, pillY + UiTokens.QUOTE_HEIGHT / 2.0F);
-        boolean imageQuote = msg.getQuoteText() != null
-                && Cicodes.isImagePlaceholder(msg.getQuoteText());
-        // Quote text takes the capsule family colour, matching the capsule tint
-        // it sits on (a bubble-family colour would go dark-on-dark in raven and
-        // white-on-sand in elegant — the two reported defects). A backing shadow
-        // keeps it legible over the tint; polarity from the capsule background.
-        int quoteText = secondaryCapsuleText();
-        int capsuleBg = secondaryCapsuleBg();
+        float quoteCenterY = pillY + UiTokens.QUOTE_HEIGHT / 2.0F;
+        if (pillLines != null) {
+            RichTextRenderer.drawLines(canvas, quoteFont, pillLines, textStartX, quoteCenterY,
+                    SkiaFontRenderer.getHeight(quoteFont), quoteText, null, false, true, capsuleBg);
+            return;
+        }
+        float centerBaselineY = SkiaFontRenderer.centerBaselineY(quoteFont, quoteCenterY);
         if (imageQuote) {
             // Only the [图片]/[Image] placeholder is a status green; the quoted
             // player's name and the colon stay in the normal capsule colour.
@@ -1107,6 +1140,58 @@ public final class MessageListView {
             SkiaFontRenderer.drawText(canvas, quoteFont, display, textStartX, centerBaselineY, quoteText,
                     TextSurface.CAPSULE.shadowed(), capsuleBg);
         }
+    }
+
+    /**
+     * The pill's rich text: {@code @name: quoted text}, where the name and the
+     * quoted text are the parts sliced out of the original line in the data layer.
+     * The {@code @} and {@code ": "} separators are colourless literals, so they
+     * take the render fallback (the capsule colour) like every other colourless
+     * run.
+     *
+     * @return null when the capsule has no rich source (text drift, no original
+     *         Text, an empty part), so the caller draws the plain string pill
+     */
+    private static RichText quoteRichLine(ChatMessage msg) {
+        RichText nameRich = msg.getQuoteNameRich();
+        RichText textRich = msg.getQuoteTextRich();
+        if (nameRich.isEmpty() || textRich.isEmpty()) {
+            return null;
+        }
+        String at = nameRich.getString().startsWith("@") ? "" : "@";
+        return RichText.concat(
+                RichText.concat(RichText.literal(at), nameRich),
+                RichText.concat(RichText.literal(": "), textRich));
+    }
+
+    /**
+     * Truncates a rich line to {@code maxW} with an ellipsis, keeping every kept
+     * run's style. The ellipsis itself is colourless (the capsule fallback paints
+     * it). Code-point stepping never splits a surrogate pair, matching the cut
+     * rule of the plain-text truncator this replaces.
+     */
+    private static RichText truncateRich(Font font, RichText text, float maxW) {
+        String plain = text.getString();
+        if (SkiaFontRenderer.getStringWidth(font, plain) <= maxW) {
+            return text;
+        }
+        if (maxW <= 0.0F) {
+            return RichText.concat(text.slice(0, 1), RichText.literal("…"));
+        }
+        float ellipsisW = SkiaFontRenderer.getStringWidth(font, "…");
+        int end = 0;
+        int i = 0;
+        while (i < plain.length()) {
+            int next = i + Character.charCount(plain.codePointAt(i));
+            if (SkiaFontRenderer.getStringWidth(font, plain.substring(0, next)) + ellipsisW > maxW) {
+                break;
+            }
+            i = next;
+            end = next;
+        }
+        return end <= 0
+                ? RichText.literal("…")
+                : RichText.concat(text.slice(0, end), RichText.literal("…"));
     }
 
     /**

@@ -78,8 +78,8 @@ public final class UiLayout {
             case ROOT -> this.tabBar.y();
             case DETAIL -> panelY + panelH - UiTokens.PANEL_BOTTOM_PAD;
         };
-        this.list = new Rect(panelX + UiTokens.LIST_PAD_X, listTop,
-                panelW - UiTokens.LIST_PAD_X * 2.0F,
+        this.list = new Rect(listColumnX(panelX), listTop,
+                listColumnW(panelW),
                 Math.max(0.0F, bottomOfContent - listTop));
 
         // Section chips share the tab bar's shape: a full-width bar of equal
@@ -166,6 +166,46 @@ public final class UiLayout {
         float inset = UiTokens.TAB_EDGE_PAD;
         return new Rect(chipBar.x() + cellW * index + inset, chipBar.y() + inset,
                 cellW - inset * 2.0F, chipBar.h() - inset * 2.0F);
+    }
+
+    /**
+     * Left edge of a card inside the list content column, and the column's width:
+     * the content column inset on each side by {@link UiTokens#ROW_CLIP_INSET},
+     * the clearance a hover-scaled card needs so the clip cannot shear its rounded
+     * ends flat.
+     *
+     * <p>One rule, two readers. The conversation list's row cards and the
+     * notification banner both take their x and width from here instead of each
+     * building an equal-looking expression: the banner is handed the panel rect
+     * rather than a {@link UiLayout} (its caller owns the signature), so it cannot
+     * read {@link #list} directly, and a copy of this arithmetic on that side is
+     * exactly how the banner came to wear a width no other surface in the shell
+     * uses. UiLayoutTest binds these values to {@link #list} plus
+     * {@code ROW_CLIP_INSET} so the panel-derived form and the layout can never
+     * drift apart.
+     */
+    public static float cardColumnX(float panelX) {
+        return listColumnX(panelX) + UiTokens.ROW_CLIP_INSET;
+    }
+
+    /** Width of a card inside the list content column; see {@link #cardColumnX}. */
+    public static float cardColumnW(float panelW) {
+        return listColumnW(panelW) - UiTokens.ROW_CLIP_INSET * 2.0F;
+    }
+
+    /**
+     * Left edge of the list content column inside the panel, and its width. The
+     * constructor builds {@link #list} from these two, and the notification banner
+     * (which never receives a {@link UiLayout}) reaches the same column through
+     * them, so the one definition has one reader per shape.
+     */
+    private static float listColumnX(float panelX) {
+        return panelX + UiTokens.LIST_PAD_X;
+    }
+
+    /** Width of the list content column inside the panel; see {@link #listColumnX}. */
+    private static float listColumnW(float panelW) {
+        return panelW - UiTokens.LIST_PAD_X * 2.0F;
     }
 
     public static UiLayout of(float panelX, float panelY, float panelW, float panelH) {

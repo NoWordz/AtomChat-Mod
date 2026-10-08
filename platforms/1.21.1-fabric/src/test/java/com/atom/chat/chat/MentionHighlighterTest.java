@@ -60,12 +60,42 @@ class MentionHighlighterTest {
     }
 
     @Test
-    void keepsSurroundingRunStyles() {
+    void keepsSurroundingRunStylesAndLeavesAnExplicitlyColouredMentionAlone() {
+        // The wire carried its own colour for the @Name run: a locally known
+        // decoration must not repaint it (only colourless mentions are restored
+        // with the local decorated name).
         Text content = Text.literal("red ").setStyle(Style.EMPTY.withColor(0xFF0000))
                 .append(Text.literal("@E33EPUS").setStyle(Style.EMPTY.withColor(0x00FF00)));
         RichText result = MentionHighlighter.highlightLocal(RichText.of(content), "E33EPUS", decorated());
-        assertEquals("red @[称号]E33EPUS", result.getString());
+        assertEquals("red @E33EPUS", result.getString());
         assertEquals(0xFF0000, result.runs().get(0).style().getColor().getRgb());
+        assertEquals(0x00FF00, result.runs().get(1).style().getColor().getRgb());
+        assertFalse(hasColouredRun(result, "E33EPUS"));
+    }
+
+    @Test
+    void leavesAMentionAloneWhenOnlyPartOfItIsColoured() {
+        // The token spans two runs and one of them carries a colour: the whole
+        // mention is left as the server sent it, so no half-recoloured token.
+        RichText content = RichText.of(Text.literal("@E33E").setStyle(Style.EMPTY.withColor(0x00FF00))
+                .append(Text.literal("PUS")));
+        RichText result = MentionHighlighter.highlightLocal(content, "E33EPUS", decorated());
+        assertEquals("@E33EPUS", result.getString());
+        assertFalse(hasColouredRun(result, "E33EPUS"));
+    }
+
+    @Test
+    void atSeparatorKeepsDefaultColourSemantics() {
+        // The inserted "@" must stay colourless: the render layer's fallback
+        // (bubble colour) is what paints it, never a hardcoded colour.
+        RichText result = MentionHighlighter.highlightLocal(
+                RichText.literal("hi @E33EPUS"), "E33EPUS", decorated());
+        assertEquals("hi @[称号]E33EPUS", result.getString());
+        // Everything ahead of the decorated name (the text plus the inserted "@")
+        // stays colourless, so the render fallback paints the separator.
+        assertTrue(result.runs().stream()
+                .takeWhile(run -> !run.text().contains("[称号]"))
+                .allMatch(run -> run.style().getColor() == null));
         assertTrue(hasColouredRun(result, "E33EPUS"));
     }
 

@@ -19,6 +19,13 @@ public class ChatMessage {
     private final String contentText;
     private final RichText senderRich;
     private final RichText contentRich;
+    /**
+     * Quote capsule parts sliced out of the original component ({@code null} when
+     * the line carried no quote, when the text drifted, or when the capsule stays
+     * a plain string pill). See {@link ChatPipeline#quotePartsRich}.
+     */
+    private final RichText quoteNameRich;
+    private final RichText quoteTextRich;
     /** 1 = ordinary message; >1 = anti-spam merged consecutive identical messages. */
     private final int duplicateCount;
     /**
@@ -50,13 +57,19 @@ public class ChatMessage {
                 System.currentTimeMillis());
     }
 
-    /** Variant used when rehydrating persisted history: keeps the original time. */
+    /**
+     * Variant used when rehydrating persisted history: keeps the original time.
+     *
+     * <p>No rich parts are supplied, so the tail slices the sender/content (and
+     * the quote capsule) out of the restored component instead of rebuilding them
+     * as plain literals — that is what keeps a reloaded line's explicit wire
+     * colours. The component is restored from the persisted JSON, so it is the
+     * original rich line even here.
+     */
     public ChatMessage(Text component, boolean own, boolean system, String quoteName, String quoteText,
                        UUID senderUuid, String senderName, String profileName, String contentText, long timestamp) {
         this(component, own, system, quoteName, quoteText, senderUuid, senderName, profileName, contentText,
-                legacySenderRich(system, senderName, profileName),
-                RichText.literal(legacyDisplayText(component.getString(), quoteName, contentText)).linkifyUrls(),
-                timestamp);
+                null, null, timestamp);
     }
 
     public ChatMessage(Text component, boolean own, boolean system, String quoteName, String quoteText,
@@ -96,10 +109,22 @@ public class ChatMessage {
         this.senderName = clean(senderName);
         this.profileName = clean(profileName);
         this.contentText = contentText != null && !contentText.isBlank() ? clean(contentText) : null;
+        // One flattening of the original component serves both fallbacks (legacy
+        // constructors and history reload) and the quote capsule: all three must
+        // read the wire's runs, never just its plain text.
+        RichText full = null;
+        if (component != null
+                && ((!system && senderRich == null) || contentRich == null || quoteName != null)) {
+            full = RichText.of(component);
+        }
         this.senderRich = !system && senderRich != null ? senderRich
-                : legacySenderRich(system, this.senderName, this.profileName);
+                : legacySenderRich(full, system, this.senderName, this.profileName);
         this.contentRich = contentRich != null ? contentRich
-                : RichText.literal(legacyDisplayText(rawText, quoteName, this.contentText)).linkifyUrls();
+                : legacyContentRich(full, rawText, quoteName, this.contentText);
+        ChatPipeline.QuoteRichParts quoteParts =
+                quoteName != null ? ChatPipeline.quotePartsRich(full, quoteName, quoteText) : null;
+        this.quoteNameRich = quoteParts != null ? quoteParts.name() : null;
+        this.quoteTextRich = quoteParts != null ? quoteParts.text() : null;
         this.duplicateCount = Math.max(1, duplicateCount);
         this.id = id;
     }
@@ -116,8 +141,16 @@ public class ChatMessage {
         return s == null || s.isBlank() ? null : clean(s);
     }
 
-    /** Rich text for the sender name shown in the bubble; empty for system lines. */
-    private static RichText legacySenderRich(boolean system, String senderName, String profileName) {
+    /**
+     * Rich text for the sender name shown in the bubble; empty for system lines.
+     *
+     * <p>The name is sliced out of the original line when it sits there exactly
+     * once, so a pre-rich constructor — a reloaded history row in particular —
+     * keeps the name run's explicit colour. A missing or ambiguous match falls
+     * back to a plain literal: the data layer must not borrow a colour from
+     * another region, and the render layer then paints AtomChat's name colour.
+     */
+    private static RichText legacySenderRich(RichText full, boolean system, String senderName, String profileName) {
         if (system) {
             return RichText.empty();
         }
@@ -125,7 +158,50 @@ public class ChatMessage {
         if (name == null) {
             name = clean(profileName);
         }
-        return name != null ? RichText.literal(name) : RichText.empty();
+        if (name == null) {
+            return RichText.empty();
+        }
+        RichText sliced = sliceUnique(full, name, 0);
+        return sliced != null ? sliced : RichText.literal(name);
+    }
+
+    /**
+     * Rich content for the pre-rich constructors, sliced out of the original line
+     * under the same uniqueness rule as {@link #legacySenderRich} so a reloaded
+     * row keeps its explicit run colours. When the line carries a quote prefix the
+     * search starts after its closing bracket, which is where the reply body
+     * begins; otherwise a plain literal backs the display text and the render
+     * layer's bubble colour applies.
+     */
+    private static RichText legacyContentRich(RichText full, String rawText, String quoteName, String contentText) {
+        String want = legacyDisplayText(rawText, quoteName, contentText);
+        int from = 0;
+        if (quoteName != null && full != null && rawText != null && rawText.startsWith("「引用")) {
+            int close = full.getString().indexOf('」');
+            if (close >= 0) {
+                from = close + 1;
+            }
+        }
+        RichText sliced = sliceUnique(full, want, from);
+        return (sliced != null ? sliced : RichText.literal(want)).linkifyUrls();
+    }
+
+    /**
+     * Slices {@code want} out of the original line, but only when it occurs
+     * exactly once from {@code from} onwards. An ambiguous match could attach
+     * another region's colour to this part, which is worse than the plain text
+     * plus the render default; the same rule covers a missing or empty match.
+     */
+    private static RichText sliceUnique(RichText full, String want, int from) {
+        if (full == null || want == null || want.isEmpty()) {
+            return null;
+        }
+        String plain = full.getString();
+        int at = plain.indexOf(want, Math.max(0, from));
+        if (at < 0 || plain.indexOf(want, at + 1) >= 0) {
+            return null;
+        }
+        return full.slice(at, at + want.length());
     }
 
     /** Plain display string used by pre-rich constructors, matching legacy display behavior. */
@@ -213,6 +289,20 @@ public class ChatMessage {
     /** Rich content part backing display text and future styled rendering. */
     public RichText getContentRich() {
         return contentRich;
+    }
+
+    /**
+     * Styled quote-capsule name sliced from the original line (without the
+     * {@code @}), or empty when the capsule has no rich source and must be drawn
+     * from {@link #getQuoteName()} with the capsule colour.
+     */
+    public RichText getQuoteNameRich() {
+        return quoteNameRich != null ? quoteNameRich : RichText.empty();
+    }
+
+    /** Styled quoted text sliced from the original line, or empty like the name. */
+    public RichText getQuoteTextRich() {
+        return quoteTextRich != null ? quoteTextRich : RichText.empty();
     }
 
     /** Anti-spam merge count: 1 for a normal message, N for N identical sends. */

@@ -1851,20 +1851,24 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
             float vmx = toVirtualX(mouseX);
             float vmy = toVirtualY(mouseY);
             // The send-style round button means "reply now": same jump plus
-            // composer focus. The rest of the banner just navigates.
+            // composer focus. The rest of the banner just navigates. Both
+            // routes jump first and dismiss only once the jump landed, so a
+            // banner whose message can no longer be located stays on screen.
             NotificationBanner.Active sendButton = NotificationBanner.INSTANCE.buttonHit(vmx, vmy);
             if (sendButton != null) {
-                NotificationBanner.INSTANCE.dismiss(sendButton);
-                jumpToNotification(sendButton);
-                focusComposerForReply();
+                if (jumpToNotification(sendButton)) {
+                    NotificationBanner.INSTANCE.dismiss(sendButton);
+                    focusComposerForReply();
+                }
                 return true;
             }
             NotificationBanner.Active hit = NotificationBanner.INSTANCE.hitTest(vmx, vmy);
             if (hit == null) {
                 return false;
             }
-            NotificationBanner.INSTANCE.dismiss(hit);
-            jumpToNotification(hit);
+            if (jumpToNotification(hit)) {
+                NotificationBanner.INSTANCE.dismiss(hit);
+            }
             return true;
         }
     }
@@ -1878,35 +1882,55 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
         }
     }
 
-    /** Opens whatever page holds this notification and scrolls the message in. */
-    private void jumpToNotification(NotificationBanner.Active banner) {
+    /**
+     * Opens whatever page holds this notification and scrolls the message in.
+     *
+     * <p>Returns whether the jump landed; the caller dismisses the banner only
+     * on {@code true}. A whisper whose sender has no profile name (there is no
+     * conversation key to open), a message that is no longer in the target
+     * page's feed, or a page selection that did not take leaves the banner up
+     * instead of stranding the player on an unchanged panel.
+     */
+    private boolean jumpToNotification(NotificationBanner.Active banner) {
         ChatMessage msg = banner.message();
         if (msg == null) {
-            return;
+            return false;
         }
         if (banner.type() == NotificationBanner.Type.WHISPER) {
             PlayerRef target = PlayerRef.of(msg.getSenderUuid(), msg.getProfileName());
-            if (target != null && !target.equals(activePrivateTarget())) {
+            // PlayerRef.key() is name-based, so a ref without a profile name
+            // has no conversation to open.
+            if (target.realName() == null) {
+                return false;
+            }
+            if (!target.equals(activePrivateTarget())) {
                 openPrivateChat(target);
+            }
+            if (topPage() != AppPage.PRIVATE_CHAT || !target.equals(activePrivateTarget())) {
+                return false;
             }
         } else if (topPage() != AppPage.WORLD_CHAT) {
             openWorldChat();
+            if (topPage() != AppPage.WORLD_CHAT) {
+                return false;
+            }
         }
-        scrollToMessage(msg);
+        return scrollToMessage(msg);
     }
 
     /**
      * Scrolls the current page's list so the message sits a third of the way
      * down the viewport, then leaves a fading highlight on it. Anti-spam merges
      * mean the target can be a merged bubble — that one is still the right
-     * destination, so merged messages are never un-merged here.
+     * destination, so merged messages are never un-merged here. Returns whether
+     * the message was located and the scroll/highlight applied.
      */
-    private void scrollToMessage(ChatMessage msg) {
+    private boolean scrollToMessage(ChatMessage msg) {
         NavPage page = topNav();
         List<ChatMessage> messages = messagesForNav(page);
         int index = findMessageIndex(messages, msg);
         if (index < 0) {
-            return;
+            return false;
         }
         ScrollController scroll = scrollForNav(page);
         UiLayout.Rect list = layout().list;
@@ -1917,15 +1941,17 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
         scroll.setContent(messageListView.offsetOf(messages, messages.size(), list.w()), list.h());
         scroll.scrollTo(offset - list.h() / 3.0F, true);
         messageListView.highlight(messages.get(index));
+        return true;
     }
 
     /**
      * Resolves the banner's message to its current list slot. Anti-spam can
      * replace the original object with a merged {@code xN} copy after the banner
      * was queued, so fall back to the last same-content/sender row instead of
-     * giving up on an identity miss.
+     * giving up on an identity miss. Touches no screen state, so the jump's
+     * locate step is pinned by a test directly instead of through a live screen.
      */
-    private static int findMessageIndex(List<ChatMessage> messages, ChatMessage target) {
+    static int findMessageIndex(List<ChatMessage> messages, ChatMessage target) {
         int exact = messages.indexOf(target);
         if (exact >= 0) {
             return exact;

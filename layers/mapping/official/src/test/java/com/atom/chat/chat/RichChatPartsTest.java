@@ -7,6 +7,7 @@ import net.minecraft.network.chat.Component;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class RichChatPartsTest {
@@ -201,5 +202,74 @@ class RichChatPartsTest {
     @Test
     void quoteBodyHandlesMissingRichSource() {
         assertEquals("body", ChatPipeline.quoteBodyRich(null, "body").getString());
+    }
+
+    // ------------------------------------------------------------- quote capsule parts
+
+    @Test
+    void quotePartsSliceStyledNameAndTextFromTheOriginalLine() {
+        Style orange = Style.EMPTY.withColor(0xFF8800);
+        Component line = Component.literal("[VIP]Steve> 「引用 @")
+                .append(Component.literal("[称号]E33EPUS").setStyle(orange))
+                .append(Component.literal(": hello」got it"));
+        ChatPipeline.QuoteRichParts parts =
+                ChatPipeline.quotePartsRich(RichText.of(line), "[称号]E33EPUS", "hello");
+        assertEquals("[称号]E33EPUS", parts.name().getString());
+        assertEquals("hello", parts.text().getString());
+        assertTrue(parts.name().runs().stream().anyMatch(r -> orange.equals(r.style())));
+    }
+
+    @Test
+    void quotePartsKeepAnExplicitColourOnTheQuotedText() {
+        Style red = Style.EMPTY.withColor(0xFF0000);
+        Component line = Component.literal("「引用 @Steve: ")
+                .append(Component.literal("hello").setStyle(red))
+                .append(Component.literal("」body"));
+        ChatPipeline.QuoteRichParts parts = ChatPipeline.quotePartsRich(RichText.of(line), "Steve", "hello");
+        assertTrue(parts.text().runs().stream().anyMatch(r -> red.equals(r.style())));
+    }
+
+    @Test
+    void quotePartsLeaveColourlessRunsColourless() {
+        // Nothing explicit on the wire: the draw layer's capsule colour is the
+        // fallback, so the data layer must not invent white here.
+        ChatPipeline.QuoteRichParts parts = ChatPipeline.quotePartsRich(
+                RichText.literal("「引用 @Steve: hello」body"), "Steve", "hello");
+        assertFalse(parts.name().hasColor());
+        assertFalse(parts.text().hasColor());
+    }
+
+    @Test
+    void quotePartsTakeTheTextInsideThePrefixNotTheBody() {
+        // "hi" appears twice — as the quoted text and as the reply body. Only the
+        // run inside 「」 belongs to the capsule.
+        Component line = Component.literal("「引用 @Steve: ")
+                .append(Component.literal("hi").setStyle(Style.EMPTY.withColor(0xFF0000)))
+                .append(Component.literal("」hi"));
+        ChatPipeline.QuoteRichParts parts = ChatPipeline.quotePartsRich(RichText.of(line), "Steve", "hi");
+        assertEquals("hi", parts.text().getString());
+        assertTrue(parts.text().runs().stream().anyMatch(r -> r.style().getColor() != null));
+    }
+
+    @Test
+    void quotePartsFallBackWhenThePlainTextDrifted() {
+        assertEquals(null, ChatPipeline.quotePartsRich(
+                RichText.literal("「引用 @Steve: hello」body"), "Bob", "hello"));
+        assertEquals(null, ChatPipeline.quotePartsRich(
+                RichText.literal("「引用 @Steve: hello」body"), "Steve", "other text"));
+    }
+
+    @Test
+    void quotePartsFallBackWithoutASource() {
+        assertEquals(null, ChatPipeline.quotePartsRich(null, "Steve", "hello"));
+        assertEquals(null, ChatPipeline.quotePartsRich(RichText.literal("no quote here"), "Steve", "hello"));
+    }
+
+    @Test
+    void quotePartsFallBackOnAHardNewline() {
+        // A capsule is one line: a wire that put a newline inside the quote keeps
+        // the plain string pill instead of spilling a second line.
+        assertEquals(null, ChatPipeline.quotePartsRich(
+                RichText.literal("「引用 @Steve: hel\nlo」body"), "Steve", "hel\nlo"));
     }
 }

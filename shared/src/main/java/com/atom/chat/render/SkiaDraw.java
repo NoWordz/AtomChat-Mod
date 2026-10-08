@@ -70,10 +70,26 @@ public final class SkiaDraw {
      * pair. Render-thread only, like the rest of the draw path.
      */
     public static void drawChromeShadow(Canvas canvas, float x, float y, float width, float height, float radius) {
+        drawChromeShadow(canvas, x, y, width, height, radius,
+                com.atom.chat.ui.UiTokens.CHROME_SHADOW_INNER,
+                com.atom.chat.ui.UiTokens.CHROME_SHADOW_OUTER);
+    }
+
+    /**
+     * The same two passes on an explicit colour pair — the seam the float family
+     * (toast, notification banner) uses for its lighter pair
+     * ({@code UiTokens.FLOAT_SHADOW_*}). The blurs are this helper's own and are
+     * shared by both families by design: the float layer pad
+     * ({@code UiTokens.floatSurfaceShadowPad()}) is sized to the reach they
+     * produce, so a family may only re-tint the passes, not widen them, without
+     * that pad being re-measured.
+     */
+    public static void drawChromeShadow(Canvas canvas, float x, float y, float width, float height,
+                                        float radius, int innerColor, int outerColor) {
         drawRoundedShadow(canvas, x, y, width, height, radius,
-                com.atom.chat.ui.UiTokens.s(6), com.atom.chat.ui.UiTokens.CHROME_SHADOW_INNER);
+                com.atom.chat.ui.UiTokens.s(6), innerColor);
         drawRoundedShadow(canvas, x, y, width, height, radius,
-                com.atom.chat.ui.UiTokens.s(12), com.atom.chat.ui.UiTokens.CHROME_SHADOW_OUTER);
+                com.atom.chat.ui.UiTokens.s(12), outerColor);
     }
 
     /**

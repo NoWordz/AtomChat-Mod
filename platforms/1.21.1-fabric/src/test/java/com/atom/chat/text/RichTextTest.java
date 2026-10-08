@@ -6,6 +6,7 @@ import net.minecraft.text.Text;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class RichTextTest {
@@ -151,5 +152,25 @@ class RichTextTest {
         assertEquals("https://b.test", linked.runs().stream()
                 .filter(r -> r.style().getClickEvent() != null)
                 .findFirst().orElseThrow().text());
+    }
+
+    @Test
+    void stripInteractionsDropsLinkAndUnderlineButKeepsColour() {
+        // The private-chat sender goes through stripInteractions so a vanilla
+        // /msg click never turns the name into a misleading link. The explicit
+        // colour is part of the wire's styling and must survive that strip.
+        Style link = Style.EMPTY.withColor(0x55FF55).withUnderline(true)
+                .withClickEvent(new ClickEvent(ClickEvent.Action.SUGGEST_COMMAND, "/msg Steve "));
+        RichText stripped = RichText.of(Text.literal("Steve").setStyle(link)).stripInteractions();
+        assertEquals("Steve", stripped.getString());
+        assertEquals(0x55FF55, stripped.runs().get(0).style().getColor().getRgb());
+        assertEquals(null, stripped.runs().get(0).style().getClickEvent());
+        assertFalse(stripped.runs().get(0).style().isUnderlined());
+    }
+
+    @Test
+    void stripInteractionsKeepsColourlessRunsColourless() {
+        RichText stripped = RichText.literal("Steve").stripInteractions();
+        assertFalse(stripped.hasColor());
     }
 }

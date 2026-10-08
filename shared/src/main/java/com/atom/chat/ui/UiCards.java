@@ -71,16 +71,19 @@ public final class UiCards {
     /**
      * A surface that floats above message content — the notification banner and
      * the action toast. Same stack as {@link #drawCard}, but on the two-tier
-     * chrome shadow the shell header, composer and tab bar ride, because these
-     * float over arbitrary content like those bars rather than sitting in a page;
-     * the single tier they used before read as a hard-edged drop. The hairline
-     * and hover wash are resolved against the caller's fill rather than the
-     * panel's card colour, so a float whose fill is not the card colour still
-     * gets an edge and a wash that match it.
+     * float shadow the shell header, composer and tab bar ride too, one third
+     * lighter in both passes ({@link UiTokens#FLOAT_SHADOW_INNER}): these float
+     * over arbitrary content, so their shadow has to contain the card softly
+     * rather than sit under it as a dark second edge — exactly how the single
+     * tier they used before read. The hairline and hover wash are resolved
+     * against the caller's fill rather than the panel's card colour, so a float
+     * whose fill is not the card colour still gets an edge and a wash that match
+     * it.
      */
     public static void drawFloatSurface(Canvas canvas, float x, float y, float w, float h,
                                         float radius, float hoverWeight, int baseFill) {
-        SkiaDraw.drawChromeShadow(canvas, x, y, w, h, radius);
+        SkiaDraw.drawChromeShadow(canvas, x, y, w, h, radius,
+                UiTokens.FLOAT_SHADOW_INNER, UiTokens.FLOAT_SHADOW_OUTER);
         SkiaDraw.drawRoundedRect(canvas, x, y, w, h, radius, baseFill);
         SkiaDraw.drawEdgeHighlight(canvas, x, y, w, h, radius, UiTokens.s(1.0F),
                 UiTokens.hairline(baseFill));

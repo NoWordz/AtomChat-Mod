@@ -13,7 +13,7 @@
 分组是编译期事实：甲组少一个类型，那个目标当场编不过。判据用简单名的词边界匹配
 （覆盖 import 全限定名与同包简单名两种写法），偏保守 —— 注释里的提及也算，宁可多列。
 
-当前：甲组 **100** 个，乙组 **53** 个。
+当前：甲组 **100** 个，乙组 **56** 个。
 
 ## 甲：共用代码引用了的（接缝）
 
@@ -110,6 +110,7 @@
 | 1.20.1-forge | `com.atom.chat.notification.NotificationController` |
 | 1.20.1-forge | `com.atom.chat.platform.ForgePlatform` |
 | 1.20.1-forge | `com.atom.chat.net.AvatarCompanionServerTest` |
+| 1.20.1-forge | `com.atom.chat.screen.AtomChatScreenMessageLookupTest` |
 | 1.21.1-fabric | `com.atom.chat.AtomChatClient` |
 | 1.21.1-fabric | `com.atom.chat.mixin.AtomChatMixinPlugin` |
 | 1.21.1-fabric | `com.atom.chat.net.AvatarPayloads` |
@@ -130,6 +131,7 @@
 | 1.21.1-fabric | `com.atom.chat.page.MessageListViewSelectionCopyTest` |
 | 1.21.1-fabric | `com.atom.chat.text.RichTextSectionCodeTest` |
 | 1.21.1-fabric | `com.atom.chat.ui.QuickPhrasePanelHitZoneTest` |
+| 1.21.1-fabric | `net.minecraft.client.gui.screen.AtomChatScreenMessageLookupTest` |
 | 1.21.1-neoforge | `com.atom.chat.AtomChatClient` |
 | 1.21.1-neoforge | `com.atom.chat.mixin.AtomChatMixinPlugin` |
 | 1.21.1-neoforge | `com.atom.chat.net.AvatarPayloads` |
@@ -146,3 +148,4 @@
 | 1.21.1-neoforge | `com.atom.chat.net.TestPayloads` |
 | 1.21.1-neoforge | `com.atom.chat.notification.NotificationController` |
 | 1.21.1-neoforge | `com.atom.chat.net.AvatarCompanionServerTest` |
+| 1.21.1-neoforge | `com.atom.chat.screen.AtomChatScreenMessageLookupTest` |

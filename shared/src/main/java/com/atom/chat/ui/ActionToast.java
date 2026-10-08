@@ -1,5 +1,6 @@
 package com.atom.chat.ui;
 
+import com.atom.chat.avatar.ColorUtil;
 import com.atom.chat.config.AtomChatConfig;
 import com.atom.chat.font.FontManager;
 import com.atom.chat.render.SkiaDraw;
@@ -26,10 +27,14 @@ import java.util.List;
  * banner: {@link UiCards#drawFloatSurface} on {@link UiTokens#floatSurfaceFill()},
  * with its text and glyph inks derived from that fill by
  * {@link UiTokens#onFloatSurface(int)} rather than taken from the panel's text
- * colour. Success draws the accent check when the accent still reads on the
- * float, otherwise the float's own ink; failure draws the shared
- * {@link UiTokens#dangerColor()} cross. The toast carries no avatar, preview or
- * reply button — it is a status line, not a navigational banner.</p>
+ * colour. Success draws the accent check — the accent walked along its own
+ * value axis until it clears {@link UiTokens#MIN_GLYPH_CONTRAST} on the float
+ * ({@link com.atom.chat.avatar.ColorUtil#readableAccent(int, int, float)}), so
+ * a theme whose accent already reads is drawn untouched and a theme whose
+ * accent does not keeps its hue instead of losing it to black or white. Failure
+ * draws the shared {@link UiTokens#dangerColor()} cross. The toast carries no
+ * avatar, preview or reply button — it is a status line, not a navigational
+ * banner.</p>
  */
 public final class ActionToast {
     private static final float PAD_X = UiTokens.s(12);
@@ -129,12 +134,15 @@ public final class ActionToast {
                 ? AppIcons.ICON_CLOSE_PATH : AppIcons.ICON_CHECK_PATH;
         Rect b = glyph.getBounds();
         float sc = ICON / Math.max(b.getWidth(), b.getHeight());
-        // Success takes the accent, but only when the accent still reads on the
-        // float: a light float under a pale accent would lose the tick, so it
-        // falls back to the float's own ink.
+        // Success keeps the theme's accent: the accent is walked along its own
+        // HSV value until it clears the glyph contrast floor on the float, so a
+        // pale accent on a pale float deepens and keeps being that accent — the
+        // old binary "readable, else the float's neutral ink" threw the hue
+        // away exactly when the theme was most visible.
         int color = outcome == ActionFeedback.Outcome.ERROR
                 ? UiTokens.dangerColor()
-                : readableOn(AtomChatConfig.get().accentColor, fill);
+                : ColorUtil.readableAccent(AtomChatConfig.get().accentColor, fill,
+                        UiTokens.MIN_GLYPH_CONTRAST);
         try (Paint paint = new Paint().setAntiAlias(true)
                 .setColor(color)
                 .setMode(PaintMode.STROKE)
@@ -153,18 +161,6 @@ public final class ActionToast {
                 canvas.restore();
             }
         }
-    }
-
-    /**
-     * {@code ink} when it still contrasts with {@code surface}, otherwise the
-     * surface's own derived ink — so a status glyph never disappears into the
-     * float it is drawn on.
-     */
-    private static int readableOn(int ink, int surface) {
-        float a = com.atom.chat.theme.ThemeService.relativeLuminance(ink);
-        float b = com.atom.chat.theme.ThemeService.relativeLuminance(surface);
-        float contrast = (Math.max(a, b) + 0.05F) / (Math.min(a, b) + 0.05F);
-        return contrast >= 3.0F ? ink : UiTokens.onFloatSurface(surface);
     }
 
     /** Resolves an action key to its localized label; the host supplies it. */

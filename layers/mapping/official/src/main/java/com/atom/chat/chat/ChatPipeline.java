@@ -168,6 +168,95 @@ public final class ChatPipeline {
         return content.slice(start, end).linkifyUrls();
     }
 
+    /** The plain-text quote prefix AtomChat/e33chat understands (see QuoteParser). */
+    private static final String QUOTE_OPEN = "「引用";
+
+    /**
+     * Sliced rich parts of a quote capsule: the quoted player's name and the
+     * quoted text, both taken from the original line.
+     */
+    public record QuoteRichParts(RichText name, RichText text) {
+    }
+
+    /**
+     * Slices the quote capsule's {@code name}/{@code text} out of the original
+     * rich line by stable plain-text offsets, keeping every run's explicit
+     * colour. The draw layer must not re-guess this: it only lays the pieces out
+     * around the {@code @} and {@code ": "} separators, truncates to the width
+     * budget and hands them to {@link com.atom.chat.render.RichTextRenderer},
+     * whose colourless runs fall back to the capsule colour.
+     *
+     * <p>Returns {@code null} — the caller keeps the plain string pill and the
+     * capsule colour — when there is no original rich line, when the prefix is
+     * absent, when the parsed name/text no longer sits verbatim in the line
+     * (translated prefixes, whitespace drift, plain-only sources), or when the
+     * wire put a hard newline inside the one-line capsule.
+     *
+     * @param source     the original rich line (the captured Component)
+     * @param quoteName  the name {@link QuoteParser} parsed (without its {@code @})
+     * @param quoteText  the quoted text {@link QuoteParser} parsed
+     */
+    public static QuoteRichParts quotePartsRich(RichText source, String quoteName, String quoteText) {
+        if (source == null || source.isEmpty() || quoteName == null) {
+            return null;
+        }
+        String plain = source.getString();
+        int open = plain.indexOf(QUOTE_OPEN);
+        int close = open < 0 ? -1 : plain.indexOf('」', open + QUOTE_OPEN.length());
+        if (close < 0) {
+            return null;
+        }
+        int at = plain.indexOf('@', open + QUOTE_OPEN.length());
+        if (at < 0 || at >= close) {
+            return null;
+        }
+        int colon = plain.indexOf(':', at);
+        if (colon < 0 || colon >= close) {
+            return null;
+        }
+        int[] nameRange = trimmedRange(plain, at + 1, colon);
+        int[] textRange = trimmedRange(plain, colon + 1, close);
+        if (nameRange == null || textRange == null) {
+            return null;
+        }
+        String name = plain.substring(nameRange[0], nameRange[1]);
+        String text = plain.substring(textRange[0], textRange[1]);
+        if (!name.equals(sectionStripped(quoteName)) || !text.equals(sectionStripped(quoteText))) {
+            return null;
+        }
+        if (hasHardNewline(name) || hasHardNewline(text)) {
+            return null;
+        }
+        return new QuoteRichParts(source.slice(nameRange[0], nameRange[1]),
+                source.slice(textRange[0], textRange[1]));
+    }
+
+    /** Trimmed {@code [start, end)} range, or null when it holds only whitespace. */
+    private static int[] trimmedRange(String text, int start, int end) {
+        int from = Math.max(0, Math.min(start, text.length()));
+        int to = Math.max(from, Math.min(end, text.length()));
+        while (from < to && Character.isWhitespace(text.charAt(from))) {
+            from++;
+        }
+        while (to > from && Character.isWhitespace(text.charAt(to - 1))) {
+            to--;
+        }
+        return from < to ? new int[]{from, to} : null;
+    }
+
+    /**
+     * The line's plain text has its {@code §} codes turned into run styles, so a
+     * quote field that still carries legacy codes is compared with them removed
+     * (offsets in the plain text ignore them).
+     */
+    private static String sectionStripped(String s) {
+        return s == null ? "" : s.replaceAll("§.", "");
+    }
+
+    private static boolean hasHardNewline(String s) {
+        return s.indexOf('\n') >= 0 || s.indexOf('\r') >= 0;
+    }
+
     /**
      * Slices the final decorated line into styled sender and content parts.
      * Only returns a result when the line parses as a player line for the

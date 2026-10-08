@@ -24,7 +24,9 @@ public final class MentionHighlighter {
     /**
      * Styles every {@code @profileName} and {@code @decoratedName} token in
      * {@code content} with the decorated rich name, preserving all surrounding
-     * text and its runs.
+     * text and its runs. A token the wire already coloured explicitly keeps its
+     * own colour (see {@link #isProtected}); the inserted {@code @} separator
+     * stays colourless so the render fallback paints it.
      *
      * @param content       rendered message body
      * @param profileName   local player's real profile name (the @ token target)
@@ -86,7 +88,7 @@ public final class MentionHighlighter {
                 break;
             }
             if (isBoundary(plain, bestStart - 1) && isBoundary(plain, bestEnd)
-                    && !isInsideInteraction(content, bestStart)) {
+                    && !isProtected(content, bestStart, bestEnd)) {
                 out.add(new int[]{bestStart, bestEnd});
             }
             from = Math.max(bestEnd, bestStart + 1);
@@ -95,19 +97,32 @@ public final class MentionHighlighter {
     }
 
     /**
-     * True when the token starting at {@code start} sits inside a run that
-     * already carries a click/hover interaction (a linkified URL, for example).
-     * Replacing such a run would silently drop the interaction, so the mention
-     * is left as the server sent it.
+     * True when any run the token overlaps already carries an explicit colour or
+     * a click/hover interaction, in which case the mention is left exactly as the
+     * server sent it.
+     *
+     * <p>A wire colour is part of the original Component's styling (a coloured
+     * {@code @Name} run must survive untouched), and replacing an interacting run
+     * would silently drop the interaction — a linkified URL, for example. Only a
+     * colourless, interaction-free mention is restored with the locally known
+     * decorated name; the whole token is protected when only part of it is
+     * coloured, so it is never half-repainted.
      */
-    private static boolean isInsideInteraction(RichText content, int start) {
+    private static boolean isProtected(RichText content, int start, int end) {
         int pos = 0;
         for (RichText.RichRun run : content.runs()) {
-            int end = pos + run.text().length();
-            if (start < end) {
-                return run.style().getClickEvent() != null || run.style().getHoverEvent() != null;
+            int runEnd = pos + run.text().length();
+            if (runEnd > start && pos < end) {
+                var style = run.style();
+                if (style.getClickEvent() != null || style.getHoverEvent() != null
+                        || style.getColor() != null) {
+                    return true;
+                }
             }
-            pos = end;
+            pos = runEnd;
+            if (pos >= end) {
+                break;
+            }
         }
         return false;
     }

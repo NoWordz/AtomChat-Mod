@@ -246,6 +246,33 @@ class UiLayoutTest {
         assertTrue(UiTokens.NAME_BAND > UiTokens.FONT_NAME, "name band clears the name text");
     }
 
+    /**
+     * The conversation list's row cards and the notification banner draw into
+     * ONE column, not two equal-looking expressions: both read
+     * {@link UiLayout#cardColumnX}/{@link UiLayout#cardColumnW}. This pins that
+     * rule against the content column it is derived from — and states it as
+     * insets, so dropping ROW_CLIP_INSET (which would make the cards exactly as
+     * wide as the clip, the shape of the original banner bug) fails here instead
+     * of sliding through.
+     */
+    @Test
+    void cardColumnIsTheContentColumnInsetByTheRowClipInset() {
+        UiLayout l = UiLayout.ofRoot(24.0F, 100.0F, 480.0F, 900.0F);
+        float cardX = UiLayout.cardColumnX(l.panelX);
+        float cardW = UiLayout.cardColumnW(l.panelW);
+
+        assertEquals(l.list.x() + UiTokens.ROW_CLIP_INSET, cardX, EPS,
+                "the card column starts one ROW_CLIP_INSET inside the list's left edge");
+        assertEquals(l.list.w() - UiTokens.ROW_CLIP_INSET * 2.0F, cardW, EPS,
+                "the card column is the list width less one ROW_CLIP_INSET per side");
+        // The same thing twice as insets, which is what a missing
+        // ROW_CLIP_INSET changes: both go to zero together.
+        assertEquals(UiTokens.ROW_CLIP_INSET, cardX - l.list.x(), EPS, "left inset is ROW_CLIP_INSET");
+        assertEquals(UiTokens.ROW_CLIP_INSET, l.list.right() - (cardX + cardW), EPS,
+                "right inset is ROW_CLIP_INSET");
+        assertTrue(UiTokens.ROW_CLIP_INSET > 0.0F, "the shared inset is a real clearance");
+    }
+
     @Test
     void headerIsCompactAndMirrorsTopGap() {
         UiLayout l = UiLayout.of(24, 100, 525, 975);

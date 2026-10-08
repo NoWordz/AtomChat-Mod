@@ -180,11 +180,55 @@ class UiTokensTest {
      * out at ~38px below the card, ~24px above); what this guards is that nobody
      * quietly drops the pad back to the blur radius, which is what clipped the
      * shadow into the hard rectangle that was reported.
+     *
+     * <p>This round softened the float shadow without touching the pad, and the
+     * pair below is the reason that is safe rather than an oversight: the
+     * reaches above belong to the s(6)/s(12) blur pair, and the float family
+     * kept those blurs while its two alphas came down. A lower peak cannot
+     * throw a tail further, so the reach can only shrink and the 40px pad still
+     * contains it. Growing either blur is the change that would need a fresh
+     * raster measurement and a bigger pad — and it would fail here first.</p>
      */
     @Test
     void floatSurfaceLayerPadStaysAtTheMeasuredReach() {
         assertEquals(40.0F, UiTokens.floatSurfaceShadowPad(), 0.01F,
                 "s(32) at the default scale: the measured shadow reach, not the blur radius");
+        assertTrue(UiTokens.floatSurfaceShadowPad() >= 40.0F,
+                "the pad never regresses below the measured reach of the shadow it has to contain");
+    }
+
+    // --- float shadow pair: the chrome shape, one third lighter ---
+
+    /**
+     * The toast and the banner float over message content, so their shadow is
+     * the chrome pair's shape with a lighter peak: same pure-black RGB (the
+     * alpha is the only thing that moved, which is what keeps the layer-pad
+     * reasoning above valid) and strictly less of it in both passes. The shell
+     * bars keep the chrome pair, so the two elevations stay distinguishable.
+     */
+    @Test
+    void floatShadowIsTheChromeShapeWithALighterPeak() {
+        assertEquals(0x2F000000, UiTokens.FLOAT_SHADOW_INNER,
+                "inner pass: pure black at 47, one third under the chrome 70");
+        assertEquals(0x1E000000, UiTokens.FLOAT_SHADOW_OUTER,
+                "outer pass: pure black at 30, one third under the chrome 45");
+        assertTrue((UiTokens.FLOAT_SHADOW_INNER >>> 24) < (UiTokens.CHROME_SHADOW_INNER >>> 24),
+                "the inner pass must stay lighter than the chrome inner pass");
+        assertTrue((UiTokens.FLOAT_SHADOW_OUTER >>> 24) < (UiTokens.CHROME_SHADOW_OUTER >>> 24),
+                "the outer pass must stay lighter than the chrome outer pass");
+        assertEquals(0, (UiTokens.FLOAT_SHADOW_INNER | UiTokens.FLOAT_SHADOW_OUTER) & 0x00FFFFFF,
+                "RGB untouched: only the alpha moved, so the blur reach cannot grow");
+    }
+
+    /**
+     * The success tick's floor, held here because it is the value the toast
+     * hands to {@code ColorUtil.readableAccent}: WCAG's 3:1 non-text minimum.
+     * If this ever moves, the tick's hue-preserving walk moves with it.
+     */
+    @Test
+    void glyphContrastFloorIsTheWcagNonTextMinimum() {
+        assertEquals(3.0F, UiTokens.MIN_GLYPH_CONTRAST, 1e-6F,
+                "a checkmark is a shape, so 3:1 is its floor rather than the 4.5:1 text tier");
     }
 
     // --- layout baselines ---

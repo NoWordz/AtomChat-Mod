@@ -1,6 +1,7 @@
 package com.atom.chat.render;
 
 import com.atom.chat.chat.ChatMessage;
+import com.atom.chat.font.FontManager;
 import com.atom.chat.notification.NotificationBanner;
 import com.atom.chat.page.MessageListView;
 import com.atom.chat.platform.Platform;
@@ -15,6 +16,7 @@ import com.atom.chat.ui.UiMotion;
 import com.atom.chat.ui.UiTokens;
 import io.github.humbleui.skija.Bitmap;
 import io.github.humbleui.skija.Canvas;
+import io.github.humbleui.skija.Font;
 import io.github.humbleui.skija.Surface;
 import net.minecraft.network.chat.Component;
 import org.junit.jupiter.api.BeforeAll;
@@ -502,16 +504,10 @@ class OffscreenRenderTest {
     }
 
     /**
-     * The banner is chrome, not an island: it must claim the same width as the
-     * header / composer / tab bar, and it must clear the header card rather than
-     * overlap it. Both were wrong before (a max(320, panelW-24) width came to 70%
-     * of the content column, and the y ignored the header's own bottom pad, so the
-     * banner sat 10px into the header).
-     */
-    /**
-     * The banner is chrome, not an island: it must claim the same width as the
-     * header / composer / tab bar, and it must clear the header card rather than
-     * overlap it.
+     * The banner is a list card, not an island: it takes exactly the column the
+     * conversation list's row cards draw into — the content column inset by
+     * {@link UiTokens#ROW_CLIP_INSET} on both sides — and it must clear the header
+     * card rather than overlap it.
      *
      * <p>The panel width is deliberately the config default ({@code 480}), not the
      * 400 the other cases use: at 400 the old {@code min(s(320), panelW - s(24))}
@@ -520,7 +516,7 @@ class OffscreenRenderTest {
      * overlapped the header by 10px there — a probe at its centre would miss it.
      */
     @Test
-    void notificationBannerMatchesTheContentColumnAndClearsTheHeader() {
+    void notificationBannerTakesTheListCardColumnAndClearsTheHeader() {
         float panelW = 480.0F;
         try (Panel panel = new Panel()) {
             UiLayout layout = UiLayout.of(PANEL_X, PANEL_Y, panelW, PANEL_H);
@@ -530,20 +526,88 @@ class OffscreenRenderTest {
             panel.paintedFrame("notification banner", canvas -> NotificationBanner.INSTANCE
                     .renderInPanel(canvas, PANEL_X, PANEL_Y, panelW, PANEL_H, -1.0F, -1.0F));
 
-            // The banner's top edge is the content column's top edge, so probing
-            // just inside list.y() lands on the banner.
+            // One column, two readers: the banner publishes the row cards' column
+            // rather than rebuilding an equal-looking expression of its own.
+            float cardX = NotificationBanner.bannerX(PANEL_X);
+            float cardW = NotificationBanner.bannerWidth(panelW);
+            assertEquals(UiLayout.cardColumnX(layout.panelX), cardX, 0.01F,
+                    "the banner takes the row cards' card column, not one of its own");
+            assertEquals(UiLayout.cardColumnW(layout.panelW), cardW, 0.01F,
+                    "the banner takes the row cards' card width");
+            // ROW_CLIP_INSET really is inside that column — stated as insets, so
+            // dropping the token (drawing as wide as the clip) fails right here.
+            assertEquals(UiTokens.ROW_CLIP_INSET, cardX - layout.list.x(), 0.01F,
+                    "the banner's left inset off the content column is ROW_CLIP_INSET");
+            assertEquals(UiTokens.ROW_CLIP_INSET, layout.list.right() - (cardX + cardW), 0.01F,
+                    "the banner's right inset off the content column is ROW_CLIP_INSET");
+
+            // Drawn and hit-tested through that one rect: the edges the render
+            // used answer the hit test one pixel inside, and nothing answers
+            // just outside them.
             float probeY = layout.list.y() + 1.0F;
-            assertNotNull(NotificationBanner.INSTANCE.hitTest(layout.list.x() + 1.0F, probeY),
-                    "the banner's left edge must sit on the content column, not inside it");
-            assertNotNull(NotificationBanner.INSTANCE.hitTest(layout.list.right() - 1.0F, probeY),
-                    "the banner's right edge must reach the far side of the content column");
-            assertNull(NotificationBanner.INSTANCE.hitTest(layout.list.x() - 4.0F, probeY),
-                    "the banner must not spill outside the content column");
-            // The header's bottom edge: where the old +10px overlap actually was.
+            assertNotNull(NotificationBanner.INSTANCE.hitTest(cardX + 1.0F, probeY),
+                    "the banner's own left edge is clickable");
+            assertNull(NotificationBanner.INSTANCE.hitTest(cardX - 2.0F, probeY),
+                    "nothing is drawn left of the card column");
+            assertNotNull(NotificationBanner.INSTANCE.hitTest(cardX + cardW - 1.0F, probeY),
+                    "the banner's own right edge is clickable");
+            assertNull(NotificationBanner.INSTANCE.hitTest(cardX + cardW + 2.0F, probeY),
+                    "nothing is drawn right of the card column");
+            // The header's bottom edge: where the old +10px overlap actually was,
+            // and the "nothing above the banner" probe (the banner's top edge is
+            // the content column's top edge).
             assertNull(NotificationBanner.INSTANCE.hitTest(
                             layout.header.x() + layout.header.w() / 2.0F,
                             layout.header.bottom() - 1.0F),
                     "the banner must not overlap the header card's lower edge");
+        }
+    }
+
+    /**
+     * The banner's height is built from the two single-line rows it holds — the
+     * title's text height, {@link NotificationBanner#TEXT_LINE_GAP}, the body's
+     * text height and {@link NotificationBanner#TEXT_PAD_Y} above and below —
+     * floored at the avatar/button square. It used to BE {@code HEADER_HEIGHT},
+     * with the rows pinned to 32% and 66% of that bar, which left the title and
+     * the preview fifteen pixels apart inside a 44px card.
+     *
+     * <p>Three banners are enqueued so the stack holds only this test's own
+     * (MAX_STACK evicts the older ones): the probe just BELOW the first card is
+     * then deterministically empty, which is what ties the rect the render
+     * published to the height computed here.
+     */
+    @Test
+    void notificationBannerHeightIsBuiltFromItsTwoTextRows() {
+        Font titleFont = FontManager.boldFont(UiTokens.FONT_NAME);
+        Font bodyFont = FontManager.font(UiTokens.FONT_QUOTE);
+        float twoRows = SkiaFontRenderer.textHeight(titleFont)
+                + NotificationBanner.TEXT_LINE_GAP
+                + SkiaFontRenderer.textHeight(bodyFont);
+        float bannerH = NotificationBanner.bannerHeight();
+        assertEquals(Math.max(UiTokens.ACTION_BUTTON_SIZE, twoRows + NotificationBanner.TEXT_PAD_Y * 2.0F),
+                bannerH, 0.01F,
+                "height = title row + gap + body row + padding, floored at the control square");
+        assertTrue(bannerH >= twoRows, "both single-line rows and their gap fit inside the banner");
+        // The old binding cannot satisfy the formula above: two text rows plus
+        // their padding are taller than the header's own bar.
+        assertTrue(bannerH > UiTokens.HEADER_HEIGHT, "the banner is no longer the header bar's height");
+
+        try (Panel panel = new Panel()) {
+            UiLayout layout = UiLayout.of(PANEL_X, PANEL_Y, PANEL_W, PANEL_H);
+            for (int i = 0; i < 3; i++) {
+                NotificationBanner.INSTANCE.enqueue(NotificationBanner.Type.MENTION, "Alice",
+                        "row " + i, new ChatMessage(Component.literal("hi"), false));
+            }
+            waitOutEntranceAnimation();
+            panel.paintedFrame("notification banner", canvas -> NotificationBanner.INSTANCE
+                    .renderInPanel(canvas, PANEL_X, PANEL_Y, PANEL_W, PANEL_H, -1.0F, -1.0F));
+
+            float cx = NotificationBanner.bannerX(PANEL_X) + NotificationBanner.bannerWidth(PANEL_W) / 2.0F;
+            float top = layout.list.y();
+            assertNotNull(NotificationBanner.INSTANCE.hitTest(cx, top + bannerH - 1.0F),
+                    "the last row of the published height is inside the banner rect");
+            assertNull(NotificationBanner.INSTANCE.hitTest(cx, top + bannerH + 1.0F),
+                    "the banner stops at the published height, with the stack gap below it");
         }
     }
 

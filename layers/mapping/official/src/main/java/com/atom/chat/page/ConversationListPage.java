@@ -372,16 +372,20 @@ public final class ConversationListPage {
     }
 
     /**
-     * Left edge of a card: the list inset on both sides by the clearance the
-     * hover bounce needs, or the rounded ends get sheared flat by the clip.
+     * Left edge of a card: the list's card column, inset on both sides by the
+     * clearance the hover bounce needs, or the rounded ends get sheared flat by
+     * the clip. The rule itself lives in {@link UiLayout#cardColumnX} because the
+     * notification banner draws into the same column and is handed the panel rect
+     * rather than a layout: one definition with one reader per shape, instead of
+     * two expressions that are merely supposed to stay equal.
      */
     private static float cardX(UiLayout layout) {
-        return layout.list.x() + UiTokens.ROW_CLIP_INSET;
+        return UiLayout.cardColumnX(layout.panelX);
     }
 
     /** Width of a card; see {@link #cardX}. */
     private static float cardW(UiLayout layout) {
-        return layout.list.w() - UiTokens.ROW_CLIP_INSET * 2.0F;
+        return UiLayout.cardColumnW(layout.panelW);
     }
 
     /**

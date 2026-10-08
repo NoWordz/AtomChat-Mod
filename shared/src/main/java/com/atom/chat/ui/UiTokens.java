@@ -192,6 +192,17 @@ public final class UiTokens {
     }
 
     /**
+     * Contrast floor for a glyph drawn in a theme colour on a float surface —
+     * WCAG's 3:1 non-text minimum. The success tick's rule
+     * ({@link com.atom.chat.avatar.ColorUtil#readableAccent(int, int, float)})
+     * is held to this: below it the accent is walked along its own value axis,
+     * which keeps the theme's hue instead of flipping to the float's neutral
+     * ink. The circle of a checkmark is a shape, not body text, so 3:1 is the
+     * right floor rather than 4.5:1.
+     */
+    public static final float MIN_GLYPH_CONTRAST = 3.0F;
+
+    /**
      * A muted companion to {@link #onFloatSurface(int)}, for the banner's
      * preview line and the toast's secondary wording: the float ink held at 60%
      * so the two lines have a hierarchy without a second hard-coded colour.
@@ -348,6 +359,24 @@ public final class UiTokens {
     public static final int CHROME_SHADOW_INNER = io.github.humbleui.skija.Color.makeARGB(70, 0, 0, 0);
     /** Two-tier chrome shadow, outer pass: wider, softer spread. */
     public static final int CHROME_SHADOW_OUTER = io.github.humbleui.skija.Color.makeARGB(45, 0, 0, 0);
+    /**
+     * The float family's own pair — the toast and the notification banner. The
+     * same two-tier shape as the chrome pair on the same blurs, one third
+     * lighter in both passes, so a float reads as a soft containment over the
+     * message content behind it instead of a second dark edge under the card.
+     * The shell bars keep the chrome pair: that difference is what still tells
+     * a floating status surface from the panel's own chrome.
+     *
+     * <p>Only alpha moved, and deliberately so. {@link #floatSurfaceShadowPad()}
+     * is sized to the reach the shared blur pair produces (~38px against the
+     * 40px pad), so a lower peak can only make the tail die out sooner — the
+     * pad cannot be outrun and no re-measurement is needed. A blur change would
+     * be a different change: it moves the reach and needs the raster probe and
+     * a bigger pad first.</p>
+     */
+    public static final int FLOAT_SHADOW_INNER = io.github.humbleui.skija.Color.makeARGB(47, 0, 0, 0);
+    /** The float family's outer pass; see {@link #FLOAT_SHADOW_INNER}. */
+    public static final int FLOAT_SHADOW_OUTER = io.github.humbleui.skija.Color.makeARGB(30, 0, 0, 0);
     /**
      * The lighter elevation tier for content cards (settings rows, tiles,
      * preview cards): low alpha, small blur — enough to lift a card off the
