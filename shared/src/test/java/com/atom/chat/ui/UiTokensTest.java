@@ -152,6 +152,41 @@ class UiTokensTest {
                 "dark surface: white rest at the same 70");
     }
 
+    @Test
+    void floatSurfaceInkFlipsWithItsOwnFill() {
+        // The bug this guards: the banner painted an opaque WHITE fill (built
+        // from the default white card colour) and then drew the panel's own
+        // text colour on it. On every dark theme that made the sender name
+        // white on white. The ink must come from the fill it is drawn on.
+        assertEquals(0xFF1C1901, UiTokens.onFloatSurface(LIGHT_BASE),
+                "a light float takes the dark float ink");
+        assertEquals(0xFFFFFFFF, UiTokens.onFloatSurface(DARK_BASE),
+                "a dark float takes the light float ink");
+    }
+
+    @Test
+    void floatSurfaceSecondaryKeepsTheSameHueAtLowerPresence() {
+        int full = UiTokens.onFloatSurface(DARK_BASE);
+        int muted = UiTokens.onFloatSurfaceSecondary(DARK_BASE);
+        assertEquals((full >>> 0) & 0x00FFFFFF, (muted >>> 0) & 0x00FFFFFF,
+                "the muted float ink is the same colour, only quieter");
+        assertTrue(((muted >>> 24) & 0xFF) < ((full >>> 24) & 0xFF),
+                "muted must be strictly less present than the primary float ink");
+    }
+
+    /**
+     * Pins the float-surface layer pad at the measured shadow reach. The reach
+     * itself was measured off a raster surface when the fix went in (alpha died
+     * out at ~38px below the card, ~24px above); what this guards is that nobody
+     * quietly drops the pad back to the blur radius, which is what clipped the
+     * shadow into the hard rectangle that was reported.
+     */
+    @Test
+    void floatSurfaceLayerPadStaysAtTheMeasuredReach() {
+        assertEquals(40.0F, UiTokens.floatSurfaceShadowPad(), 0.01F,
+                "s(32) at the default scale: the measured shadow reach, not the blur radius");
+    }
+
     // --- layout baselines ---
 
     /**

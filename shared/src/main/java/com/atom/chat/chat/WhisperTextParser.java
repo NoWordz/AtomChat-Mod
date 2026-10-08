@@ -47,10 +47,23 @@ public final class WhisperTextParser {
     /** DeluxeChat style: "Steve -> You : hi" (unbracketed arrow requires a colon). */
     private static final Pattern ARROW_COLON = Pattern.compile(
             "^(.{1,32}?)\\s*" + ARROW + "\\s*(.{1,32}?)\\s*[:：]\\s*(.+)$");
-    /** "Steve 悄悄地对你说: hi" / "Steve whispers to you: hi" / "Steve whispers: hi". */
+    /**
+     * "Steve 悄悄地对你说: hi" / "Steve whispers to you: hi".
+     *
+     * <p>The colon is mandatory, and the sender capture may not contain a
+     * separator. Both were lax before, and that is what let ordinary prose be
+     * claimed: {@code "Sent a simulated whisper banner to your client"} has no
+     * colon at all, so the sender capture ran to "Sent a simulated" and the rest
+     * became the "message body" — a server command reply turned into a fake
+     * private message and a banner. A real whisper line always separates the
+     * sender from the body with a colon, and a separator inside the sender means
+     * the match wandered into a sentence (the same rule {@link #cleanSide}
+     * applies). Whitespace stays allowed: decorated names ("Steve the Great",
+     * "Steve [Admin]") are real.</p>
+     */
     private static final Pattern KEYWORD_IN = Pattern.compile(
-            "^(.{1,32}?)\\s*(?:悄悄地?对你说|悄悄(?:地)?跟你说|对你说|悄悄(?:地)?说|密语|"
-                    + "whispers?(?:\\s+to\\s+you)?)\\s*[:：]?\\s*(.+)$");
+            "^([^:：]{1,32}?)\\s*(?:悄悄地?对你说|悄悄(?:地)?跟你说|对你说|悄悄(?:地)?说|密语|"
+                    + "whispers?(?:\\s+to\\s+you)?)\\s*[:：]\\s*(.+)$");
     /**
      * "你对Steve悄悄地说：hi" / "You whisper to Steve: hi". The EN branch
      * requires the trailing colon: with an optional colon the lazy partner
@@ -186,7 +199,31 @@ public final class WhisperTextParser {
                 break;
             }
         }
-        String zone = colon < 0 ? text : text.substring(0, colon);
+        if (colon < 0) {
+            // No colon: only an arrow/pipe separator can still make this a
+            // whisper line, and only if one actually exists. Treating the whole
+            // line as the "zone" (the old behaviour) claimed colon-less prose
+            // that merely contained a keyword, and then handed the keyword back
+            // as part of the "message body" — the reason a command reply could
+            // arrive in the private panel with the whisper word glued to its
+            // text. A line with no separator at all is not a whisper.
+            return hasArrowSeparator(text) && zoneHasKeyword(text);
+        }
+        return zoneHasKeyword(text.substring(0, colon));
+    }
+
+    /** Whether {@link #extractWhisperContent} would find a separator to split on. */
+    private static boolean hasArrowSeparator(String text) {
+        for (String sep : new String[]{" -> ", " >> ", " » ", " | "}) {
+            if (text.contains(sep)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** Whether a keyword appears in {@code zone} (already cut at the separator). */
+    private static boolean zoneHasKeyword(String zone) {
         String lower = zone.toLowerCase(Locale.ROOT);
         for (String keyword : ZH_KEYWORDS) {
             if (lower.contains(keyword)) {

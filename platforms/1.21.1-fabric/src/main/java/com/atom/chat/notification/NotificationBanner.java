@@ -39,13 +39,15 @@ import java.util.Map;
  * screen, so the HUD path is gone on purpose — do not reintroduce it.
  *
  * <p>Queueing is global: events are enqueued whether or not the panel is open,
- * and their 4s lifetime starts at enqueue. Opening the panel within that window
+ * and their lifetime starts at enqueue. Opening the panel within that window
  * reveals whatever is still alive; otherwise the {@code @N} unread badge carries
  * the signal.
  *
- * <p>Visuals follow the content-card language: opaque card fill, inner edge
- * highlight, pointer-hover wash — plus an iOS-style drop-in with a slight
- * overshoot and a slide-out on expiry. A round send-style button on the right
+ * <p>Visuals follow the shell's own language: the shared float-surface family
+ * ({@link com.atom.chat.ui.UiCards#drawFloatSurface}) — an opaque themed fill
+ * with ink derived from it, one accent-dyed hover wash and the two-tier chrome
+ * shadow the header and tab bar ride — placed on the content column, plus an
+ * iOS-style drop-in with a slight overshoot and a slide-out on expiry. A round send-style button on the right
  * jumps straight into a reply; the rest of the banner just navigates.
  */
 public final class NotificationBanner {
@@ -53,7 +55,12 @@ public final class NotificationBanner {
 
     public enum Type { MENTION, QUOTE, WHISPER }
 
-    private static final long VISIBLE_MS = 4000L;
+    /**
+     * How long a banner is held before it slides out. Raised from 4s to 6s after
+     * field feedback that a banner arrived and left before the reader could take
+     * in the sender and the body.
+     */
+    private static final long VISIBLE_MS = 6000L;
     private static final long APPEAR_MS = 220L;
     private static final long DISAPPEAR_MS = 150L;
     private static final int MAX_STACK = 3;
@@ -109,7 +116,7 @@ public final class NotificationBanner {
 
     /**
      * Retires banners only after the slide-out has had its 150ms, so the exit
-     * animation is actually visible. The 4s "lifetime" still starts at enqueue.
+     * animation is actually visible. The hold still starts at enqueue.
      */
     public void tick() {
         long now = System.currentTimeMillis();
@@ -175,11 +182,18 @@ public final class NotificationBanner {
         // made the fade crawl at ~1/90th of its intended speed.
         float hoverDt = Math.min(50.0F, Math.max(1.0F, now - lastHoverMs));
         lastHoverMs = now;
-        float bannerW = Math.min(UiTokens.s(320), Math.max(UiTokens.s(180), panelW - UiTokens.s(24)));
-        float bannerH = UiTokens.s(58);
+        // The banner belongs to the content column, not a floating island of its
+        // own: it spans the same width as the header, composer and tab bar, and
+        // sits one full header-clear row below the header card. Its previous
+        // max(320, panelW - 24) width came to 70% of the column on a standard
+        // panel, the one surface in the shell wearing a size no other surface
+        // uses, and its y of panelY + HEADER_HEIGHT + 6 ignored the header's own
+        // PANEL_BOTTOM_PAD and so overlapped the header card by 10px.
+        float bannerW = Math.max(UiTokens.s(120), panelW - UiTokens.LIST_PAD_X * 2.0F);
+        float bannerH = UiTokens.HEADER_HEIGHT;
         float gap = UiTokens.s(6);
         float x = panelX + (panelW - bannerW) / 2.0F;
-        float y = panelY + UiTokens.HEADER_HEIGHT + UiTokens.s(6);
+        float y = panelY + UiTokens.PANEL_BOTTOM_PAD + UiTokens.HEADER_HEIGHT + UiTokens.PANEL_TOP_GAP;
 
         for (int i = banners.size() - 1; i >= 0; i--) {
             Active b = banners.get(i);
@@ -277,21 +291,25 @@ public final class NotificationBanner {
         canvas.save();
         try (Paint layer = new Paint()) {
             layer.setColor(Color.makeARGB((int) (255.0F * alpha), 0, 0, 0));
-            canvas.saveLayer(Rect.makeXYWH(x - UiTokens.s(8), y - UiTokens.s(8), w + UiTokens.s(16), h + UiTokens.s(16)), layer);
+            // Padded to the family's MEASURED shadow reach, not to the blur
+            // radius: the offset plus the gaussian tail travels ~40px, so the
+            // old 10px pad clipped the shadow into a visible rectangle edge.
+            canvas.saveLayer(shadowLayer(x, y, w, h), layer);
             try {
-                // Card language on floating chrome: the fixed opaque card fill
-                // over a chrome-level shadow (the blur/alpha family the shell
-                // header and tab bar use), because a banner floats above the
-                // page like they do — not the lighter content-card shadow. The
-                // stack itself is UiCards', with the shadow tier and the opaque
-                // base passed explicitly.
-                AtomChatConfig config = AtomChatConfig.get();
-                UiCards.drawCard(canvas, x, y, w, h, radius, hover,
-                        UiTokens.CHROME_SHADOW, UiTokens.s(8),
-                        0xFF000000 | (config.cardColor & 0x00FFFFFF));
+                // One float-surface family, shared with the action toast: an
+                // opaque fill that follows the theme's card colour through the
+                // card-tint slider, and ink derived from that fill rather than
+                // from the panel's text colour. The old explicit
+                // 0xFF000000 | cardColor was opaque white for the default card
+                // colour, which painted a white card under panel-polarity text
+                // and made the sender name invisible on it.
+                int fill = UiTokens.floatSurfaceFill();
+                UiCards.drawFloatSurface(canvas, x, y, w, h, radius, hover, fill);
 
                 float padX = UiTokens.s(14);
-                float avatarSize = UiTokens.s(28);
+                // The header's own control size: this bar is header-height now,
+                // so its leading control is the same square the header uses.
+                float avatarSize = UiTokens.ACTION_BUTTON_SIZE;
                 float avatarX = x + padX;
                 float avatarY = y + (h - avatarSize) / 2.0F;
                 ChatMessage msg = b.message();
@@ -301,33 +319,38 @@ public final class NotificationBanner {
                             avatarSize / 2.0F, SamplingMode.LINEAR);
                 } else {
                     SkiaDraw.drawRoundedRect(canvas, avatarX, avatarY, avatarSize, avatarSize,
-                            avatarSize / 2.0F, Color.makeARGB(255, 120, 130, 145));
+                            avatarSize / 2.0F, UiTokens.onFloatSurfaceTint(fill));
                 }
                 // Hairline rim hugging the avatar's outer edge (face or
                 // placeholder): polarity-adaptive UiTokens.rim separates the
                 // circle from the banner card behind it. Same ring language
                 // as the swatches.
                 SkiaDraw.drawRing(canvas, avatarX + avatarSize / 2.0F, avatarY + avatarSize / 2.0F,
-                        avatarSize / 2.0F + UiTokens.s(0.75F), UiTokens.s(1.0F), UiTokens.rim());
+                        avatarSize / 2.0F + UiTokens.s(0.75F), UiTokens.s(1.0F), UiTokens.rim(fill));
 
                 float btnX = x + w - padX - BUTTON_SIZE;
                 float btnY = y + (h - BUTTON_SIZE) / 2.0F;
-                float textX = avatarX + avatarSize + UiTokens.s(8);
+                float textX = avatarX + avatarSize + UiTokens.s(10);
                 float textW = Math.max(UiTokens.s(20), btnX - UiTokens.s(8) - textX);
-                float line1Y = y + UiTokens.s(20);
-                float line2Y = y + UiTokens.s(40);
+                // Two lines centred as a block inside the bar rather than pinned
+                // to absolute offsets, so the height (now the header's) cannot
+                // push the preview out of the card.
+                float line1Y = y + h * 0.32F;
+                float line2Y = y + h * 0.66F;
                 Font titleFont = FontManager.boldFont(UiTokens.FONT_NAME);
                 Font bodyFont = FontManager.font(UiTokens.FONT_QUOTE);
                 String typeLabel = tr(typeKey(b.type()));
                 String title = typeLabel + (b.sender() != null && !b.sender().isBlank() ? "  " + b.sender() : "");
                 SkiaFontRenderer.drawText(canvas, titleFont,
                         SkiaFontRenderer.truncate(titleFont, title, textW),
-                        textX, SkiaFontRenderer.centerBaselineY(titleFont, line1Y), config.textPrimaryColor);
+                        textX, SkiaFontRenderer.centerBaselineY(titleFont, line1Y),
+                        UiTokens.onFloatSurface(fill));
 
                 String preview = b.content() == null ? "" : b.content().replace('\n', ' ');
                 SkiaFontRenderer.drawText(canvas, bodyFont,
                         SkiaFontRenderer.truncate(bodyFont, preview, textW),
-                        textX, SkiaFontRenderer.centerBaselineY(bodyFont, line2Y), config.textSecondaryColor);
+                        textX, SkiaFontRenderer.centerBaselineY(bodyFont, line2Y),
+                        UiTokens.onFloatSurfaceSecondary(fill));
 
                 // The whole control scales: fill, wash and glyph travel together.
                 // begin() keeps its save even at scale 1, so the restore below is
@@ -344,6 +367,16 @@ public final class NotificationBanner {
         } finally {
             canvas.restore();
         }
+    }
+
+    /**
+     * The saveLayer rect for one floating surface, padded by the family's
+     * measured shadow reach. The banner and the toast both route their own rect
+     * through here, so the pad can never drift from the shadow it must contain.
+     */
+    private static Rect shadowLayer(float x, float y, float w, float h) {
+        float pad = UiTokens.floatSurfaceShadowPad();
+        return Rect.makeXYWH(x - pad, y - pad, w + pad * 2.0F, h + pad * 2.0F);
     }
 
     /** Send-language round button: accent fill + paper plane, hover wash exactly

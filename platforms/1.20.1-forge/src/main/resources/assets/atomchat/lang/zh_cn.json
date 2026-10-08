@@ -262,14 +262,14 @@
   "atomchat.config.section.packs": "本服下发",
   "atomchat.config.cooldown_hint": "%s 秒",
   "atomchat.config.error.field_range": "「%s」只能是 %s–%s",
-  "atomchat.command.test.bannerSent": "已发送模拟%s横幅（客户端）",
-  "atomchat.command.test.pokeSent": "已发送模拟戳一戳（客户端）",
+  "atomchat.command.test.bannerSent": "已发送模拟通知（%s）到你的客户端",
+  "atomchat.command.test.pokeSent": "已发送模拟戳一戳到你的客户端",
   "atomchat.command.test.debugRequired": "请先在 AtomChat 设置里打开「调试模式」再使用实验命令",
   "atomchat.command.test.noChannel": "该客户端的 AtomChat 未就绪或未协商实验通道，无法模拟",
   "atomchat.test.kind.mention": "提及",
   "atomchat.test.kind.quote": "引用",
-  "atomchat.test.kind.whisper": "私聊",
+  "atomchat.test.kind.whisper": "通知",
   "atomchat.test.text.MENTION": "这是一条用于测试的提及消息喵",
   "atomchat.test.text.QUOTE": "这是一条用于测试的引用消息喵",
-  "atomchat.test.text.WHISPER": "这是一条用于测试的私聊消息喵"
+  "atomchat.test.text.WHISPER": "这是一条用于测试的通知消息喵"
 }

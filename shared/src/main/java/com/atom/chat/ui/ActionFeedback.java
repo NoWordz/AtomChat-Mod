@@ -26,8 +26,8 @@ public final class ActionFeedback {
     public static final int MAX_VISIBLE = 3;
     /** Drop-in duration, matching the notification banner. */
     public static final long APPEAR_MS = 220L;
-    public static final long SUCCESS_HOLD_MS = 2000L;
-    public static final long ERROR_HOLD_MS = 4000L;
+    public static final long SUCCESS_HOLD_MS = 3000L;
+    public static final long ERROR_HOLD_MS = 5000L;
     /** Slide-up-and-fade exit, matching the notification banner. */
     public static final long EXIT_MS = 150L;
     /**

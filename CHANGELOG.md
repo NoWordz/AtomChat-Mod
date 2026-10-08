@@ -10,6 +10,10 @@
 
 **修复**
 
+- **浮动面（通知横幅 / 操作反馈浮窗）统一为一族**：横幅此前画的是不透明白卡、文字却取面板色 ⇒ 深色主题下发件人白压白看不见；浮窗的阴影还有一个明显的硬矩形边。现在两者共用一套浮动面：填充跟随主题卡片色、文字色由填充自身亮度派生（浅底黑字、深底白字）、发丝线与悬浮高亮按自身底色解析、阴影换成顶栏/输入栏同款双通道投影，且投影在被裁切的图层里完整放得下（不再有硬边）。「返回最新消息」按钮保持原有的固定深色——它悬浮在任意消息上，本来就自成一族。
+- **横幅尺寸并入内容列**：宽度改为与顶栏、输入栏、底栏同宽（原先只有内容列的约 70%），高度取顶栏同高，头像取顶栏控件尺寸，并修正了横幅压住顶栏 10px 的偏移。
+- **横幅 6 秒、操作反馈成功 3 秒 / 失败 5 秒**（原为 4 秒 / 2 秒 · 4 秒）。
+- **修掉一处会被误判成私聊的真实 bug**：聊天行里只要出现「whisper / 私聊 / 密语」等字样（例如一条普通公屏消息或命令回执），就会被抢进私聊面板并弹出横幅，且把关键字连同正文一起当成消息内容。现在关键字族要求必须有冒号分隔，且无分隔符的行一律不再认领。附带把实验命令的回执文案改得不再含私聊字样。
 - **操作反馈浮窗改到输入栏上方，并补上真正的淡入淡出**：此前锚在面板顶部、且只有文字与图标带透明度（卡片本体是实画），所以看起来"没有淡入淡出"。现在整块卡片一起淡入淡出，从输入栏后方向上滑入（带轻微回弹），过期时下沉淡出；关闭「装饰性动效」后不淡不位移。详情页没有输入栏时贴列表底部。
 - **「加载更早消息」胶囊与「返回最新消息」按钮补上与其他控件同款的交互动效**：悬浮高亮由硬切换改为渐变淡入，按下与松开走同一套回弹弹簧（与底部标签栏、发送键一致）。命中范围仍按未缩放的位置判定。
 - **引用胶囊文字改为跟随胶囊主题色**：不再取气泡文字色，避免黑鸦主题下用户名近黑字压在深灰胶囊、典雅主题下纯白字压在浅沙胶囊而不可读。
@@ -24,6 +28,10 @@
 
 **Fixed**
 
+- **The floating surfaces (notification banner and action toast) are one family now**: the banner painted an opaque white card while taking its text from the panel, so on dark themes the sender name was white on white and invisible; the toast's shadow also showed a hard rectangular edge. Both now share one float surface: a themed fill, ink derived from that fill's own luminance (dark ink on a light float, light on a dark one), an edge hairline and hover wash resolved against the float's own colour, and the two-tier shadow the header and composer ride — inside a layer large enough to hold it, so the hard edge is gone. The jump-to-latest button keeps its fixed dark pill: it floats over arbitrary messages and was always its own thing.
+- **The banner now belongs to the content column**: its width matches the header, composer and tab bar (it was about 70% of the column), its height is the header's, its avatar the header control size, and its offset no longer overlaps the header card by 10px.
+- **Banner holds 6s; action feedback holds 3s on success and 5s on failure** (was 4s / 2s · 4s).
+- **Fixed a real misclassification bug**: any chat line merely containing a whisper word ("whisper", "私聊", "密语" …) — an ordinary public message, or a command reply — was routed into the private panel and popped a banner, with the keyword glued onto the message body. The keyword family now requires a colon separator, and a line with no separator at all is never claimed. The test command's own reply wording no longer contains whisper/private words either.
 - **Action toasts now rise from just above the composer and actually fade**: they used to be anchored at the panel top, and only the text and glyph carried opacity (the card itself was drawn solid), which is why the fade looked missing. The whole card now fades as one, slides up from behind the composer with a slight bounce, and sinks while fading out; with decorative motion off it neither fades nor moves. Detail pages without a composer anchor to the bottom of the list.
 - **The "load earlier" capsule and the jump-to-latest button gained the same interaction motion as every other control**: the hover highlight eases in instead of switching, and press/release ride the shared bounce spring (same as the bottom tab bar and the send button). Hit-testing still uses the unscaled position.
 - **Quote-capsule text now follows the capsule theme colour** instead of the bubble text colour, fixing the unreadable names (near-black on dark in raven, white on sand in elegant).

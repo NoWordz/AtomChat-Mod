@@ -39,9 +39,9 @@ public final class UiCards {
 
     /**
      * Draws the full card stack with an explicit shadow tier; {@code hoverWeight}
-     * 0..1. Content cards keep the default above; floating chrome (the
-     * notification banner) passes the heavier {@link UiTokens#CHROME_SHADOW} at
-     * s(8) — the blur/alpha family the shell header and tab bar ride at.
+     * 0..1. Content cards keep the default above. Surfaces that float above
+     * message content do not come through here at all — see
+     * {@link #drawFloatSurface}.
      */
     public static void drawCard(Canvas canvas, float x, float y, float w, float h,
                                 float radius, float hoverWeight, int shadowColor, float shadowBlur) {
@@ -50,11 +50,9 @@ public final class UiCards {
     }
 
     /**
-     * The full stack with the base fill explicit too. A surface that floats
-     * above message text keeps an opaque base — a translucent
-     * {@link UiTokens#cardFill()} would let the messages bleed through — so the
-     * banner passes its fixed opaque card colour here; every other surface
-     * keeps {@link UiTokens#cardFill()} through the overloads above.
+     * The full stack with the base fill explicit too, for a card whose face is
+     * not the configured card colour. Content surfaces keep
+     * {@link UiTokens#cardFill()} through the overloads above.
      */
     public static void drawCard(Canvas canvas, float x, float y, float w, float h,
                                 float radius, float hoverWeight, int shadowColor, float shadowBlur,
@@ -67,6 +65,28 @@ public final class UiCards {
                 UiTokens.hairline());
         if (hoverWeight > 0.01F) {
             SkiaDraw.drawRoundedRect(canvas, x, y, w, h, radius, UiTokens.cardHover(hoverWeight));
+        }
+    }
+
+    /**
+     * A surface that floats above message content — the notification banner and
+     * the action toast. Same stack as {@link #drawCard}, but on the two-tier
+     * chrome shadow the shell header, composer and tab bar ride, because these
+     * float over arbitrary content like those bars rather than sitting in a page;
+     * the single tier they used before read as a hard-edged drop. The hairline
+     * and hover wash are resolved against the caller's fill rather than the
+     * panel's card colour, so a float whose fill is not the card colour still
+     * gets an edge and a wash that match it.
+     */
+    public static void drawFloatSurface(Canvas canvas, float x, float y, float w, float h,
+                                        float radius, float hoverWeight, int baseFill) {
+        SkiaDraw.drawChromeShadow(canvas, x, y, w, h, radius);
+        SkiaDraw.drawRoundedRect(canvas, x, y, w, h, radius, baseFill);
+        SkiaDraw.drawEdgeHighlight(canvas, x, y, w, h, radius, UiTokens.s(1.0F),
+                UiTokens.hairline(baseFill));
+        if (hoverWeight > 0.01F) {
+            SkiaDraw.drawRoundedRect(canvas, x, y, w, h, radius, UiTokens.cardHover(
+                    com.atom.chat.config.AtomChatConfig.get().accentColor, baseFill, hoverWeight));
         }
     }
 }

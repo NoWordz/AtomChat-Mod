@@ -14,20 +14,35 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 class ActionFeedbackTest {
 
+    /**
+     * Pins the shipped hold lengths. The other cases assert against the constants
+     * (so a retune does not have to touch them), which would let the durations
+     * themselves drift with the suite still green — this is the one place that
+     * fixes the numbers the user actually asked for.
+     */
     @Test
-    void successHoldsTwoSecondsThenExpires() {
-        ActionFeedback f = new ActionFeedback();
-        f.show("cache", ActionFeedback.Outcome.SUCCESS, 1000L);
-        assertTrue(f.hasVisible(1500L), "still held at 0.5s");
-        assertFalse(f.hasVisible(1000L + 2000L + 150L), "gone once hold + exit elapse");
+    void holdsAreTheRequestedLengths() {
+        assertEquals(3000L, ActionFeedback.SUCCESS_HOLD_MS, "success holds 3s");
+        assertEquals(5000L, ActionFeedback.ERROR_HOLD_MS, "a failure holds 5s");
     }
 
     @Test
-    void errorHoldsFourSeconds() {
+    void successHoldsItsWindowThenExpires() {
+        ActionFeedback f = new ActionFeedback();
+        f.show("cache", ActionFeedback.Outcome.SUCCESS, 1000L);
+        assertTrue(f.hasVisible(1500L), "still held at 0.5s");
+        assertFalse(f.hasVisible(1000L + ActionFeedback.SUCCESS_HOLD_MS + ActionFeedback.EXIT_MS),
+                "gone once hold + exit elapse");
+    }
+
+    @Test
+    void errorOutlastsSuccess() {
         ActionFeedback f = new ActionFeedback();
         f.show("save", ActionFeedback.Outcome.ERROR, 1000L);
-        assertTrue(f.hasVisible(4500L), "a failure lingers past the success window");
-        assertFalse(f.hasVisible(1000L + 4000L + 150L), "but not forever");
+        assertTrue(f.hasVisible(1000L + ActionFeedback.SUCCESS_HOLD_MS + 500L),
+                "a failure outlasts a success");
+        assertFalse(f.hasVisible(1000L + ActionFeedback.ERROR_HOLD_MS + ActionFeedback.EXIT_MS),
+                "but not forever");
     }
 
     @Test
@@ -74,7 +89,8 @@ class ActionFeedbackTest {
         ActionFeedback.Entry e = new ActionFeedback.Entry("k", null, ActionFeedback.Outcome.SUCCESS, 1000L);
         assertEquals(0.0F, e.alpha(1000L), 1e-6F, "starts transparent");
         assertTrue(e.alpha(1000L + ActionFeedback.APPEAR_MS) > 0.9F, "opaque after appearing");
-        assertTrue(e.alpha(1000L + 2000L + 100L) < 0.5F, "fading out in the exit window");
+        assertTrue(e.alpha(1000L + ActionFeedback.SUCCESS_HOLD_MS + 100L) < 0.5F,
+                "fading out in the exit window");
     }
 
     /**
@@ -105,7 +121,7 @@ class ActionFeedbackTest {
             }
         }
         assertTrue(overshot, "easeOutBack must carry the row slightly past its slot");
-        assertTrue(e.offset(1000L + 2000L + ActionFeedback.EXIT_MS / 2L, true) > 0.0F,
+        assertTrue(e.offset(1000L + ActionFeedback.SUCCESS_HOLD_MS + ActionFeedback.EXIT_MS / 2L, true) > 0.0F,
                 "the exit sinks it back down while it fades");
     }
 
@@ -117,7 +133,8 @@ class ActionFeedbackTest {
         assertEquals(0.0F, e.offset(1000L + 100L, false), 1e-6F);
         assertEquals(1.0F, e.alpha(1000L, false), 1e-6F, "no fade-in ramp");
         assertEquals(1.0F, e.alpha(1000L + 1000L, false), 1e-6F, "still fully opaque while held");
-        assertEquals(0.0F, e.alpha(1000L + 2000L + 150L, false), 1e-6F, "gone once expired");
+        assertEquals(0.0F, e.alpha(1000L + ActionFeedback.SUCCESS_HOLD_MS + ActionFeedback.EXIT_MS, false),
+                1e-6F, "gone once expired");
     }
 
     /**

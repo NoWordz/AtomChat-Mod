@@ -12,9 +12,9 @@
 
 | 平台 | 实例目录 | 部署 jar md5 |
 |---|---|---|
-| Fabric 1.21.1 | `1.21.1-CCB` | `f9b29a79` |
-| NeoForge 1.21.1 | `Mechanomania-航空学` | `cffcc287` |
-| Forge 1.20.1 | `1.20.1-main` / `Go Fishing` / `元素觉醒1.4.6` | `ae0a072f` |
+| Fabric 1.21.1 | `1.21.1-CCB` | `7f412dfb` |
+| NeoForge 1.21.1 | `Mechanomania-航空学` | `b9eaeb9b` |
+| Forge 1.20.1 | `1.20.1-main` / `Go Fishing` / `元素觉醒1.4.6` | `0bf86f49` |
 
 上表是**0.3.0 之后四功能轮（plan `2026-10-08-atomchat-history-toast-poke-hudnotify.md`）的当前构建**：
 
@@ -29,7 +29,18 @@
 - **加载更早胶囊 / 返回最新 FAB** — 两处 hover 由硬切改为 `UiMotion.approach(HOVER_MS)` 渐变，并接上全站共用的 `PressScale` 回弹（4px/6% 预算），按下压、松开弹；FAB 的弹簧在淡出门之前步进，否则点它即滚到底、下一帧就隐藏，回弹永远看不到。命中判定仍用未缩放坐标（纯绘制变换）。
 - **服务端实验命令 `/atomchat test`** — 单人档无法触发横幅与戳一戳，双开又会让 debug 日志互相干扰，所以由服务端扮演对方：`banner mention|quote|whisper [文本]`（走**生产** `fire()` 路径，关掉的横幅照样不弹、音效门与去重都生效）与 `poke [对方名]`（服务端发 `PokeS2CPayload` 的点名技巧，走完整解码链路；戳自己会被拒，所以指向另一名玩家）。权限 = 单机放行 / 否则 OP2，且**必须先开「调试模式」**。横幅**只弹横幅**，不写进 `ChatStore`（跳转无处可落，但不会污染聊天记录与存档）。
 
-版本号保持 `0.3.0` 不动。三端测试 673/661/661 全绿 + 守卫 PASS + `_parity_check.py` PASS。
+版本号保持 `0.3.0` 不动。
+
+**R32 浮动面统一轮**（plan `2026-10-08-atomchat-float-surface-unification.md`，R31 实验命令真机验证的四条反馈）：
+
+- **横幅白底白字**（根因）— `NotificationBanner` 硬编码 `0xFF000000 | cardColor`，默认 cardColor 是纯白 ⇒ 不透明白卡；标题却用面板的 `textPrimaryColor`（白）⇒ 发件人名字白压白。Toast 用的是 `cardCutout()`，两个浮动面各走各的。新增共享族 `UiTokens.floatSurfaceFill()` / `onFloatSurface(int)`（由填充自身亮度派生文字色）/ `onFloatSurfaceSecondary` / `onFloatSurfaceTint` + `UiCards.drawFloatSurface()`（双通道 `drawChromeShadow`、按调用方填充解析发丝线与 hover），横幅与 Toast 统一走它。**FAB（返回最新按钮）保持固定深色，本就自成一族。**
+- **Toast 阴影硬边界**（根因）— `saveLayer` 外扩用 `s(8)`=10px，而阴影偏移+高斯尾巴实际走 ~38px ⇒ 被自己的 layer 硬切。光栅实测：卡片下方 alpha 41@6px/26@10/7@20/2@30/1@34/0@38，上方 0@24；落成 `floatSurfaceShadowPad() = s(32)`=40px，两个浮动面共用。
+- **横幅尺寸无 token** — 原宽 `min(s(320), max(s(180), panelW-s(24)))` 在标准面板只有内容列的 70%、高 `s(58)`、头像 `s(28)`。改为内容列全宽（`panelW - 2*LIST_PAD_X`，与顶栏/输入栏/底栏同宽）+ 顶栏同高 `HEADER_HEIGHT` + 头像 `ACTION_BUTTON_SIZE`；y 补上 `PANEL_BOTTOM_PAD`，不再压住顶栏 10px。
+- **`/atomchat test banner whisper` 弹两个横幅**（根因）— 服务端回执被 `WhisperTextParser` 当成收到的私聊。两层：`KEYWORD_IN` 冒号改为必需、发件人捕获不许含分隔符；**这是真实聊天也存在的 bug**（公屏里任何带 `whisper`/`私聊` 字样的话都会被抢进私聊面板）。另修 anchored 族：无分隔符的行不再被认领（否则关键字会连着正文一起被当消息体）。命令回执文案也去掉了 whisper/私聊 字样。
+- **时长** — 横幅 4s→6s；Toast 成功 2s→3s、失败 4s→5s。
+
+三端测试 682/670/670 全绿 + 守卫 PASS + `_parity_check.py` PASS；部署 fabric `7f412dfb`/neo `b9eaeb9b`/forge `0bf86f49`。**独立评审 2 MED 全修**：几何用例在 `PANEL_W=400` 时新旧宽度恰好相等（假绿）→ 改用配置默认 480 且探针移到顶栏下沿（并做了变异验证）；正则收紧会误伤多词/带装饰发件人 → 改为只禁分隔符不禁空白。**另修一个我自己引入的缺陷**：孪生同步脚本把 CRLF 二次转换产出 `
+`。
 
 > 前一轮（引用胶囊取色 + 胶囊族软阴影 + `[图片]` 占位绿）已随 commit `d8fc806` 入库并验收。
 

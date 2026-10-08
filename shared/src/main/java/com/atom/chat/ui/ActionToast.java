@@ -22,19 +22,18 @@ import java.util.List;
  * sinking back down while it fades out — the notification banner's motion
  * family, mirrored for an anchor at the bottom of the panel instead of the top.
  *
- * <p>Same card language as the rest of the floating chrome: {@link UiCards}
- * over the heavier chrome shadow, on {@link UiTokens#cardCutout()} so the surface
- * follows the theme (a banner's fixed white base is exactly what looked foreign
- * on dark themes). Success draws the accent check the profile copy already
- * uses; failure draws the shared {@link UiTokens#dangerColor()} cross. The
- * toast carries no avatar, preview or reply button — it is a status line, not
- * a navigational banner.</p>
+ * <p>Draws on the one float-surface family it shares with the notification
+ * banner: {@link UiCards#drawFloatSurface} on {@link UiTokens#floatSurfaceFill()},
+ * with its text and glyph inks derived from that fill by
+ * {@link UiTokens#onFloatSurface(int)} rather than taken from the panel's text
+ * colour. Success draws the accent check when the accent still reads on the
+ * float, otherwise the float's own ink; failure draws the shared
+ * {@link UiTokens#dangerColor()} cross. The toast carries no avatar, preview or
+ * reply button — it is a status line, not a navigational banner.</p>
  */
 public final class ActionToast {
     private static final float PAD_X = UiTokens.s(12);
     private static final float ICON = UiTokens.s(12);
-    /** Slack around the row inside its layer, so the chrome shadow is not clipped. */
-    private static final float LAYER_PAD = UiTokens.s(8);
 
     private ActionToast() {
     }
@@ -88,8 +87,12 @@ public final class ActionToast {
                     canvas.translate(0.0F, entry.offset(now, motion));
                     try (Paint layer = new Paint()) {
                         layer.setColor(Color.makeARGB((int) (255.0F * alpha), 0, 0, 0));
-                        canvas.saveLayer(Rect.makeXYWH(x - LAYER_PAD, y - LAYER_PAD,
-                                w + LAYER_PAD * 2.0F, rowH + LAYER_PAD * 2.0F), layer);
+                        // The layer is padded to the shadow's measured reach, not
+                        // to the blur radius: with both at s(8) the shadow's tail
+                        // was cut into a hard rectangle along the layer edge.
+                        float pad = UiTokens.floatSurfaceShadowPad();
+                        canvas.saveLayer(Rect.makeXYWH(x - pad, y - pad,
+                                w + pad * 2.0F, rowH + pad * 2.0F), layer);
                         try {
                             drawRow(canvas, font, entry, x, y, w, rowH, label);
                         } finally {
@@ -107,26 +110,31 @@ public final class ActionToast {
 
     private static void drawRow(Canvas canvas, Font font, ActionFeedback.Entry entry,
                                 float x, float y, float w, float h, String label) {
-        // The opaque base is deliberate: this floats over message text, and the
-        // translucent cardFill would let it bleed through (the banner's reason
-        // for the same choice). The row's own fade rides the caller's layer, so
-        // nothing here needs to know the current opacity.
-        UiCards.drawCard(canvas, x, y, w, h, UiTokens.cardRadius(), 0.0F,
-                UiTokens.CHROME_SHADOW, LAYER_PAD, UiTokens.cardCutout());
+        // The float-surface family, shared with the notification banner: an
+        // opaque fill that follows the theme's card colour, on the two-tier chrome
+        // shadow, with its ink derived from that fill. The row's own fade rides the
+        // caller's layer, so nothing here needs to know the current opacity.
+        int fill = UiTokens.floatSurfaceFill();
+        UiCards.drawFloatSurface(canvas, x, y, w, h, UiTokens.cardRadius(), 0.0F, fill);
         float cy = y + h / 2.0F;
         float ix = x + PAD_X;
-        drawGlyph(canvas, entry.outcome(), ix, cy);
+        drawGlyph(canvas, entry.outcome(), ix, cy, fill);
         SkiaFontRenderer.drawText(canvas, font, label, ix + ICON + UiTokens.s(8),
-                SkiaFontRenderer.centerBaselineY(font, cy), AtomChatConfig.get().textPrimaryColor);
+                SkiaFontRenderer.centerBaselineY(font, cy), UiTokens.onFloatSurface(fill));
     }
 
-    private static void drawGlyph(Canvas canvas, ActionFeedback.Outcome outcome, float x, float cy) {
+    private static void drawGlyph(Canvas canvas, ActionFeedback.Outcome outcome, float x, float cy,
+                                  int fill) {
         Path glyph = outcome == ActionFeedback.Outcome.ERROR
                 ? AppIcons.ICON_CLOSE_PATH : AppIcons.ICON_CHECK_PATH;
         Rect b = glyph.getBounds();
         float sc = ICON / Math.max(b.getWidth(), b.getHeight());
+        // Success takes the accent, but only when the accent still reads on the
+        // float: a light float under a pale accent would lose the tick, so it
+        // falls back to the float's own ink.
         int color = outcome == ActionFeedback.Outcome.ERROR
-                ? UiTokens.dangerColor() : AtomChatConfig.get().accentColor;
+                ? UiTokens.dangerColor()
+                : readableOn(AtomChatConfig.get().accentColor, fill);
         try (Paint paint = new Paint().setAntiAlias(true)
                 .setColor(color)
                 .setMode(PaintMode.STROKE)
@@ -145,6 +153,18 @@ public final class ActionToast {
                 canvas.restore();
             }
         }
+    }
+
+    /**
+     * {@code ink} when it still contrasts with {@code surface}, otherwise the
+     * surface's own derived ink — so a status glyph never disappears into the
+     * float it is drawn on.
+     */
+    private static int readableOn(int ink, int surface) {
+        float a = com.atom.chat.theme.ThemeService.relativeLuminance(ink);
+        float b = com.atom.chat.theme.ThemeService.relativeLuminance(surface);
+        float contrast = (Math.max(a, b) + 0.05F) / (Math.min(a, b) + 0.05F);
+        return contrast >= 3.0F ? ink : UiTokens.onFloatSurface(surface);
     }
 
     /** Resolves an action key to its localized label; the host supplies it. */

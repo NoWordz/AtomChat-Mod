@@ -29,6 +29,8 @@ import java.util.function.Consumer;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -496,6 +498,52 @@ class OffscreenRenderTest {
                 panel.paintedFrame("notification banner", canvas -> NotificationBanner.INSTANCE
                         .renderInPanel(canvas, PANEL_X, PANEL_Y, PANEL_W, PANEL_H, 120.0F, 160.0F));
             }
+        }
+    }
+
+    /**
+     * The banner is chrome, not an island: it must claim the same width as the
+     * header / composer / tab bar, and it must clear the header card rather than
+     * overlap it. Both were wrong before (a max(320, panelW-24) width came to 70%
+     * of the content column, and the y ignored the header's own bottom pad, so the
+     * banner sat 10px into the header).
+     */
+    /**
+     * The banner is chrome, not an island: it must claim the same width as the
+     * header / composer / tab bar, and it must clear the header card rather than
+     * overlap it.
+     *
+     * <p>The panel width is deliberately the config default ({@code 480}), not the
+     * 400 the other cases use: at 400 the old {@code min(s(320), panelW - s(24))}
+     * width saturates to exactly the new one, so a regression would slip past.
+     * The header probe is likewise the header's bottom edge, because the old bug
+     * overlapped the header by 10px there — a probe at its centre would miss it.
+     */
+    @Test
+    void notificationBannerMatchesTheContentColumnAndClearsTheHeader() {
+        float panelW = 480.0F;
+        try (Panel panel = new Panel()) {
+            UiLayout layout = UiLayout.of(PANEL_X, PANEL_Y, panelW, PANEL_H);
+            ChatMessage message = new ChatMessage(Component.literal("hi"), false);
+            NotificationBanner.INSTANCE.enqueue(NotificationBanner.Type.MENTION, "Alice", "hi", message);
+            waitOutEntranceAnimation();
+            panel.paintedFrame("notification banner", canvas -> NotificationBanner.INSTANCE
+                    .renderInPanel(canvas, PANEL_X, PANEL_Y, panelW, PANEL_H, -1.0F, -1.0F));
+
+            // The banner's top edge is the content column's top edge, so probing
+            // just inside list.y() lands on the banner.
+            float probeY = layout.list.y() + 1.0F;
+            assertNotNull(NotificationBanner.INSTANCE.hitTest(layout.list.x() + 1.0F, probeY),
+                    "the banner's left edge must sit on the content column, not inside it");
+            assertNotNull(NotificationBanner.INSTANCE.hitTest(layout.list.right() - 1.0F, probeY),
+                    "the banner's right edge must reach the far side of the content column");
+            assertNull(NotificationBanner.INSTANCE.hitTest(layout.list.x() - 4.0F, probeY),
+                    "the banner must not spill outside the content column");
+            // The header's bottom edge: where the old +10px overlap actually was.
+            assertNull(NotificationBanner.INSTANCE.hitTest(
+                            layout.header.x() + layout.header.w() / 2.0F,
+                            layout.header.bottom() - 1.0F),
+                    "the banner must not overlap the header card's lower edge");
         }
     }
 

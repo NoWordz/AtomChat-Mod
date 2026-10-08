@@ -162,6 +162,70 @@ public final class UiTokens {
     }
 
     /**
+     * The fill of a surface that floats above message content — the notification
+     * banner and the action toast. Opaque by design: a translucent fill would let
+     * message text bleed through the card.
+     *
+     * <p>One token so the two floaters cannot drift apart, which is exactly what
+     * happened: the toast used {@link #cardCutout()} while the banner hard-coded
+     * {@code 0xFF000000 | cardColor}. The latter is opaque white for the default
+     * (and every light) card colour, so a banner drew a white card under text
+     * picked for the panel's polarity — white on white, sender invisible. This
+     * mixes the configured card colour through the card-tint slider over the
+     * panel colour, so it follows the theme the same way the rest of the card
+     * family does, and a light theme yields a dark-enough panel-toned float
+     * instead of white.</p>
+     */
+    public static int floatSurfaceFill() {
+        return cardCutout();
+    }
+
+    /**
+     * Ink for text and glyphs sitting on {@link #floatSurfaceFill()}. Derived from
+     * the fill's own luminance by the same rule {@link #onAccent(int)} uses,
+     * rather than from {@code textPrimaryColor}: the float is a surface of its
+     * own, so the panel's text colour must not be assumed to read on it.
+     */
+    /** The same derivation as a pure function (the test seam). */
+    public static int onFloatSurface(int fill) {
+        return onAccent(fill);
+    }
+
+    /**
+     * A muted companion to {@link #onFloatSurface(int)}, for the banner's
+     * preview line and the toast's secondary wording: the float ink held at 60%
+     * so the two lines have a hierarchy without a second hard-coded colour.
+     */
+    /** As {@link #onFloatSurfaceSecondary(int)}, against an explicit fill. */
+    public static int onFloatSurfaceSecondary(int fill) {
+        return withAlpha(onFloatSurface(fill), 152.0F);
+    }
+
+    /**
+     * Placeholder fill for an avatar that has no face to draw on a float surface:
+     * the float ink lifted off the fill, so the empty circle reads as a neutral
+     * stand-in on a light and a dark float alike instead of the old fixed slate
+     * grey that ignored both.
+     */
+    /** As {@link #onFloatSurfaceTint(int)}, against an explicit fill. */
+    public static int onFloatSurfaceTint(int fill) {
+        return withAlpha(onFloatSurface(fill), 64.0F);
+    }
+
+    /**
+     * How far a float surface's shadow is allowed to travel before the layer
+     * around it cuts it off. The layer around a fading card must contain the
+     * whole shadow, or its clipped edge shows up as a hard rectangle — exactly
+     * the artefact reported against the toast. Measured on a raster surface, the
+     * two-pass chrome shadow dies out around 38px on its longest side (the inner
+     * pass is offset down by half its blur, then spreads), so the pad is that
+     * reach, not the blur radius.
+     */
+    public static float floatSurfaceShadowPad() {
+        return s(32);
+    }
+
+    /**
      * The reply / quote pill tint: the accent held at the alpha the old
      * hardcoded blue (74, 144, 226)@90 shipped with. The composer's reply
      * bar and the quoted-message surfaces draw this one derived colour, so
