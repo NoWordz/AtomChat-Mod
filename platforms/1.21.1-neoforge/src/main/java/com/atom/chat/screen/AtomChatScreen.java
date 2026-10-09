@@ -301,7 +301,9 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
         } else if ("history_clear".equals(actionId)) {
             // Wipes the current session (and the world's saved file when
             // persistence is on). Generation bumped inside: a pending auto-save
-            // cannot resurrect what was just deleted.
+            // cannot resurrect what was just deleted. The memory wipe is
+            // synchronous and is exactly what the player sees, so the toast
+            // reports that; the background file delete only logs on failure.
             com.atom.chat.history.ChatHistory.clearCurrent();
             resetHistoryWindows();
             feedback("atomchat.feedback.historyCleared", true);
@@ -3975,7 +3977,13 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
                         messageSenderName(target)), true);
     }
 
-    /** Incoming poke from {@code from}: wobble that player's row, cue and toast. */
+    /**
+     * Incoming poke from {@code from}: wobble that player's row, cue and toast.
+     *
+     * <p>Reachable only for another player, because a poke to yourself is
+     * rejected everywhere upstream — which holds for the real relay and for the
+     * ping-pong poke in the test round-trip alike.</p>
+     */
     private void onPoked(UUID from) {
         if (from == null || from.equals(client.player == null ? null : client.player.getUUID())) {
             return;

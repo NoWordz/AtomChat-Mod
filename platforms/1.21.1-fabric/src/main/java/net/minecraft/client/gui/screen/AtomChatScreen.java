@@ -8,11 +8,11 @@ import com.atom.chat.chat.Cicodes;
 import com.atom.chat.chat.MessageFilter;
 import com.atom.chat.chat.TeleportCommands;
 import com.atom.chat.chat.ChatStore;
+import com.atom.chat.config.AtomChatConfig;
+import com.atom.chat.emote.EmoteStore;
 import com.atom.chat.ui.AppIcons;
 import com.atom.chat.ui.ActionFeedback;
 import com.atom.chat.ui.ActionToast;
-import com.atom.chat.config.AtomChatConfig;
-import com.atom.chat.emote.EmoteStore;
 import com.atom.chat.image.ImageLoader;
 import com.atom.chat.image.ImagePreviewOverlay;
 import com.atom.chat.image.ImageSaver;
@@ -21,14 +21,15 @@ import com.atom.chat.net.MediaCompanionClient;
 import com.atom.chat.net.PokeCompanionClient;
 import com.atom.chat.chat.LocalEcho;
 import com.atom.chat.chat.PlayerRef;
-import com.atom.chat.chat.OwnIdentity;
-import com.atom.chat.text.RichText;
 import com.atom.chat.chat.PrivateChatStore;
 import com.atom.chat.chat.PrivateEchoTracker;
+import com.atom.chat.chat.OwnIdentity;
+import com.atom.chat.text.RichText;
 import com.atom.chat.nav.AppPage;
 import com.atom.chat.nav.AtomChatState;
 import com.atom.chat.nav.NavPage;
 import com.atom.chat.nav.NavigationStack;
+import com.atom.chat.notification.NotificationBanner;
 import com.atom.chat.avatar.AvatarImage;
 import com.atom.chat.avatar.AvatarStore;
 import com.atom.chat.avatar.ColorPickerOverlay;
@@ -66,7 +67,6 @@ import com.atom.chat.ui.PressScale;
 import com.atom.chat.ui.QuickPhrasePanel;
 import com.atom.chat.ui.UiMotion;
 import com.atom.chat.ui.UiTokens;
-import com.atom.chat.notification.NotificationBanner;
 import com.atom.chat.ui.input.InputHandler;
 import com.atom.chat.ui.input.InputRouter;
 import com.atom.chat.wallpaper.WallpaperImage;
@@ -3997,11 +3997,12 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
     /**
      * A poke simulated by {@code /atomchat test poke}, addressed to somebody
      * else. The cue already played on the client side; the wobble and the toast
-     * are what this adds. Deliberately not {@link #onPoked}: that path rejects a
-     * poke from yourself, and the test has to be a full round-trip through the
-     * server to prove the payload decodes, so the sender is always this client.
+     * are what this adds. Kept apart from {@link #onPoked} on purpose: that path
+     * rejects a poke from yourself, and the test is always addressed to another
+     * player, so routing it there would drop every test poke silently.
      */
-    public void onTestPoked(UUID target, String targetName) {        messageListView.poke(target, System.currentTimeMillis());
+    public void onTestPoked(UUID target, String targetName) {
+        messageListView.poke(target, System.currentTimeMillis());
         feedback("atomchat.feedback.pokeReceived", tr("atomchat.feedback.pokeReceived", targetName), true);
     }
 
