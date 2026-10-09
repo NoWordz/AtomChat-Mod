@@ -1,6 +1,9 @@
-# AtomChat
+<img width="2560" height="1600" alt="logo1" src="https://github.com/user-attachments/assets/354cc7eb-4c1c-49f0-9759-bbe18bf11a14" />
+<h1 align="center"AtomChat></h1>
 
-*A phone-app style chat experience for Minecraft, powered by Skija.*
+<p align="center">
+  <em>A phone-app style chat experience for Minecraft, powered by Skija.</em>
+</p>
 
 ## What it is
 
@@ -62,4 +65,6 @@ See the [wiki](https://github.com/NoWordz/AtomChat-Mod/wiki) for details.
 
 ## License
 
-MIT — see [LICENSE](LICENSE). Third-party components: [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+[MIT License](LICENSE) Third-party components: [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+
+Copyright &copy; 2026 E33EPUS & NoWordz
