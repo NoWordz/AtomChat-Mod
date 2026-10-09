@@ -482,10 +482,19 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
     /** Draft for the public world channel; kept separately because the hidden
      *  EditBox is shared by every chat page. */
     private String worldDraft = "";
+    /**
+     * Reply bar state per conversation ("" = public feed), keyed like
+     * {@link #historyWindows}. The reply bar belongs to a page, not to the
+     * screen: one shared field leaked a reply armed in the public feed into the
+     * private composer, and it could not say which of two pages a transition
+     * composites the bar for.
+     */
+    private final Map<String, ChatMessage> replies = new HashMap<>();
     /** Scroll state for root pages; shared across the root tabs, opening at the top. */
     private final ScrollController rootScroll = new ScrollController(false);
     /** Scroll state for pushed detail pages (settings/profile), opening at the top. */
     private final ScrollController detailScroll = new ScrollController(false);
+    /** Armed reply of the page that currently owns the shared EditBox. */
     private ChatMessage replyTarget;
     private ChatMessage contextMessage;
     private PlayerRef contextPlayer;
@@ -705,9 +714,6 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
 
     private long lastAvatarClickTime;
     private int lastAvatarClickIndex = -1;
-    /** Latest mouse position in GUI space, refreshed every render for hover-only chrome. */
-    private double lastMouseX;
-    private double lastMouseY;
     /** Single-click→profile competition window (QQ standard), in ms. */
     private static final long AVATAR_CLICK_WINDOW_MS = 300;
     /** Rows revealed per "load earlier" click (and the initial visible window). */
@@ -774,14 +780,29 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
     }
 
     private boolean isPrivateReadOnly() {
-        if (topPage() != AppPage.PRIVATE_CHAT) {
+        return isPrivateReadOnlyFor(topNav());
+    }
+
+    /**
+     * {@link #isPrivateReadOnly()} for one nav page. A transition composites two
+     * pages in the same frame, so the check must never read whatever happens to
+     * sit on top of the stack while the other page is drawn.
+     */
+    private boolean isPrivateReadOnlyFor(NavPage page) {
+        if (page == null || page.page() != AppPage.PRIVATE_CHAT) {
             return false;
         }
-        PlayerRef target = activePrivateTarget();
+        PlayerRef target = page.target();
         if (target == null) {
             return true;
         }
         return !isOnlinePlayer(target) || BlockList.isBlocked(target);
+    }
+
+    /** Composer hint of a read-only private page, from that page's partner. */
+    private String readOnlyHintForNav(NavPage page) {
+        return page != null && BlockList.isBlocked(page.target())
+                ? tr("atomchat.private.blocked") : tr("atomchat.private.offline");
     }
 
     private PlayerRef activePrivateTarget() {
@@ -914,6 +935,10 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
         } else if (page.page() == AppPage.WORLD_CHAT) {
             loadWorldDraft();
         }
+        // The reply bar follows its page exactly like the draft above: the nav
+        // draws the leaving page's bar from its slot while the arriving page's
+        // is live in the field.
+        loadReplyFor(page);
         if (!page.isRoot()) {
             clearRootTransition();
         }
@@ -971,6 +996,11 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
             worldScroll.reset();
             loadWorldDraft();
         }
+        // resetTransientWorldUi() above dropped every armed reply, so this only
+        // re-arms the page underneath when that rule ever loosens; the reply bar
+        // is loaded exactly like the draft, never left pointing at the page that
+        // was just popped.
+        loadReplyFor(topNav());
     }
 
     private boolean pageNavActive() {
@@ -1017,6 +1047,9 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
 
     private void startPageNav(NavPage from, NavPage to, boolean popPending) {
         saveCurrentDraft();
+        // The reply bar is captured with the draft: whichever page leaves keeps
+        // its own bar, so the incoming page's composer is never drawn with it.
+        syncReplySlot();
         pageNavFrom = from;
         pageNavTo = to;
         pageNavPopPending = popPending;
@@ -1251,25 +1284,84 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
         return worldScroll;
     }
 
-    private void drawMessageLayerForNav(Canvas canvas, UiLayout layout, NavPage page, float dx) {
-        if (page == null) {
+    /**
+     * Composer text of one page. The hidden EditBox is a single instance, so
+     * only the page that currently owns it ({@link #ownsInputField}) may read it
+     * live; every other page draws its own saved draft. This is what lets a
+     * transition draw the leaving and the arriving composer side by side without
+     * showing the same text twice.
+     */
+    private String draftForNav(NavPage page) {
+        if (ownsInputField(page)) {
+            return inputGetText();
+        }
+        if (page != null && page.page() == AppPage.PRIVATE_CHAT && page.target() != null) {
+            return privateDrafts.getOrDefault(page.target().key(), "");
+        }
+        return page != null && page.page() == AppPage.WORLD_CHAT ? worldDraft : "";
+    }
+
+    /**
+     * True while the shared EditBox holds {@code page}'s draft. Push and pop load
+     * the arriving page's draft into the field, so during a nav the field belongs
+     * to the page on top of the stack — the destination on a push, the page being
+     * left on a pop — and to the arriving page once the nav settles.
+     */
+    private boolean ownsInputField(NavPage page) {
+        NavPage top = navigation.peek();
+        return top != null && top.equals(page);
+    }
+
+    /** Reply slot key, using {@link #historyWindows}'s convention. */
+    private String replyKeyForNav(NavPage page) {
+        return page != null && page.page() == AppPage.PRIVATE_CHAT && page.target() != null
+                ? page.target().key() : "";
+    }
+
+    /** Persists the armed reply to the page that is currently open. A page that
+     *  is not a chat page has no reply bar to persist. */
+    private void syncReplySlot() {
+        AppPage page = topPage();
+        if (page != AppPage.WORLD_CHAT && page != AppPage.PRIVATE_CHAT) {
             return;
         }
-        UiLayout.Rect list = layout.list;
-        List<ChatMessage> messages = messagesForNav(page);
-        HistoryWindow window = historyWindowForNav(page, messages.size());
-        messageListView.setVisibleStart(window.visibleStart());
-        canvas.save();
-        try {
-            SkiaDraw.clip(canvas, list.x(), list.y(), list.w(), list.h(), 0.0F);
-            canvas.translate(dx, 0.0F);
-            messageListView.setLoadEarlierHovered(toVirtualX(lastMouseX), toVirtualY(lastMouseY));
-            messageListView.draw(canvas, list.x(), list.y(), list.w(), list.h(),
-                    messages, scrollForNav(page));
-        } finally {
-            canvas.restore();
+        if (replyTarget == null) {
+            replies.remove(replyKeyForNav(topNav()));
+        } else {
+            replies.put(replyKeyForNav(topNav()), replyTarget);
         }
-        applyLoadEarlierRequest(page, messages, window, list, scrollForNav(page));
+    }
+
+    /** Arms {@code page}'s saved reply, so the live field belongs to that page. */
+    private void loadReplyFor(NavPage page) {
+        if (page == null || (page.page() != AppPage.WORLD_CHAT && page.page() != AppPage.PRIVATE_CHAT)) {
+            replyTarget = null;
+            return;
+        }
+        replyTarget = replies.get(replyKeyForNav(page));
+    }
+
+    /** Armed reply of a page: the live field when it owns the composer, else its slot. */
+    private ChatMessage replyForNav(NavPage page) {
+        return ownsInputField(page) ? replyTarget : replies.get(replyKeyForNav(page));
+    }
+
+    /**
+     * True while a reply bar is on screen. Both pages of a nav share one layout,
+     * so either side's armed reply must reserve the row — otherwise the other
+     * side's bar would be painted into the zero-height rect
+     * {@code UiLayout.of} leaves at the panel origin when {@code replyH == 0}.
+     */
+    private boolean replyBarVisible() {
+        return replyTarget != null || replySlotArmed(pageNavFrom) || replySlotArmed(pageNavTo);
+    }
+
+    /** True when a chat page still holds an armed reply in its slot. */
+    private boolean replySlotArmed(NavPage page) {
+        if (page == null || (page.page() != AppPage.WORLD_CHAT && page.page() != AppPage.PRIVATE_CHAT)) {
+            return false;
+        }
+        return replies.get(replyKeyForNav(page)) != null;
     }
 
     /** Fold window for a conversation, created on first view and kept across in-place growth. */
@@ -1375,6 +1467,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
         endPhraseEdit(false);
         quickPhrasePanel.resetTransient();
         replyTarget = null;
+        replies.clear();
         messageListView.clearSelection();
         pendingClickSpan = null;
         pendingClickMoved = false;
@@ -1387,8 +1480,6 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
 
     @Override
     public void render(GuiGraphics context, int mouseX, int mouseY, float delta) {
-        lastMouseX = mouseX;
-        lastMouseY = mouseY;
         // Panel progress on the exponential clock (same family as the page
         // nav): expApproach clamps dt to 50ms internally and snaps exactly to
         // the target, so the equality below is the settle test — with
@@ -1643,10 +1734,18 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
 
     /** True when the private-chat partner is composing a message (WATUT). */
     private boolean partnerTyping() {
-        if (topPage() != AppPage.PRIVATE_CHAT || isPrivateReadOnly()) {
+        return partnerTypingFor(topNav());
+    }
+
+    /**
+     * {@link #partnerTyping()} for one nav page: the hint belongs to the page
+     * whose composer is drawn, not to whatever is on top of the stack.
+     */
+    private boolean partnerTypingFor(NavPage page) {
+        if (page == null || page.page() != AppPage.PRIVATE_CHAT || isPrivateReadOnlyFor(page)) {
             return false;
         }
-        PlayerRef partner = activePrivateTarget();
+        PlayerRef partner = page.target();
         return partner != null
                 && com.atom.chat.watut.WatutBridge.isTyping(partner.uuid());
     }
@@ -2244,26 +2343,46 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
                     && !pageNavFrom.isRoot() && !pageNavTo.isRoot()) {
                 // Detail-to-detail (public <-> private, chat <-> profile)
                 // full-width push/pop. Same style rule as root<->detail: SLIDE
-                // translates the two pages, ZOOM runs the shared serial
-                // fade+scale. The header/input chrome is drawn fixed once so
-                // the change reads as a page push whatever the style.
+                // translates two whole pages, ZOOM runs the shared serial
+                // fade+scale. Each side is drawn from its own page view — the
+                // hidden EditBox is shared, so nothing may re-read topPage()
+                // state while the other page is composited — and no chrome is
+                // repainted fixed outside the moving layer: the composer deck
+                // belongs to its page and travels with it.
                 boolean popping = pageNavPopPending;
                 NavPage fromPage = pageNavFrom;
                 NavPage toPage = pageNavTo;
                 float travel = layout.list.w();
                 float progress = navSlideProgress;
-                float fromDx = popping ? travel * progress : -travel * progress;
-                float toDx = popping ? -travel * (1.0F - progress) : travel * (1.0F - progress);
+                // Both whole pages ride one pair of offsets, assigned by role
+                // and not by page kind: the page on top of the stack during the
+                // nav — the destination on a push, the page being left on a pop
+                // — uses the shared pageNavDx(travel) expression the
+                // root<->detail slide rides, and the other side its mirror.
+                float slideDx = pageNavDx(travel);
+                float fromDx = popping ? slideDx : -travel * progress;
+                float toDx = popping ? -travel * (1.0F - progress) : slideDx;
                 suppressHeader = true;
-                // Chat <-> profile detail has no shared chrome to hold fixed
-                // (the profile page has no composer at all), so the whole chat
-                // body travels as one piece; world <-> private has identical
-                // chrome on both sides, so only the two lists move under it.
-                boolean profilePair = fromPage.page() == AppPage.PROFILE_DETAIL
-                        || toPage.page() == AppPage.PROFILE_DETAIL;
+                // Per-page render state: draft, read-only hint, reply bar and
+                // scroll come from the page they are drawn for. A page with no
+                // composer (settings sub-page, profile detail) has no view and
+                // is drawn by its own body method.
+                ChatPageView fromView = chatPageViewFor(fromPage);
+                ChatPageView toView = chatPageViewFor(toPage);
+                if (fromView != null || toView != null) {
+                    // Grow the bar before the list is measured, and grow it for
+                    // whichever side needs the taller composer: the composer is
+                    // part of the moving page now, so the shared layout has to
+                    // be final — and tall enough for both pages — before either
+                    // side paints.
+                    float width = layout.inputTextMaxWidth();
+                    layout = updateInputLayout(layout, inputGetText(),
+                            Math.max(inputExtraFor(fromView, width), inputExtraFor(toView, width)));
+                }
+                UiLayout.Rect panelRect = layout.rect();
                 if (pageNavZoom) {
-                    // ZOOM: one side per phase, on the shared serial clock —
-                    // the same navZoomPhase / navExitAlpha / navEnterAlpha the
+                    // ZOOM: one whole side per phase, on the shared serial clock
+                    // — the same navZoomPhase / navExitAlpha / navEnterAlpha the
                     // root<->detail push rides, so the setting means the same
                     // motion on every pair. EXIT drains the page being left
                     // (alpha 1 -> 0 at scale 1.0 -> 0.9), ENTER settles the
@@ -2271,11 +2390,14 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
                     // is skipped outright, so the halves never double-expose,
                     // and a settled alpha+scale skips the layer (pure overdraw,
                     // the state decorative-motion-off lands in on frame one).
+                    // EXIT paints the leaving page whole and ENTER the arriving
+                    // one whole — never a bare message list with the chrome of
+                    // the other side left standing.
                     boolean exiting = navZoomPhase == NAV_ZOOM_EXIT;
-                    NavPage visible = exiting ? fromPage : toPage;
+                    NavPage visiblePage = exiting ? fromPage : toPage;
+                    ChatPageView visibleView = exiting ? fromView : toView;
                     float alpha = exiting ? navExitAlpha : navEnterAlpha;
                     float scale = exiting ? 0.9F + alpha * 0.1F : 1.1F - alpha * 0.1F;
-                    UiLayout.Rect panelRect = layout.rect();
                     Paint layer = null;
                     canvas.save();
                     if (!navLayerSkippable(alpha, scale)) {
@@ -2289,73 +2411,52 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
                     SkiaDraw.clip(canvas, panelRect.x(), panelRect.y(), panelRect.w(), panelRect.h(),
                             UiTokens.panelRadius());
                     applyNavScale(canvas, panelRect, scale);
-                    if (visible.page() == AppPage.PROFILE_DETAIL) {
+                    if (visibleView != null) {
+                        drawChatPageBody(canvas, layout, mouseX, mouseY, visibleView);
+                    } else if (visiblePage.page() == AppPage.PROFILE_DETAIL) {
                         drawProfileDetail(canvas, mouseX, mouseY);
-                    } else if (profilePair) {
-                        // The chat side keeps its composer with it, exactly as
-                        // in the slide below: this pair has no shared chrome to
-                        // hold fixed.
-                        layout = updateInputLayout(layout);
-                        drawChatPageBody(canvas, layout, mouseX, mouseY, visible);
-                    } else {
-                        // World <-> private: identical chrome, so only the list
-                        // content moves (offsets are the zoom layer's, not a
-                        // translation).
-                        drawMessageLayerForNav(canvas, layout, visible, 0.0F);
+                    } else if (visiblePage.page() == AppPage.SETTINGS_SECTION) {
+                        // The pages without a composer draw their own body.
+                        // Leaving this side blank would composite one page
+                        // against nothing for the whole transition.
+                        drawSettingsSection(canvas, mouseX, mouseY, visiblePage.section());
                     }
                     if (layer != null) {
                         canvas.restore();
                         layer.close();
                     }
                     canvas.restore();
-                    if (!profilePair) {
-                        // The shared composer surface stays put, matching the
-                        // slide: it never leaves the frame.
-                        UiLayout.Rect bar = layout.inputBar;
-                        SkiaDraw.drawChromeShadow(canvas, bar.x(), bar.y(), bar.w(), bar.h(),
-                                UiTokens.chromeRadius());
-                        SkiaDraw.drawRoundedRect(canvas, bar.x(), bar.y(), bar.w(), bar.h(),
-                                UiTokens.chromeRadius(), UiTokens.cardFill());
-                    }
-                } else if (profilePair) {
-                    // Chat <-> profile detail: full-width page push. The whole
-                    // chat body (messages, reply bar, composer) slides as one
-                    // piece under the incoming profile page — the lists-only
-                    // slide below reads wrong when the two sides have different
-                    // chrome (the detail page has no composer at all). The base
-                    // page is whichever side is the chat: topPage() is already
-                    // the destination on a push and still the detail on a pop,
-                    // so messages must be resolved per page, not off the stack.
-                    NavPage chatPage = fromPage.page() == AppPage.PROFILE_DETAIL ? toPage : fromPage;
-                    float baseDx = popping ? -travel * (1.0F - progress) : -travel * progress;
-                    UiLayout.Rect panelRect = layout.rect();
-                    // Rounded panel clips: the sliding pages follow the panel
-                    // corner radius, matching the bezel instead of biting it
-                    // with hard square edges.
+                } else {
+                    // SLIDE: both whole pages travel as one piece each — the
+                    // messages, reply bar, composer, scrollbar and jump-to-latest
+                    // of a chat page go together with it, so the composer never
+                    // sits still while its conversation slides past (and the
+                    // incoming one no longer pops in).
                     canvas.save();
                     SkiaDraw.clip(canvas, panelRect.x(), panelRect.y(), panelRect.w(), panelRect.h(),
                             UiTokens.panelRadius());
-                    canvas.translate(baseDx, 0.0F);
-                    layout = updateInputLayout(layout);
-                    drawChatPageBody(canvas, layout, mouseX, mouseY, chatPage);
+                    canvas.translate(fromDx, 0.0F);
+                    if (fromView != null) {
+                        drawChatPageBody(canvas, layout, mouseX, mouseY, fromView);
+                    } else if (fromPage.page() == AppPage.PROFILE_DETAIL) {
+                        drawProfileDetail(canvas, mouseX, mouseY);
+                    } else if (fromPage.page() == AppPage.SETTINGS_SECTION) {
+                        drawSettingsSection(canvas, mouseX, mouseY, fromPage.section());
+                    }
                     canvas.restore();
 
                     canvas.save();
                     SkiaDraw.clip(canvas, panelRect.x(), panelRect.y(), panelRect.w(), panelRect.h(),
                             UiTokens.panelRadius());
-                    canvas.translate(pageNavDx(travel), 0.0F);
-                    drawProfileDetail(canvas, mouseX, mouseY);
+                    canvas.translate(toDx, 0.0F);
+                    if (toView != null) {
+                        drawChatPageBody(canvas, layout, mouseX, mouseY, toView);
+                    } else if (toPage.page() == AppPage.PROFILE_DETAIL) {
+                        drawProfileDetail(canvas, mouseX, mouseY);
+                    } else if (toPage.page() == AppPage.SETTINGS_SECTION) {
+                        drawSettingsSection(canvas, mouseX, mouseY, toPage.section());
+                    }
                     canvas.restore();
-                } else {
-                    // World <-> private: identical chrome on both sides, so the
-                    // lists slide under a fixed header and composer.
-                    drawMessageLayerForNav(canvas, layout, fromPage, fromDx);
-                    drawMessageLayerForNav(canvas, layout, toPage, toDx);
-                    UiLayout.Rect bar = layout.inputBar;
-                    SkiaDraw.drawChromeShadow(canvas, bar.x(), bar.y(), bar.w(), bar.h(),
-                            UiTokens.chromeRadius());
-                    SkiaDraw.drawRoundedRect(canvas, bar.x(), bar.y(), bar.w(), bar.h(), UiTokens.chromeRadius(),
-                            UiTokens.cardFill());
                 }
                 suppressHeader = false;
                 ShellHeader.render(canvas, layout.header, shellTitleFor(toPage), true,
@@ -2572,7 +2673,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
         layout = updateInputLayout(layout);
 
         if (!navMovingHidden) {
-            drawChatPageBody(canvas, layout, mouseX, mouseY, topNav());
+            drawChatPageBody(canvas, layout, mouseX, mouseY, chatPageViewFor(topNav()));
 
             emojiPanel.render(canvas, layout, toVirtualX(mouseX), toVirtualY(mouseY), frameDt);
             quickPhrasePanel.render(canvas, layout, toVirtualX(mouseX), toVirtualY(mouseY), frameDt);
@@ -2608,42 +2709,74 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
     }
 
     /**
-     * The whole chat page body — messages, reply bar, composer, scrollbar,
-     * jump-to-latest — drawn for a specific nav page. Self-contained so the
-     * full-width page push can slide it as one piece; the settled path calls
-     * it with the top page. The header and the emoji/context overlays stay
-     * with the caller: the header is a fixed status bar during pushes, and
-     * the overlays belong to the screen, not the sliding page.
+     * Everything {@link #drawChatPageBody} needs that the single hidden EditBox
+     * makes shared: the composer text, the read-only and typing hints, the reply
+     * bar and the scroll controller all belong to one {@link NavPage}. A
+     * transition composites two pages in the same frame, so each side is
+     * resolved into its own immutable view instead of both re-reading the
+     * top-page helpers — which is exactly how the arriving page's draft used to
+     * be painted onto the leaving page.
      */
-    private void drawChatPageBody(Canvas canvas, UiLayout layout, int mouseX, int mouseY, NavPage page) {
+    private record ChatPageView(NavPage page, String draft, boolean readOnly, String readOnlyHint,
+                               boolean partnerTyping, ChatMessage reply, ScrollController scroll,
+                               boolean ownsField) {
+    }
+
+    /** Render state of a chat page, or null for a page that has no composer. */
+    private ChatPageView chatPageViewFor(NavPage page) {
+        if (page == null || (page.page() != AppPage.WORLD_CHAT && page.page() != AppPage.PRIVATE_CHAT)) {
+            return null;
+        }
+        boolean readOnly = isPrivateReadOnlyFor(page);
+        return new ChatPageView(page, draftForNav(page), readOnly,
+                readOnly ? readOnlyHintForNav(page) : "",
+                partnerTypingFor(page), replyForNav(page), scrollForNav(page),
+                ownsInputField(page));
+    }
+
+    /**
+     * The whole chat page body — messages, reply bar, composer, scrollbar,
+     * jump-to-latest — drawn for one page view. Self-contained so the full-width
+     * page push can slide it as one piece; the settled path calls it with the
+     * top page's view. The header and the emoji/context overlays stay with the
+     * caller: the header is a fixed status bar during pushes, and the overlays
+     * belong to the screen, not the sliding page.
+     */
+    private void drawChatPageBody(Canvas canvas, UiLayout layout, int mouseX, int mouseY, ChatPageView view) {
+        if (view == null) {
+            return;
+        }
+        NavPage page = view.page();
         int probeBefore = canvas.getSaveCount();
         List<ChatMessage> messages = messagesForNav(page);
         HistoryWindow window = historyWindowForNav(page, messages.size());
         messageListView.setVisibleStart(window.visibleStart());
         messageListView.setLoadEarlierHovered(toVirtualX(mouseX), toVirtualY(mouseY));
         messageListView.draw(canvas, layout.list.x(), layout.list.y(), layout.list.w(), layout.list.h(),
-                messages, scrollForNav(page));
+                messages, view.scroll());
         probeCanvasLeak("messageListView.draw", probeBefore, canvas);
-        applyLoadEarlierRequest(page, messages, window, layout.list, scrollForNav(page));
+        applyLoadEarlierRequest(page, messages, window, layout.list, view.scroll());
 
         // Reply bar floats above the input bar. It is drawn after the message
         // list so it always sits on top; the layout keeps an 8px gap below it.
-        if (replyTarget != null) {
-            UiLayout.Rect reply = layout.replyBar;
+        ChatMessage reply = view.reply();
+        if (reply != null) {
+            UiLayout.Rect replyRect = layout.replyBar;
             float replyH = s(26);
-            SkiaDraw.drawRoundedRect(canvas, reply.x(), reply.y(), reply.w(), replyH, UiTokens.radius(8), UiTokens.quoteAccent(accent()));
+            SkiaDraw.drawRoundedRect(canvas, replyRect.x(), replyRect.y(), replyRect.w(), replyH,
+                    UiTokens.radius(8), UiTokens.quoteAccent(accent()));
             Font replyFont = FontManager.font(UiTokens.FONT_NAME);
-            String replyLabel = tr("atomchat.reply.to", messageSenderName(replyTarget),
-                    abbreviate(replyTarget.getContentText(), 26));
-            SkiaFontRenderer.drawText(canvas, replyFont, replyLabel, reply.x() + UiTokens.QUOTE_PAD_X,
-                    SkiaFontRenderer.centerBaselineY(replyFont, reply.y() + s(13)), textPrimary());
+            String replyLabel = tr("atomchat.reply.to", messageSenderName(reply),
+                    abbreviate(reply.getContentText(), 26));
+            SkiaFontRenderer.drawText(canvas, replyFont, replyLabel, replyRect.x() + UiTokens.QUOTE_PAD_X,
+                    SkiaFontRenderer.centerBaselineY(replyFont, replyRect.y() + s(13)), textPrimary());
         }
 
         // Input bar: one button row (image / emoji … send), text row below.
         // The list layout already ends at this bar's top, so the translucent
         // card never has message content underneath it.
         UiLayout.Rect bar = layout.inputBar;
-        boolean readOnly = isPrivateReadOnly();
+        boolean readOnly = view.readOnly();
         SkiaDraw.drawChromeShadow(canvas, bar.x(), bar.y(), bar.w(), bar.h(), UiTokens.chromeRadius());
         SkiaDraw.drawRoundedRect(canvas, bar.x(), bar.y(), bar.w(), bar.h(), UiTokens.chromeRadius(), UiTokens.cardFill());
         if (quickPhrasePanel.isEditing()) {
@@ -2699,28 +2832,36 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
 
         // Input text: rendered by Skia at fixed density; the hidden EditBox is the
         // input backend (IME/keys) only. It wraps onto a second line (the bar has
-        // already grown for it) and scrolls past INPUT_MAX_LINES.
+        // already grown for it) and scrolls past INPUT_MAX_LINES. The text comes
+        // from the page's own view: the field is live for one page at a time, so
+        // the leaving page keeps its own draft while the arriving page's sits in
+        // the shared EditBox.
         Font inputFont = FontManager.font(UiTokens.FONT_INPUT);
         float lineH = inputLineHeight();
-        String current = inputGetText();
+        String current = view.draft();
         float textX = bar.x() + UiTokens.INPUT_TEXT_X;
         float clipTop = layout.inputTextCenterY - lineH / 2.0F;
         float clipBottom = bar.bottom() - UiTokens.INPUT_ROW_PAD;
         canvas.save();
         SkiaDraw.clip(canvas, textX, clipTop, layout.inputTextMaxWidth(), Math.max(0.0F, clipBottom - clipTop), 0.0F);
         if (readOnly) {
-            String hint = BlockList.isBlocked(activePrivateTarget())
-                    ? tr("atomchat.private.blocked") : tr("atomchat.private.offline");
-            SkiaFontRenderer.drawText(canvas, inputFont, hint, textX,
+            SkiaFontRenderer.drawText(canvas, inputFont, view.readOnlyHint(), textX,
                     SkiaFontRenderer.centerBaselineY(inputFont, layout.inputTextCenterY), textSecondary());
             canvas.restore();
         } else {
-            List<String> lines = wrappedInput(layout.inputTextMaxWidth());
+            List<String> lines = wrappedInput(current, layout.inputTextMaxWidth());
             int total = lines.size();
-            int caretRow = total == 0 ? 0 : caretLine(lines, caretIndex());
-            scrollInputToCaret(caretRow, total);
+            // Caret and selection belong to the page that owns the field; the
+            // other side draws its text without them instead of borrowing the
+            // live caret position.
+            boolean ownComposer = view.ownsField();
+            int caretRow = ownComposer && total > 0 ? caretLine(lines, caretIndex()) : 0;
+            if (ownComposer) {
+                scrollInputToCaret(caretRow, total);
+            }
             int shown = Math.min(UiTokens.INPUT_MAX_LINES, total);
-            int from = total == 0 ? 0 : Math.min(inputScrollLine, total - shown);
+            int from = total == 0 ? 0
+                    : Math.min(ownComposer ? inputScrollLine : 0, Math.max(0, total - shown));
             // Placeholder stays visible while the field is focused: ChatScreen
             // focuses the chat field the moment the screen opens, so a hint gated
             // on "not focused" was literally never on screen. It doubles as the
@@ -2732,7 +2873,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
                     hintText = tr("atomchat.input.phrase_hint");
                 } else if (imageUploading) {
                     hintText = tr("atomchat.input.uploading");
-                } else if (partnerTyping()) {
+                } else if (view.partnerTyping()) {
                     // QQ-style: WATUT reports the partner composing a message
                     // (only the private page asks; silent no-op without WATUT).
                     hintText = tr("atomchat.private.typing");
@@ -2745,14 +2886,17 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
                 SkiaFontRenderer.drawText(canvas, inputFont, hint, textX,
                         SkiaFontRenderer.centerBaselineY(inputFont, layout.inputTextCenterY), textSecondary());
             } else {
-                drawInputSelection(canvas, inputFont, lines, from, shown, textX, layout.inputTextCenterY, lineH);
+                if (ownComposer) {
+                    drawInputSelection(canvas, inputFont, lines, from, shown, textX, layout.inputTextCenterY, lineH);
+                }
                 for (int i = from; i < from + shown && i < total; i++) {
                     float cy = layout.inputTextCenterY + (i - from) * lineH;
                     SkiaFontRenderer.drawText(canvas, inputFont, lines.get(i), textX,
                             SkiaFontRenderer.centerBaselineY(inputFont, cy), textPrimary());
                 }
             }
-            if (inputFocused && input != null && (System.currentTimeMillis() / 500L) % 2L == 0L) {
+            if (ownComposer && inputFocused && input != null
+                    && (System.currentTimeMillis() / 500L) % 2L == 0L) {
                 int caret = caretIndex();
                 float cursorY;
                 String measure;
@@ -2777,8 +2921,8 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
         }
 
         // Scrollbar (e33chat style): fades in near/hinting scroll, draggable, highlights.
-        drawScrollbar(canvas, layout, toVirtualX(mouseX), toVirtualY(mouseY), scrollForNav(page));
-        drawJumpLatest(canvas, layout, toVirtualX(mouseX), toVirtualY(mouseY));
+        drawScrollbar(canvas, layout, toVirtualX(mouseX), toVirtualY(mouseY), view.scroll());
+        drawJumpLatest(canvas, layout, toVirtualX(mouseX), toVirtualY(mouseY), view.scroll(), view.ownsField());
     }
 
     /**
@@ -3369,10 +3513,20 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
     }
 
 
-    private void drawJumpLatest(Canvas canvas, UiLayout layout, float vmx, float vmy) {
-        ScrollController scroll = currentScroll();
+    /**
+     * The floating jump-to-latest pill.
+     *
+     * @param scroll  the drawn page's own scroll controller — the pill belongs to
+     *                its page and must never read another page's scroll while a
+     *                transition composites both
+     * @param advance true for the page that owns the composer field: the fade,
+     *                hover and spring values are shared screen state, so they are
+     *                stepped once per frame and the second page of a transition
+     *                only re-draws them
+     */
+    private void drawJumpLatest(Canvas canvas, UiLayout layout, float vmx, float vmy,
+                                ScrollController scroll, boolean advance) {
         boolean show = scroll.getMaxScroll() > 0.0F && !scroll.isAtBottom();
-        jumpLatestAnim = UiMotion.approach(jumpLatestAnim, show ? 1.0F : 0.0F, frameDt, UiMotion.POPUP_MS);
         float size = s(38);
         float x = layout.list.right() - size - s(12);
         float y = layout.list.bottom() - size - s(12);
@@ -3383,10 +3537,16 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
         // BEFORE the fade gate below, because the click that presses the pill also
         // scrolls to the bottom and hides it on the very next frame — behind the
         // gate the release half of the bounce would never be drawn.
-        jumpLatestHover = UiMotion.approach(jumpLatestHover, hover ? 1.0F : 0.0F,
-                frameDt, UiMotion.HOVER_MS);
-        jumpLatestScale.update(hover, jumpLatestHeld, frameDt, Animations.enabled(), size);
-        if (jumpLatestAnim < 0.01F) {
+        if (advance) {
+            jumpLatestAnim = UiMotion.approach(jumpLatestAnim, show ? 1.0F : 0.0F, frameDt, UiMotion.POPUP_MS);
+            jumpLatestHover = UiMotion.approach(jumpLatestHover, hover ? 1.0F : 0.0F,
+                    frameDt, UiMotion.HOVER_MS);
+            jumpLatestScale.update(hover, jumpLatestHeld, frameDt, Animations.enabled(), size);
+        }
+        // The fade and spring are shared screen state stepped by the owning page,
+        // so a side that does not own the composer must not draw the pill from
+        // them: it would show a pill belonging to the other page's scroll.
+        if (jumpLatestAnim < 0.01F || (!advance && !show)) {
             return;
         }
         canvas.save();
@@ -4210,6 +4370,9 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
         }
         inputSetText("");
         replyTarget = null;
+        // The armed reply is consumed with the send: drop its slot too, or
+        // navigating away and back would re-arm a reply that was already sent.
+        syncReplySlot();
         inputFocused = true;
         currentScroll().stickToBottom();
     }
@@ -4239,6 +4402,8 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
         }
         inputSetText("");
         replyTarget = null;
+        // Consumed with the send — see sendMessage's matching call.
+        syncReplySlot();
         inputFocused = true;
         currentScroll().stickToBottom();
     }
@@ -4382,7 +4547,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
      * from what was drawn.
      */
     private UiLayout layout() {
-        float replyH = replyTarget != null ? s(34) : 0.0F;
+        float replyH = replyBarVisible() ? s(34) : 0.0F;
         return UiLayout.of(panelX(), panelY(), panelWidth(), panelHeight(), inputExtraH, replyH);
     }
 
@@ -4400,10 +4565,25 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
      * @return a layout rebuilt with the updated height.
      */
     private UiLayout updateInputLayout(UiLayout current) {
+        return updateInputLayout(current, inputGetText(), 0.0F);
+    }
+
+    /**
+     * Wraps the draft the shared EditBox holds, with a floor on the bar's extra
+     * height. The floor is what a transition needs: its two pages are drawn in
+     * one layout, so a second line belonging to the page that does not own the
+     * field would otherwise be clipped until the nav landed and the field
+     * switched. {@link #inputExtraFor} supplies that floor.
+     *
+     * @param draft    composer text to measure (normally the field's own)
+     * @param minExtra lower bound for the animated extra height
+     * @return a layout rebuilt with the updated height.
+     */
+    private UiLayout updateInputLayout(UiLayout current, String draft, float minExtra) {
         float lineH = inputLineHeight();
-        List<String> lines = wrappedInput(current.inputTextMaxWidth());
+        List<String> lines = wrappedInput(draft, current.inputTextMaxWidth());
         int targetLines = Math.min(UiTokens.INPUT_MAX_LINES, Math.max(1, lines.size()));
-        float targetExtra = (targetLines - 1) * lineH;
+        float targetExtra = Math.max(minExtra, (targetLines - 1) * lineH);
         ScrollController activeScroll = currentScroll();
         if (Math.abs(targetExtra - inputExtraH) > 0.5F
                 && activeScroll.getTarget() >= activeScroll.getMaxScroll() - 3.0F) {
@@ -4415,17 +4595,35 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
         return layout();
     }
 
+    /** Extra input-bar height a page's own draft needs (read-only pages need none). */
+    private float inputExtraFor(ChatPageView view, float maxWidth) {
+        if (view == null || view.readOnly()) {
+            return 0.0F;
+        }
+        int lines = Math.min(UiTokens.INPUT_MAX_LINES,
+                Math.max(1, wrappedInput(view.draft(), maxWidth).size()));
+        return (lines - 1) * inputLineHeight();
+    }
+
     private float inputLineHeight() {
         return SkiaFontRenderer.getHeight(FontManager.font(UiTokens.FONT_INPUT));
     }
 
     /** Wrapped input text, cached until the text or the available width changes. */
     private List<String> wrappedInput(float maxWidth) {
-        String current = inputGetText();
-        if (inputWrapCache == null || inputWrapWidth != maxWidth || !current.equals(inputWrapText)) {
-            inputWrapText = current;
+        return wrappedInput(inputGetText(), maxWidth);
+    }
+
+    /**
+     * Wraps an explicit composer text. A transition draws two pages with two
+     * different drafts, so the wrap cannot assume the shared EditBox's text; the
+     * cache stays keyed on the text and width, exactly as before.
+     */
+    private List<String> wrappedInput(String text, float maxWidth) {
+        if (inputWrapCache == null || inputWrapWidth != maxWidth || !text.equals(inputWrapText)) {
+            inputWrapText = text;
             inputWrapWidth = maxWidth;
-            inputWrapCache = SkiaFontRenderer.wrap(FontManager.font(UiTokens.FONT_INPUT), current, maxWidth);
+            inputWrapCache = SkiaFontRenderer.wrap(FontManager.font(UiTokens.FONT_INPUT), text, maxWidth);
         }
         return inputWrapCache;
     }

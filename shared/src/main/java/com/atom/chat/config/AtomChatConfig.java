@@ -33,8 +33,10 @@ public class AtomChatConfig {
      * 1.1 -> 1.0 — the phases never overlap into a double-exposure, and a
      * pop swaps the two pages' roles while keeping the same phase order, so
      * a return matches its push (single clock, see
-     * {@code UiMotion.PAGE_NAV_TAU_MS}). Root<->detail and detail<->detail
-     * hops all follow this setting. Gson persists the enum
+     * {@code UiMotion.PAGE_NAV_TAU_MS}). Every hop follows this setting — the
+     * root tabs, root<->detail and detail<->detail (public<->private,
+     * chat<->profile) alike, in both directions — and no page kind carries an
+     * animation rule of its own. Gson persists the enum
      * by name; the retired boolean toggle's key is simply dropped by the
      * next save, no migration needed.
      */
