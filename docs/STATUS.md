@@ -1,7 +1,7 @@
 # AtomChat 项目状态
 
 > 交接文档：给下一个会话（或未来的自己）快速定位「现在在哪、下一步做什么」。
-> 更新于 **v0.3.0 发版后 + R33 浮层/富文本修补轮**（tag `v0.3.0`，未推送）。
+> 更新于 **v0.3.0 发版后 + R35 头图与整页转场轮**（tag `v0.3.0`，未推送）。
 
 ## 当前位置
 
@@ -12,9 +12,9 @@
 
 | 平台 | 实例目录 | 部署 jar md5 |
 |---|---|---|
-| Fabric 1.21.1 | `1.21.1-CCB` | `7f412dfb` |
-| NeoForge 1.21.1 | `Mechanomania-航空学` | `b9eaeb9b` |
-| Forge 1.20.1 | `1.20.1-main` / `Go Fishing` / `元素觉醒1.4.6` | `0bf86f49` |
+| Fabric 1.21.1 | `1.21.1-CCB` | `96f737ae` |
+| NeoForge 1.21.1 | `Mechanomania-航空学` | `39750212` |
+| Forge 1.20.1 | `1.20.1-main` / `Go Fishing` / `元素觉醒1.4.6` | `d4f6aa3f` |
 
 上表是**0.3.0 之后四功能轮（plan `2026-10-08-atomchat-history-toast-poke-hudnotify.md`）的当前构建**：
 
@@ -41,6 +41,13 @@
 
 三端测试 682/670/670 全绿 + 守卫 PASS + `_parity_check.py` PASS；部署 fabric `7f412dfb`/neo `b9eaeb9b`/forge `0bf86f49`。**独立评审 2 MED 全修**：几何用例在 `PANEL_W=400` 时新旧宽度恰好相等（假绿）→ 改用配置默认 480 且探针移到顶栏下沿（并做了变异验证）；正则收紧会误伤多词/带装饰发件人 → 改为只禁分隔符不禁空白。**另修一个我自己引入的缺陷**：孪生同步脚本把 CRLF 二次转换产出 `
 `。
+
+**R35 头图与整页转场轮**（commit `b0882a0`，未推送；用户真机反馈两条）：
+
+- **关于页头图重做** — 旧实现只画 AC 图形标记（`logo_mark.png` 本身就是红色 AC），正常资源路径下根本不绘制文字，不是裁切丢字。改为从 `logo1.jpg` 抠出的**完整 `AtomChat` 红字标**：EXIF 归一化 → 裁到字标+阴影联合 bbox（2346×409，≈6:1）→ 逐像素白底反合成未预乘成透底 RGBA（保留参考图自身红色与中性阴影、无白边，8% 以下不透明度平滑滚降去掉 JPEG 蚊噪），输出 `assets/atomchat/logo_wordmark.png`（三端一致，337 KB）；旧 `logo_mark.png` 三端删除。背景 `about_hero.png` 换成 1200×360 暖白底（`0xFFF8F6F2`）+ 低对比几何框（蓝灰带/胶囊、品牌红短线、暖炭灰短线），中心留白、外圈 16px 即底色所以 letterbox 不可见。`UiTokens` hero token 重做：`SETTINGS_HERO_H s(88)→s(136)`、新增 `SETTINGS_HERO_PAD s(28)` / `SETTINGS_HERO_WORDMARK_MAX_W s(300)` / `SETTINGS_HERO_WORDMARK_MAX_H s(56)` / `SETTINGS_HERO_GROUND`，删除无消费者的 `SETTINGS_HERO_PLATE`。`SettingsSectionPage` 以底色填卡 + contain 画背景 + contain 居中画字标（不拉伸、不 cover、不越界），缺字标回退**完整 AtomChat 文本**而非 AC。
+- **多入口页面转场统一**（根因）— WORLD_CHAT↔PRIVATE_CHAT 的 detail-to-detail 分支只调用 `drawMessageLayerForNav`（仅消息列表），并在 transform layer **外**固定重画 `inputBar` 底板；而输入文字、按钮、回复条、滚动条、返回最新只在 `drawChatPageBody` 里 ⇒ 横幅/头像右键进私聊时"底栏不动、文字瞬现"。改为聊天页整体参加同一 Slide/Zoom：每侧一个 `ChatPageView`，`ownsInputField(page)` 只让**当前拥有隐藏 EditBox 的那页**读实时输入，草稿/只读/typing/scroll 都按传入 `NavPage` 解析，回复条改为按会话存 `replies`（`loadReplyFor` / `saveReplyForNav`）；Zoom EXIT 只画离场整页、ENTER 只画目标整页，Slide 两侧用同一 `fromDx/toDx`，删除 layer 外固定 composer；`ShellHeader.render` 与 `drawBezel` 仍在所有 layer restore 后、transform 外绘制（顶栏/返回键/手机外框固定）。五条入口（列表卡片→私聊、头像右键→私聊、横幅→私聊、头像单击→档案、列表卡片右键→档案）都只经统一 `startPageNav`/`pageNavStyle()`。
+
+三端测试 763/751/751 全绿 + 守卫 PASS + `_parity_check.py` PASS；部署 fabric `96f737ae`/neo `39750212`/forge `d4f6aa3f`。独立审查抓到**头图测试假绿**（`heroWordmarkRect` 零覆盖，变异成"铺满整卡"仍 6/6 全过）已在复审轮修掉。**遗留**：真实游戏内五入口 Slide/Zoom 手感、字标抠图边缘、窄窗口裁切仍需用户真机验收。
 
 > 前一轮（引用胶囊取色 + 胶囊族软阴影 + `[图片]` 占位绿）已随 commit `d8fc806` 入库并验收。
 
