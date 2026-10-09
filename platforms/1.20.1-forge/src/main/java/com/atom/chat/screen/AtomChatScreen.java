@@ -3,6 +3,7 @@ import com.atom.chat.AtomChat;
 
 import com.atom.chat.chat.BlockList;
 import com.atom.chat.chat.PublicEchoTracker;
+import com.atom.chat.chat.DraftStore;
 import com.atom.chat.chat.ReplySlotStore;
 import com.atom.chat.chat.ChatMessage;
 import com.atom.chat.chat.Cicodes;
@@ -481,10 +482,33 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
     private final Map<String, HistoryWindow> historyWindows = new HashMap<>();
     /** Transient action acknowledgements (cache cleared, copied, save failed). */
     private final ActionFeedback actionFeedback = new ActionFeedback();
-    private final Map<String, String> privateDrafts = new HashMap<>();
-    /** Draft for the public world channel; kept separately because the hidden
-     *  EditBox is shared by every chat page. */
-    private String worldDraft = "";
+    /**
+     * Composer drafts per page, and the shared field they are loaded into. The
+     * draft text lives in {@link DraftStore}; the port below is this shell's half
+     * of it (the EditBox itself belongs to D21) — see {@link DraftStore.ComposerTextPort}
+     * for why a missing composer is passed through as null rather than "".
+     */
+    private final DraftStore draftStore = new DraftStore();
+    private final DraftStore.ComposerTextPort composerText = new DraftStore.ComposerTextPort() {
+        @Override
+        public String get() {
+            return inputGetText();
+        }
+
+        @Override
+        public void set(String text) {
+            if (input != null) {
+                input.setValue(text);
+            }
+        }
+
+        @Override
+        public void moveCursorToStart() {
+            if (input != null) {
+                input.moveCursorToStart();
+            }
+        }
+    };
     /**
      * Reply bar state per conversation ("" = public feed), keyed like
      * {@link #historyWindows}. The bar belongs to a page, not to the screen, so the
@@ -742,7 +766,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
     public AtomChatScreen(String originalChatText, AtomChatOpenMode mode) {
         super(originalChatText);
         this.originalChatText = originalChatText;
-        this.worldDraft = originalChatText;
+        draftStore.seedWorld(originalChatText);
         // Screen objects are constructed fresh on every open (init() re-runs on
         // resize), so this is the right hook for picking up hand-edited config
         // — chat/whisper templates take effect without a game restart.
@@ -1282,13 +1306,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
      * showing the same text twice.
      */
     private String draftForNav(NavPage page) {
-        if (ownsInputField(page)) {
-            return inputGetText();
-        }
-        if (page != null && page.page() == AppPage.PRIVATE_CHAT && page.target() != null) {
-            return privateDrafts.getOrDefault(page.target().key(), "");
-        }
-        return page != null && page.page() == AppPage.WORLD_CHAT ? worldDraft : "";
+        return draftStore.draftForNav(page, ownsInputField(page), composerText);
     }
 
     /**
@@ -1368,41 +1386,19 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
 
     /** Persists the hidden EditBox draft to the page that is currently open. */
     private void saveCurrentDraft() {
-        if (input == null) {
-            return;
-        }
-        if (topPage() == AppPage.WORLD_CHAT) {
-            worldDraft = input.getValue();
-        } else if (topPage() == AppPage.PRIVATE_CHAT) {
-            PlayerRef target = activePrivateTarget();
-            if (target != null) {
-                privateDrafts.put(target.key(), input.getValue());
-            }
-        }
+        draftStore.saveCurrentDraft(topPage(), activePrivateTarget(), composerText);
     }
 
     private void savePrivateDraft(PlayerRef target, String text) {
-        if (target != null) {
-            privateDrafts.put(target.key(), text);
-        }
+        draftStore.savePrivateDraft(target, text);
     }
 
     private void loadDraft(PlayerRef target) {
-        if (target == null) {
-            return;
-        }
-        String draft = privateDrafts.getOrDefault(target.key(), "");
-        if (input != null) {
-            input.setValue(draft);
-            input.moveCursorToStart();
-        }
+        draftStore.loadDraft(target, composerText);
     }
 
     private void loadWorldDraft() {
-        if (input != null) {
-            input.setValue(worldDraft);
-            input.moveCursorToStart();
-        }
+        draftStore.loadWorldDraft(composerText);
     }
 
     /**
