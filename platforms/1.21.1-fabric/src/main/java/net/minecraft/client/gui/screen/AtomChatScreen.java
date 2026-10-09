@@ -6,6 +6,7 @@ import com.atom.chat.chat.PublicEchoTracker;
 import com.atom.chat.chat.DraftStore;
 import com.atom.chat.chat.ReplySlotStore;
 import com.atom.chat.chat.SendPipeline;
+import com.atom.chat.history.HistoryFoldStore;
 import com.atom.chat.chat.ChatMessage;
 import com.atom.chat.chat.Cicodes;
 import com.atom.chat.chat.MessageFilter;
@@ -481,9 +482,11 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
     /**
      * Per-conversation history fold depth (world="", private=PlayerRef.key()).
      * Not remembered across screen instances: closing the panel forgets how far
-     * a conversation was unfolded, matching the public scroll reset.
+     * a conversation was unfolded, matching the public scroll reset. The state
+     * and the reveal compensation live in {@link HistoryFoldStore}; the wrappers
+     * below are the only entry points this shell keeps.
      */
-    private final Map<String, HistoryWindow> historyWindows = new HashMap<>();
+    private final HistoryFoldStore historyFold = new HistoryFoldStore();
     /** Transient action acknowledgements (cache cleared, copied, save failed). */
     private final ActionFeedback actionFeedback = new ActionFeedback();
     /**
@@ -515,7 +518,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
     };
     /**
      * Reply bar state per conversation ("" = public feed), keyed like
-     * {@link #historyWindows}. The bar belongs to a page, not to the screen, so the
+     * {@link HistoryFoldStore}'s windows. The bar belongs to a page, not to the screen, so the
      * state lives in {@link ReplySlotStore} (moved out of the screen); the four
      * wrappers below are the only entry points this shell keeps.
      */
@@ -782,8 +785,6 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
     private int lastAvatarClickIndex = -1;
     /** Single-click→profile competition window (QQ standard), in ms. */
     private static final long AVATAR_CLICK_WINDOW_MS = 300;
-    /** Rows revealed per "load earlier" click (and the initial visible window). */
-    private static final int HISTORY_WINDOW_BATCH = 100;
     private long pendingAvatarClickTime;
     private int pendingAvatarClickIndex = -1;
     private ChatMessage pendingAvatarClickMessage;
@@ -1390,22 +1391,12 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
 
     /** Fold window for a conversation, created on first view and kept across in-place growth. */
     private HistoryWindow historyWindowForNav(NavPage page, int total) {
-        String key = page.page() == AppPage.PRIVATE_CHAT && page.target() != null
-                ? page.target().key() : "";
-        HistoryWindow window = historyWindows.get(key);
-        if (window == null) {
-            window = new HistoryWindow(total, HISTORY_WINDOW_BATCH);
-            historyWindows.put(key, window);
-        } else {
-            // Follow sends/evictions without collapsing an unfolded history.
-            window.syncTotal(total);
-        }
-        return window;
+        return historyFold.historyWindowForNav(page, total);
     }
 
     /** Forgets every conversation's fold depth (world switch, history clear, disconnect). */
     private void resetHistoryWindows() {
-        historyWindows.clear();
+        historyFold.resetHistoryWindows();
     }
 
     /**
@@ -1415,15 +1406,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
      */
     private void applyLoadEarlierRequest(NavPage page, List<ChatMessage> messages, HistoryWindow window,
                                          UiLayout.Rect list, ScrollController scroll) {
-        if (!messageListView.consumeLoadEarlierRequest()) {
-            return;
-        }
-        int oldStart = window.visibleStart();
-        if (!window.loadEarlier()) {
-            return;
-        }
-        float inserted = messageListView.offsetBetween(messages, oldStart, window.visibleStart(), list.w());
-        scroll.scrollTo(scroll.getScrollY() + inserted, false);
+        historyFold.applyLoadEarlierRequest(page, messages, window, list, scroll, messageListView);
     }
 
     /** Persists the hidden EditBox draft to the page that is currently open. */
