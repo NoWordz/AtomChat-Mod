@@ -1,65 +1,65 @@
 # AtomChat
 
-<em>把 Minecraft 原版聊天框变成手机聊天 APP 的面板。</em>
+*A phone-app style chat experience for Minecraft, powered by Skija.*
 
-## 这是什么
+## What it is
 
-一个纯客户端 mod：打开聊天键，原版聊天屏换成一块 Skija 矢量自绘的手机面板——圆角气泡、真实皮肤头像、私聊会话、引用回复、戳一戳、图片与 GIF 消息。图片沿用 `[[CICode]]` 协议，与 E33Chat / ChatImage 系互通。服务端可选安装：装了才启用服务端媒体托管与自定义头像同步，不装就是纯客户端。
+A client-side mod that replaces the vanilla chat screen with a vector-drawn phone panel: rounded message bubbles, real skin avatars, private chat sessions, quote replies, image and GIF messages. The interface is drawn entirely with [Skija](https://github.com/HumbleUI/skija) and does not use vanilla chat textures. Image messages follow the `[[CICode]]` protocol and interoperate with the E33Chat / ChatImage family. Installing the mod on the server is optional; it enables server-side media hosting and custom avatar sync.
 
-## 功能
+## Features
 
-- **手机面板** — 毛玻璃或壁纸背景、底部三标签（聊天 / 个人 / 设置）、slide / zoom 页面转场，全局可切。
-- **气泡与身份** — 自己在右他人在左，真实玩家名 + 圆形皮肤头像；引用胶囊、@ 高亮、刷屏合并计数、历史折叠（每批 100 条）。
-- **图片消息** — 选择器 / 拖放 / Ctrl+V 上传；GIF 在气泡内循环；左键大图预览（暗背景 + 缩放淡入）；右键存原图。
-- **私聊与通知** — `/msg` 会话各自存草稿与滚动位置；被 @、被引用、收私聊弹横幅，点击跳转原消息；双击头像戳一戳。
-- **外观** — 九套主题（含半透明「薄暮」「薄荷」）、全配色可调带实时预览、自定义壁纸 / 头图 / 头像、内容缩放滑条。
-- **治理与设置** — 公屏视图过滤、跨消息拖选复制、屏蔽名单；设置即时生效写盘，聊天记录可按服 / 世界存盘。
+- **Phone panel** — frosted-glass or wallpaper background, three bottom tabs (chat / profile / settings), slide and zoom page transitions, switchable globally.
+- **Bubbles and identity** — own messages right, others left; real player names with round skin avatars, quote capsules, @ highlights, flood grouping, history folding at 100 messages per batch.
+- **Image messages** — upload via picker, drag-and-drop or Ctrl+V; GIFs loop inside the bubble; left-click for a fullscreen preview, right-click to save the original.
+- **Private chat and notifications** — per-session drafts and scroll positions; banners for mentions, quotes and DMs with click-to-jump; double-click an avatar to poke.
+- **Appearance** — nine themes including two translucent ones, per-color adjustment with live preview, custom wallpaper / header / avatar, content scale slider.
+- **Controls and settings** — world-chat view filters, cross-message drag selection and copy, block list; settings apply instantly and persist; chat history can be saved per server or world.
 
-## 兼容性
+## Compatibility
 
-| 目标 | 需要 |
+| Target | Requires |
 | --- | --- |
-| Fabric 1.21.1 | Fabric Loader 0.16+、Fabric API |
+| Fabric 1.21.1 | Fabric Loader 0.16+, Fabric API |
 | NeoForge 1.21.1 | NeoForge 21.1+ |
 | Forge 1.20.1 | Forge 47+ |
 
-Java 21（两个 1.21.1 目标）/ 17（Forge 1.20.1）。**仅 Windows x64**：jar 只打包了 Skija 的 Windows x64 原生库。三端都是客户端可用；服务端也装一份，别人才能拿到你托管的图片与头像。
+Java 21 for the 1.21.1 targets, Java 17 for Forge 1.20.1. **Windows x64 only** — the jar bundles just the Windows x64 Skija native. All three targets work client-side; install the same jar on the server for media hosting and avatar sync.
 
-## 配置
+## Configuration
 
-客户端配置在 `config/atomchat/atomchat-client.json`，所有选项即时生效并写盘。常用键：`panelWidth` / `uiScale` / `contentScale` / `pageNavStyle`（slide 或 zoom）/ `animationEnabled` / `blurEnabled` / `hostingEnabled` / `retentionDays` / `maxFileKb` / `emoteMax` / `debug`。本地头像、壁纸、表情包同在 `config/atomchat/` 下。
+Client config lives at `config/atomchat/atomchat-client.json` and every option applies instantly. Common keys: `panelWidth`, `uiScale`, `contentScale`, `pageNavStyle` (slide or zoom), `animationEnabled`, `blurEnabled`, `hostingEnabled`, `retentionDays`, `maxFileKb`, `emoteMax`, `debug`. Local avatars, wallpapers and emotes are stored in the same folder.
 
-## 已知限制
+## Known limitations
 
-- 仅 Windows x64，Linux / macOS 面板起不来。
-- 服务端没装 AtomChat 时图片走第三方图床（约 3 小时过期）；超过 `maxFileKb` 的文件不上传。
-- 玩家身份解析是尽力而为：昵称插件的极端格式会保守归为灰色系统消息。
-- 独立服务器的托管链路只在单人 / 局域网主机侧实测过。
+- Windows x64 only; the panel cannot start on Linux or macOS.
+- Without the server mod, images fall back to a third-party host (roughly 3-hour expiry); files above `maxFileKb` are not uploaded.
+- Player identity parsing is best-effort — exotic nickname-plugin formats degrade to grey system messages.
+- The dedicated-server hosting path has only been tested against singleplayer and LAN hosts.
 
 ## FAQ
 
-**需要装服务端吗？** — 自己用不需要；装了才有媒体托管与头像同步。
+**Is the server install required?** — No for your own use; it adds media hosting and avatar sync for everyone.
 
-**图片走图床还是服务器？** — 服务端装了且 `hostingEnabled=true` 走服务器，否则回退图床；客户端日志里 `Stored hosted media` 表示走了托管。
+**Do images go to the server or an image host?** — To the server when it runs AtomChat with `hostingEnabled=true`, otherwise to the fallback host. `Stored hosted media` in the client log means hosting was used.
 
-**表情包存哪？** — 自己的在 `config/atomchat/emotes/`；服务端下发的在只读「本服」分区。
+**Where are emotes stored?** — Yours in `config/atomchat/emotes/`; server-pushed packs in a read-only "This server" section.
 
-## 安装
+## Install
 
-1. 从 [Releases](https://github.com/NoWordz/AtomChat-Mod/releases) 下载对应加载器的 jar（Forge 用不带 `-slim` 的）。
-2. 丢进 `mods/`；要托管图片就把同一个 jar 也放进服务端 `mods/`。
-3. 游戏里按聊天键或 `Y` 打开面板。
+1. Download the jar for your loader from [Releases](https://github.com/NoWordz/AtomChat-Mod/releases) (Forge: the non-`-slim` jar).
+2. Place it in `mods/`; add the same jar to the server's `mods/` for media hosting.
+3. Open chat in game, or press `Y` to open the panel directly.
 
-## 从源码构建
+## Building from source
 
-单分支多目标：`shared/` 平台无关逻辑，`layers/mapping/official/` 官方映射层，`platforms/<目标>/` 每目标一个 Gradle 工程。
+Single-branch multi-target layout: `shared/` holds mapping-neutral logic, `layers/mapping/official/` the official-mappings layer, and `platforms/<target>/` one Gradle project per target.
 
 ```bash
-cd platforms/1.21.1-fabric && ./gradlew build    # JDK 21，其余两目标换目录；Forge 1.20.1 用 JDK 17
+cd platforms/1.21.1-fabric && ./gradlew build    # JDK 21; other targets: change directory, Forge 1.20.1 uses JDK 17
 ```
 
-更多说明见 [Wiki（英文）](https://github.com/NoWordz/AtomChat-Mod/wiki)。
+See the [wiki](https://github.com/NoWordz/AtomChat-Mod/wiki) for details.
 
-## 许可
+## License
 
-MIT，见 [LICENSE](LICENSE)。第三方组件声明见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
+MIT — see [LICENSE](LICENSE). Third-party components: [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

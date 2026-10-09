@@ -56,7 +56,7 @@
 - **新仓库迁移**：旧仓库 `E33EPUS/AtomChat` 被封，新仓库 `NoWordz/AtomChat-Mod`；`origin` 改指新仓库（旧 remote 改名 `banned-old` 保留）。推送时远端非空拒绝快进——查实只是建仓模板提交（一行 README + Apache 模板 LICENSE，无真实内容），确认后才 force-push 覆盖。
 - **版本与许可**：`mod_version=0.3.0-Preview`；许可换回 MIT（四份 LICENSE、`mod_license`、`fabric.mod.json`、关于页展示六处同步）；关于页三行（版本链接 / 许可 / 仓库）全指新仓库；三端 `changelogFor` 先剥预览后缀再找段（skill 规矩 1，`_dump.gradle` 验证工具同步），商店英文块取法不破。
 - **日志**：CHANGELOG 两个 `v0.3.0` 段合并为一段（段首版本级 `>` 说明、中英成对）；RELEASE_NOTES 补 `>` 预览说明与 R31–R35 浓缩条目；`_parity_check.py` PASS。
-- **README / README_EN**：按 fgmplus 式密度重写（是什么 / 功能 / 兼容性 / 配置 / 限制 / FAQ / 安装 / 构建 / 许可，无徽章无长表），链接全指新仓库、许可 MIT、顶部标 0.3.0-Preview。
+- **README**：按 fgmplus 式密度重写，用户驳回首版中文口语稿后改为**纯英文**（What it is / Features / Compatibility / Configuration / Known limitations / FAQ / Install / Building / License，无徽章无长表），tagline 沿用 `A phone-app style chat experience for Minecraft, powered by Skija.`；`README_EN.md` 冗余已删，中英双语 README 格局取消（新仓库对外一律英文，中文叙述只留 CHANGELOG / RELEASE_NOTES）。
 - **发布**：prerelease [`v0.3.0-Preview`](https://github.com/NoWordz/AtomChat-Mod/releases/tag/v0.3.0-Preview) 挂三端非 slim jar，正文取 RELEASE_NOTES 的 v0.3.0 段整段。
 - **wiki**：五页纯英文（Home / Getting-Started / Features / Configuration / Building-from-source）已推送 wiki 仓库；GitHub wiki 的 git 端点要网页创建第一页后才存在（API 开关无效），用户点完后 force-push 覆盖模板首页。
 
