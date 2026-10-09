@@ -3,6 +3,7 @@ import com.atom.chat.AtomChat;
 
 import com.atom.chat.chat.BlockList;
 import com.atom.chat.chat.PublicEchoTracker;
+import com.atom.chat.chat.ReplySlotStore;
 import com.atom.chat.chat.ChatMessage;
 import com.atom.chat.chat.Cicodes;
 import com.atom.chat.chat.MessageFilter;
@@ -491,18 +492,15 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
     private String worldDraft = "";
     /**
      * Reply bar state per conversation ("" = public feed), keyed like
-     * {@link #historyWindows}. The reply bar belongs to a page, not to the
-     * screen: one shared field leaked a reply armed in the public feed into the
-     * private composer, and it could not say which of two pages a transition
-     * composites the bar for.
+     * {@link #historyWindows}. The bar belongs to a page, not to the screen, so the
+     * state lives in {@link ReplySlotStore} (moved out of the screen); the four
+     * wrappers below are the only entry points this shell keeps.
      */
-    private final Map<String, ChatMessage> replies = new HashMap<>();
+    private final ReplySlotStore replySlots = new ReplySlotStore();
     /** Scroll state for root pages; shared across the root tabs, opening at the top. */
     private final ScrollController rootScroll = new ScrollController(false);
     /** Scroll state for pushed detail pages (settings/profile), opening at the top. */
     private final ScrollController detailScroll = new ScrollController(false);
-    /** Armed reply of the page that currently owns the shared EditBox. */
-    private ChatMessage replyTarget;
     private ChatMessage contextMessage;
     private PlayerRef contextPlayer;
     private float contextX;
@@ -1309,38 +1307,20 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
         return top != null && top.equals(page);
     }
 
-    /** Reply slot key, using {@link #historyWindows}'s convention. */
-    private String replyKeyForNav(NavPage page) {
-        return page != null && page.page() == AppPage.PRIVATE_CHAT && page.target() != null
-                ? page.target().key() : "";
-    }
-
     /** Persists the armed reply to the page that is currently open. A page that
      *  is not a chat page has no reply bar to persist. */
     private void syncReplySlot() {
-        AppPage page = topPage();
-        if (page != AppPage.WORLD_CHAT && page != AppPage.PRIVATE_CHAT) {
-            return;
-        }
-        if (replyTarget == null) {
-            replies.remove(replyKeyForNav(topNav()));
-        } else {
-            replies.put(replyKeyForNav(topNav()), replyTarget);
-        }
+        replySlots.syncReplySlot(topPage(), topNav());
     }
 
     /** Arms {@code page}'s saved reply, so the live field belongs to that page. */
     private void loadReplyFor(NavPage page) {
-        if (page == null || (page.page() != AppPage.WORLD_CHAT && page.page() != AppPage.PRIVATE_CHAT)) {
-            replyTarget = null;
-            return;
-        }
-        replyTarget = replies.get(replyKeyForNav(page));
+        replySlots.loadReplyFor(page);
     }
 
     /** Armed reply of a page: the live field when it owns the composer, else its slot. */
     private ChatMessage replyForNav(NavPage page) {
-        return ownsInputField(page) ? replyTarget : replies.get(replyKeyForNav(page));
+        return replySlots.replyForNav(page, ownsInputField(page));
     }
 
     /**
@@ -1350,15 +1330,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
      * {@code UiLayout.of} leaves at the panel origin when {@code replyH == 0}.
      */
     private boolean replyBarVisible() {
-        return replyTarget != null || replySlotArmed(pageNavFrom) || replySlotArmed(pageNavTo);
-    }
-
-    /** True when a chat page still holds an armed reply in its slot. */
-    private boolean replySlotArmed(NavPage page) {
-        if (page == null || (page.page() != AppPage.WORLD_CHAT && page.page() != AppPage.PRIVATE_CHAT)) {
-            return false;
-        }
-        return replies.get(replyKeyForNav(page)) != null;
+        return replySlots.replyBarVisible(pageNavFrom, pageNavTo);
     }
 
     /** Fold window for a conversation, created on first view and kept across in-place growth. */
@@ -1458,8 +1430,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
         emojiPanel.resetTransient();
         endPhraseEdit(false);
         quickPhrasePanel.resetTransient();
-        replyTarget = null;
-        replies.clear();
+        replySlots.clearAll();
         messageListView.clearSelection();
         pendingClickSpan = null;
         pendingClickMoved = false;
@@ -4300,9 +4271,10 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
         // The typed body stays separate from the wire text: the quote prefix
         // travels with the message, but the local bubble must not show it.
         String body = normalized;
-        if (replyTarget != null) {
-            quoteName = messageSenderName(replyTarget);
-            quoteText = quoteTextFor(replyTarget);
+        ChatMessage reply = replySlots.replyTarget();
+        if (reply != null) {
+            quoteName = messageSenderName(reply);
+            quoteText = quoteTextFor(reply);
             // Quote travels with the message so other players can see it too.
             normalized = "「引用 @" + quoteName + ": " + quoteText + "」" + body;
         }
@@ -4343,7 +4315,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
                     ownUuid, ownProfile, OwnIdentity.displayNameRich()));
         }
         inputSetText("");
-        replyTarget = null;
+        replySlots.disarm();
         // The armed reply is consumed with the send: drop its slot too, or
         // navigating away and back would re-arm a reply that was already sent.
         syncReplySlot();
@@ -4352,6 +4324,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
     }
 
     private void sendPrivateMessage(String normalized, String body, PlayerRef target) {
+        ChatMessage reply = replySlots.replyTarget();
         if (target == null || BlockList.isBlocked(target)) {
             return;
         }
@@ -4368,13 +4341,13 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
             String ownProfile = this.client.player.getName().getString();
             // Decorated self name on the outgoing bubble, e33chat parity.
             PrivateChatStore.addOutgoing(target,
-                    LocalEcho.build(historyText, body, replyTarget != null ? messageSenderName(replyTarget) : null,
-                            replyTarget != null ? quoteTextFor(replyTarget) : null,
+                    LocalEcho.build(historyText, body, reply != null ? messageSenderName(reply) : null,
+                            reply != null ? quoteTextFor(reply) : null,
                             ownUuid, ownProfile, OwnIdentity.displayNameRich()));
             PrivateEchoTracker.markOutgoing(target);
         }
         inputSetText("");
-        replyTarget = null;
+        replySlots.disarm();
         // Consumed with the send — see sendMessage's matching call.
         syncReplySlot();
         inputFocused = true;
@@ -5337,7 +5310,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
                     } else if (row == 0) {
                         feedback("atomchat.feedback.copied", copyToClipboard(contextMessage.getContentText()));
                     } else if (row == 1) {
-                        replyTarget = contextMessage;
+                        replySlots.arm(contextMessage);
                         inputFocused = true;
                         setFocused(chatField);
                         chatField.setFocused(true);
