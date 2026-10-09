@@ -1,4 +1,6 @@
-<img width="800" height="500" alt="logo1" src="https://github.com/user-attachments/assets/354cc7eb-4c1c-49f0-9759-bbe18bf11a14" />
+<p align="center">
+<img width="400" height="250" alt="logo1" src="https://github.com/user-attachments/assets/354cc7eb-4c1c-49f0-9759-bbe18bf11a14" />
+</p>
 
 <h1 align="center">AtomChat</h1>
 
