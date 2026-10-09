@@ -293,3 +293,129 @@ tasks.register('atomchatLayers') {
         logger.lifecycle("  test resources：${testResList.isEmpty() ? '（共享层暂无内容）' : testResList.join(', ')}")
     }
 }
+
+// ---- 5. 裸值棘轮守卫（bareValueCheck / bareBaselineUpdate） ----
+//
+// 【它拦什么】`s(数字)` 裸值：绕过 token 体系的硬编码缩放值。2026-10-05 三个按钮家族三套数、
+// 11 条家族 mismatch 而测试全绿，根因就是裸值没人拦。拆分期更危险 —— 代码从 AtomChatScreen
+// 搬进 layers/shared 时字面量跟着搬进来，没有守卫就没人看得见「这一块又多了 12 处」。
+//
+// 【为什么挂在 check 上】CI 每平台跑 `./gradlew build`（build 依赖 check），挂 check 即自动
+// 进 CI，workflow 文件零改动。口径（正则词边界 / 去重视图 / 注释与豁免）只有一份实现：
+// tools/bare_scan.py；Gradle 只负责在正确的位置调它，不在构建脚本里重写一套判据。
+//
+// 【解释器为什么在执行期挑】本机（Windows）PATH 上的 `python3` 是个不认识 --version 的包装器
+// （实测 exit 9009），而 CI（ubuntu）只有 python3 可靠。配置期探测外部进程会让 NeoForge 的
+// 配置缓存失效（见 3c 的踩坑记录），所以在 doLast 里按候选顺序探测。
+def pythonCandidates = [['python3'], ['python'], ['py', '-3']]
+
+// 探测一个能用的解释器：必须 `--version` 返回 0 且输出里有 "Python"。
+// 只看退出码不够 —— 本机那个坏的 python3 也会「启动成功」然后返回 9009。
+def resolvePython = {
+    for (def cand : pythonCandidates) {
+        try {
+            def p = new ProcessBuilder((cand + ['--version']) as List<String>)
+                    .redirectErrorStream(true).start()
+            def out = p.inputStream.getText('UTF-8')
+            if (p.waitFor() == 0 && out.contains('Python')) {
+                return cand as List<String>
+            }
+        } catch (Throwable ignored) {
+            // 换下一个候选
+        }
+    }
+    throw new GradleException(
+            "找不到可用的 python 解释器（试过 ${pythonCandidates.collect { it.join(' ') }.join(' / ')}）。\n" +
+            "裸值守卫与 tools/ 下的校验脚本都是 python3 写的；CI（ubuntu）自带 python3，\n" +
+            "本机请装一个 python3 或在 PATH 上放一个能用的 python。")
+}
+
+// 跑一个 python 工具：输出直接进控制台，非零退出即构建失败（报文由工具自己给）。
+def runPythonTool = { List<String> args ->
+    def python = resolvePython()
+    def pb = new ProcessBuilder((python + args) as List<String>)
+    pb.directory(repoRoot)
+    pb.redirectErrorStream(true)
+    def p = pb.start()
+    p.inputStream.transferTo(System.out)
+    def code = p.waitFor()
+    if (code != 0) {
+        throw new GradleException("${args.join(' ')} 失败（exit ${code}）")
+    }
+}
+
+tasks.register('bareValueCheck') {
+    group = 'atomchat'
+    description = '裸值棘轮守卫：扫 s(数字) 字面量，新增即红（口径与基线见 tools/bare_scan.py / tools/bare_baseline.json）'
+    doLast {
+        runPythonTool(['tools/bare_scan.py'])
+    }
+}
+tasks.named('check') { dependsOn 'bareValueCheck' }
+
+tasks.register('bareBaselineUpdate') {
+    group = 'atomchat'
+    description = '重写裸值基线（拆块迁移后允许；commit message 必须写明 +N 处系迁移自 AtomChatScreen）'
+    doLast {
+        runPythonTool(['tools/bare_scan.py', '--update'])
+        logger.lifecycle("基线已更新 —— 记得在 commit message 里写明迁入的 +N 处来源")
+    }
+}
+
+// ---- 6. 孪生残差报告（twinDiffReport） ----
+//
+// 它与 verify_targets.py 的孪生检查分工：那个验「副本在不在 + 有没有逐字相同」，
+// 这个验「内容差异能不能全部归类为映射改名」。fabric 孪生多一行逻辑，只有这里会红。
+// 不进 check：它是**审查工具**（会打印残差细节、需要人读），check 里挂它只会让
+// 「已经声明的既有分歧」反复占用构建输出；阶段 2 的每块验证电池里手动跑它。
+tasks.register('twinDiffReport') {
+    group = 'atomchat'
+    description = '孪生残差报告：official ↔ fabric 内容比对，未归类残差非空即失败'
+    doLast {
+        runPythonTool(['tools/twin_diff_report.py'])
+    }
+}
+
+// ---- 7. 基准帧入口（goldenCapture / goldenCompare） ----
+//
+// 【为什么不是 CI 门】Skia 的 CPU 光栅不保证跨机器 / 跨 Skija 版本逐字节一致，所以
+// golden/ 只在本机当「拆分前后」的对照，且已 gitignore。阶段 2 每拆一块：
+// 拆前 goldenCapture（若尚无基准）→ 拆后 goldenCompare（differing pixels 必须 0）。
+//
+// 【模式怎么传】测试侧读系统属性 atomchat.golden.mode（capture / compare / off）。
+// 两个入口任务必须把模式在【配置期】写进 test 任务的系统属性，所以只能靠
+// startParameter 判断这次跑的是哪个入口（配置缓存在意的是配置期跑外部进程，
+// 读 startParameter 是配置输入的一部分）。也支持 -Patomchat.golden.mode=… 直传。
+def goldenModes = [goldenCapture: 'capture', goldenCompare: 'compare', goldenDeterminism: 'determinism']
+def requestedGolden = gradle.startParameter.taskNames
+        .collect { it.tokenize(':').last() }
+        .findResult(null) { goldenModes.containsKey(it) ? goldenModes[it] : null }
+def goldenMode = (project.findProperty('atomchat.golden.mode') ?: requestedGolden ?: 'off').toString()
+if (!['off', 'capture', 'compare', 'determinism'].contains(goldenMode)) {
+    throw new GradleException("atomchat.golden.mode 只能是 off / capture / compare / determinism，收到 ${goldenMode}")
+}
+tasks.named('test', Test).configure {
+    systemProperty 'atomchat.golden.mode', goldenMode
+    // 目标名与仓库根由构建脚本给出：测试的工作目录**不一定是工程目录**
+    // （NeoForge 的 ModDevGradle 把测试跑在 build/minecraft-junit 下），
+    // 让测试从 cwd 猜目标名会在 neo 上把基准帧写进 golden/minecraft-junit/。
+    systemProperty 'atomchat.golden.target', targetName
+    systemProperty 'atomchat.repoRoot', repoRoot.path
+    systemProperty 'atomchat.projectDir', projectDir.path
+    if (goldenMode != 'off') {
+        // 入口任务只为基准帧而来：整套测试跑一遍太慢，这里只跑 GoldenFrameTest
+        filter { includeTestsMatching 'com.atom.chat.render.GoldenFrameTest' }
+    }
+}
+def goldenDescriptions = [
+        capture    : '拍基准帧到仓库根 golden/<目标>/（本机对照用，CI 不跑）',
+        compare    : '对拍基准帧：重渲 + 逐字节比，differing pixels 必须为 0',
+        determinism: '确定性实证：同一 JVM 连拍两次，逐页断言 PNG 逐字节相同',
+]
+goldenModes.each { taskName, mode ->
+    tasks.register(taskName) {
+        group = 'atomchat'
+        description = goldenDescriptions[mode]
+        dependsOn tasks.named('test')
+    }
+}

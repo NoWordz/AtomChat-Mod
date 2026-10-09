@@ -9,5 +9,9 @@ logs/
 
 .worktrees/
 
+# 基准帧（golden frames）：Skia 的 CPU 光栅不保证跨机器 / 跨 Skija 版本逐字节一致，
+# 它只在本机当拆分前后的对照（goldenCapture 拍、goldenCompare 对），不进仓库。
+golden/
+
 # Subagent review/intermediate artifacts (never shipped)
 .review-*
