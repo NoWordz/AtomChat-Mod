@@ -1,14 +1,16 @@
 # AtomChat 项目状态
 
 > 交接文档：给下一个会话（或未来的自己）快速定位「现在在哪、下一步做什么」。
-> 更新于 **v0.3.0 发版后 + R35 头图与整页转场轮**（tag `v0.3.0`，未推送）。
+> 更新于 **R35 预览发版轮（0.3.0-Preview 已推送新仓库 NoWordz/AtomChat-Mod）**。
 
 ## 当前位置
 
-- **版本**：`0.3.0`（`gradle.properties:17`）；tag `v0.3.0` 已打，**未 push 远端**（用户明说不推）。
+- **版本**：`0.3.0-Preview`（`gradle.properties:17`）；tag `v0.3.0-Preview` 与 main 已推送**新仓库** `NoWordz/AtomChat-Mod`（旧仓库 `E33EPUS/AtomChat` 被封，remote 改名 `banned-old` 保留，`origin` 指向新仓库）。
 - **构建**：`bash /d/Claude_ds/_atomchat_build_all.sh` → 三平台 BUILD SUCCESSFUL + 守卫 + `_parity_check.py` PASS。
-- **部署**：五实例已铺 0.3.0（见下），md5 已配对（含 R31 修补轮）。
-- **许可**：Apache-2.0（根 `LICENSE`、三平台 `src/main/resources/LICENSE`、`fabric.mod.json`、`gradle.properties` 的 `mod_license` 四处一致，版权行 `E33EPUS`）。
+- **发布**：[v0.3.0-Preview prerelease](https://github.com/NoWordz/AtomChat-Mod/releases/tag/v0.3.0-Preview) 已建，挂三端非 slim jar；release 正文取 `RELEASE_NOTES.md` 的 v0.3.0 段整段（双语）。
+- **部署**：五实例仍铺 0.3.0 构建（见下表）；预览 jar 只发布到 release，未铺实例。
+- **许可**：MIT（根 `LICENSE`、三平台 `src/main/resources/LICENSE`、`fabric.mod.json`、`gradle.properties` 的 `mod_license`、关于页 `SettingsCatalog` 展示六处一致，版权行 `E33EPUS`）。
+- **Wiki**：五页纯英文 wiki 已写好暂存 `D:\Claude_ds\_r35-wiki`（Home / Getting-Started / Features / Configuration / Building-from-source）；**GitHub wiki 的 git 端点要在网页创建第一页后才存在**（API 开关 `has_wiki` 无效），等用户网页点一下「Create the first page」后再 push。
 
 | 平台 | 实例目录 | 部署 jar md5 |
 |---|---|---|
@@ -16,7 +18,7 @@
 | NeoForge 1.21.1 | `Mechanomania-航空学` | `39750212` |
 | Forge 1.20.1 | `1.20.1-main` / `Go Fishing` / `元素觉醒1.4.6` | `d4f6aa3f` |
 
-上表是**0.3.0 之后四功能轮（plan `2026-10-08-atomchat-history-toast-poke-hudnotify.md`）的当前构建**：
+上表是 **R35 轮（含头图与整页转场改动）的当前构建**；五实例尚未铺预览版：
 
 - **T1 历史折叠** — `db87113`。内存仍 500 条，列表初始只展示最近 100，顶部「加载更早消息」胶囊每点一次揭 100 并做锚点补偿；公屏与每个私聊各自独立、关面板即忘。
 - **T2 操作反馈 Toast** — `112295d`。清缓存/取消壁纸/清历史/复制/存图/头像头图移除 都有浮动反馈（成功=主题 accent、失败=共享危险红），底层 API 改为结果感知（剪贴板返回 bool、`clearDiskCache` 返回删除数）。
@@ -48,6 +50,15 @@
 - **多入口页面转场统一**（根因）— WORLD_CHAT↔PRIVATE_CHAT 的 detail-to-detail 分支只调用 `drawMessageLayerForNav`（仅消息列表），并在 transform layer **外**固定重画 `inputBar` 底板；而输入文字、按钮、回复条、滚动条、返回最新只在 `drawChatPageBody` 里 ⇒ 横幅/头像右键进私聊时"底栏不动、文字瞬现"。改为聊天页整体参加同一 Slide/Zoom：每侧一个 `ChatPageView`，`ownsInputField(page)` 只让**当前拥有隐藏 EditBox 的那页**读实时输入，草稿/只读/typing/scroll 都按传入 `NavPage` 解析，回复条改为按会话存 `replies`（`loadReplyFor` / `saveReplyForNav`）；Zoom EXIT 只画离场整页、ENTER 只画目标整页，Slide 两侧用同一 `fromDx/toDx`，删除 layer 外固定 composer；`ShellHeader.render` 与 `drawBezel` 仍在所有 layer restore 后、transform 外绘制（顶栏/返回键/手机外框固定）。五条入口（列表卡片→私聊、头像右键→私聊、横幅→私聊、头像单击→档案、列表卡片右键→档案）都只经统一 `startPageNav`/`pageNavStyle()`。
 
 三端测试 763/751/751 全绿 + 守卫 PASS + `_parity_check.py` PASS；部署 fabric `96f737ae`/neo `39750212`/forge `d4f6aa3f`。独立审查抓到**头图测试假绿**（`heroWordmarkRect` 零覆盖，变异成"铺满整卡"仍 6/6 全过）已在复审轮修掉。**遗留**：真实游戏内五入口 Slide/Zoom 手感、字标抠图边缘、窄窗口裁切仍需用户真机验收。
+
+**R35 预览发版轮**（commit `e8cf67c` + 文档补提交，已推送新仓库）：
+
+- **新仓库迁移**：旧仓库 `E33EPUS/AtomChat` 被封，新仓库 `NoWordz/AtomChat-Mod`；`origin` 改指新仓库（旧 remote 改名 `banned-old` 保留）。推送时远端非空拒绝快进——查实只是建仓模板提交（一行 README + Apache 模板 LICENSE，无真实内容），确认后才 force-push 覆盖。
+- **版本与许可**：`mod_version=0.3.0-Preview`；许可换回 MIT（四份 LICENSE、`mod_license`、`fabric.mod.json`、关于页展示六处同步）；关于页三行（版本链接 / 许可 / 仓库）全指新仓库；三端 `changelogFor` 先剥预览后缀再找段（skill 规矩 1，`_dump.gradle` 验证工具同步），商店英文块取法不破。
+- **日志**：CHANGELOG 两个 `v0.3.0` 段合并为一段（段首版本级 `>` 说明、中英成对）；RELEASE_NOTES 补 `>` 预览说明与 R31–R35 浓缩条目；`_parity_check.py` PASS。
+- **README / README_EN**：旧仓库链接全替换、死 CI 徽章与被封仓库的 user-attachments 图链删除（改仓库内 `logo.png`）、许可改 MIT、顶部标注 0.3.0-Preview。
+- **发布**：prerelease [`v0.3.0-Preview`](https://github.com/NoWordz/AtomChat-Mod/releases/tag/v0.3.0-Preview) 挂三端非 slim jar，正文取 RELEASE_NOTES 的 v0.3.0 段整段。
+- **wiki 未推送**：五页纯英文已暂存 `D:\Claude_ds\_r35-wiki`；GitHub wiki 的 git 端点要网页创建第一页后才存在（API 开关无效），等用户点一下后再 push。
 
 > 前一轮（引用胶囊取色 + 胶囊族软阴影 + `[图片]` 占位绿）已随 commit `d8fc806` 入库并验收。
 
