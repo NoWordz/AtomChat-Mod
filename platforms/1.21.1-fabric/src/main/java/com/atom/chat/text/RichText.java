@@ -195,7 +195,7 @@ public final class RichText {
             out.addAll(replacement.runs());
         }
         out.addAll(slice(end, full.length()).runs());
-        return new RichText(out, rootStyle);
+        return new RichText(mergeRuns(out), rootStyle);
     }
 
     /**

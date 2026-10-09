@@ -192,13 +192,6 @@
         "reason": "主会话 2026-10-09 批复：美容级。注释措辞/新增 javadoc 不同",
         "sample_a": "",
         "sample_b": "    /**"
-      },
-      {
-        "fingerprint": "071477de377a",
-        "kind": "code",
-        "reason": "pending user decision 2026-10-09：official 的 splice() 调 mergeRuns(out) 而 fabric 漏调（official 为 canonical，fabric 有 mergeRuns 方法且在 of() 里调了、只漏这一处）。属行为级差异：同一 splice 在 neo/forge 上合并相邻同款 run、在 fabric 上不合并。主会话已上报用户待拍板，本轮只登记不改码",
-        "sample_a": "        return new RichText(mergeRuns(out), rootStyle);",
-        "sample_b": "        return new RichText(out, rootStyle);"
       }
     ],
     "src/main/java/com/atom/chat/mixin/MessageHandlerMixin.java": [
