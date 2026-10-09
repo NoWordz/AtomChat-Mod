@@ -1244,16 +1244,6 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
         return worldScroll;
     }
 
-    private List<ChatMessage> currentMessages() {
-        if (topPage() == AppPage.WORLD_CHAT) {
-            return ChatStore.get().snapshot();
-        }
-        if (topPage() == AppPage.PRIVATE_CHAT) {
-            return PrivateChatStore.messages(activePrivateTarget());
-        }
-        return List.of();
-    }
-
     private List<ChatMessage> messagesForNav(NavPage page) {
         if (page == null) {
             return List.of();
@@ -1404,11 +1394,6 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
         scroll.scrollTo(scroll.getScrollY() + inserted, false);
     }
 
-    private String currentPrivateKey() {
-        PlayerRef target = activePrivateTarget();
-        return target != null ? target.key() : null;
-    }
-
     /** Persists the hidden EditBox draft to the page that is currently open. */
     private void saveCurrentDraft() {
         if (input == null) {
@@ -1474,10 +1459,6 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
         pendingClickSpan = null;
         pendingClickMoved = false;
         dismissSuggestor();
-    }
-
-    public String getOriginalChatText() {
-        return originalChatText;
     }
 
     @Override
@@ -1734,13 +1715,8 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
         return lineStart + s.length();
     }
 
-    /** True when the private-chat partner is composing a message (WATUT). */
-    private boolean partnerTyping() {
-        return partnerTypingFor(topNav());
-    }
-
     /**
-     * {@link #partnerTyping()} for one nav page: the hint belongs to the page
+     * The typing hint for one nav page: the hint belongs to the page
      * whose composer is drawn, not to whatever is on top of the stack.
      */
     private boolean partnerTypingFor(NavPage page) {
@@ -3210,10 +3186,6 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
         };
     }
 
-    private String shellTitle() {
-        return shellTitleFor(topNav());
-    }
-
     private String shellTitleFor(NavPage nav) {
         if (nav.page() == AppPage.PRIVATE_CHAT && nav.target() != null) {
             return nav.target().realName();
@@ -3249,10 +3221,6 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
     private void drawBottomTabBar(Canvas canvas, UiLayout layout, AppPage rootPage) {
         int selectedIndex = rootIndex(rootPage);
         bottomTabBar.render(canvas, layout.tabBar, selectedIndex, textPrimary(), accent());
-    }
-
-    private void drawBottomTabBar(Canvas canvas, UiLayout layout) {
-        drawBottomTabBar(canvas, layout, topPage());
     }
 
     /** Routes a root-page click on one of the three bottom tab cells. */
@@ -4452,27 +4420,12 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
         return AtomChatConfig.get().accentColor;
     }
 
-    private int ownBubble() {
-        return AtomChatConfig.get().ownBubbleColor;
-    }
-
-    private int otherBubble() {
-        return AtomChatConfig.get().otherBubbleColor;
-    }
-
     private int textPrimary() {
         return AtomChatConfig.get().textPrimaryColor;
     }
 
     private int textSecondary() {
         return AtomChatConfig.get().textSecondaryColor;
-    }
-
-    /** Component inside a chat bubble (body rich text and quoted text). */
-    private int bubbleText(ChatMessage msg) {
-        return msg != null && msg.isOwn()
-                ? AtomChatConfig.get().bubbleTextColor
-                : AtomChatConfig.get().otherBubbleTextColor;
     }
 
     private float panelWidth() {
