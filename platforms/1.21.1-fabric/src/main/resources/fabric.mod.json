@@ -7,13 +7,13 @@
   "authors": [
     "E33EPUS"
   ],
-  "license": "Apache-2.0",
+  "license": "MIT",
   "environment": "*",
   "icon": "assets/atomchat/logo.png",
   "contact": {
-    "homepage": "https://github.com/E33EPUS/AtomChat",
-    "issues": "https://github.com/E33EPUS/AtomChat/issues",
-    "sources": "https://github.com/E33EPUS/AtomChat"
+    "homepage": "https://github.com/NoWordz/AtomChat-Mod",
+    "issues": "https://github.com/NoWordz/AtomChat-Mod/issues",
+    "sources": "https://github.com/NoWordz/AtomChat-Mod"
   },
   "entrypoints": {
     "main": [

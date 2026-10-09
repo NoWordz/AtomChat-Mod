@@ -1,6 +1,6 @@
 [简体中文](README.md) | [English](README_EN.md)
 
-<h1 align="center"><img width="256" height="256" alt="logo" src="https://github.com/user-attachments/assets/e449c62e-644b-4c19-9fbc-431d7a899781" /></h1>
+<h1 align="center"><img width="128" height="128" alt="logo" src="platforms/1.21.1-fabric/src/main/resources/assets/atomchat/logo.png" /></h1>
 
 <h1 align="center">AtomChat</h1>
 
@@ -17,14 +17,10 @@
   <img alt="OS" src="https://img.shields.io/badge/OS-Windows%20x64-lightgrey">
   <img alt="Java" src="https://img.shields.io/badge/Java-17%2B-yellow">
   <img alt="Version" src="https://img.shields.io/github/v/release/E33EPUS/AtomChat?sort=semver">
-  <img alt="License" src="https://img.shields.io/badge/License-Apache--2.0-brightgreen">
+  <img alt="License" src="https://img.shields.io/badge/License-MIT-blue">
 </p>
 
-<p align="center">
-  <a href="https://github.com/E33EPUS/AtomChat/actions/workflows/build.yml"><img alt="Build" src="https://github.com/E33EPUS/AtomChat/actions/workflows/build.yml/badge.svg?branch=main"></a>
-</p>
-
-> **v0.3.0 is out** · [Download the JAR](https://github.com/E33EPUS/AtomChat/releases) · [Wiki](https://github.com/E33EPUS/AtomChat/wiki)
+> **0.3.0-Preview** · [Download the JAR](https://github.com/NoWordz/AtomChat-Mod/releases) · [Wiki](https://github.com/NoWordz/AtomChat-Mod/wiki)
 
 > [!WARNING]
 > **Windows x64 only for now.** The JAR bundles only the Windows x64 Skija native, so the chat panel cannot start on Linux or macOS. See [Known limitations](#known-limitations).
@@ -48,7 +44,7 @@ The mod is **client-side only**: it works without a server install (images go to
 | Java | 21+ for Fabric / NeoForge; 17 for the Forge 1.20.1 build |
 | OS | Windows x64 (macOS / Linux not usable yet) |
 
-1. Download the JAR for your platform from [Releases](https://github.com/E33EPUS/AtomChat/releases) (`atomchat-Fabric-1.21.1-*.jar` / `atomchat-NeoForge-1.21.1-*.jar` / `atomchat-Forge-1.20.1-*.jar`), or build it yourself as described in [Development](#development)
+1. Download the JAR for your platform from [Releases](https://github.com/NoWordz/AtomChat-Mod/releases) (`atomchat-Fabric-1.21.1-*.jar` / `atomchat-NeoForge-1.21.1-*.jar` / `atomchat-Forge-1.20.1-*.jar`), or build it yourself as described in [Development](#development)
 2. Drop it into `.minecraft/mods/`; to host images / GIFs and sync avatars on your server, put the same JAR into the server's `mods/` too
 3. Launch the game and press the chat key (default `T` / `/`) to open AtomChat; `Y` (default, rebindable under Controls → `AtomChat`) opens the panel directly and restores the page you were last on
 
@@ -83,7 +79,7 @@ A server running AtomChat **prefers** to host your images: the message carries a
 
 To see which route was used, check the client log: a successful host shows `Stored hosted media`.
 
-Hosted media is kept for 7 days by default (`retentionDays`, `0` = forever) and trimmed oldest-first against the size caps; the exact numbers are in the [Wiki host manual](https://github.com/E33EPUS/AtomChat/wiki).
+Hosted media is kept for 7 days by default (`retentionDays`, `0` = forever) and trimmed oldest-first against the size caps; the exact numbers are in the [Wiki host manual](https://github.com/NoWordz/AtomChat-Mod/wiki).
 
 ## Compatibility
 
@@ -114,7 +110,7 @@ Hosted media is kept for 7 days by default (`retentionDays`, `0` = forever) and 
 - The mod sends no telemetry and no personal data; uploads only happen when you pick, paste or drag an image in
 - Hosting transfers bytes over the game connection only — it opens no HTTP port and exposes nothing to players who are not connected
 - Config, avatars, wallpaper and stickers stay in `.minecraft/config/atomchat/` and are never synced to anyone automatically
-- The full data map and retention rules live in the [Wiki](https://github.com/E33EPUS/AtomChat/wiki)
+- The full data map and retention rules live in the [Wiki](https://github.com/NoWordz/AtomChat-Mod/wiki)
 
 ## FAQ
 
@@ -126,16 +122,16 @@ Hosted media is kept for 7 days by default (`retentionDays`, `0` = forever) and 
 
 **Why is a message shown in gray?** When the client cannot be sure a line is player chat it conservatively falls back to gray system text — common with nickname plugins using unrecognized formats.
 
-**Can I put it in a modpack?** Yes. The code is Apache-2.0 and needs no extra permission; if you redistribute the JAR, keep the third-party notices in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+**Can I put it in a modpack?** Yes. The code is MIT and needs no extra permission; if you redistribute the JAR, keep the third-party notices in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 ## More documentation
 
 | Where | What |
 |---|---|
-| [Wiki](https://github.com/E33EPUS/AtomChat/wiki) | Quick start, images & transfer routes, stickers, appearance with the full config reference, the **host manual**, troubleshooting, developer notes |
-| [Issues](https://github.com/E33EPUS/AtomChat/issues) | Bug reports and suggestions (platform comments work too) |
-| [Releases](https://github.com/E33EPUS/AtomChat/releases) | JARs for all three platforms plus per-version release notes |
-| [CHANGELOG](https://github.com/E33EPUS/AtomChat/blob/main/CHANGELOG.md) | Complete change history (bilingual) |
+| [Wiki](https://github.com/NoWordz/AtomChat-Mod/wiki) | Installation, feature tour, the full config reference and build notes |
+| [Issues](https://github.com/NoWordz/AtomChat-Mod/issues) | Bug reports and suggestions (platform comments work too) |
+| [Releases](https://github.com/NoWordz/AtomChat-Mod/releases) | JARs for all three platforms plus per-version release notes |
+| [CHANGELOG](https://github.com/NoWordz/AtomChat-Mod/blob/main/CHANGELOG.md) | Complete change history (bilingual) |
 
 ## Development
 
@@ -146,10 +142,10 @@ Hosted media is kept for 7 days by default (`retentionDays`, `0` = forever) and 
 
 Artifacts land in `build/libs/`: the Fabric and NeoForge builds need JDK 21, the Forge 1.20.1 build needs JDK 17; Forge also emits a `-slim` jar without bundled dependencies — **use the non-slim one for releases**.
 
-The source lives on **a single branch**: code every target can use sits in `shared/`, code split by version / loader / mapping family sits in `layers/`, and each target's own code plus build files sit in `platforms/<target>/`. Which targets are supported is declared in `versions/targets.json`; one release produces a jar per target, and adding a target does not touch the build scripts. Module layout, packages and testing are described on the [Wiki developer page](https://github.com/E33EPUS/AtomChat/wiki).
+The source lives on **a single branch**: code every target can use sits in `shared/`, code split by version / loader / mapping family sits in `layers/`, and each target's own code plus build files sit in `platforms/<target>/`. Which targets are supported is declared in `versions/targets.json`; one release produces a jar per target, and adding a target does not touch the build scripts. Module layout, packages and testing are described on the [Wiki developer page](https://github.com/NoWordz/AtomChat-Mod/wiki).
 
 ## License
 
-[AtomChat's own code](LICENSE) is Apache-2.0. The distributed JAR bundles Skija (Java bindings), HumbleUI types, FlatLaf and the Skia native library, each under its own license — full texts in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+[AtomChat's own code](LICENSE) is MIT. The distributed JAR bundles Skija (Java bindings), HumbleUI types, FlatLaf and the Skia native library, each under its own license — full texts in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 Copyright © 2026 E33EPUS

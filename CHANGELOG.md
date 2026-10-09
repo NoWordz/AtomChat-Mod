@@ -1,49 +1,14 @@
 # Changelog
 
-## v0.3.0 后续小修补
+## v0.3.0
 
-> 0.3.0 部署后的用户反馈小修补轮，暂并入 0.3.0，不升版本号、不推送。
+> 本段合并 0.3.0 官方轮与部署后修补轮（R31–R35）；对外首次发布于新仓库 NoWordz/AtomChat-Mod，版本 0.3.0-Preview（预览版），许可换回 MIT。
 
 **新增**
 
 - **服务端实验命令 `/atomchat test`**：单人档无法产生提及/引用/私聊横幅，也没有第二个玩家来戳你，而双开客户端会让 debug 日志互相干扰。现在可以让服务端扮演对方：`/atomchat test banner mention|quote|whisper [文本]` 与 `/atomchat test poke [对方名]`。横幅走真实的通知链路（设置开关、音效门、去重都照常生效），戳一戳走完整的网络往返；横幅只弹横幅，不会写进聊天记录。需要先在 AtomChat 设置里打开「调试模式」，权限与 `/atomchat gui` 一致（单机放行，否则 OP 2 级）。
-
-**修复**
-
-- **浮动面（通知横幅 / 操作反馈浮窗）统一为一族**：横幅此前画的是不透明白卡、文字却取面板色 ⇒ 深色主题下发件人白压白看不见；浮窗的阴影还有一个明显的硬矩形边。现在两者共用一套浮动面：填充跟随主题卡片色、文字色由填充自身亮度派生（浅底黑字、深底白字）、发丝线与悬浮高亮按自身底色解析、阴影换成顶栏/输入栏同款双通道投影，且投影在被裁切的图层里完整放得下（不再有硬边）。「返回最新消息」按钮保持原有的固定深色——它悬浮在任意消息上，本来就自成一族。
-- **横幅尺寸并入内容列**：宽度改为与顶栏、输入栏、底栏同宽（原先只有内容列的约 70%），高度取顶栏同高，头像取顶栏控件尺寸，并修正了横幅压住顶栏 10px 的偏移。
-- **横幅 6 秒、操作反馈成功 3 秒 / 失败 5 秒**（原为 4 秒 / 2 秒 · 4 秒）。
-- **修掉一处会被误判成私聊的真实 bug**：聊天行里只要出现「whisper / 私聊 / 密语」等字样（例如一条普通公屏消息或命令回执），就会被抢进私聊面板并弹出横幅，且把关键字连同正文一起当成消息内容。现在关键字族要求必须有冒号分隔，且无分隔符的行一律不再认领。附带把实验命令的回执文案改得不再含私聊字样。
-- **操作反馈浮窗改到输入栏上方，并补上真正的淡入淡出**：此前锚在面板顶部、且只有文字与图标带透明度（卡片本体是实画），所以看起来"没有淡入淡出"。现在整块卡片一起淡入淡出，从输入栏后方向上滑入（带轻微回弹），过期时下沉淡出；关闭「装饰性动效」后不淡不位移。详情页没有输入栏时贴列表底部。
-- **「加载更早消息」胶囊与「返回最新消息」按钮补上与其他控件同款的交互动效**：悬浮高亮由硬切换改为渐变淡入，按下与松开走同一套回弹弹簧（与底部标签栏、发送键一致）。命中范围仍按未缩放的位置判定。
-- **引用胶囊文字改为跟随胶囊主题色**：不再取气泡文字色，避免黑鸦主题下用户名近黑字压在深灰胶囊、典雅主题下纯白字压在浅沙胶囊而不可读。
-- **软阴影范围重排**：系统消息、引用胶囊、时间分割线、图片占位胶囊与发送者名字带保留文字软阴影；自身 / 他人气泡正文一律去影。阴影明暗改为按文字所在表面的底色判定，不再一律随面板。
-- **`[图片]` 占位绿自适应**：按胶囊底色实测对比度择优（深胶囊用亮绿、浅胶囊用深绿），浅色主题下不再隐形。
-
-----
-
-**Added**
-
-- **Server-side test command `/atomchat test`**: a single-player session cannot produce a mention / quote / whisper banner, and has no second player to poke you, while running two clients at once muddies the very debug log you are reading. The server can now play the other party: `/atomchat test banner mention|quote|whisper [text]` and `/atomchat test poke [name]`. Banners go through the real notification path (settings toggles, sound gate and dedupe all still apply) and the poke is a full network round-trip. Banners only pop a banner — nothing is written into the chat history. Requires Debug mode in AtomChat settings; permission matches `/atomchat gui` (single-player always, otherwise OP level 2).
-
-**Fixed**
-
-- **The floating surfaces (notification banner and action toast) are one family now**: the banner painted an opaque white card while taking its text from the panel, so on dark themes the sender name was white on white and invisible; the toast's shadow also showed a hard rectangular edge. Both now share one float surface: a themed fill, ink derived from that fill's own luminance (dark ink on a light float, light on a dark one), an edge hairline and hover wash resolved against the float's own colour, and the two-tier shadow the header and composer ride — inside a layer large enough to hold it, so the hard edge is gone. The jump-to-latest button keeps its fixed dark pill: it floats over arbitrary messages and was always its own thing.
-- **The banner now belongs to the content column**: its width matches the header, composer and tab bar (it was about 70% of the column), its height is the header's, its avatar the header control size, and its offset no longer overlaps the header card by 10px.
-- **Banner holds 6s; action feedback holds 3s on success and 5s on failure** (was 4s / 2s · 4s).
-- **Fixed a real misclassification bug**: any chat line merely containing a whisper word ("whisper", "私聊", "密语" …) — an ordinary public message, or a command reply — was routed into the private panel and popped a banner, with the keyword glued onto the message body. The keyword family now requires a colon separator, and a line with no separator at all is never claimed. The test command's own reply wording no longer contains whisper/private words either.
-- **Action toasts now rise from just above the composer and actually fade**: they used to be anchored at the panel top, and only the text and glyph carried opacity (the card itself was drawn solid), which is why the fade looked missing. The whole card now fades as one, slides up from behind the composer with a slight bounce, and sinks while fading out; with decorative motion off it neither fades nor moves. Detail pages without a composer anchor to the bottom of the list.
-- **The "load earlier" capsule and the jump-to-latest button gained the same interaction motion as every other control**: the hover highlight eases in instead of switching, and press/release ride the shared bounce spring (same as the bottom tab bar and the send button). Hit-testing still uses the unscaled position.
-- **Quote-capsule text now follows the capsule theme colour** instead of the bubble text colour, fixing the unreadable names (near-black on dark in raven, white on sand in elegant).
-- **Soft-shadow scope rebalanced**: system messages, quote pills, time dividers, image placeholders and the sender name band keep the text shadow; bubble body text (own and others) has none. The shadow's light/dark polarity follows the surface the text sits on rather than the panel.
-- **[Image] placeholder green adapts by measured contrast** with the capsule tint (bright on dark, deep on light), so it no longer disappears on pale themes.
-
-## v0.3.0
-
-> 本版重做了整套界面动效与个人档案页，统一了卡片与描边语言，加入双轴缩放与自适应边框，并把许可换为 Apache-2.0。
-
-**新增**
-
+- **图片预览**：左键聊天里已加载的图片打开等比全尺寸预览（背景变暗、淡入缩放进入，底部 X / 暗背景 / Esc 关闭）；加载中的占位与 `[图片]` 胶囊不响应左键。
+- **全入口统一导航动画**：列表卡片、头像右键菜单、通知横幅、头像单击、列表卡片右键菜单五个入口共用全局 slide/zoom；公屏↔私聊切换时消息列表、回复条与输入栏（含文字与按钮）作为整层一起转场，顶栏与外框固定。
 - 新增「导航动画风格」单选：滑动 / 缩放，标签页与页面切换共用同一风格（默认缩放）。
 - 新增主题预设「薄暮」（灰蓝紫半透明）与「薄荷」（深青绿半透明），主题总数增至九张。
 - 新增自定义壁纸、自定义头图与头像裁剪，图片本地托管、走系统文件选择器。
@@ -62,6 +27,10 @@
 - 描边完全按所选颜色绘制，不再自动替换成灰。
 - 界面外框改为双层外阴影，圆角与卡片内缩统一。
 - 许可换为 Apache-2.0。
+- 许可换回 MIT：四份 LICENSE、`mod_license`、`fabric.mod.json` 与关于页展示同步。
+- **关于页头图**改为完整 AtomChat 红字标 + 浅底几何留白背景，卡片加高（s(88)→s(136)），字标按自然比例 contain 居中，不拉伸不越界。
+- **通知横幅**对齐列表静态卡宽度并改为双行自适应卡（标题一行、正文一行、超长截断）；点击先确认跳转成功再关闭；类型前缀取 HUD 语义色（@=主题强调 / 引用=蓝 / 私聊=洋红），玩家名与正文保留原始富文本颜色。
+- **成功 Toast 勾号**强调色优先、对比不足时保留色相只调明度，不再直接切纯白/纯黑；浮层阴影强度单独降低，不影响顶栏与输入栏。
 
 **修复**
 
@@ -72,6 +41,19 @@
 - 深色主题下浅色预览卡的下栏串色。
 - 头像描边被裁掉一段。
 - 轮廓设为纯黑却显示为灰。
+- **浮动面（通知横幅 / 操作反馈浮窗）统一为一族**：横幅此前画的是不透明白卡、文字却取面板色 ⇒ 深色主题下发件人白压白看不见；浮窗的阴影还有一个明显的硬矩形边。现在两者共用一套浮动面：填充跟随主题卡片色、文字色由填充自身亮度派生、发丝线与悬浮高亮按自身底色解析、阴影换成顶栏/输入栏同款双通道投影且在被裁切的图层里完整放得下。「返回最新消息」按钮保持原有的固定深色。
+- **横幅尺寸并入内容列**：宽度改为与顶栏、输入栏、底栏同宽，高度取顶栏同高，头像取顶栏控件尺寸，并修正横幅压住顶栏 10px 的偏移。
+- **横幅 6 秒、操作反馈成功 3 秒 / 失败 5 秒**（原为 4 秒 / 2 秒 · 4 秒）。
+- **修掉一处会被误判成私聊的真实 bug**：聊天行里只要出现「whisper / 私聊 / 密语」等字样（例如一条普通公屏消息或命令回执），就会被抢进私聊面板并弹出横幅，且把关键字连同正文一起当成消息内容。现在关键字族要求必须有冒号分隔，且无分隔符的行一律不再认领；实验命令的回执文案也不再含私聊字样。
+- **操作反馈浮窗改到输入栏上方，并补上真正的淡入淡出**：此前锚在面板顶部、且只有文字与图标带透明度。现在整块卡片一起淡入淡出，从输入栏后方向上滑入（带轻微回弹），过期时下沉淡出；关闭「装饰性动效」后不淡不位移；详情页没有输入栏时贴列表底部。
+- **「加载更早消息」胶囊与「返回最新消息」按钮补上与其他控件同款的交互动效**：悬浮高亮由硬切换改为渐变淡入，按下与松开走同一套回弹弹簧；命中范围仍按未缩放的位置判定。
+- **引用胶囊文字改为跟随胶囊主题色**：不再取气泡文字色，避免黑鸦 / 典雅主题下用户名不可读。
+- **软阴影范围重排**：系统消息、引用胶囊、时间分割线、图片占位胶囊与发送者名字带保留文字软阴影；自身 / 他人气泡正文一律去影；阴影明暗按文字所在表面的底色判定。
+- **`[图片]` 占位绿自适应**：按胶囊底色实测对比度择优（深胶囊用亮绿、浅胶囊用深绿），浅色主题下不再隐形。
+- 横幅高度不足导致玩家名与正文重叠；点击横幅直接消失而不跳转。
+- 私聊 / 引用 / @ 前缀没有颜色：横幅与引用胶囊改走富文本管线，无显式颜色的 run 回退界面默认色。
+- detail↔detail 页面转场只移动消息列表、输入栏底板不动且文字与按钮瞬现；现在整页聊天作为同一层参加转场。
+- 公屏→私聊动画不跟随全局动画类型（detail→detail 曾硬编码为 SLIDE）。
 
 **性能**
 
@@ -79,10 +61,13 @@
 
 ----
 
-> This release rebuilds the whole interface motion and the profile page, unifies the card and border language, adds dual-axis scaling and adaptive outlines, and moves the license to Apache-2.0.
+> This section merges the 0.3.0 official round with the post-deployment patch rounds (R31-R35); first published externally on the new repository NoWordz/AtomChat-Mod as 0.3.0-Preview (a preview), with the license moved back to MIT.
 
 **Added**
 
+- **Server-side test command `/atomchat test`**: a single-player session cannot produce a mention / quote / whisper banner, and has no second player to poke you, while running two clients at once muddies the very debug log you are reading. The server can now play the other party: `/atomchat test banner mention|quote|whisper [text]` and `/atomchat test poke [name]`. Banners go through the real notification path (settings toggles, sound gate and dedupe all still apply) and the poke is a full network round-trip. Banners only pop a banner - nothing is written into the chat history. Requires Debug mode in AtomChat settings; permission matches `/atomchat gui` (single-player always, otherwise OP level 2).
+- **Image preview**: left-click a loaded chat image for a full-size, aspect-kept preview (dimmed backdrop, fade-and-zoom entry, closed by the bottom X, the backdrop or Esc); loading placeholders and the `[image]` capsule stay inert.
+- **One navigation rule for every entry point**: the list card, the avatar context menu, the notification banner, the avatar click and the list-card menu all follow the global slide/zoom; world <-> private chat moves messages, reply bar and composer (text and buttons included) as one layer while the header and frame stay fixed.
 - New "navigation animation style" single choice: slide / zoom, shared by tab switching and page pushes (default zoom).
 - New themes "Dusk" (grey-violet, translucent) and "Mint" (deep teal, translucent); nine themes in total.
 - Custom wallpaper, custom banner and avatar cropping, with images hosted locally through the system file picker.
@@ -100,7 +85,11 @@
 - The composer buttons are rebuilt, with the press bounce unified on a 4-pixel travel budget per side.
 - The outline is drawn in exactly the picked colour, with no automatic substitution.
 - The panel frame gets a two-pass drop shadow, with unified corner radius and card inset.
-- The license is now Apache-2.0.
+- The license was moved to Apache-2.0.
+- The license is MIT again: the four LICENSE files, `mod_license`, `fabric.mod.json` and the about page all agree.
+- **About hero** is now the full AtomChat red wordmark on a light geometric ground; the card is taller (s(88) to s(136)) and the mark is contained and centred, never stretched or overflowing.
+- **Notification banner** matches the list's static card width, became a two-line auto-height card (title line, body line, truncated when overlong); a click dismisses only after the jump is confirmed; type prefixes use HUD semantic colours (@ = theme accent / quote = blue / private = magenta) while names and bodies keep their original rich-text colours.
+- **Success toast tick** prefers the accent colour and only adjusts lightness along the hue when contrast is short, instead of flipping to pure white or black; the float shadow is softened on its own without touching the header or composer.
 
 **Fixed**
 
@@ -111,11 +100,23 @@
 - The lower half of light theme preview cards picked up a dark tint on dark themes.
 - The avatar ring was clipped on one side.
 - An outline set to pure black showed as grey.
+- **The floating surfaces (notification banner and action toast) are one family now**: the banner painted an opaque white card while taking its text from the panel, so on dark themes the sender name was white on white and invisible; the toast's shadow also showed a hard rectangular edge. Both now share one float surface: a themed fill, ink derived from that fill's own luminance, an edge hairline and hover wash resolved against the float's own colour, and the two-tier shadow the header and composer ride - inside a layer large enough to hold it. The jump-to-latest button keeps its fixed dark pill.
+- **The banner now belongs to the content column**: its width matches the header, composer and tab bar, its height is the header's, its avatar the header control size, and its offset no longer overlaps the header card by 10px.
+- **Banner holds 6s; action feedback holds 3s on success and 5s on failure** (was 4s / 2s · 4s).
+- **Fixed a real misclassification bug**: any chat line merely containing a whisper word ("whisper", "私聊", "密语" ...) - an ordinary public message, or a command reply - was routed into the private panel and popped a banner, with the keyword glued onto the message body. The keyword family now requires a colon separator, and a line with no separator at all is never claimed. The test command's own reply wording no longer contains whisper/private words either.
+- **Action toasts now rise from just above the composer and actually fade**: they used to be anchored at the panel top, and only the text and glyph carried opacity. The whole card now fades as one, slides up from behind the composer with a slight bounce, and sinks while fading out; with decorative motion off it neither fades nor moves. Detail pages without a composer anchor to the bottom of the list.
+- **The "load earlier" capsule and the jump-to-latest button gained the same interaction motion as every other control**: the hover highlight eases in instead of switching, and press/release ride the shared bounce spring. Hit-testing still uses the unscaled position.
+- **Quote-capsule text now follows the capsule theme colour** instead of the bubble text colour, fixing the unreadable names on raven and elegant.
+- **Soft-shadow scope rebalanced**: system messages, quote pills, time dividers, image placeholders and the sender name band keep the text shadow; bubble body text (own and others) has none. The shadow's polarity follows the surface the text sits on.
+- **[Image] placeholder green adapts by measured contrast** with the capsule tint (bright on dark, deep on light), so it no longer disappears on pale themes.
+- Banner name and body overlapped at the old height; a banner click dismissed without jumping.
+- Private / quote / @ prefixes had no colour: banner and quote capsule now run a rich-text pipeline, and runs without an explicit colour fall back to the interface default.
+- Detail-to-detail transitions moved only the message list while the composer plate stayed and its text and buttons popped in; the whole chat page now transitions as one layer.
+- The world to private animation ignored the global style (detail-to-detail was hardcoded to SLIDE).
 
 **Performance**
 
 - Low-risk hot-path work: cached font measurement and shadow filters, removed per-frame recomputation and temporary objects.
-
 ## v0.2.17
 
 > 本版把悬停高亮统一成「强调色染色 + 明暗自适应」的一种语言，边框回到发丝感，并修掉 0.2.16 引入的几处视觉回归。

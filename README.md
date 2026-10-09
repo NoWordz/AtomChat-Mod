@@ -1,6 +1,6 @@
 [简体中文](README.md) | [English](README_EN.md)
 
-<h1 align="center"><img width="256" height="256" alt="logo" src="https://github.com/user-attachments/assets/e449c62e-644b-4c19-9fbc-431d7a899781" /></h1>
+<h1 align="center"><img width="128" height="128" alt="logo" src="platforms/1.21.1-fabric/src/main/resources/assets/atomchat/logo.png" /></h1>
 
 <h1 align="center">AtomChat</h1>
 
@@ -17,14 +17,10 @@
   <img alt="OS" src="https://img.shields.io/badge/OS-Windows%20x64-lightgrey">
   <img alt="Java" src="https://img.shields.io/badge/Java-17%2B-yellow">
   <img alt="Version" src="https://img.shields.io/github/v/release/E33EPUS/AtomChat?sort=semver">
-  <img alt="License" src="https://img.shields.io/badge/License-Apache--2.0-brightgreen">
+  <img alt="License" src="https://img.shields.io/badge/License-MIT-blue">
 </p>
 
-<p align="center">
-  <a href="https://github.com/E33EPUS/AtomChat/actions/workflows/build.yml"><img alt="Build" src="https://github.com/E33EPUS/AtomChat/actions/workflows/build.yml/badge.svg?branch=main"></a>
-</p>
-
-> **v0.3.0 已发布** · [下载 JAR](https://github.com/E33EPUS/AtomChat/releases) · [中文 Wiki](https://github.com/E33EPUS/AtomChat/wiki)
+> **0.3.0-Preview 预览版** · [下载 JAR](https://github.com/NoWordz/AtomChat-Mod/releases) · [Wiki（英文）](https://github.com/NoWordz/AtomChat-Mod/wiki)
 
 > [!WARNING]
 > **目前只支持 Windows x64。** JAR 内只打包了 Skija 的 Windows x64 原生库，Linux / macOS 装上后聊天面板起不来。详见[已知限制](#已知限制)。
@@ -48,7 +44,7 @@ AtomChat 把原版聊天屏改造成一个独立的「手机 App」风格聊天�
 | Java | Fabric / NeoForge 版需 21+；Forge 1.20.1 版需 17 |
 | 系统 | Windows x64（macOS / Linux 尚不可用） |
 
-1. 从 [Releases](https://github.com/E33EPUS/AtomChat/releases) 下载对应平台的 JAR（`atomchat-Fabric-1.21.1-*.jar` / `atomchat-NeoForge-1.21.1-*.jar` / `atomchat-Forge-1.20.1-*.jar`），或按[开发与构建](#开发与构建)自行构建
+1. 从 [Releases](https://github.com/NoWordz/AtomChat-Mod/releases) 下载对应平台的 JAR（`atomchat-Fabric-1.21.1-*.jar` / `atomchat-NeoForge-1.21.1-*.jar` / `atomchat-Forge-1.20.1-*.jar`），或按[开发与构建](#开发与构建)自行构建
 2. 放进 `.minecraft/mods/`；想让服务器托管图片 / GIF 并同步头像，把同一个 JAR 也放进服务端的 `mods/`
 3. 启动游戏，按聊天键（默认 `T` / `/`）打开 AtomChat；也可以按 `Y`（默认按键，可在 按键绑定 → `AtomChat` 分类里改）直接打开面板并回到上次所在的页面
 
@@ -83,7 +79,7 @@ AtomChat 把原版聊天屏改造成一个独立的「手机 App」风格聊天�
 
 想确认实际走了哪条路，看客户端日志：托管成功会有一行 `Stored hosted media`。
 
-服务端托管的媒体默认保留 7 天（`retentionDays`，`0` = 永久），按容量上限自动修剪最旧的内容；具体数值见 [Wiki 服主手册](https://github.com/E33EPUS/AtomChat/wiki)。
+服务端托管的媒体默认保留 7 天（`retentionDays`，`0` = 永久），按容量上限自动修剪最旧的内容；具体数值见 [Wiki（英文）](https://github.com/NoWordz/AtomChat-Mod/wiki)。
 
 ## 兼容性
 
@@ -114,7 +110,7 @@ AtomChat 把原版聊天屏改造成一个独立的「手机 App」风格聊天�
 - 模组不上传任何遥测 / 个人信息；图片上传只在你主动选择 / 粘贴 / 拖入时发生
 - 服务端托管只通过游戏连接传输字节，不开放 HTTP 端口，也不暴露给未连接的玩家
 - 本地配置、头像、壁纸、表情包只存在 `.minecraft/config/atomchat/`，不会自动同步给别人
-- 全套数据落点与保留策略见 [Wiki](https://github.com/E33EPUS/AtomChat/wiki)
+- 全套数据落点与保留策略见 [Wiki](https://github.com/NoWordz/AtomChat-Mod/wiki)
 
 ## 常见问题
 
@@ -126,16 +122,16 @@ AtomChat 把原版聊天屏改造成一个独立的「手机 App」风格聊天�
 
 **为什么某条消息显示成灰色？** 客户端无法确定它是玩家消息时会保守归为系统灰字（常见于昵称插件使用了无法解析的格式）。
 
-**可以放进整合包吗？** 可以。AtomChat 代码为 Apache-2.0，无需额外授权；若分发 JAR，请保留 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) 中的第三方声明。
+**可以放进整合包吗？** 可以。AtomChat 代码为 MIT，无需额外授权；若分发 JAR，请保留 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) 中的第三方声明。
 
 ## 更多文档
 
 | 去哪 | 看什么 |
 |---|---|
-| [Wiki](https://github.com/E33EPUS/AtomChat/wiki) | 快速上手、图片与传输路线、表情包、外观与配置全表、**服主手册**、疑难排查、开发者说明 |
-| [Issues](https://github.com/E33EPUS/AtomChat/issues) | 报 bug、提建议（也可在百科 / 平台评论区留言） |
-| [Releases](https://github.com/E33EPUS/AtomChat/releases) | 三个平台的 JAR 与每个版本的更新说明 |
-| [CHANGELOG](https://github.com/E33EPUS/AtomChat/blob/main/CHANGELOG.md) | 完整变更历史（双语） |
+| [Wiki（英文）](https://github.com/NoWordz/AtomChat-Mod/wiki) | 安装、功能导览、配置全表与构建说明 |
+| [Issues](https://github.com/NoWordz/AtomChat-Mod/issues) | 报 bug、提建议（也可在百科 / 平台评论区留言） |
+| [Releases](https://github.com/NoWordz/AtomChat-Mod/releases) | 三个平台的 JAR 与每个版本的更新说明 |
+| [CHANGELOG](https://github.com/NoWordz/AtomChat-Mod/blob/main/CHANGELOG.md) | 完整变更历史（双语） |
 
 ## 开发与构建
 
@@ -146,10 +142,10 @@ AtomChat 把原版聊天屏改造成一个独立的「手机 App」风格聊天�
 
 产物在 `build/libs/`：Fabric 与 NeoForge 版本需 JDK 21，Forge 1.20.1 版本需 JDK 17；Forge 另有一个未内嵌依赖的 `-slim` 版本，**发版请用不带 `-slim` 的那个**。
 
-源码在**一个分支**里维护：能共用的代码在 `shared/`，按版本 / 加载器 / 映射家族分层的是 `layers/`，各目标自己的代码与构建脚本在 `platforms/<目标>/`。支持哪些目标写在 `versions/targets.json`；一次发版所有目标各出一个 jar，新增目标不必改构建脚本。模块划分、包结构与测试说明见 [Wiki 开发者页](https://github.com/E33EPUS/AtomChat/wiki)。
+源码在**一个分支**里维护：能共用的代码在 `shared/`，按版本 / 加载器 / 映射家族分层的是 `layers/`，各目标自己的代码与构建脚本在 `platforms/<目标>/`。支持哪些目标写在 `versions/targets.json`；一次发版所有目标各出一个 jar，新增目标不必改构建脚本。模块划分、包结构与测试说明见 [Wiki（英文）](https://github.com/NoWordz/AtomChat-Mod/wiki)。
 
 ## 许可证
 
-[AtomChat 自身代码](LICENSE)为 Apache-2.0。分发的 JAR 中捆绑了 Skija（Java 绑定）、HumbleUI types、FlatLaf 与 Skia 原生库，各自保留其许可证，完整文本见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
+[AtomChat 自身代码](LICENSE)为 MIT。分发的 JAR 中捆绑了 Skija（Java 绑定）、HumbleUI types、FlatLaf 与 Skia 原生库，各自保留其许可证，完整文本见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
 
 Copyright © 2026 E33EPUS

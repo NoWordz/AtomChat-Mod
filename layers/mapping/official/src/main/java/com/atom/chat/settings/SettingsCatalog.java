@@ -360,11 +360,11 @@ public final class SettingsCatalog {
     public static List<InfoRow> aboutCoreRows() {
         return List.of(
                 new InfoRow("atomchat.settings.about.version", AtomChat.version(),
-                        "https://github.com/E33EPUS/AtomChat/releases"),
-                new InfoRow("atomchat.settings.about.license", "Apache-2.0",
-                        "https://www.apache.org/licenses/LICENSE-2.0"),
-                new InfoRow("atomchat.settings.about.repo", "E33EPUS/AtomChat",
-                        "https://github.com/E33EPUS/AtomChat"));
+                        "https://github.com/NoWordz/AtomChat-Mod/releases"),
+                new InfoRow("atomchat.settings.about.license", "MIT",
+                        "https://opensource.org/licenses/MIT"),
+                new InfoRow("atomchat.settings.about.repo", "NoWordz/AtomChat-Mod",
+                        "https://github.com/NoWordz/AtomChat-Mod"));
     }
 
     /** Bundled third-party components, each linking to its own project page. */

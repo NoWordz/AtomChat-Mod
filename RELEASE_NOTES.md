@@ -2,7 +2,9 @@
 
 ## v0.3.0
 
-本版重做了整套界面动效与个人档案页，统一了卡片与描边语言，加入双轴缩放与自适应边框，并把许可换为 Apache-2.0。三个发布目标（Fabric 1.21.1 / NeoForge 1.21.1 / Forge 1.20.1）同步。
+> 对外首次发布于新仓库 NoWordz/AtomChat-Mod，版本 0.3.0-Preview（预览版）；许可由 Apache-2.0 换回 MIT。
+
+本版重做了整套界面动效与个人档案页，统一了卡片与描边语言，加入双轴缩放与自适应边框。三个发布目标（Fabric 1.21.1 / NeoForge 1.21.1 / Forge 1.20.1）同步。
 
 **新增**
 
@@ -10,6 +12,8 @@
 - **新主题「薄暮」「薄荷」**（半透明面板），主题总数增至九张。
 - **自定义壁纸 / 头图 / 头像裁剪**，图片本地托管。
 - **「内容缩放」滑条**：手机大小不变，内部文字与按钮随其缩放。
+- **图片预览**：左键聊天里已加载的图片打开等比全尺寸预览（背景变暗、淡入缩放进入，底部 X / 暗背景 / Esc 关闭）。
+- **全入口统一导航动画**：五个入口共用全局 slide/zoom；公屏↔私聊切换时消息、回复条与输入栏作为整层一起转场，顶栏与外框固定。
 
 **更改**
 
@@ -17,7 +21,10 @@
 - **个人档案页按 QQ 主页重做**：可自定义头图（带裁剪）、头像跨压头图下沿、统计瓦片、信息大卡与身份卡，头像与头图加大。
 - **整卡语言统一**（关于页第三方、mod 信息、档案信息区与身份卡），行间发丝分割、整卡缩放；悬停高亮统一为强调色染色。
 - 输入栏按钮整组重做，弹跳统一为每边 4 像素；界面外框改双层外阴影。
-- **描边完全按所选颜色绘制**（不再自动换成灰），许可换为 **Apache-2.0**。
+- **描边完全按所选颜色绘制**（不再自动换成灰）。
+- **关于页头图**改为完整 AtomChat 红字标 + 浅底几何留白背景，卡片加高，字标按自然比例 contain 居中。
+- **通知横幅**对齐列表静态卡宽度并改双行自适应卡，点击先确认跳转成功再关闭；类型前缀取 HUD 语义色，玩家名与正文保留原始富文本颜色。
+- **许可换回 MIT**：四份 LICENSE、mod 元数据与关于页展示同步。
 
 **修复**
 
@@ -25,6 +32,9 @@
 - 自定义壁纸后「背景模糊」副标题显示成键名。
 - 浅色主题下滚动条 / 滑条轨道 / 内嵌输入框不可见；深色主题下浅色预览卡串色。
 - 轮廓设为纯黑却显示为灰。
+- 横幅白底白字与浮层阴影硬边；横幅玩家名与正文重叠；点击横幅不跳转直接关闭。
+- detail↔detail 转场只移动消息列表、输入栏底板不动且文字瞬现；现在整页聊天一起转场。
+- 成功 Toast 勾号在部分主题切纯白/纯黑；现在保留强调色相只调明度。
 
 **性能**
 
@@ -32,7 +42,9 @@
 
 ----
 
-This release rebuilds the interface motion and the profile page, unifies the card and border language, adds dual-axis scaling and adaptive outlines, and moves the license to Apache-2.0. All three targets (Fabric 1.21.1 / NeoForge 1.21.1 / Forge 1.20.1) ship together.
+> First published externally on the new repository NoWordz/AtomChat-Mod as 0.3.0-Preview (a preview); the license moves back from Apache-2.0 to MIT.
+
+This release rebuilds the interface motion and the profile page, unifies the card and border language, and adds dual-axis scaling and adaptive outlines. All three targets (Fabric 1.21.1 / NeoForge 1.21.1 / Forge 1.20.1) ship together.
 
 **Added**
 
@@ -40,6 +52,8 @@ This release rebuilds the interface motion and the profile page, unifies the car
 - **Two new themes "Dusk" and "Mint"** (translucent panels); nine themes in total.
 - **Custom wallpaper / banner / avatar cropping**, images hosted locally.
 - **"Content scale" slider**: the phone frame keeps its size while the contents scale.
+- **Image preview**: left-click a loaded chat image for a full-size, aspect-kept preview (dimmed backdrop, fade-and-zoom entry, closed by the bottom X, the backdrop or Esc).
+- **One navigation rule for every entry point**: all five entries share the global slide/zoom; world <-> private chat moves messages, reply bar and composer as one layer while the header and frame stay fixed.
 
 **Changed**
 
@@ -47,7 +61,10 @@ This release rebuilds the interface motion and the profile page, unifies the car
 - **The profile page is rebuilt after the QQ home page**: a customisable banner (with cropping), an avatar straddling its edge, stat tiles, one merged info card and an identity card; avatar and banner are larger.
 - **One card language** (about's third-party list, mod info, profile info block and identity card) with hairline dividers and whole-card scaling; hover highlights are one accent-tinted language.
 - The composer buttons are rebuilt with a 4-pixel travel bounce; the panel frame gets a two-pass shadow.
-- **The outline is drawn in exactly the picked colour** (no automatic substitution); the license is now **Apache-2.0**.
+- **The outline is drawn in exactly the picked colour** (no automatic substitution).
+- **About hero** is the full AtomChat red wordmark on a light geometric ground; the card is taller and the mark is contained and centred.
+- **Notification banner** matches the list's static card width, became a two-line auto-height card, dismisses only after a confirmed jump; type prefixes use HUD semantic colours while names and bodies keep their rich-text colours.
+- **The license is MIT again**: the four LICENSE files, the mod metadata and the about page agree.
 
 **Fixed**
 
@@ -55,6 +72,9 @@ This release rebuilds the interface motion and the profile page, unifies the car
 - With a custom wallpaper set, the blur switch's subtitle showed a raw key name.
 - Scrollbars, slider tracks and inline fields were invisible on light themes; light preview cards picked up a dark tint on dark themes.
 - An outline set to pure black showed as grey.
+- White-on-white banner and the float shadow's hard edge; banner name/body overlap; banner clicks dismissing without jumping.
+- Detail-to-detail transitions moved only the message list while the composer plate stayed and its text popped in; the whole chat page now transitions as one layer.
+- The success toast tick flipped to pure white or black on some themes; it now keeps the accent hue and only adjusts lightness.
 
 **Performance**
 

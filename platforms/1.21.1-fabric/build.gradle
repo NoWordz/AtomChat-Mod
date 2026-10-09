@@ -90,7 +90,10 @@ def storeVersion = "Fabric-${project.minecraft_version}-${project.mod_version}"
 def changelogFor(version) {
     // 单分支之后 RELEASE_NOTES.md 只有仓库根那一份，各平台不再各存一份
     def text = new File(atomchatRepoRoot, 'RELEASE_NOTES.md').getText('UTF-8')
-    def start = text.indexOf("## v${version}")
+    // A prerelease suffix (0.3.0-Preview) shares the base version's section —
+    // the suffix is not a version difference (skill changelog-format, rule 1).
+    def base = version.split('-')[0]
+    def start = text.indexOf("## v${base}")
     if (start < 0) {
         return "AtomChat ${version}"
     }
