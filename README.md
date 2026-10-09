@@ -1,6 +1,6 @@
 <img width="800" height="500" alt="logo1" src="https://github.com/user-attachments/assets/354cc7eb-4c1c-49f0-9759-bbe18bf11a14" />
 
-<h1 align="center">AtomChat></h1>
+<h1 align="center">AtomChat</h1>
 
 <p align="center">
   <em>A phone-app style chat experience for Minecraft, powered by Skija.</em>
