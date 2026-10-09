@@ -144,7 +144,11 @@ def main() -> int:
         print(f"接缝清单与代码同步（甲 {len(referenced)} / 乙 {len(internal)}）")
         return 0
     DOC.parent.mkdir(parents=True, exist_ok=True)
-    DOC.write_text(text.replace("\n", "\r\n"), encoding="utf-8", newline="")
+    # newline='\n'：产物行尾必须与平台无关。以前这里把 \n 换成 \r\n 再以 newline="" 写盘，
+    # 于是本机（Windows）生成一次就把这份文档变成 CRLF 工作区态，而仓库的 blob 策略是 LF
+    # （.gitattributes）—— 同一个文件在不同机器上呈现两种行尾，读 diff 的人只会困惑。
+    # --check 那一侧本来就做了 \r\n -> \n 归一化，所以它两种行尾都认，不必动。
+    DOC.write_text(text, encoding="utf-8", newline="\n")
     print(f"已生成 {DOC.relative_to(ROOT)}：甲 {len(referenced)} 个，乙 {len(internal)} 个")
     return 0
 
