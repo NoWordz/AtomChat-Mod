@@ -25,6 +25,7 @@ import com.atom.chat.ui.ScrollController;
 import com.atom.chat.ui.UiMotion;
 import com.atom.chat.ui.UiSpring;
 import com.atom.chat.ui.UiTokens;
+import static com.atom.chat.ui.UiTokens.s;
 import io.github.humbleui.skija.Canvas;
 import io.github.humbleui.skija.Color;
 import io.github.humbleui.skija.Font;
@@ -1667,10 +1668,6 @@ public final class MessageListView {
     }
 
     // ------------------------------------------------------------------ tokens
-
-    private static float s(float v) {
-        return UiTokens.s(v);
-    }
 
     /**
      * Breathing gap between the avatar and the list edge: the rim ring extends

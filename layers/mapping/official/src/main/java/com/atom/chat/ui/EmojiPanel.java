@@ -10,6 +10,7 @@ import com.atom.chat.render.Animator;
 import com.atom.chat.render.Easing;
 import com.atom.chat.render.SkiaDraw;
 import com.atom.chat.render.SkiaFontRenderer;
+import static com.atom.chat.ui.UiTokens.s;
 import io.github.humbleui.skija.Canvas;
 import io.github.humbleui.skija.Color;
 import io.github.humbleui.skija.Font;
@@ -1020,9 +1021,5 @@ public final class EmojiPanel {
             canvas.scale(scale, scale);
             canvas.translate(-cx, -cy);
         }
-    }
-
-    private static float s(float v) {
-        return UiTokens.s(v);
     }
 }

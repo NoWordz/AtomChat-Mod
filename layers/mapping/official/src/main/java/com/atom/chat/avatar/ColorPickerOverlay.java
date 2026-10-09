@@ -10,6 +10,7 @@ import com.atom.chat.ui.PressScale;
 import com.atom.chat.ui.UiLayout;
 import com.atom.chat.ui.UiMotion;
 import com.atom.chat.ui.UiTokens;
+import static com.atom.chat.ui.UiTokens.s;
 import io.github.humbleui.skija.Canvas;
 import io.github.humbleui.skija.Color;
 import io.github.humbleui.skija.Font;
@@ -64,10 +65,6 @@ public final class ColorPickerOverlay {
     /** @param clipboard copies the hex value (the shell's clipboard helper). */
     public ColorPickerOverlay(java.util.function.Consumer<String> clipboard) {
         this.clipboard = clipboard;
-    }
-
-    private static float s(float v) {
-        return UiTokens.s(v);
     }
 
     public void open(SettingsColor color) {

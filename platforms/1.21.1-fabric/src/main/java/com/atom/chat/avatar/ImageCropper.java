@@ -9,6 +9,7 @@ import com.atom.chat.ui.PressScale;
 import com.atom.chat.ui.UiLayout;
 import com.atom.chat.ui.UiMotion;
 import com.atom.chat.ui.UiTokens;
+import static com.atom.chat.ui.UiTokens.s;
 import io.github.humbleui.skija.Canvas;
 import io.github.humbleui.skija.Color;
 import io.github.humbleui.skija.EncodedImageFormat;
@@ -85,10 +86,6 @@ public final class ImageCropper {
 
     public ImageCropper(Callback callback) {
         this.callback = callback;
-    }
-
-    private static float s(float v) {
-        return UiTokens.s(v);
     }
 
     /**

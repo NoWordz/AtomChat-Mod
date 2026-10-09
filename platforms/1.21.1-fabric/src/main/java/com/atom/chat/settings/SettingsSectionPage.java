@@ -23,6 +23,7 @@ import com.atom.chat.ui.UiLayout;
 import com.atom.chat.ui.UiMotion;
 import com.atom.chat.ui.UiCards;
 import com.atom.chat.ui.UiTokens;
+import static com.atom.chat.ui.UiTokens.s;
 import io.github.humbleui.skija.Canvas;
 import io.github.humbleui.skija.Color;
 import io.github.humbleui.skija.Font;
@@ -481,10 +482,6 @@ public final class SettingsSectionPage {
     private long settleStart;
     private int hoveredIndex = -1;
     private long lastFrameMs = System.currentTimeMillis();
-
-    private static float s(float v) {
-        return UiTokens.s(v);
-    }
 
     /** Title/value/verb/icon colour — follows the interface text colour setting. */
     private static int textPrimary() {

@@ -17,6 +17,7 @@ import com.atom.chat.ui.UiCards;
 import com.atom.chat.ui.UiLayout;
 import com.atom.chat.ui.UiMotion;
 import com.atom.chat.ui.UiTokens;
+import static com.atom.chat.ui.UiTokens.s;
 import io.github.humbleui.skija.Canvas;
 import io.github.humbleui.skija.Color;
 import io.github.humbleui.skija.ColorFilter;
@@ -156,10 +157,6 @@ public final class ConversationListPage {
 
     private static String tr(String key, Object... args) {
         return Text.translatable(key, args).getString();
-    }
-
-    private static float s(float v) {
-        return UiTokens.s(v);
     }
 
     /**
