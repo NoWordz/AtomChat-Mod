@@ -10,7 +10,7 @@
 - **发布**：[v0.3.0-Preview prerelease](https://github.com/NoWordz/AtomChat-Mod/releases/tag/v0.3.0-Preview) 已建，挂三端非 slim jar；release 正文取 `RELEASE_NOTES.md` 的 v0.3.0 段整段（双语）。
 - **部署**：五实例仍铺 0.3.0 构建（见下表）；预览 jar 只发布到 release，未铺实例。
 - **许可**：MIT（根 `LICENSE`、三平台 `src/main/resources/LICENSE`、`fabric.mod.json`、`gradle.properties` 的 `mod_license`、关于页 `SettingsCatalog` 展示六处一致，版权行 `E33EPUS`）。
-- **Wiki**：五页纯英文 wiki 已写好暂存 `D:\Claude_ds\_r35-wiki`（Home / Getting-Started / Features / Configuration / Building-from-source）；**GitHub wiki 的 git 端点要在网页创建第一页后才存在**（API 开关 `has_wiki` 无效），等用户网页点一下「Create the first page」后再 push。
+- **Wiki**：五页纯英文已发布在 https://github.com/NoWordz/AtomChat-Mod/wiki （Home / Getting-Started / Features / Configuration / Building-from-source，wiki 仓库 `d33f7aa`）。
 
 | 平台 | 实例目录 | 部署 jar md5 |
 |---|---|---|
@@ -56,9 +56,9 @@
 - **新仓库迁移**：旧仓库 `E33EPUS/AtomChat` 被封，新仓库 `NoWordz/AtomChat-Mod`；`origin` 改指新仓库（旧 remote 改名 `banned-old` 保留）。推送时远端非空拒绝快进——查实只是建仓模板提交（一行 README + Apache 模板 LICENSE，无真实内容），确认后才 force-push 覆盖。
 - **版本与许可**：`mod_version=0.3.0-Preview`；许可换回 MIT（四份 LICENSE、`mod_license`、`fabric.mod.json`、关于页展示六处同步）；关于页三行（版本链接 / 许可 / 仓库）全指新仓库；三端 `changelogFor` 先剥预览后缀再找段（skill 规矩 1，`_dump.gradle` 验证工具同步），商店英文块取法不破。
 - **日志**：CHANGELOG 两个 `v0.3.0` 段合并为一段（段首版本级 `>` 说明、中英成对）；RELEASE_NOTES 补 `>` 预览说明与 R31–R35 浓缩条目；`_parity_check.py` PASS。
-- **README / README_EN**：旧仓库链接全替换、死 CI 徽章与被封仓库的 user-attachments 图链删除（改仓库内 `logo.png`）、许可改 MIT、顶部标注 0.3.0-Preview。
+- **README / README_EN**：按 fgmplus 式密度重写（是什么 / 功能 / 兼容性 / 配置 / 限制 / FAQ / 安装 / 构建 / 许可，无徽章无长表），链接全指新仓库、许可 MIT、顶部标 0.3.0-Preview。
 - **发布**：prerelease [`v0.3.0-Preview`](https://github.com/NoWordz/AtomChat-Mod/releases/tag/v0.3.0-Preview) 挂三端非 slim jar，正文取 RELEASE_NOTES 的 v0.3.0 段整段。
-- **wiki 未推送**：五页纯英文已暂存 `D:\Claude_ds\_r35-wiki`；GitHub wiki 的 git 端点要网页创建第一页后才存在（API 开关无效），等用户点一下后再 push。
+- **wiki**：五页纯英文（Home / Getting-Started / Features / Configuration / Building-from-source）已推送 wiki 仓库；GitHub wiki 的 git 端点要网页创建第一页后才存在（API 开关无效），用户点完后 force-push 覆盖模板首页。
 
 > 前一轮（引用胶囊取色 + 胶囊族软阴影 + `[图片]` 占位绿）已随 commit `d8fc806` 入库并验收。
 
