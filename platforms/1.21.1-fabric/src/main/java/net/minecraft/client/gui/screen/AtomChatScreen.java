@@ -5,6 +5,7 @@ import com.atom.chat.chat.BlockList;
 import com.atom.chat.chat.PublicEchoTracker;
 import com.atom.chat.chat.DraftStore;
 import com.atom.chat.chat.ReplySlotStore;
+import com.atom.chat.chat.SendPipeline;
 import com.atom.chat.chat.ChatMessage;
 import com.atom.chat.chat.Cicodes;
 import com.atom.chat.chat.MessageFilter;
@@ -95,9 +96,7 @@ import net.minecraft.client.option.KeyBinding;
 import net.minecraft.text.Style;
 import net.minecraft.text.Text;
 import net.minecraft.util.Identifier;
-import net.minecraft.util.StringHelper;
 import net.minecraft.util.math.MathHelper;
-import org.apache.commons.lang3.StringUtils;
 import net.fabricmc.loader.api.FabricLoader;
 
 import org.lwjgl.PointerBuffer;
@@ -521,6 +520,44 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
      * wrappers below are the only entry points this shell keeps.
      */
     private final ReplySlotStore replySlots = new ReplySlotStore();
+    /**
+     * The send path (D3). Every fact and every side effect it needs from another
+     * domain goes through this Host: D24's stack top, D1's reply slots, D21's
+     * composer, D11's scroll controller, and the screen's own client handle —
+     * the last one deliberately as a getter, so the pipeline sees the same
+     * pre-{@code init()} null the old code saw.
+     */
+    private final SendPipeline sendPipeline = new SendPipeline(new SendPipeline.Host() {
+        @Override
+        public MinecraftClient client() {
+            return client;
+        }
+
+        @Override
+        public NavPage topNav() {
+            return navigation.peek();
+        }
+
+        @Override
+        public ReplySlotStore replySlots() {
+            return replySlots;
+        }
+
+        @Override
+        public void clearComposer() {
+            inputSetText("");
+        }
+
+        @Override
+        public void focusComposer() {
+            inputFocused = true;
+        }
+
+        @Override
+        public void stickToBottom() {
+            currentScroll().stickToBottom();
+        }
+    });
     /** Scroll state for root pages; shared across the root tabs, opening at the top. */
     private final ScrollController rootScroll = new ScrollController(false);
     /** Scroll state for pushed detail pages (settings/profile), opening at the top. */
@@ -4242,146 +4279,27 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
         });
     }
 
-    private static String quoteTextFor(ChatMessage message) {
-        if (message == null) {
-            return null;
-        }
-        String contentText = message.getContentText();
-        if (Cicodes.extractImageUrl(message.getRawText()) != null
-                || (contentText != null && Cicodes.extractImageUrl(contentText) != null)) {
-            return tr("atomchat.hud.image");
-        }
-        return abbreviate(message.getContentText(), 30);
-    }
-
+    /** Sends whatever the composer holds; the pipeline owns the whole order. */
     private void sendMessage(String text) {
-        String normalized = normalizeInput(text);
-        if (normalized.isEmpty()) {
-            return;
-        }
-        if (this.client.player == null) {
-            return;
-        }
-        String quoteName = null;
-        String quoteText = null;
-        // The typed body stays separate from the wire text: the quote prefix
-        // travels with the message, but the local bubble must not show it.
-        String body = normalized;
-        ChatMessage reply = replySlots.replyTarget();
-        if (reply != null) {
-            quoteName = messageSenderName(reply);
-            quoteText = quoteTextFor(reply);
-            // Quote travels with the message so other players can see it too.
-            normalized = "「引用 @" + quoteName + ": " + quoteText + "」" + body;
-        }
-
-        boolean privateChat = topPage() == AppPage.PRIVATE_CHAT;
-        PlayerRef privateTarget = privateChat ? activePrivateTarget() : null;
-        if (privateChat) {
-            sendPrivateMessage(normalized, body, privateTarget);
-            return;
-        }
-
-        boolean command = normalized.startsWith("/");
-        if (command) {
-            this.client.player.networkHandler.sendChatCommand(normalized.substring(1));
-        } else {
-            if (!normalized.startsWith("「引用")
-                    && (normalized.startsWith("http://") || normalized.startsWith("https://"))
-                    && !normalized.contains("CICode")
-                    && ImageFiles.isImageUrl(normalized)) {
-                normalized = "[[CICode,url=" + normalized + ",name=图片]]";
-            }
-            this.client.player.networkHandler.sendChatMessage(normalized);
-            // Arm echo suppression: the server relays this line back through the
-            // identity-less path on NCR-style servers (e33chat parity).
-            PublicEchoTracker.markSent(normalized);
-        }
-        this.client.inGameHud.getChatHud().addToMessageHistory(normalized);
-        // Vanilla never echoes commands back into the chat feed as your own
-        // message, so do not manufacture a local bubble for them either.
-        // Non-command chat still gets an immediate local echo so the UI feels
-        // like a phone messenger even before the server relays the message.
-        if (!command) {
-            UUID ownUuid = this.client.player.getUuid();
-            String ownProfile = this.client.player.getName().getString();
-            // Own bubbles show the decorated self name (titles/team prefix),
-            // e33chat parity — the bare profile name stays for identity fields.
-            ChatStore.get().add(LocalEcho.build(normalized, body, quoteName, quoteText,
-                    ownUuid, ownProfile, OwnIdentity.displayNameRich()));
-        }
-        inputSetText("");
-        replySlots.disarm();
-        // The armed reply is consumed with the send: drop its slot too, or
-        // navigating away and back would re-arm a reply that was already sent.
-        syncReplySlot();
-        inputFocused = true;
-        currentScroll().stickToBottom();
+        sendPipeline.sendMessage(text);
     }
 
-    private void sendPrivateMessage(String normalized, String body, PlayerRef target) {
-        ChatMessage reply = replySlots.replyTarget();
-        if (target == null || BlockList.isBlocked(target)) {
-            return;
-        }
-        boolean command = normalized.startsWith("/");
-        String historyText = normalized;
-        String sendText = command ? normalized
-                : "/msg " + target.realName() + " " + normalized;
-        this.client.player.networkHandler.sendChatCommand(sendText.startsWith("/")
-                ? sendText.substring(1) : sendText);
-        this.client.inGameHud.getChatHud().addToMessageHistory(historyText);
-
-        if (!command) {
-            UUID ownUuid = this.client.player.getUuid();
-            String ownProfile = this.client.player.getName().getString();
-            // Decorated self name on the outgoing bubble, e33chat parity.
-            PrivateChatStore.addOutgoing(target,
-                    LocalEcho.build(historyText, body, reply != null ? messageSenderName(reply) : null,
-                            reply != null ? quoteTextFor(reply) : null,
-                            ownUuid, ownProfile, OwnIdentity.displayNameRich()));
-            PrivateEchoTracker.markOutgoing(target);
-        }
-        inputSetText("");
-        replySlots.disarm();
-        // Consumed with the send — see sendMessage's matching call.
-        syncReplySlot();
-        inputFocused = true;
-        currentScroll().stickToBottom();
-    }
-
-    private static String normalizeInput(String text) {
-        return StringHelper.truncateChat(StringUtils.normalizeSpace(text.trim()));
-    }
-
-
+    /** The local player's name, or the "(me)" stand-in outside a world. */
     private String ownName() {
-        return this.client.player != null ? this.client.player.getName().getString() : tr("atomchat.sender.me");
+        return sendPipeline.ownName();
     }
-
-    /**
+        /**
      * Display name for a message row. Own messages use the local player; other
      * messages prefer the structured sender name from the capture pipeline and
      * only fall back to the old hard-coded label when identity is unavailable.
      */
     private String messageSenderName(ChatMessage msg) {
-        if (msg.isOwn()) {
-            return ownName();
-        }
-        String name = msg.getSenderName();
-        if (name != null && !name.isBlank()) {
-            return name;
-        }
-        return tr("atomchat.sender.player");
+        return sendPipeline.messageSenderName(msg);
     }
-
+    /** Head-truncates with an ellipsis — the reply bar formats its quote with it. */
     private static String abbreviate(String text, int maxChars) {
-        if (text.length() <= maxChars) {
-            return text;
-        }
-        return text.substring(0, maxChars) + "…";
+        return SendPipeline.abbreviate(text, maxChars);
     }
-
     private int accent() {
         return AtomChatConfig.get().accentColor;
     }

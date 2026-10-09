@@ -91,6 +91,11 @@
     { "yarn": "net.minecraft.stat.", "official": "net.minecraft.stats.", "note": "yarn 的 stat 包 = 官方的 stats 包（1.20.1 forge 侧写成 net.minecraft.stats.）" },
 
     { "yarn": "getOperatingSystem().open(", "official": "getPlatform().openUri(", "literal": true, "note": "Util 打开链接：整段一起换，避免把通用的 open 单词做成规则" },
-    { "yarn": "@Accessor(\"window\")", "official": "@Accessor(\"suggestions\")", "literal": true, "note": "访问器目标字段名：yarn window ↔ 官方 suggestions；连注解一起换，避免把通用的 window 词做成规则" }
+    { "yarn": "@Accessor(\"window\")", "official": "@Accessor(\"suggestions\")", "literal": true, "note": "访问器目标字段名：yarn window ↔ 官方 suggestions；连注解一起换，避免把通用的 window 词做成规则" },
+    { "yarn": "sendChatCommand", "official": "sendCommand", "note": "网络发包：yarn sendChatCommand（去斜杠后发出）↔ 官方 sendCommand；D3 SendPipeline 与三副本原代码逐字核对" },
+    { "yarn": "sendChatMessage", "official": "sendChat", "note": "网络发包：yarn sendChatMessage ↔ 官方 sendChat（同上核对）" },
+    { "yarn": "addToMessageHistory", "official": "addRecentChat", "note": "聊天历史：yarn ChatHud.addToMessageHistory ↔ 官方 ChatComponent.addRecentChat（同上核对）" },
+    { "yarn": "StringHelper", "official": "StringUtil", "note": "net.minecraft.util.StringHelper（yarn）↔ net.minecraft.util.StringUtil（官方）" },
+    { "yarn": "truncateChat", "official": "trimChatMessage", "note": "聊天文本裁剪：yarn StringHelper.truncateChat ↔ 官方 StringUtil.trimChatMessage（D3 normalizeInput 在用）" }
   ]
 }

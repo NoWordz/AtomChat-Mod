@@ -26,6 +26,7 @@
     "net.minecraft  — 原版类（共享层里出现的都是两套映射下同名的那些；改名的那类编不过，编译就是判据）",
     "com.mojang     — 原版捆绑库（如 DataFixerUpper / brigadier）",
     "com.google     — gson / guava 等，由原版捆绑",
+    "org.apache.commons.lang3 — commons-lang3（StringUtils.normalizeSpace），由原版捆绑",
     "org.slf4j      — 日志门面，由加载器提供",
     "org.lwjgl      — GLFW / OpenGL 绑定，由原版提供",
     "it.unimi       — fastutil，由原版捆绑",
