@@ -54,6 +54,7 @@ import com.atom.chat.render.RichTextRenderer;
 import com.atom.chat.render.SkiaDraw;
 import com.atom.chat.render.SkiaFontRenderer;
 import com.atom.chat.render.SkiaGraphics;
+import com.atom.chat.settings.ProfilePageWiring;
 import com.atom.chat.settings.SettingsActions;
 import com.atom.chat.settings.SettingsDetailPage;
 import com.atom.chat.settings.SettingsHomePage;
@@ -180,41 +181,88 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
 
         @Override
         public void beginSignatureEdit() {
-            // The quick-phrase editor's borrow, pointed at the signature: park
-            // the composer draft, load the current signature into the field
-            // (the IME carrier) and focus it. The page flips into its editing
-            // draw once the field is primed.
-            signatureSavedComposer = inputGetText();
-            String sig = AtomChatConfig.get().playerSignature;
-            inputSetText(sig == null ? "" : sig);
+            profileWiring.beginSignatureEdit();
+        }
+
+        @Override
+        public void endSignatureEdit(boolean commit) {
+            profileWiring.endSignatureEdit(commit);
+        }
+    }, avatarStore);
+
+    /**
+     * The profile page's signature half (D18a): the composer borrow behind the
+     * signature editor, the per-frame draft feed, the page's draw path and the
+     * role row's resolver. The parking-ticket order and the "abort, never commit"
+     * rule for the four navigation paths live in {@link ProfilePageWiring}; this
+     * screen hands it the page, D21's composer, D10/D11's layout and scroll, the
+     * two coordinate conversions and the two local-player facts.
+     */
+    private final ProfilePageWiring profileWiring = new ProfilePageWiring(new ProfilePageWiring.Host() {
+        @Override
+        public ProfilePage profilePage() {
+            return profilePage;
+        }
+
+        @Override
+        public String composerText() {
+            return inputGetText();
+        }
+
+        @Override
+        public void setComposerText(String text) {
+            inputSetText(text);
+        }
+
+        @Override
+        public void focusComposer() {
             inputFocused = true;
             setFocused(chatField);
             if (chatField != null) {
                 chatField.setFocused(true);
             }
-            setCaretAtEnd();
-            profilePage.beginSignatureEdit();
         }
 
         @Override
-        public void endSignatureEdit(boolean commit) {
-            if (commit) {
-                String text = inputGetText();
-                if (text.length() > 256) {
-                    // Same cap as a quick phrase: a longer signature could
-                    // never be typed within Minecraft's chat limit anyway.
-                    text = text.substring(0, 256);
-                }
-                AtomChatConfig cfg = AtomChatConfig.get();
-                cfg.playerSignature = text;
-                AtomChatConfig.save(cfg);
-            }
-            inputSetText(signatureSavedComposer);
+        public void caretToEnd() {
             setCaretAtEnd();
         }
-    }, avatarStore);
-    /** Composer text parked while the profile page borrows the field. */
-    private String signatureSavedComposer = "";
+
+        @Override
+        public UiLayout detailLayout() {
+            return AtomChatScreen.this.detailLayout();
+        }
+
+        @Override
+        public ScrollSyncService scrollSync() {
+            return scrollSync;
+        }
+
+        @Override
+        public float toVirtualX(double guiX) {
+            return AtomChatScreen.this.toVirtualX(guiX);
+        }
+
+        @Override
+        public float toVirtualY(double guiY) {
+            return AtomChatScreen.this.toVirtualY(guiY);
+        }
+
+        @Override
+        public java.util.UUID localPlayerId() {
+            return client.player == null ? null : client.player.getUuid();
+        }
+
+        @Override
+        public boolean localPlayerHasPermissions(int level) {
+            return client.player.hasPermissionLevel(level);
+        }
+
+        @Override
+        public boolean composerFocused() {
+            return inputFocused && chatField != null && chatField.isFocused();
+        }
+    });
     private final SettingsHomePage settingsHomePage = new SettingsHomePage();
     private final SettingsSectionPage settingsSectionPage = new SettingsSectionPage();
 
@@ -330,13 +378,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         // Role row: vanilla 1.21.1 only syncs the local player's own permission
         // level; other players stay unknown (row hidden) until a server
         // companion can answer for them.
-        profilePage.setRoleResolver((uuid, name) -> {
-            if (uuid != null && this.client.player != null
-                    && uuid.equals(this.client.player.getUuid())) {
-                return this.client.player.hasPermissionLevel(2);
-            }
-            return null;
-        });
+        profilePage.setRoleResolver(profileWiring.roleResolver());
     }
 
     /** Picks a custom avatar off-thread; the cropper opens on the render side. */
@@ -2804,22 +2846,12 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
      * field (and the IME behind it) lives here.
      */
     private void syncProfileSignatureDraft() {
-        if (profilePage.isSignatureEditing()) {
-            boolean focused = inputFocused && chatField != null && chatField.isFocused();
-            profilePage.setSignatureDraft(inputGetText(), focused);
-        }
+        profileWiring.syncProfileSignatureDraft();
     }
 
     /** Body of a pushed profile detail page (another player's profile). */
     private void drawProfileDetail(Canvas canvas, int mouseX, int mouseY) {
-        UiLayout layout = detailLayout();
-        float vmx = toVirtualX(mouseX);
-        float vmy = toVirtualY(mouseY);
-        scrollSync.detailScroll().setContent(profilePage.measureContent(layout), layout.list.h());
-        scrollSync.detailScroll().updateAnimation(System.currentTimeMillis());
-        syncProfileSignatureDraft();
-        profilePage.render(canvas, layout, vmx, vmy, scrollSync.detailScroll().getScrollY());
-        drawScrollbar(canvas, layout, vmx, vmy, scrollSync.detailScroll());
+        profileWiring.drawProfileDetail(canvas, mouseX, mouseY);
     }
 
     /** Fixed header (with back affordance) for a pushed settings sub-page. */
