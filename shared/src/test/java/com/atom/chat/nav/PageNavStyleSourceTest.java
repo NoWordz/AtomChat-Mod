@@ -49,6 +49,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 class PageNavStyleSourceTest {
 
+    /** The extracted nav stack (D24a), where the cascades now live. */
+    private static final String CONTROLLER =
+            "shared/src/main/java/com/atom/chat/nav/NavStackController.java";
+
     /** The three screen sources, repo-root relative, in a fixed order. */
     private static final List<String> SCREENS = List.of(
             "platforms/1.20.1-forge/src/main/java/com/atom/chat/screen/AtomChatScreen.java",
@@ -193,8 +197,14 @@ class PageNavStyleSourceTest {
             // Root tab switches never run pushNav/popPage, so they must resolve
             // the style through the same helper rather than reading a second
             // path of their own.
-            assertTrue(body(src, "public void switchRoot(AppPage").contains("pageNavStyle()"),
+            // Since D24a the tab switch is the controller's, so the resolution is
+            // reached through the port; what must never come back is a second path.
+            assertTrue(body(src, "public boolean navStyleIsZoom()").contains("pageNavStyle()"),
                     screen + ": the root tab switch must resolve the style through pageNavStyle()");
+            assertTrue(body(source(CONTROLLER), "public void switchRoot(AppPage")
+                            .contains("host.navStyleIsZoom()"),
+                    "the tab switch must resolve the style through the one resolver, by asking the"
+                            + " screen, never by page kind");
         }
     }
 
@@ -205,17 +215,29 @@ class PageNavStyleSourceTest {
             String src = source(screen);
             String pushNav = body(src, "private void pushNav(NavPage");
             String popPage = body(src, "public void popPage()");
+            // The three arms are the controller's now; the screen keeps exactly one
+            // call site, inside the port method the controller arms the nav through.
             List<Integer> starts = callSites(src, "startPageNav(");
-            assertEquals(3, starts.size(),
-                    screen + ": expected exactly the two push call sites plus the pop one, got " + starts);
-            int pushAt = indexOf(src, pushNav);
-            int popAt = indexOf(src, popPage);
-            for (int i : starts) {
-                boolean inPush = i >= pushAt && i < pushAt + pushNav.length();
-                boolean inPop = i >= popAt && i < popAt + popPage.length();
+            assertEquals(1, starts.size(),
+                    screen + ": exactly one startPageNav call site may remain (the port's"
+                            + " beginPageNav), got " + starts);
+            String port = body(src, "public void beginPageNav(NavPage from, NavPage to, boolean popPending)");
+            int portAt = indexOf(src, port);
+            assertTrue(starts.get(0) >= portAt && starts.get(0) < portAt + port.length(),
+                    screen + ": the remaining startPageNav call escaped the port, so the controller"
+                            + " would arm nothing");
+            String controller = source(CONTROLLER);
+            List<Integer> arms = callSites(controller, "host.beginPageNav(");
+            assertEquals(3, arms.size(),
+                    "expected exactly the two push arms plus the pop one in the controller, got " + arms);
+            int cPushAt = indexOf(controller, body(controller, "public void pushNav(NavPage"));
+            int cPopAt = indexOf(controller, body(controller, "public void popPage()"));
+            for (int i : arms) {
+                boolean inPush = i >= cPushAt && i < cPushAt + body(controller, "public void pushNav(NavPage").length();
+                boolean inPop = i >= cPopAt && i < cPopAt + body(controller, "public void popPage()").length();
                 assertTrue(inPush || inPop,
-                        screen + ": a startPageNav call escaped pushNav/popPage, so it bypasses"
-                                + " the single resolution path");
+                        "a host.beginPageNav call escaped pushNav/popPage, so it bypasses the single"
+                                + " resolution path");
             }
             // The public entry points must delegate, not drive the nav state.
             assertTrue(body(src, "public void openWorldChat()").contains("pushPage(AppPage.WORLD_CHAT)"),
@@ -450,12 +472,16 @@ class PageNavStyleSourceTest {
     void theFiveChatEntryPointsStillShareTheOneStartHelper() throws IOException {
         for (String screen : SCREENS) {
             String src = source(screen);
-            assertTrue(body(src, "private void pushNav(NavPage").contains("startPageNav("),
-                    screen + ": pushNav must drive the one animated nav start");
-            assertTrue(body(src, "public void popPage()").contains("startPageNav("),
-                    screen + ": popPage must drive the one animated nav start");
+            assertTrue(body(src, "private void pushNav(NavPage").contains("navStack.pushNav(page)"),
+                    screen + ": the screen's pushNav must stay the funnel and delegate");
+            assertTrue(body(src, "public void popPage()").contains("navStack.popPage()"),
+                    screen + ": the screen's popPage must stay the door and delegate");
             assertTrue(body(src, "private void startPageNav(").contains("pageNavStyle()"),
                     screen + ": startPageNav is the one place the nav style is resolved");
+            assertTrue(body(source(CONTROLLER), "public void pushNav(NavPage").contains("host.beginPageNav("),
+                    "the controller's pushNav must drive the one animated nav start");
+            assertTrue(body(source(CONTROLLER), "public void popPage()").contains("host.beginPageNav("),
+                    "the controller's popPage must drive the one animated nav start");
             assertTrue(body(src, "public void openWorldChat()").contains("pushPage(AppPage.WORLD_CHAT)"),
                     screen + ": openWorldChat must delegate into pushPage");
             assertTrue(body(src, "public void openPrivateChat(PlayerRef").contains("pushNav("),
@@ -483,10 +509,17 @@ class PageNavStyleSourceTest {
                 assertTrue(step.contains("Animations.enabled()"),
                         screen + ": both nav clocks must zero their tau when decorative motion is off");
             }
-            assertTrue(body(src, "public void popPage()").contains("!Animations.enabled()"),
-                    screen + ": a pop with decorative motion off must land without waiting");
-            assertTrue(body(src, "public void switchRoot(AppPage").contains("!Animations.enabled()"),
-                    screen + ": a tab switch with decorative motion off must land without waiting");
+            // The gates moved with the cascades (D24a); both must keep facing the
+            // screen's own delegates, or motion-off would stop snapping.
+            String controller = source(CONTROLLER);
+            assertTrue(body(controller, "public void popPage()").contains("!Animations.enabled()"),
+                    "a pop with decorative motion off must land without waiting");
+            assertTrue(body(controller, "public void switchRoot(AppPage").contains("!Animations.enabled()"),
+                    "a tab switch with decorative motion off must land without waiting");
+            assertTrue(body(src, "public void popPage()").contains("navStack.popPage()"),
+                    screen + ": the screen must keep facing the controller's pop");
+            assertTrue(body(src, "public void switchRoot(AppPage").contains("navStack.switchRoot(root)"),
+                    screen + ": the screen must keep facing the controller's tab switch");
         }
     }
 }

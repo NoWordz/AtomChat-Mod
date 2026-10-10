@@ -29,7 +29,7 @@ import com.atom.chat.text.RichText;
 import com.atom.chat.nav.AppPage;
 import com.atom.chat.nav.AtomChatState;
 import com.atom.chat.nav.NavPage;
-import com.atom.chat.nav.NavigationStack;
+import com.atom.chat.nav.NavStackController;
 import com.atom.chat.notification.NotificationJumpService;
 import com.atom.chat.avatar.AvatarImage;
 import com.atom.chat.avatar.AvatarStore;
@@ -122,8 +122,6 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
     public enum AtomChatOpenMode { DIRECT_WORLD, RESTORE }
 
     private final Minecraft client = Minecraft.getInstance();
-
-    private final NavigationStack<NavPage> navigation;
 
     private final ConversationListPage conversationListPage = new ConversationListPage(this);
     /** Local custom avatar for the profile page and own bubbles. */
@@ -1045,7 +1043,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
 
         @Override
         public NavPage topNav() {
-            return navigation.peek();
+            return navStack.topNav();
         }
 
         @Override
@@ -1276,6 +1274,169 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
     private long frameDt = 16;
     private long lastFrameMs = System.currentTimeMillis();
 
+    /**
+     * The nav stack's port (D24a). One method per step the controller cannot take
+     * itself, each a one-line call into the domain that already owns it: D1 reply
+     * slots, D2 drafts, D11 scroll, D15 settings, D18 signature and subject, D19
+     * online check, D21 composer, D25 transient bus — plus the two transition
+     * state machines the shell still owns (D24b), asked for rather than moved.
+     *
+     * <p>The names are deliberately unlike this screen's own method names: the
+     * source guards locate members by first textual occurrence, so a port that
+     * borrowed one of them would capture the guard's anchor.
+     */
+    private final NavStackController.Host navHost = new NavStackController.Host() {
+        @Override
+        public boolean signatureEditLive() {
+            return profilePage.isSignatureEditing();
+        }
+
+        @Override
+        public void abortSignatureEdit() {
+            profilePage.endSignatureEdit(false);
+        }
+
+        @Override
+        public void persistCurrentDraft() {
+            saveCurrentDraft();
+        }
+
+        @Override
+        public void persistPrivateDraft(PlayerRef target, String text) {
+            savePrivateDraft(target, text);
+        }
+
+        @Override
+        public void adoptDraft(PlayerRef target) {
+            loadDraft(target);
+        }
+
+        @Override
+        public void adoptWorldDraft() {
+            loadWorldDraft();
+        }
+
+        @Override
+        public String composerTextNow() {
+            return composer.text();
+        }
+
+        @Override
+        public void armReplyFor(NavPage page) {
+            loadReplyFor(page);
+        }
+
+        @Override
+        public void clearWorldScroll() {
+            scrollSync.worldScroll().reset();
+        }
+
+        @Override
+        public void clearDetailScroll() {
+            scrollSync.detailScroll().reset();
+        }
+
+        @Override
+        public void clearRootScroll() {
+            scrollSync.rootScroll().reset();
+        }
+
+        @Override
+        public void clearSettingsPageState() {
+            resetSettingsUi();
+        }
+
+        @Override
+        public void clearTransientWorldUi() {
+            resetTransientWorldUi();
+        }
+
+        @Override
+        public boolean isPlayerOnline(PlayerRef target) {
+            return contextActions.isOnlinePlayer(target);
+        }
+
+        @Override
+        public void dropProfileSubject() {
+            profilePage.resetSubject();
+        }
+
+        @Override
+        public String copy(String key) {
+            return tr(key);
+        }
+
+        @Override
+        public void beginPageNav(NavPage from, NavPage to, boolean popPending) {
+            startPageNav(from, to, popPending);
+        }
+
+        @Override
+        public void abandonPageNav() {
+            pageNavFrom = null;
+            pageNavTo = null;
+            pageNavPopPending = false;
+            navSlideProgress = 0.0F;
+        }
+
+        @Override
+        public void abandonRootTransition() {
+            clearRootTransition();
+        }
+
+        @Override
+        public boolean rootTransitionLive() {
+            return rootTransitionActive();
+        }
+
+        @Override
+        public boolean navStyleIsZoom() {
+            return pageNavStyle() == AtomChatConfig.PageNavStyle.ZOOM;
+        }
+
+        @Override
+        public void pinRootTabCapsule(AppPage from) {
+            rootTabAnim.setValue(rootIndex(from));
+        }
+
+        @Override
+        public void markRootTabSpan(AppPage from, AppPage to) {
+            rootTabFrom = rootIndex(from);
+            rootTabTo = rootIndex(to);
+        }
+
+        @Override
+        public void applyRootTabMotion(boolean zoom) {
+            rootTabZoom = zoom;
+            if (zoom) {
+                rootZoomPhase = ROOT_ZOOM_EXIT;
+                rootZoomExitAlpha = 1.0F;
+                rootZoomEnterAlpha = 0.0F;
+            } else {
+                rootTabProgress = 0.0F;
+            }
+        }
+
+        @Override
+        public void resetRootTabCapsule() {
+            rootTabAnim.setValue(rootTabFrom);
+        }
+
+        @Override
+        public void selectTabNow(AppPage root) {
+            bottomTabBar.setSelectedImmediate(rootIndex(root));
+        }
+    };
+    /**
+     * The one holder of the nav stack. Built in the constructor, where every field
+     * the port above reads is already initialised; the screen keeps one delegating
+     * method per query and per cascade, so {@code PageHost} and
+     * {@code NotificationJumpService.NavPort} stay implemented here and every
+     * existing call site (this screen's own, and the pages handed {@code this})
+     * is untouched.
+     */
+    private final NavStackController navStack;
+
     public AtomChatScreen(String originalChatText) {
         this(originalChatText, AtomChatOpenMode.DIRECT_WORLD);
     }
@@ -1288,41 +1449,24 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         // resize), so this is the right hook for picking up hand-edited config
         // — chat/whisper templates take effect without a game restart.
         AtomChatConfig.reload();
-        this.navigation = new NavigationStack<>(NavPage.of(AppPage.CHAT_LIST));
-        if (mode == AtomChatOpenMode.DIRECT_WORLD) {
-            navigation.replaceWithRoot(NavPage.of(AppPage.CHAT_LIST));
-            navigation.push(NavPage.of(AppPage.WORLD_CHAT));
-        } else {
-            List<NavPage> saved = AtomChatState.snapshot();
-            navigation.replaceWithRoot(saved.get(0));
-            for (int i = 1; i < saved.size(); i++) {
-                navigation.push(saved.get(i));
-            }
-        }
-        if (topPage().isRoot()) {
-            bottomTabBar.setSelectedImmediate(rootIndex(topPage()));
-        }
-        if (topPage() == AppPage.PRIVATE_CHAT) {
-            PrivateChatStore.setActive(activePrivateTarget());
-            ChatStore.setPublicActive(false);
-        } else if (topPage() == AppPage.WORLD_CHAT) {
-            ChatStore.setPublicActive(true);
-        } else {
-            ChatStore.setPublicActive(false);
-        }
+        // The stack, its queries and the three cascades live in the controller
+        // (D24a), loading included: one screen opening replays the saved stack
+        // (the AtomChat key) or pushes the public feed (the vanilla chat key),
+        // and lands the tab bar and the two active stores on the top page.
+        this.navStack = new NavStackController(navHost, mode == AtomChatOpenMode.RESTORE);
     }
 
     private NavPage topNav() {
-        return navigation.peek();
+        return navStack.topNav();
     }
 
     @Override
     public AppPage topPage() {
-        return navigation.peek().page();
+        return navStack.topPage();
     }
 
     private boolean isPrivateReadOnly() {
-        return isPrivateReadOnlyFor(topNav());
+        return navStack.isPrivateReadOnly();
     }
 
     /**
@@ -1331,26 +1475,17 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
      * sit on top of the stack while the other page is drawn.
      */
     private boolean isPrivateReadOnlyFor(NavPage page) {
-        if (page == null || page.page() != AppPage.PRIVATE_CHAT) {
-            return false;
-        }
-        PlayerRef target = page.target();
-        if (target == null) {
-            return true;
-        }
-        return !contextActions.isOnlinePlayer(target) || BlockList.isBlocked(target);
+        return navStack.isPrivateReadOnlyFor(page);
     }
 
     /** Composer hint of a read-only private page, from that page's partner. */
     private String readOnlyHintForNav(NavPage page) {
-        return page != null && BlockList.isBlocked(page.target())
-                ? tr("atomchat.private.blocked") : tr("atomchat.private.offline");
+        return navStack.readOnlyHintForNav(page);
     }
 
     @Override
     public PlayerRef activePrivateTarget() {
-        NavPage top = navigation.peek();
-        return top != null && top.page() == AppPage.PRIVATE_CHAT ? top.target() : null;
+        return navStack.activePrivateTarget();
     }
 
     /**
@@ -1359,8 +1494,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
      * sites but also covers PRIVATE_CHAT.
      */
     private boolean isWorldChatPage() {
-        AppPage page = topPage();
-        return page == AppPage.WORLD_CHAT || page == AppPage.PRIVATE_CHAT;
+        return navStack.isWorldChatPage();
     }
 
     private boolean isVanillaChatKey(int keyCode, int scanCode) {
@@ -1460,109 +1594,17 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
     }
 
     private void pushNav(NavPage page) {
-        // Leaving the profile page must not carry a live signature edit into
-        // the next page: abort (never commit on navigation) before anything
-        // else touches the borrowed field.
-        if (profilePage.isSignatureEditing()) {
-            profilePage.endSignatureEdit(false);
-        }
-        saveCurrentDraft();
-        AppPage fromPage = topPage();
-        if (page.page() == AppPage.WORLD_CHAT) {
-            scrollSync.worldScroll().reset();
-        }
-        if (page.page() == AppPage.SETTINGS_SECTION) {
-            resetSettingsUi();
-        }
-        if (page.page() == AppPage.PROFILE_DETAIL) {
-            scrollSync.detailScroll().reset();
-        }
-        if (!page.isRoot() && fromPage.isRoot()) {
-            rootTabAnim.setValue(rootIndex(fromPage));
-            startPageNav(topNav(), page, false);
-        } else if (!page.isRoot() && !fromPage.isRoot()) {
-            // Public <-> private detail pages also use the full-width push/pop.
-            startPageNav(topNav(), page, false);
-        } else {
-            pageNavFrom = null;
-            pageNavTo = null;
-            pageNavPopPending = false;
-            navSlideProgress = 0.0F;
-        }
-        navigation.push(page);
-        ChatStore.setPublicActive(page.page() == AppPage.WORLD_CHAT);
-        if (page.page() == AppPage.PRIVATE_CHAT) {
-            PrivateChatStore.setActive(page.target());
-            loadDraft(page.target());
-        } else if (page.page() == AppPage.WORLD_CHAT) {
-            loadWorldDraft();
-        }
-        // The reply bar follows its page exactly like the draft above: the nav
-        // draws the leaving page's bar from its slot while the arriving page's
-        // is live in the field.
-        loadReplyFor(page);
-        if (!page.isRoot()) {
-            clearRootTransition();
-        }
+        navStack.pushNav(page);
     }
 
     @Override
     public void popPage() {
-        // Same rule as pushNav: a live signature edit never survives
-        // navigation, and it aborts (no commit) when the page goes away.
-        if (profilePage.isSignatureEditing()) {
-            profilePage.endSignatureEdit(false);
-        }
-        if (navigation.size() <= 1) {
-            return;
-        }
-        if (topPage().isRoot()) {
-            navigation.pop();
-            return;
-        }
-        // With decorative motion off there is no slide-out to wait for, so the
-        // pop can be applied right here instead of in finishPageNav().
-        if (!Animations.enabled()) {
-            popNow();
-            return;
-        }
-        NavPage from = topNav();
-        NavPage previous = navigation.snapshot().get(navigation.size() - 2);
-        // Keep the detail page on top while it slides out; the actual navigation
-        // pop happens in finishPageNav(). Both root and detail targets animate.
-        // The subject reset lives in popNow(): clearing it here would redraw the
-        // sliding-out page as the local player's profile mid-animation.
-        startPageNav(from, previous, true);
+        navStack.popPage();
     }
 
     /** Applies a pending pop and restores the page underneath it. */
     private void popNow() {
-        boolean leavingProfile = topPage() == AppPage.PROFILE_DETAIL;
-        if (topPage() == AppPage.PRIVATE_CHAT) {
-            savePrivateDraft(activePrivateTarget(), composer.text());
-            PrivateChatStore.clearActive();
-        }
-        resetTransientWorldUi();
-        resetSettingsUi();
-        navigation.pop();
-        // Falling back to the local player only once the page is off the stack,
-        // so the Profile root tab never shows a stale injected subject.
-        if (leavingProfile) {
-            profilePage.resetSubject();
-        }
-        ChatStore.setPublicActive(topPage() == AppPage.WORLD_CHAT);
-        if (topPage() == AppPage.PRIVATE_CHAT) {
-            PrivateChatStore.setActive(activePrivateTarget());
-            loadDraft(activePrivateTarget());
-        } else if (topPage() == AppPage.WORLD_CHAT) {
-            scrollSync.worldScroll().reset();
-            loadWorldDraft();
-        }
-        // resetTransientWorldUi() above dropped every armed reply, so this only
-        // re-arms the page underneath when that rule ever loosens; the reply bar
-        // is loaded exactly like the draft, never left pointing at the page that
-        // was just popped.
-        loadReplyFor(topNav());
+        navStack.popNow();
     }
 
     private boolean pageNavActive() {
@@ -1726,60 +1768,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
 
     @Override
     public void switchRoot(AppPage root) {
-        if (!root.isRoot()) {
-            return;
-        }
-        // Tab switches are the one navigation path that never runs pushNav or
-        // popPage, so the signature edit aborts here too (arriving OR leaving
-        // the profile tab).
-        if (profilePage.isSignatureEditing()) {
-            profilePage.endSignatureEdit(false);
-        }
-        AppPage from = topPage();
-        // Leaving the profile root falls back to the local player's page; the
-        // injected subject (open-profile-for-other-player) is transient.
-        if (from == AppPage.PROFILE && root != AppPage.PROFILE) {
-            profilePage.resetSubject();
-        }
-        saveCurrentDraft();
-        scrollSync.rootScroll().reset();
-        // With decorative motion off the tab change is instant: no indicator
-        // slide, no body push — the new root is simply on screen.
-        if (!Animations.enabled()) {
-            clearRootTransition();
-            bottomTabBar.setSelectedImmediate(rootIndex(root));
-            navigation.replaceWithRoot(NavPage.of(root));
-            ChatStore.setPublicActive(false);
-            return;
-        }
-        // If a previous tab transition is still running, snap it before
-        // re-arming: the clocks below always start from rest.
-        if (rootTransitionActive() && from.isRoot()) {
-            clearRootTransition();
-        }
-        navigation.replaceWithRoot(NavPage.of(root));
-        ChatStore.setPublicActive(false);
-        if (from.isRoot() && from != root) {
-            rootTabFrom = rootIndex(from);
-            rootTabTo = rootIndex(root);
-            // The content transition follows the configured page-nav style,
-            // resolved once per switch through the same resolver the push/pop
-            // path uses (one rule for every switch) so it can't change
-            // mid-flight; the capsule is pinned to the source tab and travels
-            // from the same clock in stepRootNav.
-            rootTabZoom = pageNavStyle() == AtomChatConfig.PageNavStyle.ZOOM;
-            if (rootTabZoom) {
-                rootZoomPhase = ROOT_ZOOM_EXIT;
-                rootZoomExitAlpha = 1.0F;
-                rootZoomEnterAlpha = 0.0F;
-            } else {
-                rootTabProgress = 0.0F;
-            }
-            rootTabAnim.setValue(rootTabFrom);
-        } else {
-            clearRootTransition();
-            bottomTabBar.setSelectedImmediate(rootIndex(root));
-        }
+        navStack.switchRoot(root);
     }
 
     private ScrollController currentScroll() {
@@ -1808,7 +1797,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
      * left on a pop — and to the arriving page once the nav settles.
      */
     private boolean ownsInputField(NavPage page) {
-        NavPage top = navigation.peek();
+        NavPage top = navStack.topNav();
         return top != null && top.equals(page);
     }
 
@@ -2297,7 +2286,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
             PrivateChatStore.clearActive();
         }
         ChatStore.setPublicActive(false);
-        AtomChatState.save(navigation.snapshot());
+        AtomChatState.save(navStack.snapshot());
         uninstallDropCallback();
         // Give back the GPU texture the panel blur was sampling.
         graphics.releaseWorldSnapshot();
