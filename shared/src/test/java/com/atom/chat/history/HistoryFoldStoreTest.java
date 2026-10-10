@@ -181,30 +181,37 @@ class HistoryFoldStoreTest {
         MessageListView view = view();
         ScrollController scroll = new ScrollController();
         UiLayout.Rect list = list();
-        float before = scroll.getScrollY();
+        // A real scroll range the compensation fits inside, so "the scroll moved
+        // by exactly what was inserted" is asserted rather than a clamp.
+        scroll.setContent(20000.0F, 600.0F);
+        float before = 10.0F;   // "load earlier" is reached from near the top
+        scroll.scrollTo(before, false);
+        assertEquals(before, scroll.getScrollY(), 0.01F);
 
         view.requestLoadEarlier();
         store.applyLoadEarlierRequest(world(), messages, window, list, scroll, view);
 
         assertEquals(300, window.visibleStart(), "the click revealed exactly one batch");
 
-        // ---- The compensation, as the code actually behaves today ----
+        // ---- The compensation, as the code behaves since the fix ----
         //
-        // The store asks for offsetBetween(oldStart=400, newStart=300): a REVERSED
-        // range. offsetBetween clamps `limit = max(from, toIndex)`, so that call
-        // measures an empty range and returns 0 — the scroll never moves, and the
-        // list jumps when older rows are revealed. That is a pre-existing defect in
-        // the call's argument order (the method's own javadoc says it measures the
-        // range that was inserted ABOVE the old top row, i.e. [newStart, oldStart)),
-        // reported for a decision rather than fixed here: changing it is a behaviour
-        // change, and this block is a mechanical extraction.
-        assertEquals(0.0F, view.offsetBetween(messages, 400, 300, list.w()), 0.01F,
-                "a reversed range measures nothing (this is why the compensation is dead)");
-        float wouldInsert = view.offsetBetween(messages, 300, 400, list.w());
-        assertTrue(wouldInsert > 0.0F,
+        // The store asks for offsetBetween(newStart=300, oldStart=400): the range
+        // that was inserted ABOVE the old top row, which is what the method's own
+        // javadoc defines it to measure. It used to pass the same two indices the
+        // other way round — a REVERSED range, which offsetBetween clamps away
+        // (`limit = max(from, toIndex)`) so that it measured nothing and returned
+        // 0. The scroll never moved and the list jumped when older rows were
+        // revealed: the "anchor compensation" had never actually run.
+        //
+        // The two assertions that pinned the defect — "a reversed range measures
+        // nothing" and "today the scroll does not move at all" — were removed
+        // together with it. This is a deliberate behaviour change (a bug fix),
+        // not a mechanical extraction, so the contract is now the intended one:
+        float inserted = view.offsetBetween(messages, 300, 400, list.w());
+        assertTrue(inserted > 0.0F,
                 "the range that WAS revealed above the old top row has a real height");
-        assertEquals(before, scroll.getScrollY(), 0.01F,
-                "today the scroll does not move at all: the anchor compensation is a no-op");
+        assertEquals(before + inserted, scroll.getScrollY(), 0.01F,
+                "the reveal scrolls by exactly the height it inserted, it does not jump");
 
         // One-shot: the same request must not reveal twice.
         float after = scroll.getScrollY();

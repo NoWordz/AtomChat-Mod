@@ -66,6 +66,15 @@ public final class HistoryFoldStore {
      * scrolls by exactly the height the reveal inserted above the row that was
      * topmost, so the previously visible content does not jump.
      *
+     * <p>The range handed to {@link MessageListView#offsetBetween} is
+     * {@code [newStart, oldStart)} — the rows the reveal <em>inserted above</em>
+     * the old top row, which is the range that method's javadoc defines. The two
+     * indices used to be passed the other way round, and because that method
+     * clamps {@code limit = max(from, toIndex)} a reversed range measured nothing
+     * at all: the compensation was always zero and the list jumped. This is the
+     * one-line correction of that pre-existing defect (a deliberate behaviour
+     * change, not part of the mechanical extraction).</p>
+     *
      * @param view the message list the button lives in and the row metrics come
      *             from — passed in rather than held, because the screen owns it
      */
@@ -78,7 +87,7 @@ public final class HistoryFoldStore {
         if (!window.loadEarlier()) {
             return;
         }
-        float inserted = view.offsetBetween(messages, oldStart, window.visibleStart(), list.w());
+        float inserted = view.offsetBetween(messages, window.visibleStart(), oldStart, list.w());
         scroll.scrollTo(scroll.getScrollY() + inserted, false);
     }
 }
