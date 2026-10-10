@@ -54,6 +54,7 @@ import com.atom.chat.render.SkiaDraw;
 import com.atom.chat.render.SkiaFontRenderer;
 import com.atom.chat.render.SkiaGraphics;
 import com.atom.chat.settings.SettingsActions;
+import com.atom.chat.settings.SettingsDetailPage;
 import com.atom.chat.settings.SettingsHomePage;
 import com.atom.chat.settings.SettingsSection;
 import com.atom.chat.settings.SettingsSectionPage;
@@ -204,10 +205,6 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
     private String signatureSavedComposer = "";
     private final SettingsHomePage settingsHomePage = new SettingsHomePage();
     private final SettingsSectionPage settingsSectionPage = new SettingsSectionPage();
-    /** Per-chip scroll memory ("section:chip" -> offset); the detail
-     *  controller is shared across chips. */
-    private final java.util.HashMap<String, Float> chipScroll = new java.util.HashMap<>();
-    private String chipScrollKey = "";
 
     /**
      * The settings screen's actions (D15a): the seven action cards, the three
@@ -266,6 +263,57 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         }
     });
 
+    /**
+     * The pushed settings sub-page (D15b): its scroll state, the per-chip memory
+     * it keeps, its frame and the inline numeric editor of its integer sliders.
+     * The domain keeps the modal contract — the cropper and the colour picker
+     * must be rendered on this page's draw path, or an active-but-unrendered
+     * modal eats every click and freezes the screen. This screen hands it D16's
+     * section page, D9's two modals and accent, D11's scroll service, D10's
+     * detail layout and its own two coordinate conversions.
+     */
+    private final SettingsDetailPage settingsDetailPage = new SettingsDetailPage(new SettingsDetailPage.Host() {
+        @Override
+        public SettingsSectionPage sectionPage() {
+            return settingsSectionPage;
+        }
+
+        @Override
+        public ColorPickerOverlay colorPicker() {
+            return colorPicker;
+        }
+
+        @Override
+        public ImageCropper imageCropper() {
+            return imageCropper;
+        }
+
+        @Override
+        public ScrollSyncService scrollSync() {
+            return scrollSync;
+        }
+
+        @Override
+        public UiLayout detailLayout() {
+            return AtomChatScreen.this.detailLayout();
+        }
+
+        @Override
+        public int accent() {
+            return AtomChatScreen.this.accent();
+        }
+
+        @Override
+        public float toVirtualX(double guiX) {
+            return AtomChatScreen.this.toVirtualX(guiX);
+        }
+
+        @Override
+        public float toVirtualY(double guiY) {
+            return AtomChatScreen.this.toVirtualY(guiY);
+        }
+    });
+
     {
         // Role row: vanilla 1.21.1 only syncs the local player's own permission
         // level; other players stay unknown (row hidden) until a server
@@ -311,7 +359,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
     private final InputRouter inputRouter = new InputRouter()
             .add(new ClosingStateInput())
             .add(new ModalInput())
-            .add(new NumberEditInput())
+            .add(settingsDetailPage.numberEditInput())
             .add(new BannerInput())
             .add(new ScreenEscInput())
             .add(new RootPageInput())
@@ -1193,26 +1241,13 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         canvas.translate(-cx, -cy);
     }
 
-    /** Clears the transient state of a settings sub-page when leaving it. */
+    /**
+     * Clears the transient state of a settings sub-page when leaving it. The
+     * three-part cleanup and the chip memory live in {@link SettingsDetailPage}
+     * (D15b); this shell keeps the entry point the navigation paths call.
+     */
     private void resetSettingsUi() {
-        scrollSync.detailScroll().reset();
-        settingsSectionPage.reset();
-        chipScroll.clear();
-        chipScrollKey = "";
-    }
-
-    /** Saves the outgoing chip's scroll offset and restores the incoming one,
-     *  so each chip of a section page remembers where the user left it. */
-    private void syncChipScroll(SettingsSection section) {
-        String key = section.id() + ':' + settingsSectionPage.activeChipIndex(section);
-        if (!key.equals(chipScrollKey)) {
-            if (!chipScrollKey.isEmpty()) {
-                chipScroll.put(chipScrollKey, scrollSync.detailScroll().getScrollY());
-            }
-            chipScrollKey = key;
-            Float saved = chipScroll.get(key);
-            scrollSync.detailScroll().scrollTo(saved == null ? 0.0F : saved, false);
-        }
+        settingsDetailPage.resetSettingsUi();
     }
 
     private float pageNavDx(float travel) {
@@ -2714,22 +2749,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
      * affordance) is drawn fixed on top so it never slides with the list.
      */
     private void drawSettingsSection(Canvas canvas, int mouseX, int mouseY, SettingsSection section) {
-        if (section == null) {
-            return;
-        }
-        UiLayout layout = detailLayout();
-        float vmx = toVirtualX(mouseX);
-        float vmy = toVirtualY(mouseY);
-        scrollSync.detailScroll().setContent(settingsSectionPage.measureContent(layout, section), layout.list.h());
-        syncChipScroll(section);
-        scrollSync.detailScroll().updateAnimation(System.currentTimeMillis());
-        settingsSectionPage.render(canvas, layout, section, vmx, vmy, scrollSync.detailScroll().getScrollY(), accent());
-        drawScrollbar(canvas, layout, vmx, vmy, scrollSync.detailScroll());
-        // Modal overlays on top of the whole panel: the cropper must render on
-        // this path too — it is opened from here (wallpaper pick), and an
-        // active-but-unrendered modal eats every click and freezes the screen.
-        imageCropper.render(canvas, layout.rect(), vmx, vmy);
-        colorPicker.render(canvas, layout.rect(), vmx, vmy, accent());
+        settingsDetailPage.drawSettingsSection(canvas, mouseX, mouseY, section);
     }
 
     /**
@@ -4134,57 +4154,6 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
                 return true;
             }
             return false;
-        }
-    }
-
-    /** Inline numeric editor for integer sliders (retention days). */
-    private final class NumberEditInput implements InputHandler {
-        @Override
-        public boolean onClick(double mouseX, double mouseY, int button) {
-            if (!settingsSectionPage.isEditingNumber()) {
-                return false;
-            }
-            float mx = toVirtualX(mouseX);
-            float my = toVirtualY(mouseY);
-            if (settingsSectionPage.isInsideNumberEditRow(mx, my)) {
-                return true;
-            }
-            // Click outside the editor commits the typed value and lets the
-            // click continue to whatever the user actually aimed at.
-            settingsSectionPage.commitNumberEdit();
-            return false;
-        }
-
-        @Override
-        public boolean onKey(int keyCode, int scanCode, int modifiers) {
-            if (!settingsSectionPage.isEditingNumber()) {
-                return false;
-            }
-            if (keyCode == 256) { // Esc: cancel
-                settingsSectionPage.cancelNumberEdit();
-            } else if (keyCode == 257 || keyCode == 335) { // Enter
-                settingsSectionPage.commitNumberEdit();
-            } else if (keyCode == 259) { // Backspace
-                settingsSectionPage.backspaceNumber();
-            } else if (keyCode >= 48 && keyCode <= 57) { // top-row digits
-                settingsSectionPage.appendNumberChar((char) ('0' + keyCode - 48));
-            } else if (keyCode >= 320 && keyCode <= 329) { // numpad digits
-                settingsSectionPage.appendNumberChar((char) ('0' + keyCode - 320));
-            }
-            return true;
-        }
-
-        @Override
-        public boolean onChar(char chr, int modifiers) {
-            // Digits are appended from onKey. Minecraft also delivers a char
-            // callback for the same press; appending here would double every
-            // digit (1 became 11). Swallow the char so it never reaches chat.
-            return settingsSectionPage.isEditingNumber();
-        }
-
-        @Override
-        public boolean onScroll(double mouseX, double mouseY, double horizontalAmount, double verticalAmount) {
-            return settingsSectionPage.isEditingNumber();
         }
     }
 
