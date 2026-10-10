@@ -1,7 +1,7 @@
 package com.atom.chat.history;
 
 import com.atom.chat.chat.ChatMessage;
-import com.atom.chat.nav.AppPage;
+import com.atom.chat.chat.ConversationKeys;
 import com.atom.chat.nav.NavPage;
 import com.atom.chat.page.HistoryWindow;
 import com.atom.chat.page.MessageListView;
@@ -44,8 +44,7 @@ public final class HistoryFoldStore {
 
     /** Fold window for a conversation, created on first view and kept across in-place growth. */
     public HistoryWindow historyWindowForNav(NavPage page, int total) {
-        String key = page.page() == AppPage.PRIVATE_CHAT && page.target() != null
-                ? page.target().key() : "";
+        String key = ConversationKeys.of(page);
         HistoryWindow window = historyWindows.get(key);
         if (window == null) {
             window = new HistoryWindow(total, HISTORY_WINDOW_BATCH);

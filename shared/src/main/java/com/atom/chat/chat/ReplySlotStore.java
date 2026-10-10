@@ -44,10 +44,9 @@ public final class ReplySlotStore {
     /** Armed reply of the page that currently owns the shared composer. */
     private ChatMessage replyTarget;
 
-    /** Reply slot key, using the history windows' convention. */
+    /** Reply slot key, using the conversation keys' convention ({@link ConversationKeys}). */
     public String replyKeyForNav(NavPage page) {
-        return page != null && page.page() == AppPage.PRIVATE_CHAT && page.target() != null
-                ? page.target().key() : "";
+        return ConversationKeys.of(page);
     }
 
     /**

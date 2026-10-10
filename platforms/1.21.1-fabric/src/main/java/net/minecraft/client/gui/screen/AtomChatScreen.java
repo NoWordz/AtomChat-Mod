@@ -61,6 +61,7 @@ import com.atom.chat.settings.SettingsSectionPage;
 import com.atom.chat.ui.Animations;
 import com.atom.chat.ui.BottomTabBar;
 import com.atom.chat.ui.ScrollController;
+import com.atom.chat.ui.ScrollSyncService;
 import com.atom.chat.ui.ShellHeader;
 import com.atom.chat.ui.UiLayout;
 import com.atom.chat.ui.EmojiPanel;
@@ -109,7 +110,6 @@ import java.io.File;
 import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
@@ -473,10 +473,6 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
     private final QuickPhrasePanel quickPhrasePanel = new QuickPhrasePanel(this::inputAppend, this::accent);
 
     private boolean inputFocused = true;
-    /** Scroll state for the world-chat message list. */
-    private final ScrollController worldScroll = new ScrollController();
-    /** Per-private-conversation scroll controllers; draft map keys are PlayerRef.key(). */
-    private final Map<String, ScrollController> privateScrolls = new HashMap<>();
     /**
      * Per-conversation history fold depth (world="", private=PlayerRef.key()).
      * Not remembered across screen instances: closing the panel forgets how far
@@ -578,6 +574,35 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         }
     });
     /**
+     * Scroll state, its scrollbar and the jump-to-latest pill (D11). The service
+     * owns the four controllers and the pill's spring/hover/fade; this screen
+     * hands it the frame clock, where the nav stack is (D24) and the drawing
+     * primitives (D9). The wrappers below are the only entry points this shell
+     * keeps, and the controllers it hands out are the same instances the pages
+     * draw with.
+     */
+    private final ScrollSyncService scrollSync = new ScrollSyncService(new ScrollSyncService.Host() {
+        @Override
+        public long frameDt() {
+            return frameDt;
+        }
+
+        @Override
+        public AppPage topPage() {
+            return AtomChatScreen.this.topPage();
+        }
+
+        @Override
+        public PlayerRef activePrivateTarget() {
+            return AtomChatScreen.this.activePrivateTarget();
+        }
+
+        @Override
+        public DrawPrimitives primitives() {
+            return primitives;
+        }
+    });
+    /**
      * Composer drafts per page, and the shared field they are loaded into. The
      * draft text lives in {@link DraftStore}; the port below is this shell's half
      * of it (the EditBox itself belongs to D21) — see {@link DraftStore.ComposerTextPort}
@@ -649,10 +674,6 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
             currentScroll().stickToBottom();
         }
     });
-    /** Scroll state for root pages; shared across the root tabs, opening at the top. */
-    private final ScrollController rootScroll = new ScrollController(false);
-    /** Scroll state for pushed detail pages (settings/profile), opening at the top. */
-    private final ScrollController detailScroll = new ScrollController(false);
     private ChatMessage contextMessage;
     private PlayerRef contextPlayer;
     private float contextX;
@@ -761,13 +782,6 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
 
     // Per-frame animation state (smooth hover/popup transitions)
     private float contextAnim;
-    private float jumpLatestAnim;
-    /** Eased hover of the jump-to-latest FAB, matching the composer keys' fade. */
-    private float jumpLatestHover;
-    /** Bounce spring for the FAB; the scaled shape is the round pill itself. */
-    private final PressScale jumpLatestScale = PressScale.bounce();
-    /** True while the FAB is held down, so the release can bounce back. */
-    private boolean jumpLatestHeld;
     private ChatMessage lastContextMessage;
     private PlayerRef lastContextPlayer;
     private ContextMenuMode lastContextMenuMode = ContextMenuMode.BUBBLE;
@@ -986,13 +1000,13 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         saveCurrentDraft();
         AppPage fromPage = topPage();
         if (page.page() == AppPage.WORLD_CHAT) {
-            worldScroll.reset();
+            scrollSync.worldScroll().reset();
         }
         if (page.page() == AppPage.SETTINGS_SECTION) {
             resetSettingsUi();
         }
         if (page.page() == AppPage.PROFILE_DETAIL) {
-            detailScroll.reset();
+            scrollSync.detailScroll().reset();
         }
         if (!page.isRoot() && fromPage.isRoot()) {
             rootTabAnim.setValue(rootIndex(fromPage));
@@ -1072,7 +1086,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
             PrivateChatStore.setActive(activePrivateTarget());
             loadDraft(activePrivateTarget());
         } else if (topPage() == AppPage.WORLD_CHAT) {
-            worldScroll.reset();
+            scrollSync.worldScroll().reset();
             loadWorldDraft();
         }
         // resetTransientWorldUi() above dropped every armed reply, so this only
@@ -1202,7 +1216,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
 
     /** Clears the transient state of a settings sub-page when leaving it. */
     private void resetSettingsUi() {
-        detailScroll.reset();
+        scrollSync.detailScroll().reset();
         settingsSectionPage.reset();
         chipScroll.clear();
         chipScrollKey = "";
@@ -1214,11 +1228,11 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         String key = section.id() + ':' + settingsSectionPage.activeChipIndex(section);
         if (!key.equals(chipScrollKey)) {
             if (!chipScrollKey.isEmpty()) {
-                chipScroll.put(chipScrollKey, detailScroll.getScrollY());
+                chipScroll.put(chipScrollKey, scrollSync.detailScroll().getScrollY());
             }
             chipScrollKey = key;
             Float saved = chipScroll.get(key);
-            detailScroll.scrollTo(saved == null ? 0.0F : saved, false);
+            scrollSync.detailScroll().scrollTo(saved == null ? 0.0F : saved, false);
         }
     }
 
@@ -1270,7 +1284,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
             profilePage.resetSubject();
         }
         saveCurrentDraft();
-        rootScroll.reset();
+        scrollSync.rootScroll().reset();
         // With decorative motion off the tab change is instant: no indicator
         // slide, no body push — the new root is simply on screen.
         if (!Animations.enabled()) {
@@ -1311,14 +1325,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
     }
 
     private ScrollController currentScroll() {
-        if (topPage() == AppPage.PRIVATE_CHAT) {
-            PlayerRef target = activePrivateTarget();
-            if (target == null) {
-                return worldScroll;
-            }
-            return privateScrolls.computeIfAbsent(target.key(), k -> new ScrollController());
-        }
-        return worldScroll;
+        return scrollSync.currentScroll();
     }
 
     private List<ChatMessage> messagesForNav(NavPage page) {
@@ -1335,10 +1342,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
     }
 
     private ScrollController scrollForNav(NavPage page) {
-        if (page != null && page.page() == AppPage.PRIVATE_CHAT && page.target() != null) {
-            return privateScrolls.computeIfAbsent(page.target().key(), k -> new ScrollController());
-        }
-        return worldScroll;
+        return scrollSync.scrollForNav(page);
     }
 
     /**
@@ -1433,7 +1437,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
      * channel starts fresh at the bottom.
      */
     private void resetTransientWorldUi() {
-        worldScroll.reset();
+        scrollSync.worldScroll().reset();
         resetHistoryWindows();
         closeContextMenu();
         lastContextMessage = null;
@@ -1576,12 +1580,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
      * demand and therefore have to be refreshed too.
      */
     private void syncScrollMotion() {
-        boolean on = Animations.enabled();
-        worldScroll.setDecorativeMotion(on);
-        rootScroll.setDecorativeMotion(on);
-        for (ScrollController controller : privateScrolls.values()) {
-            controller.setDecorativeMotion(on);
-        }
+        scrollSync.syncScrollMotion();
     }
 
     /** Collapses the suggestion popup and clears the gray ghost suffix. */
@@ -2752,8 +2751,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
     }
 
     private ScrollController listScroll() {
-        return topPage() == AppPage.SETTINGS_SECTION || topPage() == AppPage.PROFILE_DETAIL
-                ? detailScroll : rootScroll;
+        return scrollSync.listScroll();
     }
 
     private float measureRootContent(UiLayout root, AppPage page) {
@@ -2777,11 +2775,11 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         UiLayout layout = detailLayout();
         float vmx = toVirtualX(mouseX);
         float vmy = toVirtualY(mouseY);
-        detailScroll.setContent(settingsSectionPage.measureContent(layout, section), layout.list.h());
+        scrollSync.detailScroll().setContent(settingsSectionPage.measureContent(layout, section), layout.list.h());
         syncChipScroll(section);
-        detailScroll.updateAnimation(System.currentTimeMillis());
-        settingsSectionPage.render(canvas, layout, section, vmx, vmy, detailScroll.getScrollY(), accent());
-        drawScrollbar(canvas, layout, vmx, vmy, detailScroll);
+        scrollSync.detailScroll().updateAnimation(System.currentTimeMillis());
+        settingsSectionPage.render(canvas, layout, section, vmx, vmy, scrollSync.detailScroll().getScrollY(), accent());
+        drawScrollbar(canvas, layout, vmx, vmy, scrollSync.detailScroll());
         // Modal overlays on top of the whole panel: the cropper must render on
         // this path too — it is opened from here (wallpaper pick), and an
         // active-but-unrendered modal eats every click and freezes the screen.
@@ -2806,11 +2804,11 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         UiLayout layout = detailLayout();
         float vmx = toVirtualX(mouseX);
         float vmy = toVirtualY(mouseY);
-        detailScroll.setContent(profilePage.measureContent(layout), layout.list.h());
-        detailScroll.updateAnimation(System.currentTimeMillis());
+        scrollSync.detailScroll().setContent(profilePage.measureContent(layout), layout.list.h());
+        scrollSync.detailScroll().updateAnimation(System.currentTimeMillis());
         syncProfileSignatureDraft();
-        profilePage.render(canvas, layout, vmx, vmy, detailScroll.getScrollY());
-        drawScrollbar(canvas, layout, vmx, vmy, detailScroll);
+        profilePage.render(canvas, layout, vmx, vmy, scrollSync.detailScroll().getScrollY());
+        drawScrollbar(canvas, layout, vmx, vmy, scrollSync.detailScroll());
     }
 
     /** Fixed header (with back affordance) for a pushed settings sub-page. */
@@ -2834,10 +2832,10 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         }
         rootMouseX = vmx;
         rootMouseY = vmy;
-        rootScroll.setContent(measureRootContent(root, rootPage), root.list.h());
-        rootScroll.updateAnimation(System.currentTimeMillis());
+        scrollSync.rootScroll().setContent(measureRootContent(root, rootPage), root.list.h());
+        scrollSync.rootScroll().updateAnimation(System.currentTimeMillis());
         drawRootPage(canvas, root, rootPage);
-        drawScrollbar(canvas, root, vmx, vmy, rootScroll);
+        drawScrollbar(canvas, root, vmx, vmy, scrollSync.rootScroll());
         drawBottomTabBar(canvas, root, rootPage);
         // Modal avatar cropper on top of everything inside the panel.
         imageCropper.render(canvas, root.rect(), vmx, vmy);
@@ -2914,13 +2912,13 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         canvas.translate(dx, 0.0F);
         try {
             switch (page) {
-                case CHAT_LIST -> conversationListPage.render(canvas, layout, rootMouseX, rootMouseY, rootScroll.getScrollY());
+                case CHAT_LIST -> conversationListPage.render(canvas, layout, rootMouseX, rootMouseY, scrollSync.rootScroll().getScrollY());
                 case PROFILE -> {
                     syncProfileSignatureDraft();
-                    profilePage.render(canvas, layout, rootMouseX, rootMouseY, rootScroll.getScrollY());
+                    profilePage.render(canvas, layout, rootMouseX, rootMouseY, scrollSync.rootScroll().getScrollY());
                 }
                 case SETTINGS -> settingsHomePage.render(canvas, layout, rootMouseX, rootMouseY,
-                        rootScroll.getScrollY());
+                        scrollSync.rootScroll().getScrollY());
                 case WORLD_CHAT, PRIVATE_CHAT ->
                         throw new IllegalStateException("Root page body cannot render chat/detail pages");
             }
@@ -3142,46 +3140,12 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
      */
     private void drawScrollbar(Canvas canvas, UiLayout layout, float vmx, float vmy,
                                ScrollController controller) {
-        long now = System.currentTimeMillis();
-
-        UiLayout.Rect list = layout.list;
-        float trackW = s(6);
-        float trackH = list.h();
-        float visibleRatio = Math.min(1.0F, trackH / (trackH + controller.getMaxScroll()));
-        float thumbH = Math.max(s(30), trackH * visibleRatio);
-        // Deliberately computed before drag updates below, matching the original
-        // frame ordering: the thumb is drawn from the offset captured at frame start.
-        float thumbY = list.y() + (trackH - thumbH) * (controller.getScrollY() / controller.getMaxScroll());
-
-        if (controller.updateScrollbarFade(now, vmx, vmy, list, controller.isDragging(), trackW, frameDt) <= 0.0F) {
-            return;
-        }
-
-        if (controller.isDragging()) {
-            controller.dragTo(vmy, trackH);
-        }
-
-        float w = trackW + controller.getScrollEmphasis() * s(3);
-        // The thumb rides the accent channel the whole way — a static white
-        // thumb vanishes on light panels, so the idle low-alpha state reads
-        // accent too, same emphasis language as the docked bar's active tab.
-        int r = (accent() >> 16) & 0xFF;
-        int g = (accent() >> 8) & 0xFF;
-        int bch = accent() & 0xFF;
-        int alpha = MathHelper.clamp((int) ((170 + 60 * controller.getScrollEmphasis())
-                * controller.getScrollBarAlpha()), 0, 255);
-        int color = (alpha << 24) | (r << 16) | (g << 8) | bch;
-        float trackX = list.right() - trackW - s(2);
-        SkiaDraw.drawRoundedRect(canvas, trackX - (w - trackW) / 2.0F, thumbY, w, thumbH, w / 2.0F, color);
+        scrollSync.drawScrollbar(canvas, layout, vmx, vmy, controller);
     }
 
     private boolean overScrollbarTrack(UiLayout layout, float vmx, float vmy,
                                        ScrollController controller) {
-        float trackW = s(6);
-        float trackX = layout.list.right() - trackW - s(2);
-        return controller.getMaxScroll() > 0.0F
-                && vmx >= trackX - s(8) && vmx <= trackX + trackW + s(8)
-                && vmy >= layout.list.y() && vmy <= layout.list.bottom();
+        return scrollSync.overScrollbarTrack(layout, vmx, vmy, controller);
     }
 
 
@@ -3198,55 +3162,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
      */
     private void drawJumpLatest(Canvas canvas, UiLayout layout, float vmx, float vmy,
                                 ScrollController scroll, boolean advance) {
-        boolean show = scroll.getMaxScroll() > 0.0F && !scroll.isAtBottom();
-        float size = s(38);
-        float x = layout.list.right() - size - s(12);
-        float y = layout.list.bottom() - size - s(12);
-        boolean hover = vmx >= x && vmx <= x + size && vmy >= y && vmy <= y + size;
-        // Same interaction language as every other control: the hover grey is
-        // eased rather than switched, and the pill rides the shared bounce spring
-        // so the press squashes it and the release bounces back. Both are stepped
-        // BEFORE the fade gate below, because the click that presses the pill also
-        // scrolls to the bottom and hides it on the very next frame — behind the
-        // gate the release half of the bounce would never be drawn.
-        if (advance) {
-            jumpLatestAnim = UiMotion.approach(jumpLatestAnim, show ? 1.0F : 0.0F, frameDt, UiMotion.POPUP_MS);
-            jumpLatestHover = UiMotion.approach(jumpLatestHover, hover ? 1.0F : 0.0F,
-                    frameDt, UiMotion.HOVER_MS);
-            jumpLatestScale.update(hover, jumpLatestHeld, frameDt, Animations.enabled(), size);
-        }
-        // The fade and spring are shared screen state stepped by the owning page,
-        // so a side that does not own the composer must not draw the pill from
-        // them: it would show a pill belonging to the other page's scroll.
-        if (jumpLatestAnim < 0.01F || (!advance && !show)) {
-            return;
-        }
-        canvas.save();
-        try (Paint layer = new Paint()) {
-            layer.setColor(Color.makeARGB((int) (255.0F * jumpLatestAnim), 0, 0, 0));
-            canvas.saveLayer(Rect.makeXYWH(x - s(4), y - s(4), size + s(8), size + s(8)), layer);
-            float cx = x + size / 2.0F;
-            float cy = y + size / 2.0F;
-            jumpLatestScale.begin(canvas, cx, cy);
-            try {
-                // Fixed dark floating pill (the jump FAB floats over arbitrary
-                // message content, whose polarity no theme token knows), same fixed
-                // polarity family as the popups; hover lifts the grey a notch.
-                int bg = lerpArgb(Color.makeARGB(235, 52, 58, 70), Color.makeARGB(245, 70, 76, 90),
-                        jumpLatestHover);
-                SkiaDraw.drawRoundedRect(canvas, x, y, size, size, size / 2.0F, bg);
-                SkiaDraw.drawRoundedShadow(canvas, x, y, size, size, size / 2.0F, s(8), UiTokens.CHROME_SHADOW);
-                // Glyph pinned white like the pill itself: the pill is fixed dark,
-                // so a themed text colour would go dark-on-dark on light themes.
-                drawIconCentered(canvas, DrawPrimitives.ICON_JUMP_DOWN_PATH, cx, cy, s(18),
-                        Color.makeARGB(255, 255, 255, 255));
-            } finally {
-                canvas.restore();
-            }
-            canvas.restore();
-        } finally {
-            canvas.restore();
-        }
+        scrollSync.drawJumpLatest(canvas, layout, vmx, vmy, scroll, advance);
     }
 
     /**
@@ -3259,14 +3175,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
     }
 
     private boolean overJumpLatest(UiLayout layout, float vmx, float vmy) {
-        ScrollController scroll = currentScroll();
-        if (jumpLatestAnim < 0.01F || scroll.getMaxScroll() <= 0.0F || scroll.isAtBottom()) {
-            return false;
-        }
-        float size = s(38);
-        float x = layout.list.right() - size - s(12);
-        float y = layout.list.bottom() - size - s(12);
-        return vmx >= x && vmx <= x + size && vmy >= y && vmy <= y + size;
+        return scrollSync.overJumpLatest(layout, vmx, vmy);
     }
 
     /**
@@ -4605,10 +4514,10 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
                     return true;
                 }
                 if (button == 0) {
-                    profilePage.onClick(mx, my, detailLayout(), detailScroll.getScrollY());
+                    profilePage.onClick(mx, my, detailLayout(), scrollSync.detailScroll().getScrollY());
                 } else if (button == 1) {
                     // Right-click on the banner card clears the custom banner.
-                    profilePage.onRightClick(mx, my, detailLayout(), detailScroll.getScrollY());
+                    profilePage.onRightClick(mx, my, detailLayout(), scrollSync.detailScroll().getScrollY());
                 }
                 return true;
             }
@@ -4914,7 +4823,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
             // Jump-to-latest bubble sits above the message list and takes priority
             // over ordinary message clicks when it is visible.
             if (button == 0 && overJumpLatest(layout, mx, my)) {
-                jumpLatestHeld = true;
+                scrollSync.pressJumpLatest();
                 currentScroll().scrollToBottom(true);
                 return true;
             }
@@ -5134,7 +5043,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
             // are armed on press and must be released here, or the bounce never
             // gets its release half.
             messageListView.setLoadEarlierPressed(false);
-            jumpLatestHeld = false;
+            scrollSync.releaseJumpLatest();
             if (button == 0) {
                 float mx = toVirtualX(mouseX);
                 float my = toVirtualY(mouseY);

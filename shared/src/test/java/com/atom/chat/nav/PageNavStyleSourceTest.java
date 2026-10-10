@@ -373,16 +373,25 @@ class PageNavStyleSourceTest {
      * <p>The gate cannot be exercised without a Skija surface, so it is asserted
      * at the source: the guard must consult both {@code advance} (the owner
      * steps the state) and the side's own {@code show}.
+     *
+     * <p>Since block 11/25 the pill is drawn by {@code ScrollSyncService} (D11),
+     * so the gate is asserted where it now lives and the three screens are held
+     * to forwarding to it — the same pair of facts, one indirection deeper.
      */
     @Test
     void theJumpLatestPillIsOwnerAndVisibilityGated() throws IOException {
         for (String screen : SCREENS) {
             String body = body(source(screen), "private void drawJumpLatest(");
-            assertTrue(body.contains("!advance && !show"),
-                    screen + ": drawJumpLatest must not draw a non-owner side whose own scroll"
-                            + " says there is no pill; the guard reads only the shared animation"
-                            + " state.\n" + body);
+            assertTrue(body.contains("scrollSync.drawJumpLatest("),
+                    screen + ": the pill's drawing lives in the D11 service now, so this screen"
+                            + " must forward to it instead of drawing its own.\n" + body);
         }
+        String service = body(source("shared/src/main/java/com/atom/chat/ui/ScrollSyncService.java"),
+                "public void drawJumpLatest(");
+        assertTrue(service.contains("!advance && !show"),
+                "ScrollSyncService.drawJumpLatest must not draw a non-owner side whose own scroll"
+                        + " says there is no pill; the guard reads only the shared animation"
+                        + " state.\n" + service);
     }
 
     /**
