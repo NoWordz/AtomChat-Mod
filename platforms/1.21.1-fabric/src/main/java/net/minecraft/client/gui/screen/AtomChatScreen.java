@@ -6,15 +6,14 @@ import com.atom.chat.chat.PublicEchoTracker;
 import com.atom.chat.chat.DraftStore;
 import com.atom.chat.chat.ReplySlotStore;
 import com.atom.chat.chat.SendPipeline;
+import com.atom.chat.chat.WorldFeedFilter;
 import com.atom.chat.history.HistoryFoldStore;
 import com.atom.chat.chat.ChatMessage;
 import com.atom.chat.chat.Cicodes;
-import com.atom.chat.chat.MessageFilter;
 import com.atom.chat.chat.TeleportCommands;
 import com.atom.chat.chat.ChatStore;
 import com.atom.chat.config.AtomChatConfig;
 import com.atom.chat.emote.EmoteStore;
-import com.atom.chat.ui.AppIcons;
 import com.atom.chat.ui.ActionFeedback;
 import com.atom.chat.ui.ActionToast;
 import com.atom.chat.image.ImageLoader;
@@ -108,7 +107,6 @@ import org.lwjgl.system.MemoryUtil;
 import java.awt.datatransfer.DataFlavor;
 import java.io.File;
 import java.nio.file.Path;
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -636,7 +634,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
      * the unfiltered feed. A fresh screen instance starts at ALL, so closing
      * and reopening the panel resets it by construction.
      */
-    private MessageFilter worldFilter = MessageFilter.ALL;
+    private final WorldFeedFilter worldFeed = new WorldFeedFilter();
     /** Hover wash behind the header filter button (world chat only). */
     private float filterButtonHover;
     /** Hover washes for the emoji panel tab strip (owned by {@link EmojiPanel}). */
@@ -916,7 +914,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
 
     /** Cycles the feed filter and drops a selection that may span hidden rows. */
     private void cycleWorldFilter() {
-        worldFilter = worldFilter.next();
+        worldFeed.cycle();
         messageListView.clearSelection();
     }
 
@@ -928,15 +926,9 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
      * open).
      */
     private ShellHeader.HeaderAction headerActionFor(NavPage page) {
-        if (page == null || page.page() != AppPage.WORLD_CHAT) {
-            return null;
-        }
-        io.github.humbleui.skija.Path icon =
-                worldFilter == MessageFilter.SYSTEM ? AppIcons.ICON_ANNOUNCE_PATH
-                        : worldFilter == MessageFilter.PLAYERS ? AppIcons.ICON_TAB_PROFILE_PATH
-                        : AppIcons.ICON_FILTER_PATH;
-        int color = worldFilter.isFiltering() ? accent() : textPrimary();
-        return new ShellHeader.HeaderAction(filterButton(), filterButtonHover, icon, color);
+        // The filter's state, icons and tint live in WorldFeedFilter; the button's
+        // rect and hover wash are header chrome and stay here (D20).
+        return worldFeed.headerActionFor(page, filterButton(), filterButtonHover);
     }
 
     private boolean isBackButtonHit(float vmx, float vmy) {
@@ -1314,19 +1306,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
             return List.of();
         }
         if (page.page() == AppPage.WORLD_CHAT) {
-            List<ChatMessage> all = ChatStore.get().snapshot();
-            if (worldFilter == MessageFilter.ALL) {
-                return all;
-            }
-            // View filter only: the store, unread counts and previews always
-            // see the full feed.
-            List<ChatMessage> out = new ArrayList<>(all.size());
-            for (ChatMessage message : all) {
-                if (worldFilter.accepts(message)) {
-                    out.add(message);
-                }
-            }
-            return out;
+            return worldFeed.filterFeed(ChatStore.get().snapshot());
         }
         if (page.page() == AppPage.PRIVATE_CHAT) {
             return PrivateChatStore.messages(page.target());
