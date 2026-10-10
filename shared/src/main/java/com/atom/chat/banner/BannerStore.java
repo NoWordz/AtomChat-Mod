@@ -105,8 +105,19 @@ public final class BannerStore {
     /**
      * Deletes the banner; the profile falls back to its accent gradient
      * ("delete image = off").
+     *
+     * <p>The {@code dir == null} guard is the same one {@link
+     * com.atom.chat.wallpaper.WallpaperStore#clear()} carries: {@link #init} runs
+     * from client init, but the store is reachable before that (and from offline
+     * tests), and {@link #removeExisting} walks straight into
+     * {@code Files.isDirectory(null)}, which throws rather than answering false.
+     * Deleting nothing is already the answer this method gives when the directory
+     * is missing, so an uninitialised store is not a separate case.</p>
      */
     public static boolean clear() {
+        if (dir == null) {
+            return false;
+        }
         boolean removed = removeExisting(null);
         refresh();
         return removed;

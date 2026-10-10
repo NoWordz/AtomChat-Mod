@@ -108,19 +108,14 @@ class SettingsActionsTest {
         }
     }
 
-    /** Only the banner store needs the guard — see {@link #releaseStores()}. */
-    private boolean bannerInitialized;
-
     @AfterEach
     void releaseStores() {
-        // WallpaperStore.clear() guards a null directory; BannerStore.clear()
-        // does not (it walks straight into Files.isDirectory(null)), so this only
-        // touches the one this class pointed at a temp directory. Registered in
-        // the D15a report as a pre-existing asymmetry.
+        // Both stores now guard a null directory in clear(): the asymmetry (the
+        // banner store walked straight into Files.isDirectory(null)) was fixed in
+        // the phase-3 defect batch, so neither call needs a "was it initialised"
+        // flag. Neither store's file is touched when the directory is null.
         WallpaperStore.clear();
-        if (bannerInitialized) {
-            BannerStore.clear();
-        }
+        BannerStore.clear();
         // Hand the statics back exactly as they were found: uninitialised (both
         // refresh() implementations guard a null directory).
         WallpaperStore.init(null);
@@ -138,7 +133,6 @@ class SettingsActionsTest {
     void theCropperCallbackRoutesEachTargetToItsOwnStore() throws Exception {
         WallpaperStore.init(tmp.resolve("wallpaper"));
         BannerStore.init(tmp.resolve("banner"));
-        bannerInitialized = true;
         AvatarStore avatar = new AvatarStore(tmp.resolve("avatar"));
         ImageCropper.Callback callback = SettingsActions.cropperCallback(avatar, null);
 
