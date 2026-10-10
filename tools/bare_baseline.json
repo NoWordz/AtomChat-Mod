@@ -6,7 +6,7 @@
     "且 N 要与该块 git diff 里迁入的 `s(N)` 数逐一对得上。",
     "口径见 tools/bare_scan.py 顶部注释。"
   ],
-  "total": 515,
+  "total": 516,
   "files": {
     "shared/src/main/java/com/atom/chat/config/AtomChatConfig.java": 1,
     "shared/src/main/java/com/atom/chat/image/ImagePreviewOverlay.java": 1,
@@ -14,6 +14,7 @@
     "shared/src/main/java/com/atom/chat/render/SkiaDraw.java": 2,
     "shared/src/main/java/com/atom/chat/ui/ActionFeedback.java": 1,
     "shared/src/main/java/com/atom/chat/ui/ActionToast.java": 9,
+    "shared/src/main/java/com/atom/chat/ui/ComposerPointer.java": 1,
     "shared/src/main/java/com/atom/chat/ui/ContextMenuController.java": 8,
     "shared/src/main/java/com/atom/chat/ui/MenuPopup.java": 1,
     "shared/src/main/java/com/atom/chat/ui/ScrollController.java": 8,

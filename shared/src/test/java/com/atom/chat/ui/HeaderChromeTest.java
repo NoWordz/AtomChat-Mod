@@ -356,14 +356,38 @@ class HeaderChromeTest {
                 chrome.drawPushedHeader(hovered.getCanvas(), back.x() + 2.0F, back.y() + 2.0F, nav);
             }
 
-            assertNotEquals(signature(idle, button), signature(hovered, button),
-                    "the hover wash is painted where the hit rect says the button is");
-            assertEquals(signature(idle, titleArea), signature(hovered, titleArea),
-                    "and nowhere else: the title area is untouched by a back-button hover");
+            // Colour mass rather than byte identity: the header render carries a
+            // rare, tiny glyph-rasterisation jitter across JVM runs (measured: a
+            // handful of pixels at most), while the wash itself moves ~100k of
+            // mass over the button. The thresholds below sit two orders of
+            // magnitude away from both, so they catch a missing wash and a wash
+            // that leaked into the title without ever flaking.
+            assertTrue(colourMass(idle, hovered, button) > 10_000L,
+                    "the hover wash is painted where the hit rect says the button is (mass="
+                            + colourMass(idle, hovered, button) + ")");
+            assertTrue(colourMass(idle, hovered, titleArea) < 2_000L,
+                    "and nowhere else: the title area is untouched by a back-button hover (mass="
+                            + colourMass(idle, hovered, titleArea) + ")");
         } finally {
             idle.close();
             hovered.close();
         }
+    }
+
+    /** Total RGB movement between two frames inside one rect. */
+    private static long colourMass(Surface a, Surface b, int[] rect) {
+        byte[] pa = readPixels(a);
+        byte[] pb = readPixels(b);
+        long sum = 0L;
+        for (int y = Math.max(0, rect[1]); y < Math.min(SURFACE_H, rect[1] + rect[3]); y++) {
+            for (int x = Math.max(0, rect[0]); x < Math.min(SURFACE_W, rect[0] + rect[2]); x++) {
+                int at = (y * SURFACE_W + x) * 4;
+                sum += Math.abs((pa[at] & 0xFF) - (pb[at] & 0xFF))
+                        + Math.abs((pa[at + 1] & 0xFF) - (pb[at + 1] & 0xFF))
+                        + Math.abs((pa[at + 2] & 0xFF) - (pb[at + 2] & 0xFF));
+            }
+        }
+        return sum;
     }
 
     /** The header plate's painted box must match the rect the chrome was given. */
