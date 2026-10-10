@@ -62,6 +62,7 @@ import com.atom.chat.settings.SettingsSection;
 import com.atom.chat.settings.SettingsSectionPage;
 import com.atom.chat.ui.Animations;
 import com.atom.chat.ui.BottomTabBar;
+import com.atom.chat.ui.ContextMenuActions;
 import com.atom.chat.ui.ContextMenuController;
 import com.atom.chat.ui.ScrollController;
 import com.atom.chat.ui.ScrollSyncService;
@@ -958,7 +959,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
 
         @Override
         public boolean isPlayerOnline(PlayerRef player) {
-            return isOnlinePlayer(player);
+            return contextActions.isOnlinePlayer(player);
         }
 
         @Override
@@ -984,6 +985,73 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
                 : ContextMenuController.Subject.of(
                         PlayerRef.of(msg.getSenderUuid(), msg.getProfileName()),
                         Cicodes.extractImageUrl(msg.getRawText()) != null, msg);
+    }
+
+    /**
+     * What a menu row does (D19b): the avatar menu's four actions, the player
+     * card's three, the teleport command and the shared online test. The tab list
+     * crosses as neutral facts (so the matching rule is testable and this screen
+     * stays the only place that reads the tab list), the teleport probe stays here
+     * because it needs the client object, and a message crosses as
+     * {@link ContextMenuActions.MessageFacts} — the message type's chat component
+     * is spelled differently per mapping.
+     */
+    private final ContextMenuActions contextActions = new ContextMenuActions(new ContextMenuActions.Host() {
+        @Override
+        public java.util.List<ContextMenuActions.OnlinePlayer> onlinePlayers() {
+            if (client == null || client.getConnection() == null) {
+                return java.util.List.of();
+            }
+            java.util.List<ContextMenuActions.OnlinePlayer> out = new java.util.ArrayList<>();
+            for (PlayerInfo entry : client.getConnection().getOnlinePlayers()) {
+                out.add(ContextMenuActions.OnlinePlayer.of(entry.getProfile().getId(),
+                        entry.getProfile().getName()));
+            }
+            return out;
+        }
+
+        @Override
+        public boolean hasLocalPlayer() {
+            return client.player != null;
+        }
+
+        @Override
+        public String teleportCommand() {
+            // auto: probe the server command tree, fall back on failure replies.
+            return TeleportCommands.commandFor(client, AtomChatConfig.get().teleportCommandMode);
+        }
+
+        @Override
+        public void sendCommand(String command) {
+            client.player.connection.sendCommand(command);
+        }
+
+        @Override
+        public void appendToComposer(String text) {
+            inputAppend(text);
+        }
+
+        @Override
+        public void privateChatWith(PlayerRef player) {
+            AtomChatScreen.this.openPrivateChat(player);
+        }
+
+        @Override
+        public void profileDetailFor(PlayerRef player) {
+            AtomChatScreen.this.openProfileDetail(player);
+        }
+
+        @Override
+        public PlayerRef currentOrLastPlayer() {
+            return contextMenu.currentOrLastPlayer();
+        }
+    });
+
+    /** The actions' neutral view of a message row (D19b): both names resolved here. */
+    private static ContextMenuActions.MessageFacts menuMessageOf(ChatMessage msg) {
+        return msg == null ? null
+                : ContextMenuActions.MessageFacts.of(msg.getSenderUuid(), msg.getProfileName(),
+                        msg.getSenderName(), msg.isOwn(), msg.isSystem());
     }
     // Root tab transition. The bottom bar owns the shared Animator; the screen
     // keeps the from/to slot indexes and reuses the same Animator for the root
@@ -1174,7 +1242,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         if (target == null) {
             return true;
         }
-        return !isOnlinePlayer(target) || BlockList.isBlocked(target);
+        return !contextActions.isOnlinePlayer(target) || BlockList.isBlocked(target);
     }
 
     /** Composer hint of a read-only private page, from that page's partner. */
@@ -2430,7 +2498,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
                 ShellHeader.render(canvas, layout.header, shellTitleFor(toPage), true,
                         backButton(), backButtonHover, textPrimary(),
                         toPage.page() == AppPage.PRIVATE_CHAT
-                                ? isOnlinePlayer(toPage.target()) : null,
+                                ? contextActions.isOnlinePlayer(toPage.target()) : null,
                         headerActionFor(toPage));
                 drawBezel(canvas, layout);
                 return;
@@ -2632,7 +2700,8 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         if (!suppressHeader) {
             ShellHeader.render(canvas, layout.header, shellTitleFor(topNav()), true,
                     backButton(), backButtonHover, textPrimary(),
-                    topPage() == AppPage.PRIVATE_CHAT ? isOnlinePlayer(activePrivateTarget()) : null,
+                    topPage() == AppPage.PRIVATE_CHAT
+                            ? contextActions.isOnlinePlayer(activePrivateTarget()) : null,
                     headerActionFor(topNav()));
         }
 
@@ -2663,7 +2732,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
                 ShellHeader.render(canvas, layout.header, shellTitleFor(pageNavTo), true,
                         backButton(), backButtonHover, textPrimary(),
                         pageNavTo.page() == AppPage.PRIVATE_CHAT
-                                ? isOnlinePlayer(pageNavTo.target()) : null,
+                                ? contextActions.isOnlinePlayer(pageNavTo.target()) : null,
                         headerActionFor(pageNavTo));
             } else {
                 UiLayout root = rootLayout();
@@ -3341,95 +3410,6 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
             ((MouseHandlerAccessor) this.client.mouseHandler).atomchat$setActiveButton(0);
         }
         emojiWiring.pickEmoteFile();
-    }
-
-    private static boolean isOnlinePlayer(PlayerRef player) {
-        if (player == null) {
-            return false;
-        }
-        Minecraft client = Minecraft.getInstance();
-        if (client == null || client.getConnection() == null) {
-            return false;
-        }
-        for (PlayerInfo entry : client.getConnection().getOnlinePlayers()) {
-            if (player.uuid() != null && player.uuid().equals(entry.getProfile().getId())) {
-                return true;
-            }
-            if (player.realName() != null && player.realName().equalsIgnoreCase(entry.getProfile().getName())) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    /** Avatar menus only make sense for another player with a real sender identity. */
-    private static boolean canOpenAvatarMenu(ChatMessage msg) {
-        if (msg == null || msg.isSystem() || msg.isOwn()) {
-            return false;
-        }
-        return msg.getSenderName() != null || msg.getProfileName() != null;
-    }
-
-    /**
-     * Avatar context-menu actions. Row 0 (@ mention) is already wired because it
-     * is the direct replacement for the old single-left-click behavior. Whisper /
-     * Teleport / Block intentionally do nothing yet — the menu framework is the
-     * current step, and each action is wired in its own feature pass.
-     */
-    private void performAvatarMenuAction(int row, ChatMessage message) {
-        PlayerRef player = PlayerRef.of(message.getSenderUuid(), message.getProfileName());
-        if (player == null || player.realName() == null) {
-            return;
-        }
-        if (row == 0) {
-            // Insert the real profile name, not the decorated label: the label
-            // reaches other clients as uncoloured plain text (the title colour
-            // cannot survive a vanilla chat string) and a decorated @token also
-            // defeats mention detection that looks for @ProfileName.
-            inputAppend("@" + player.realName() + " ");
-        } else if (row == 1) {
-            openPrivateChat(player);
-        } else if (row == 2) {
-            if (isOnlinePlayer(player)) {
-                sendTeleportCommand(player);
-            }
-        } else if (row == 3) {
-            toggleBlock(player);
-        }
-    }
-
-    private void performPlayerCardAction(int row) {
-        PlayerRef player = contextMenu.currentOrLastPlayer();
-        if (player == null) {
-            return;
-        }
-        if (row == 0) {
-            openProfileDetail(player);
-        } else if (row == 1) {
-            if (isOnlinePlayer(player)) {
-                sendTeleportCommand(player);
-            }
-        } else if (row == 2) {
-            toggleBlock(player);
-        }
-    }
-
-    private void sendTeleportCommand(PlayerRef player) {
-        if (this.client.player == null || player == null || player.realName() == null) {
-            return;
-        }
-        // auto: probe the server command tree, fall back on failure replies.
-        String command = TeleportCommands.commandFor(client, AtomChatConfig.get().teleportCommandMode);
-        this.client.player.connection.sendCommand(command.substring(1) + " " + player.realName());
-        TeleportCommands.noteTeleportSent();
-    }
-
-    private void toggleBlock(PlayerRef player) {
-        if (player == null) {
-            return;
-        }
-        boolean nowBlocked = BlockList.isBlocked(player);
-        BlockList.setBlocked(player, !nowBlocked);
     }
 
     /**
@@ -4114,7 +4094,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
             if (contextMenu.hasPlayerCardMenu()) {
                 int row = contextMenu.hitPlayerCardRow(mx, my);
                 if (row >= 0 && button == 0) {
-                    performPlayerCardAction(row);
+                    contextActions.performPlayerCardAction(row);
                     contextMenu.close();
                     return true;
                 }
@@ -4479,7 +4459,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
                 int row = contextMenu.hitRow((float) mx, (float) my);
                 if (row >= 0 && button == 0) {
                     if (menuBeforeAvatar) {
-                        performAvatarMenuAction(row, menuBefore);
+                        contextActions.performAvatarMenuAction(row, menuMessageOf(menuBefore));
                     } else if (row == 0) {
                         feedback("atomchat.feedback.copied", copyToClipboard(menuBefore.getContentText()));
                     } else if (row == 1) {
@@ -4601,7 +4581,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
                 if (button == 1 && hit.avatarSize() > 0F
                         && mx >= hit.avatarX() && mx <= hit.avatarX() + hit.avatarSize()
                         && my >= hit.avatarY() && my <= hit.avatarY() + hit.avatarSize()
-                        && canOpenAvatarMenu(hit.message())) {
+                        && ContextMenuActions.canOpenAvatarMenu(menuMessageOf(hit.message()))) {
                     // Right-clicking the avatar the avatar menu is already on closes it.
                     if (menuBefore == hit.message() && menuBeforeAvatar) {
                         return true;
