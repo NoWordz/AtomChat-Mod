@@ -2726,18 +2726,17 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
     }
 
     private UiLayout rootLayout() {
-        return UiLayout.ofRoot(panelX(), panelY(), panelWidth(), panelHeight());
+        return ScreenMetrics.rootLayout(client.getWindow());
     }
 
     /** A pushed settings sub-page: no composer, no tab bar, tallest possible list. */
     private UiLayout detailLayout() {
-        return UiLayout.ofDetail(panelX(), panelY(), panelWidth(), panelHeight());
+        return ScreenMetrics.detailLayout(client.getWindow());
     }
 
     /** Layout and scroll controller of whatever list the top page is showing. */
     private UiLayout listLayout() {
-        return topPage() == AppPage.SETTINGS_SECTION || topPage() == AppPage.PROFILE_DETAIL
-                ? detailLayout() : rootLayout();
+        return ScreenMetrics.listLayout(client.getWindow(), topPage());
     }
 
     private ScrollController listScroll() {
@@ -3991,58 +3990,38 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
     }
 
     private float panelWidth() {
-        return Math.min(UiTokens.s(AtomChatConfig.get().panelWidth) / contentScale(), vw() - 32.0F);
+        return ScreenMetrics.panelWidth(client.getWindow());
     }
 
     private float panelHeight() {
-        return Math.min(UiTokens.s(AtomChatConfig.get().panelHeight) / contentScale(), vh() - 32.0F);
+        return ScreenMetrics.panelHeight(client.getWindow());
     }
 
-    // Virtual UI space: independent of vanilla GUI scale, anchored at 1080p.
-    /**
-     * Content-only zoom axis, clamped to the config's slider span [0.8, 1.5].
-     * Multiplies the density (so every inner token's pixel size) while
-     * panelWidth/panelHeight divide their virtual size by the same factor:
-     * the two cancel exactly on the panel frame, so the box's pixel size
-     * tracks uiScale only and the content inside zooms.
-     */
+    /** Content zoom (D10): see {@link ScreenMetrics#contentScale()} for the clamp and why it cancels on the frame. */
     private float contentScale() {
-        return Math.max(0.8F, Math.min(AtomChatConfig.get().contentScale, 1.5F));
+        return ScreenMetrics.contentScale();
     }
 
-    /**
-     * Design density: the 1080p-anchored base times the AtomChat UI scale
-     * times the content zoom. Every virtual-coordinate conversion in this
-     * screen funnels through here, so scaling this one value scales the whole
-     * virtual space — fonts, icons, hit rects and the blur pre-pass included
-     * — without touching UiTokens. The panel frame opts back out via the
-     * division in panelWidth/panelHeight/panelX.
-     */
+    /** Design density (D10): the 1080p-anchored funnel every conversion goes through. */
     private float uiDensity() {
-        var window = this.client.getWindow();
-        float base = Math.max(1.0F, window.getHeight() / 1080.0F);
-        return base * Math.max(0.5F, AtomChatConfig.get().uiScale) * contentScale();
+        return ScreenMetrics.uiDensity(client.getWindow());
     }
 
     private float vw() {
-        return this.client.getWindow().getWidth() / uiDensity();
+        return ScreenMetrics.vw(client.getWindow());
     }
 
     private float vh() {
-        return this.client.getWindow().getHeight() / uiDensity();
+        return ScreenMetrics.vh(client.getWindow());
     }
 
-    /**
-     * The anchor is part of the panel frame, whose pixel size is
-     * contentScale-invariant, so the physical left margin must be too: the
-     * virtual constant divides back out against the density's content factor.
-     */
+    /** Panel anchor (D10): contentScale-invariant, see {@link ScreenMetrics#panelX()}. */
     private float panelX() {
-        return UiTokens.PANEL_ANCHOR_X / contentScale();
+        return ScreenMetrics.panelX();
     }
 
     private float panelY() {
-        return (vh() - panelHeight()) / 2.0F;
+        return ScreenMetrics.panelY(client.getWindow());
     }
 
     /**
@@ -4067,7 +4046,10 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
     /**
      * The one and only way to build the layout. Rendering and every hit test go
      * through it so the input bar's animated height can never desync a click
-     * from what was drawn.
+     * from what was drawn. The frame itself comes from {@link ScreenMetrics};
+     * the two facts it adds here — the animated bar height (D21) and whether a
+     * reply bar is reserved (D1) — stay in this shell, so the assembly is
+     * unchanged.
      */
     private UiLayout layout() {
         float replyH = replyBarVisible() ? s(34) : 0.0F;
@@ -4203,11 +4185,11 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
     }
 
     private float toVirtualX(double guiX) {
-        return (float) (guiX * this.client.getWindow().getGuiScale() / uiDensity());
+        return ScreenMetrics.toVirtualX(client.getWindow(), guiX);
     }
 
     private float toVirtualY(double guiY) {
-        return (float) (guiY * this.client.getWindow().getGuiScale() / uiDensity());
+        return ScreenMetrics.toVirtualY(client.getWindow(), guiY);
     }
 
     @Override

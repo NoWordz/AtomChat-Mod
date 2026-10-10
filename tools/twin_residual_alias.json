@@ -78,6 +78,9 @@
     { "yarn": "method_45745", "official": "handleDisguisedChatMessage", "note": "yarn 的混淆中间名 ↔ 官方名（同一方法）" },
     { "yarn": "currentScreen", "official": "screen" },
     { "yarn": "MouseHandler", "official": "Mouse" },
+    { "yarn": "getFramebufferWidth", "official": "getWidth", "note": "窗口像素宽：yarn Window.getFramebufferWidth() ↔ 官方 Window.getWidth()（同一个 com.mojang.blaze3d.platform.Window；yarn 的 getWidth() 是 GUI 缩放后的宽，语义不同，D10 ScreenMetrics 孪生逐字核对）" },
+    { "yarn": "getFramebufferHeight", "official": "getHeight", "note": "窗口像素高：yarn Window.getFramebufferHeight() ↔ 官方 Window.getHeight()（同一窗口类，同上核对）" },
+    { "yarn": "getScaleFactor", "official": "getGuiScale", "note": "窗口 GUI 缩放比：yarn Window.getScaleFactor() ↔ 官方 Window.getGuiScale()（两边都返回 double，D10 ScreenMetrics 孪生核对）" },
 
     { "yarn": "net.minecraft.text.", "official": "net.minecraft.network.chat.", "note": "整包迁移：1.21 里 yarn 的 text 包 = 官方的 network.chat 包" },
     { "yarn": "net.minecraft.text.TranslatableTextContent", "official": "net.minecraft.network.chat.contents.TranslatableContents", "note": "整个限定名一起换：官方把 TranslatableContents 放在 network.chat.contents 子包，yarn 没有该子包" },
