@@ -272,6 +272,36 @@
         "sample_a": "",
         "sample_b": ""
       }
+    ],
+    "src/main/java/com/atom/chat/screen/SuggestorWiring.java": [
+      {
+        "fingerprint": "245c4643a447",
+        "kind": "code",
+        "reason": "主会话终验批准 2026-10-09（D8 工单「既定裁定」）：dismissSuggestor 的平台差异是平台接缝，只记注释不统一。official 侧（Forge/NeoForge）用 hide() 并自建 EditBox responder 驱动 suggestor（setAllowSuggestions(!text.equals(originalChatText)) + updateCommandInfo()）；fabric 侧用 setWindowActive(false)（yarn 名 = setAllowSuggestions，同时清 allow 标志）且不装 responder —— 它把 suggestor 写进 ChatScreen 自己的字段，由 vanilla 的 chat-field listener 继续驱动并在每次击键时重新武装该标志。因此 install 的签名在 official 侧多一个 originalChatText（responder 的比较基线），fabric 侧没有 responder 也就不需要它。两者各自正确，不许统一。",
+        "sample_a": "     * @param originalChatText the text the screen was opened with: the baseline a",
+        "sample_b": ""
+      },
+      {
+        "fingerprint": "91a294776020",
+        "kind": "code",
+        "reason": "主会话终验批准 2026-10-09（D8 工单「既定裁定」）：dismissSuggestor 的平台差异是平台接缝，只记注释不统一。official 侧（Forge/NeoForge）用 hide() 并自建 EditBox responder 驱动 suggestor（setAllowSuggestions(!text.equals(originalChatText)) + updateCommandInfo()）；fabric 侧用 setWindowActive(false)（yarn 名 = setAllowSuggestions，同时清 allow 标志）且不装 responder —— 它把 suggestor 写进 ChatScreen 自己的字段，由 vanilla 的 chat-field listener 继续驱动并在每次击键时重新武装该标志。因此 install 的签名在 official 侧多一个 originalChatText（responder 的比较基线），fabric 侧没有 responder 也就不需要它。两者各自正确，不许统一。",
+        "sample_a": "    public CommandSuggestions install(Minecraft client, Screen owner, Font textRenderer,",
+        "sample_b": "    public CommandSuggestions install(Minecraft client, Screen owner, Font textRenderer) {"
+      },
+      {
+        "fingerprint": "73fc8a2d34cf",
+        "kind": "code",
+        "reason": "主会话终验批准 2026-10-09（D8 工单「既定裁定」）：dismissSuggestor 的平台差异是平台接缝，只记注释不统一。official 侧（Forge/NeoForge）用 hide() 并自建 EditBox responder 驱动 suggestor（setAllowSuggestions(!text.equals(originalChatText)) + updateCommandInfo()）；fabric 侧用 setWindowActive(false)（yarn 名 = setAllowSuggestions，同时清 allow 标志）且不装 responder —— 它把 suggestor 写进 ChatScreen 自己的字段，由 vanilla 的 chat-field listener 继续驱动并在每次击键时重新武装该标志。因此 install 的签名在 official 侧多一个 originalChatText（responder 的比较基线），fabric 侧没有 responder 也就不需要它。两者各自正确，不许统一。",
+        "sample_a": "        suggestor.hide();",
+        "sample_b": "        suggestor.setWindowActive(false);"
+      },
+      {
+        "fingerprint": "76c85d0dd1ea",
+        "kind": "code",
+        "reason": "主会话终验批准 2026-10-09（D8 工单「既定裁定」）：dismissSuggestor 的平台差异是平台接缝，只记注释不统一。official 侧（Forge/NeoForge）用 hide() 并自建 EditBox responder 驱动 suggestor（setAllowSuggestions(!text.equals(originalChatText)) + updateCommandInfo()）；fabric 侧用 setWindowActive(false)（yarn 名 = setAllowSuggestions，同时清 allow 标志）且不装 responder —— 它把 suggestor 写进 ChatScreen 自己的字段，由 vanilla 的 chat-field listener 继续驱动并在每次击键时重新武装该标志。因此 install 的签名在 official 侧多一个 originalChatText（responder 的比较基线），fabric 侧没有 responder 也就不需要它。两者各自正确，不许统一。",
+        "sample_a": "            chatInputSuggestor.hide();",
+        "sample_b": "            chatInputSuggestor.setWindowActive(false);"
+      }
     ]
   }
 }

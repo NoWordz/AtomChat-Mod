@@ -90,7 +90,6 @@ import io.github.humbleui.types.RRect;
 import io.github.humbleui.skija.SamplingMode;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
-import net.minecraft.client.gui.components.CommandSuggestions;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.ChatScreen;
 import net.minecraft.client.multiplayer.PlayerInfo;
@@ -124,8 +123,6 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
     public enum AtomChatOpenMode { DIRECT_WORLD, RESTORE }
 
     private final Minecraft client = Minecraft.getInstance();
-    /** Command/mention suggestor anchored to the Skia input row. */
-    private CommandSuggestions chatInputSuggestor;
 
     private final NavigationStack<NavPage> navigation;
 
@@ -519,6 +516,34 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
             },
             AtomChatScreen::probeCanvasLeak,
             AtomChatScreen::tr);
+    /**
+     * The command/mention suggestion popup (D8): the anchored suggestor, the
+     * anchors it opens at, its render hook and the three input priorities it
+     * owns. The wiring holds the suggestor; this screen hands it the facts it
+     * reads — D21's one composer field, D10's layout and density, and the
+     * window's GUI scale.
+     */
+    private final SuggestorWiring suggestorWiring = new SuggestorWiring(new SuggestorWiring.Host() {
+        @Override
+        public EditBox input() {
+            return input;
+        }
+
+        @Override
+        public UiLayout layout() {
+            return AtomChatScreen.this.layout();
+        }
+
+        @Override
+        public double density() {
+            return uiDensity();
+        }
+
+        @Override
+        public double scaleFactor() {
+            return client.getWindow().getGuiScale();
+        }
+    });
     /**
      * Composer drafts per page, and the shared field they are loaded into. The
      * draft text lives in {@link DraftStore}; the port below is this shell's half
@@ -1568,9 +1593,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         if (!closing && input != null
                 && (isWorldChatPage() || profilePage.isSignatureEditing())) {
             positionInputField(layout());
-            if (isWorldChatPage() && chatInputSuggestor != null) {
-                chatInputSuggestor.render(context, mouseX, mouseY);
-            }
+            suggestorWiring.render(context, mouseX, mouseY, isWorldChatPage());
         }
 
         // Hover tooltips are drawn through the vanilla pipeline after the Skia
@@ -1602,25 +1625,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
 
     /** Collapses the suggestion popup and clears the gray ghost suffix. */
     private void dismissSuggestor() {
-        if (chatInputSuggestor != null) {
-            chatInputSuggestor.hide();
-            input.setSuggestion(null);
-        }
-    }
-
-    /** GUI-space anchor for the suggestion window: bottom edge of the popup. */
-    private int anchorInputTopY() {
-        double density = uiDensity();
-        double scaleFactor = this.client.getWindow().getGuiScale();
-        // The popup must clear the whole input bar (button row + text row),
-        // not just the caret line; otherwise it overlaps the bar's top half.
-        return (int) Math.round((layout().inputBar.y() - s(4)) * density / scaleFactor);
-    }
-
-    private int anchorInputLeftX() {
-        double density = uiDensity();
-        double scaleFactor = this.client.getWindow().getGuiScale();
-        return (int) Math.round((layout().inputBar.x() + UiTokens.INPUT_TEXT_X) * density / scaleFactor);
+        suggestorWiring.dismiss();
     }
 
     private void positionInputField(UiLayout layout) {
@@ -1757,21 +1762,12 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         super.init();
         // Route incoming remote pokes to this screen while it is open.
         PokeCompanionClient.setHandler(this::onPoked);
-        // Swap the vanilla suggestor for our anchored one on the same chat field;
-        // ChatScreen's changed listener drives whatever sits in chatInputSuggestor.
-        this.chatInputSuggestor = new AtomChatSuggestor(this.client, this, this.input,
-                this.client.font, false, false, 1, 10, true, -805306368,
-                this::anchorInputTopY, this::anchorInputLeftX);
-        this.chatInputSuggestor.setAllowHiding(false);
-        this.chatInputSuggestor.hide();
-        // Drive our anchored suggestor from the same EditBox responder vanilla
-        // ChatScreen would use for its package-private commandSuggestions.
-        this.input.setResponder(text -> {
-            if (this.chatInputSuggestor != null) {
-                this.chatInputSuggestor.setAllowSuggestions(!text.equals(originalChatText));
-                this.chatInputSuggestor.updateCommandInfo();
-            }
-        });
+        // Swap the vanilla suggestor for our anchored one on the same chat field.
+        // The popup, its anchors and its responder live in the D8 wiring; the
+        // "may this popup be hidden" switch does not exist on 1.20.1, so the
+        // versions that have it set it here.
+        suggestorWiring.install(this.client, this, this.client.font, originalChatText)
+                .setAllowHiding(false);
         // init() also runs on every resize, hence the guard inside.
         installDropCallback();
     }
@@ -4974,7 +4970,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
             UiLayout layout = layout();
 
             // Vanilla suggestion layer gets first pick on clicks too (prevents click-through).
-            if (chatInputSuggestor != null && chatInputSuggestor.mouseClicked((int) mouseX, (int) mouseY, button)) {
+            if (suggestorWiring.mouseClicked((int) mouseX, (int) mouseY, button)) {
                 return true;
             }
 
@@ -5356,7 +5352,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
             float mx = toVirtualX(mouseX);
             float my = toVirtualY(mouseY);
             // Suggestion popup scrolls first when open.
-            if (chatInputSuggestor != null && chatInputSuggestor.mouseScrolled(verticalAmount)) {
+            if (suggestorWiring.mouseScrolled(verticalAmount)) {
                 return true;
             }
             if (emojiPanel.isOpen() && emojiPanel.overPanel(layout(), mx, my)) {
@@ -5406,7 +5402,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
                 }
             }
             // Vanilla suggestion layer gets first pick (Tab/arrows over the popup).
-            if (chatInputSuggestor != null && chatInputSuggestor.keyPressed(keyCode, scanCode, modifiers)) {
+            if (suggestorWiring.keyPressed(keyCode, scanCode, modifiers)) {
                 return true;
             }
             if (keyCode == 257 || keyCode == 335) { // Enter

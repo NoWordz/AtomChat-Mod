@@ -51,6 +51,7 @@
     { "yarn": "area", "official": "rect", "note": "SuggestionWindow 的矩形字段：yarn area ↔ 官方 rect" },
     { "yarn": "getArea", "official": "getRect" },
     { "yarn": "setArea", "official": "setRect" },
+    { "yarn": "DrawContext", "official": "GuiGraphics", "note": "绘制上下文（D8 SuggestorWiring 的 render 钩子要用）：yarn DrawContext ↔ 官方 GuiGraphics，与 AtomChatSuggestor 同一次核对" },
     { "yarn": "TextFieldWidget", "official": "EditBox" },
     { "yarn": "TextRenderer", "official": "Font", "note": "MC 的字体渲染器：yarn TextRenderer ↔ 官方 Font（与 Skija 的 Font 同名但形态一致，两侧同套规则）" },
     { "yarn": "MathHelper", "official": "Mth" },

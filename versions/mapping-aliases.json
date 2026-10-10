@@ -13,11 +13,17 @@
     "写了别名，检查照样跑：它按这里的对应关系去另一侧找，找不到一样红。",
     "换个说法：这份文件存在的意义是让「包位置差异」从隐性事实变成显式声明，代价是这一处必须人手维护。",
     "",
-    "【键是层内的相对路径，值是该类在另一家族上的相对路径】两边都相对仓库根。"
+    "【键是层内的相对路径，值是该类在另一家族上的相对路径】两边都相对仓库根。",
+    "D8 起多一个（同样是「住原版包才能碰包私有成员」的形状）：",
+    "  net/minecraft/client/gui/screen/SuggestorWiring.java",
+    "它与 AtomChatSuggestor 同住一个包、同一份理由；它的测试孪生也住在同一个包，",
+    "所以测试那份同样按路径别名登记（src/test/java 下的同一对）。"
   ],
 
   "layers/mapping/official": {
     "src/main/java/com/atom/chat/screen/AtomChatSuggestor.java": "src/main/java/net/minecraft/client/gui/screen/AtomChatSuggestor.java",
+    "src/main/java/com/atom/chat/screen/SuggestorWiring.java": "src/main/java/net/minecraft/client/gui/screen/SuggestorWiring.java",
+    "src/test/java/com/atom/chat/screen/SuggestorWiringTest.java": "src/test/java/net/minecraft/client/gui/screen/SuggestorWiringTest.java",
     "src/main/java/com/atom/chat/mixin/ChatInputSuggestorAccessor.java": "src/main/java/net/minecraft/client/gui/screen/atomchat/ChatInputSuggestorAccessor.java"
   }
 }

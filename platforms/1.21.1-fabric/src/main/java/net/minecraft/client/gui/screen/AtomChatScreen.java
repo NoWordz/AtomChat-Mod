@@ -90,6 +90,7 @@ import io.github.humbleui.types.RRect;
 import io.github.humbleui.skija.SamplingMode;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.DrawContext;
+import net.minecraft.client.gui.widget.TextFieldWidget;
 import net.minecraft.client.network.PlayerListEntry;
 import net.minecraft.client.option.KeyBinding;
 import net.minecraft.text.Style;
@@ -524,6 +525,34 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
             },
             AtomChatScreen::probeCanvasLeak,
             AtomChatScreen::tr);
+    /**
+     * The command/mention suggestion popup (D8): the anchored suggestor, the
+     * anchors it opens at, its render hook and the three input priorities it
+     * owns. The wiring holds the suggestor; this screen hands it the facts it
+     * reads — D21's one composer field, D10's layout and density, and the
+     * window's GUI scale.
+     */
+    private final SuggestorWiring suggestorWiring = new SuggestorWiring(new SuggestorWiring.Host() {
+        @Override
+        public TextFieldWidget input() {
+            return chatField;
+        }
+
+        @Override
+        public UiLayout layout() {
+            return AtomChatScreen.this.layout();
+        }
+
+        @Override
+        public double density() {
+            return uiDensity();
+        }
+
+        @Override
+        public double scaleFactor() {
+            return client.getWindow().getScaleFactor();
+        }
+    });
     /**
      * Composer drafts per page, and the shared field they are loaded into. The
      * draft text lives in {@link DraftStore}; the port below is this shell's half
@@ -1573,9 +1602,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         if (!closing && chatField != null
                 && (isWorldChatPage() || profilePage.isSignatureEditing())) {
             positionInputField(layout());
-            if (isWorldChatPage() && chatInputSuggestor != null) {
-                chatInputSuggestor.render(context, mouseX, mouseY);
-            }
+            suggestorWiring.render(context, mouseX, mouseY, isWorldChatPage());
         }
 
         // Hover tooltips are drawn through the vanilla pipeline after the Skia
@@ -1607,25 +1634,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
 
     /** Collapses the suggestion popup and clears the gray ghost suffix. */
     private void dismissSuggestor() {
-        if (chatInputSuggestor != null) {
-            chatInputSuggestor.setWindowActive(false);
-            chatField.setSuggestion(null);
-        }
-    }
-
-    /** GUI-space anchor for the suggestion window: bottom edge of the popup. */
-    private int anchorInputTopY() {
-        double density = uiDensity();
-        double scaleFactor = this.client.getWindow().getScaleFactor();
-        // The popup must clear the whole input bar (button row + text row),
-        // not just the caret line; otherwise it overlaps the bar's top half.
-        return (int) Math.round((layout().inputBar.y() - s(4)) * density / scaleFactor);
-    }
-
-    private int anchorInputLeftX() {
-        double density = uiDensity();
-        double scaleFactor = this.client.getWindow().getScaleFactor();
-        return (int) Math.round((layout().inputBar.x() + UiTokens.INPUT_TEXT_X) * density / scaleFactor);
+        suggestorWiring.dismiss();
     }
 
     private void positionInputField(UiLayout layout) {
@@ -1764,11 +1773,11 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         PokeCompanionClient.setHandler(this::onPoked);
         // Swap the vanilla suggestor for our anchored one on the same chat field;
         // ChatScreen's changed listener drives whatever sits in chatInputSuggestor.
-        this.chatInputSuggestor = new AtomChatSuggestor(this.client, this, this.chatField,
-                this.client.textRenderer, false, false, 1, 10, true, -805306368,
-                this::anchorInputTopY, this::anchorInputLeftX);
+        // The popup and its anchors live in the D8 wiring; this shell publishes it
+        // into the vanilla field so that listener keeps driving it, and switches
+        // the "may this popup be left" flag the way vanilla's own wiring does.
+        this.chatInputSuggestor = suggestorWiring.install(this.client, this, this.client.textRenderer);
         this.chatInputSuggestor.setCanLeave(false);
-        this.chatInputSuggestor.setWindowActive(false);
         // init() also runs on every resize, hence the guard inside.
         installDropCallback();
     }
@@ -4972,7 +4981,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
             UiLayout layout = layout();
 
             // Vanilla suggestion layer gets first pick on clicks too (prevents click-through).
-            if (chatInputSuggestor != null && chatInputSuggestor.mouseClicked((int) mouseX, (int) mouseY, button)) {
+            if (suggestorWiring.mouseClicked((int) mouseX, (int) mouseY, button)) {
                 return true;
             }
 
@@ -5354,7 +5363,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
             float mx = toVirtualX(mouseX);
             float my = toVirtualY(mouseY);
             // Suggestion popup scrolls first when open.
-            if (chatInputSuggestor != null && chatInputSuggestor.mouseScrolled(verticalAmount)) {
+            if (suggestorWiring.mouseScrolled(verticalAmount)) {
                 return true;
             }
             if (emojiPanel.isOpen() && emojiPanel.overPanel(layout(), mx, my)) {
@@ -5404,7 +5413,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
                 }
             }
             // Vanilla suggestion layer gets first pick (Tab/arrows over the popup).
-            if (chatInputSuggestor != null && chatInputSuggestor.keyPressed(keyCode, scanCode, modifiers)) {
+            if (suggestorWiring.keyPressed(keyCode, scanCode, modifiers)) {
                 return true;
             }
             if (keyCode == 257 || keyCode == 335) { // Enter
