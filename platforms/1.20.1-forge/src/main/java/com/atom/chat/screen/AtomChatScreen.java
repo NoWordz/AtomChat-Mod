@@ -69,6 +69,7 @@ import com.atom.chat.ui.PanelBackground;
 import com.atom.chat.ui.MenuPopup;
 import com.atom.chat.ui.PressScale;
 import com.atom.chat.ui.QuickPhrasePanel;
+import com.atom.chat.ui.QuickPhraseWiring;
 import com.atom.chat.ui.UiMotion;
 import com.atom.chat.ui.UiTokens;
 import com.atom.chat.ui.input.InputHandler;
@@ -418,6 +419,52 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
      * and closes the panel — the phrase can still be edited before sending.
      */
     private final QuickPhrasePanel quickPhrasePanel = new QuickPhrasePanel(this::inputAppend, this::accent);
+
+    /**
+     * The quick-phrase borrow (D16): the parked composer text, the add/edit
+     * lifecycle and what each panel action does to the screen. The composer is
+     * shared (D21 owns it, D18 borrows it too), so the domain keeps the parking
+     * ticket and this screen hands it the panel, D21's reads/writes, the focus
+     * and caret steps, and D24's read-only test.
+     */
+    private final QuickPhraseWiring quickPhraseWiring = new QuickPhraseWiring(new QuickPhraseWiring.Host() {
+        @Override
+        public QuickPhrasePanel panel() {
+            return quickPhrasePanel;
+        }
+
+        @Override
+        public String composerText() {
+            return inputGetText();
+        }
+
+        @Override
+        public void setComposerText(String text) {
+            inputSetText(text);
+        }
+
+        @Override
+        public void appendToComposer(String text) {
+            inputAppend(text);
+        }
+
+        @Override
+        public void focusComposer() {
+            inputFocused = true;
+            setFocused(input);
+            input.setFocused(true);
+        }
+
+        @Override
+        public void caretToEnd() {
+            setCaretAtEnd();
+        }
+
+        @Override
+        public boolean privateReadOnly() {
+            return isPrivateReadOnly();
+        }
+    });
 
     private boolean inputFocused = true;
     /**
@@ -1743,9 +1790,6 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         installDropCallback();
     }
 
-    /** Composer text saved while the quick-phrase panel borrows the field. */
-    private String phraseSavedComposer = "";
-
     private String inputGetText() {
         return input != null ? input.getValue() : "";
     }
@@ -1771,48 +1815,24 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
 
     // ---- quick-phrase edit borrows the composer field (the IME carrier) ----
 
-    /** Begins adding ({@link QuickPhrasePanel#ADD_NEW}) or editing a phrase. */
+    /**
+     * Begins adding or editing a phrase. The read-only guard, committing whatever
+     * edit was already running, the parking ticket and the load-focus-caret
+     * sequence live in {@link QuickPhraseWiring} (D16); this shell keeps the
+     * entry point the panel's own callbacks use.
+     */
     private void beginPhraseEdit(int target) {
-        if (isPrivateReadOnly()) {
-            return;
-        }
-        if (quickPhrasePanel.isEditing()) {
-            endPhraseEdit(true);
-        }
-        phraseSavedComposer = inputGetText();
-        if (target == QuickPhrasePanel.ADD_NEW) {
-            inputSetText("");
-            quickPhrasePanel.startAdd();
-        } else {
-            inputSetText(quickPhrasePanel.phraseAt(target));
-            quickPhrasePanel.startEdit(target);
-        }
-        inputFocused = true;
-        setFocused(input);
-        input.setFocused(true);
-        setCaretAtEnd();
+        quickPhraseWiring.beginPhraseEdit(target);
     }
 
     /** Ends a phrase add/edit; commit=true saves the field text as the phrase. */
     private void endPhraseEdit(boolean commit) {
-        if (!quickPhrasePanel.isEditing()) {
-            return;
-        }
-        if (commit) {
-            quickPhrasePanel.commitText(inputGetText());
-        } else {
-            quickPhrasePanel.abortEdit();
-        }
-        inputSetText(phraseSavedComposer);
-        setCaretAtEnd();
+        quickPhraseWiring.endPhraseEdit(commit);
     }
 
     /** Closes the phrase panel; an in-progress edit commits (blur applies). */
     private void closePhrasePanel() {
-        if (quickPhrasePanel.isEditing()) {
-            endPhraseEdit(true);
-        }
-        quickPhrasePanel.close();
+        quickPhraseWiring.closePhrasePanel();
     }
 
     private void setCaretAtEnd() {
@@ -1821,32 +1841,16 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         }
     }
 
-    /** Turns a panel click into the screen-level side effects. */
+    /**
+     * Turns a panel click into the screen-level side effects. The five action types —
+     * including the server rows' read-only insert-then-close — live in
+     * {@link QuickPhraseWiring} (D16).
+     * <p>The 1.20.1 copy carries the note that this branch was missing on that end for a
+     * while: clicking a server-provided phrase did nothing (the switch fell into
+     * {@code default}).</p>
+     */
     private void handlePhraseAction(QuickPhrasePanel.Action action) {
-        switch (action.type()) {
-            case QuickPhrasePanel.Action.ADD -> beginPhraseEdit(QuickPhrasePanel.ADD_NEW);
-            case QuickPhrasePanel.Action.EDIT -> beginPhraseEdit(action.index());
-            case QuickPhrasePanel.Action.DELETE -> quickPhrasePanel.deleteAt(action.index());
-            case QuickPhrasePanel.Action.INSERT -> {
-                endPhraseEdit(true);
-                quickPhrasePanel.pickRow(action.index());
-            }
-            case QuickPhrasePanel.Action.INSERT_SERVER -> {
-                // The server's rows are read-only: they insert text and close,
-                // with no edit or delete path behind them.
-                // 这一支在 1.21.1 两端都有、1.20.1 这端一直缺 —— 缺的表现是
-                // 点服务端下发的常用语毫无反应（switch 落到 default 里什么都不做）。
-                endPhraseEdit(true);
-                java.util.List<String> serverPhrases =
-                        com.atom.chat.pack.ServerPackStore.current().phrases();
-                if (action.index() >= 0 && action.index() < serverPhrases.size()) {
-                    inputAppend(serverPhrases.get(action.index()));
-                }
-                quickPhrasePanel.close();
-            }
-            default -> {
-            }
-        }
+        quickPhraseWiring.handlePhraseAction(action);
     }
 
     private static int leakProbeCount;
