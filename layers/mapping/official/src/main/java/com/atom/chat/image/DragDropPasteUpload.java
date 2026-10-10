@@ -38,8 +38,10 @@ import java.util.function.LongSupplier;
  * from {@code init} — which also runs on every resize, hence the guard — and
  * {@link #uninstallDropCallback} from {@code removed}. GLFW hands back the
  * callback it <em>replaced</em> (its contract for every {@code glfwSet*Callback}),
- * and that value is what the field below holds; the guard therefore reads
- * exactly what the old code read, and nothing here changes what it does.</p>
+ * which is why the field holds the callback this class built for itself instead:
+ * the replaced value is null on the first install, so the guard could never see
+ * an installed callback and the teardown could never release one. The guard and
+ * the free are the same ones the screen had — they now have something to read.</p>
  *
  * <p>Ports on {@link Host}: the screen's client handle — for one thing only, the
  * window pointer the drop callback is installed on, never
@@ -78,16 +80,36 @@ public final class DragDropPasteUpload {
 
     /**
      * The window's drop-callback slot: the only native call this domain makes,
-     * so the lifecycle around it can be stubbed. The token is whatever the
-     * window handed back — GLFW returns the callback it replaced, and nothing
-     * here ever looks inside it, it is only ever released.
+     * so the lifecycle around it can be stubbed. {@link #build} is the step that
+     * did not exist while the screen owned this wiring: GLFW answers
+     * {@code glfwSetDropCallback} with the callback it <em>replaced</em>, so the
+     * object this domain installs is only reachable if it is built and kept
+     * separately from the call that binds it.
      */
     public interface DropSlot {
-        /** Points {@code window}'s drop callback at {@code handler}; returns what it replaced. */
-        Object install(long window, DropHandler handler);
+        /**
+         * Builds a drop callback that is not yet attached to any window. The token
+         * is opaque to this domain; only {@link #bind} and {@link #release} look
+         * inside it.
+         */
+        Object build(DropHandler handler);
 
-        /** Detaches {@code token} from {@code window} and releases it. */
-        void release(long window, Object token);
+        /**
+         * Points {@code window}'s drop callback at {@code token} and answers with
+         * the callback that was in that slot before it — {@code null} when there
+         * was none, which is the normal case because Minecraft registers no drop
+         * callback at all. A {@code null} token clears the slot.
+         */
+        Object bind(long window, Object token);
+
+        /**
+         * Frees {@code callback} — {@code GLFWDropCallback.free()}, the one release
+         * action there is. Detaching this domain's own callback from the window is
+         * {@link #bind}'s job ({@code bind(window, null)}); this call never touches
+         * the window, so it is also the right way to drop a callback a failed
+         * install left unbound.
+         */
+        void release(Object callback);
     }
 
     /**
@@ -106,20 +128,24 @@ public final class DragDropPasteUpload {
     }
 
     /**
-     * The production slot: GLFW's setter and the callback object it returns.
+     * The production slot: GLFW's callback object plus the setter that binds it.
      * The handler runs without the window argument, exactly like the lambda the
      * screen used to pass here.
      */
     private static final DropSlot GLFW_SLOT = new DropSlot() {
         @Override
-        public Object install(long window, DropHandler handler) {
-            return GLFW.glfwSetDropCallback(window, (win, count, names) -> handler.dropped(count, names));
+        public Object build(DropHandler handler) {
+            return GLFWDropCallback.create((win, count, names) -> handler.dropped(count, names));
         }
 
         @Override
-        public void release(long window, Object token) {
-            GLFW.glfwSetDropCallback(window, null);
-            ((GLFWDropCallback) token).free();
+        public Object bind(long window, Object token) {
+            return GLFW.glfwSetDropCallback(window, (GLFWDropCallback) token);
+        }
+
+        @Override
+        public void release(Object callback) {
+            ((GLFWDropCallback) callback).free();
         }
     };
 
@@ -127,7 +153,12 @@ public final class DragDropPasteUpload {
     private final DropSlot dropSlot;
     private final ClipboardReader clipboard;
 
-    /** GLFW drop callback, installed while this screen is open (MC sets none). */
+    /**
+     * The drop callback <em>this domain installed</em>, or null while none is
+     * installed. Deliberately not what GLFW hands back — that value is the
+     * callback this one replaced, and holding it made the guard below read as
+     * "nothing installed" and the uninstall release nothing at all.
+     */
     private Object dropCallback;
 
     public DragDropPasteUpload(Host host) {
@@ -165,14 +196,30 @@ public final class DragDropPasteUpload {
      * one, so the guard can be driven without a live window. The supplier is read
      * where the client handle used to be read: inside the try, right at the
      * install call.
+     *
+     * <p>The field holds the callback <em>this</em> method installed, not the one
+     * GLFW handed back in exchange: the guard needs to answer "is there already
+     * one of mine in the window?", and the value GLFW returns is the callback
+     * that was there before (null in production, because Minecraft registers
+     * none) — reading that made the guard dead, so a resize re-entering
+     * {@code init} installed a second callback every time.</p>
      */
     void installDropCallback(LongSupplier window) {
         if (dropCallback != null) {
             return;
         }
+        Object installed = null;
         try {
-            dropCallback = dropSlot.install(window.getAsLong(), this::onFilesDropped);
+            installed = dropSlot.build(this::onFilesDropped);
+            // The replaced callback is GLFW's to hand over and nobody else's to
+            // read: this domain never invokes it, so there is nothing to keep it
+            // alive for.
+            dropSlot.bind(window.getAsLong(), installed);
+            dropCallback = installed;
         } catch (Throwable t) {
+            if (installed != null) {
+                dropSlot.release(installed);
+            }
             AtomChat.LOGGER.warn("Failed to install the file drop callback", t);
         }
     }
@@ -186,12 +233,14 @@ public final class DragDropPasteUpload {
         if (dropCallback == null) {
             return;
         }
+        Object installed = dropCallback;
+        dropCallback = null;
         try {
-            dropSlot.release(window.getAsLong(), dropCallback);
+            dropSlot.bind(window.getAsLong(), null);
+            dropSlot.release(installed);
         } catch (Throwable t) {
             AtomChat.LOGGER.warn("Failed to remove the file drop callback", t);
         }
-        dropCallback = null;
     }
 
     /** Window-wide: the drop event carries no cursor position we could hit-test with. */
