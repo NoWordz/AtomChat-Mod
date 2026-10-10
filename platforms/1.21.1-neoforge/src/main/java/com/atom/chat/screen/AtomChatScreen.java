@@ -37,7 +37,6 @@ import com.atom.chat.avatar.ColorPickerOverlay;
 import com.atom.chat.avatar.ImageCropper;
 import com.atom.chat.banner.BannerImage;
 import com.atom.chat.banner.BannerStore;
-import com.atom.chat.image.OwnPlayerAvatarSource;
 import com.atom.chat.page.ConversationListPage;
 import com.atom.chat.page.HistoryWindow;
 import com.atom.chat.page.MessageListView;
@@ -54,6 +53,7 @@ import com.atom.chat.render.RichTextRenderer;
 import com.atom.chat.render.SkiaDraw;
 import com.atom.chat.render.SkiaFontRenderer;
 import com.atom.chat.render.SkiaGraphics;
+import com.atom.chat.settings.SettingsActions;
 import com.atom.chat.settings.SettingsHomePage;
 import com.atom.chat.settings.SettingsSection;
 import com.atom.chat.settings.SettingsSectionPage;
@@ -123,35 +123,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
     private final AvatarStore avatarStore = new AvatarStore(
             net.neoforged.fml.loading.FMLPaths.CONFIGDIR.get().resolve("atomchat/avatar"));
     /** QQ-style crop overlay for avatar and wallpaper picks. */
-    private final ImageCropper imageCropper = new ImageCropper(new ImageCropper.Callback() {
-        @Override
-        public void onConfirm(String targetId, byte[] pngBytes) {
-            if ("avatar".equals(targetId)) {
-                if (avatarStore.setPng(pngBytes)) {
-                    AvatarImage.release();
-                    // Companion push: skipped only when the server has no
-                    // companion channels at all (negotiation, not a timeout).
-                    if (client.player != null) {
-                        com.atom.chat.net.AvatarCompanionClient.uploadOwnAvatar(
-                                client.player.getUUID(), pngBytes);
-                    }
-                }
-            } else if ("wallpaper".equals(targetId)) {
-                if (WallpaperStore.setPng(pngBytes)) {
-                    WallpaperImage.release();
-                }
-            } else if ("banner".equals(targetId)) {
-                if (BannerStore.setPng(pngBytes)) {
-                    BannerImage.release();
-                }
-            }
-        }
-
-        @Override
-        public void onCancel(String targetId) {
-            // Nothing to clean up; the picked file is simply dropped.
-        }
-    });
+    private final ImageCropper imageCropper = new ImageCropper(SettingsActions.cropperCallback(avatarStore, client));
     /** Modal HSV colour picker opened from the settings colour rows. */
     private final ColorPickerOverlay colorPicker = new ColorPickerOverlay(this::copyToClipboard);
     /**
@@ -237,12 +209,64 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
     private final java.util.HashMap<String, Float> chipScroll = new java.util.HashMap<>();
     private String chipScrollKey = "";
 
+    /**
+     * The settings screen's actions (D15a): the seven action cards, the three
+     * native pickers behind them and the crop each picked file is framed with.
+     * The domain owns the pickers and the cropper's confirm half; this screen
+     * hands it the avatar store it built from this platform's config directory
+     * (the domain never resolves one), the cropper and the section page it owns,
+     * its own client handle — never Minecraft.getInstance(), D3's
+     * precedent — D14's dialog bridge, D7's feedback, D4's history windows and
+     * D10's two layouts.
+     */
+    private final SettingsActions settingsActions = new SettingsActions(new SettingsActions.Host() {
+        @Override
+        public AvatarStore avatarStore() {
+            return avatarStore;
+        }
+
+        @Override
+        public ImageCropper imageCropper() {
+            return imageCropper;
+        }
+
+        @Override
+        public SettingsSectionPage sectionPage() {
+            return settingsSectionPage;
+        }
+
+        @Override
+        public Minecraft client() {
+            return client;
+        }
+
+        @Override
+        public NativeDialogBridge dialogs() {
+            return dialogBridge;
+        }
+
+        @Override
+        public void feedback(String key, boolean success) {
+            AtomChatScreen.this.feedback(key, success);
+        }
+
+        @Override
+        public void resetHistoryWindows() {
+            AtomChatScreen.this.resetHistoryWindows();
+        }
+
+        @Override
+        public UiLayout layout() {
+            return AtomChatScreen.this.layout();
+        }
+
+        @Override
+        public UiLayout listLayout() {
+            return AtomChatScreen.this.listLayout();
+        }
+    });
+
     {
-        // Action cards (pick/clear wallpaper) need the shell's file picker,
-        // which lives here rather than in the settings package.
-        settingsSectionPage.setActionHandler(this::handleSettingsAction);
-        // The custom-avatar source needs the store instance created above.
-        OwnPlayerAvatarSource.attach(avatarStore);
         // Role row: vanilla 1.21.1 only syncs the local player's own permission
         // level; other players stay unknown (row hidden) until a server
         // companion can answer for them.
@@ -255,96 +279,9 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         });
     }
 
-    /** Settings action cards: the wallpaper pair and the teleport mode cycle. */
-    private void handleSettingsAction(String actionId) {
-        if ("wallpaper_pick".equals(actionId)) {
-            pickWallpaperFile();
-        } else if ("wallpaper_clear".equals(actionId)) {
-            boolean removed = WallpaperStore.clear();
-            WallpaperImage.release();
-            feedback(removed ? "atomchat.feedback.wallpaperCleared" : "atomchat.feedback.wallpaperClearFailed",
-                    removed);
-        } else if ("test_sound".equals(actionId)) {
-            com.atom.chat.notification.NotificationController.playTestSound();
-        } else if ("teleport_mode".equals(actionId)) {
-            AtomChatConfig cfg = AtomChatConfig.get();
-            String current = cfg.teleportCommandMode == null ? "auto" : cfg.teleportCommandMode;
-            // auto -> tp -> tpa -> auto. The old cycle was tp -> tpa -> tp:
-            // once you left auto there was no way back — reported and fixed.
-            cfg.teleportCommandMode = switch (current) {
-                case "tp" -> "tpa";
-                case "tpa" -> "auto";
-                default -> "tp";
-            };
-            TeleportCommands.reset();
-            AtomChatConfig.save(cfg);
-        } else if ("page_nav_style".equals(actionId)) {
-            // Style pick: tap cycles SLIDE <-> ZOOM and saves, like the
-            // teleport-mode cycle above. Takes effect on the next nav.
-            AtomChatConfig cfg = AtomChatConfig.get();
-            cfg.pageNavStyle = cfg.pageNavStyle == AtomChatConfig.PageNavStyle.ZOOM
-                    ? AtomChatConfig.PageNavStyle.SLIDE
-                    : AtomChatConfig.PageNavStyle.ZOOM;
-            AtomChatConfig.save(cfg);
-        } else if ("history_clear".equals(actionId)) {
-            // Wipes the current session (and the world's saved file when
-            // persistence is on). Generation bumped inside: a pending auto-save
-            // cannot resurrect what was just deleted. The memory wipe is
-            // synchronous and is exactly what the player sees, so the toast
-            // reports that; the background file delete only logs on failure.
-            com.atom.chat.history.ChatHistory.clearCurrent();
-            resetHistoryWindows();
-            feedback("atomchat.feedback.historyCleared", true);
-        } else if ("cache_clear".equals(actionId)) {
-            // Image downloads are safe to drop; they are re-fetched on demand.
-            // A directory that could not be enumerated reports failure rather
-            // than a success the player cannot trust.
-            int deleted = ImageLoader.get().clearDiskCache();
-            feedback(deleted < 0 ? "atomchat.feedback.cacheClearFailed" : "atomchat.feedback.cacheCleared",
-                    deleted >= 0);
-        }
-    }
-
-    /** Picks a wallpaper image off-thread; the store mutation returns to render. */
-    private void pickWallpaperFile() {
-        KeyMapping.releaseAll();
-        if (this.client.mouseHandler != null) {
-            ((MouseHandlerAccessor) this.client.mouseHandler).atomchat$setActiveButton(0);
-        }
-        Thread worker = new Thread(() -> {
-            Path file = FilePicker.pickImage(this::suppressAutoIconify, this::restoreAutoIconify,
-                    WallpaperStore::isSupportedName);
-            refocusWindow();
-            if (file == null) {
-                return;
-            }
-            this.client.execute(() -> {
-                // Crop at the current panel aspect so what you frame is what
-                // the panel shows (cover-fit has nothing left to do).
-                UiLayout l = layout();
-                imageCropper.open(file, false, l.rect().w(), l.rect().h(), "wallpaper");
-            });
-        }, "AtomChat-WallpaperPicker");
-        worker.setDaemon(true);
-        worker.start();
-    }
     /** Picks a custom avatar off-thread; the cropper opens on the render side. */
     private void pickAvatarFile() {
-        KeyMapping.releaseAll();
-        if (this.client.mouseHandler != null) {
-            ((MouseHandlerAccessor) this.client.mouseHandler).atomchat$setActiveButton(0);
-        }
-        Thread worker = new Thread(() -> {
-            Path file = FilePicker.pickImage(this::suppressAutoIconify, this::restoreAutoIconify,
-                    AvatarStore::isSupportedName);
-            refocusWindow();
-            if (file == null) {
-                return;
-            }
-            this.client.execute(() -> imageCropper.open(file, true, 0.0F, 0.0F, "avatar"));
-        }, "AtomChat-AvatarPicker");
-        worker.setDaemon(true);
-        worker.start();
+        settingsActions.pickAvatarFile();
     }
 
     /**
@@ -354,27 +291,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
      * other store write.
      */
     private void pickBannerFile() {
-        KeyMapping.releaseAll();
-        if (this.client.mouseHandler != null) {
-            ((MouseHandlerAccessor) this.client.mouseHandler).atomchat$setActiveButton(0);
-        }
-        Thread worker = new Thread(() -> {
-            Path file = FilePicker.pickImage(this::suppressAutoIconify, this::restoreAutoIconify,
-                    BannerStore::isSupportedName);
-            refocusWindow();
-            if (file == null) {
-                return;
-            }
-            this.client.execute(() -> {
-                // Crop at the profile banner card's aspect so what you frame is
-                // what the card shows (cover-fit has nothing left to do).
-                UiLayout l = listLayout();
-                float bannerW = Math.max(1.0F, l.list.w() - UiTokens.ROW_CLIP_INSET * 2.0F);
-                imageCropper.open(file, false, bannerW, UiTokens.PROFILE_BANNER_H, "banner");
-            });
-        }, "AtomChat-BannerPicker");
-        worker.setDaemon(true);
-        worker.start();
+        settingsActions.pickBannerFile();
     }
 
     /** Root-page mouse coordinates in virtual UI space, for card hover rendering. */
