@@ -48,6 +48,7 @@ import com.atom.chat.mixin.MouseHandlerAccessor;
 import com.atom.chat.render.Animator;
 import com.atom.chat.render.BlurMotionGate;
 import com.atom.chat.render.ClickableSpan;
+import com.atom.chat.render.DrawPrimitives;
 import com.atom.chat.render.PanelBlurRenderer;
 import com.atom.chat.render.RichTextRenderer;
 import com.atom.chat.render.SkiaDraw;
@@ -83,8 +84,6 @@ import io.github.humbleui.skija.Font;
 import io.github.humbleui.skija.Image;
 import io.github.humbleui.skija.Paint;
 import io.github.humbleui.skija.PaintMode;
-import io.github.humbleui.skija.PaintStrokeCap;
-import io.github.humbleui.skija.PaintStrokeJoin;
 import io.github.humbleui.types.Rect;
 import io.github.humbleui.types.RRect;
 import io.github.humbleui.skija.SamplingMode;
@@ -554,6 +553,30 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         }
     });
     /**
+     * Drawing primitives and theme tokens (D9): the composer's icon row, the
+     * inline SVG icon set, the ARGB blend the hover washes use and the
+     * press/hover state that row is drawn from. The buttons read three facts
+     * off this screen — the frame clock and whether the emoji / quick-phrase
+     * panel is open — and nothing else; geometry, the pointer and its
+     * conversion stay with the shell.
+     */
+    private final DrawPrimitives primitives = new DrawPrimitives(new DrawPrimitives.Host() {
+        @Override
+        public float frameDt() {
+            return frameDt;
+        }
+
+        @Override
+        public boolean emojiPanelOpen() {
+            return emojiPanel.isOpen();
+        }
+
+        @Override
+        public boolean phrasePanelOpen() {
+            return quickPhrasePanel.isOpen();
+        }
+    });
+    /**
      * Composer drafts per page, and the shared field they are loaded into. The
      * draft text lives in {@link DraftStore}; the port below is this shell's half
      * of it (the EditBox itself belongs to D21) — see {@link DraftStore.ComposerTextPort}
@@ -710,68 +733,6 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
     // panel open/close rides the same exponential clock (PANEL_OPEN_TAU_MS on
     // the way in, the shorter PANEL_CLOSE_TAU_MS on the way out), so its shape
     // and fade resolve on one timeline per direction.
-    // Toolbar icons are kept as inline SVG path data (not assets): three tiny
-    // paths are cheaper than a resource pipeline, stay crisp at every scale,
-    // and are trivial to recolour for hover/pressed/theme states. The paths use
-    // a 20x20 logical space; drawIcon() fits them into the button bounds.
-    // Landscape photo glyph: a wide rounded rect (14x9 on the 20 grid), sun
-    // top-left, mountains inside — the old one was portrait and read as a
-    // phone photo instead of an image.
-    // Image glyph fills a ~14x12 box: fit-by-longest-edge scaling leaves the
-    // old 13x9 glyph visibly shorter than the emoji/send neighbours.
-    private static final String ICON_IMAGE_SVG = "M4.5 4 L15.5 4 A1.5 1.5 0 0 1 17 5.5 L17 14.5 A1.5 1.5 0 0 1 15.5 16 L4.5 16 A1.5 1.5 0 0 1 3 14.5 L3 5.5 A1.5 1.5 0 0 1 4.5 4 Z"
-            + " M7 7.2 m-1.3 0 a1.3 1.3 0 1 0 2.6 0 a1.3 1.3 0 1 0 -2.6 0"
-            + " M4 15 L8.6 10.9 L11.2 13.2 L13.6 10.6 L16 13.2";
-    private static final String ICON_EMOJI_SVG = "M10 3 a7 7 0 1 0 0 14 a7 7 0 1 0 0 -14"
-            + " M7 8.6 v1.3 M13 8.6 v1.3"
-            + " M6.8 12.2 C8.5 14.3 11.5 14.3 13.2 12.2";
-    // Feather-style send: one diagonal fold + the paper-plane outline.
-    private static final String ICON_SEND_SVG = "M18 2.5 L9.5 11"
-            + " M18 2.5 L13.5 18.5 L9.5 11 L2.5 7.5 Z";
-    // Context-menu icons, same 20x20 line-icon language as the toolbar.
-    private static final String ICON_COPY_SVG = "M5 3 L11 3 L11 9 L5 9 Z M8 7 L14 7 L14 13 L8 13 Z";
-    private static final String ICON_QUOTE_SVG = "M3 3 L17 3 L17 12 L10 12 L6 16 L7 12 L3 12 Z"
-            + " M7 6 L7 9 M10 6 L10 9";
-    private static final String ICON_SAVE_SVG = "M10 3 L10 11 M7 8 L10 11 L13 8"
-            + " M4 15 L4 17 L16 17 L16 15";
-    // Avatar context-menu icons, same 20x20 line-icon language.
-    // Lucide at-sign (ISC): a true "@" shape — inner circle plus the outer
-    // ring/tail stroke. Coordinates are in Lucide's 24x24 space and are fitted
-    // by drawIconCentered exactly like the other icon paths.
-    private static final String ICON_MENTION_SVG = "M12 8 a4 4 0 1 0 0 8 a4 4 0 1 0 0 -8"
-            + " M16 8 v5 a3 3 0 0 0 6 0 v-1 a10 10 0 1 0 -4 8";
-    private static final String ICON_WHISPER_SVG = "M3 4 L17 4 L17 14 L10 14 L6 18 L7 14 L3 14 Z";
-    private static final String ICON_TP_SVG = "M3 17 L17 3 M17 3 L10 3 M17 3 L17 10";
-    private static final String ICON_BLOCK_SVG = "M10 3 a7 7 0 1 0 0 14 a7 7 0 1 0 0 -14"
-            + " M4.5 4.5 L15.5 15.5";
-    private static final io.github.humbleui.skija.Path ICON_IMAGE_PATH =
-            io.github.humbleui.skija.Path.makeFromSVGString(ICON_IMAGE_SVG);
-    private static final io.github.humbleui.skija.Path ICON_EMOJI_PATH =
-            io.github.humbleui.skija.Path.makeFromSVGString(ICON_EMOJI_SVG);
-    /** Quick-phrase button: a lightning bolt (Lucide zap). */
-    private static final String ICON_PHRASE_SVG = "M13 2 3 14h9l-1 8 10-12h-9l1-8z";
-    private static final io.github.humbleui.skija.Path ICON_PHRASE_PATH =
-            io.github.humbleui.skija.Path.makeFromSVGString(ICON_PHRASE_SVG);
-    private static final io.github.humbleui.skija.Path ICON_SEND_PATH =
-            io.github.humbleui.skija.Path.makeFromSVGString(ICON_SEND_SVG);
-    private static final io.github.humbleui.skija.Path ICON_COPY_PATH =
-            io.github.humbleui.skija.Path.makeFromSVGString(ICON_COPY_SVG);
-    private static final io.github.humbleui.skija.Path ICON_QUOTE_PATH =
-            io.github.humbleui.skija.Path.makeFromSVGString(ICON_QUOTE_SVG);
-    private static final io.github.humbleui.skija.Path ICON_SAVE_PATH =
-            io.github.humbleui.skija.Path.makeFromSVGString(ICON_SAVE_SVG);
-    private static final io.github.humbleui.skija.Path ICON_MENTION_PATH =
-            io.github.humbleui.skija.Path.makeFromSVGString(ICON_MENTION_SVG);
-    private static final io.github.humbleui.skija.Path ICON_WHISPER_PATH =
-            io.github.humbleui.skija.Path.makeFromSVGString(ICON_WHISPER_SVG);
-    private static final io.github.humbleui.skija.Path ICON_TP_PATH =
-            io.github.humbleui.skija.Path.makeFromSVGString(ICON_TP_SVG);
-    private static final io.github.humbleui.skija.Path ICON_BLOCK_PATH =
-            io.github.humbleui.skija.Path.makeFromSVGString(ICON_BLOCK_SVG);
-    private static final String ICON_JUMP_DOWN_SVG = "M4 8 L10 14 M10 14 L16 8 M10 3 L10 14";
-    private static final io.github.humbleui.skija.Path ICON_JUMP_DOWN_PATH =
-            io.github.humbleui.skija.Path.makeFromSVGString(ICON_JUMP_DOWN_SVG);
-
     private static final int GLFW_KEY_V = 86;
     /** Open-animation shape floor for the ZOOM style: the panel grows
      * 0.94 -> 1 around its centre. The blur pre-pass reads the same mapping
@@ -796,18 +757,8 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
     /** Composer height seen by the previous blur-gate frame, for change detection. */
     private float lastBlurInputExtraH;
     private boolean blurDrawnThisFrame;
-    private int pressedButton = -1;
-    private long pressTime;
-    /** Button under a held press, for the icon-row press scale; -1 = none. */
-    private int pressedButtonHeld = -1;
-    /** Per-button press/hover scale (image / emoji / send / phrase), draw-only. */
-    // One width-budget bounce per key: the 4px per-side budget stays inside
-    // the s(6) gap these four share a row through, at any button width.
-    private final PressScale[] iconButtonScale = {PressScale.bounce(), PressScale.bounce(),
-            PressScale.bounce(), PressScale.bounce()};
 
     // Per-frame animation state (smooth hover/popup transitions)
-    private final float[] buttonHover = new float[4];
     private float contextAnim;
     private float jumpLatestAnim;
     /** Eased hover of the jump-to-latest FAB, matching the composer keys' fade. */
@@ -3112,50 +3063,14 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         return Text.translatable(key, args).getString();
     }
 
+    /**
+     * Composer button drawing (D9). The geometry comes from the layout and the
+     * pointer is converted here — both belong to the screen — while the
+     * primitives, their press/hover state and the icon set live in
+     * {@link DrawPrimitives}.
+     */
     private void drawIconButton(Canvas canvas, float bx, float by, int id, int mouseX, int mouseY) {
-        boolean hover = inputButtonHovered(bx, by, UiTokens.ACTION_BUTTON_SIZE,
-                UiTokens.ACTION_BUTTON_SIZE, mouseX, mouseY);
-        boolean pressed = buttonPressed(id);
-        boolean pressedHeld = pressedButtonHeld == id;
-        buttonHover[id] = UiMotion.approach(buttonHover[id], hover ? 1.0F : 0.0F, frameDt, UiMotion.HOVER_MS);
-        // Same bounce spring as every other control; the spring keeps running
-        // until it settles, so the release overshoot is drawn even after the
-        // pointer is up.
-        PressScale scale = iconButtonScale[id];
-        // The scaled shape is the ACTION_BUTTON_SIZE icon square itself.
-        scale.update(hover, pressedHeld, frameDt, Animations.enabled(), UiTokens.ACTION_BUTTON_SIZE);
-        canvas.save();
-        if (scale.scale() != 1.0F) {
-            float keyHalf = UiTokens.ACTION_BUTTON_SIZE / 2.0F;
-            canvas.translate(bx + keyHalf, by + keyHalf);
-            canvas.scale(scale.scale(), scale.scale());
-            canvas.translate(-(bx + keyHalf), -(by + keyHalf));
-        }
-        // Same art language as the header buttons: the icon sits on the composer,
-        // and a hover draws an inset rounded wash in the accent. No standing
-        // plate and no hairline - a plate would make the row read as three cards,
-        // and the hairline was only there to separate that plate from the panel.
-        float hoverWash = buttonHover[id];
-        float pressedWash = pressed ? 1.0F : 0.0F;
-        float wash = Math.max(hoverWash, pressedWash);
-        if (wash > 0.01F) {
-            float inset = UiTokens.EDGE_CONTROL_INSET;
-            SkiaDraw.drawRoundedRect(canvas, bx + inset, by + inset,
-                    UiTokens.ACTION_BUTTON_SIZE - inset * 2.0F,
-                    UiTokens.ACTION_BUTTON_SIZE - inset * 2.0F,
-                    UiTokens.radius(8), UiTokens.cardHover(wash));
-        }
-        // Active states take the accent colour: the emoji button while its
-        // panel is open (a toggle), any button for a moment after a press.
-        boolean activeTint = (id == 1 && emojiPanel.isOpen()) || (id == 3 && quickPhrasePanel.isOpen())
-                || pressed;
-        io.github.humbleui.skija.Path icon = switch (id) {
-            case 0 -> ICON_IMAGE_PATH;
-            case 3 -> ICON_PHRASE_PATH;
-            default -> ICON_EMOJI_PATH;
-        };
-        drawIcon(canvas, icon, bx, by, activeTint ? accent() : textPrimary());
-        canvas.restore();
+        primitives.drawIconButton(canvas, bx, by, id, toVirtualX(mouseX), toVirtualY(mouseY));
     }
 
     /**
@@ -3165,83 +3080,17 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
      */
     private boolean inputButtonHovered(float bx, float by, float w, float h,
                                        int mouseX, int mouseY) {
-        float vmx = toVirtualX(mouseX);
-        float vmy = toVirtualY(mouseY);
-        return vmx >= bx && vmx <= bx + w && vmy >= by && vmy <= by + h;
+        return primitives.inputButtonHovered(bx, by, w, h, toVirtualX(mouseX), toVirtualY(mouseY));
     }
 
     private void drawSendButton(Canvas canvas, float bx, float by, int mouseX, int mouseY) {
-        boolean hover = inputButtonHovered(bx, by, UiTokens.BUTTON_W, UiTokens.BUTTON_H,
-                mouseX, mouseY);
-        boolean pressed = buttonPressed(2);
-        boolean pressedHeld = pressedButtonHeld == 2;
-        buttonHover[2] = UiMotion.approach(buttonHover[2], hover ? 1.0F : 0.0F, frameDt, UiMotion.HOVER_MS);
-        // Same press/hover scale as the icon buttons and the bottom tab bar.
-        PressScale scale = iconButtonScale[2];
-        // The scaled shape is the send button itself (BUTTON_W capsule).
-        scale.update(hover, pressedHeld, frameDt, Animations.enabled(), UiTokens.BUTTON_W);
-        canvas.save();
-        if (scale.scale() != 1.0F) {
-            canvas.translate(bx + UiTokens.BUTTON_W / 2.0F, by + UiTokens.BUTTON_H / 2.0F);
-            canvas.scale(scale.scale(), scale.scale());
-            canvas.translate(-(bx + UiTokens.BUTTON_W / 2.0F), -(by + UiTokens.BUTTON_H / 2.0F));
-        }
-        SkiaDraw.drawRoundedRect(canvas, bx, by, UiTokens.BUTTON_W, UiTokens.BUTTON_H, UiTokens.BUTTON_RADIUS, accent());
-        float overlay = buttonHover[2] * 55.0F + (pressed ? 90.0F : 0.0F);
-        if (overlay > 0.5F) {
-            SkiaDraw.drawRoundedRect(canvas, bx, by, UiTokens.BUTTON_W, UiTokens.BUTTON_H, UiTokens.BUTTON_RADIUS,
-                    Color.makeARGB((int) Math.min(160, overlay), 255, 255, 255));
-        }
-        // Icon ink derives from the solid accent fill it sits on (same language
-        // as the selected bottom tab), not from the panel's text colour: a pale
-        // accent capsule needs dark glyphs even on a dark panel.
-        drawIcon(canvas, ICON_SEND_PATH, bx, by, UiTokens.BUTTON_W, UiTokens.BUTTON_H,
-                UiTokens.onAccent(accent()));
-        canvas.restore();
-    }
-
-    /**
-     * Draws one of the inline SVG-path toolbar icons, centered in its button
-     * and scaled to fit an {@code ICON_SIZE} box. Stroke width scales with the
-     * rendered icon size so every icon keeps the same optical line weight.
-     */
-    private void drawIcon(Canvas canvas, io.github.humbleui.skija.Path icon, float bx, float by, int color) {
-        drawIcon(canvas, icon, bx, by, UiTokens.ACTION_BUTTON_SIZE, UiTokens.ACTION_BUTTON_SIZE, color);
-    }
-
-    /**
-     * Draws one of the inline SVG-path toolbar icons, centred in the box it is
-     * given. The stroke width follows the rendered glyph size, so both button
-     * families keep the same optical line weight.
-     */
-    private void drawIcon(Canvas canvas, io.github.humbleui.skija.Path icon, float bx, float by,
-                          float boxW, float boxH, int color) {
-        drawIconCentered(canvas, icon, bx + boxW / 2.0F, by + boxH / 2.0F, s(18), color);
+        primitives.drawSendButton(canvas, bx, by, toVirtualX(mouseX), toVirtualY(mouseY));
     }
 
     /** Draws an icon centered on an arbitrary point; used by toolbar and menus. */
     private void drawIconCentered(Canvas canvas, io.github.humbleui.skija.Path icon, float cx, float cy,
                                   float size, int color) {
-        Rect b = icon.getBounds();
-        if (b == null || b.isEmpty()) {
-            return;
-        }
-        float scale = size / Math.max(b.getWidth(), b.getHeight());
-        canvas.save();
-        try {
-            canvas.translate(cx - (b.getLeft() + b.getRight()) / 2.0F * scale,
-                    cy - (b.getTop() + b.getBottom()) / 2.0F * scale);
-            canvas.scale(scale, scale);
-            try (Paint paint = new Paint().setColor(color).setAntiAlias(true)
-                    .setMode(PaintMode.STROKE)
-                    .setStrokeWidth(UiTokens.iconStroke(size) / scale)
-                    .setStrokeCap(PaintStrokeCap.ROUND)
-                    .setStrokeJoin(PaintStrokeJoin.ROUND)) {
-                canvas.drawPath(icon, paint);
-            }
-        } finally {
-            canvas.restore();
-        }
+        primitives.drawIconCentered(canvas, icon, cx, cy, size, color);
     }
 
     /**
@@ -3284,16 +3133,6 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
             float cy = centerY + (i - from) * lineH;
             SkiaDraw.drawRoundedRect(canvas, x0, cy - lineH / 2.0F, Math.max(1.0F, x1 - x0), lineH, s(2), 0xE02D6FD6);
         }
-    }
-
-
-    private boolean buttonPressed(int id) {
-        return pressedButton == id && System.currentTimeMillis() - pressTime < 150L;
-    }
-
-    private void pressButton(int id) {
-        pressedButton = id;
-        pressTime = System.currentTimeMillis();
     }
 
     /**
@@ -3399,7 +3238,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
                 SkiaDraw.drawRoundedShadow(canvas, x, y, size, size, size / 2.0F, s(8), UiTokens.CHROME_SHADOW);
                 // Glyph pinned white like the pill itself: the pill is fixed dark,
                 // so a themed text colour would go dark-on-dark on light themes.
-                drawIconCentered(canvas, ICON_JUMP_DOWN_PATH, cx, cy, s(18),
+                drawIconCentered(canvas, DrawPrimitives.ICON_JUMP_DOWN_PATH, cx, cy, s(18),
                         Color.makeARGB(255, 255, 255, 255));
             } finally {
                 canvas.restore();
@@ -3416,17 +3255,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
      * translucent overlay on a fixed grey.
      */
     private static int lerpArgb(int from, int to, float t) {
-        if (t <= 0.0F) {
-            return from;
-        }
-        if (t >= 1.0F) {
-            return to;
-        }
-        int a = (int) (((from >>> 24) & 0xFF) + (((to >>> 24) & 0xFF) - ((from >>> 24) & 0xFF)) * t);
-        int r = (int) (((from >> 16) & 0xFF) + (((to >> 16) & 0xFF) - ((from >> 16) & 0xFF)) * t);
-        int g = (int) (((from >> 8) & 0xFF) + (((to >> 8) & 0xFF) - ((from >> 8) & 0xFF)) * t);
-        int b = (int) ((from & 0xFF) + ((to & 0xFF) - (from & 0xFF)) * t);
-        return Color.makeARGB(a, r, g, b);
+        return DrawPrimitives.lerpArgb(from, to, t);
     }
 
     private boolean overJumpLatest(UiLayout layout, float vmx, float vmy) {
@@ -3595,16 +3424,16 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
     private static io.github.humbleui.skija.Path bubbleContextIcon(int row, boolean imageMessage) {
         if (!imageMessage) {
             return switch (row) {
-                case 0 -> ICON_COPY_PATH;
-                case 1 -> ICON_QUOTE_PATH;
-                default -> ICON_SAVE_PATH;
+                case 0 -> DrawPrimitives.ICON_COPY_PATH;
+                case 1 -> DrawPrimitives.ICON_QUOTE_PATH;
+                default -> DrawPrimitives.ICON_SAVE_PATH;
             };
         }
         return switch (row) {
-            case 0 -> ICON_COPY_PATH;
-            case 1 -> ICON_QUOTE_PATH;
-            case 2 -> ICON_SAVE_PATH;
-            default -> ICON_SAVE_PATH;
+            case 0 -> DrawPrimitives.ICON_COPY_PATH;
+            case 1 -> DrawPrimitives.ICON_QUOTE_PATH;
+            case 2 -> DrawPrimitives.ICON_SAVE_PATH;
+            default -> DrawPrimitives.ICON_SAVE_PATH;
         };
     }
 
@@ -3624,11 +3453,11 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
 
     private static io.github.humbleui.skija.Path avatarContextIcon(int row) {
         return switch (row) {
-            case 0 -> ICON_MENTION_PATH;
-            case 1 -> ICON_WHISPER_PATH;
-            case 2 -> ICON_TP_PATH;
-            case 3 -> ICON_BLOCK_PATH;
-            default -> ICON_MENTION_PATH;
+            case 0 -> DrawPrimitives.ICON_MENTION_PATH;
+            case 1 -> DrawPrimitives.ICON_WHISPER_PATH;
+            case 2 -> DrawPrimitives.ICON_TP_PATH;
+            case 3 -> DrawPrimitives.ICON_BLOCK_PATH;
+            default -> DrawPrimitives.ICON_MENTION_PATH;
         };
     }
 
@@ -3644,9 +3473,9 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
     private static io.github.humbleui.skija.Path playerCardContextIcon(int row) {
         return switch (row) {
             case 0 -> com.atom.chat.ui.AppIcons.ICON_TAB_PROFILE_PATH;
-            case 1 -> ICON_TP_PATH;
-            case 2 -> ICON_BLOCK_PATH;
-            default -> ICON_TP_PATH;
+            case 1 -> DrawPrimitives.ICON_TP_PATH;
+            case 2 -> DrawPrimitives.ICON_BLOCK_PATH;
+            default -> DrawPrimitives.ICON_TP_PATH;
         };
     }
 
@@ -4161,15 +3990,15 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         return SendPipeline.abbreviate(text, maxChars);
     }
     private int accent() {
-        return AtomChatConfig.get().accentColor;
+        return primitives.accent();
     }
 
     private int textPrimary() {
-        return AtomChatConfig.get().textPrimaryColor;
+        return primitives.textPrimary();
     }
 
     private int textSecondary() {
-        return AtomChatConfig.get().textSecondaryColor;
+        return primitives.textSecondary();
     }
 
     private float panelWidth() {
@@ -5017,8 +4846,8 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
             // dismisses" rule, otherwise closing and reopening in the same click nets
             // back to open and the button can never toggle the panel off.
             if (button == 0 && layout.emojiBtn.contains((float) mx, (float) my)) {
-                pressButton(1);
-                pressedButtonHeld = 1;
+                primitives.pressButton(1);
+                primitives.setButtonHeld(1);
                 inputFocused = true;
                 closePhrasePanel();
                 emojiPanel.toggle();
@@ -5027,8 +4856,8 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
 
             // Quick-phrase toggle: same pre-dismiss ordering as the emoji button.
             if (button == 0 && layout.phraseBtn.contains((float) mx, (float) my)) {
-                pressButton(3);
-                pressedButtonHeld = 3;
+                primitives.pressButton(3);
+                primitives.setButtonHeld(3);
                 inputFocused = true;
                 emojiPanel.close();
                 if (quickPhrasePanel.isOpen()) {
@@ -5110,8 +4939,8 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
             // Button row: image / emoji / send share one row and one size,
             // geometry comes from UiLayout so hits can never drift from the drawing.
             if (button == 0 && layout.imageBtn.contains((float) mx, (float) my)) {
-                pressButton(0);
-                pressedButtonHeld = 0;
+                primitives.pressButton(0);
+                primitives.setButtonHeld(0);
                 inputFocused = true;
                 pickAndUploadImage();
                 return true;
@@ -5119,8 +4948,8 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
             // Inserting an emoji must NOT close the panel: users often want to pick several
             // in a row. The panel still closes on any outside click or the toggle button.
             if (button == 0 && layout.sendBtn.contains((float) mx, (float) my)) {
-                pressButton(2);
-                pressedButtonHeld = 2;
+                primitives.pressButton(2);
+                primitives.setButtonHeld(2);
                 if (quickPhrasePanel.isEditing()) {
                     // In phrase-edit mode the send button commits the phrase.
                     endPhraseEdit(true);
@@ -5317,7 +5146,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
             // The composer buttons live in THIS handler, so their held-press state
             // is cleared here: parked in RootPageInput.onRelease it never ran (the two
             // guards are opposites) and the button stayed squashed at 0.92.
-            pressedButtonHeld = -1;
+            primitives.setButtonHeld(-1);
             // Same for the folded-history capsule and the jump-to-latest FAB: both
             // are armed on press and must be released here, or the bounce never
             // gets its release half.
