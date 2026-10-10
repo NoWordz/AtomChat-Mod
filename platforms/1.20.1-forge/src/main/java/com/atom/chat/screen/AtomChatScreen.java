@@ -18,6 +18,7 @@ import com.atom.chat.image.DragDropPasteUpload;
 import com.atom.chat.image.ImageLoader;
 import com.atom.chat.image.ImagePreviewOverlay;
 import com.atom.chat.image.ImageUploadPipeline;
+import com.atom.chat.image.NativeDialogBridge;
 import com.atom.chat.net.PokeCompanionClient;
 import com.atom.chat.chat.LocalEcho;
 import com.atom.chat.chat.PlayerRef;
@@ -97,7 +98,6 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.Mth;
 
-import org.lwjgl.glfw.GLFW;
 
 import java.awt.datatransfer.DataFlavor;
 import java.io.File;
@@ -106,8 +106,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.TimeUnit;
 
 public final class AtomChatScreen extends ChatScreen implements PageHost, NotificationJumpService.NavPort {
     /** Which context menu is open: normal message bubble actions or player-avatar actions. */
@@ -659,6 +657,21 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
                     return uploadPipeline;
                 }
             });
+
+    /**
+     * The window plumbing every native picker needs (D14): suspend GLFW's
+     * auto-iconify while a dialog owns input, hand focus back when it closes,
+     * and the clipboard write the menus report with. The bridge owns the
+     * pairing, the clear-then-focus order and the "false, never throw" clipboard
+     * contract; this screen hands it its own client handle — never
+     * Minecraft.getInstance(), D3's precedent.
+     */
+    private final NativeDialogBridge dialogBridge = new NativeDialogBridge(new NativeDialogBridge.Host() {
+        @Override
+        public Minecraft client() {
+            return client;
+        }
+    });
     /**
      * Composer drafts per page, and the shared field they are loaded into. The
      * draft text lives in {@link DraftStore}; the port below is this shell's half
@@ -3515,17 +3528,14 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         BlockList.setBlocked(player, !nowBlocked);
     }
 
+    /**
+     * Puts a message's text on the clipboard. The failure contract — false
+     * instead of a throw, so a refused clipboard cannot leave the context menu
+     * stuck open — lives in {@link NativeDialogBridge} (D14); this shell keeps
+     * the entry point the menu handlers and the colour picker call.
+     */
     private boolean copyToClipboard(String text) {
-        try {
-            this.client.keyboardHandler.setClipboard(text);
-            return true;
-        } catch (Throwable t) {
-            // Never let a clipboard failure abort the click handler: it used to
-            // leave the menu stuck open with no clue why. The boolean lets the
-            // caller show a failure instead of a success.
-            AtomChat.LOGGER.warn("Failed to copy message to clipboard", t);
-            return false;
-        }
+        return dialogBridge.copyToClipboard(text);
     }
 
     /** Raises a transient action acknowledgement in the panel's floating layer. */
@@ -3740,61 +3750,27 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
      * GLFW iconifies a fullscreen window as soon as it loses focus
      * (GLFW_AUTO_ICONIFY defaults to true and Minecraft leaves it there), so a
      * picker that takes focus would minimise the game every time. Suspension
-     * lasts exactly as long as the picker is open.
+     * lasts exactly as long as the picker is open. The pairing (and the hop onto
+     * the render thread) lives in {@link NativeDialogBridge} (D14); this shell
+     * keeps the two halves the picker workers pass as method references.
      */
     private void suppressAutoIconify() {
-        setAutoIconify(false);
+        dialogBridge.suppressAutoIconify();
     }
 
     private void restoreAutoIconify() {
-        setAutoIconify(true);
-    }
-
-    private void setAutoIconify(boolean value) {
-        runOnRender(() -> {
-            try {
-                GLFW.glfwSetWindowAttrib(this.client.getWindow().getWindow(),
-                        GLFW.GLFW_AUTO_ICONIFY, value ? GLFW.GLFW_TRUE : GLFW.GLFW_FALSE);
-            } catch (Throwable t) {
-                AtomChat.LOGGER.warn("Failed to toggle GLFW_AUTO_ICONIFY for the image picker", t);
-            }
-        });
-    }
-
-    /** Runs a GLFW call on the render thread and waits for it to land. */
-    private void runOnRender(Runnable task) {
-        CountDownLatch done = new CountDownLatch(1);
-        this.client.execute(() -> {
-            try {
-                task.run();
-            } finally {
-                done.countDown();
-            }
-        });
-        try {
-            done.await(2L, TimeUnit.SECONDS);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        }
+        dialogBridge.restoreAutoIconify();
     }
 
     /**
      * Returns OS focus to the game window after the native picker closes, and
-     * clears any key/button state the dialog left behind. GLFW window calls are
-     * not thread-safe, so the work hops onto the render thread.
+     * clears any key/button state the dialog left behind. The clear-then-focus
+     * order and the hop onto the render thread live in
+     * {@link NativeDialogBridge} (D14); this shell keeps the entry point the
+     * picker workers call.
      */
     private void refocusWindow() {
-        this.client.execute(() -> {
-            KeyMapping.releaseAll();
-            if (this.client.mouseHandler != null) {
-                ((MouseHandlerAccessor) this.client.mouseHandler).atomchat$setActiveButton(0);
-            }
-            try {
-                GLFW.glfwFocusWindow(this.client.getWindow().getWindow());
-            } catch (Throwable t) {
-                AtomChat.LOGGER.warn("Failed to refocus the window after the image picker", t);
-            }
-        });
+        dialogBridge.refocusWindow();
     }
 
     /** Sends whatever the composer holds; the pipeline owns the whole order. */
