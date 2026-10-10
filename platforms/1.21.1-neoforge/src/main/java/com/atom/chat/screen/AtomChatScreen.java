@@ -69,6 +69,7 @@ import com.atom.chat.ui.ScrollSyncService;
 import com.atom.chat.ui.ShellHeader;
 import com.atom.chat.ui.UiLayout;
 import com.atom.chat.ui.EmojiPanel;
+import com.atom.chat.ui.HeaderChrome;
 import com.atom.chat.ui.EmojiWiring;
 import com.atom.chat.ui.PanelBackground;
 import com.atom.chat.ui.PressScale;
@@ -1103,9 +1104,6 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
     /** Exponential 0->1 clock of the SLIDE tab push; the page-nav twin is {@link #navSlideProgress}. */
     private float rootTabProgress;
 
-    /** Hover wash behind the unified header back arrow. */
-    private float backButtonHover;
-
     /**
      * Public-feed view filter (all / system only / players only), cycled by the
      * header button. View-only: storage, unread counts and previews always see
@@ -1271,22 +1269,51 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         return client != null && client.options.keyChat.matches(keyCode, scanCode);
     }
 
-    /**
-     * Shared hit rect for the world-chat header's SVG back button. It is fixed
-     * to the left edge of the header card and vertically centered. The side comes
-     * from ACTION_BUTTON_SIZE, the same token the composer keys use, so the
-     * header button and those keys stay one size instead of drifting apart.
-     */
-    private UiLayout.Rect backButton() {
-        float size = UiTokens.ACTION_BUTTON_SIZE;
-        UiLayout.Rect header = layout().header;
-        float y = header.y() + (header.h() - size) / 2.0F;
-        return new UiLayout.Rect(header.x() + UiTokens.EDGE_CONTROL_INSET, y, size, size);
-    }
-
     /** Filter button: the back button's recipe, one slot to its right. */
+
+    /**
+     * The header's own chrome (D20): the back button's rect and hover, the fixed
+     * header a pushed page draws, and every title the bar can carry. The back
+     * button's rect is read back from here by the shell's header renders, and the
+     * hover spring is stepped here by both the settled frame and the pushed
+     * header — one value, the same positions as before. {@code suppressHeader} is
+     * deliberately NOT here: the shell reads it in two of its own gates (the
+     * settled header and the root header) and writes it in six transition spots,
+     * so it stays where both sides can see it.
+     */
+    private final HeaderChrome headerChrome = new HeaderChrome(new HeaderChrome.Host() {
+        @Override
+        public String label(String key) {
+            return tr(key);
+        }
+
+        @Override
+        public String activePrivateName() {
+            return activePrivateTarget() == null ? null : activePrivateTarget().realName();
+        }
+
+        @Override
+        public UiLayout.Rect headerRect() {
+            return layout().header;
+        }
+
+        @Override
+        public UiLayout.Rect pushedHeaderRect() {
+            return detailLayout().header;
+        }
+
+        @Override
+        public float frameDt() {
+            return frameDt;
+        }
+
+        @Override
+        public int textPrimary() {
+            return AtomChatScreen.this.textPrimary();
+        }
+    });
     private UiLayout.Rect filterButton() {
-        UiLayout.Rect back = backButton();
+        UiLayout.Rect back = headerChrome.backButton();
         return new UiLayout.Rect(back.x() + back.w() + UiTokens.EDGE_CONTROL_INSET, back.y(), back.w(), back.h());
     }
 
@@ -1311,10 +1338,6 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         // The filter's state, icons and tint live in WorldFeedFilter; the button's
         // rect and hover wash are header chrome and stay here (D20).
         return worldFeed.headerActionFor(page, filterButton(), filterButtonHover);
-    }
-
-    private boolean isBackButtonHit(float vmx, float vmy) {
-        return backButton().contains(vmx, vmy);
     }
 
     @Override
@@ -2495,8 +2518,8 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
                     canvas.restore();
                 }
                 suppressHeader = false;
-                ShellHeader.render(canvas, layout.header, shellTitleFor(toPage), true,
-                        backButton(), backButtonHover, textPrimary(),
+                ShellHeader.render(canvas, layout.header, headerChrome.shellTitleFor(toPage), true,
+                        headerChrome.backButton(), headerChrome.backButtonHover(), textPrimary(),
                         toPage.page() == AppPage.PRIVATE_CHAT
                                 ? contextActions.isOnlinePlayer(toPage.target()) : null,
                         headerActionFor(toPage));
@@ -2656,7 +2679,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
                     // The header always names the destination, never the page
                     // that is sliding away — a pop flips the title on frame one
                     // too, which is what "click then title" expects.
-                    drawPushedHeader(canvas, vmx, vmy, pushing ? moving : navRoot);
+                    headerChrome.drawPushedHeader(canvas, vmx, vmy, pushing ? moving : navRoot);
                     drawBezel(canvas, detailLayout());
                     return;
                 }
@@ -2672,7 +2695,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
                         canvas.restore();
                     }
                     suppressHeader = false;
-                    drawPushedHeader(canvas, vmx, vmy, pushing ? moving : navRoot);
+                    headerChrome.drawPushedHeader(canvas, vmx, vmy, pushing ? moving : navRoot);
                     drawBezel(canvas, detailLayout());
                     return;
                 }
@@ -2681,25 +2704,24 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         // A settled settings sub-page: header + list, nothing else.
         if (!navRunning && topPage() == AppPage.SETTINGS_SECTION) {
             drawSettingsSection(canvas, mouseX, mouseY, topNav().section());
-            drawPushedHeader(canvas, vmx, vmy, topNav());
+            headerChrome.drawPushedHeader(canvas, vmx, vmy, topNav());
             drawBezel(canvas, detailLayout());
             return;
         }
         // A settled profile detail: same chrome, profile body.
         if (!navRunning && topPage() == AppPage.PROFILE_DETAIL) {
             drawProfileDetail(canvas, mouseX, mouseY);
-            drawPushedHeader(canvas, vmx, vmy, topNav());
+            headerChrome.drawPushedHeader(canvas, vmx, vmy, topNav());
             drawBezel(canvas, detailLayout());
             return;
         }
-        backButtonHover = UiMotion.approach(backButtonHover,
-                isBackButtonHit(vmx, vmy) ? 1.0F : 0.0F, frameDt, UiMotion.HOVER_MS);
+        headerChrome.stepBackButtonHover(vmx, vmy);
         filterButtonHover = UiMotion.approach(filterButtonHover,
                 topPage() == AppPage.WORLD_CHAT && isFilterButtonHit(vmx, vmy) ? 1.0F : 0.0F,
                 frameDt, UiMotion.HOVER_MS);
         if (!suppressHeader) {
-            ShellHeader.render(canvas, layout.header, shellTitleFor(topNav()), true,
-                    backButton(), backButtonHover, textPrimary(),
+            ShellHeader.render(canvas, layout.header, headerChrome.shellTitleFor(topNav()), true,
+                    headerChrome.backButton(), headerChrome.backButtonHover(), textPrimary(),
                     topPage() == AppPage.PRIVATE_CHAT
                             ? contextActions.isOnlinePlayer(activePrivateTarget()) : null,
                     headerActionFor(topNav()));
@@ -2729,14 +2751,14 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
             suppressHeader = false;
             // Fixed status-bar header: it never slides with the page bodies.
             if (!pageNavTo.isRoot()) {
-                ShellHeader.render(canvas, layout.header, shellTitleFor(pageNavTo), true,
-                        backButton(), backButtonHover, textPrimary(),
+                ShellHeader.render(canvas, layout.header, headerChrome.shellTitleFor(pageNavTo), true,
+                        headerChrome.backButton(), headerChrome.backButtonHover(), textPrimary(),
                         pageNavTo.page() == AppPage.PRIVATE_CHAT
                                 ? contextActions.isOnlinePlayer(pageNavTo.target()) : null,
                         headerActionFor(pageNavTo));
             } else {
                 UiLayout root = rootLayout();
-                ShellHeader.render(canvas, root.header, shellTitleFor(pageNavTo), false, null, 0.0F,
+                ShellHeader.render(canvas, root.header, headerChrome.shellTitleFor(pageNavTo), false, null, 0.0F,
                         textPrimary());
             }
         }
@@ -3032,14 +3054,6 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         profileWiring.drawProfileDetail(canvas, mouseX, mouseY);
     }
 
-    /** Fixed header (with back affordance) for a pushed settings sub-page. */
-    private void drawPushedHeader(Canvas canvas, float vmx, float vmy, NavPage nav) {
-        backButtonHover = UiMotion.approach(backButtonHover,
-                isBackButtonHit(vmx, vmy) ? 1.0F : 0.0F, frameDt, UiMotion.HOVER_MS);
-        ShellHeader.render(canvas, detailLayout().header, shellTitleFor(nav), true,
-                backButton(), backButtonHover, textPrimary(), null);
-    }
-
     /** Renders the full root screen (header + page body + bottom tab bar). */
     private void drawRootScreen(Canvas canvas, int mouseX, int mouseY, AppPage rootPage) {
         UiLayout root = rootLayout();
@@ -3048,7 +3062,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         bottomTabBar.update(frameDt, vmx, vmy, root.tabBar);
         stepRootNav(frameDt);
         if (!suppressHeader) {
-            ShellHeader.render(canvas, root.header, shellTitleFor(rootPage), false, null, 0.0F,
+            ShellHeader.render(canvas, root.header, headerChrome.shellTitleFor(rootPage), false, null, 0.0F,
                     textPrimary());
         }
         rootMouseX = vmx;
@@ -3216,38 +3230,6 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
             case SETTINGS -> 2;
             case WORLD_CHAT, PRIVATE_CHAT, SETTINGS_SECTION, PROFILE_DETAIL ->
                     throw new IllegalStateException("Pushed pages have no bottom tab index");
-        };
-    }
-
-    private String shellTitleFor(NavPage nav) {
-        if (nav.page() == AppPage.PRIVATE_CHAT && nav.target() != null) {
-            return nav.target().realName();
-        }
-        if (nav.page() == AppPage.SETTINGS_SECTION && nav.section() != null) {
-            return settingsTitle(nav.section());
-        }
-        return shellTitleFor(nav.page());
-    }
-
-    private static String settingsTitle(SettingsSection section) {
-        return switch (section) {
-            case APPEARANCE -> tr("atomchat.settings.appearance");
-            case CHAT -> tr("atomchat.settings.chat");
-            case PRIVACY -> tr("atomchat.settings.privacy");
-            case ABOUT -> tr("atomchat.settings.about");
-        };
-    }
-
-    private String shellTitleFor(AppPage page) {
-        return switch (page) {
-            case CHAT_LIST -> tr("atomchat.tab.chat");
-            case PROFILE -> tr("atomchat.page.profile.title");
-            case SETTINGS -> tr("atomchat.tab.settings");
-            case WORLD_CHAT -> tr("atomchat.channel.world");
-            case PRIVATE_CHAT -> activePrivateTarget() != null
-                    ? activePrivateTarget().realName() : tr("atomchat.channel.private");
-            case SETTINGS_SECTION -> tr("atomchat.tab.settings");
-            case PROFILE_DETAIL -> tr("atomchat.page.profile.title");
         };
     }
 
@@ -4106,7 +4088,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
             }
             // A pushed settings sub-page: back arrow, then switch rows.
             if (topPage() == AppPage.SETTINGS_SECTION) {
-                if (button == 0 && isBackButtonHit(mx, my)) {
+                if (button == 0 && headerChrome.isBackButtonHit(mx, my)) {
                     popPage();
                     return true;
                 }
@@ -4181,7 +4163,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
             }
             // A pushed profile detail: back arrow, then copyable rows/tiles.
             if (topPage() == AppPage.PROFILE_DETAIL) {
-                if (button == 0 && isBackButtonHit(mx, my)) {
+                if (button == 0 && headerChrome.isBackButtonHit(mx, my)) {
                     popPage();
                     return true;
                 }
@@ -4377,7 +4359,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
             // Back to the conversation list before any composer/emoji/message hit.
             // resetTransientWorldUi() runs inside popPage() after any slide-out
             // animation so the world page still looks intact while it leaves.
-            if (button == 0 && isBackButtonHit(mx, my)) {
+            if (button == 0 && headerChrome.isBackButtonHit(mx, my)) {
                 ShellHeader.armBackPress();
                 popPage();
                 return true;
