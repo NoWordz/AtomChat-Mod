@@ -62,6 +62,7 @@ import com.atom.chat.settings.SettingsSection;
 import com.atom.chat.settings.SettingsSectionPage;
 import com.atom.chat.ui.Animations;
 import com.atom.chat.ui.BottomTabBar;
+import com.atom.chat.ui.ComposerInput;
 import com.atom.chat.ui.ContextMenuActions;
 import com.atom.chat.ui.ContextMenuController;
 import com.atom.chat.ui.ScrollController;
@@ -308,26 +309,22 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
 
         @Override
         public String composerText() {
-            return inputGetText();
+            return composer.text();
         }
 
         @Override
         public void setComposerText(String text) {
-            inputSetText(text);
+            composer.setText(text);
         }
 
         @Override
         public void focusComposer() {
-            inputFocused = true;
-            setFocused(input);
-            if (input != null) {
-                input.setFocused(true);
-            }
+            composer.focusGuarded();
         }
 
         @Override
         public void caretToEnd() {
-            setCaretAtEnd();
+            composer.caretToEnd();
         }
 
         @Override
@@ -362,7 +359,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
 
         @Override
         public boolean composerFocused() {
-            return inputFocused && input != null && input.isFocused();
+            return composer.focused() && composer.fieldFocused();
         }
     });
     private final SettingsHomePage settingsHomePage = new SettingsHomePage();
@@ -569,7 +566,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
 
         @Override
         public void appendToComposer(String text) {
-            inputAppend(text);
+            composer.append(text);
         }
 
         @Override
@@ -603,7 +600,90 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
      * Quick phrases above the composer. Tapping one inserts it into the input
      * and closes the panel — the phrase can still be edited before sending.
      */
-    private final QuickPhrasePanel quickPhrasePanel = new QuickPhrasePanel(this::inputAppend, this::accent);
+    /**
+     * The composer's own surface (D21a): the text the shared field holds, the focus
+     * flag, the caret and the wrap/height geometry. Every call it makes on the
+     * hidden field is one method of {@link ComposerInput.Field} — that port is what
+     * makes the 256 cap, the focus order, the wrap cache and the caret mapping
+     * testable without a game, and this screen stays its only implementation. The
+     * per-frame focus read-back and the read-only blur stay separate calls, because
+     * they sit in the frame where they always did.
+     */
+    private final ComposerInput composer = new ComposerInput(new ComposerInput.Host() {
+        @Override
+        public UiLayout layout() {
+            return AtomChatScreen.this.layout();
+        }
+
+        @Override
+        public ScrollController currentScroll() {
+            return AtomChatScreen.this.currentScroll();
+        }
+
+        @Override
+        public float frameDt() {
+            return frameDt;
+        }
+
+        @Override
+        public int clampInt(int value, int lo, int hi) {
+            return Mth.clamp(value, lo, hi);
+        }
+    }, new ComposerInput.Field() {
+        @Override
+        public boolean present() {
+            return input != null;
+        }
+
+        @Override
+        public String text() {
+            return input.getValue();
+        }
+
+        @Override
+        public void setText(String text) {
+            input.setValue(text);
+        }
+
+        @Override
+        public int caretPosition() {
+            return input.getCursorPosition();
+        }
+
+        @Override
+        public boolean focused() {
+            return input.isFocused();
+        }
+
+        @Override
+        public void setScreenFocus() {
+            setFocused(input);
+        }
+
+        @Override
+        public void fieldFocus() {
+            input.setFocused(true);
+        }
+
+        @Override
+        public void fieldFocusGuarded() {
+            if (input != null) {
+                input.setFocused(true);
+            }
+        }
+
+        @Override
+        public void fieldBlur() {
+            input.setFocused(false);
+        }
+
+        @Override
+        public void moveCaretTo(int pos) {
+            input.moveCursorTo(pos);
+        }
+    });
+
+    private final QuickPhrasePanel quickPhrasePanel = new QuickPhrasePanel(composer::append, this::accent);
 
     /**
      * The quick-phrase borrow (D16): the parked composer text, the add/edit
@@ -620,29 +700,27 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
 
         @Override
         public String composerText() {
-            return inputGetText();
+            return composer.text();
         }
 
         @Override
         public void setComposerText(String text) {
-            inputSetText(text);
+            composer.setText(text);
         }
 
         @Override
         public void appendToComposer(String text) {
-            inputAppend(text);
+            composer.append(text);
         }
 
         @Override
         public void focusComposer() {
-            inputFocused = true;
-            setFocused(input);
-            input.setFocused(true);
+            composer.focus();
         }
 
         @Override
         public void caretToEnd() {
-            setCaretAtEnd();
+            composer.caretToEnd();
         }
 
         @Override
@@ -651,7 +729,6 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         }
     });
 
-    private boolean inputFocused = true;
     /**
      * Per-conversation history fold depth (world="", private=PlayerRef.key()).
      * Not remembered across screen instances: closing the panel forgets how far
@@ -693,9 +770,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
 
                 @Override
                 public void focusComposer() {
-                    inputFocused = true;
-                    setFocused(input);
-                    input.setFocused(true);
+                    composer.focus();
                 }
             },
             AtomChatScreen::probeCanvasLeak,
@@ -799,12 +874,12 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
 
                 @Override
                 public boolean composerEmpty() {
-                    return inputGetText().isEmpty();
+                    return composer.text().isEmpty();
                 }
 
                 @Override
                 public void appendToComposer(String text) {
-                    inputAppend(text);
+                    composer.append(text);
                 }
 
                 @Override
@@ -879,7 +954,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
     private final DraftStore.ComposerTextPort composerText = new DraftStore.ComposerTextPort() {
         @Override
         public String get() {
-            return inputGetText();
+            return composer.text();
         }
 
         @Override
@@ -928,12 +1003,12 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
 
         @Override
         public void clearComposer() {
-            inputSetText("");
+            composer.setText("");
         }
 
         @Override
         public void focusComposer() {
-            inputFocused = true;
+            composer.setFocused(true);
         }
 
         @Override
@@ -1029,7 +1104,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
 
         @Override
         public void appendToComposer(String text) {
-            inputAppend(text);
+            composer.append(text);
         }
 
         @Override
@@ -1148,21 +1223,6 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
     // Per-frame animation state (smooth hover/popup transitions)
     private long frameDt = 16;
     private long lastFrameMs = System.currentTimeMillis();
-
-    // Multi-line input: the bar grows upward by whole line heights, and once the
-    // text passes INPUT_MAX_LINES it scrolls inside the fixed box.
-    private float inputExtraH;
-    /**
-     * Tracks the height transition as start/end/time rather than per-frame lerp:
-     * UiMotion.approach is unitless, so on a pixel-valued target it only covers
-     * a fraction of the distance per frame and leaves a multi-hundred-ms tail.
-     * Animator guarantees the bar reaches its target height within INPUT_GROW_MS.
-     */
-    private final Animator inputHeightAnim = new Animator(t -> t);
-    private int inputScrollLine;
-    private String inputWrapText;
-    private float inputWrapWidth = -1.0F;
-    private List<String> inputWrapCache;
 
     // Input mouse drag selection (0.1.11): the hidden EditBox is single-line
     // and its X shifts per caret (IME anchor), so its own hit-testing cannot
@@ -1441,7 +1501,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
     private void popNow() {
         boolean leavingProfile = topPage() == AppPage.PROFILE_DETAIL;
         if (topPage() == AppPage.PRIVATE_CHAT) {
-            savePrivateDraft(activePrivateTarget(), inputGetText());
+            savePrivateDraft(activePrivateTarget(), composer.text());
             PrivateChatStore.clearActive();
         }
         resetTransientWorldUi();
@@ -1835,12 +1895,12 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         // every-2-frames blur refresh; a still scene drops to the slow fallback
         // (see BlurMotionGate). The pre-pass below asks the gate per frame.
         boolean chromeAnimating = !panelSettled
-                || Math.abs(inputExtraH - lastBlurInputExtraH) > 0.01F;
+                || Math.abs(composer.extraH() - lastBlurInputExtraH) > 0.01F;
         BlurMotionGate.noteFrame(System.currentTimeMillis(),
                 client.player != null ? client.player.getYRot() : 0.0F,
                 client.player != null ? client.player.getXRot() : 0.0F,
                 chromeAnimating);
-        lastBlurInputExtraH = inputExtraH;
+        lastBlurInputExtraH = composer.extraH();
 
         // The blur pre-pass is raw GL and must run before Skia paints the panel.
         // Load the shader first so drawPanel knows whether it may use the
@@ -1954,8 +2014,8 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         ProfilePage.SignatureAnchor signAnchor =
                 profilePage.signatureImeAnchor(listLayout(), listScroll().getScrollY());
         if (signAnchor != null) {
-            String current = inputGetText();
-            int caret = caretIndex();
+            String current = composer.text();
+            int caret = composer.caretIndex();
             String wholePrefix = current.substring(0, Math.min(caret, current.length()));
             Font signFont = FontManager.font(UiTokens.PROFILE_SIGN_FONT);
             float skiaSignPrefixVirtual = SkiaFontRenderer.getStringWidth(signFont, wholePrefix);
@@ -1975,8 +2035,8 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         // width, while AtomChat draws the committed text with Skia. Shift the
         // field's X so EditBox.getScreenX(caret) lands exactly on the Skia caret
         // (no visible gap before the IME pre-edit box).
-        String current = inputGetText();
-        int caret = caretIndex();
+        String current = composer.text();
+        int caret = composer.caretIndex();
         String wholePrefix = current.substring(0, Math.min(caret, current.length()));
         String linePrefix = inputLinePrefix(layout, caret);
         Font inputFont = FontManager.font(UiTokens.FONT_INPUT);
@@ -1993,9 +2053,9 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
             imeEnglishState = commandMode;
             com.atom.chat.compat.IMBlockerCompat.setCommandMode(input, commandMode);
         }
-        input.setY((int) Math.round(caretLineTopY() * density / scaleFactor));
+        input.setY((int) Math.round(composer.caretLineTopY() * density / scaleFactor));
         input.setWidth((int) Math.max(10.0F, Math.round((layout.inputBar.w() - UiTokens.INPUT_TEXT_X * 2.0F) * density / scaleFactor)));
-        input.setHeight((int) Math.round(inputLineHeight() * density / scaleFactor));
+        input.setHeight((int) Math.round(composer.lineHeight() * density / scaleFactor));
     }
 
     /**
@@ -2004,14 +2064,14 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
      * selects that character, past the end selects the line end.
      */
     private int inputCaretIndexAt(UiLayout layout, float vmx, float vmy) {
-        List<String> lines = wrappedInput(layout.inputTextMaxWidth());
+        List<String> lines = composer.wrappedInput(layout.inputTextMaxWidth());
         if (lines.isEmpty()) {
             return 0;
         }
         int total = lines.size();
         int shown = Math.min(UiTokens.INPUT_MAX_LINES, total);
-        int from = Math.min(inputScrollLine, Math.max(0, total - shown));
-        float lineH = inputLineHeight();
+        int from = Math.min(composer.scrollLine(), Math.max(0, total - shown));
+        float lineH = composer.lineHeight();
         float firstTop = layout.inputTextCenterY - lineH / 2.0F;
         int row = Mth.clamp((int) Math.floor((vmy - firstTop) / lineH), 0, shown - 1);
         int line = Math.min(from + row, total - 1);
@@ -2052,11 +2112,11 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
 
     /** Skia width of the committed text before the caret on the caret's wrapped line. */
     private String inputLinePrefix(UiLayout layout, int caret) {
-        List<String> lines = wrappedInput(layout.inputTextMaxWidth());
+        List<String> lines = composer.wrappedInput(layout.inputTextMaxWidth());
         if (lines.isEmpty()) {
             return "";
         }
-        int line = caretLine(lines, caret);
+        int line = ComposerInput.caretLine(lines, caret);
         int lineStart = 0;
         for (int i = 0; i < line; i++) {
             lineStart += lines.get(i).length();
@@ -2082,29 +2142,6 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         installDropCallback();
     }
 
-    private String inputGetText() {
-        return input != null ? input.getValue() : "";
-    }
-
-    private void inputSetText(String text) {
-        if (input != null) {
-            input.setValue(text == null ? "" : text);
-        }
-    }
-
-    private void inputAppend(String text) {
-        if (input == null) {
-            return;
-        }
-        String current = input.getValue();
-        if (current.length() + text.length() <= 256) {
-            input.setValue(current + text);
-        }
-        inputFocused = true;
-        setFocused(input);
-        input.setFocused(true);
-    }
-
     // ---- quick-phrase edit borrows the composer field (the IME carrier) ----
 
     /**
@@ -2125,12 +2162,6 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
     /** Closes the phrase panel; an in-progress edit commits (blur applies). */
     private void closePhrasePanel() {
         quickPhraseWiring.closePhrasePanel();
-    }
-
-    private void setCaretAtEnd() {
-        if (input != null) {
-            input.moveCursorTo(input.getValue().length());
-        }
     }
 
     /**
@@ -2288,11 +2319,8 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
     }
 
     private void drawPanel(Canvas canvas, float x, float y, Image worldSnapshot, int mouseX, int mouseY, float delta) {
-        inputFocused = input != null && input.isFocused();
-        if (isPrivateReadOnly() && input != null) {
-            input.setFocused(false);
-            inputFocused = false;
-        }
+        composer.syncFocusedFromField();
+        composer.blurOnReadOnlyPage(isPrivateReadOnly());
         long nowMs = System.currentTimeMillis();
         frameDt = Math.min(50L, Math.max(1L, nowMs - lastFrameMs));
         lastFrameMs = nowMs;
@@ -2435,7 +2463,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
                     // be final — and tall enough for both pages — before either
                     // side paints.
                     float width = layout.inputTextMaxWidth();
-                    layout = updateInputLayout(layout, inputGetText(),
+                    layout = composer.updateLayout(layout, composer.text(),
                             Math.max(inputExtraFor(fromView, width), inputExtraFor(toView, width)));
                 }
                 UiLayout.Rect panelRect = layout.rect();
@@ -2729,7 +2757,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
 
         // Grow the input bar before the list is measured, so the list loses
         // exactly the height the bar gains.
-        layout = updateInputLayout(layout);
+        layout = composer.updateLayout(layout);
 
         if (!navMovingHidden) {
             drawChatPageBody(canvas, layout, mouseX, mouseY, chatPageViewFor(topNav()));
@@ -2896,7 +2924,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         // the leaving page keeps its own draft while the arriving page's sits in
         // the shared EditBox.
         Font inputFont = FontManager.font(UiTokens.FONT_INPUT);
-        float lineH = inputLineHeight();
+        float lineH = composer.lineHeight();
         String current = view.draft();
         float textX = bar.x() + UiTokens.INPUT_TEXT_X;
         float clipTop = layout.inputTextCenterY - lineH / 2.0F;
@@ -2908,19 +2936,19 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
                     SkiaFontRenderer.centerBaselineY(inputFont, layout.inputTextCenterY), textSecondary());
             canvas.restore();
         } else {
-            List<String> lines = wrappedInput(current, layout.inputTextMaxWidth());
+            List<String> lines = composer.wrappedInput(current, layout.inputTextMaxWidth());
             int total = lines.size();
             // Caret and selection belong to the page that owns the field; the
             // other side draws its text without them instead of borrowing the
             // live caret position.
             boolean ownComposer = view.ownsField();
-            int caretRow = ownComposer && total > 0 ? caretLine(lines, caretIndex()) : 0;
+            int caretRow = ownComposer && total > 0 ? ComposerInput.caretLine(lines, composer.caretIndex()) : 0;
             if (ownComposer) {
-                scrollInputToCaret(caretRow, total);
+                composer.scrollToCaret(caretRow, total);
             }
             int shown = Math.min(UiTokens.INPUT_MAX_LINES, total);
             int from = total == 0 ? 0
-                    : Math.min(ownComposer ? inputScrollLine : 0, Math.max(0, total - shown));
+                    : Math.min(ownComposer ? composer.scrollLine() : 0, Math.max(0, total - shown));
             // Placeholder stays visible while the field is focused: ChatScreen
             // focuses the chat field the moment the screen opens, so a hint gated
             // on "not focused" was literally never on screen. It doubles as the
@@ -2955,9 +2983,9 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
                             SkiaFontRenderer.centerBaselineY(inputFont, cy), textPrimary());
                 }
             }
-            if (ownComposer && inputFocused && input != null
+            if (ownComposer && composer.focused() && composer.fieldFocused()
                     && (System.currentTimeMillis() / 500L) % 2L == 0L) {
-                int caret = caretIndex();
+                int caret = composer.caretIndex();
                 float cursorY;
                 String measure;
                 if (total == 0) {
@@ -3304,7 +3332,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         if (input == null || lines.isEmpty()) {
             return;
         }
-        int len = inputGetText().length();
+        int len = composer.text().length();
         int a = Mth.clamp(input.cursorPos, 0, len);
         int b = Mth.clamp(input.highlightPos, 0, len);
         int selStart = Math.min(a, b);
@@ -3688,7 +3716,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
      */
     private UiLayout layout() {
         float replyH = replyBarVisible() ? s(34) : 0.0F;
-        return UiLayout.of(panelX(), panelY(), panelWidth(), panelHeight(), inputExtraH, replyH);
+        return UiLayout.of(panelX(), panelY(), panelWidth(), panelHeight(), composer.extraH(), replyH);
     }
 
     // ---------------------------------------------------------------- input box
@@ -3704,119 +3732,12 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
      *
      * @return a layout rebuilt with the updated height.
      */
-    private UiLayout updateInputLayout(UiLayout current) {
-        return updateInputLayout(current, inputGetText(), 0.0F);
-    }
-
-    /**
-     * Wraps the draft the shared EditBox holds, with a floor on the bar's extra
-     * height. The floor is what a transition needs: its two pages are drawn in
-     * one layout, so a second line belonging to the page that does not own the
-     * field would otherwise be clipped until the nav landed and the field
-     * switched. {@link #inputExtraFor} supplies that floor.
-     *
-     * @param draft    composer text to measure (normally the field's own)
-     * @param minExtra lower bound for the animated extra height
-     * @return a layout rebuilt with the updated height.
-     */
-    private UiLayout updateInputLayout(UiLayout current, String draft, float minExtra) {
-        float lineH = inputLineHeight();
-        List<String> lines = wrappedInput(draft, current.inputTextMaxWidth());
-        int targetLines = Math.min(UiTokens.INPUT_MAX_LINES, Math.max(1, lines.size()));
-        float targetExtra = Math.max(minExtra, (targetLines - 1) * lineH);
-        ScrollController activeScroll = currentScroll();
-        if (Math.abs(targetExtra - inputExtraH) > 0.5F
-                && activeScroll.getTarget() >= activeScroll.getMaxScroll() - 3.0F) {
-            activeScroll.stickToBottom();
-        }
-        inputHeightAnim.animateTo(UiMotion.INPUT_GROW_MS, targetExtra);
-        inputHeightAnim.update(frameDt);
-        inputExtraH = inputHeightAnim.getValue();
-        return layout();
-    }
-
     /** Extra input-bar height a page's own draft needs (read-only pages need none). */
     private float inputExtraFor(ChatPageView view, float maxWidth) {
         if (view == null || view.readOnly()) {
             return 0.0F;
         }
-        int lines = Math.min(UiTokens.INPUT_MAX_LINES,
-                Math.max(1, wrappedInput(view.draft(), maxWidth).size()));
-        return (lines - 1) * inputLineHeight();
-    }
-
-    private float inputLineHeight() {
-        return SkiaFontRenderer.getHeight(FontManager.font(UiTokens.FONT_INPUT));
-    }
-
-    /** Wrapped input text, cached until the text or the available width changes. */
-    private List<String> wrappedInput(float maxWidth) {
-        return wrappedInput(inputGetText(), maxWidth);
-    }
-
-    /**
-     * Wraps an explicit composer text. A transition draws two pages with two
-     * different drafts, so the wrap cannot assume the shared EditBox's text; the
-     * cache stays keyed on the text and width, exactly as before.
-     */
-    private List<String> wrappedInput(String text, float maxWidth) {
-        if (inputWrapCache == null || inputWrapWidth != maxWidth || !text.equals(inputWrapText)) {
-            inputWrapText = text;
-            inputWrapWidth = maxWidth;
-            inputWrapCache = SkiaFontRenderer.wrap(FontManager.font(UiTokens.FONT_INPUT), text, maxWidth);
-        }
-        return inputWrapCache;
-    }
-
-    /**
-     * Absolute index of the line holding the caret. wrap() drops the whitespace
-     * at a break point, so line lengths can sum to slightly less than the full
-     * text — the mapping is exact everywhere except right at a break.
-     */
-    private static int caretLine(List<String> lines, int caret) {
-        int pos = 0;
-        for (int i = 0; i < lines.size(); i++) {
-            pos += lines.get(i).length();
-            if (caret <= pos) {
-                return i;
-            }
-        }
-        return Math.max(0, lines.size() - 1);
-    }
-
-    private int caretIndex() {
-        return input == null ? 0 : Mth.clamp(input.getCursorPosition(), 0, inputGetText().length());
-    }
-
-    /** Keeps the caret's line inside the visible window, clamping to the ends. */
-    private void scrollInputToCaret(int caretLine, int totalLines) {
-        int max = UiTokens.INPUT_MAX_LINES;
-        if (totalLines <= max) {
-            inputScrollLine = 0;
-            return;
-        }
-        if (caretLine < inputScrollLine) {
-            inputScrollLine = caretLine;
-        } else if (caretLine > inputScrollLine + max - 1) {
-            inputScrollLine = caretLine - max + 1;
-        }
-        inputScrollLine = Math.max(0, Math.min(inputScrollLine, totalLines - max));
-    }
-
-    /** Virtual-space top edge of the line the caret sits on, for IME anchoring. */
-    private float caretLineTopY() {
-        UiLayout l = layout();
-        Font font = FontManager.font(UiTokens.FONT_INPUT);
-        float lineH = SkiaFontRenderer.getHeight(font);
-        List<String> lines = wrappedInput(l.inputTextMaxWidth());
-        if (lines.isEmpty()) {
-            return l.inputTextCenterY - lineH / 2.0F;
-        }
-        int line = caretLine(lines, caretIndex());
-        int shown = Math.min(UiTokens.INPUT_MAX_LINES, lines.size());
-        int from = Math.min(inputScrollLine, lines.size() - shown);
-        int row = Math.max(0, Math.min(line - from, shown - 1));
-        return l.inputTextCenterY + row * lineH - lineH / 2.0F;
+        return composer.extraFor(view.draft(), view.readOnly(), maxWidth);
     }
 
     private float toVirtualX(double guiX) {
@@ -4391,7 +4312,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
             if (button == 0 && layout.emojiBtn.contains((float) mx, (float) my)) {
                 primitives.pressButton(1);
                 primitives.setButtonHeld(1);
-                inputFocused = true;
+                composer.setFocused(true);
                 closePhrasePanel();
                 emojiPanel.toggle();
                 return true;
@@ -4401,7 +4322,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
             if (button == 0 && layout.phraseBtn.contains((float) mx, (float) my)) {
                 primitives.pressButton(3);
                 primitives.setButtonHeld(3);
-                inputFocused = true;
+                composer.setFocused(true);
                 emojiPanel.close();
                 if (quickPhrasePanel.isOpen()) {
                     closePhrasePanel();
@@ -4416,7 +4337,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
                 if (emojiPanel.overPanel(layout, mx, my)) {
                     String inserted = emojiPanel.click(layout, mx, my);
                     if (inserted != null && !inserted.isEmpty()) {
-                        inputAppend(inserted);
+                        composer.append(inserted);
                     }
                     return true;
                 }
@@ -4447,7 +4368,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
                         feedback("atomchat.feedback.copied", copyToClipboard(menuBefore.getContentText()));
                     } else if (row == 1) {
                         replySlots.arm(menuBefore);
-                        inputFocused = true;
+                        composer.setFocused(true);
                         setFocused(input);
                         input.setFocused(true);
                     } else {
@@ -4474,7 +4395,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
             if (button == 0 && layout.imageBtn.contains((float) mx, (float) my)) {
                 primitives.pressButton(0);
                 primitives.setButtonHeld(0);
-                inputFocused = true;
+                composer.setFocused(true);
                 pickAndUploadImage();
                 return true;
             }
@@ -4488,15 +4409,15 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
                     endPhraseEdit(true);
                     return true;
                 }
-                sendMessage(inputGetText());
+                sendMessage(composer.text());
                 return true;
             }
 
             // Input box focus
-            inputFocused = false;
+            composer.setFocused(false);
             dismissSuggestor();
             if (button == 0 && layout.inputBar.contains((float) mx, (float) my)) {
-                inputFocused = true;
+                composer.setFocused(true);
                 setFocused(input);
                 input.setFocused(true);
                 // Click-to-position / drag-select on the multi-line Skia input:
@@ -4750,19 +4671,19 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
                 return true;
             }
             if (keyCode == 257 || keyCode == 335) { // Enter
-                if (inputFocused) {
-                    sendMessage(inputGetText());
+                if (composer.focused()) {
+                    sendMessage(composer.text());
                 }
                 return true;
             }
             // Up/Down become caret navigation as soon as the text wraps onto a second
             // line (>= INPUT_MAX_LINES). Once multiline, Up/Down never fall back to
             // vanilla chat history — that remains a single-line behaviour.
-            if (inputFocused && input != null && (keyCode == 265 || keyCode == 264)) {
-                List<String> lines = wrappedInput(layout().inputTextMaxWidth());
+            if (composer.focused() && composer.fieldFocused() && (keyCode == 265 || keyCode == 264)) {
+                List<String> lines = composer.wrappedInput(layout().inputTextMaxWidth());
                 if (lines.size() >= UiTokens.INPUT_MAX_LINES) {
-                    int caret = caretIndex();
-                    int row = caretLine(lines, caret);
+                    int caret = composer.caretIndex();
+                    int row = ComposerInput.caretLine(lines, caret);
                     int target = (keyCode == 265) ? row - 1 : row + 1;
                     if (target >= 0 && target < lines.size()) {
                         int rowStart = 0;
@@ -4782,7 +4703,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
                     return true;
                 }
             }
-            if (inputFocused && AtomChatConfig.get().debug) {
+            if (composer.focused() && AtomChatConfig.get().debug) {
                 AtomChat.LOGGER.info("keyPressed: {} (sc {}) mod {}", keyCode, scanCode, modifiers);
             }
             // Falls through to super (ChatScreen): the focused input consumes
@@ -4797,7 +4718,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
             }
             if (AtomChatConfig.get().debug) {
                 AtomChat.LOGGER.info("charTyped: '{}' (U+{}) focused={} field={}",
-                        chr, Integer.toHexString(chr), inputFocused, input != null && input.isFocused());
+                        chr, Integer.toHexString(chr), composer.focused(), composer.fieldFocused());
             }
             return false;
         }
