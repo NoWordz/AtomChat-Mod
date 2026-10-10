@@ -111,6 +111,19 @@ class PageNavStyleSourceTest {
         return haystack.indexOf(needle);
     }
 
+    /**
+     * The profile detail door may push directly ({@code pushPage(AppPage.PROFILE_DETAIL)})
+     * or hand off to the D18b domain, which pushes on the screen's behalf through the
+     * {@code openProfileDetailPage} fact. Both links are checked: what must never happen
+     * is a hand-rolled navigation somewhere else, or a fact that stops going through
+     * {@code pushPage}.
+     */
+    private static boolean profileDetailPushesThroughPushPage(String door, String fact) {
+        boolean doorGoesThroughPushPage = door.contains("pushPage(")
+                || door.contains("avatarWiring.openProfileDetail(");
+        return doorGoesThroughPushPage && fact.contains("pushPage(AppPage.PROFILE_DETAIL)");
+    }
+
     /** The text from {@code from} on, clamped: a -1 search result must not turn
      *  a failure message into a StringIndexOutOfBoundsException. */
     private static String tail(String text, int from) {
@@ -213,7 +226,9 @@ class PageNavStyleSourceTest {
                     screen + ": the settings push must go through pushNav");
             assertTrue(body(src, "public void pushPage(AppPage").contains("pushNav("),
                     screen + ": the profile/settings push must go through pushNav");
-            assertTrue(body(src, "public void openProfileDetail(PlayerRef").contains("pushPage("),
+            assertTrue(profileDetailPushesThroughPushPage(
+                            body(src, "public void openProfileDetail(PlayerRef"),
+                            body(src, "public void openProfileDetailPage()")),
                     screen + ": the profile push must go through pushPage");
         }
     }
@@ -449,7 +464,9 @@ class PageNavStyleSourceTest {
                     screen + ": openSettingsSection must delegate into pushNav");
             assertTrue(body(src, "public void pushPage(AppPage").contains("pushNav("),
                     screen + ": pushPage must delegate into pushNav");
-            assertTrue(body(src, "public void openProfileDetail(PlayerRef").contains("pushPage("),
+            assertTrue(profileDetailPushesThroughPushPage(
+                            body(src, "public void openProfileDetail(PlayerRef"),
+                            body(src, "public void openProfileDetailPage()")),
                     screen + ": openProfileDetail must delegate into pushPage");
         }
     }

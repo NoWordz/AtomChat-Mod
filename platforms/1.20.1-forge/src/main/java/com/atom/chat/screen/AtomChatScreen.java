@@ -53,6 +53,7 @@ import com.atom.chat.render.RichTextRenderer;
 import com.atom.chat.render.SkiaDraw;
 import com.atom.chat.render.SkiaFontRenderer;
 import com.atom.chat.render.SkiaGraphics;
+import com.atom.chat.settings.AvatarClickWiring;
 import com.atom.chat.settings.ProfilePageWiring;
 import com.atom.chat.settings.SettingsActions;
 import com.atom.chat.settings.SettingsDetailPage;
@@ -136,37 +137,149 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
      * {@link ModalInput} hands it every event.
      */
     private final ImagePreviewOverlay imagePreview = new ImagePreviewOverlay();
+
+    /**
+     * The profile page's avatar-and-banner half, the avatar click competition
+     * window and poking (D18b). The window's verdict is reached inside a
+     * rendered frame, from this screen's {@code nowMs} (see {@link #drawPanel}),
+     * and the click's three branches live in the domain; this screen only hands
+     * over the page, the poke config and client, and its own labels and sinks.
+     * A message crosses as {@link AvatarClickWiring.MessageFacts}, because the
+     * message type itself is spelled differently per mapping. The signature
+     * borrow still belongs to {@link ProfilePageWiring} — the page's handler is
+     * one object, so the two handlers are chained here.
+     */
+    private final AvatarClickWiring avatarWiring = new AvatarClickWiring(new AvatarClickWiring.Host() {
+        @Override
+        public ProfilePage profilePage() {
+            return profilePage;
+        }
+
+        @Override
+        public void openProfileDetailPage() {
+            pushPage(AppPage.PROFILE_DETAIL);
+        }
+
+        @Override
+        public java.util.UUID localPlayerId() {
+            return client.player == null ? null : client.player.getUUID();
+        }
+
+        @Override
+        public boolean pokeConfigEnabled() {
+            return Animations.avatarPoke();
+        }
+
+        @Override
+        public boolean animationsEnabled() {
+            return Animations.enabled();
+        }
+
+        @Override
+        public boolean clearAvatar() {
+            return avatarStore.clear();
+        }
+
+        @Override
+        public boolean pokeSend(java.util.UUID target) {
+            return PokeCompanionClient.send(target);
+        }
+
+        @Override
+        public void installPokeHandler(java.util.function.Consumer<java.util.UUID> handler) {
+            PokeCompanionClient.setHandler(handler);
+        }
+
+        @Override
+        public String displayNameFor(java.util.UUID uuid) {
+            return AtomChatScreen.this.displayNameFor(uuid);
+        }
+
+        @Override
+        public boolean isBlocked(String name) {
+            return com.atom.chat.chat.BlockList.isBlocked(name);
+        }
+
+        @Override
+        public void pokeWobble(java.util.UUID uuid, long nowMs) {
+            messageListView.poke(uuid, nowMs);
+        }
+
+        @Override
+        public void playPokeSound() {
+            com.atom.chat.notification.NotificationController.playPokeSound();
+        }
+
+        @Override
+        public void feedback(String key, boolean success) {
+            AtomChatScreen.this.feedback(key, success);
+        }
+
+        @Override
+        public String label(String key, String arg) {
+            return tr(key, arg);
+        }
+
+        @Override
+        public void feedback(String key, String label, boolean success) {
+            AtomChatScreen.this.feedback(key, label, success);
+        }
+
+        @Override
+        public void pickAvatarFile() {
+            AtomChatScreen.this.pickAvatarFile();
+        }
+
+        @Override
+        public void pickBannerFile() {
+            AtomChatScreen.this.pickBannerFile();
+        }
+
+        @Override
+        public boolean clearBanner() {
+            return BannerStore.clear();
+        }
+
+        @Override
+        public boolean copyToClipboard(String text) {
+            return AtomChatScreen.this.copyToClipboard(text);
+        }
+
+        @Override
+        public void beginSignatureEdit() {
+            profileWiring.beginSignatureEdit();
+        }
+
+        @Override
+        public void endSignatureEdit(boolean commit) {
+            profileWiring.endSignatureEdit(commit);
+        }
+    });
+
     private final ProfilePage profilePage = new ProfilePage(new ProfilePage.Handler() {
         @Override
         public void openAvatarPicker() {
-            pickAvatarFile();
+            avatarWiring.handler().openAvatarPicker();
         }
 
         @Override
         public void clearAvatar() {
-            boolean removed = avatarStore.clear();
-            AvatarImage.release();
-            feedback(removed ? "atomchat.feedback.avatarCleared" : "atomchat.feedback.avatarClearFailed",
-                    removed);
+            avatarWiring.handler().clearAvatar();
         }
 
         @Override
         public void openBannerPicker() {
-            pickBannerFile();
+            avatarWiring.handler().openBannerPicker();
         }
 
         @Override
         public void clearBanner() {
-            // Delete image = off: the file goes, the accent gradient returns.
-            boolean removed = BannerStore.clear();
-            BannerImage.release();
-            feedback(removed ? "atomchat.feedback.bannerCleared" : "atomchat.feedback.bannerClearFailed",
-                    removed);
+            avatarWiring.handler().clearBanner();
         }
 
         @Override
         public boolean copyText(String text) {
-            return copyToClipboard(text);
+            return avatarWiring.handler().copyText(text);
         }
 
         @Override
@@ -958,13 +1071,6 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
     private float inputWrapWidth = -1.0F;
     private List<String> inputWrapCache;
 
-    private long lastAvatarClickTime;
-    private int lastAvatarClickIndex = -1;
-    /** Single-click→profile competition window (QQ standard), in ms. */
-    private static final long AVATAR_CLICK_WINDOW_MS = 300;
-    private long pendingAvatarClickTime;
-    private int pendingAvatarClickIndex = -1;
-    private ChatMessage pendingAvatarClickMessage;
     // Input mouse drag selection (0.1.11): the hidden EditBox is single-line
     // and its X shifts per caret (IME anchor), so its own hit-testing cannot
     // serve the multi-line Skia input — map virtual coords to an index.
@@ -1381,24 +1487,26 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
 
     /** Opens another player's profile as a pushed detail page. */
     public void openProfileDetail(PlayerRef player) {
-        if (player == null || player.realName() == null) {
-            return;
-        }
-        profilePage.setSubject(player);
-        pushPage(AppPage.PROFILE_DETAIL);
+        avatarWiring.openProfileDetail(player);
     }
 
     /** Opens the profile detail for a message's sender (avatar single click). */
     private void openProfileFor(ChatMessage msg) {
-        if (msg == null || msg.isSystem() || msg.isOwn()) {
-            return;
-        }
-        PlayerRef player = PlayerRef.of(msg.getSenderUuid(), msg.getProfileName());
-        if (player == null || player.realName() == null) {
-            return;
-        }
-        openProfileDetail(player);
+        avatarWiring.openProfileFor(factsOf(msg));
     }
+
+    /**
+     * The domain's neutral view of a message row. The message type itself is
+     * spelled differently per mapping ({@code Component} vs {@code Text}), so the
+     * shared layer never sees it — this screen converts, per click.
+     */
+    private static AvatarClickWiring.MessageFacts factsOf(ChatMessage msg) {
+        return msg == null ? null
+                : AvatarClickWiring.MessageFacts.of(msg.getSenderUuid(), msg.getProfileName(),
+                        msg.getSenderName(), msg.isOwn(), msg.isSystem());
+    }
+
+    /** Opens the profile detail for a message's sender (avatar single click). */
 
     @Override
     public void switchRoot(AppPage root) {
@@ -1855,7 +1963,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
     protected void init() {
         super.init();
         // Route incoming remote pokes to this screen while it is open.
-        PokeCompanionClient.setHandler(this::onPoked);
+        avatarWiring.poke().install();
         // Swap the vanilla suggestor for our anchored one on the same chat field.
         // The popup, its anchors and its responder live in the D8 wiring.
         suggestorWiring.install(this.client, this, this.client.font, originalChatText);
@@ -2049,7 +2157,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
 
     @Override
     public void removed() {
-        PokeCompanionClient.setHandler(null);
+        avatarWiring.poke().uninstall();
         // Hygiene on screen teardown: release the borrowed field so the parked
         // composer draft state cannot outlive the page that borrowed it.
         if (profilePage.isSignatureEditing()) {
@@ -2078,17 +2186,9 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         frameDt = Math.min(50L, Math.max(1L, nowMs - lastFrameMs));
         lastFrameMs = nowMs;
         // Single-click→profile competition window: fire when no second click
-        // arrived within the threshold.
-        if (pendingAvatarClickMessage != null) {
-            if (closing) {
-                pendingAvatarClickMessage = null;
-            } else if (nowMs - pendingAvatarClickTime >= AVATAR_CLICK_WINDOW_MS) {
-                ChatMessage pending = pendingAvatarClickMessage;
-                pendingAvatarClickMessage = null;
-                pendingAvatarClickIndex = -1;
-                openProfileFor(pending);
-            }
-        }
+        // arrived within the threshold. The verdict stays inside this frame —
+        // the domain only decides, the frame order is this method's.
+        avatarWiring.settlePendingAvatarClick(nowMs, closing);
         syncScrollMotion();
         emojiPanel.update(frameDt);
         quickPhrasePanel.update(frameDt);
@@ -3542,57 +3642,9 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         notificationJump.feedback(key, label, success);
     }
 
-    /**
-     * Pokes {@code target}: the local wobble and cue play either way, and a
-     * real poke is sent when the server negotiated the companion channel. The
-     * wobble plays for the sender immediately; the target's client wobbles when
-     * the server relays it.
-     */
-    private void sendPoke(ChatMessage target) {
-        UUID uuid = target == null ? null : target.getSenderUuid();
-        if (uuid == null) {
-            return;
-        }
-        messageListView.poke(uuid, System.currentTimeMillis());
-        com.atom.chat.notification.NotificationController.playPokeSound();
-        // The toast is truthful about delivery: without the companion channel the
-        // poke is local only (the wobble still plays), so the label says so.
-        boolean sent = PokeCompanionClient.send(uuid);
-        feedback(sent ? "atomchat.feedback.poked" : "atomchat.feedback.pokedLocal",
-                tr(sent ? "atomchat.feedback.poked" : "atomchat.feedback.pokedLocal",
-                        messageSenderName(target)), true);
-    }
-
-    /**
-     * Incoming poke from {@code from}: wobble that player's row, cue and toast.
-     *
-     * <p>Reachable only for another player, because a poke to yourself is
-     * rejected everywhere upstream — which holds for the real relay and for the
-     * ping-pong poke in the test round-trip alike.</p>
-     */
-    private void onPoked(UUID from) {
-        if (from == null || from.equals(client.player == null ? null : client.player.getUUID())) {
-            return;
-        }
-        // A blocked player's poke is dropped like their chat: no cue, no toast.
-        if (com.atom.chat.chat.BlockList.isBlocked(displayNameFor(from))) {
-            return;
-        }
-        messageListView.poke(from, System.currentTimeMillis());
-        com.atom.chat.notification.NotificationController.playPokeSound();
-        feedback("atomchat.feedback.pokeReceived", tr("atomchat.feedback.pokeReceived", displayNameFor(from)), true);
-    }
-
-    /**
-     * A poke simulated by {@code /atomchat test poke}, addressed to somebody
-     * else. The cue already played on the client side; the wobble and the toast
-     * are what this adds. Kept apart from {@link #onPoked} on purpose: that path
-     * rejects a poke from yourself, and the test is always addressed to another
-     * player, so routing it there would drop every test poke silently.
-     */
+    /** The test-poke command's door: {@code /atomchat test poke} lands here. */
     public void onTestPoked(UUID target, String targetName) {
-        messageListView.poke(target, System.currentTimeMillis());
-        feedback("atomchat.feedback.pokeReceived", tr("atomchat.feedback.pokeReceived", targetName), true);
+        avatarWiring.poke().tested(target, targetName);
     }
 
     /** A player's display name from the tab list, falling back to the raw uuid. */
@@ -4807,33 +4859,10 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
                 if (button == 0 && hit.avatarSize() > 0F
                         && mx >= hit.avatarX() && mx <= hit.avatarX() + hit.avatarSize()
                         && my >= hit.avatarY() && my <= hit.avatarY() + hit.avatarSize()) {
-                    long now = System.currentTimeMillis();
-                    // Poke is a nudge at *someone else*: your own avatar has no
-                    // one to notify, so it falls straight through to the profile.
-                    boolean pokeEnabled = Animations.avatarPoke() && Animations.enabled()
-                            && !hit.message().isOwn() && hit.message().getSenderUuid() != null;
-                    boolean doubleClick = pokeEnabled
-                            && lastAvatarClickIndex == hit.index()
-                            && now - lastAvatarClickTime < AVATAR_CLICK_WINDOW_MS;
-                    if (doubleClick) {
-                        // Double click → poke; cancels the pending single click.
-                        lastAvatarClickTime = 0;
-                        pendingAvatarClickMessage = null;
-                        sendPoke(hit.message());
-                    } else if (pokeEnabled) {
-                        // QQ-style competition window: the single click waits for
-                        // the double-click threshold before opening the profile.
-                        lastAvatarClickTime = now;
-                        lastAvatarClickIndex = hit.index();
-                        pendingAvatarClickTime = now;
-                        pendingAvatarClickIndex = hit.index();
-                        pendingAvatarClickMessage = hit.message();
-                    } else {
-                        // With poke (or decorative motion) off a double click does
-                        // nothing, so there is nothing to compete with: jump at once.
-                        lastAvatarClickTime = 0;
-                        openProfileFor(hit.message());
-                    }
+                    // The competition window's three branches and their order
+                    // are the domain's (D18b); the frame's clock is this click's.
+                    avatarWiring.handleAvatarClick(System.currentTimeMillis(),
+                            factsOf(hit.message()), hit.index());
                     return true;
                 }
             }
