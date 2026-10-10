@@ -57,6 +57,14 @@ class PageNavStyleSourceTest {
     private static final String DIRECTOR =
             "shared/src/main/java/com/atom/chat/nav/PageTransitionDirector.java";
 
+    /**
+     * The composite that block D24b-2a extracted: the detail&lt;-&gt;detail branch
+     * (and its per-side draws) live here now, so the five guards about that branch
+     * are asserted on this source.
+     */
+    private static final String COMPOSITE =
+            "shared/src/main/java/com/atom/chat/nav/PageTransitionComposite.java";
+
     /** The three screen sources, repo-root relative, in a fixed order. */
     private static final List<String> SCREENS = List.of(
             "platforms/1.20.1-forge/src/main/java/com/atom/chat/screen/AtomChatScreen.java",
@@ -148,10 +156,16 @@ class PageNavStyleSourceTest {
     }
 
     /** The public&lt;-&gt;private / chat&lt;-&gt;profile detail-to-detail branch. */
+    /**
+     * The detail&lt;-&gt;detail compositor. It used to be a commented block inside the
+     * screen's nav branch; block D24b-2a made it a method, so the guard is anchored on
+     * the two signatures that now bound it. The comment markers are gone with the code
+     * — anchoring on a comment would have gone quiet rather than red.
+     */
     private static String detailToDetailBranch(String source) {
         return slice(source,
-                "// Detail-to-detail",
-                "// Full-width push/pop: root<->detail transitions.");
+                "private NavFrame detailToDetail(",
+                "private NavFrame rootToDetail(");
     }
 
     /** Call sites of a method, skipping its own declaration ({@code void name(}). */
@@ -273,10 +287,9 @@ class PageNavStyleSourceTest {
      */
     @Test
     void detailToDetailFollowsTheResolvedStyle() throws IOException {
-        for (String screen : SCREENS) {
-            String branch = slice(source(screen),
-                    "// Detail-to-detail",
-                    "// Full-width push/pop: root<->detail transitions.");
+        {
+            String screen = COMPOSITE;
+            String branch = detailToDetailBranch(source(COMPOSITE));
             assertTrue(branch.contains("pageNavZoom"),
                     screen + ": the detail<->detail branch must consult the resolved style");
             assertTrue(branch.contains("zoomExiting") && branch.contains("navExitAlpha")
@@ -300,8 +313,9 @@ class PageNavStyleSourceTest {
      */
     @Test
     void worldPrivatePairMovesTheWholeChatBody() throws IOException {
-        for (String screen : SCREENS) {
-            String branch = detailToDetailBranch(source(screen));
+        {
+            String screen = COMPOSITE;
+            String branch = detailToDetailBranch(source(COMPOSITE));
             assertTrue(branch.contains("drawChatPageBody("),
                     screen + ": the world<->private pair must draw the whole chat body"
                             + " (messages + reply bar + composer), not only a message layer.\n" + branch);
@@ -330,8 +344,9 @@ class PageNavStyleSourceTest {
      */
     @Test
     void theSlideOffsetsAreAssignedByRoleNotByPosition() throws IOException {
-        for (String screen : SCREENS) {
-            String branch = detailToDetailBranch(source(screen));
+        {
+            String screen = COMPOSITE;
+            String branch = detailToDetailBranch(source(COMPOSITE));
             Map<String, String[]> roles = slideRoles(branch);
             assertEquals(2, roles.size(),
                     screen + ": expected exactly the fromDx and toDx declarations in the"
@@ -395,8 +410,9 @@ class PageNavStyleSourceTest {
      */
     @Test
     void everyCompositeSideDrawsABody() throws IOException {
-        for (String screen : SCREENS) {
-            String branch = detailToDetailBranch(source(screen));
+        {
+            String screen = COMPOSITE;
+            String branch = detailToDetailBranch(source(COMPOSITE));
             for (String side : List.of("visible", "from", "to")) {
                 assertTrue(branch.contains(side + "View != null"),
                         screen + ": the " + side + " side must draw a chat page when it has"
@@ -450,8 +466,9 @@ class PageNavStyleSourceTest {
      */
     @Test
     void fixedChromeIsPaintedAfterTheBodyLayerRestores() throws IOException {
-        for (String screen : SCREENS) {
-            String branch = detailToDetailBranch(source(screen));
+        {
+            String screen = COMPOSITE;
+            String branch = detailToDetailBranch(source(COMPOSITE));
             int lastBody = lastIndexOfAny(branch,
                     "drawChatPageBody(", "drawMessageLayerForNav(", "drawProfileDetail(",
                     "drawSettingsSection(");

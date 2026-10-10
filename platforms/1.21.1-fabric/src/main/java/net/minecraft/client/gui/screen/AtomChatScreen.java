@@ -30,6 +30,7 @@ import com.atom.chat.nav.AppPage;
 import com.atom.chat.nav.AtomChatState;
 import com.atom.chat.nav.NavPage;
 import com.atom.chat.nav.NavStackController;
+import com.atom.chat.nav.PageTransitionComposite;
 import com.atom.chat.nav.PageTransitionDirector;
 import com.atom.chat.notification.NotificationJumpService;
 import com.atom.chat.avatar.AvatarImage;
@@ -1522,6 +1523,62 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
             return AtomChatScreen.this.textPrimary();
         }
     });
+    /**
+     * The transition frame compositor (D24b-2a). Nine port steps, each a one-line
+     * forward to something this screen owns -- the page body (by ruling), the root
+     * orchestration (until 24b-2b), the bezel, the two layouts, D20's header
+     * action, D25's suppressHeader field and the E group's view.
+     */
+    private final PageTransitionComposite composite = new PageTransitionComposite(
+            new PageTransitionComposite.Host() {
+                @Override
+                public AppPage topPage() {
+                    return AtomChatScreen.this.topPage();
+                }
+
+                @Override
+                public void suppressHeader(boolean value) {
+                    suppressHeader = value;
+                }
+
+                @Override
+                public PageTransitionComposite.ChatPageView viewFor(NavPage page) {
+                    return chatPageViewFor(page);
+                }
+
+                @Override
+                public void drawChatPageBody(Canvas canvas, UiLayout layout, int mouseX, int mouseY,
+                                             PageTransitionComposite.ChatPageView view) {
+                    AtomChatScreen.this.drawChatPageBody(canvas, layout, mouseX, mouseY, view);
+                }
+
+                @Override
+                public void drawRootScreen(Canvas canvas, int mouseX, int mouseY, AppPage rootPage) {
+                    AtomChatScreen.this.drawRootScreen(canvas, mouseX, mouseY, rootPage);
+                }
+
+                @Override
+                public void drawBezel(Canvas canvas, UiLayout layout) {
+                    AtomChatScreen.this.drawBezel(canvas, layout);
+                }
+
+                @Override
+                public UiLayout rootLayout() {
+                    return AtomChatScreen.this.rootLayout();
+                }
+
+                @Override
+                public UiLayout detailLayout() {
+                    return AtomChatScreen.this.detailLayout();
+                }
+
+                @Override
+                public ShellHeader.HeaderAction headerActionFor(NavPage page) {
+                    return AtomChatScreen.this.headerActionFor(page);
+                }
+            },
+            director, composer, headerChrome, primitives, contextMenu, contextActions,
+            profileWiring, settingsDetailPage);
     private UiLayout.Rect filterButton() {
         UiLayout.Rect back = headerChrome.backButton();
         return new UiLayout.Rect(back.x() + back.w() + UiTokens.EDGE_CONTROL_INSET, back.y(), back.w(), back.h());
@@ -2190,354 +2247,27 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         // One unified shell header is drawn before page content on every page.
         // Root pages add their body and the bottom tab bar; pushed pages run
         // through the navigation machinery below.
-        if (topPage().isRoot()) {
-            drawRootScreen(canvas, mouseX, mouseY, topPage());
-            contextMenu.draw(canvas, toVirtualX(mouseX), toVirtualY(mouseY));
-            drawBezel(canvas, layout);
-            return;
-        }
-
+        // The pointer is mapped here rather than inside the composite: the
+        // settled path below needs the same two values anyway.
         float vmx = toVirtualX(mouseX);
         float vmy = toVirtualY(mouseY);
-        boolean navRunning = director.pageNavActive();
-        // Open save-point for the moving page during a nav: the zoom layer's
-        // paint (restore + close) or the slide save (restore only). The
-        // settings/profile branches close it before their early returns; the
-        // chat page closes it after the shared tail below.
-        Paint navMovingLayer = null;
-        boolean navMovingSlide = false;
-        // Set inside the nav branch when the moving side is the zoom's
-        // invisible phase; the chat fall-through below then skips its draws
-        // (drawing without the layer would composite onto the visible side).
-        boolean navMovingHidden = false;
-        if (navRunning) {
-            if (director.pageNavZoom()) {
-                director.stepZoomNav(frameDt);
-            } else {
-                director.stepSlideNav(frameDt);
-            }
-            if (!director.pageNavActive()) {
-                director.finishPageNav();
-                if (topPage().isRoot()) {
-                    drawRootScreen(canvas, mouseX, mouseY, topPage());
-                    drawBezel(canvas, layout);
-                    return;
-                }
-                // Push finished (or a detail-to-detail settle): the current
-                // detail page is now the settled top page.
-                navRunning = false;
-            } else if (director.pageNavFrom() != null && director.pageNavTo() != null
-                    && !director.pageNavFrom().isRoot() && !director.pageNavTo().isRoot()) {
-                // Detail-to-detail (public <-> private, chat <-> profile)
-                // full-width push/pop. Same style rule as root<->detail: SLIDE
-                // translates two whole pages, ZOOM runs the shared serial
-                // fade+scale. Each side is drawn from its own page view — the
-                // hidden EditBox is shared, so nothing may re-read topPage()
-                // state while the other page is composited — and no chrome is
-                // repainted fixed outside the moving layer: the composer deck
-                // belongs to its page and travels with it.
-                boolean popping = director.pageNavPopPending();
-                NavPage fromPage = director.pageNavFrom();
-                NavPage toPage = director.pageNavTo();
-                float travel = layout.list.w();
-                float progress = director.navSlideProgress();
-                // Both whole pages ride one pair of offsets, assigned by role
-                // and not by page kind: the page on top of the stack during the
-                // nav — the destination on a push, the page being left on a pop
-                // — uses the shared director.pageNavDx(travel) expression the
-                // root<->detail slide rides, and the other side its mirror.
-                float slideDx = director.pageNavDx(travel);
-                float fromDx = popping ? slideDx : -travel * progress;
-                float toDx = popping ? -travel * (1.0F - progress) : slideDx;
-                suppressHeader = true;
-                // Per-page render state: draft, read-only hint, reply bar and
-                // scroll come from the page they are drawn for. A page with no
-                // composer (settings sub-page, profile detail) has no view and
-                // is drawn by its own body method.
-                ChatPageView fromView = chatPageViewFor(fromPage);
-                ChatPageView toView = chatPageViewFor(toPage);
-                if (fromView != null || toView != null) {
-                    // Grow the bar before the list is measured, and grow it for
-                    // whichever side needs the taller composer: the composer is
-                    // part of the moving page now, so the shared layout has to
-                    // be final — and tall enough for both pages — before either
-                    // side paints.
-                    float width = layout.inputTextMaxWidth();
-                    layout = composer.updateLayout(layout, composer.text(),
-                            Math.max(inputExtraFor(fromView, width), inputExtraFor(toView, width)));
-                }
-                UiLayout.Rect panelRect = layout.rect();
-                if (director.pageNavZoom()) {
-                    // ZOOM: one whole side per phase, on the shared serial clock
-                    // — the same serial zoom channels the
-                    // root<->detail push rides, so the setting means the same
-                    // motion on every pair. EXIT drains the page being left
-                    // (alpha 1 -> 0 at scale 1.0 -> 0.9), ENTER settles the
-                    // arriving one (0 -> 1 at 1.1 -> 1.0). The invisible phase
-                    // is skipped outright, so the halves never double-expose,
-                    // and a settled alpha+scale skips the layer (pure overdraw,
-                    // the state decorative-motion-off lands in on frame one).
-                    // EXIT paints the leaving page whole and ENTER the arriving
-                    // one whole — never a bare message list with the chrome of
-                    // the other side left standing.
-                    boolean exiting = director.zoomExiting();
-                    NavPage visiblePage = exiting ? fromPage : toPage;
-                    ChatPageView visibleView = exiting ? fromView : toView;
-                    float alpha = exiting ? director.navExitAlpha() : director.navEnterAlpha();
-                    float scale = exiting ? 0.9F + alpha * 0.1F : 1.1F - alpha * 0.1F;
-                    Paint layer = null;
-                    canvas.save();
-                    if (!PageTransitionDirector.navLayerSkippable(alpha, scale)) {
-                        layer = new Paint().setAlphaf(alpha);
-                        canvas.saveLayer(Rect.makeXYWH(panelRect.x(), panelRect.y(),
-                                panelRect.w(), panelRect.h()), layer);
-                    }
-                    // Same rounded panel clip and centre scale as the
-                    // root<->detail zoom: the moving body follows the bezel
-                    // corner radius instead of biting it with square edges.
-                    SkiaDraw.clip(canvas, panelRect.x(), panelRect.y(), panelRect.w(), panelRect.h(),
-                            UiTokens.panelRadius());
-                    PageTransitionDirector.applyNavScale(canvas, panelRect, scale);
-                    if (visibleView != null) {
-                        drawChatPageBody(canvas, layout, mouseX, mouseY, visibleView);
-                    } else if (visiblePage.page() == AppPage.PROFILE_DETAIL) {
-                        drawProfileDetail(canvas, mouseX, mouseY);
-                    } else if (visiblePage.page() == AppPage.SETTINGS_SECTION) {
-                        // The pages without a composer draw their own body.
-                        // Leaving this side blank would composite one page
-                        // against nothing for the whole transition.
-                        drawSettingsSection(canvas, mouseX, mouseY, visiblePage.section());
-                    }
-                    if (layer != null) {
-                        canvas.restore();
-                        layer.close();
-                    }
-                    canvas.restore();
-                } else {
-                    // SLIDE: both whole pages travel as one piece each — the
-                    // messages, reply bar, composer, scrollbar and jump-to-latest
-                    // of a chat page go together with it, so the composer never
-                    // sits still while its conversation slides past (and the
-                    // incoming one no longer pops in).
-                    canvas.save();
-                    SkiaDraw.clip(canvas, panelRect.x(), panelRect.y(), panelRect.w(), panelRect.h(),
-                            UiTokens.panelRadius());
-                    canvas.translate(fromDx, 0.0F);
-                    if (fromView != null) {
-                        drawChatPageBody(canvas, layout, mouseX, mouseY, fromView);
-                    } else if (fromPage.page() == AppPage.PROFILE_DETAIL) {
-                        drawProfileDetail(canvas, mouseX, mouseY);
-                    } else if (fromPage.page() == AppPage.SETTINGS_SECTION) {
-                        drawSettingsSection(canvas, mouseX, mouseY, fromPage.section());
-                    }
-                    canvas.restore();
-
-                    canvas.save();
-                    SkiaDraw.clip(canvas, panelRect.x(), panelRect.y(), panelRect.w(), panelRect.h(),
-                            UiTokens.panelRadius());
-                    canvas.translate(toDx, 0.0F);
-                    if (toView != null) {
-                        drawChatPageBody(canvas, layout, mouseX, mouseY, toView);
-                    } else if (toPage.page() == AppPage.PROFILE_DETAIL) {
-                        drawProfileDetail(canvas, mouseX, mouseY);
-                    } else if (toPage.page() == AppPage.SETTINGS_SECTION) {
-                        drawSettingsSection(canvas, mouseX, mouseY, toPage.section());
-                    }
-                    canvas.restore();
-                }
-                suppressHeader = false;
-                ShellHeader.render(canvas, layout.header, headerChrome.shellTitleFor(toPage), true,
-                        headerChrome.backButton(), headerChrome.backButtonHover(), textPrimary(),
-                        toPage.page() == AppPage.PRIVATE_CHAT
-                                ? contextActions.isOnlinePlayer(toPage.target()) : null,
-                        headerActionFor(toPage));
-                drawBezel(canvas, layout);
-                return;
-            } else {
-                // Full-width push/pop: root<->detail transitions. The header is
-                // drawn separately as a fixed "status bar" after both layers.
-                suppressHeader = true;
-                NavPage navRoot = director.pageNavTo().isRoot() ? director.pageNavTo() : director.pageNavFrom();
-                NavPage moving = director.pageNavTo().isRoot() ? director.pageNavFrom() : director.pageNavTo();
-                float travel = layout.rect().w();
-                float progress = director.navSlideProgress();
-                boolean pushing = !director.pageNavTo().isRoot();
-                // One eased clock, two paired layers. ZOOM gives the change
-                // depth: the moving page grows 0.94 -> 1 while fading in while
-                // the page underneath sinks 1 -> 0.96 and dims; a pop runs the
-                // same channels in reverse so the return matches its push (the
-                // old code slid every pop, whatever the style). SLIDE keeps
-                // the horizontal push. The fixed chrome (header, bezel) never
-                // joins the transforms.
-                boolean zoom = director.pageNavZoom();
-                // Melodify's serial zoom: while EXIT runs only the leaving
-                // page is composited (shrinking 1.0 -> 0.9 as it fades);
-                // while ENTER runs only the arriving page (settling
-                // 1.1 -> 1.0 as it fades in). The invisible side gets alpha
-                // 0 and is skipped below, so the phases never stack into a
-                // double-exposure. Slides keep the paired translation.
-                float movingAlpha;
-                float movingScale;
-                float rootAlpha;
-                float rootScale;
-                if (zoom) {
-                    if (director.zoomExiting()) {
-                        float a = director.navExitAlpha();
-                        float s = 0.9F + a * 0.1F;
-                        if (pushing) {
-                            rootAlpha = a;
-                            rootScale = s;
-                            movingAlpha = 0.0F;
-                            movingScale = 1.0F;
-                        } else {
-                            movingAlpha = a;
-                            movingScale = s;
-                            rootAlpha = 0.0F;
-                            rootScale = 1.0F;
-                        }
-                    } else {
-                        float a = director.navEnterAlpha();
-                        float s = 1.1F - a * 0.1F;
-                        if (pushing) {
-                            movingAlpha = a;
-                            movingScale = s;
-                            rootAlpha = 0.0F;
-                            rootScale = 1.0F;
-                        } else {
-                            rootAlpha = a;
-                            rootScale = s;
-                            movingAlpha = 0.0F;
-                            movingScale = 1.0F;
-                        }
-                    }
-                } else {
-                    // The slide's alpha/scale channels are unused (it
-                    // translates); keeping the assignment local to the else
-                    // would leave them unassigned for the branch above.
-                    movingAlpha = pushing ? progress : 1.0F - progress;
-                    movingScale = pushing ? 0.94F + 0.06F * progress : 1.0F - 0.06F * progress;
-                    rootAlpha = pushing ? 1.0F - 0.5F * progress : 0.5F + 0.5F * progress;
-                    rootScale = pushing ? 1.0F - 0.04F * progress : 0.96F + 0.04F * progress;
-                }
-                float rootDx = pushing ? -travel * progress : -travel * (1.0F - progress);
-                UiLayout.Rect panelRect = layout.rect();
-                // Bottom layer: on a zoom it sinks and dims inside its own
-                // saveLayer (the layer bounds double as the panel clip); on a
-                // slide it just translates. save and saveLayer each push their
-                // own entry, so a zoom pairs two restores below; a skipped
-                // layer or a slide leaves just the plain save to pop. During
-                // the zoom phase where the root is the invisible side, both
-                // the layer and the draw are skipped.
-                boolean rootVisible = !zoom || rootAlpha > 0.001F;
-                canvas.save();
-                Paint rootLayer = null;
-                if (zoom) {
-                    if (rootVisible && !PageTransitionDirector.navLayerSkippable(rootAlpha, rootScale)) {
-                        rootLayer = new Paint().setAlphaf(rootAlpha);
-                        canvas.saveLayer(Rect.makeXYWH(panelRect.x(), panelRect.y(),
-                                panelRect.w(), panelRect.h()), rootLayer);
-                        // The layer bounds clip square, so round the layer's
-                        // content to the panel radius right away — the scaled
-                        // page must not paint into the bezel's corners.
-                        SkiaDraw.clip(canvas, panelRect.x(), panelRect.y(), panelRect.w(), panelRect.h(),
-                                UiTokens.panelRadius());
-                        PageTransitionDirector.applyNavScale(canvas, panelRect, rootScale);
-                    }
-                } else {
-                    SkiaDraw.clip(canvas, panelRect.x(), panelRect.y(), panelRect.w(), panelRect.h(),
-                            UiTokens.panelRadius());
-                    canvas.translate(rootDx, 0.0F);
-                }
-                if (rootVisible) {
-                    drawRootScreen(canvas, mouseX, mouseY, navRoot.page());
-                }
-                if (rootLayer != null) {
-                    // The zoom's saveLayer sits on top of the plain save; pop
-                    // it first so each entry pairs with its own restore.
-                    canvas.restore();
-                }
-                canvas.restore();
-                if (rootLayer != null) {
-                    rootLayer.close();
-                }
-
-                // Moving layer: on a zoom it fades+scales inside a saveLayer;
-                // on a slide it translates under a plain save. Exactly one
-                // save-point is opened here — the settings/profile branches
-                // close it before returning, the chat page falls through and
-                // closes it after the shared tail below. While the moving
-                // side is the zoom's invisible phase, no layer opens and the
-                // draws below are skipped (drawing without the layer would
-                // composite straight onto the visible side).
-                boolean movingVisible = !zoom || movingAlpha > 0.001F;
-                navMovingHidden = zoom && !movingVisible;
-                if (zoom) {
-                    if (movingVisible && !PageTransitionDirector.navLayerSkippable(movingAlpha, movingScale)) {
-                        navMovingLayer = new Paint().setAlphaf(movingAlpha);
-                        canvas.saveLayer(Rect.makeXYWH(panelRect.x(), panelRect.y(),
-                                panelRect.w(), panelRect.h()), navMovingLayer);
-                        // Same rounded layer clip as the root side above.
-                        SkiaDraw.clip(canvas, panelRect.x(), panelRect.y(), panelRect.w(), panelRect.h(),
-                                UiTokens.panelRadius());
-                        PageTransitionDirector.applyNavScale(canvas, panelRect, movingScale);
-                    }
-                } else {
-                    canvas.save();
-                    SkiaDraw.clip(canvas, panelRect.x(), panelRect.y(), panelRect.w(), panelRect.h(),
-                            UiTokens.panelRadius());
-                    canvas.translate(director.pageNavDx(travel), 0.0F);
-                    navMovingSlide = true;
-                }
-                // A settings sub-page has no composer tail to draw into the
-                // open layer, so it renders and closes its own layer here. The
-                // chat page leaves the layer open for the shared tail below.
-                if (moving.page() == AppPage.SETTINGS_SECTION) {
-                    if (movingVisible) {
-                        drawSettingsSection(canvas, mouseX, mouseY, moving.section());
-                    }
-                    if (navMovingLayer != null) {
-                        canvas.restore();
-                        navMovingLayer.close();
-                    } else if (navMovingSlide) {
-                        // The slide branch opened a save; a skipped zoom layer
-                        // opened nothing, so it must not pop past it.
-                        canvas.restore();
-                    }
-                    suppressHeader = false;
-                    // The header always names the destination, never the page
-                    // that is sliding away — a pop flips the title on frame one
-                    // too, which is what "click then title" expects.
-                    headerChrome.drawPushedHeader(canvas, vmx, vmy, pushing ? moving : navRoot);
-                    drawBezel(canvas, detailLayout());
-                    return;
-                }
-                if (moving.page() == AppPage.PROFILE_DETAIL) {
-                    if (movingVisible) {
-                        drawProfileDetail(canvas, mouseX, mouseY);
-                    }
-                    if (navMovingLayer != null) {
-                        canvas.restore();
-                        navMovingLayer.close();
-                    } else if (navMovingSlide) {
-                        // Same pairing as the settings branch above.
-                        canvas.restore();
-                    }
-                    suppressHeader = false;
-                    headerChrome.drawPushedHeader(canvas, vmx, vmy, pushing ? moving : navRoot);
-                    drawBezel(canvas, detailLayout());
-                    return;
-                }
-            }
+        if (composite.drawRootFrame(canvas, layout, mouseX, mouseY, vmx, vmy)) {
+            return;
+        }
+        PageTransitionComposite.NavFrame navFrame = composite.begin(canvas, layout, mouseX, mouseY,
+                vmx, vmy, frameDt);
+        if (navFrame.finished()) {
+            return;
         }
         // A settled settings sub-page: header + list, nothing else.
-        if (!navRunning && topPage() == AppPage.SETTINGS_SECTION) {
+        if (!navFrame.running() && topPage() == AppPage.SETTINGS_SECTION) {
             drawSettingsSection(canvas, mouseX, mouseY, topNav().section());
             headerChrome.drawPushedHeader(canvas, vmx, vmy, topNav());
             drawBezel(canvas, detailLayout());
             return;
         }
         // A settled profile detail: same chrome, profile body.
-        if (!navRunning && topPage() == AppPage.PROFILE_DETAIL) {
+        if (!navFrame.running() && topPage() == AppPage.PROFILE_DETAIL) {
             drawProfileDetail(canvas, mouseX, mouseY);
             headerChrome.drawPushedHeader(canvas, vmx, vmy, topNav());
             drawBezel(canvas, detailLayout());
@@ -2559,7 +2289,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         // exactly the height the bar gains.
         layout = composer.updateLayout(layout);
 
-        if (!navMovingHidden) {
+        if (!navFrame.movingHidden()) {
             drawChatPageBody(canvas, layout, mouseX, mouseY, chatPageViewFor(topNav()));
 
             emojiPanel.render(canvas, layout, toVirtualX(mouseX), toVirtualY(mouseY), frameDt);
@@ -2569,26 +2299,8 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
             imagePreview.render(canvas, layout.rect(), toVirtualX(mouseX), toVirtualY(mouseY));
         }
 
-        if (navRunning) {
-            if (navMovingLayer != null) {
-                canvas.restore();
-                navMovingLayer.close();
-            } else if (navMovingSlide) {
-                canvas.restore();
-            }
-            suppressHeader = false;
-            // Fixed status-bar header: it never slides with the page bodies.
-            if (!director.pageNavTo().isRoot()) {
-                ShellHeader.render(canvas, layout.header, headerChrome.shellTitleFor(director.pageNavTo()), true,
-                        headerChrome.backButton(), headerChrome.backButtonHover(), textPrimary(),
-                        director.pageNavTo().page() == AppPage.PRIVATE_CHAT
-                                ? contextActions.isOnlinePlayer(director.pageNavTo().target()) : null,
-                        headerActionFor(director.pageNavTo()));
-            } else {
-                UiLayout root = rootLayout();
-                ShellHeader.render(canvas, root.header, headerChrome.shellTitleFor(director.pageNavTo()), false, null, 0.0F,
-                        textPrimary());
-            }
+        if (navFrame.running()) {
+            composite.end(canvas, layout, navFrame);
         }
 
         // Bezel ring last: nothing at the panel edge can sit on top of it.
@@ -2604,18 +2316,13 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
      * top-page helpers — which is exactly how the arriving page's draft used to
      * be painted onto the leaving page.
      */
-    private record ChatPageView(NavPage page, String draft, boolean readOnly, String readOnlyHint,
-                               boolean partnerTyping, ChatMessage reply, ScrollController scroll,
-                               boolean ownsField) {
-    }
-
     /** Render state of a chat page, or null for a page that has no composer. */
-    private ChatPageView chatPageViewFor(NavPage page) {
+    private PageTransitionComposite.ChatPageView chatPageViewFor(NavPage page) {
         if (page == null || (page.page() != AppPage.WORLD_CHAT && page.page() != AppPage.PRIVATE_CHAT)) {
             return null;
         }
         boolean readOnly = isPrivateReadOnlyFor(page);
-        return new ChatPageView(page, draftForNav(page), readOnly,
+        return new PageTransitionComposite.ChatPageView(page, draftForNav(page), readOnly,
                 readOnly ? readOnlyHintForNav(page) : "",
                 partnerTypingFor(page), replyForNav(page), scrollForNav(page),
                 ownsInputField(page));
@@ -2629,7 +2336,8 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
      * caller: the header is a fixed status bar during pushes, and the overlays
      * belong to the screen, not the sliding page.
      */
-    private void drawChatPageBody(Canvas canvas, UiLayout layout, int mouseX, int mouseY, ChatPageView view) {
+    private void drawChatPageBody(Canvas canvas, UiLayout layout, int mouseX, int mouseY,
+                                  PageTransitionComposite.ChatPageView view) {
         if (view == null) {
             return;
         }
@@ -3156,7 +2864,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
      * drawn through the open transform (zoom/slide) but hit tests run on the
      * settled virtual layout, so a click mid-animation would land somewhere
      * other than where it looks — swallowed whole until the panel settles,
-     * same rule as the page nav's navMovingHidden. The gate owns that rule;
+     * same rule as the page nav's hidden-side skip. The gate owns that rule;
      * this answers it.
      */
 
@@ -3404,13 +3112,6 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
      * @return a layout rebuilt with the updated height.
      */
     /** Extra input-bar height a page's own draft needs (read-only pages need none). */
-    private float inputExtraFor(ChatPageView view, float maxWidth) {
-        if (view == null || view.readOnly()) {
-            return 0.0F;
-        }
-        return composer.extraFor(view.draft(), view.readOnly(), maxWidth);
-    }
-
     private float toVirtualX(double guiX) {
         return ScreenMetrics.toVirtualX(client.getWindow(), guiX);
     }

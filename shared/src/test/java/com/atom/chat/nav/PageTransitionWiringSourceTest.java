@@ -67,21 +67,41 @@ class PageTransitionWiringSourceTest {
             "rootTabProgress", "rootTabFrom", "rootTabTo",
             "NAV_ZOOM_EXIT", "NAV_ZOOM_ENTER", "ROOT_ZOOM_EXIT", "ROOT_ZOOM_ENTER", "rootTabAnim");
 
-    /** Calls the screen must make through the director (never unprefixed). */
+    /**
+     * Calls the screen must still make through the director (never unprefixed).
+     *
+     * <p>This list used to carry every read point in the transition code. Block
+     * D24b-2a moved the composite out of the screen, so the reads it owned went
+     * with it — and they were moved to {@link #COMPOSITE_READS} rather than
+     * dropped: the same fact, asserted at the code's new home.
+     */
     private static final List<String> SHELL_READS = List.of(
-            "director.pageNavActive(", "director.stepZoomNav(", "director.stepSlideNav(",
-            "director.finishPageNav(", "director.pageNavDx(", "director.stepRootNav(",
-            "director.rootIndex(", "director.rootPageForIndex(", "director.zoomExiting(",
-            "director.rootZoomExiting(", "director.navSlideProgress(", "director.pageNavFrom(",
-            "director.pageNavTo(", "director.pageNavPopPending(", "director.pageNavZoom(",
-            "director.navExitAlpha(", "director.navEnterAlpha(", "director.rootTabZoom(",
-            "director.rootTabFrom(", "director.rootTabTo(", "director.rootZoomExitAlpha(",
-            "director.rootZoomEnterAlpha(", "director.rootTabProgress(",
+            "director.stepRootNav(", "director.rootIndex(", "director.rootPageForIndex(",
+            "director.rootZoomExiting(", "director.pageNavFrom(", "director.pageNavTo(",
+            "director.rootTabZoom(", "director.rootTabFrom(", "director.rootTabTo(",
+            "director.rootZoomExitAlpha(", "director.rootZoomEnterAlpha(", "director.rootTabProgress(",
             "director.rootTransitionActive(", "director.clearRootTransition(",
             "director.startPageNav(", "director.abandonPageNav(", "director.pinTabCapsule(",
             "director.markTabSpan(", "director.applyTabMotion(", "director.resetTabCapsule(",
-            "director.navStyleIsZoom(",
-            "PageTransitionDirector.navLayerSkippable(", "PageTransitionDirector.applyNavScale(");
+            "director.navStyleIsZoom(");
+
+    /**
+     * The read points that left the screen with block D24b-2a: the page-nav clock
+     * and both zoom channels are consumed by {@code PageTransitionComposite} now,
+     * before any page is drawn. Asserted on the composite's source, because the
+     * screen no longer contains them at all.
+     */
+    private static final List<String> COMPOSITE_READS = List.of(
+            "director.pageNavActive(", "director.stepZoomNav(", "director.stepSlideNav(",
+            "director.finishPageNav(", "director.pageNavDx(", "director.zoomExiting(",
+            "director.navSlideProgress(", "director.pageNavFrom(", "director.pageNavTo(",
+            "director.pageNavPopPending(", "director.pageNavZoom(", "director.navExitAlpha(",
+            "director.navEnterAlpha(", "PageTransitionDirector.navLayerSkippable(",
+            "PageTransitionDirector.applyNavScale(");
+
+    /** The composite the transition reads moved into. */
+    private static final String COMPOSITE =
+            "shared/src/main/java/com/atom/chat/nav/PageTransitionComposite.java";
 
     /** The director's own port: three steps, each of which must still do its work. */
     private static final Map<String, String> PORT_WORK = new LinkedHashMap<>();
@@ -227,7 +247,10 @@ class PageTransitionWiringSourceTest {
         }
     }
 
-    /** Every read point in the screen's own code reaches the director. */
+    /**
+     * Every read point reaches the director: the ones the screen still owns in the
+     * screen, the ones block D24b-2a moved into the composite in the composite.
+     */
     @Test
     void everyReadPointGoesThroughTheDirector() throws IOException {
         for (String screen : SCREENS) {
@@ -247,6 +270,25 @@ class PageTransitionWiringSourceTest {
                 assertFalse(bare.matcher(src).find(),
                         screen + ": " + name + " is called without the PageTransitionDirector prefix");
             }
+        }
+        // The page-nav reads left the screen with the composite (block D24b-2a): the
+        // same fact, asserted where the code is now. Dropping them instead of moving
+        // them is how a guard goes quiet.
+        String composite = source(COMPOSITE);
+        for (String call : COMPOSITE_READS) {
+            assertTrue(composite.contains(call),
+                    COMPOSITE + ": the composite must reach the director with " + call + "...");
+        }
+        for (String name : List.of("pageNavActive", "stepZoomNav", "stepSlideNav", "finishPageNav",
+                "pageNavDx", "pageNavFrom", "pageNavTo", "zoomExiting")) {
+            Pattern bare = Pattern.compile("(?<![\\w.])" + name + "\\(");
+            assertFalse(bare.matcher(composite).find(),
+                    COMPOSITE + ": " + name + "( is called without the director prefix");
+        }
+        for (String name : List.of("navLayerSkippable(", "applyNavScale(")) {
+            Pattern bare = Pattern.compile("(?<![\\w.])" + Pattern.quote(name));
+            assertFalse(bare.matcher(composite).find(),
+                    COMPOSITE + ": " + name + " is called without the PageTransitionDirector prefix");
         }
     }
 
