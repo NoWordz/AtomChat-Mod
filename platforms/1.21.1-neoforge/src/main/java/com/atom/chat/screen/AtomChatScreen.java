@@ -62,6 +62,7 @@ import com.atom.chat.settings.SettingsSection;
 import com.atom.chat.settings.SettingsSectionPage;
 import com.atom.chat.ui.Animations;
 import com.atom.chat.ui.BottomTabBar;
+import com.atom.chat.ui.ContextMenuController;
 import com.atom.chat.ui.ScrollController;
 import com.atom.chat.ui.ScrollSyncService;
 import com.atom.chat.ui.ShellHeader;
@@ -69,7 +70,6 @@ import com.atom.chat.ui.UiLayout;
 import com.atom.chat.ui.EmojiPanel;
 import com.atom.chat.ui.EmojiWiring;
 import com.atom.chat.ui.PanelBackground;
-import com.atom.chat.ui.MenuPopup;
 import com.atom.chat.ui.PressScale;
 import com.atom.chat.ui.QuickPhrasePanel;
 import com.atom.chat.ui.QuickPhraseWiring;
@@ -113,9 +113,6 @@ import java.util.Set;
 import java.util.UUID;
 
 public final class AtomChatScreen extends ChatScreen implements PageHost, NotificationJumpService.NavPort {
-    /** Which context menu is open: normal message bubble actions or player-avatar actions. */
-    private enum ContextMenuMode { BUBBLE, AVATAR, PLAYER_CARD }
-
     /** How this screen was opened: from the vanilla chat box or from the AtomChat key. */
     public enum AtomChatOpenMode { DIRECT_WORLD, RESTORE }
 
@@ -942,18 +939,52 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
             currentScroll().stickToBottom();
         }
     });
-    private ChatMessage contextMessage;
-    private PlayerRef contextPlayer;
-    private float contextX;
-    private float contextY;
-    private ContextMenuMode contextMenuMode = ContextMenuMode.BUBBLE;
 
-    // Per-cell hover fade for the bubble context menu rows.
-    private final float[] contextMenuHover = new float[4];
-    /** Per-row menu bounce, indexed like {@link #contextMenuHover}. */
-    private final PressScale[] contextMenuScale = {PressScale.bounce(), PressScale.bounce(),
-            PressScale.bounce(), PressScale.bounce()};
+    /**
+     * The right-click menu (D19a): its three modes, its animation state and its
+     * drawing. The whole geometry — row count included — lives in
+     * {@link ContextMenuController}, so this screen's two hit tests and the two
+     * draw sites below all measure the same box; {@code M} is this screen's row
+     * identity, carried so the "same row again closes" toggle still compares the
+     * message itself. The menu's target crosses as a neutral subject, because the
+     * message type's chat component is spelled differently per mapping.
+     */
+    private final ContextMenuController<ChatMessage> contextMenu =
+            new ContextMenuController<>(new ContextMenuController.Host() {
+        @Override
+        public String label(String key) {
+            return tr(key);
+        }
 
+        @Override
+        public boolean isPlayerOnline(PlayerRef player) {
+            return isOnlinePlayer(player);
+        }
+
+        @Override
+        public UiLayout.Rect panelRect() {
+            return layout().rect();
+        }
+
+        @Override
+        public float frameDt() {
+            return frameDt;
+        }
+
+        @Override
+        public void drawIcon(Canvas canvas, io.github.humbleui.skija.Path icon, float cx, float cy,
+                             float size, int color) {
+            drawIconCentered(canvas, icon, cx, cy, size, color);
+        }
+    });
+
+    /** The menu's neutral view of a message row: sender, image row, identity. */
+    private static ContextMenuController.Subject<ChatMessage> menuSubjectOf(ChatMessage msg) {
+        return msg == null ? null
+                : ContextMenuController.Subject.of(
+                        PlayerRef.of(msg.getSenderUuid(), msg.getProfileName()),
+                        Cicodes.extractImageUrl(msg.getRawText()) != null, msg);
+    }
     // Root tab transition. The bottom bar owns the shared Animator; the screen
     // keeps the from/to slot indexes and reuses the same Animator for the root
     // page push so the capsule and content always move in lockstep.
@@ -1049,10 +1080,6 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
     private boolean blurDrawnThisFrame;
 
     // Per-frame animation state (smooth hover/popup transitions)
-    private float contextAnim;
-    private ChatMessage lastContextMessage;
-    private PlayerRef lastContextPlayer;
-    private ContextMenuMode lastContextMenuMode = ContextMenuMode.BUBBLE;
     private long frameDt = 16;
     private long lastFrameMs = System.currentTimeMillis();
 
@@ -1681,14 +1708,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
     private void resetTransientWorldUi() {
         scrollSync.worldScroll().reset();
         resetHistoryWindows();
-        closeContextMenu();
-        lastContextMessage = null;
-        lastContextPlayer = null;
-        lastContextMenuMode = ContextMenuMode.BUBBLE;
-        contextAnim = 0.0F;
-        for (int i = 0; i < contextMenuHover.length; i++) {
-            contextMenuHover[i] = 0.0F;
-        }
+        contextMenu.resetTransient();
         emojiPanel.resetTransient();
         endPhraseEdit(false);
         quickPhrasePanel.resetTransient();
@@ -2253,7 +2273,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         // through the navigation machinery below.
         if (topPage().isRoot()) {
             drawRootScreen(canvas, mouseX, mouseY, topPage());
-            drawContextMenu(canvas, toVirtualX(mouseX), toVirtualY(mouseY));
+            contextMenu.draw(canvas, toVirtualX(mouseX), toVirtualY(mouseY));
             drawBezel(canvas, layout);
             return;
         }
@@ -2625,7 +2645,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
 
             emojiPanel.render(canvas, layout, toVirtualX(mouseX), toVirtualY(mouseY), frameDt);
             quickPhrasePanel.render(canvas, layout, toVirtualX(mouseX), toVirtualY(mouseY), frameDt);
-            drawContextMenu(canvas, toVirtualX(mouseX), toVirtualY(mouseY));
+            contextMenu.draw(canvas, toVirtualX(mouseX), toVirtualY(mouseY));
             // Last inside the panel: a modal over the page it was opened from.
             imagePreview.render(canvas, layout.rect(), toVirtualX(mouseX), toVirtualY(mouseY));
         }
@@ -3323,198 +3343,6 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         emojiWiring.pickEmoteFile();
     }
 
-    /**
-     * Row count for a context menu. Drawing and every click hit-test go through
-     * this one helper so their geometry cannot drift apart: the player-card menu
-     * grew a third row (block/unblock) while the root-page click test stayed at
-     * two, which made "取消屏蔽" unclickable.
-     */
-    private static int contextMenuRows(ContextMenuMode mode, boolean imageMessage) {
-        if (mode == ContextMenuMode.AVATAR) {
-            return 4;
-        }
-        if (mode == ContextMenuMode.PLAYER_CARD) {
-            return 3;
-        }
-        return imageMessage ? 3 : 2;
-    }
-
-    private void drawContextMenu(Canvas canvas, float vmx, float vmy) {
-        boolean hasCurrent = contextMessage != null || contextPlayer != null;
-        boolean hasLast = lastContextMessage != null || lastContextPlayer != null;
-        if (!hasCurrent && !hasLast) {
-            contextAnim = 0.0F;
-            return;
-        }
-        float target = hasCurrent ? 1.0F : 0.0F;
-        contextAnim = UiMotion.approach(contextAnim, target, frameDt, Animations.ms(UiMotion.POPUP_MS));
-        if (contextAnim < 0.01F) {
-            if (!hasCurrent) {
-                lastContextMessage = null;
-                lastContextPlayer = null;
-                contextAnim = 0.0F;
-            }
-            return;
-        }
-        ContextMenuMode mode = hasCurrent ? contextMenuMode : lastContextMenuMode;
-        boolean avatarMenu = mode == ContextMenuMode.AVATAR;
-        boolean playerMenu = mode == ContextMenuMode.PLAYER_CARD;
-        boolean bubbleMenu = !avatarMenu && !playerMenu;
-        ChatMessage shown = contextMessage != null ? contextMessage : lastContextMessage;
-        boolean imageMessage = bubbleMenu && shown != null && Cicodes.extractImageUrl(shown.getRawText()) != null;
-        int rows = contextMenuRows(mode, imageMessage);
-        float rowH = UiTokens.MENU_H / 2.0F;
-        float menuH = rowH * rows;
-        float menuW = UiTokens.MENU_W;
-        float menuX = Math.min(contextX, panelX() + panelWidth() - menuW - s(8));
-        float menuY = Math.min(contextY, panelY() + panelHeight() - menuH - s(8));
-        for (int row = 0; row < rows; row++) {
-            float rowY = menuY + row * rowH;
-            boolean overRow = vmx >= menuX && vmx <= menuX + menuW
-                    && vmy >= rowY && vmy <= rowY + rowH;
-            contextMenuHover[row] = UiMotion.approach(contextMenuHover[row], overRow ? 1.0F : 0.0F, frameDt, UiMotion.HOVER_MS);
-            MenuPopup.updateRowBounce(contextMenuScale[row], overRow, frameDt, menuW);
-        }
-        canvas.save();
-        try (Paint layer = new Paint()) {
-            layer.setColor(Color.makeARGB((int) (255.0F * contextAnim), 0, 0, 0));
-            canvas.saveLayer(Rect.makeXYWH(menuX - s(20), menuY - s(20), menuW + s(40), menuH + s(40)), layer);
-            float sc = 0.94F + 0.06F * contextAnim;
-            canvas.translate(menuX + menuW / 2.0F, menuY);
-            canvas.scale(sc, sc);
-            canvas.translate(-(menuX + menuW / 2.0F), -menuY);
-            // The one right-click-menu language (MenuPopup owns the plate for
-            // every menu in the mod): fixed dark surface (35,39,47), radius
-            // and shadow tokens. Fixed polarity by design.
-            MenuPopup.drawSurface(canvas, menuX, menuY, menuW, menuH);
-            Font menuFont = FontManager.font(UiTokens.FONT_BUTTON);
-            for (int row = 0; row < rows; row++) {
-                float rowY = menuY + row * rowH;
-                float hov = contextMenuHover[row];
-                // One bounce per row, the shared menu language: wash, icon and
-                // label all travel with the row's own PressScale, centred on
-                // the row like the profile avatar menu's items.
-                MenuPopup.beginRowBounce(canvas, contextMenuScale[row], menuX + menuW / 2.0F, rowY + rowH / 2.0F);
-                try {
-                    MenuPopup.drawRowWash(canvas, menuX, rowY, menuW, rowH, hov);
-                    String label;
-                    io.github.humbleui.skija.Path icon;
-                    if (playerMenu) {
-                        label = playerCardContextLabel(row);
-                        icon = playerCardContextIcon(row);
-                    } else if (avatarMenu) {
-                        label = avatarContextLabel(row);
-                        icon = avatarContextIcon(row);
-                    } else {
-                        label = bubbleContextLabel(row, imageMessage);
-                        icon = bubbleContextIcon(row, imageMessage);
-                    }
-                    // Overlay surfaces keep the fixed overlay palette: they sit on
-                    // their own opaque dark cards and must not follow the
-                    // interface text colour setting.
-                    int textColor = Color.makeARGB(255, 255, 255, 255);
-                    if (playerMenu && row == 1 && !isOnlinePlayer(contextPlayer != null ? contextPlayer : lastContextPlayer)) {
-                        textColor = Color.makeARGB(110, 255, 255, 255);
-                    } else if (avatarMenu && row == 2) {
-                        ChatMessage avatarMsg = contextMessage != null ? contextMessage : lastContextMessage;
-                        if (avatarMsg != null) {
-                            PlayerRef avatarPlayer = PlayerRef.of(avatarMsg.getSenderUuid(), avatarMsg.getProfileName());
-                            if (avatarPlayer != null && !isOnlinePlayer(avatarPlayer)) {
-                                textColor = Color.makeARGB(110, 255, 255, 255);
-                            }
-                        }
-                    }
-                    drawIconCentered(canvas, icon, menuX + s(18), rowY + rowH / 2.0F, UiTokens.CONTEXT_ICON_SIZE, textColor);
-                    SkiaFontRenderer.drawText(canvas, menuFont, label, menuX + s(36),
-                            SkiaFontRenderer.centerBaselineY(menuFont, rowY + rowH / 2.0F), textColor);
-                } finally {
-                    MenuPopup.endRowBounce(canvas);
-                }
-            }
-            canvas.restore();
-        }
-        canvas.restore();
-    }
-
-    private static String bubbleContextLabel(int row, boolean imageMessage) {
-        if (!imageMessage) {
-            return switch (row) {
-                case 0 -> tr("atomchat.context.copy");
-                case 1 -> tr("atomchat.context.quote");
-                default -> tr("atomchat.context.save");
-            };
-        }
-        return switch (row) {
-            case 0 -> tr("atomchat.context.copy");
-            case 1 -> tr("atomchat.context.quote");
-            case 2 -> tr("atomchat.context.save");
-            default -> "";
-        };
-    }
-
-    private static io.github.humbleui.skija.Path bubbleContextIcon(int row, boolean imageMessage) {
-        if (!imageMessage) {
-            return switch (row) {
-                case 0 -> DrawPrimitives.ICON_COPY_PATH;
-                case 1 -> DrawPrimitives.ICON_QUOTE_PATH;
-                default -> DrawPrimitives.ICON_SAVE_PATH;
-            };
-        }
-        return switch (row) {
-            case 0 -> DrawPrimitives.ICON_COPY_PATH;
-            case 1 -> DrawPrimitives.ICON_QUOTE_PATH;
-            case 2 -> DrawPrimitives.ICON_SAVE_PATH;
-            default -> DrawPrimitives.ICON_SAVE_PATH;
-        };
-    }
-
-    private String avatarContextLabel(int row) {
-        ChatMessage target = contextMessage != null ? contextMessage : lastContextMessage;
-        if (row == 3 && target != null) {
-            PlayerRef p = PlayerRef.of(target.getSenderUuid(), target.getProfileName());
-            return BlockList.isBlocked(p) ? tr("atomchat.context.unblock") : tr("atomchat.context.block");
-        }
-        return switch (row) {
-            case 0 -> tr("atomchat.context.mention");
-            case 1 -> tr("atomchat.context.whisper");
-            case 2 -> tr("atomchat.context.tp");
-            default -> "";
-        };
-    }
-
-    private static io.github.humbleui.skija.Path avatarContextIcon(int row) {
-        return switch (row) {
-            case 0 -> DrawPrimitives.ICON_MENTION_PATH;
-            case 1 -> DrawPrimitives.ICON_WHISPER_PATH;
-            case 2 -> DrawPrimitives.ICON_TP_PATH;
-            case 3 -> DrawPrimitives.ICON_BLOCK_PATH;
-            default -> DrawPrimitives.ICON_MENTION_PATH;
-        };
-    }
-
-    private String playerCardContextLabel(int row) {
-        return switch (row) {
-            case 0 -> tr("atomchat.context.profile");
-            case 1 -> tr("atomchat.context.tp");
-            case 2 -> isBlockedContextPlayer() ? tr("atomchat.context.unblock") : tr("atomchat.context.block");
-            default -> "";
-        };
-    }
-
-    private static io.github.humbleui.skija.Path playerCardContextIcon(int row) {
-        return switch (row) {
-            case 0 -> com.atom.chat.ui.AppIcons.ICON_TAB_PROFILE_PATH;
-            case 1 -> DrawPrimitives.ICON_TP_PATH;
-            case 2 -> DrawPrimitives.ICON_BLOCK_PATH;
-            default -> DrawPrimitives.ICON_TP_PATH;
-        };
-    }
-
-    private boolean isBlockedContextPlayer() {
-        PlayerRef p = contextPlayer != null ? contextPlayer : lastContextPlayer;
-        return p != null && BlockList.isBlocked(p);
-    }
-
     private static boolean isOnlinePlayer(PlayerRef player) {
         if (player == null) {
             return false;
@@ -3532,24 +3360,6 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
             }
         }
         return false;
-    }
-
-    /**
-     * Hands the open menu over to lastContextMessage so it can play the closing
-     * animation instead of vanishing. Never recurse: it used to call itself,
-     * which left contextMessage set forever and blew the stack on the caller.
-     */
-    private void closeContextMenu() {
-        if (contextMessage != null) {
-            lastContextMessage = contextMessage;
-            lastContextMenuMode = contextMenuMode;
-            contextMessage = null;
-        }
-        if (contextPlayer != null) {
-            lastContextPlayer = contextPlayer;
-            lastContextMenuMode = contextMenuMode;
-            contextPlayer = null;
-        }
     }
 
     /** Avatar menus only make sense for another player with a real sender identity. */
@@ -3589,7 +3399,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
     }
 
     private void performPlayerCardAction(int row) {
-        PlayerRef player = contextPlayer != null ? contextPlayer : lastContextPlayer;
+        PlayerRef player = contextMenu.currentOrLastPlayer();
         if (player == null) {
             return;
         }
@@ -4298,25 +4108,17 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
             UiLayout pageLayout = listLayout();
             ScrollController pageScroll = listScroll();
             // Root-page player-card context menu gets priority over row clicks.
-            if (contextPlayer != null || lastContextPlayer != null) {
-                // Player-card menus are always the 3-row layout (profile / tp /
-                // block), so the hit test must use the same row count as the
-                // drawing. Two rows left "取消屏蔽" permanently unclickable.
-                int rows = contextMenuRows(ContextMenuMode.PLAYER_CARD, false);
-                float rowH = UiTokens.MENU_H / 2.0F;
-                float menuH = rowH * rows;
-                float menuW = UiTokens.MENU_W;
-                float menuX = Math.min(contextX, panelX() + panelWidth() - menuW - s(8));
-                float menuY = Math.min(contextY, panelY() + panelHeight() - menuH - s(8));
-                boolean inside = mx >= menuX && mx <= menuX + menuW
-                        && my >= menuY && my <= menuY + menuH;
-                if (inside && button == 0) {
-                    int row = (int) ((my - menuY) / rowH);
+            // The box (row count included) comes from the menu itself — the same
+            // source its drawing measures with: two rows here once left
+            // "取消屏蔽" permanently unclickable.
+            if (contextMenu.hasPlayerCardMenu()) {
+                int row = contextMenu.hitPlayerCardRow(mx, my);
+                if (row >= 0 && button == 0) {
                     performPlayerCardAction(row);
-                    closeContextMenu();
+                    contextMenu.close();
                     return true;
                 }
-                closeContextMenu();
+                contextMenu.close();
             }
             if (button == 0 && overScrollbarTrack(pageLayout, mx, my, pageScroll)) {
                 pageScroll.beginDrag(my);
@@ -4447,11 +4249,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
                             return true;
                         }
                         if (button == 1) {
-                            contextMenuMode = ContextMenuMode.PLAYER_CARD;
-                            contextPlayer = hit.row().player();
-                            contextX = mx;
-                            contextY = my;
-                            contextMessage = null;
+                            contextMenu.openPlayerCard(hit.row().player(), mx, my);
                             return true;
                         }
                     }
@@ -4675,39 +4473,29 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
 
             // Context menu click. Remember the target before dismissing so a
             // right-click on the same bubble/avatar toggles instead of reopening.
-            ChatMessage menuBefore = contextMessage;
-            ContextMenuMode menuBeforeMode = contextMenuMode;
-            if (contextMessage != null) {
-                float menuW = UiTokens.MENU_W;
-                boolean avatarMenu = contextMenuMode == ContextMenuMode.AVATAR;
-                boolean imageMessage = !avatarMenu && Cicodes.extractImageUrl(contextMessage.getRawText()) != null;
-                int rows = contextMenuRows(contextMenuMode, imageMessage);
-                float rowH = UiTokens.MENU_H / 2.0F;
-                float menuH = rowH * rows;
-                float menuX = Math.min(contextX, panelX + panelWidth() - menuW - s(8));
-                float menuY = Math.min(contextY, panelY + panelHeight() - menuH - s(8));
-                boolean inside = (float) mx >= menuX && (float) mx <= menuX + menuW
-                        && (float) my >= menuY && (float) my <= menuY + menuH;
-                if (inside && button == 0) {
-                    int row = (int) ((my - menuY) / rowH);
-                    if (avatarMenu) {
-                        performAvatarMenuAction(row, contextMessage);
+            ChatMessage menuBefore = contextMenu.currentRow();
+            boolean menuBeforeAvatar = contextMenu.isAvatarMode();
+            if (contextMenu.hasMessageMenu()) {
+                int row = contextMenu.hitRow((float) mx, (float) my);
+                if (row >= 0 && button == 0) {
+                    if (menuBeforeAvatar) {
+                        performAvatarMenuAction(row, menuBefore);
                     } else if (row == 0) {
-                        feedback("atomchat.feedback.copied", copyToClipboard(contextMessage.getContentText()));
+                        feedback("atomchat.feedback.copied", copyToClipboard(menuBefore.getContentText()));
                     } else if (row == 1) {
-                        replySlots.arm(contextMessage);
+                        replySlots.arm(menuBefore);
                         inputFocused = true;
                         setFocused(input);
                         input.setFocused(true);
                     } else {
-                        saveImage(contextMessage);
+                        saveImage(menuBefore);
                     }
-                    closeContextMenu();
+                    contextMenu.close();
                     return true;
                 }
                 // Any other click — including a right-click aimed at another bubble —
                 // dismisses first; the handlers below may then open a new menu.
-                closeContextMenu();
+                contextMenu.close();
             }
 
             // Jump-to-latest bubble sits above the message list and takes priority
@@ -4815,13 +4603,10 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
                         && my >= hit.avatarY() && my <= hit.avatarY() + hit.avatarSize()
                         && canOpenAvatarMenu(hit.message())) {
                     // Right-clicking the avatar the avatar menu is already on closes it.
-                    if (menuBefore == hit.message() && menuBeforeMode == ContextMenuMode.AVATAR) {
+                    if (menuBefore == hit.message() && menuBeforeAvatar) {
                         return true;
                     }
-                    contextMenuMode = ContextMenuMode.AVATAR;
-                    contextMessage = hit.message();
-                    contextX = mx;
-                    contextY = my;
+                    contextMenu.openAvatar(menuSubjectOf(hit.message()), mx, my);
                     return true;
                 }
                 if (button == 1 && !hit.message().isSystem()
@@ -4831,10 +4616,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
                     if (menuBefore == hit.message()) {
                         return true;
                     }
-                    contextMenuMode = ContextMenuMode.BUBBLE;
-                    contextMessage = hit.message();
-                    contextX = mx;
-                    contextY = my;
+                    contextMenu.openBubble(menuSubjectOf(hit.message()), mx, my);
                     return true;
                 }
                 if (button == 0) {
