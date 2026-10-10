@@ -66,6 +66,7 @@ import com.atom.chat.ui.ScrollSyncService;
 import com.atom.chat.ui.ShellHeader;
 import com.atom.chat.ui.UiLayout;
 import com.atom.chat.ui.EmojiPanel;
+import com.atom.chat.ui.EmojiWiring;
 import com.atom.chat.ui.PanelBackground;
 import com.atom.chat.ui.MenuPopup;
 import com.atom.chat.ui.PressScale;
@@ -407,22 +408,52 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
      * panel class; the screen only supplies composer side effects (insert
      * text, send sticker, open the picker).
      */
-    private final EmojiPanel emojiPanel = new EmojiPanel(new EmojiPanel.Host() {
+
+    /**
+     * The emoji panel's wiring (D17): the three screen-side effects its host needs,
+     * plus the add slot's picker. This screen builds the panel with the wiring's
+     * host and hands the panel back through the wiring's own port; the two
+     * press-clearing lines the picker opens with stay here (they run synchronously
+     * and without touching window focus, while D14's bridge is a hop plus a focus —
+     * a different shape; see the D17 report).
+     */
+    private final EmojiWiring emojiWiring = new EmojiWiring(new EmojiWiring.Host() {
         @Override
-        public void insert(String text) {
+        public EmojiPanel panel() {
+            return emojiPanel;
+        }
+
+        @Override
+        public void appendToComposer(String text) {
             inputAppend(text);
         }
 
         @Override
-        public void sendSticker(Path file) {
+        public void uploadSticker(Path file) {
             uploadAndAppend(file);
         }
 
         @Override
-        public void pickEmoteFile() {
-            AtomChatScreen.this.pickEmoteFile();
+        public void execute(Runnable task) {
+            client.execute(task);
+        }
+
+        @Override
+        public void suspendAutoIconify() {
+            dialogBridge.suppressAutoIconify();
+        }
+
+        @Override
+        public void restoreAutoIconify() {
+            dialogBridge.restoreAutoIconify();
+        }
+
+        @Override
+        public void refocusWindow() {
+            dialogBridge.refocusWindow();
         }
     });
+    private final EmojiPanel emojiPanel = new EmojiPanel(emojiWiring.panelHost());
 
     /**
      * Quick phrases above the composer. Tapping one inserts it into the input
@@ -3168,17 +3199,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         if (this.client.mouse != null) {
             ((MouseHandlerAccessor) this.client.mouse).atomchat$setActiveButton(0);
         }
-        Thread worker = new Thread(() -> {
-            Path file = FilePicker.pickImage(this::suppressAutoIconify, this::restoreAutoIconify,
-                    EmoteStore::isSupportedName);
-            refocusWindow();
-            if (file == null) {
-                return;
-            }
-            this.client.execute(() -> emojiPanel.addEmote(file));
-        }, "AtomChat-EmotePicker");
-        worker.setDaemon(true);
-        worker.start();
+        emojiWiring.pickEmoteFile();
     }
 
     /**
