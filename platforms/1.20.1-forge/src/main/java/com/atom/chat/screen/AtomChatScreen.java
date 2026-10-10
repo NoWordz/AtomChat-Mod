@@ -62,6 +62,7 @@ import com.atom.chat.settings.SettingsSection;
 import com.atom.chat.settings.SettingsSectionPage;
 import com.atom.chat.ui.Animations;
 import com.atom.chat.ui.BottomTabBar;
+import com.atom.chat.ui.CanvasLeakWatch;
 import com.atom.chat.ui.ComposerInput;
 import com.atom.chat.ui.ComposerPointer;
 import com.atom.chat.ui.ContextMenuActions;
@@ -75,6 +76,7 @@ import com.atom.chat.ui.MessageListWiring;
 import com.atom.chat.ui.HeaderChrome;
 import com.atom.chat.ui.EmojiWiring;
 import com.atom.chat.ui.PanelBackground;
+import com.atom.chat.ui.PanelOpenMotion;
 import com.atom.chat.ui.PressScale;
 import com.atom.chat.ui.QuickPhrasePanel;
 import com.atom.chat.ui.QuickPhraseWiring;
@@ -520,7 +522,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
     private final InputGate gate = new InputGate(new InputGate.Host() {
         @Override
         public boolean panelAnimating() {
-            return AtomChatScreen.this.panelAnimating();
+            return PanelOpenMotion.animating(panelProgress, closing);
         }
     })
             .add(new ClosingStateInput())
@@ -823,7 +825,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
                     composer.focus();
                 }
             },
-            AtomChatScreen::probeCanvasLeak,
+            CanvasLeakWatch::probe,
             AtomChatScreen::tr);
     /**
      * The command/mention suggestion popup (D8): the anchored suggestor, the
@@ -1228,11 +1230,6 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
     // the way in, the shorter PANEL_CLOSE_TAU_MS on the way out), so its shape
     // and fade resolve on one timeline per direction.
     private static final int GLFW_KEY_V = 86;
-    /** Open-animation shape floor for the ZOOM style: the panel grows
-     * 0.94 -> 1 around its centre. The blur pre-pass reads the same mapping
-     * through panelOpenScale/panelOpenSlidePx, so the capture rect and the
-     * painted rect can never drift apart mid-flight. */
-    private static final float OPEN_MIN_SCALE = 0.94F;
     /** Slack around the panel in the fade layer, so bezel/shadow are not clipped. */
     private static final float LAYER_CHROME = 32.0F;
     private final long openStart = System.currentTimeMillis();
@@ -1734,25 +1731,23 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         // the target, so the equality below is the settle test — with
         // decorative motion off tau=0 lands this frame, closing included.
         long nowNanos = System.nanoTime();
-        float frameDtMs = Math.max(0.0F, Math.min(50.0F, (nowNanos - lastFrameNanos) / 1_000_000.0F));
+        float frameDtMs = PanelOpenMotion.frameDtMs(nowNanos, lastFrameNanos);
         lastFrameNanos = nowNanos;
-        float panelTarget = closing ? 0.0F : 1.0F;
-        float panelTau = !Animations.enabled() ? 0.0F
-                : closing ? UiMotion.PANEL_CLOSE_TAU_MS : UiMotion.PANEL_OPEN_TAU_MS;
-        panelProgress = UiMotion.expApproach(panelProgress, panelTarget, frameDtMs, panelTau);
-        boolean panelSettled = panelProgress == panelTarget;
+        panelProgress = PanelOpenMotion.stepProgress(panelProgress, closing, frameDtMs,
+                Animations.enabled());
+        boolean panelSettled = PanelOpenMotion.settled(panelProgress, closing);
         // Closing is cut at 6% left: past that the panel is a subpixel sliver
         // and the exponential tail would only delay setScreen(null) (see
         // PANEL_CLOSE_TAU_MS for why the close runs a shorter tau at all).
-        if (closing && (panelSettled || panelProgress < 0.06F)) {
+        if (PanelOpenMotion.closeDue(panelProgress, closing)) {
             this.client.setScreen(null);
             return;
         }
         // Feed the blur cadence gate: camera or panel-chrome motion keeps the
         // every-2-frames blur refresh; a still scene drops to the slow fallback
         // (see BlurMotionGate). The pre-pass below asks the gate per frame.
-        boolean chromeAnimating = !panelSettled
-                || Math.abs(composer.extraH() - lastBlurInputExtraH) > 0.01F;
+        boolean chromeAnimating = PanelOpenMotion.chromeAnimating(panelSettled,
+                composer.extraH(), lastBlurInputExtraH);
         BlurMotionGate.noteFrame(System.currentTimeMillis(),
                 client.player != null ? client.player.getYRot() : 0.0F,
                 client.player != null ? client.player.getXRot() : 0.0F,
@@ -1779,27 +1774,14 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
                     // The capture rect must be the rect drawPhone paints: the
                     // inset panel rect carried through the same open transform
                     // (zoom around the panel centre, then the slide offset).
-                    float scale = panelOpenScale(panelProgress);
-                    float slide = panelOpenSlidePx(panelProgress);
-                    float insetW = panelWidth() - strokeWidth * 2.0F;
-                    float insetH = panelHeight() - strokeWidth * 2.0F;
-                    float cx = panelX() + panelWidth() / 2.0F;
-                    float cy = panelY() + panelHeight() / 2.0F;
-                    float vx = cx + slide - insetW * scale / 2.0F;
-                    float vy = cy - insetH * scale / 2.0F;
-                    float vw = insetW * scale;
-                    float vh = insetH * scale;
-                    float vRadius = (UiTokens.panelRadius() - strokeWidth) * scale;
-                    double density = uiDensity();
-                    double scaleFactor = this.client.getWindow().getGuiScale();
-                    float gx = (float) (vx * density / scaleFactor);
-                    float gy = (float) (vy * density / scaleFactor);
-                    float gw = (float) (vw * density / scaleFactor);
-                    float gh = (float) (vh * density / scaleFactor);
-                    float gr = (float) (vRadius * density / scaleFactor);
+                    PanelOpenMotion.PanelRect capture = PanelOpenMotion.blurCapture(
+                            panelProgress, AtomChatConfig.get().pageNavStyle,
+                            panelX(), panelY(), panelWidth(), panelHeight(), strokeWidth,
+                            uiDensity(), this.client.getWindow().getGuiScale());
                     blurDrawnThisFrame = PanelBlurRenderer.render(
                             context.pose().last().pose(),
-                            gx, gy, gw, gh, gr, panelProgress);
+                            capture.x(), capture.y(), capture.w(), capture.h(), capture.radius(),
+                            panelProgress);
                 } catch (Throwable t) {
                     // One line, one stack trace, then the breaker: isAvailable()
                     // goes false, so the pre-pass is not even built on the next
@@ -1996,19 +1978,9 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         quickPhraseWiring.handlePhraseAction(action);
     }
 
-    private static int leakProbeCount;
-
-    private static void probeCanvasLeak(String where, int before, Canvas canvas) {
-        int leaked = canvas.getSaveCount() - before;
-        if (leaked == 0 || !AtomChatConfig.get().debug) {
-            return;
-        }
-        leakProbeCount++;
-        if (leakProbeCount == 1 || leakProbeCount % 200 == 0) {
-            AtomChat.LOGGER.warn("Leak probe: {} leaked {} stack entries (occurrence {})",
-                    where, leaked, leakProbeCount);
-        }
-    }
+    // The canvas save-stack leak probe -- its debug gate, its leak gate and its
+    // log throttle -- lives in CanvasLeakWatch (D25); this screen is one of its
+    // two callers.
 
     /**
      * Banners and action toasts (D7). The draw order — banners painted after the
@@ -2043,39 +2015,36 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         float y = panelY();
         float progress = panelProgress;
         // The one open transform, shared with the blur pre-pass's capture rect
-        // (panelOpenScale/panelOpenSlidePx): ZOOM grows around the panel
+        // (PanelOpenMotion.openScale/openSlidePx): ZOOM grows around the panel
         // centre, SLIDE pushes in from the left. Same mapping on both sides or
         // the blurred region drifts off the panel mid-flight.
-        float scale = panelOpenScale(progress);
-        float slide = panelOpenSlidePx(progress);
+        float scale = PanelOpenMotion.openScale(progress, AtomChatConfig.get().pageNavStyle);
+        float slide = PanelOpenMotion.openSlidePx(progress, AtomChatConfig.get().pageNavStyle);
         // Settled state: expApproach snaps to its target, so progress never
         // lingers in [0.999, 1) — past this point the fade is fully opaque and
         // scale/slide are exactly 1/0, so the full-panel layer is pure
         // overdraw and the panel draws directly (same call as the nav branch).
-        if (PageTransitionDirector.navLayerSkippable(Math.max(0.0F, Math.min(1.0F, progress)), scale)) {
+        if (PageTransitionDirector.navLayerSkippable(PanelOpenMotion.fade(progress), scale)) {
             int probeBefore = canvas.getSaveCount();
             drawPanel(canvas, x, y, worldSnapshot, mouseX, mouseY, delta);
             drawNotificationBanners(canvas, mouseX, mouseY);
-            probeCanvasLeak("drawPanel+banners", probeBefore, canvas);
+            CanvasLeakWatch.probe("drawPanel+banners", probeBefore, canvas);
             return;
         }
         canvas.save();
         try (Paint layer = new Paint()) {
             // expApproach never overshoots; the clamp keeps the fade safe anyway.
-            float fade = Math.max(0.0F, Math.min(1.0F, progress));
+            float fade = PanelOpenMotion.fade(progress);
             layer.setColor(Color.makeARGB((int) (255.0F * fade), 0, 0, 0));
             // The layer must cover the scaled panel plus its slide excursion
             // (LAYER_CHROME slack for the bezel/shadow), otherwise the fade
             // clips the bezel while the panel is still in flight.
-            float w = panelWidth() * scale;
-            float h = panelHeight() * scale;
             float cx = x + panelWidth() / 2.0F;
             float cy = y + panelHeight() / 2.0F;
-            float left = cx - w / 2.0F;
-            float top = cy - h / 2.0F;
-            float layerX = Math.min(left, left + slide) - LAYER_CHROME;
-            float layerW = w + LAYER_CHROME * 2.0F + Math.abs(slide);
-            canvas.saveLayer(Rect.makeXYWH(layerX, top - LAYER_CHROME, layerW, h + LAYER_CHROME * 2.0F), layer);
+            PanelOpenMotion.LayerRect layerRect = PanelOpenMotion.fadeLayer(progress,
+                    AtomChatConfig.get().pageNavStyle, x, y, panelWidth(), panelHeight(), LAYER_CHROME);
+            canvas.saveLayer(Rect.makeXYWH(layerRect.x(), layerRect.y(), layerRect.w(), layerRect.h()),
+                    layer);
             // Scale around the panel centre, then slide: the exact transform
             // the capture-rect math above mirrors.
             canvas.translate(cx + slide, cy);
@@ -2086,7 +2055,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
             int probeBefore = canvas.getSaveCount();
             drawPanel(canvas, x, y, worldSnapshot, mouseX, mouseY, delta);
             drawNotificationBanners(canvas, mouseX, mouseY);
-            probeCanvasLeak("drawPanel+banners", probeBefore, canvas);
+            CanvasLeakWatch.probe("drawPanel+banners", probeBefore, canvas);
             canvas.restore();
         }
         canvas.restore();
@@ -2142,7 +2111,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         composer.syncFocusedFromField();
         composer.blurOnReadOnlyPage(isPrivateReadOnly());
         long nowMs = System.currentTimeMillis();
-        frameDt = Math.min(50L, Math.max(1L, nowMs - lastFrameMs));
+        frameDt = PanelOpenMotion.domainFrameDtMs(nowMs, lastFrameMs);
         lastFrameMs = nowMs;
         // Single-click→profile competition window: fire when no second click
         // arrived within the threshold. The verdict stays inside this frame —
@@ -2661,7 +2630,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         messageListView.setLoadEarlierHovered(toVirtualX(mouseX), toVirtualY(mouseY));
         messageListView.draw(canvas, layout.list.x(), layout.list.y(), layout.list.w(), layout.list.h(),
                 messages, view.scroll());
-        probeCanvasLeak("messageListView.draw", probeBefore, canvas);
+        CanvasLeakWatch.probe("messageListView.draw", probeBefore, canvas);
         applyLoadEarlierRequest(page, messages, window, layout.list, view.scroll());
 
         // Reply bar floats above the input bar. It is drawn after the message
@@ -3178,9 +3147,6 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
      * same rule as the page nav's navMovingHidden. The gate owns that rule;
      * this answers it.
      */
-    private boolean panelAnimating() {
-        return panelProgress != (closing ? 0.0F : 1.0F);
-    }
 
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double verticalAmount) {
@@ -3395,24 +3361,10 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         return ScreenMetrics.panelY(client.getWindow());
     }
 
-    /**
-     * The one progress→shape mapping of the open/close animation, shared by
-     * drawPhone and the blur pre-pass — the capture rect must stay identical
-     * to the painted rect or the blurred region drifts off the panel
-     * mid-flight. ZOOM follows {@link AtomChatConfig.PageNavStyle#ZOOM} and
-     * grows the panel around its centre; SLIDE pushes it in from the left.
-     */
-    private float panelOpenScale(float progress) {
-        return AtomChatConfig.get().pageNavStyle == AtomChatConfig.PageNavStyle.ZOOM
-                ? OPEN_MIN_SCALE + (1.0F - OPEN_MIN_SCALE) * progress
-                : 1.0F;
-    }
-
-    private float panelOpenSlidePx(float progress) {
-        return AtomChatConfig.get().pageNavStyle == AtomChatConfig.PageNavStyle.SLIDE
-                ? (progress - 1.0F) * s(24)
-                : 0.0F;
-    }
+    // The one progress->shape mapping of the open/close animation, and the
+    // capture rect that mirrors it, live in PanelOpenMotion (D25): one
+    // derivation for both sides, so the blurred region cannot drift off the
+    // panel mid-flight.
 
     /**
      * The one and only way to build the layout. Rendering and every hit test go
