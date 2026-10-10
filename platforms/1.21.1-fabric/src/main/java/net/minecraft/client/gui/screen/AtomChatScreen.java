@@ -81,8 +81,8 @@ import com.atom.chat.ui.QuickPhrasePanel;
 import com.atom.chat.ui.QuickPhraseWiring;
 import com.atom.chat.ui.UiMotion;
 import com.atom.chat.ui.UiTokens;
+import com.atom.chat.ui.input.InputGate;
 import com.atom.chat.ui.input.InputHandler;
-import com.atom.chat.ui.input.InputRouter;
 import com.atom.chat.wallpaper.WallpaperImage;
 import com.atom.chat.wallpaper.WallpaperStore;
 import com.atom.chat.watut.TypingIndicatorSource;
@@ -516,12 +516,25 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
     private final SkiaGraphics graphics = new SkiaGraphics();
     private final String originalChatText;
     /**
-     * Ordered input routing. Priority (first registered wins): closing guard,
-     * modals (cropper/colour picker), pushed-subpage Esc, screen Esc, root
-     * pages, world chat. New interactive features register a handler instead
-     * of inserting branches into the former if-else chains.
+     * Ordered input routing (D23a). Priority (first registered wins): closing
+     * guard, modals (cropper/colour picker), pushed-subpage Esc, screen Esc,
+     * root pages, world chat. New interactive features register a handler
+     * instead of inserting branches into the former if-else chains.
+     *
+     * <p>The gate holds this chain and owns the one rule that decides whether a
+     * pointer event reaches it at all — swallowed whole while the panel
+     * animates, because hit tests run on the settled layout while the panel is
+     * drawn mid-transform. It also owns the deliberate asymmetry (the keyboard
+     * is not gated); see InputGate. The registration table stays here, on the
+     * gate itself: its entries are this screen's own handler classes, and a
+     * second chain would leave the gate's own one empty.</p>
      */
-    private final InputRouter inputRouter = new InputRouter()
+    private final InputGate gate = new InputGate(new InputGate.Host() {
+        @Override
+        public boolean panelAnimating() {
+            return AtomChatScreen.this.panelAnimating();
+        }
+    })
             .add(new ClosingStateInput())
             .add(new ModalInput())
             .add(settingsDetailPage.numberEditInput())
@@ -3412,19 +3425,18 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
      * drawn through the open transform (zoom/slide) but hit tests run on the
      * settled virtual layout, so a click mid-animation would land somewhere
      * other than where it looks — swallowed whole until the panel settles,
-     * same rule as the page nav's navMovingHidden.
+     * same rule as the page nav's navMovingHidden. The gate owns that rule;
+     * this answers it.
      */
-    private boolean panelInFlight() {
+    private boolean panelAnimating() {
         return panelProgress != (closing ? 0.0F : 1.0F);
     }
 
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double horizontalAmount, double verticalAmount) {
-        if (panelInFlight()) {
-            return true;
-        }
-        if (inputRouter.scroll(mouseX, mouseY, horizontalAmount, verticalAmount)) {
-            return true;
+        Boolean direct = gate.scroll(mouseX, mouseY, horizontalAmount, verticalAmount);
+        if (direct != null) {
+            return direct;
         }
         return super.mouseScrolled(mouseX, mouseY, horizontalAmount, verticalAmount);
     }
@@ -3441,52 +3453,49 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
                     (int) mouseX, (int) mouseY,
                     (int) toVirtualX(mouseX), (int) toVirtualY(mouseY), button);
         }
-        if (panelInFlight()) {
-            return true;
-        }
-        if (inputRouter.click(mouseX, mouseY, button)) {
-            return true;
+        Boolean direct = gate.click(mouseX, mouseY, button);
+        if (direct != null) {
+            return direct;
         }
         return super.mouseClicked(mouseX, mouseY, button);
     }
 
     @Override
     public boolean mouseDragged(double mouseX, double mouseY, int button, double dragX, double dragY) {
-        if (panelInFlight()) {
-            return true;
-        }
-        if (inputRouter.drag(mouseX, mouseY, button, dragX, dragY)) {
-            return true;
+        Boolean direct = gate.drag(mouseX, mouseY, button, dragX, dragY);
+        if (direct != null) {
+            return direct;
         }
         return super.mouseDragged(mouseX, mouseY, button, dragX, dragY);
     }
 
     @Override
     public boolean mouseReleased(double mouseX, double mouseY, int button) {
-        if (panelInFlight()) {
-            return true;
-        }
-        if (inputRouter.release(mouseX, mouseY, button)) {
-            return true;
+        Boolean direct = gate.release(mouseX, mouseY, button);
+        if (direct != null) {
+            return direct;
         }
         return super.mouseReleased(mouseX, mouseY, button);
     }
 
     @Override
     public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
-        if (inputRouter.key(keyCode, scanCode, modifiers)) {
-            return true;
+        Boolean direct = gate.key(keyCode, scanCode, modifiers);
+        if (direct != null) {
+            return direct;
         }
         return super.keyPressed(keyCode, scanCode, modifiers);
     }
 
     @Override
     public boolean charTyped(char chr, int modifiers) {
-        if (inputRouter.charTyped(chr, modifiers)) {
-            return true;
+        Boolean direct = gate.charTyped(chr, modifiers);
+        if (direct != null) {
+            return direct;
         }
         return super.charTyped(chr, modifiers);
     }
+
 
     private void pickAndUploadImage() {
         // The native AWT dialog grabs OS input; release MC's held keys/button so
@@ -3704,7 +3713,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
 
     // ------------------------------------------------------------------ input handlers
     //
-    // Ordered by the registration sequence in `inputRouter`. Each handler owns
+    // Ordered by the registration sequence in `gate`. Each handler owns
     // one interaction domain and answers events with consume/pass; nothing may
     // ever be inserted "into the middle of a chain" again.
 
