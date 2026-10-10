@@ -74,6 +74,7 @@ import com.atom.chat.ui.input.InputHandler;
 import com.atom.chat.ui.input.InputRouter;
 import com.atom.chat.wallpaper.WallpaperImage;
 import com.atom.chat.wallpaper.WallpaperStore;
+import com.atom.chat.watut.TypingIndicatorSource;
 import com.atom.chat.util.ClipboardImages;
 import com.atom.chat.util.FilePicker;
 import com.atom.chat.util.ImageFileNames;
@@ -1684,15 +1685,13 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
 
     /**
      * The typing hint for one nav page: the hint belongs to the page
-     * whose composer is drawn, not to whatever is on top of the stack.
+     * whose composer is drawn, not to whatever is on top of the stack. The
+     * decision and the WATUT query live in {@link TypingIndicatorSource};
+     * whether the page is read-only is D24's rule
+     * ({@link #isPrivateReadOnlyFor}) and goes in as a fact.
      */
     private boolean partnerTypingFor(NavPage page) {
-        if (page == null || page.page() != AppPage.PRIVATE_CHAT || isPrivateReadOnlyFor(page)) {
-            return false;
-        }
-        PlayerRef partner = page.target();
-        return partner != null
-                && com.atom.chat.watut.WatutBridge.isTyping(partner.uuid());
+        return TypingIndicatorSource.partnerTypingFor(page, isPrivateReadOnlyFor(page));
     }
 
     /** Skia width of the committed text before the caret on the caret's wrapped line. */
