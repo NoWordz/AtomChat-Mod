@@ -14,8 +14,6 @@ import com.atom.chat.chat.TeleportCommands;
 import com.atom.chat.chat.ChatStore;
 import com.atom.chat.config.AtomChatConfig;
 import com.atom.chat.emote.EmoteStore;
-import com.atom.chat.ui.ActionFeedback;
-import com.atom.chat.ui.ActionToast;
 import com.atom.chat.image.ImageLoader;
 import com.atom.chat.image.ImagePreviewOverlay;
 import com.atom.chat.image.ImageSaver;
@@ -32,7 +30,7 @@ import com.atom.chat.nav.AppPage;
 import com.atom.chat.nav.AtomChatState;
 import com.atom.chat.nav.NavPage;
 import com.atom.chat.nav.NavigationStack;
-import com.atom.chat.notification.NotificationBanner;
+import com.atom.chat.notification.NotificationJumpService;
 import com.atom.chat.avatar.AvatarImage;
 import com.atom.chat.avatar.AvatarStore;
 import com.atom.chat.avatar.ColorPickerOverlay;
@@ -116,7 +114,7 @@ import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
-public final class AtomChatScreen extends ChatScreen implements PageHost {
+public final class AtomChatScreen extends ChatScreen implements PageHost, NotificationJumpService.NavPort {
     /** Which context menu is open: normal message bubble actions or player-avatar actions. */
     private enum ContextMenuMode { BUBBLE, AVATAR, PLAYER_CARD }
 
@@ -486,8 +484,46 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
      * below are the only entry points this shell keeps.
      */
     private final HistoryFoldStore historyFold = new HistoryFoldStore();
-    /** Transient action acknowledgements (cache cleared, copied, save failed). */
-    private final ActionFeedback actionFeedback = new ActionFeedback();
+    /**
+     * Notification banners, the jump behind their clicks and the action-feedback
+     * queue (D7). Every fact and side effect it needs from another domain goes
+     * through a port: this screen is itself D24's nav port (its own
+     * {@link #topPage}, {@link #activePrivateTarget}, {@link #openPrivateChat}
+     * and {@link #openWorldChat}), while D11's per-page scroll controllers (over
+     * D22's feed) and D21's composer are the two ports wired below. The layout,
+     * the message list view, the modal and read-only facts and the panel-space
+     * pointer are passed in per call; the leak probe and the language lookup go
+     * in as this screen's own functions, so the service keeps the exact
+     * measurement and copy the old code used.
+     */
+    private final NotificationJumpService notificationJump = new NotificationJumpService(
+            this,
+            new NotificationJumpService.ScrollPort() {
+                @Override
+                public List<ChatMessage> currentMessages() {
+                    return messagesForNav(topNav());
+                }
+
+                @Override
+                public ScrollController currentScroll() {
+                    return scrollForNav(topNav());
+                }
+            },
+            new NotificationJumpService.ComposerFocusPort() {
+                @Override
+                public boolean composerPresent() {
+                    return chatField != null;
+                }
+
+                @Override
+                public void focusComposer() {
+                    inputFocused = true;
+                    setFocused(chatField);
+                    chatField.setFocused(true);
+                }
+            },
+            AtomChatScreen::probeCanvasLeak,
+            AtomChatScreen::tr);
     /**
      * Composer drafts per page, and the shared field they are loaded into. The
      * draft text lives in {@link DraftStore}; the port below is this shell's half
@@ -841,7 +877,8 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
         return navigation.peek();
     }
 
-    private AppPage topPage() {
+    @Override
+    public AppPage topPage() {
         return navigation.peek().page();
     }
 
@@ -871,7 +908,8 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
                 ? tr("atomchat.private.blocked") : tr("atomchat.private.offline");
     }
 
-    private PlayerRef activePrivateTarget() {
+    @Override
+    public PlayerRef activePrivateTarget() {
         NavPage top = navigation.peek();
         return top != null && top.page() == AppPage.PRIVATE_CHAT ? top.target() : null;
     }
@@ -1839,12 +1877,6 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
         }
     }
 
-    /**
-     * Notification banners, painted after every page body so they sit on top
-     * regardless of which page is showing (the settings and profile branches
-     * return early from drawPanel). They live inside the panel layer, so they
-     * fade and slide with the panel instead of floating outside it.
-     */
     private static int leakProbeCount;
 
     private static void probeCanvasLeak(String where, int before, Canvas canvas) {
@@ -1859,33 +1891,16 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
         }
     }
 
+    /**
+     * Banners and action toasts (D7). The draw order — banners painted after the
+     * page body, the toast last, both inside the panel layer — lives with
+     * {@link NotificationJumpService#drawNotificationBanners}; the modal flag,
+     * the layout and the panel-space pointer are this shell's facts.
+     */
     private void drawNotificationBanners(Canvas canvas, int mouseX, int mouseY) {
-        // Modals own the top layer; a banner painted over them would be visible
-        // but unclickable (ModalInput swallows the click), so hide it until the
-        // modal closes. The 4s queue lifetime still lets it reappear.
-        if (imageCropper.isActive() || colorPicker.isActive() || imagePreview.isActive()) {
-            return;
-        }
-        UiLayout.Rect panel = layout().rect();
-        if (NotificationBanner.INSTANCE.hasActive()) {
-            float vmx = toVirtualX(mouseX);
-            float vmy = toVirtualY(mouseY);
-            int probeBefore = canvas.getSaveCount();
-            NotificationBanner.INSTANCE.renderInPanel(canvas, panel.x(), panel.y(), panel.w(), panel.h(),
-                    vmx, vmy);
-            probeCanvasLeak("banner render", probeBefore, canvas);
-        }
-        // Action feedback draws last, so it sits above a queued banner in the
-        // same floating layer: it acknowledges something the player just did and
-        // must stay in view. It is anchored where the eye already is — the top
-        // edge of the input bar — and rises up from behind it, rather than
-        // dropping in from the panel top away from the action. Pages without a
-        // composer (detail pages) fall back to the bottom of the list.
-        UiLayout toastLayout = layout();
-        float toastAnchor = toastLayout.inputBar.w() > 0.0F
-                ? toastLayout.inputBar.y() : toastLayout.list.bottom();
-        ActionToast.render(canvas, actionFeedback, panel.x(), panel.w(),
-                panel.y(), toastAnchor, System.currentTimeMillis(), AtomChatScreen::tr);
+        notificationJump.drawNotificationBanners(canvas,
+                imageCropper.isActive() || colorPicker.isActive() || imagePreview.isActive(),
+                layout(), toVirtualX(mouseX), toVirtualY(mouseY));
     }
 
     /**
@@ -1896,136 +1911,12 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
     private final class BannerInput implements InputHandler {
         @Override
         public boolean onClick(double mouseX, double mouseY, int button) {
-            if (button != 0 || !NotificationBanner.INSTANCE.hasActive()) {
-                return false;
-            }
-            float vmx = toVirtualX(mouseX);
-            float vmy = toVirtualY(mouseY);
-            // The send-style round button means "reply now": same jump plus
-            // composer focus. The rest of the banner just navigates. Both
-            // routes jump first and dismiss only once the jump landed, so a
-            // banner whose message can no longer be located stays on screen.
-            NotificationBanner.Active sendButton = NotificationBanner.INSTANCE.buttonHit(vmx, vmy);
-            if (sendButton != null) {
-                if (jumpToNotification(sendButton)) {
-                    NotificationBanner.INSTANCE.dismiss(sendButton);
-                    focusComposerForReply();
-                }
-                return true;
-            }
-            NotificationBanner.Active hit = NotificationBanner.INSTANCE.hitTest(vmx, vmy);
-            if (hit == null) {
-                return false;
-            }
-            if (jumpToNotification(hit)) {
-                NotificationBanner.INSTANCE.dismiss(hit);
-            }
-            return true;
+            // The click rules live in NotificationJumpService; the GUI->panel
+            // conversion, the layout, the list view and the read-only flag are
+            // this shell's facts.
+            return notificationJump.onBannerClick(button, toVirtualX(mouseX), toVirtualY(mouseY),
+                    isPrivateReadOnly(), layout(), messageListView);
         }
-    }
-
-    /** Composer focus for the banner send-button: one click from banner to typing. */
-    private void focusComposerForReply() {
-        if (chatField != null && !isPrivateReadOnly()) {
-            inputFocused = true;
-            setFocused(chatField);
-            chatField.setFocused(true);
-        }
-    }
-
-    /**
-     * Opens whatever page holds this notification and scrolls the message in.
-     *
-     * <p>Returns whether the jump landed; the caller dismisses the banner only
-     * on {@code true}. A whisper whose sender has no profile name (there is no
-     * conversation key to open), a message that is no longer in the target
-     * page's feed, or a page selection that did not take leaves the banner up
-     * instead of stranding the player on an unchanged panel.
-     */
-    private boolean jumpToNotification(NotificationBanner.Active banner) {
-        ChatMessage msg = banner.message();
-        if (msg == null) {
-            return false;
-        }
-        if (banner.type() == NotificationBanner.Type.WHISPER) {
-            PlayerRef target = PlayerRef.of(msg.getSenderUuid(), msg.getProfileName());
-            // PlayerRef.key() is name-based, so a ref without a profile name
-            // has no conversation to open.
-            if (target.realName() == null) {
-                return false;
-            }
-            if (!target.equals(activePrivateTarget())) {
-                openPrivateChat(target);
-            }
-            if (topPage() != AppPage.PRIVATE_CHAT || !target.equals(activePrivateTarget())) {
-                return false;
-            }
-        } else if (topPage() != AppPage.WORLD_CHAT) {
-            openWorldChat();
-            if (topPage() != AppPage.WORLD_CHAT) {
-                return false;
-            }
-        }
-        return scrollToMessage(msg);
-    }
-
-    /**
-     * Scrolls the current page's list so the message sits a third of the way
-     * down the viewport, then leaves a fading highlight on it. Anti-spam merges
-     * mean the target can be a merged bubble — that one is still the right
-     * destination, so merged messages are never un-merged here. Returns whether
-     * the message was located and the scroll/highlight applied.
-     */
-    private boolean scrollToMessage(ChatMessage msg) {
-        NavPage page = topNav();
-        List<ChatMessage> messages = messagesForNav(page);
-        int index = findMessageIndex(messages, msg);
-        if (index < 0) {
-            return false;
-        }
-        ScrollController scroll = scrollForNav(page);
-        UiLayout.Rect list = layout().list;
-        float offset = messageListView.offsetOf(messages, index, list.w());
-        // The page may have just been opened (fresh controller, maxScroll still
-        // zero). Feed it the real content height before the jump or the clamp
-        // inside scrollTo collapses the target to 0.
-        scroll.setContent(messageListView.offsetOf(messages, messages.size(), list.w()), list.h());
-        scroll.scrollTo(offset - list.h() / 3.0F, true);
-        messageListView.highlight(messages.get(index));
-        return true;
-    }
-
-    /**
-     * Resolves the banner's message to its current list slot. Anti-spam can
-     * replace the original object with a merged {@code xN} copy after the banner
-     * was queued, so fall back to the last same-content/sender row instead of
-     * giving up on an identity miss. Touches no screen state, so the jump's
-     * locate step is pinned by a test directly instead of through a live screen.
-     */
-    static int findMessageIndex(List<ChatMessage> messages, ChatMessage target) {
-        int exact = messages.indexOf(target);
-        if (exact >= 0) {
-            return exact;
-        }
-        for (int i = messages.size() - 1; i >= 0; i--) {
-            ChatMessage candidate = messages.get(i);
-            if (candidate.isOwn() != target.isOwn()
-                    || candidate.isSystem() != target.isSystem()
-                    || !java.util.Objects.equals(candidate.getQuoteName(), target.getQuoteName())
-                    || !java.util.Objects.equals(candidate.getQuoteText(), target.getQuoteText())
-                    || !java.util.Objects.equals(candidate.getContentText(), target.getContentText())) {
-                continue;
-            }
-            UUID a = candidate.getSenderUuid();
-            UUID b = target.getSenderUuid();
-            boolean sameSender = a != null && b != null
-                    ? a.equals(b)
-                    : java.util.Objects.equals(candidate.getProfileName(), target.getProfileName());
-            if (sameSender) {
-                return i;
-            }
-        }
-        return -1;
     }
 
     private void drawPhone(Canvas canvas, Image worldSnapshot, int mouseX, int mouseY, float delta) {
@@ -3877,14 +3768,12 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
 
     /** Raises a transient action acknowledgement in the panel's floating layer. */
     private void feedback(String key, boolean success) {
-        actionFeedback.show(key, success ? ActionFeedback.Outcome.SUCCESS : ActionFeedback.Outcome.ERROR,
-                System.currentTimeMillis());
+        notificationJump.feedback(key, success);
     }
 
     /** Raises an acknowledgement whose text carries an argument (a player name). */
     private void feedback(String key, String label, boolean success) {
-        actionFeedback.show(key, label, success ? ActionFeedback.Outcome.SUCCESS : ActionFeedback.Outcome.ERROR,
-                System.currentTimeMillis());
+        notificationJump.feedback(key, label, success);
     }
 
     /**
