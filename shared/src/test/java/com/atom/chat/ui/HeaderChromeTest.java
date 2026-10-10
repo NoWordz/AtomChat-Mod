@@ -341,8 +341,9 @@ class HeaderChromeTest {
         Surface idle = Surface.makeRasterN32Premul(SURFACE_W, SURFACE_H);
         Surface hovered = Surface.makeRasterN32Premul(SURFACE_W, SURFACE_H);
         try {
-            setUp();
             NavPage nav = NavPage.settingsSection(SettingsSection.CHAT);
+            UiLayout.Rect warmBack = warmUp(nav);
+            setUp();
             for (int i = 0; i < 40; i++) {
                 chrome.drawPushedHeader(idle.getCanvas(), -1.0F, -1.0F, nav);
             }
@@ -353,15 +354,16 @@ class HeaderChromeTest {
 
             setUp();
             for (int i = 0; i < 40; i++) {
-                chrome.drawPushedHeader(hovered.getCanvas(), back.x() + 2.0F, back.y() + 2.0F, nav);
+                chrome.drawPushedHeader(hovered.getCanvas(), warmBack.x() + 2.0F,
+                        warmBack.y() + 2.0F, nav);
             }
 
             // Colour mass rather than byte identity: the header render carries a
-            // rare, tiny glyph-rasterisation jitter across JVM runs (measured: a
-            // handful of pixels at most), while the wash itself moves ~100k of
-            // mass over the button. The thresholds below sit two orders of
-            // magnitude away from both, so they catch a missing wash and a wash
-            // that leaked into the title without ever flaking.
+            // rare glyph-rasterisation jitter across JVM runs, while the wash itself
+            // moves ~100k of mass over the button. The thresholds sit two orders of
+            // magnitude away from both, so they catch a missing wash and a wash that
+            // leaked into the title; the warm-up above removes the one source of
+            // movement that was neither (a cold first pass).
             assertTrue(colourMass(idle, hovered, button) > 10_000L,
                     "the hover wash is painted where the hit rect says the button is (mass="
                             + colourMass(idle, hovered, button) + ")");
@@ -374,9 +376,36 @@ class HeaderChromeTest {
         }
     }
 
+    /**
+     * Renders the header through both the idle and the hover path once, into a
+     * throwaway surface, and returns the back-button rect.
+     *
+     * <p>The two measured passes below have to see the same rasteriser state. In a
+     * full-suite run the first pass through this header starts colder than the
+     * second one, and the title area came back with ~16k of movement — while both
+     * passes measured 0 in isolation. Warming both shapes up first makes the
+     * measurement a property of the wash instead of of the JVM's warm-up order.
+     */
+    private static UiLayout.Rect warmUp(NavPage nav) {
+        Surface warm = Surface.makeRasterN32Premul(SURFACE_W, SURFACE_H);
+        try {
+            HeaderChrome cold = new HeaderChrome(new Recorder());
+            for (int i = 0; i < 40; i++) {
+                cold.drawPushedHeader(warm.getCanvas(), -1.0F, -1.0F, nav);
+            }
+            UiLayout.Rect back = cold.backButton();
+            HeaderChrome hot = new HeaderChrome(new Recorder());
+            for (int i = 0; i < 40; i++) {
+                hot.drawPushedHeader(warm.getCanvas(), back.x() + 2.0F, back.y() + 2.0F, nav);
+            }
+            return back;
+        } finally {
+            warm.close();
+        }
+    }
+
     /** Total RGB movement between two frames inside one rect. */
-    private static long colourMass(Surface a, Surface b, int[] rect) {
-        byte[] pa = readPixels(a);
+    private static long colourMass(Surface a, Surface b, int[] rect) {        byte[] pa = readPixels(a);
         byte[] pb = readPixels(b);
         long sum = 0L;
         for (int y = Math.max(0, rect[1]); y < Math.min(SURFACE_H, rect[1] + rect[3]); y++) {
