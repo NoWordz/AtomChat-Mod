@@ -14,6 +14,7 @@ import com.atom.chat.chat.TeleportCommands;
 import com.atom.chat.chat.ChatStore;
 import com.atom.chat.config.AtomChatConfig;
 import com.atom.chat.emote.EmoteStore;
+import com.atom.chat.image.DragDropPasteUpload;
 import com.atom.chat.image.ImageLoader;
 import com.atom.chat.image.ImagePreviewOverlay;
 import com.atom.chat.image.ImageUploadPipeline;
@@ -96,10 +97,7 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.Mth;
 
-import org.lwjgl.PointerBuffer;
-import org.lwjgl.glfw.GLFWDropCallback;
 import org.lwjgl.glfw.GLFW;
-import org.lwjgl.system.MemoryUtil;
 
 import java.awt.datatransfer.DataFlavor;
 import java.io.File;
@@ -635,6 +633,32 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
                     return target;
                 }
             }, AtomChatScreen::tr);
+
+    /**
+     * File drops and clipboard pastes (D13): the window-wide drop callback's
+     * lifetime and the two entry points that turn external bytes into an upload.
+     * The domain owns the native slot and the clipboard read (both replaceable
+     * offline); this screen hands it its own client handle — the window the
+     * callback is installed on, never Minecraft.getInstance(), D3's
+     * precedent — D24's page test and D12's uploader.
+     */
+    private final DragDropPasteUpload dragDropPaste =
+            new DragDropPasteUpload(new DragDropPasteUpload.Host() {
+                @Override
+                public Minecraft client() {
+                    return client;
+                }
+
+                @Override
+                public boolean worldChatPage() {
+                    return isWorldChatPage();
+                }
+
+                @Override
+                public ImageUploadPipeline uploads() {
+                    return uploadPipeline;
+                }
+            });
     /**
      * Composer drafts per page, and the shared field they are loaded into. The
      * draft text lives in {@link DraftStore}; the port below is this shell's half
@@ -835,9 +859,6 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
     private String inputWrapText;
     private float inputWrapWidth = -1.0F;
     private List<String> inputWrapCache;
-
-    /** GLFW drop callback, installed while this screen is open (MC sets none). */
-    private GLFWDropCallback dropCallback;
 
     private long lastAvatarClickTime;
     private int lastAvatarClickIndex = -1;
@@ -1969,53 +1990,20 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
      * registers no drop callback at all — the Win32 backend already calls
      * DragAcceptFiles, so the events have been arriving and being discarded.
      * The callback fires on the render thread, from inside glfwPollEvents.
+     * The slot, the guard and the free live in {@link DragDropPasteUpload}
+     * (D13); this shell keeps the lifecycle entry points init/removed call.
      */
     private void installDropCallback() {
-        if (dropCallback != null) {
-            return;
-        }
-        try {
-            dropCallback = GLFW.glfwSetDropCallback(this.client.getWindow().getWindow(),
-                    (win, count, names) -> onFilesDropped(count, names));
-        } catch (Throwable t) {
-            AtomChat.LOGGER.warn("Failed to install the file drop callback", t);
-        }
+        dragDropPaste.installDropCallback();
     }
 
     private void uninstallDropCallback() {
-        if (dropCallback == null) {
-            return;
-        }
-        try {
-            GLFW.glfwSetDropCallback(this.client.getWindow().getWindow(), null);
-            dropCallback.free();
-        } catch (Throwable t) {
-            AtomChat.LOGGER.warn("Failed to remove the file drop callback", t);
-        }
-        dropCallback = null;
+        dragDropPaste.uninstallDropCallback();
     }
 
     /** Window-wide: the drop event carries no cursor position we could hit-test with. */
     private void onFilesDropped(int count, long names) {
-        // File drops only feed the world-chat composer; root pages must ignore them.
-        if (!isWorldChatPage()) {
-            return;
-        }
-        try {
-            PointerBuffer buffer = MemoryUtil.memPointerBuffer(names, count);
-            for (int i = 0; i < count; i++) {
-                Path file = Path.of(MemoryUtil.memUTF8(buffer.get(i)));
-                if (ImageFiles.isImage(file)) {
-                    uploadAndAppend(file);
-                    return;
-                }
-            }
-            if (count > 0) {
-                AtomChat.LOGGER.info("Ignored {} dropped file(s): none was an image", count);
-            }
-        } catch (Throwable t) {
-            AtomChat.LOGGER.warn("Failed to handle dropped files", t);
-        }
+        dragDropPaste.onFilesDropped(count, names);
     }
 
     @Override
@@ -3740,19 +3728,12 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
     /**
      * Ctrl+V with a picture on the clipboard. The payload is read off the render
      * thread — a screenshot is several megabytes and converting it is not free —
-     * then uploaded and appended.
+     * then uploaded and appended. The worker, the read and the D12 hand-off live
+     * in {@link DragDropPasteUpload} (D13); this shell keeps the entry point the
+     * Ctrl+V interception calls.
      */
     private void pasteFromClipboard(DataFlavor flavor) {
-        Thread worker = new Thread(() -> {
-            Path file = ClipboardImages.read(flavor);
-            if (file == null) {
-                AtomChat.LOGGER.warn("Clipboard held no usable image; Ctrl+V fell back to a text paste");
-                return;
-            }
-            uploadAndAppend(file);
-        }, "AtomChat-Paste");
-        worker.setDaemon(true);
-        worker.start();
+        dragDropPaste.pasteFromClipboard(flavor);
     }
 
     /**
