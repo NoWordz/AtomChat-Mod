@@ -53,6 +53,10 @@ class PageNavStyleSourceTest {
     private static final String CONTROLLER =
             "shared/src/main/java/com/atom/chat/nav/NavStackController.java";
 
+    /** Both transition state machines (D24b-1), where the clocks now live. */
+    private static final String DIRECTOR =
+            "shared/src/main/java/com/atom/chat/nav/PageTransitionDirector.java";
+
     /** The three screen sources, repo-root relative, in a fixed order. */
     private static final List<String> SCREENS = List.of(
             "platforms/1.20.1-forge/src/main/java/com/atom/chat/screen/AtomChatScreen.java",
@@ -171,7 +175,7 @@ class PageNavStyleSourceTest {
     @Test
     void resolverReadsTheConfigWithNoPerPairException() throws IOException {
         for (String screen : SCREENS) {
-            String resolver = body(source(screen), "AtomChatConfig.PageNavStyle pageNavStyle(");
+            String resolver = body(source(DIRECTOR), "AtomChatConfig.PageNavStyle pageNavStyle(");
             assertTrue(resolver.contains("AtomChatConfig.get().pageNavStyle"),
                     screen + ": the resolver must read AtomChatConfig.pageNavStyle");
             assertFalse(resolver.contains("isRoot"),
@@ -187,20 +191,26 @@ class PageNavStyleSourceTest {
     void styleIsResolvedOncePerNavAndEverySwitchReadsIt() throws IOException {
         for (String screen : SCREENS) {
             String src = source(screen);
-            String startNav = body(src, "private void startPageNav(");
+            // Since 24b-1 the machine is the director's; the facts are unchanged --
+            // one resolution point, one assignment of the style flag.
+            String startNav = body(source(DIRECTOR), "public void startPageNav(");
             assertTrue(startNav.contains("pageNavStyle()"),
                     screen + ": startPageNav must resolve the style through pageNavStyle()");
-            assertEquals(1, occurrences(src, "pageNavZoom ="),
+            assertEquals(1, occurrences(source(DIRECTOR), "pageNavZoom ="),
                     screen + ": pageNavZoom may only be assigned by the single resolution point");
             assertTrue(startNav.contains("pageNavZoom ="),
                     screen + ": pageNavZoom must be assigned inside startPageNav");
             // Root tab switches never run pushNav/popPage, so they must resolve
             // the style through the same helper rather than reading a second
             // path of their own.
-            // Since D24a the tab switch is the controller's, so the resolution is
-            // reached through the port; what must never come back is a second path.
-            assertTrue(body(src, "public boolean navStyleIsZoom()").contains("pageNavStyle()"),
-                    screen + ": the root tab switch must resolve the style through pageNavStyle()");
+            // Since D24a the tab switch is the controller's and since 24b-1 the
+            // machine is the director's, so the resolution is reached through two
+            // forwards; what must never come back is a second path of its own.
+            assertTrue(body(src, "public boolean navStyleIsZoom()").contains("director.navStyleIsZoom()"),
+                    screen + ": the root tab switch must resolve the style through the director,"
+                            + " never by reading the config itself");
+            assertTrue(body(source(DIRECTOR), "public boolean navStyleIsZoom()").contains("pageNavStyle()"),
+                    "the director's style answer must come from the one resolver");
             assertTrue(body(source(CONTROLLER), "public void switchRoot(AppPage")
                             .contains("host.navStyleIsZoom()"),
                     "the tab switch must resolve the style through the one resolver, by asking the"
@@ -269,10 +279,10 @@ class PageNavStyleSourceTest {
                     "// Full-width push/pop: root<->detail transitions.");
             assertTrue(branch.contains("pageNavZoom"),
                     screen + ": the detail<->detail branch must consult the resolved style");
-            assertTrue(branch.contains("navZoomPhase") && branch.contains("navExitAlpha")
+            assertTrue(branch.contains("zoomExiting") && branch.contains("navExitAlpha")
                             && branch.contains("navEnterAlpha"),
                     screen + ": the detail<->detail zoom must ride the shared serial zoom clock"
-                            + " (navZoomPhase / navExitAlpha / navEnterAlpha), not a private one");
+                            + " (the EXIT phase / navExitAlpha / navEnterAlpha), not a private one");
             assertTrue(branch.contains("navLayerSkippable") && branch.contains("applyNavScale"),
                     screen + ": the detail<->detail zoom must reuse the nav layer helpers"
                             + " (pure-overdraw skip + panel-centred scale)");
@@ -476,7 +486,7 @@ class PageNavStyleSourceTest {
                     screen + ": the screen's pushNav must stay the funnel and delegate");
             assertTrue(body(src, "public void popPage()").contains("navStack.popPage()"),
                     screen + ": the screen's popPage must stay the door and delegate");
-            assertTrue(body(src, "private void startPageNav(").contains("pageNavStyle()"),
+            assertTrue(body(source(DIRECTOR), "public void startPageNav(").contains("pageNavStyle()"),
                     screen + ": startPageNav is the one place the nav style is resolved");
             assertTrue(body(source(CONTROLLER), "public void pushNav(NavPage").contains("host.beginPageNav("),
                     "the controller's pushNav must drive the one animated nav start");
@@ -503,8 +513,8 @@ class PageNavStyleSourceTest {
         for (String screen : SCREENS) {
             String src = source(screen);
             List<String> gated = new ArrayList<>(List.of(
-                    body(src, "private void stepZoomNav("),
-                    body(src, "private void stepSlideNav(")));
+                    body(source(DIRECTOR), "public void stepZoomNav("),
+                    body(source(DIRECTOR), "public void stepSlideNav(")));
             for (String step : gated) {
                 assertTrue(step.contains("Animations.enabled()"),
                         screen + ": both nav clocks must zero their tau when decorative motion is off");

@@ -30,6 +30,7 @@ import com.atom.chat.nav.AppPage;
 import com.atom.chat.nav.AtomChatState;
 import com.atom.chat.nav.NavPage;
 import com.atom.chat.nav.NavStackController;
+import com.atom.chat.nav.PageTransitionDirector;
 import com.atom.chat.notification.NotificationJumpService;
 import com.atom.chat.avatar.AvatarImage;
 import com.atom.chat.avatar.AvatarStore;
@@ -44,7 +45,6 @@ import com.atom.chat.page.PageHost;
 import com.atom.chat.page.ProfilePage;
 import com.atom.chat.font.FontManager;
 import com.atom.chat.mixin.MouseHandlerAccessor;
-import com.atom.chat.render.Animator;
 import com.atom.chat.render.BlurMotionGate;
 import com.atom.chat.render.ClickableSpan;
 import com.atom.chat.screen.ScreenMetrics;
@@ -1189,55 +1189,37 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
                 : ContextMenuActions.MessageFacts.of(msg.getSenderUuid(), msg.getProfileName(),
                         msg.getSenderName(), msg.isOwn(), msg.isSystem());
     }
-    // Root tab transition. The bottom bar owns the shared Animator; the screen
-    // keeps the from/to slot indexes and reuses the same Animator for the root
-    // page push so the capsule and content always move in lockstep.
+    // Root tab transition (D24b-1). The bottom bar is the screen's: it draws,
+    // hit-tests and holds the shared animator the capsule rides. Both transition
+    // state machines and their clocks live in the director, which is handed that
+    // animator; every read point below goes through it.
     private final BottomTabBar bottomTabBar = new BottomTabBar();
-    private final Animator rootTabAnim = bottomTabBar.indicatorAnimator();
-    private int rootTabFrom = -1;
-    private int rootTabTo = -1;
-
-    // Page push/pop transition (root <-> detail). The navigation entry changes
-    // only after the animation settles so the active page stays consistent.
-    // No tween clock: the SLIDE style rides navSlideProgress and the ZOOM
-    // style rides the serial state machine below — both exponential
-    // (UiMotion.expApproach), so the motion starts at full speed and decays
-    // instead of the eased tween's acceleration notch.
-    private float navSlideProgress;
-    private NavPage pageNavFrom;
-    private NavPage pageNavTo;
-    private boolean pageNavPopPending;
-    /** Resolved once per nav in {@link #startPageNav} by {@link #pageNavStyle()}:
-     *  true exactly while the configured style is ZOOM, for every page pair. */
-    private boolean pageNavZoom;
     /**
-     * Melodify-style serial zoom phases: the leaving page shrinks out first
-     * (EXIT, alpha 1 -> 0 at scale 1.0 -> 0.9), then the arriving page
-     * settles in (ENTER, alpha 0 -> 1 at scale 1.1 -> 1.0) — never two
-     * half-transparent pages composited at once.
+     * The two transition state machines (D24b-1): the page push/pop clock and the
+     * root-tab clock, the one {@code pageNavStyle()} resolution they share, and
+     * the nav-layer geometry. Built here, before the nav port below, because that
+     * port forwards its ten transition steps to it. Its own port is the three
+     * steps this screen owns: the draft save and reply capture a nav starts with,
+     * and the pop a finished pop transition applies.
      */
-    private static final int NAV_ZOOM_EXIT = 0;
-    private static final int NAV_ZOOM_ENTER = 1;
-    private int navZoomPhase = NAV_ZOOM_ENTER;
-    private float navExitAlpha;
-    private float navEnterAlpha;
+    private final PageTransitionDirector director = new PageTransitionDirector(
+            new PageTransitionDirector.Host() {
+                @Override
+                public void persistCurrentDraft() {
+                    saveCurrentDraft();
+                }
 
-    // Root tab content transition, following the configured page-nav style
-    // like the root<->detail push: ZOOM = the same serial shrink-out/settle
-    // state machine, staged inside the list area; SLIDE = the two-page push
-    // driven by the same exponential family. The capsule shares the tab bar's
-    // animator as its value holder and is advanced from the same clock in
-    // {@link #stepRootNav}, so pill and pages always land together.
-    /** Resolved once per switch in {@link #switchRoot}: ZOOM while the config style is ZOOM. */
-    private boolean rootTabZoom;
-    /** Serial zoom phases for the tab content, mirroring {@link #navZoomPhase}. */
-    private static final int ROOT_ZOOM_EXIT = 0;
-    private static final int ROOT_ZOOM_ENTER = 1;
-    private int rootZoomPhase = ROOT_ZOOM_ENTER;
-    private float rootZoomExitAlpha;
-    private float rootZoomEnterAlpha;
-    /** Exponential 0->1 clock of the SLIDE tab push; the page-nav twin is {@link #navSlideProgress}. */
-    private float rootTabProgress;
+                @Override
+                public void captureReplySlot() {
+                    syncReplySlot();
+                }
+
+                @Override
+                public void applyPendingPop() {
+                    popNow();
+                }
+            },
+            bottomTabBar.indicatorAnimator());
 
     /**
      * Public-feed view filter (all / system only / players only), cycled by the
@@ -1378,63 +1360,52 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
 
         @Override
         public void beginPageNav(NavPage from, NavPage to, boolean popPending) {
-            startPageNav(from, to, popPending);
+            director.startPageNav(from, to, popPending);
         }
 
         @Override
         public void abandonPageNav() {
-            pageNavFrom = null;
-            pageNavTo = null;
-            pageNavPopPending = false;
-            navSlideProgress = 0.0F;
+            director.abandonPageNav();
         }
 
         @Override
         public void abandonRootTransition() {
-            clearRootTransition();
+            director.clearRootTransition();
         }
 
         @Override
         public boolean rootTransitionLive() {
-            return rootTransitionActive();
+            return director.rootTransitionActive();
         }
 
         @Override
         public boolean navStyleIsZoom() {
-            return pageNavStyle() == AtomChatConfig.PageNavStyle.ZOOM;
+            return director.navStyleIsZoom();
         }
 
         @Override
         public void pinRootTabCapsule(AppPage from) {
-            rootTabAnim.setValue(rootIndex(from));
+            director.pinTabCapsule(from);
         }
 
         @Override
         public void markRootTabSpan(AppPage from, AppPage to) {
-            rootTabFrom = rootIndex(from);
-            rootTabTo = rootIndex(to);
+            director.markTabSpan(from, to);
         }
 
         @Override
         public void applyRootTabMotion(boolean zoom) {
-            rootTabZoom = zoom;
-            if (zoom) {
-                rootZoomPhase = ROOT_ZOOM_EXIT;
-                rootZoomExitAlpha = 1.0F;
-                rootZoomEnterAlpha = 0.0F;
-            } else {
-                rootTabProgress = 0.0F;
-            }
+            director.applyTabMotion(zoom);
         }
 
         @Override
         public void resetRootTabCapsule() {
-            rootTabAnim.setValue(rootTabFrom);
+            director.resetTabCapsule();
         }
 
         @Override
         public void selectTabNow(AppPage root) {
-            bottomTabBar.setSelectedImmediate(rootIndex(root));
+            bottomTabBar.setSelectedImmediate(director.rootIndex(root));
         }
     };
     /**
@@ -1617,124 +1588,6 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         navStack.popNow();
     }
 
-    private boolean pageNavActive() {
-        if (pageNavFrom == null || pageNavTo == null) {
-            return false;
-        }
-        if (pageNavZoom) {
-            return !(navZoomPhase == NAV_ZOOM_ENTER && navEnterAlpha >= 0.999F);
-        }
-        return navSlideProgress < 0.999F;
-    }
-
-    /**
-     * Advances the serial zoom: the leaving page drains to alpha 0 (handing
-     * over to ENTER at 0.02), then the arriving page fills to 1. With
-     * decorative motion off the tau is 0 and both phases snap in one frame.
-     * Sequential ifs on purpose: a fast exit can hand over to the enter
-     * phase within the same step.
-     */
-    private void stepZoomNav(float dtMs) {
-        float tau = Animations.enabled() ? UiMotion.PAGE_NAV_TAU_MS : 0.0F;
-        if (navZoomPhase == NAV_ZOOM_EXIT) {
-            navExitAlpha = UiMotion.expApproach(navExitAlpha, 0.0F, dtMs, tau);
-            if (navExitAlpha <= 0.02F) {
-                navExitAlpha = 0.0F;
-                navZoomPhase = NAV_ZOOM_ENTER;
-            }
-        }
-        if (navZoomPhase == NAV_ZOOM_ENTER && navEnterAlpha < 1.0F) {
-            navEnterAlpha = UiMotion.expApproach(navEnterAlpha, 1.0F, dtMs, tau);
-        }
-    }
-
-    /**
-     * Advances the SLIDE progress on the same exponential language as the
-     * zoom ({@link #stepZoomNav}): full-speed start, decaying tail, no eased
-     * tween's acceleration notch. With decorative motion off the tau is 0
-     * and the progress snaps in one frame.
-     */
-    private void stepSlideNav(float dtMs) {
-        float tau = Animations.enabled() ? UiMotion.PAGE_SLIDE_TAU_MS : 0.0F;
-        navSlideProgress = UiMotion.expApproach(navSlideProgress, 1.0F, dtMs, tau);
-    }
-
-    private void startPageNav(NavPage from, NavPage to, boolean popPending) {
-        saveCurrentDraft();
-        // The reply bar is captured with the draft: whichever page leaves keeps
-        // its own bar, so the incoming page's composer is never drawn with it.
-        syncReplySlot();
-        pageNavFrom = from;
-        pageNavTo = to;
-        pageNavPopPending = popPending;
-        // The style is resolved once per nav so push and pop can never
-        // disagree mid-flight, and every pair goes through the one resolver
-        // (pageNavStyle) — no page kind carries an animation rule of its own.
-        AtomChatConfig.PageNavStyle style = pageNavStyle();
-        pageNavZoom = style == AtomChatConfig.PageNavStyle.ZOOM;
-        if (pageNavZoom) {
-            // The zoom runs on its own two-phase clock (UiMotion.expApproach,
-            // Melodify's M3 step); pageNavActive() reads the state machine.
-            navZoomPhase = NAV_ZOOM_EXIT;
-            navExitAlpha = 1.0F;
-            navEnterAlpha = 0.0F;
-        } else {
-            // The slide rides the exponential progress; the Animations gate
-            // sits inside stepSlideNav's tau, so decorative-motion-off snaps
-            // there.
-            navSlideProgress = 0.0F;
-        }
-    }
-
-    /**
-     * The one resolution path for every page switch: root tabs, root<->detail,
-     * detail<->detail, pushes, pops and the banner-driven jumps all read the
-     * configured style here, in both directions (a pop mirrors its push).
-     *
-     * <p>The pair used to be split by kind — root<->detail followed the config
-     * while detail<->detail was pinned to SLIDE — which made the setting read
-     * as "does nothing" on the public<->private and chat<->profile hops and put
-     * a second, invisible rule next to the config field. No pair is special
-     * any more: the style is whatever {@link AtomChatConfig#pageNavStyle} says.
-     */
-    static AtomChatConfig.PageNavStyle pageNavStyle() {
-        return AtomChatConfig.get().pageNavStyle;
-    }
-
-    private void finishPageNav() {
-        if (pageNavPopPending) {
-            popNow();
-        }
-        pageNavFrom = null;
-        pageNavTo = null;
-        pageNavPopPending = false;
-        navSlideProgress = 0.0F;
-    }
-
-    /**
-     * True when a zoom layer has nothing left to composite: the scale is back
-     * at 1 and the layer is fully opaque. A full-panel saveLayer behind an
-     * identity transform is pure overdraw, so the nav branch and the settled
-     * shell panel skip the layer entirely in that state (motion off lands here
-     * from frame one).
-     */
-    private static boolean navLayerSkippable(float alpha, float scale) {
-        return alpha >= 0.999F && Math.abs(scale - 1.0F) < 0.001F;
-    }
-
-    /** Centers a nav scale around the panel middle. Draw-only: hit-tests
-     *  keep unscaled coordinates, like every other transform in this screen. */
-    private static void applyNavScale(Canvas canvas, UiLayout.Rect panelRect, float scale) {
-        if (scale == 1.0F) {
-            return;
-        }
-        float cx = panelRect.x() + panelRect.w() / 2.0F;
-        float cy = panelRect.y() + panelRect.h() / 2.0F;
-        canvas.translate(cx, cy);
-        canvas.scale(scale, scale);
-        canvas.translate(-cx, -cy);
-    }
-
     /**
      * Clears the transient state of a settings sub-page when leaving it. The
      * three-part cleanup and the chip memory live in {@link SettingsDetailPage}
@@ -1744,16 +1597,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         settingsDetailPage.resetSettingsUi();
     }
 
-    private float pageNavDx(float travel) {
-        float progress = navSlideProgress;
-        // Push: the incoming page enters from the right (travel -> 0).
-        // Pop: the outgoing page leaves to the right (0 -> travel).
-        // The old code decided by pageNavTo.isRoot(), which broke detail<->detail
-        // pops (the destination WORLD_CHAT is also non-root).
-        return pageNavPopPending ? travel * progress : travel * (1.0F - progress);
-    }
-
-    /** Opens another player's profile as a pushed detail page. */
+        /** Opens another player's profile as a pushed detail page. */
     public void openProfileDetail(PlayerRef player) {
         avatarWiring.openProfileDetail(player);
     }
@@ -1834,7 +1678,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
      * {@code UiLayout.of} leaves at the panel origin when {@code replyH == 0}.
      */
     private boolean replyBarVisible() {
-        return replySlots.replyBarVisible(pageNavFrom, pageNavTo);
+        return replySlots.replyBarVisible(director.pageNavFrom(), director.pageNavTo());
     }
 
     /** Fold window for a conversation, created on first view and kept across in-place growth. */
@@ -2219,7 +2063,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         // lingers in [0.999, 1) — past this point the fade is fully opaque and
         // scale/slide are exactly 1/0, so the full-panel layer is pure
         // overdraw and the panel draws directly (same call as the nav branch).
-        if (navLayerSkippable(Math.max(0.0F, Math.min(1.0F, progress)), scale)) {
+        if (PageTransitionDirector.navLayerSkippable(Math.max(0.0F, Math.min(1.0F, progress)), scale)) {
             int probeBefore = canvas.getSaveCount();
             drawPanel(canvas, x, y, worldSnapshot, mouseX, mouseY, delta);
             drawNotificationBanners(canvas, mouseX, mouseY);
@@ -2386,7 +2230,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
 
         float vmx = toVirtualX(mouseX);
         float vmy = toVirtualY(mouseY);
-        boolean navRunning = pageNavActive();
+        boolean navRunning = director.pageNavActive();
         // Open save-point for the moving page during a nav: the zoom layer's
         // paint (restore + close) or the slide save (restore only). The
         // settings/profile branches close it before their early returns; the
@@ -2398,13 +2242,13 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         // (drawing without the layer would composite onto the visible side).
         boolean navMovingHidden = false;
         if (navRunning) {
-            if (pageNavZoom) {
-                stepZoomNav(frameDt);
+            if (director.pageNavZoom()) {
+                director.stepZoomNav(frameDt);
             } else {
-                stepSlideNav(frameDt);
+                director.stepSlideNav(frameDt);
             }
-            if (!pageNavActive()) {
-                finishPageNav();
+            if (!director.pageNavActive()) {
+                director.finishPageNav();
                 if (topPage().isRoot()) {
                     drawRootScreen(canvas, mouseX, mouseY, topPage());
                     drawBezel(canvas, layout);
@@ -2413,8 +2257,8 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
                 // Push finished (or a detail-to-detail settle): the current
                 // detail page is now the settled top page.
                 navRunning = false;
-            } else if (pageNavFrom != null && pageNavTo != null
-                    && !pageNavFrom.isRoot() && !pageNavTo.isRoot()) {
+            } else if (director.pageNavFrom() != null && director.pageNavTo() != null
+                    && !director.pageNavFrom().isRoot() && !director.pageNavTo().isRoot()) {
                 // Detail-to-detail (public <-> private, chat <-> profile)
                 // full-width push/pop. Same style rule as root<->detail: SLIDE
                 // translates two whole pages, ZOOM runs the shared serial
@@ -2423,17 +2267,17 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
                 // state while the other page is composited — and no chrome is
                 // repainted fixed outside the moving layer: the composer deck
                 // belongs to its page and travels with it.
-                boolean popping = pageNavPopPending;
-                NavPage fromPage = pageNavFrom;
-                NavPage toPage = pageNavTo;
+                boolean popping = director.pageNavPopPending();
+                NavPage fromPage = director.pageNavFrom();
+                NavPage toPage = director.pageNavTo();
                 float travel = layout.list.w();
-                float progress = navSlideProgress;
+                float progress = director.navSlideProgress();
                 // Both whole pages ride one pair of offsets, assigned by role
                 // and not by page kind: the page on top of the stack during the
                 // nav — the destination on a push, the page being left on a pop
-                // — uses the shared pageNavDx(travel) expression the
+                // — uses the shared director.pageNavDx(travel) expression the
                 // root<->detail slide rides, and the other side its mirror.
-                float slideDx = pageNavDx(travel);
+                float slideDx = director.pageNavDx(travel);
                 float fromDx = popping ? slideDx : -travel * progress;
                 float toDx = popping ? -travel * (1.0F - progress) : slideDx;
                 suppressHeader = true;
@@ -2454,9 +2298,9 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
                             Math.max(inputExtraFor(fromView, width), inputExtraFor(toView, width)));
                 }
                 UiLayout.Rect panelRect = layout.rect();
-                if (pageNavZoom) {
+                if (director.pageNavZoom()) {
                     // ZOOM: one whole side per phase, on the shared serial clock
-                    // — the same navZoomPhase / navExitAlpha / navEnterAlpha the
+                    // — the same serial zoom channels the
                     // root<->detail push rides, so the setting means the same
                     // motion on every pair. EXIT drains the page being left
                     // (alpha 1 -> 0 at scale 1.0 -> 0.9), ENTER settles the
@@ -2467,14 +2311,14 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
                     // EXIT paints the leaving page whole and ENTER the arriving
                     // one whole — never a bare message list with the chrome of
                     // the other side left standing.
-                    boolean exiting = navZoomPhase == NAV_ZOOM_EXIT;
+                    boolean exiting = director.zoomExiting();
                     NavPage visiblePage = exiting ? fromPage : toPage;
                     ChatPageView visibleView = exiting ? fromView : toView;
-                    float alpha = exiting ? navExitAlpha : navEnterAlpha;
+                    float alpha = exiting ? director.navExitAlpha() : director.navEnterAlpha();
                     float scale = exiting ? 0.9F + alpha * 0.1F : 1.1F - alpha * 0.1F;
                     Paint layer = null;
                     canvas.save();
-                    if (!navLayerSkippable(alpha, scale)) {
+                    if (!PageTransitionDirector.navLayerSkippable(alpha, scale)) {
                         layer = new Paint().setAlphaf(alpha);
                         canvas.saveLayer(Rect.makeXYWH(panelRect.x(), panelRect.y(),
                                 panelRect.w(), panelRect.h()), layer);
@@ -2484,7 +2328,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
                     // corner radius instead of biting it with square edges.
                     SkiaDraw.clip(canvas, panelRect.x(), panelRect.y(), panelRect.w(), panelRect.h(),
                             UiTokens.panelRadius());
-                    applyNavScale(canvas, panelRect, scale);
+                    PageTransitionDirector.applyNavScale(canvas, panelRect, scale);
                     if (visibleView != null) {
                         drawChatPageBody(canvas, layout, mouseX, mouseY, visibleView);
                     } else if (visiblePage.page() == AppPage.PROFILE_DETAIL) {
@@ -2544,11 +2388,11 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
                 // Full-width push/pop: root<->detail transitions. The header is
                 // drawn separately as a fixed "status bar" after both layers.
                 suppressHeader = true;
-                NavPage navRoot = pageNavTo.isRoot() ? pageNavTo : pageNavFrom;
-                NavPage moving = pageNavTo.isRoot() ? pageNavFrom : pageNavTo;
+                NavPage navRoot = director.pageNavTo().isRoot() ? director.pageNavTo() : director.pageNavFrom();
+                NavPage moving = director.pageNavTo().isRoot() ? director.pageNavFrom() : director.pageNavTo();
                 float travel = layout.rect().w();
-                float progress = navSlideProgress;
-                boolean pushing = !pageNavTo.isRoot();
+                float progress = director.navSlideProgress();
+                boolean pushing = !director.pageNavTo().isRoot();
                 // One eased clock, two paired layers. ZOOM gives the change
                 // depth: the moving page grows 0.94 -> 1 while fading in while
                 // the page underneath sinks 1 -> 0.96 and dims; a pop runs the
@@ -2556,7 +2400,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
                 // old code slid every pop, whatever the style). SLIDE keeps
                 // the horizontal push. The fixed chrome (header, bezel) never
                 // joins the transforms.
-                boolean zoom = pageNavZoom;
+                boolean zoom = director.pageNavZoom();
                 // Melodify's serial zoom: while EXIT runs only the leaving
                 // page is composited (shrinking 1.0 -> 0.9 as it fades);
                 // while ENTER runs only the arriving page (settling
@@ -2568,8 +2412,8 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
                 float rootAlpha;
                 float rootScale;
                 if (zoom) {
-                    if (navZoomPhase == NAV_ZOOM_EXIT) {
-                        float a = navExitAlpha;
+                    if (director.zoomExiting()) {
+                        float a = director.navExitAlpha();
                         float s = 0.9F + a * 0.1F;
                         if (pushing) {
                             rootAlpha = a;
@@ -2583,7 +2427,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
                             rootScale = 1.0F;
                         }
                     } else {
-                        float a = navEnterAlpha;
+                        float a = director.navEnterAlpha();
                         float s = 1.1F - a * 0.1F;
                         if (pushing) {
                             movingAlpha = a;
@@ -2619,7 +2463,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
                 canvas.save();
                 Paint rootLayer = null;
                 if (zoom) {
-                    if (rootVisible && !navLayerSkippable(rootAlpha, rootScale)) {
+                    if (rootVisible && !PageTransitionDirector.navLayerSkippable(rootAlpha, rootScale)) {
                         rootLayer = new Paint().setAlphaf(rootAlpha);
                         canvas.saveLayer(Rect.makeXYWH(panelRect.x(), panelRect.y(),
                                 panelRect.w(), panelRect.h()), rootLayer);
@@ -2628,7 +2472,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
                         // page must not paint into the bezel's corners.
                         SkiaDraw.clip(canvas, panelRect.x(), panelRect.y(), panelRect.w(), panelRect.h(),
                                 UiTokens.panelRadius());
-                        applyNavScale(canvas, panelRect, rootScale);
+                        PageTransitionDirector.applyNavScale(canvas, panelRect, rootScale);
                     }
                 } else {
                     SkiaDraw.clip(canvas, panelRect.x(), panelRect.y(), panelRect.w(), panelRect.h(),
@@ -2659,20 +2503,20 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
                 boolean movingVisible = !zoom || movingAlpha > 0.001F;
                 navMovingHidden = zoom && !movingVisible;
                 if (zoom) {
-                    if (movingVisible && !navLayerSkippable(movingAlpha, movingScale)) {
+                    if (movingVisible && !PageTransitionDirector.navLayerSkippable(movingAlpha, movingScale)) {
                         navMovingLayer = new Paint().setAlphaf(movingAlpha);
                         canvas.saveLayer(Rect.makeXYWH(panelRect.x(), panelRect.y(),
                                 panelRect.w(), panelRect.h()), navMovingLayer);
                         // Same rounded layer clip as the root side above.
                         SkiaDraw.clip(canvas, panelRect.x(), panelRect.y(), panelRect.w(), panelRect.h(),
                                 UiTokens.panelRadius());
-                        applyNavScale(canvas, panelRect, movingScale);
+                        PageTransitionDirector.applyNavScale(canvas, panelRect, movingScale);
                     }
                 } else {
                     canvas.save();
                     SkiaDraw.clip(canvas, panelRect.x(), panelRect.y(), panelRect.w(), panelRect.h(),
                             UiTokens.panelRadius());
-                    canvas.translate(pageNavDx(travel), 0.0F);
+                    canvas.translate(director.pageNavDx(travel), 0.0F);
                     navMovingSlide = true;
                 }
                 // A settings sub-page has no composer tail to draw into the
@@ -2765,15 +2609,15 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
             }
             suppressHeader = false;
             // Fixed status-bar header: it never slides with the page bodies.
-            if (!pageNavTo.isRoot()) {
-                ShellHeader.render(canvas, layout.header, headerChrome.shellTitleFor(pageNavTo), true,
+            if (!director.pageNavTo().isRoot()) {
+                ShellHeader.render(canvas, layout.header, headerChrome.shellTitleFor(director.pageNavTo()), true,
                         headerChrome.backButton(), headerChrome.backButtonHover(), textPrimary(),
-                        pageNavTo.page() == AppPage.PRIVATE_CHAT
-                                ? contextActions.isOnlinePlayer(pageNavTo.target()) : null,
-                        headerActionFor(pageNavTo));
+                        director.pageNavTo().page() == AppPage.PRIVATE_CHAT
+                                ? contextActions.isOnlinePlayer(director.pageNavTo().target()) : null,
+                        headerActionFor(director.pageNavTo()));
             } else {
                 UiLayout root = rootLayout();
-                ShellHeader.render(canvas, root.header, headerChrome.shellTitleFor(pageNavTo), false, null, 0.0F,
+                ShellHeader.render(canvas, root.header, headerChrome.shellTitleFor(director.pageNavTo()), false, null, 0.0F,
                         textPrimary());
             }
         }
@@ -3075,7 +2919,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         float vmx = toVirtualX(mouseX);
         float vmy = toVirtualY(mouseY);
         bottomTabBar.update(frameDt, vmx, vmy, root.tabBar);
-        stepRootNav(frameDt);
+        director.stepRootNav(frameDt);
         if (!suppressHeader) {
             ShellHeader.render(canvas, root.header, headerChrome.shellTitleFor(rootPage), false, null, 0.0F,
                     textPrimary());
@@ -3093,11 +2937,11 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
     }
 
     private void drawRootPage(Canvas canvas, UiLayout layout, AppPage rootPage) {
-        if (!rootTransitionActive()) {
+        if (!director.rootTransitionActive()) {
             drawRootPageBody(canvas, layout, rootPage, 0.0F);
             return;
         }
-        if (rootTabZoom) {
+        if (director.rootTabZoom()) {
             drawRootPageZoom(canvas, layout, rootPage);
             return;
         }
@@ -3106,14 +2950,14 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         // the incoming page enters from that side. The progress is the same
         // exponential clock that positions the capsule (stepRootNav), so pill
         // and pages land together without the eased tween's notch.
-        float progress = rootTabProgress;
+        float progress = director.rootTabProgress();
         canvas.save();
         try {
             SkiaDraw.clip(canvas, layout.list.x(), layout.list.y(),
                     layout.list.w(), layout.list.h(), 0.0F);
             float travel = layout.list.w();
-            float sign = rootTabTo > rootTabFrom ? 1.0F : -1.0F;
-            drawRootPageBody(canvas, layout, rootPageForIndex(rootTabFrom),
+            float sign = director.rootTabTo() > director.rootTabFrom() ? 1.0F : -1.0F;
+            drawRootPageBody(canvas, layout, director.rootPageForIndex(director.rootTabFrom()),
                     -sign * travel * progress);
             drawRootPageBody(canvas, layout, rootPage,
                     sign * travel * (1.0F - progress));
@@ -3133,18 +2977,18 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
      */
     private void drawRootPageZoom(Canvas canvas, UiLayout layout, AppPage rootPage) {
         UiLayout.Rect list = layout.list;
-        boolean exiting = rootZoomPhase == ROOT_ZOOM_EXIT;
-        float alpha = exiting ? rootZoomExitAlpha : rootZoomEnterAlpha;
+        boolean exiting = director.rootZoomExiting();
+        float alpha = exiting ? director.rootZoomExitAlpha() : director.rootZoomEnterAlpha();
         float scale = exiting ? 0.9F + alpha * 0.1F : 1.1F - alpha * 0.1F;
-        AppPage page = exiting ? rootPageForIndex(rootTabFrom) : rootPage;
-        if (alpha <= 0.001F || navLayerSkippable(alpha, scale)) {
+        AppPage page = exiting ? director.rootPageForIndex(director.rootTabFrom()) : rootPage;
+        if (alpha <= 0.001F || PageTransitionDirector.navLayerSkippable(alpha, scale)) {
             return;
         }
         canvas.save();
         try (Paint layer = new Paint().setAlphaf(alpha)) {
             canvas.saveLayer(Rect.makeXYWH(list.x(), list.y(), list.w(), list.h()), layer);
             SkiaDraw.clip(canvas, list.x(), list.y(), list.w(), list.h(), 0.0F);
-            applyNavScale(canvas, list, scale);
+            PageTransitionDirector.applyNavScale(canvas, list, scale);
             drawRootPageBody(canvas, layout, page, 0.0F);
             // save() and saveLayer() pushed two entries; both must be popped.
             // This restore pairs with the layer, the finally's with the plain
@@ -3177,79 +3021,8 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         }
     }
 
-    private boolean rootTransitionActive() {
-        if (rootTabFrom < 0 || rootTabTo < 0 || rootTabFrom == rootTabTo) {
-            return false;
-        }
-        if (rootTabZoom) {
-            return !(rootZoomPhase == ROOT_ZOOM_ENTER && rootZoomEnterAlpha >= 0.999F);
-        }
-        return rootTabProgress < 0.999F;
-    }
-
-    private void clearRootTransition() {
-        rootTabFrom = -1;
-        rootTabTo = -1;
-    }
-
-    /**
-     * Advances the tab transition, style-aware like the page nav. The capsule
-     * shares the tab bar's animator as its value holder and is written from
-     * the same clock as the content: on a slide the pill position is the
-     * progress mapped across the from->to cells (perfect lockstep), on a zoom
-     * it keeps its own exponential travel at the zoom tau so it lands as the
-     * enter phase settles. A transition that completes here is cleared at
-     * once, so the same frame already draws the settled page.
-     */
-    private void stepRootNav(float dtMs) {
-        if (!rootTransitionActive()) {
-            return;
-        }
-        boolean enabled = Animations.enabled();
-        if (rootTabZoom) {
-            float tau = enabled ? UiMotion.PAGE_NAV_TAU_MS : 0.0F;
-            if (rootZoomPhase == ROOT_ZOOM_EXIT) {
-                rootZoomExitAlpha = UiMotion.expApproach(rootZoomExitAlpha, 0.0F, dtMs, tau);
-                if (rootZoomExitAlpha <= 0.02F) {
-                    rootZoomExitAlpha = 0.0F;
-                    rootZoomPhase = ROOT_ZOOM_ENTER;
-                }
-            }
-            if (rootZoomPhase == ROOT_ZOOM_ENTER && rootZoomEnterAlpha < 1.0F) {
-                rootZoomEnterAlpha = UiMotion.expApproach(rootZoomEnterAlpha, 1.0F, dtMs, tau);
-            }
-            rootTabAnim.setValue(UiMotion.expApproach(rootTabAnim.getValue(), rootTabTo, dtMs, tau));
-        } else {
-            float tau = enabled ? UiMotion.PAGE_SLIDE_TAU_MS : 0.0F;
-            rootTabProgress = UiMotion.expApproach(rootTabProgress, 1.0F, dtMs, tau);
-            rootTabAnim.setValue(rootTabFrom + (rootTabTo - rootTabFrom) * rootTabProgress);
-        }
-        if (!rootTransitionActive()) {
-            clearRootTransition();
-        }
-    }
-
-    private AppPage rootPageForIndex(int index) {
-        return switch (index) {
-            case 0 -> AppPage.CHAT_LIST;
-            case 1 -> AppPage.PROFILE;
-            case 2 -> AppPage.SETTINGS;
-            default -> throw new IllegalStateException("Unexpected root tab index " + index);
-        };
-    }
-
-    private int rootIndex(AppPage page) {
-        return switch (page) {
-            case CHAT_LIST -> 0;
-            case PROFILE -> 1;
-            case SETTINGS -> 2;
-            case WORLD_CHAT, PRIVATE_CHAT, SETTINGS_SECTION, PROFILE_DETAIL ->
-                    throw new IllegalStateException("Pushed pages have no bottom tab index");
-        };
-    }
-
-    private void drawBottomTabBar(Canvas canvas, UiLayout layout, AppPage rootPage) {
-        int selectedIndex = rootIndex(rootPage);
+            private void drawBottomTabBar(Canvas canvas, UiLayout layout, AppPage rootPage) {
+        int selectedIndex = director.rootIndex(rootPage);
         bottomTabBar.render(canvas, layout.tabBar, selectedIndex, textPrimary(), accent());
     }
 

@@ -93,6 +93,12 @@ class NavStackWiringSourceTest {
      * declared, implemented and never does the work — the cascade would run,
      * every unit test above would still pass (the recorder is the port), and
      * the screen would do nothing.
+     *
+     * <p>Since block 24b-1 nine of the ten transition steps are forwarded one
+     * indirection deeper, to {@code PageTransitionDirector}. The fact is
+     * unchanged -- the port must still reach whatever owns the step -- and the
+     * director's own work is asserted at its new home in
+     * {@code PageTransitionWiringSourceTest}.
      */
     private static final Map<String, String> PORT_WORK = new LinkedHashMap<>();
 
@@ -114,15 +120,15 @@ class NavStackWiringSourceTest {
         PORT_WORK.put("dropProfileSubject", "profilePage.resetSubject()");
         PORT_WORK.put("copy", "tr(key)");
         PORT_WORK.put("beginPageNav", "startPageNav(from, to, popPending)");
-        PORT_WORK.put("abandonPageNav", "pageNavFrom = null");
-        PORT_WORK.put("abandonRootTransition", "clearRootTransition()");
-        PORT_WORK.put("rootTransitionLive", "rootTransitionActive()");
-        PORT_WORK.put("navStyleIsZoom", "pageNavStyle() == AtomChatConfig.PageNavStyle.ZOOM");
-        PORT_WORK.put("pinRootTabCapsule", "rootTabAnim.setValue(rootIndex(from))");
-        PORT_WORK.put("markRootTabSpan", "rootTabFrom = rootIndex(from)");
-        PORT_WORK.put("applyRootTabMotion", "rootTabZoom = zoom");
-        PORT_WORK.put("resetRootTabCapsule", "rootTabAnim.setValue(rootTabFrom)");
-        PORT_WORK.put("selectTabNow", "bottomTabBar.setSelectedImmediate(rootIndex(root))");
+        PORT_WORK.put("abandonPageNav", "director.abandonPageNav()");
+        PORT_WORK.put("abandonRootTransition", "director.clearRootTransition()");
+        PORT_WORK.put("rootTransitionLive", "director.rootTransitionActive()");
+        PORT_WORK.put("navStyleIsZoom", "director.navStyleIsZoom()");
+        PORT_WORK.put("pinRootTabCapsule", "director.pinTabCapsule(from)");
+        PORT_WORK.put("markRootTabSpan", "director.markTabSpan(from, to)");
+        PORT_WORK.put("applyRootTabMotion", "director.applyTabMotion(zoom)");
+        PORT_WORK.put("resetRootTabCapsule", "director.resetTabCapsule()");
+        PORT_WORK.put("selectTabNow", "bottomTabBar.setSelectedImmediate(director.rootIndex(root))");
     }
 
     // ---------------------------------------------------------------- helpers
