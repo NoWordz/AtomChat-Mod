@@ -16,9 +16,7 @@ import com.atom.chat.config.AtomChatConfig;
 import com.atom.chat.emote.EmoteStore;
 import com.atom.chat.image.ImageLoader;
 import com.atom.chat.image.ImagePreviewOverlay;
-import com.atom.chat.image.ImageSaver;
-import com.atom.chat.image.ImageUploader;
-import com.atom.chat.net.MediaCompanionClient;
+import com.atom.chat.image.ImageUploadPipeline;
 import com.atom.chat.net.PokeCompanionClient;
 import com.atom.chat.chat.LocalEcho;
 import com.atom.chat.chat.PlayerRef;
@@ -77,7 +75,6 @@ import com.atom.chat.wallpaper.WallpaperStore;
 import com.atom.chat.watut.TypingIndicatorSource;
 import com.atom.chat.util.ClipboardImages;
 import com.atom.chat.util.FilePicker;
-import com.atom.chat.util.ImageFileNames;
 import com.atom.chat.util.ImageFiles;
 import io.github.humbleui.skija.Canvas;
 import io.github.humbleui.skija.Color;
@@ -392,7 +389,6 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
 
     private final SkiaGraphics graphics = new SkiaGraphics();
     private final String originalChatText;
-    private final ImageUploader imageUploader = new ImageUploader();
     /**
      * Ordered input routing. Priority (first registered wins): closing guard,
      * modals (cropper/colour picker), pushed-subpage Esc, screen Esc, root
@@ -592,6 +588,53 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
             return primitives;
         }
     });
+    /**
+     * The image upload chain and the save-image path (D12): server-hosted media
+     * with the external host behind it, the CICode it drops into the draft, and
+     * the placeholder-hint state that goes with it. The pipeline owns the
+     * uploader and the hint (D21 reads the hint back every frame); this screen
+     * hands it the render-thread hop — its own client handle, never
+     * Minecraft.getInstance() (D3's precedent) — D21's two composer
+     * calls, D7's toast and D14's save dialog.
+     */
+    private final ImageUploadPipeline uploadPipeline =
+            new ImageUploadPipeline(new ImageUploadPipeline.Host() {
+                @Override
+                public Minecraft client() {
+                    return client;
+                }
+
+                @Override
+                public boolean composerEmpty() {
+                    return inputGetText().isEmpty();
+                }
+
+                @Override
+                public void appendToComposer(String text) {
+                    inputAppend(text);
+                }
+
+                @Override
+                public void toast(String key, boolean success) {
+                    feedback(key, success);
+                }
+
+                @Override
+                public Path pickSavePath(String suggestedName) {
+                    // D14's dialog plumbing, in the order the save path always
+                    // spelled out: suspend auto-iconify around the picker, hand
+                    // OS focus back, and only then let the caller download.
+                    suppressAutoIconify();
+                    Path target;
+                    try {
+                        target = FilePicker.pickSavePath(suggestedName);
+                    } finally {
+                        restoreAutoIconify();
+                    }
+                    refocusWindow();
+                    return target;
+                }
+            }, AtomChatScreen::tr);
     /**
      * Composer drafts per page, and the shared field they are loaded into. The
      * draft text lives in {@link DraftStore}; the port below is this shell's half
@@ -793,11 +836,6 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
     private float inputWrapWidth = -1.0F;
     private List<String> inputWrapCache;
 
-    /** Set while an upload is in flight; the input placeholder reads it. */
-    private volatile boolean imageUploading;
-    /** Short-lived hint shown in the empty input placeholder (save errors etc). */
-    private volatile String transientHint;
-    private long transientHintSetAt;
     /** GLFW drop callback, installed while this screen is open (MC sets none). */
     private GLFWDropCallback dropCallback;
 
@@ -2651,14 +2689,15 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
                 String hintText;
                 if (quickPhrasePanel.isEditing()) {
                     hintText = tr("atomchat.input.phrase_hint");
-                } else if (imageUploading) {
+                } else if (uploadPipeline.uploading()) {
                     hintText = tr("atomchat.input.uploading");
                 } else if (view.partnerTyping()) {
                     // QQ-style: WATUT reports the partner composing a message
                     // (only the private page asks; silent no-op without WATUT).
                     hintText = tr("atomchat.private.typing");
-                } else if (transientHint != null && System.currentTimeMillis() - transientHintSetAt < 4000L) {
-                    hintText = transientHint;
+                } else if (uploadPipeline.transientHint() != null
+                        && System.currentTimeMillis() - uploadPipeline.transientHintSetAt() < 4000L) {
+                    hintText = uploadPipeline.transientHint();
                 } else {
                     hintText = tr("atomchat.input.placeholder");
                 }
@@ -3679,111 +3718,23 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
     }
 
     /**
-     * Saves another player's CICode image to a local file. The save dialog runs
-     * on the same worker-thread pattern as the open picker; the actual download
-     * happens off-thread via {@link ImageSaver} so the raw bytes stay identical.
+     * Saves another player's CICode image to a local file. Url extraction, the
+     * dialog, the download and both failure surfaces live in
+     * {@link ImageUploadPipeline} (D12); this shell keeps the entry point the
+     * context menu calls.
      */
     private void saveImage(ChatMessage message) {
-        String url = Cicodes.extractImageUrl(message.getRawText());
-        if (url == null) {
-            return;
-        }
-        Thread worker = new Thread(() -> {
-            suppressAutoIconify();
-            Path target;
-            try {
-                target = FilePicker.pickSavePath(fileNameFromUrl(url));
-            } finally {
-                restoreAutoIconify();
-            }
-            refocusWindow();
-            if (target == null) {
-                return;
-            }
-            ImageSaver.save(url, target).whenComplete((path, throwable) -> {
-                if (throwable != null) {
-                    // Both surfaces: the composer hint is only visible with an
-                    // empty draft, so the toast carries the failure when a
-                    // draft is present.
-                    this.client.execute(() -> {
-                        showTransientHint(tr("atomchat.input.save_failed"));
-                        feedback("atomchat.feedback.saveFailed", false);
-                    });
-                } else {
-                    AtomChat.LOGGER.info("Saved chat image to {}", path);
-                    this.client.execute(() -> feedback("atomchat.feedback.saved", true));
-                }
-            });
-        }, "AtomChat-ImageSavePicker");
-        worker.setDaemon(true);
-        worker.start();
-    }
-
-    /** URL last path segment, stripped of query/fragment; falls back to image.png. */
-    private static String fileNameFromUrl(String url) {
-        return ImageFileNames.fromUrl(url);
-    }
-
-    private void showTransientHint(String text) {
-        transientHint = text;
-        transientHintSetAt = System.currentTimeMillis();
+        uploadPipeline.saveImage(message);
     }
 
     /**
      * Uploads an image and drops its CICode into the draft. Shared by the file
-     * picker and by Ctrl+V pastes.
+     * picker and by Ctrl+V pastes; the chain itself (server media → uguu
+     * fallback, CICode assembly, the hop back to the render thread) lives in
+     * {@link ImageUploadPipeline} (D12).
      */
     private void uploadAndAppend(Path file) {
-        int[] size = ImageFiles.dimensions(file);
-        imageUploading = true;
-        // The server decides: when it hosts media, upload there first; any
-        // failure (or a server without the companion) falls back to uguu.
-        if (MediaCompanionClient.hostingEnabled()) {
-            MediaCompanionClient.uploadFile(file,
-                    url -> appendImageCode(url, file, size),
-                    error -> {
-                        AtomChat.LOGGER.warn("Server media upload failed ({}), falling back to uguu", error);
-                        uploadToUguu(file, size);
-                    });
-        } else {
-            if (AtomChatConfig.get().debug) {
-                AtomChat.LOGGER.info("[media] server media hosting unavailable; using the external host");
-            }
-            uploadToUguu(file, size);
-        }
-    }
-
-    private void uploadToUguu(Path file, int[] size) {
-        imageUploader.upload(file,
-                url -> {
-                    // Keep the choice auditable: server-hosted uploads already
-                    // log "Stored hosted media", so the external path logs too.
-                    AtomChat.LOGGER.info("Uploaded chat image to the external host: {}", url);
-                    appendImageCode(url, file, size);
-                },
-                error -> {
-                    AtomChat.LOGGER.warn("Image upload failed: {}", error);
-                    this.client.execute(() -> imageUploading = false);
-                });
-    }
-
-    private void appendImageCode(String url, Path file, int[] size) {
-        StringBuilder code = new StringBuilder("[[CICode,url=").append(url)
-                .append(",name=").append(file.getFileName());
-        // Carry the intrinsic size so any client receiving this can lay the
-        // bubble out at the right aspect ratio before the download lands —
-        // that is what keeps the height from jumping when it arrives.
-        if (size != null) {
-            code.append(",w=").append(size[0]).append(",h=").append(size[1]);
-        }
-        code.append("]]");
-        String text = code.toString();
-        // The upload callbacks run off the render thread; the chat field is
-        // only safe to touch from the render thread.
-        this.client.execute(() -> {
-            imageUploading = false;
-            inputAppend(inputGetText().isEmpty() ? text : " " + text);
-        });
+        uploadPipeline.uploadAndAppend(file);
     }
 
     /**
