@@ -1503,6 +1503,93 @@ class PageTransitionCompositeTest {
     }
 
     /**
+     * A nav that lands on a <b>non-root</b> page must hand the frame back to the
+     * screen, not claim it.
+     *
+     * <p>The screen returns as soon as a frame reports {@code finished()}, so a
+     * settle that answered "done" on a detail destination painted the panel base
+     * and the banner and then skipped the body, the header and the bezel — one
+     * blank frame per navigation, and with decorative motion off (tau 0) it is the
+     * <em>first</em> frame of every push. The landing arm therefore has to report
+     * {@code noNav()} (neither running nor finished) for a non-root top page,
+     * exactly as the pre-nav code did by falling out of its nav branch.</p>
+     *
+     * <p><b>Frame sequence, not the shell's early return.</b> The shell's
+     * {@code if (frame.finished()) return;} is deliberately NOT replayed here: a
+     * test that copies it reproduces the defect and stays green through it.</p>
+     */
+    @Test
+    void aNavLandingOnANonRootPageHandsTheFrameBackToTheScreen() {
+        try (Fixture f = new Fixture()) {
+            f.host.top = AppPage.PRIVATE_CHAT;
+            f.director.startPageNav(WORLD, PRIVATE, false);
+            f.host.landings.clear();
+            f.host.calls.clear();
+
+            // One frame whose step carries the clock over the snap threshold. The
+            // per-frame step is capped, so the landing is reached the way the game
+            // reaches it fastest: with decorative motion off the tau is 0 and the
+            // progress snaps to settled inside this very frame — the first frame of
+            // the navigation, and the reason a "done" here is a visible blank flash
+            // rather than a one-frame artefact nobody sees.
+            assertTrue(f.director.pageNavActive(), "precondition: the nav is open");
+            AtomChatConfig.get().animationEnabled = false;
+            PageTransitionComposite.NavFrame frame = f.beginFrame("landing on a detail page", 50L);
+            AtomChatConfig.get().animationEnabled = true;   // the restore @AfterEach also does
+            assertFalse(f.director.pageNavActive(),
+                    "precondition: this frame carried the clock to settled");
+
+            assertFalse(frame.finished(),
+                    "a settle on a non-root page must NOT claim the frame: the screen returns on"
+                            + " finished(), which would skip the body, the header and the bezel");
+            assertFalse(frame.running(), "there is no nav tail left to close either");
+            assertFalse(frame.tailCloses(), "and the composite opened nothing to close");
+            assertTrue(f.host.landings.isEmpty(),
+                    "the composite paints neither a page body nor a root screen here: "
+                            + f.host.landings);
+            assertFalse(f.host.calls.stream().anyMatch(c -> c.startsWith("drawBezel")),
+                    "and it must not paint the bezel itself: " + f.host.calls);
+            assertEquals(f.baseline, f.canvas.getSaveCount(), "with nothing left open");
+
+            // The screen's half of that frame, which the shell now reaches: the body it
+            // paints is the one the navigation landed on.
+            f.drawArrivingBody(PRIVATE);
+            assertEquals("chat:PRIVATE_CHAT", f.host.landings.get(0).what(),
+                    "the non-root landing frame is the screen's to paint: " + f.host.landings);
+        }
+    }
+
+    /**
+     * The other arm of the same settle: a <b>root</b> destination is painted by
+     * the composite, which then owns the frame and says so — the screen returns
+     * without repainting the settled root page a second time.
+     */
+    @Test
+    void aNavLandingOnARootPageIsStillCompletedByTheComposite() {
+        try (Fixture f = new Fixture()) {
+            f.host.top = AppPage.CHAT_LIST;
+            f.director.startPageNav(PRIVATE, NavPage.of(AppPage.CHAT_LIST), true);
+            f.host.landings.clear();
+            f.host.calls.clear();
+
+            AtomChatConfig.get().animationEnabled = false;
+            PageTransitionComposite.NavFrame frame = f.beginFrame("landing on a root page", 50L);
+            AtomChatConfig.get().animationEnabled = true;
+
+            assertTrue(frame.finished(),
+                    "a root landing is finished here: the composite painted the whole frame");
+            assertFalse(frame.running(), "and there is no nav tail left to run");
+            assertFalse(f.director.pageNavActive(), "the nav is over");
+            assertEquals(1, f.host.landings.size(),
+                    "the arriving root page is painted once, by the composite: " + f.host.landings);
+            assertEquals("root:CHAT_LIST", f.host.landings.get(0).what());
+            assertTrue(f.host.calls.stream().anyMatch(c -> c.startsWith("drawBezel")),
+                    "the root frame's bezel is the composite's to close: " + f.host.calls);
+            assertEquals(f.baseline, f.canvas.getSaveCount(), "with nothing left open");
+        }
+    }
+
+    /**
      * A slide that keeps running leaves exactly one save-point open and reports the
      * handle the tail needs: the plain save on a slide, the layer on a zoom —
      * {@code end} pairs its restore with that answer rather than guessing.

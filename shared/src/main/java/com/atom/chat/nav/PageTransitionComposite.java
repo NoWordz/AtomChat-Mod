@@ -208,13 +208,19 @@ public final class PageTransitionComposite {
             // heading for is the settled top page. A root one makes the whole frame the
             // root screen (drawn here, exactly as the 11a branch does); any other one is
             // left to the screen's own settled draws — the shape the pre-nav code had by
-            // falling out of its nav branch.
+            // falling out of its nav branch, which is why this arm must report
+            // {@link NavFrame#noNav()} and not {@code done()}: the screen returns on a
+            // finished frame, so "done" here would paint the panel base and the banner
+            // and skip the body, the header and the bezel for a whole frame — and with
+            // decorative motion off the tau is 0, so that frame is the first frame of
+            // every navigation.
             director.finishPageNav();
             if (host.topPage().isRoot()) {
                 host.drawRootScreen(canvas, mouseX, mouseY, host.topPage());
                 host.drawBezel(canvas, layout);
+                return NavFrame.done();
             }
-            return NavFrame.done();
+            return NavFrame.noNav();
         }
         if (director.pageNavFrom() != null && director.pageNavTo() != null
                 && !director.pageNavFrom().isRoot() && !director.pageNavTo().isRoot()) {
