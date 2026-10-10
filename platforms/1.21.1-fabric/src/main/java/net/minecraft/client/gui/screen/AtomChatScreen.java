@@ -72,6 +72,7 @@ import com.atom.chat.ui.ScrollSyncService;
 import com.atom.chat.ui.ShellHeader;
 import com.atom.chat.ui.UiLayout;
 import com.atom.chat.ui.EmojiPanel;
+import com.atom.chat.ui.MessageListWiring;
 import com.atom.chat.ui.HeaderChrome;
 import com.atom.chat.ui.EmojiWiring;
 import com.atom.chat.ui.PanelBackground;
@@ -534,9 +535,19 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
      * controllers and all input-side interaction state; every value the view
      * needs from the screen is wired through the Host below.
      */
-    private final MessageListView messageListView = new MessageListView(new MessageListView.Host() {
+    /**
+     * The message list's wiring (D22): what the list asks the screen for, the
+     * messages a page owns, the click/drag coexistence flow and the hover span.
+     * The span type stays a parameter — the mapping layer's record carries a
+     * Minecraft style, and keeping it out of the domain is what lets the flow be
+     * tested without one. Nothing here reads the navigation stack's top page: each
+     * side of a transition asks for its own list, exactly like the scroll
+     * controllers.
+     */
+    private final MessageListWiring<ClickableSpan> messageWiring =
+            new MessageListWiring<>(new MessageListWiring.Host<ClickableSpan>() {
         @Override
-        public UUID ownUuid() {
+        public java.util.UUID ownUuid() {
             return client.player != null ? client.player.getUuid() : null;
         }
 
@@ -546,7 +557,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         }
 
         @Override
-        public String senderName(ChatMessage message) {
+        public String messageSenderName(ChatMessage message) {
             return AtomChatScreen.this.messageSenderName(message);
         }
 
@@ -554,7 +565,34 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         public long openStart() {
             return AtomChatScreen.this.openStart;
         }
+
+        @Override
+        public java.util.List<ChatMessage> worldSnapshot() {
+            return ChatStore.get().snapshot();
+        }
+
+        @Override
+        public java.util.List<ChatMessage> privateMessages(PlayerRef target) {
+            return PrivateChatStore.messages(target);
+        }
+
+        @Override
+        public WorldFeedFilter worldFeed() {
+            return worldFeed;
+        }
+
+        @Override
+        public ClickableSpan clickableSpanAt(float vmx, float vmy) {
+            return messageListView.clickableSpanAt(vmx, vmy).orElse(null);
+        }
+
+        @Override
+        public boolean hasClickEvent(ClickableSpan span) {
+            return span.style().getClickEvent() != null;
+        }
     });
+
+    private final MessageListView messageListView = new MessageListView(messageWiring.viewHost());
     /**
      * Emoji / kaomoji / emote panel: state, geometry and rendering live in the
      * panel class; the screen only supplies composer side effects (insert
@@ -765,7 +803,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
             new NotificationJumpService.ScrollPort() {
                 @Override
                 public List<ChatMessage> currentMessages() {
-                    return messagesForNav(topNav());
+                    return messageWiring.messagesForNav(topNav());
                 }
 
                 @Override
@@ -1234,12 +1272,6 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
     // Per-frame animation state (smooth hover/popup transitions)
     private long frameDt = 16;
     private long lastFrameMs = System.currentTimeMillis();
-
-    // Message text drag-selection state lives in MessageListView; the screen
-    // keeps only the click/drag coexistence flow (Task 8).
-    /** Pending click candidate used by the click/drag coexistence flow (Task 8). */
-    private ClickableSpan pendingClickSpan;
-    private boolean pendingClickMoved;
 
     public AtomChatScreen(String originalChatText) {
         this(originalChatText, AtomChatOpenMode.DIRECT_WORLD);
@@ -1751,19 +1783,6 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         return scrollSync.currentScroll();
     }
 
-    private List<ChatMessage> messagesForNav(NavPage page) {
-        if (page == null) {
-            return List.of();
-        }
-        if (page.page() == AppPage.WORLD_CHAT) {
-            return worldFeed.filterFeed(ChatStore.get().snapshot());
-        }
-        if (page.page() == AppPage.PRIVATE_CHAT) {
-            return PrivateChatStore.messages(page.target());
-        }
-        return List.of();
-    }
-
     private ScrollController scrollForNav(NavPage page) {
         return scrollSync.scrollForNav(page);
     }
@@ -1868,8 +1887,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         quickPhrasePanel.resetTransient();
         replySlots.clearAll();
         messageListView.clearSelection();
-        pendingClickSpan = null;
-        pendingClickMoved = false;
+        messageWiring.clearClick();
         dismissSuggestor();
     }
 
@@ -1979,10 +1997,10 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
 
         // Hover tooltips are drawn through the vanilla pipeline after the Skia
         // panel and the suggestion popup so they stay readable on top of both.
-        // Root pages keep their own hover model; stale world spans must not show.
-        ClickableSpan hoveredSpan = isWorldChatPage()
-                ? messageListView.clickableSpanAt(toVirtualX(mouseX), toVirtualY(mouseY)).orElse(null)
-                : null;
+        // Whether a span is hovered at all is the domain's answer (D22), and it
+        // answers null on a root page so a stale world span cannot show there.
+        ClickableSpan hoveredSpan = messageWiring.hoverSpan(isWorldChatPage(),
+                toVirtualX(mouseX), toVirtualY(mouseY));
         Style hovered = hoveredSpan != null ? hoveredSpan.style() : null;
         if (hovered != null && hovered.getHoverEvent() != null) {
             context.drawHoverEvent(this.textRenderer, hovered, mouseX, mouseY);
@@ -2802,7 +2820,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         }
         NavPage page = view.page();
         int probeBefore = canvas.getSaveCount();
-        List<ChatMessage> messages = messagesForNav(page);
+        List<ChatMessage> messages = messageWiring.messagesForNav(page);
         HistoryWindow window = historyWindowForNav(page, messages.size());
         messageListView.setVisibleStart(window.visibleStart());
         messageListView.setLoadEarlierHovered(toVirtualX(mouseX), toVirtualY(mouseY));
@@ -4376,8 +4394,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
             // This covers clickable sender names and any clickable span outside bubble
             // text; the text-line branch below may overwrite it with the same result.
             if (button == 0) {
-                pendingClickSpan = messageListView.clickableSpanAt(mx, my).orElse(null);
-                pendingClickMoved = false;
+                messageWiring.armClickAt(mx, my);
                 // The folded-history button floats over the top of the list, so it
                 // claims the press before any message row beneath it can.
                 if (messageListView.loadEarlierHitAt(mx, my)) {
@@ -4397,8 +4414,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
                         imagePreview.open(bitmap);
                         // This press belongs to the modal now: nothing was armed
                         // for a clickable span or a selection on the way here.
-                        pendingClickSpan = null;
-                        pendingClickMoved = false;
+                        messageWiring.clearClick();
                         return true;
                     }
                 }
@@ -4444,8 +4460,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
                             // selection anchor is armed. Dragging from this point will
                             // select text instead of firing the click; a clean click
                             // (no drag) will fire it on mouse release.
-                            pendingClickSpan = messageListView.clickableSpanAt(mx, my).orElse(null);
-                            pendingClickMoved = false;
+                            messageWiring.armClickAt(mx, my);
                             messageListView.beginSelection(hit, line, mx);
                             return true;
                         }
@@ -4477,8 +4492,8 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
             }
             // Any drag while a click is pending must suppress the click-on-release,
             // including drags that do not start a text selection (e.g. name bars).
-            if (button == 0 && pendingClickSpan != null) {
-                pendingClickMoved = true;
+            if (button == 0 && messageWiring.hasPendingClick()) {
+                messageWiring.markMoved();
             }
             if (button == 0 && messageListView.isSelecting()) {
                 float mx = toVirtualX(mouseX);
@@ -4511,16 +4526,12 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
                 float mx = toVirtualX(mouseX);
                 float my = toVirtualY(mouseY);
                 boolean wasSelecting = messageListView.isSelecting();
-                ClickableSpan pending = pendingClickSpan;
-                pendingClickSpan = null;
-                ClickableSpan released = messageListView.clickableSpanAt(mx, my).orElse(null);
-                boolean shouldClick = pending != null && !pendingClickMoved
-                        && pending.style().getClickEvent() != null
-                        && pending.equals(released);
+                ClickableSpan pending = messageWiring.takePending();
+                boolean shouldClick = messageWiring.shouldFireClick(pending, mx, my);
                 if (wasSelecting) {
                     messageListView.endSelection();
                 }
-                pendingClickMoved = false;
+                messageWiring.clearMoved();
                 if (composerPointer.dragging()) {
                     composerPointer.setDragging(false);
                 }
