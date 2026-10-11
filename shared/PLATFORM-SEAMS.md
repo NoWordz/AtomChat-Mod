@@ -13,7 +13,7 @@
 分组是编译期事实：甲组少一个类型，那个目标当场编不过。判据用简单名的词边界匹配
 （覆盖 import 全限定名与同包简单名两种写法），偏保守 —— 注释里的提及也算，宁可多列。
 
-当前：甲组 **102** 个，乙组 **56** 个。
+当前：甲组 **122** 个，乙组 **50** 个。
 
 ## 甲：共用代码引用了的（接缝）
 
@@ -38,6 +38,8 @@
 | `com.atom.chat.chat.PrivateChatParser` | 1.21.1-fabric |
 | `com.atom.chat.chat.PrivateChatStoreTest` | 1.21.1-fabric |
 | `com.atom.chat.chat.RichChatPartsTest` | 1.21.1-fabric |
+| `com.atom.chat.chat.SendPipeline` | 1.21.1-fabric |
+| `com.atom.chat.chat.SendPipelineTest` | 1.21.1-fabric |
 | `com.atom.chat.chat.SenderMeta` | 1.21.1-fabric |
 | `com.atom.chat.chat.SenderMetaTest` | 1.21.1-fabric |
 | `com.atom.chat.chat.TeleportCommands` | 1.21.1-fabric |
@@ -45,6 +47,12 @@
 | `com.atom.chat.config.ServerConfigScreen` | 1.20.1-forge, 1.21.1-fabric, 1.21.1-neoforge |
 | `com.atom.chat.history.ChatHistory` | 1.20.1-forge, 1.21.1-fabric, 1.21.1-neoforge |
 | `com.atom.chat.image.AvatarRenderer` | 1.21.1-fabric |
+| `com.atom.chat.image.DragDropPasteUpload` | 1.21.1-fabric |
+| `com.atom.chat.image.DragDropPasteUploadTest` | 1.21.1-fabric |
+| `com.atom.chat.image.ImageUploadPipeline` | 1.21.1-fabric |
+| `com.atom.chat.image.ImageUploadPipelineTest` | 1.21.1-fabric |
+| `com.atom.chat.image.NativeDialogBridge` | 1.21.1-fabric |
+| `com.atom.chat.image.NativeDialogBridgeTest` | 1.21.1-fabric |
 | `com.atom.chat.image.OwnPlayerAvatarSource` | 1.21.1-fabric |
 | `com.atom.chat.image.SkinResolver` | 1.20.1-forge, 1.21.1-fabric, 1.21.1-neoforge |
 | `com.atom.chat.mixin.ChatHudMixin` | 1.20.1-forge, 1.21.1-fabric, 1.21.1-neoforge |
@@ -57,9 +65,11 @@
 | `com.atom.chat.net.ConfigPayloads` | 1.20.1-forge, 1.21.1-fabric, 1.21.1-neoforge |
 | `com.atom.chat.net.ConfigPayloadsCodecTest` | 1.20.1-forge, 1.21.1-fabric, 1.21.1-neoforge |
 | `com.atom.chat.net.ConfigScreenClient` | 1.21.1-fabric |
+| `com.atom.chat.net.MediaCompanionClient` | 1.20.1-forge, 1.21.1-fabric, 1.21.1-neoforge |
 | `com.atom.chat.net.MediaCompanionServer` | 1.20.1-forge, 1.21.1-fabric, 1.21.1-neoforge |
 | `com.atom.chat.net.PackPayloads` | 1.20.1-forge, 1.21.1-fabric, 1.21.1-neoforge |
 | `com.atom.chat.net.PackPayloadsCodecTest` | 1.20.1-forge, 1.21.1-fabric, 1.21.1-neoforge |
+| `com.atom.chat.net.PokeCompanionClient` | 1.20.1-forge, 1.21.1-fabric, 1.21.1-neoforge |
 | `com.atom.chat.net.PokeCompanionServer` | 1.20.1-forge, 1.21.1-fabric, 1.21.1-neoforge |
 | `com.atom.chat.notification.NotificationBanner` | 1.21.1-fabric |
 | `com.atom.chat.notification.NotificationBannerRichTextTest` | 1.21.1-fabric |
@@ -69,11 +79,15 @@
 | `com.atom.chat.page.ProfilePage` | 1.21.1-fabric |
 | `com.atom.chat.platform.NeoForgePlatform` | 1.21.1-neoforge |
 | `com.atom.chat.render.ClickableSpan` | 1.21.1-fabric |
+| `com.atom.chat.render.GoldenFrameTest` | 1.21.1-fabric |
 | `com.atom.chat.render.OffscreenRenderTest` | 1.21.1-fabric |
 | `com.atom.chat.render.PanelBlurRenderer` | 1.20.1-forge, 1.21.1-fabric, 1.21.1-neoforge |
 | `com.atom.chat.render.RichTextRenderer` | 1.21.1-fabric |
 | `com.atom.chat.render.SkiaGraphics` | 1.21.1-fabric |
 | `com.atom.chat.screen.AtomChatScreen` | 1.20.1-forge, 1.21.1-neoforge |
+| `com.atom.chat.screen.ScreenMetrics` | 1.21.1-fabric |
+| `com.atom.chat.settings.SettingsActions` | 1.21.1-fabric |
+| `com.atom.chat.settings.SettingsActionsTest` | 1.21.1-fabric |
 | `com.atom.chat.settings.SettingsCatalog` | 1.21.1-fabric |
 | `com.atom.chat.settings.SettingsHomePage` | 1.21.1-fabric |
 | `com.atom.chat.settings.SettingsSectionPage` | 1.21.1-fabric |
@@ -89,6 +103,8 @@
 | `com.atom.chat.util.ImagePreview` | 1.21.1-fabric |
 | `net.minecraft.client.gui.screen.AtomChatScreen` | 1.21.1-fabric |
 | `net.minecraft.client.gui.screen.AtomChatSuggestor` | 1.21.1-fabric |
+| `net.minecraft.client.gui.screen.SuggestorWiring` | 1.21.1-fabric |
+| `net.minecraft.client.gui.screen.SuggestorWiringTest` | 1.21.1-fabric |
 | `net.minecraft.client.gui.screen.atomchat.ChatInputSuggestorAccessor` | 1.21.1-fabric |
 
 ## 乙：平台内部的
@@ -100,11 +116,9 @@
 | 1.20.1-forge | `com.atom.chat.net.AvatarPayloads` |
 | 1.20.1-forge | `com.atom.chat.net.ConfigScreenServer` |
 | 1.20.1-forge | `com.atom.chat.net.ForgeWireIo` |
-| 1.20.1-forge | `com.atom.chat.net.MediaCompanionClient` |
 | 1.20.1-forge | `com.atom.chat.net.MediaPayloads` |
 | 1.20.1-forge | `com.atom.chat.net.PackNetClient` |
 | 1.20.1-forge | `com.atom.chat.net.PackNetServer` |
-| 1.20.1-forge | `com.atom.chat.net.PokeCompanionClient` |
 | 1.20.1-forge | `com.atom.chat.net.PokePayloads` |
 | 1.20.1-forge | `com.atom.chat.net.TestCompanionClient` |
 | 1.20.1-forge | `com.atom.chat.net.TestCompanionServer` |
@@ -118,11 +132,9 @@
 | 1.21.1-fabric | `com.atom.chat.net.AvatarPayloads` |
 | 1.21.1-fabric | `com.atom.chat.net.ConfigScreenServer` |
 | 1.21.1-fabric | `com.atom.chat.net.FabricWireIo` |
-| 1.21.1-fabric | `com.atom.chat.net.MediaCompanionClient` |
 | 1.21.1-fabric | `com.atom.chat.net.MediaPayloads` |
 | 1.21.1-fabric | `com.atom.chat.net.PackNetClient` |
 | 1.21.1-fabric | `com.atom.chat.net.PackNetServer` |
-| 1.21.1-fabric | `com.atom.chat.net.PokeCompanionClient` |
 | 1.21.1-fabric | `com.atom.chat.net.PokePayloads` |
 | 1.21.1-fabric | `com.atom.chat.net.TestCompanionClient` |
 | 1.21.1-fabric | `com.atom.chat.net.TestCompanionServer` |
@@ -138,12 +150,10 @@
 | 1.21.1-neoforge | `com.atom.chat.mixin.AtomChatMixinPlugin` |
 | 1.21.1-neoforge | `com.atom.chat.net.AvatarPayloads` |
 | 1.21.1-neoforge | `com.atom.chat.net.ConfigScreenServer` |
-| 1.21.1-neoforge | `com.atom.chat.net.MediaCompanionClient` |
 | 1.21.1-neoforge | `com.atom.chat.net.MediaPayloads` |
 | 1.21.1-neoforge | `com.atom.chat.net.NeoForgeWireIo` |
 | 1.21.1-neoforge | `com.atom.chat.net.PackNetClient` |
 | 1.21.1-neoforge | `com.atom.chat.net.PackNetServer` |
-| 1.21.1-neoforge | `com.atom.chat.net.PokeCompanionClient` |
 | 1.21.1-neoforge | `com.atom.chat.net.PokePayloads` |
 | 1.21.1-neoforge | `com.atom.chat.net.TestCompanionClient` |
 | 1.21.1-neoforge | `com.atom.chat.net.TestCompanionServer` |

@@ -1,0 +1,307 @@
+{
+  "_comment": [
+    "【已声明的孪生结构分歧】tools/twin_diff_report.py 的数据文件。",
+    "",
+    "为什么需要它：官方名（NeoForge/Forge）与 Yarn（Fabric）两侧的孪生副本，除了映射改名之外，",
+    "少数文件**本来就结构不同**（loader 接缝、注释措辞、各自的实现选择）。那些差异套完 alias 表仍在，",
+    "如果不登记，工具就会一直红；如果登记成「整文件豁免」，工具就废了。所以：",
+    "",
+    "  * 登记单位是**残差块指纹**（sha1(归一化后的两侧行)，前 12 位）—— 块里任何一个字节变了指纹就变，",
+    "    于是「已声明的分歧」照样是活的：改动它 = 红（需要重新登记并说明）。",
+    "  * 每条必填 reason。无理由的条目视为未归类（--accept 强制要求 --reason）。",
+    "  * 台账里对不上任何残差的条目也是红（陈旧的豁免 = 比没有豁免更危险）。",
+    "  * 新增孪生对（阶段 2 拆出来的每一块）默认**没有**任何登记项：只要出现非映射残差就红。",
+    "",
+    "kind 取值：code（代码真的不同）/ comment（注释措辞不同）/ loader-seam（加载器接缝）/ test-code（测试代码写法）",
+    "",
+    "【本轮登记的现状（2026-10-09，第二轮）】13 对文件有残差，其中两条是**真漂移**（不是接缝）：",
+    "  1. text/RichText.java —— official 的 splice() 调 mergeRuns(out)，fabric 漏调（:190 vs :198）",
+    "  2. mixin/MessageHandlerMixin.java —— 两侧是两套不同实现（HEAD+decoratedContent vs INVOKE+getContents）",
+    "这两条已上报主会话，等拍板；在此之前按「既有分歧」登记，任何改动都会让它重新变红。"
+  ],
+  "declared": {
+    "src/main/java/com/atom/chat/image/AvatarRenderer.java": [
+      {
+        "fingerprint": "50d0480d4596",
+        "kind": "loader-seam",
+        "reason": "主会话 2026-10-09 批复：结构性合法（loader 接缝）：官方侧走 Platform.configDir() provider，fabric 侧直接用 FabricLoader.getInstance().getConfigDir()（Fabric 自己的加载器 API，无对应官方名）",
+        "sample_a": "            Path dir = com.atom.chat.platform.Platform.configDir().resolve(\"atomchat/debug\");",
+        "sample_b": "            Path dir = FabricLoader.getInstance().getConfigDir().resolve(\"atomchat/debug\");"
+      }
+    ],
+    "src/main/java/com/atom/chat/net/ConfigScreenClient.java": [
+      {
+        "fingerprint": "9f54a827a07e",
+        "kind": "loader-seam",
+        "reason": "主会话 2026-10-09 批复：结构性合法（loader 接缝）：接收器接线机制不同 —— 官方侧 onSnapshot/onStatus/onResult 三个由载荷分发调用的静态方法，fabric 侧在 onSnapshot() 里用 ClientPlayNetworking.registerGlobalReceiver 注册（Fabric 网络 API 无官方对应）",
+        "sample_a": " * Client half of the config screen (0.2.9): opens it and feeds it the server's",
+        "sample_b": " * Client half of the config screen (0.2.9): the receivers that open it and feed"
+      },
+      {
+        "fingerprint": "d569cd1b02e1",
+        "kind": "loader-seam",
+        "reason": "主会话 2026-10-09 批复：结构性合法（loader 接缝）：接收器接线机制不同 —— 官方侧 onSnapshot/onStatus/onResult 三个由载荷分发调用的静态方法，fabric 侧在 onSnapshot() 里用 ClientPlayNetworking.registerGlobalReceiver 注册（Fabric 网络 API 无官方对应）",
+        "sample_a": " * references a {@code Screen} - NeoForge's RuntimeDistCleaner refuses a dual-side",
+        "sample_b": " * references a {@code Screen}. The Forge/NeoForge port needs that split - their"
+      },
+      {
+        "fingerprint": "88e2616900c8",
+        "kind": "loader-seam",
+        "reason": "主会话 2026-10-09 批复：结构性合法（loader 接缝）：接收器接线机制不同 —— 官方侧 onSnapshot/onStatus/onResult 三个由载荷分发调用的静态方法，fabric 侧在 onSnapshot() 里用 ClientPlayNetworking.registerGlobalReceiver 注册（Fabric 网络 API 无官方对应）",
+        "sample_a": "    /** S2C: the server's current settings - build the screen on this client. */",
+        "sample_b": "    /** Registers the receivers; called once from the client entrypoint. */"
+      },
+      {
+        "fingerprint": "4666771814ff",
+        "kind": "loader-seam",
+        "reason": "主会话 2026-10-09 批复：结构性合法（loader 接缝）：接收器接线机制不同 —— 官方侧 onSnapshot/onStatus/onResult 三个由载荷分发调用的静态方法，fabric 侧在 onSnapshot() 里用 ClientPlayNetworking.registerGlobalReceiver 注册（Fabric 网络 API 无官方对应）",
+        "sample_a": "    }",
+        "sample_b": ""
+      }
+    ],
+    "src/main/java/com/atom/chat/mixin/ChatInputSuggestorAccessor.java": [
+      {
+        "fingerprint": "b8654934007c",
+        "kind": "comment",
+        "reason": "主会话 2026-10-09 批复：美容级。fabric 侧多一段 javadoc 解释「为何住在原版包下」，语义相同",
+        "sample_a": "/** Lets AtomChatSuggestor reach the private SuggestionsList instance. */",
+        "sample_b": "/**"
+      }
+    ],
+    "src/main/java/com/atom/chat/screen/AtomChatSuggestor.java": [
+      {
+        "fingerprint": "5ba93c9db0cf",
+        "kind": "comment",
+        "reason": "主会话 2026-10-09 批复：美容级（注释措辞 + 等价表达式）",
+        "sample_a": "",
+        "sample_b": ""
+      },
+      {
+        "fingerprint": "d47b5788c925",
+        "kind": "comment",
+        "reason": "主会话 2026-10-09 批复：美容级（注释措辞 + 等价表达式）",
+        "sample_a": " * vanilla hard-coded screen bottom. The accessor mixins reach the package-",
+        "sample_b": " * vanilla hard-coded screen bottom. Lives in MC's own package so the"
+      },
+      {
+        "fingerprint": "95488c4dbb16",
+        "kind": "comment",
+        "reason": "主会话 2026-10-09 批复：美容级（注释措辞 + 等价表达式）",
+        "sample_a": "        CommandSuggestions.SuggestionsList window = ((ChatInputSuggestorAccessor) this).atomchat$getSuggestions();",
+        "sample_b": "        Object window = ((ChatInputSuggestorAccessor) this).atomchat$getSuggestions();"
+      }
+    ],
+    "src/main/java/com/atom/chat/settings/SettingsHomePage.java": [
+      {
+        "fingerprint": "93fbc8eb2def",
+        "kind": "comment",
+        "reason": "主会话 2026-10-09 批复：美容级。注释位置不同、官方侧把 gridW 内联进表达式（等价），值相同",
+        "sample_a": "    /**",
+        "sample_b": "    /** Tile width from the column grid; the tile is square, so this is also its height. */"
+      },
+      {
+        "fingerprint": "7217ac7f1b87",
+        "kind": "comment",
+        "reason": "主会话 2026-10-09 批复：美容级。注释位置不同、官方侧把 gridW 内联进表达式（等价），值相同",
+        "sample_a": "        return (layout.list.w() - 2.0F * UiTokens.ROW_CLIP_INSET",
+        "sample_b": "        // The grid sits ROW_CLIP_INSET inside the list clip on both sides, like"
+      },
+      {
+        "fingerprint": "3344d7865527",
+        "kind": "comment",
+        "reason": "主会话 2026-10-09 批复：美容级。注释位置不同、官方侧把 gridW 内联进表达式（等价），值相同",
+        "sample_a": "        // Pointer pass and state updates first, drawing second: computing the",
+        "sample_b": "        // Hover test, then state, then draw: the tile paints with the values"
+      },
+      {
+        "fingerprint": "864595642e96",
+        "kind": "comment",
+        "reason": "主会话 2026-10-09 批复：美容级。注释位置不同、官方侧把 gridW 内联进表达式（等价），值相同",
+        "sample_a": "            // Animated value only: forcing it to 1 while hovered is what",
+        "sample_b": ""
+      },
+      {
+        "fingerprint": "924c0a7f5fe1",
+        "kind": "comment",
+        "reason": "主会话 2026-10-09 批复：美容级。注释位置不同、官方侧把 gridW 内联进表达式（等价），值相同",
+        "sample_a": "",
+        "sample_b": "                // Animated value only: forcing it to 1 while hovered is what"
+      }
+    ],
+    "src/test/java/com/atom/chat/chat/MentionHighlighterTest.java": [
+      {
+        "fingerprint": "bc79133d4393",
+        "kind": "test-code",
+        "reason": "主会话 2026-10-09 批复：测试写法差异，等价构造（一侧先建 RichText 再传，另一侧传 RichText.of(...)），非产品代码",
+        "sample_a": "        RichText content = RichText.of(Component.literal(\"red \").setStyle(Style.EMPTY.withColor(0xFF0000))",
+        "sample_b": "        Component content = Component.literal(\"red \").setStyle(Style.EMPTY.withColor(0xFF0000))"
+      }
+    ],
+    "src/test/java/com/atom/chat/chat/RichChatPartsTest.java": [
+      {
+        "fingerprint": "83696b4846bb",
+        "kind": "test-code",
+        "reason": "主会话 2026-10-09 批复：测试写法差异，仅测试方法排列顺序不同",
+        "sample_a": "    void emptyWhenMetaHasNoUsableName() {",
+        "sample_b": ""
+      },
+      {
+        "fingerprint": "feeb536d60a8",
+        "kind": "test-code",
+        "reason": "主会话 2026-10-09 批复：测试写法差异，仅测试方法排列顺序不同",
+        "sample_a": "",
+        "sample_b": "    }"
+      }
+    ],
+    "src/test/java/com/atom/chat/text/RichTextTest.java": [
+      {
+        "fingerprint": "163ba6a6cd0c",
+        "kind": "test-code",
+        "reason": "主会话 2026-10-09 批复：测试写法差异，等价构造（rich.splice(...) vs RichText.of(text).splice(...)）",
+        "sample_a": "        RichText rich = RichText.of(Component.literal(\"abc\").setStyle(Style.EMPTY.withColor(0xFF0000))",
+        "sample_b": "        Component text = Component.literal(\"abc\").setStyle(Style.EMPTY.withColor(0xFF0000))"
+      }
+    ],
+    "src/main/java/com/atom/chat/mixin/SuggestionWindowAccessor.java": [
+      {
+        "fingerprint": "588275eac17d",
+        "kind": "comment",
+        "reason": "主会话 2026-10-09 批复：美容级。官方侧用一行 javadoc 说明访问器用途；fabric 侧无 javadoc",
+        "sample_a": "/** Lets AtomChatSuggestor reposition the package-private SuggestionsList rect. */",
+        "sample_b": ""
+      },
+      {
+        "fingerprint": "8cdefe03b262",
+        "kind": "mixin-annotations",
+        "reason": "主会话 2026-10-09 批复：结构性合法。fabric 侧 getter 也带 @Mutable/@Final（冗余但无害，Mixin 允许），官方侧只在 setter 上带",
+        "sample_a": "",
+        "sample_b": "    @Mutable"
+      }
+    ],
+    "src/main/java/com/atom/chat/text/RichText.java": [
+      {
+        "fingerprint": "b025e64c935b",
+        "kind": "comment",
+        "reason": "主会话 2026-10-09 批复：美容级。注释措辞/新增 javadoc 不同",
+        "sample_a": "        // parsed separately below.",
+        "sample_b": "        // parsed separately below, which is what keeps an unrecognised or a"
+      },
+      {
+        "fingerprint": "bcff6255fc59",
+        "kind": "comment",
+        "reason": "主会话 2026-10-09 批复：美容级。注释措辞/新增 javadoc 不同",
+        "sample_a": "",
+        "sample_b": "    /**"
+      }
+    ],
+    "src/main/java/com/atom/chat/mixin/MessageHandlerMixin.java": [
+      {
+        "fingerprint": "543ee33f5ac4",
+        "kind": "code",
+        "reason": "pending user decision 2026-10-09：两侧是两套不同实现（官方侧 @Inject(HEAD)+message.decoratedContent()，fabric 侧 @Inject(INVOKE ChatHud.addMessage)+message.getContents()，fabric 版为 2026-09-03 审计后的精确注入）。主会话已上报用户待拍板，本轮只登记不改码",
+        "sample_a": " * Channel-level capture (NeoForge ChatListener variant).",
+        "sample_b": " * Channel-level capture."
+      },
+      {
+        "fingerprint": "1b38aab12d96",
+        "kind": "code",
+        "reason": "pending user decision 2026-10-09：两侧是两套不同实现（官方侧 @Inject(HEAD)+message.decoratedContent()，fabric 侧 @Inject(INVOKE ChatHud.addMessage)+message.getContents()，fabric 版为 2026-09-03 审计后的精确注入）。主会话已上报用户待拍板，本轮只登记不改码",
+        "sample_a": " * <p>Architecture ported from e33chat's NeoForge ChatListenerMixin (MIT, same",
+        "sample_b": " * <p>Unlike a naive HEAD-of-public-method capture, the injects are placed"
+      },
+      {
+        "fingerprint": "c75c1174c8f8",
+        "kind": "code",
+        "reason": "pending user decision 2026-10-09：两侧是两套不同实现（官方侧 @Inject(HEAD)+message.decoratedContent()，fabric 侧 @Inject(INVOKE ChatHud.addMessage)+message.getContents()，fabric 版为 2026-09-03 审计后的精确注入）。主会话已上报用户待拍板，本轮只登记不改码",
+        "sample_a": "    @Inject(method = \"handlePlayerChatMessage\", at = @At(\"HEAD\"))",
+        "sample_b": "    /**"
+      },
+      {
+        "fingerprint": "fbdac1110c34",
+        "kind": "code",
+        "reason": "pending user decision 2026-10-09：两侧是两套不同实现（官方侧 @Inject(HEAD)+message.decoratedContent()，fabric 侧 @Inject(INVOKE ChatHud.addMessage)+message.getContents()，fabric 版为 2026-09-03 审计后的精确注入）。主会话已上报用户待拍板，本轮只登记不改码",
+        "sample_a": "        // decoratedContent() keeps the server/plugin rich body (unsigned",
+        "sample_b": "        String content = message.getContents().getString();"
+      },
+      {
+        "fingerprint": "b9ae23125b19",
+        "kind": "code",
+        "reason": "pending user decision 2026-10-09：两侧是两套不同实现（官方侧 @Inject(HEAD)+message.decoratedContent()，fabric 侧 @Inject(INVOKE ChatHud.addMessage)+message.getContents()，fabric 版为 2026-09-03 审计后的精确注入）。主会话已上报用户待拍板，本轮只登记不改码",
+        "sample_a": "                senderComponent, contentComponent));",
+        "sample_b": "                params.name(), message.getContents()));"
+      },
+      {
+        "fingerprint": "9326b1dc6a20",
+        "kind": "code",
+        "reason": "pending user decision 2026-10-09：两侧是两套不同实现（官方侧 @Inject(HEAD)+message.decoratedContent()，fabric 侧 @Inject(INVOKE ChatHud.addMessage)+message.getContents()，fabric 版为 2026-09-03 审计后的精确注入）。主会话已上报用户待拍板，本轮只登记不改码",
+        "sample_a": "    @Inject(method = \"handleDisguisedChatMessage\", at = @At(\"HEAD\"))",
+        "sample_b": "    /**"
+      },
+      {
+        "fingerprint": "e34503837b9a",
+        "kind": "code",
+        "reason": "pending user decision 2026-10-09：两侧是两套不同实现（官方侧 @Inject(HEAD)+message.decoratedContent()，fabric 侧 @Inject(INVOKE ChatHud.addMessage)+message.getContents()，fabric 版为 2026-09-03 审计后的精确注入）。主会话已上报用户待拍板，本轮只登记不改码",
+        "sample_a": "                PlayerInfo info = ChatClassifier.resolveOnlinePlayer(display);",
+        "sample_b": "                var info = ChatClassifier.resolveOnlinePlayer(display);"
+      },
+      {
+        "fingerprint": "f837a62db536",
+        "kind": "code",
+        "reason": "pending user decision 2026-10-09：两侧是两套不同实现（官方侧 @Inject(HEAD)+message.decoratedContent()，fabric 侧 @Inject(INVOKE ChatHud.addMessage)+message.getContents()，fabric 版为 2026-09-03 审计后的精确注入）。主会话已上报用户待拍板，本轮只登记不改码",
+        "sample_a": "                    senderComponent, message));",
+        "sample_b": "                    params.name(), message));"
+      },
+      {
+        "fingerprint": "d9bf31d5375d",
+        "kind": "code",
+        "reason": "pending user decision 2026-10-09：两侧是两套不同实现（官方侧 @Inject(HEAD)+message.decoratedContent()，fabric 侧 @Inject(INVOKE ChatHud.addMessage)+message.getContents()，fabric 版为 2026-09-03 审计后的精确注入）。主会话已上报用户待拍板，本轮只登记不改码",
+        "sample_a": "        SenderMeta parsed = ChatPipeline.tryParsePlayerLine(decoratedStr);",
+        "sample_b": "        SenderMeta parsed = ChatPipeline.tryParsePlayerLine(decorated);"
+      },
+      {
+        "fingerprint": "50a7c4fb4286",
+        "kind": "code",
+        "reason": "pending user decision 2026-10-09：两侧是两套不同实现（官方侧 @Inject(HEAD)+message.decoratedContent()，fabric 侧 @Inject(INVOKE ChatHud.addMessage)+message.getContents()，fabric 版为 2026-09-03 审计后的精确注入）。主会话已上报用户待拍板，本轮只登记不改码",
+        "sample_a": "    @Inject(method = \"onGameMessage\", at = @At(\"HEAD\"))",
+        "sample_b": "    /**"
+      },
+      {
+        "fingerprint": "0e7d8de93567",
+        "kind": "code",
+        "reason": "pending user decision 2026-10-09：两侧是两套不同实现（官方侧 @Inject(HEAD)+message.decoratedContent()，fabric 侧 @Inject(INVOKE ChatHud.addMessage)+message.getContents()，fabric 版为 2026-09-03 审计后的精确注入）。主会话已上报用户待拍板，本轮只登记不改码",
+        "sample_a": "",
+        "sample_b": ""
+      }
+    ],
+    "src/main/java/com/atom/chat/screen/SuggestorWiring.java": [
+      {
+        "fingerprint": "245c4643a447",
+        "kind": "code",
+        "reason": "主会话终验批准 2026-10-09（D8 工单「既定裁定」）：dismissSuggestor 的平台差异是平台接缝，只记注释不统一。official 侧（Forge/NeoForge）用 hide() 并自建 EditBox responder 驱动 suggestor（setAllowSuggestions(!text.equals(originalChatText)) + updateCommandInfo()）；fabric 侧用 setWindowActive(false)（yarn 名 = setAllowSuggestions，同时清 allow 标志）且不装 responder —— 它把 suggestor 写进 ChatScreen 自己的字段，由 vanilla 的 chat-field listener 继续驱动并在每次击键时重新武装该标志。因此 install 的签名在 official 侧多一个 originalChatText（responder 的比较基线），fabric 侧没有 responder 也就不需要它。两者各自正确，不许统一。",
+        "sample_a": "     * @param originalChatText the text the screen was opened with: the baseline a",
+        "sample_b": ""
+      },
+      {
+        "fingerprint": "91a294776020",
+        "kind": "code",
+        "reason": "主会话终验批准 2026-10-09（D8 工单「既定裁定」）：dismissSuggestor 的平台差异是平台接缝，只记注释不统一。official 侧（Forge/NeoForge）用 hide() 并自建 EditBox responder 驱动 suggestor（setAllowSuggestions(!text.equals(originalChatText)) + updateCommandInfo()）；fabric 侧用 setWindowActive(false)（yarn 名 = setAllowSuggestions，同时清 allow 标志）且不装 responder —— 它把 suggestor 写进 ChatScreen 自己的字段，由 vanilla 的 chat-field listener 继续驱动并在每次击键时重新武装该标志。因此 install 的签名在 official 侧多一个 originalChatText（responder 的比较基线），fabric 侧没有 responder 也就不需要它。两者各自正确，不许统一。",
+        "sample_a": "    public CommandSuggestions install(Minecraft client, Screen owner, Font textRenderer,",
+        "sample_b": "    public CommandSuggestions install(Minecraft client, Screen owner, Font textRenderer) {"
+      },
+      {
+        "fingerprint": "73fc8a2d34cf",
+        "kind": "code",
+        "reason": "主会话终验批准 2026-10-09（D8 工单「既定裁定」）：dismissSuggestor 的平台差异是平台接缝，只记注释不统一。official 侧（Forge/NeoForge）用 hide() 并自建 EditBox responder 驱动 suggestor（setAllowSuggestions(!text.equals(originalChatText)) + updateCommandInfo()）；fabric 侧用 setWindowActive(false)（yarn 名 = setAllowSuggestions，同时清 allow 标志）且不装 responder —— 它把 suggestor 写进 ChatScreen 自己的字段，由 vanilla 的 chat-field listener 继续驱动并在每次击键时重新武装该标志。因此 install 的签名在 official 侧多一个 originalChatText（responder 的比较基线），fabric 侧没有 responder 也就不需要它。两者各自正确，不许统一。",
+        "sample_a": "        suggestor.hide();",
+        "sample_b": "        suggestor.setWindowActive(false);"
+      },
+      {
+        "fingerprint": "76c85d0dd1ea",
+        "kind": "code",
+        "reason": "主会话终验批准 2026-10-09（D8 工单「既定裁定」）：dismissSuggestor 的平台差异是平台接缝，只记注释不统一。official 侧（Forge/NeoForge）用 hide() 并自建 EditBox responder 驱动 suggestor（setAllowSuggestions(!text.equals(originalChatText)) + updateCommandInfo()）；fabric 侧用 setWindowActive(false)（yarn 名 = setAllowSuggestions，同时清 allow 标志）且不装 responder —— 它把 suggestor 写进 ChatScreen 自己的字段，由 vanilla 的 chat-field listener 继续驱动并在每次击键时重新武装该标志。因此 install 的签名在 official 侧多一个 originalChatText（responder 的比较基线），fabric 侧没有 responder 也就不需要它。两者各自正确，不许统一。",
+        "sample_a": "            chatInputSuggestor.hide();",
+        "sample_b": "            chatInputSuggestor.setWindowActive(false);"
+      }
+    ]
+  }
+}

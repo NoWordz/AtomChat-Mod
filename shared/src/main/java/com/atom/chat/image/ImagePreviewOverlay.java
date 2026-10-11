@@ -7,6 +7,7 @@ import com.atom.chat.ui.PressScale;
 import com.atom.chat.ui.UiLayout;
 import com.atom.chat.ui.UiMotion;
 import com.atom.chat.ui.UiTokens;
+import static com.atom.chat.ui.UiTokens.s;
 import io.github.humbleui.skija.Canvas;
 import io.github.humbleui.skija.Color;
 import io.github.humbleui.skija.Image;
@@ -64,10 +65,6 @@ public final class ImagePreviewOverlay {
     private float closeHover;
     /** The close key breathes on hover; the click request itself is instant. */
     private final PressScale closeScale = PressScale.bounce();
-
-    private static float s(float v) {
-        return UiTokens.s(v);
-    }
 
     /**
      * Shows the picture. A null bitmap is not a preview — a dim plate with a

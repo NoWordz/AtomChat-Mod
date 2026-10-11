@@ -132,6 +132,34 @@ class RichTextTest {
         assertEquals(root, rich.splice(0, 1, RichText.literal("z")).rootStyle());
     }
 
+    /**
+     * splice 之后相邻的同样式段必须被合并成一段。
+     *
+     * <p>为什么单独立一条：splice 的 run 结构真的漂移过 —— 一侧的 splice 漏调了
+     * {@code mergeRuns}，而上面两条只断字符串的用例完全逮不到：文本一模一样、
+     * 视觉一模一样，只有 {@code runs()} 的段数不同（3 段 vs 1 段）。
+     */
+    @Test
+    void spliceMergesAdjacentRunsWithTheSameStyle() {
+        Style red = Style.EMPTY.withColor(0xFF0000);
+        RichText rich = RichText.of(Component.literal("abc").setStyle(red));
+
+        RichText replaced = rich.splice(1, 2, RichText.of(Component.literal("X").setStyle(red)));
+        assertEquals("aXc", replaced.getString());
+        assertEquals(1, replaced.runs().size(),
+                "同样式的三段拼接必须合并成一段（漏调 mergeRuns 时是 3 段）");
+        assertEquals(red, replaced.runs().get(0).style());
+
+        RichText appended = rich.splice(3, 3, RichText.of(Component.literal("Z").setStyle(red)));
+        assertEquals("abcZ", appended.getString());
+        assertEquals(1, appended.runs().size(), "尾端追加同样式也必须合并");
+
+        RichText mixed = rich.splice(1, 2,
+                RichText.of(Component.literal("X").setStyle(Style.EMPTY.withColor(0x00FF00))));
+        assertEquals("aXc", mixed.getString());
+        assertEquals(3, mixed.runs().size(), "不同样式的相邻段不许被合并（合并过头同样是缺陷）");
+    }
+
     @Test
     void linkifyStaysOffAnImageCodeTail() {
         // A code the panel cannot render used to be drawn as a text bubble, and

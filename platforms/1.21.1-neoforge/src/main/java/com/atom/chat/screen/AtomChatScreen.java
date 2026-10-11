@@ -3,21 +3,22 @@ import com.atom.chat.AtomChat;
 
 import com.atom.chat.chat.BlockList;
 import com.atom.chat.chat.PublicEchoTracker;
+import com.atom.chat.chat.DraftStore;
+import com.atom.chat.chat.ReplySlotStore;
+import com.atom.chat.chat.SendPipeline;
+import com.atom.chat.chat.WorldFeedFilter;
+import com.atom.chat.history.HistoryFoldStore;
 import com.atom.chat.chat.ChatMessage;
 import com.atom.chat.chat.Cicodes;
-import com.atom.chat.chat.MessageFilter;
 import com.atom.chat.chat.TeleportCommands;
 import com.atom.chat.chat.ChatStore;
 import com.atom.chat.config.AtomChatConfig;
 import com.atom.chat.emote.EmoteStore;
-import com.atom.chat.ui.AppIcons;
-import com.atom.chat.ui.ActionFeedback;
-import com.atom.chat.ui.ActionToast;
+import com.atom.chat.image.DragDropPasteUpload;
 import com.atom.chat.image.ImageLoader;
 import com.atom.chat.image.ImagePreviewOverlay;
-import com.atom.chat.image.ImageSaver;
-import com.atom.chat.image.ImageUploader;
-import com.atom.chat.net.MediaCompanionClient;
+import com.atom.chat.image.ImageUploadPipeline;
+import com.atom.chat.image.NativeDialogBridge;
 import com.atom.chat.net.PokeCompanionClient;
 import com.atom.chat.chat.LocalEcho;
 import com.atom.chat.chat.PlayerRef;
@@ -28,15 +29,16 @@ import com.atom.chat.text.RichText;
 import com.atom.chat.nav.AppPage;
 import com.atom.chat.nav.AtomChatState;
 import com.atom.chat.nav.NavPage;
-import com.atom.chat.nav.NavigationStack;
-import com.atom.chat.notification.NotificationBanner;
+import com.atom.chat.nav.NavStackController;
+import com.atom.chat.nav.PageTransitionComposite;
+import com.atom.chat.nav.PageTransitionDirector;
+import com.atom.chat.notification.NotificationJumpService;
 import com.atom.chat.avatar.AvatarImage;
 import com.atom.chat.avatar.AvatarStore;
 import com.atom.chat.avatar.ColorPickerOverlay;
 import com.atom.chat.avatar.ImageCropper;
 import com.atom.chat.banner.BannerImage;
 import com.atom.chat.banner.BannerStore;
-import com.atom.chat.image.OwnPlayerAvatarSource;
 import com.atom.chat.page.ConversationListPage;
 import com.atom.chat.page.HistoryWindow;
 import com.atom.chat.page.MessageListView;
@@ -44,36 +46,50 @@ import com.atom.chat.page.PageHost;
 import com.atom.chat.page.ProfilePage;
 import com.atom.chat.font.FontManager;
 import com.atom.chat.mixin.MouseHandlerAccessor;
-import com.atom.chat.render.Animator;
 import com.atom.chat.render.BlurMotionGate;
 import com.atom.chat.render.ClickableSpan;
+import com.atom.chat.render.DrawPrimitives;
 import com.atom.chat.render.PanelBlurRenderer;
 import com.atom.chat.render.RichTextRenderer;
 import com.atom.chat.render.SkiaDraw;
 import com.atom.chat.render.SkiaFontRenderer;
 import com.atom.chat.render.SkiaGraphics;
+import com.atom.chat.settings.AvatarClickWiring;
+import com.atom.chat.settings.ProfilePageWiring;
+import com.atom.chat.settings.SettingsActions;
+import com.atom.chat.settings.SettingsDetailPage;
 import com.atom.chat.settings.SettingsHomePage;
 import com.atom.chat.settings.SettingsSection;
 import com.atom.chat.settings.SettingsSectionPage;
 import com.atom.chat.ui.Animations;
 import com.atom.chat.ui.BottomTabBar;
+import com.atom.chat.ui.CanvasLeakWatch;
+import com.atom.chat.ui.ComposerInput;
+import com.atom.chat.ui.ComposerPointer;
+import com.atom.chat.ui.ContextMenuActions;
+import com.atom.chat.ui.ContextMenuController;
 import com.atom.chat.ui.ScrollController;
+import com.atom.chat.ui.ScrollSyncService;
 import com.atom.chat.ui.ShellHeader;
 import com.atom.chat.ui.UiLayout;
 import com.atom.chat.ui.EmojiPanel;
+import com.atom.chat.ui.MessageListWiring;
+import com.atom.chat.ui.HeaderChrome;
+import com.atom.chat.ui.EmojiWiring;
 import com.atom.chat.ui.PanelBackground;
-import com.atom.chat.ui.MenuPopup;
+import com.atom.chat.ui.PanelOpenMotion;
 import com.atom.chat.ui.PressScale;
 import com.atom.chat.ui.QuickPhrasePanel;
+import com.atom.chat.ui.QuickPhraseWiring;
 import com.atom.chat.ui.UiMotion;
 import com.atom.chat.ui.UiTokens;
+import com.atom.chat.ui.input.InputGate;
 import com.atom.chat.ui.input.InputHandler;
-import com.atom.chat.ui.input.InputRouter;
 import com.atom.chat.wallpaper.WallpaperImage;
 import com.atom.chat.wallpaper.WallpaperStore;
+import com.atom.chat.watut.TypingIndicatorSource;
 import com.atom.chat.util.ClipboardImages;
 import com.atom.chat.util.FilePicker;
-import com.atom.chat.util.ImageFileNames;
 import com.atom.chat.util.ImageFiles;
 import io.github.humbleui.skija.Canvas;
 import io.github.humbleui.skija.Color;
@@ -81,14 +97,11 @@ import io.github.humbleui.skija.Font;
 import io.github.humbleui.skija.Image;
 import io.github.humbleui.skija.Paint;
 import io.github.humbleui.skija.PaintMode;
-import io.github.humbleui.skija.PaintStrokeCap;
-import io.github.humbleui.skija.PaintStrokeJoin;
 import io.github.humbleui.types.Rect;
 import io.github.humbleui.types.RRect;
 import io.github.humbleui.skija.SamplingMode;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
-import net.minecraft.client.gui.components.CommandSuggestions;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.ChatScreen;
 import net.minecraft.client.multiplayer.PlayerInfo;
@@ -96,74 +109,29 @@ import net.minecraft.client.KeyMapping;
 import net.minecraft.network.chat.Style;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
-import net.minecraft.util.StringUtil;
 import net.minecraft.util.Mth;
-import org.apache.commons.lang3.StringUtils;
 
-import org.lwjgl.PointerBuffer;
-import org.lwjgl.glfw.GLFWDropCallback;
-import org.lwjgl.glfw.GLFW;
-import org.lwjgl.system.MemoryUtil;
 
 import java.awt.datatransfer.DataFlavor;
 import java.io.File;
 import java.nio.file.Path;
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.TimeUnit;
 
-public final class AtomChatScreen extends ChatScreen implements PageHost {
-    /** Which context menu is open: normal message bubble actions or player-avatar actions. */
-    private enum ContextMenuMode { BUBBLE, AVATAR, PLAYER_CARD }
-
+public final class AtomChatScreen extends ChatScreen implements PageHost, NotificationJumpService.NavPort {
     /** How this screen was opened: from the vanilla chat box or from the AtomChat key. */
     public enum AtomChatOpenMode { DIRECT_WORLD, RESTORE }
 
     private final Minecraft client = Minecraft.getInstance();
-    /** Command/mention suggestor anchored to the Skia input row. */
-    private CommandSuggestions chatInputSuggestor;
-
-    private final NavigationStack<NavPage> navigation;
 
     private final ConversationListPage conversationListPage = new ConversationListPage(this);
     /** Local custom avatar for the profile page and own bubbles. */
     private final AvatarStore avatarStore = new AvatarStore(
             net.neoforged.fml.loading.FMLPaths.CONFIGDIR.get().resolve("atomchat/avatar"));
     /** QQ-style crop overlay for avatar and wallpaper picks. */
-    private final ImageCropper imageCropper = new ImageCropper(new ImageCropper.Callback() {
-        @Override
-        public void onConfirm(String targetId, byte[] pngBytes) {
-            if ("avatar".equals(targetId)) {
-                if (avatarStore.setPng(pngBytes)) {
-                    AvatarImage.release();
-                    // Companion push: skipped only when the server has no
-                    // companion channels at all (negotiation, not a timeout).
-                    if (client.player != null) {
-                        com.atom.chat.net.AvatarCompanionClient.uploadOwnAvatar(
-                                client.player.getUUID(), pngBytes);
-                    }
-                }
-            } else if ("wallpaper".equals(targetId)) {
-                if (WallpaperStore.setPng(pngBytes)) {
-                    WallpaperImage.release();
-                }
-            } else if ("banner".equals(targetId)) {
-                if (BannerStore.setPng(pngBytes)) {
-                    BannerImage.release();
-                }
-            }
-        }
-
-        @Override
-        public void onCancel(String targetId) {
-            // Nothing to clean up; the picked file is simply dropped.
-        }
-    });
+    private final ImageCropper imageCropper = new ImageCropper(SettingsActions.cropperCallback(avatarStore, client));
     /** Modal HSV colour picker opened from the settings colour rows. */
     private final ColorPickerOverlay colorPicker = new ColorPickerOverlay(this::copyToClipboard);
     /**
@@ -172,189 +140,352 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
      * {@link ModalInput} hands it every event.
      */
     private final ImagePreviewOverlay imagePreview = new ImagePreviewOverlay();
-    private final ProfilePage profilePage = new ProfilePage(new ProfilePage.Handler() {
+
+    /**
+     * The profile page's avatar-and-banner half, the avatar click competition
+     * window and poking (D18b). The window's verdict is reached inside a
+     * rendered frame, from this screen's {@code nowMs} (see {@link #drawPanel}),
+     * and the click's three branches live in the domain; this screen only hands
+     * over the page, the poke config and client, and its own labels and sinks.
+     * A message crosses as {@link AvatarClickWiring.MessageFacts}, because the
+     * message type itself is spelled differently per mapping. The signature
+     * borrow still belongs to {@link ProfilePageWiring} — the page's handler is
+     * one object, so the two handlers are chained here.
+     */
+    private final AvatarClickWiring avatarWiring = new AvatarClickWiring(new AvatarClickWiring.Host() {
         @Override
-        public void openAvatarPicker() {
-            pickAvatarFile();
+        public ProfilePage profilePage() {
+            return profilePage;
         }
 
         @Override
-        public void clearAvatar() {
-            boolean removed = avatarStore.clear();
-            AvatarImage.release();
-            feedback(removed ? "atomchat.feedback.avatarCleared" : "atomchat.feedback.avatarClearFailed",
-                    removed);
+        public void openProfileDetailPage() {
+            pushPage(AppPage.PROFILE_DETAIL);
         }
 
         @Override
-        public void openBannerPicker() {
-            pickBannerFile();
+        public java.util.UUID localPlayerId() {
+            return client.player == null ? null : client.player.getUUID();
         }
 
         @Override
-        public void clearBanner() {
-            // Delete image = off: the file goes, the accent gradient returns.
-            boolean removed = BannerStore.clear();
-            BannerImage.release();
-            feedback(removed ? "atomchat.feedback.bannerCleared" : "atomchat.feedback.bannerClearFailed",
-                    removed);
+        public boolean pokeConfigEnabled() {
+            return Animations.avatarPoke();
         }
 
         @Override
-        public boolean copyText(String text) {
-            return copyToClipboard(text);
+        public boolean animationsEnabled() {
+            return Animations.enabled();
+        }
+
+        @Override
+        public boolean clearAvatar() {
+            return avatarStore.clear();
+        }
+
+        @Override
+        public boolean pokeSend(java.util.UUID target) {
+            return PokeCompanionClient.send(target);
+        }
+
+        @Override
+        public void installPokeHandler(java.util.function.Consumer<java.util.UUID> handler) {
+            PokeCompanionClient.setHandler(handler);
+        }
+
+        @Override
+        public String displayNameFor(java.util.UUID uuid) {
+            return AtomChatScreen.this.displayNameFor(uuid);
+        }
+
+        @Override
+        public boolean isBlocked(String name) {
+            return com.atom.chat.chat.BlockList.isBlocked(name);
+        }
+
+        @Override
+        public void pokeWobble(java.util.UUID uuid, long nowMs) {
+            messageListView.poke(uuid, nowMs);
+        }
+
+        @Override
+        public void playPokeSound() {
+            com.atom.chat.notification.NotificationController.playPokeSound();
+        }
+
+        @Override
+        public void feedback(String key, boolean success) {
+            AtomChatScreen.this.feedback(key, success);
+        }
+
+        @Override
+        public String label(String key, String arg) {
+            return tr(key, arg);
+        }
+
+        @Override
+        public void feedback(String key, String label, boolean success) {
+            AtomChatScreen.this.feedback(key, label, success);
+        }
+
+        @Override
+        public void pickAvatarFile() {
+            AtomChatScreen.this.pickAvatarFile();
+        }
+
+        @Override
+        public void pickBannerFile() {
+            AtomChatScreen.this.pickBannerFile();
+        }
+
+        @Override
+        public boolean clearBanner() {
+            return BannerStore.clear();
+        }
+
+        @Override
+        public boolean copyToClipboard(String text) {
+            return AtomChatScreen.this.copyToClipboard(text);
         }
 
         @Override
         public void beginSignatureEdit() {
-            // The quick-phrase editor's borrow, pointed at the signature: park
-            // the composer draft, load the current signature into the field
-            // (the IME carrier) and focus it. The page flips into its editing
-            // draw once the field is primed.
-            signatureSavedComposer = inputGetText();
-            String sig = AtomChatConfig.get().playerSignature;
-            inputSetText(sig == null ? "" : sig);
-            inputFocused = true;
-            setFocused(input);
-            if (input != null) {
-                input.setFocused(true);
-            }
-            setCaretAtEnd();
-            profilePage.beginSignatureEdit();
+            profileWiring.beginSignatureEdit();
         }
 
         @Override
         public void endSignatureEdit(boolean commit) {
-            if (commit) {
-                String text = inputGetText();
-                if (text.length() > 256) {
-                    // Same cap as a quick phrase: a longer signature could
-                    // never be typed within Minecraft's chat limit anyway.
-                    text = text.substring(0, 256);
-                }
-                AtomChatConfig cfg = AtomChatConfig.get();
-                cfg.playerSignature = text;
-                AtomChatConfig.save(cfg);
-            }
-            inputSetText(signatureSavedComposer);
-            setCaretAtEnd();
+            profileWiring.endSignatureEdit(commit);
+        }
+    });
+
+    private final ProfilePage profilePage = new ProfilePage(new ProfilePage.Handler() {
+        @Override
+        public void openAvatarPicker() {
+            avatarWiring.handler().openAvatarPicker();
+        }
+
+        @Override
+        public void clearAvatar() {
+            avatarWiring.handler().clearAvatar();
+        }
+
+        @Override
+        public void openBannerPicker() {
+            avatarWiring.handler().openBannerPicker();
+        }
+
+        @Override
+        public void clearBanner() {
+            avatarWiring.handler().clearBanner();
+        }
+
+        @Override
+        public boolean copyText(String text) {
+            return avatarWiring.handler().copyText(text);
+        }
+
+        @Override
+        public void beginSignatureEdit() {
+            profileWiring.beginSignatureEdit();
+        }
+
+        @Override
+        public void endSignatureEdit(boolean commit) {
+            profileWiring.endSignatureEdit(commit);
         }
     }, avatarStore);
-    /** Composer text parked while the profile page borrows the field. */
-    private String signatureSavedComposer = "";
+
+    /**
+     * The profile page's signature half (D18a): the composer borrow behind the
+     * signature editor, the per-frame draft feed, the page's draw path and the
+     * role row's resolver. The parking-ticket order and the "abort, never commit"
+     * rule for the four navigation paths live in {@link ProfilePageWiring}; this
+     * screen hands it the page, D21's composer, D10/D11's layout and scroll, the
+     * two coordinate conversions and the two local-player facts.
+     */
+    private final ProfilePageWiring profileWiring = new ProfilePageWiring(new ProfilePageWiring.Host() {
+        @Override
+        public ProfilePage profilePage() {
+            return profilePage;
+        }
+
+        @Override
+        public String composerText() {
+            return composer.text();
+        }
+
+        @Override
+        public void setComposerText(String text) {
+            composer.setText(text);
+        }
+
+        @Override
+        public void focusComposer() {
+            composer.focusGuarded();
+        }
+
+        @Override
+        public void caretToEnd() {
+            composer.caretToEnd();
+        }
+
+        @Override
+        public UiLayout detailLayout() {
+            return AtomChatScreen.this.detailLayout();
+        }
+
+        @Override
+        public ScrollSyncService scrollSync() {
+            return scrollSync;
+        }
+
+        @Override
+        public float toVirtualX(double guiX) {
+            return AtomChatScreen.this.toVirtualX(guiX);
+        }
+
+        @Override
+        public float toVirtualY(double guiY) {
+            return AtomChatScreen.this.toVirtualY(guiY);
+        }
+
+        @Override
+        public java.util.UUID localPlayerId() {
+            return client.player == null ? null : client.player.getUUID();
+        }
+
+        @Override
+        public boolean localPlayerHasPermissions(int level) {
+            return client.player.hasPermissions(level);
+        }
+
+        @Override
+        public boolean composerFocused() {
+            return composer.focused() && composer.fieldFocused();
+        }
+    });
     private final SettingsHomePage settingsHomePage = new SettingsHomePage();
     private final SettingsSectionPage settingsSectionPage = new SettingsSectionPage();
-    /** Per-chip scroll memory ("section:chip" -> offset); the detail
-     *  controller is shared across chips. */
-    private final java.util.HashMap<String, Float> chipScroll = new java.util.HashMap<>();
-    private String chipScrollKey = "";
+
+    /**
+     * The settings screen's actions (D15a): the seven action cards, the three
+     * native pickers behind them and the crop each picked file is framed with.
+     * The domain owns the pickers and the cropper's confirm half; this screen
+     * hands it the avatar store it built from this platform's config directory
+     * (the domain never resolves one), the cropper and the section page it owns,
+     * its own client handle — never Minecraft.getInstance(), D3's
+     * precedent — D14's dialog bridge, D7's feedback, D4's history windows and
+     * D10's two layouts.
+     */
+    private final SettingsActions settingsActions = new SettingsActions(new SettingsActions.Host() {
+        @Override
+        public AvatarStore avatarStore() {
+            return avatarStore;
+        }
+
+        @Override
+        public ImageCropper imageCropper() {
+            return imageCropper;
+        }
+
+        @Override
+        public SettingsSectionPage sectionPage() {
+            return settingsSectionPage;
+        }
+
+        @Override
+        public Minecraft client() {
+            return client;
+        }
+
+        @Override
+        public NativeDialogBridge dialogs() {
+            return dialogBridge;
+        }
+
+        @Override
+        public void feedback(String key, boolean success) {
+            AtomChatScreen.this.feedback(key, success);
+        }
+
+        @Override
+        public void resetHistoryWindows() {
+            AtomChatScreen.this.resetHistoryWindows();
+        }
+
+        @Override
+        public UiLayout layout() {
+            return AtomChatScreen.this.layout();
+        }
+
+        @Override
+        public UiLayout listLayout() {
+            return AtomChatScreen.this.listLayout();
+        }
+    });
+
+    /**
+     * The pushed settings sub-page (D15b): its scroll state, the per-chip memory
+     * it keeps, its frame and the inline numeric editor of its integer sliders.
+     * The domain keeps the modal contract — the cropper and the colour picker
+     * must be rendered on this page's draw path, or an active-but-unrendered
+     * modal eats every click and freezes the screen. This screen hands it D16's
+     * section page, D9's two modals and accent, D11's scroll service, D10's
+     * detail layout and its own two coordinate conversions.
+     */
+    private final SettingsDetailPage settingsDetailPage = new SettingsDetailPage(new SettingsDetailPage.Host() {
+        @Override
+        public SettingsSectionPage sectionPage() {
+            return settingsSectionPage;
+        }
+
+        @Override
+        public ColorPickerOverlay colorPicker() {
+            return colorPicker;
+        }
+
+        @Override
+        public ImageCropper imageCropper() {
+            return imageCropper;
+        }
+
+        @Override
+        public ScrollSyncService scrollSync() {
+            return scrollSync;
+        }
+
+        @Override
+        public UiLayout detailLayout() {
+            return AtomChatScreen.this.detailLayout();
+        }
+
+        @Override
+        public int accent() {
+            return AtomChatScreen.this.accent();
+        }
+
+        @Override
+        public float toVirtualX(double guiX) {
+            return AtomChatScreen.this.toVirtualX(guiX);
+        }
+
+        @Override
+        public float toVirtualY(double guiY) {
+            return AtomChatScreen.this.toVirtualY(guiY);
+        }
+    });
 
     {
-        // Action cards (pick/clear wallpaper) need the shell's file picker,
-        // which lives here rather than in the settings package.
-        settingsSectionPage.setActionHandler(this::handleSettingsAction);
-        // The custom-avatar source needs the store instance created above.
-        OwnPlayerAvatarSource.attach(avatarStore);
         // Role row: vanilla 1.21.1 only syncs the local player's own permission
         // level; other players stay unknown (row hidden) until a server
         // companion can answer for them.
-        profilePage.setRoleResolver((uuid, name) -> {
-            if (uuid != null && this.client.player != null
-                    && uuid.equals(this.client.player.getUUID())) {
-                return this.client.player.hasPermissions(2);
-            }
-            return null;
-        });
+        profilePage.setRoleResolver(profileWiring.roleResolver());
     }
 
-    /** Settings action cards: the wallpaper pair and the teleport mode cycle. */
-    private void handleSettingsAction(String actionId) {
-        if ("wallpaper_pick".equals(actionId)) {
-            pickWallpaperFile();
-        } else if ("wallpaper_clear".equals(actionId)) {
-            boolean removed = WallpaperStore.clear();
-            WallpaperImage.release();
-            feedback(removed ? "atomchat.feedback.wallpaperCleared" : "atomchat.feedback.wallpaperClearFailed",
-                    removed);
-        } else if ("test_sound".equals(actionId)) {
-            com.atom.chat.notification.NotificationController.playTestSound();
-        } else if ("teleport_mode".equals(actionId)) {
-            AtomChatConfig cfg = AtomChatConfig.get();
-            String current = cfg.teleportCommandMode == null ? "auto" : cfg.teleportCommandMode;
-            // auto -> tp -> tpa -> auto. The old cycle was tp -> tpa -> tp:
-            // once you left auto there was no way back — reported and fixed.
-            cfg.teleportCommandMode = switch (current) {
-                case "tp" -> "tpa";
-                case "tpa" -> "auto";
-                default -> "tp";
-            };
-            TeleportCommands.reset();
-            AtomChatConfig.save(cfg);
-        } else if ("page_nav_style".equals(actionId)) {
-            // Style pick: tap cycles SLIDE <-> ZOOM and saves, like the
-            // teleport-mode cycle above. Takes effect on the next nav.
-            AtomChatConfig cfg = AtomChatConfig.get();
-            cfg.pageNavStyle = cfg.pageNavStyle == AtomChatConfig.PageNavStyle.ZOOM
-                    ? AtomChatConfig.PageNavStyle.SLIDE
-                    : AtomChatConfig.PageNavStyle.ZOOM;
-            AtomChatConfig.save(cfg);
-        } else if ("history_clear".equals(actionId)) {
-            // Wipes the current session (and the world's saved file when
-            // persistence is on). Generation bumped inside: a pending auto-save
-            // cannot resurrect what was just deleted.
-            com.atom.chat.history.ChatHistory.clearCurrent();
-            resetHistoryWindows();
-            feedback("atomchat.feedback.historyCleared", true);
-        } else if ("cache_clear".equals(actionId)) {
-            // Image downloads are safe to drop; they are re-fetched on demand.
-            // A directory that could not be enumerated reports failure rather
-            // than a success the player cannot trust.
-            int deleted = ImageLoader.get().clearDiskCache();
-            feedback(deleted < 0 ? "atomchat.feedback.cacheClearFailed" : "atomchat.feedback.cacheCleared",
-                    deleted >= 0);
-        }
-    }
-
-    /** Picks a wallpaper image off-thread; the store mutation returns to render. */
-    private void pickWallpaperFile() {
-        KeyMapping.releaseAll();
-        if (this.client.mouseHandler != null) {
-            ((MouseHandlerAccessor) this.client.mouseHandler).atomchat$setActiveButton(0);
-        }
-        Thread worker = new Thread(() -> {
-            Path file = FilePicker.pickImage(this::suppressAutoIconify, this::restoreAutoIconify,
-                    WallpaperStore::isSupportedName);
-            refocusWindow();
-            if (file == null) {
-                return;
-            }
-            this.client.execute(() -> {
-                // Crop at the current panel aspect so what you frame is what
-                // the panel shows (cover-fit has nothing left to do).
-                UiLayout l = layout();
-                imageCropper.open(file, false, l.rect().w(), l.rect().h(), "wallpaper");
-            });
-        }, "AtomChat-WallpaperPicker");
-        worker.setDaemon(true);
-        worker.start();
-    }
     /** Picks a custom avatar off-thread; the cropper opens on the render side. */
     private void pickAvatarFile() {
-        KeyMapping.releaseAll();
-        if (this.client.mouseHandler != null) {
-            ((MouseHandlerAccessor) this.client.mouseHandler).atomchat$setActiveButton(0);
-        }
-        Thread worker = new Thread(() -> {
-            Path file = FilePicker.pickImage(this::suppressAutoIconify, this::restoreAutoIconify,
-                    AvatarStore::isSupportedName);
-            refocusWindow();
-            if (file == null) {
-                return;
-            }
-            this.client.execute(() -> imageCropper.open(file, true, 0.0F, 0.0F, "avatar"));
-        }, "AtomChat-AvatarPicker");
-        worker.setDaemon(true);
-        worker.start();
+        settingsActions.pickAvatarFile();
     }
 
     /**
@@ -364,27 +495,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
      * other store write.
      */
     private void pickBannerFile() {
-        KeyMapping.releaseAll();
-        if (this.client.mouseHandler != null) {
-            ((MouseHandlerAccessor) this.client.mouseHandler).atomchat$setActiveButton(0);
-        }
-        Thread worker = new Thread(() -> {
-            Path file = FilePicker.pickImage(this::suppressAutoIconify, this::restoreAutoIconify,
-                    BannerStore::isSupportedName);
-            refocusWindow();
-            if (file == null) {
-                return;
-            }
-            this.client.execute(() -> {
-                // Crop at the profile banner card's aspect so what you frame is
-                // what the card shows (cover-fit has nothing left to do).
-                UiLayout l = listLayout();
-                float bannerW = Math.max(1.0F, l.list.w() - UiTokens.ROW_CLIP_INSET * 2.0F);
-                imageCropper.open(file, false, bannerW, UiTokens.PROFILE_BANNER_H, "banner");
-            });
-        }, "AtomChat-BannerPicker");
-        worker.setDaemon(true);
-        worker.start();
+        settingsActions.pickBannerFile();
     }
 
     /** Root-page mouse coordinates in virtual UI space, for card hover rendering. */
@@ -395,17 +506,29 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
 
     private final SkiaGraphics graphics = new SkiaGraphics();
     private final String originalChatText;
-    private final ImageUploader imageUploader = new ImageUploader();
     /**
-     * Ordered input routing. Priority (first registered wins): closing guard,
-     * modals (cropper/colour picker), pushed-subpage Esc, screen Esc, root
-     * pages, world chat. New interactive features register a handler instead
-     * of inserting branches into the former if-else chains.
+     * Ordered input routing (D23a). Priority (first registered wins): closing
+     * guard, modals (cropper/colour picker), pushed-subpage Esc, screen Esc,
+     * root pages, world chat. New interactive features register a handler
+     * instead of inserting branches into the former if-else chains.
+     *
+     * <p>The gate holds this chain and owns the one rule that decides whether a
+     * pointer event reaches it at all — swallowed whole while the panel
+     * animates, because hit tests run on the settled layout while the panel is
+     * drawn mid-transform. It also owns the deliberate asymmetry (the keyboard
+     * is not gated); see InputGate. The registration table stays here, on the
+     * gate itself: its entries are this screen's own handler classes, and a
+     * second chain would leave the gate's own one empty.</p>
      */
-    private final InputRouter inputRouter = new InputRouter()
+    private final InputGate gate = new InputGate(new InputGate.Host() {
+        @Override
+        public boolean panelAnimating() {
+            return PanelOpenMotion.animating(panelProgress, closing);
+        }
+    })
             .add(new ClosingStateInput())
             .add(new ModalInput())
-            .add(new NumberEditInput())
+            .add(settingsDetailPage.numberEditInput())
             .add(new BannerInput())
             .add(new ScreenEscInput())
             .add(new RootPageInput())
@@ -416,9 +539,19 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
      * controllers and all input-side interaction state; every value the view
      * needs from the screen is wired through the Host below.
      */
-    private final MessageListView messageListView = new MessageListView(new MessageListView.Host() {
+    /**
+     * The message list's wiring (D22): what the list asks the screen for, the
+     * messages a page owns, the click/drag coexistence flow and the hover span.
+     * The span type stays a parameter — the mapping layer's record carries a
+     * Minecraft style, and keeping it out of the domain is what lets the flow be
+     * tested without one. Nothing here reads the navigation stack's top page: each
+     * side of a transition asks for its own list, exactly like the scroll
+     * controllers.
+     */
+    private final MessageListWiring<ClickableSpan> messageWiring =
+            new MessageListWiring<>(new MessageListWiring.Host<ClickableSpan>() {
         @Override
-        public UUID ownUuid() {
+        public java.util.UUID ownUuid() {
             return client.player != null ? client.player.getUUID() : null;
         }
 
@@ -428,7 +561,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
         }
 
         @Override
-        public String senderName(ChatMessage message) {
+        public String messageSenderName(ChatMessage message) {
             return AtomChatScreen.this.messageSenderName(message);
         }
 
@@ -436,130 +569,650 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
         public long openStart() {
             return AtomChatScreen.this.openStart;
         }
+
+        @Override
+        public java.util.List<ChatMessage> worldSnapshot() {
+            return ChatStore.get().snapshot();
+        }
+
+        @Override
+        public java.util.List<ChatMessage> privateMessages(PlayerRef target) {
+            return PrivateChatStore.messages(target);
+        }
+
+        @Override
+        public WorldFeedFilter worldFeed() {
+            return worldFeed;
+        }
+
+        @Override
+        public ClickableSpan clickableSpanAt(float vmx, float vmy) {
+            return messageListView.clickableSpanAt(vmx, vmy).orElse(null);
+        }
+
+        @Override
+        public boolean hasClickEvent(ClickableSpan span) {
+            return span.style().getClickEvent() != null;
+        }
     });
+
+    private final MessageListView messageListView = new MessageListView(messageWiring.viewHost());
     /**
      * Emoji / kaomoji / emote panel: state, geometry and rendering live in the
      * panel class; the screen only supplies composer side effects (insert
      * text, send sticker, open the picker).
      */
-    private final EmojiPanel emojiPanel = new EmojiPanel(new EmojiPanel.Host() {
+
+    /**
+     * The emoji panel's wiring (D17): the three screen-side effects its host needs,
+     * plus the add slot's picker. This screen builds the panel with the wiring's
+     * host and hands the panel back through the wiring's own port; the two
+     * press-clearing lines the picker opens with stay here (they run synchronously
+     * and without touching window focus, while D14's bridge is a hop plus a focus —
+     * a different shape; see the D17 report).
+     */
+    private final EmojiWiring emojiWiring = new EmojiWiring(new EmojiWiring.Host() {
         @Override
-        public void insert(String text) {
-            inputAppend(text);
+        public EmojiPanel panel() {
+            return emojiPanel;
         }
 
         @Override
-        public void sendSticker(Path file) {
+        public void appendToComposer(String text) {
+            composer.append(text);
+        }
+
+        @Override
+        public void uploadSticker(Path file) {
             uploadAndAppend(file);
         }
 
         @Override
-        public void pickEmoteFile() {
-            AtomChatScreen.this.pickEmoteFile();
+        public void execute(Runnable task) {
+            client.execute(task);
+        }
+
+        @Override
+        public void suspendAutoIconify() {
+            dialogBridge.suppressAutoIconify();
+        }
+
+        @Override
+        public void restoreAutoIconify() {
+            dialogBridge.restoreAutoIconify();
+        }
+
+        @Override
+        public void refocusWindow() {
+            dialogBridge.refocusWindow();
         }
     });
+    private final EmojiPanel emojiPanel = new EmojiPanel(emojiWiring.panelHost());
 
     /**
      * Quick phrases above the composer. Tapping one inserts it into the input
      * and closes the panel — the phrase can still be edited before sending.
      */
-    private final QuickPhrasePanel quickPhrasePanel = new QuickPhrasePanel(this::inputAppend, this::accent);
+    /**
+     * The composer's own surface (D21a): the text the shared field holds, the focus
+     * flag, the caret and the wrap/height geometry. Every call it makes on the
+     * hidden field is one method of {@link ComposerInput.Field} — that port is what
+     * makes the 256 cap, the focus order, the wrap cache and the caret mapping
+     * testable without a game, and this screen stays its only implementation. The
+     * per-frame focus read-back and the read-only blur stay separate calls, because
+     * they sit in the frame where they always did.
+     */
+    private final ComposerInput composer = new ComposerInput(new ComposerInput.Host() {
+        @Override
+        public UiLayout layout() {
+            return AtomChatScreen.this.layout();
+        }
 
-    private boolean inputFocused = true;
-    /** Scroll state for the world-chat message list. */
-    private final ScrollController worldScroll = new ScrollController();
-    /** Per-private-conversation scroll controllers; draft map keys are PlayerRef.key(). */
-    private final Map<String, ScrollController> privateScrolls = new HashMap<>();
+        @Override
+        public ScrollController currentScroll() {
+            return AtomChatScreen.this.currentScroll();
+        }
+
+        @Override
+        public float frameDt() {
+            return frameDt;
+        }
+
+        @Override
+        public int clampInt(int value, int lo, int hi) {
+            return Mth.clamp(value, lo, hi);
+        }
+    }, new ComposerInput.Field() {
+        @Override
+        public boolean present() {
+            return input != null;
+        }
+
+        @Override
+        public String text() {
+            return input.getValue();
+        }
+
+        @Override
+        public void setText(String text) {
+            input.setValue(text);
+        }
+
+        @Override
+        public int caretPosition() {
+            return input.getCursorPosition();
+        }
+
+        @Override
+        public boolean focused() {
+            return input.isFocused();
+        }
+
+        @Override
+        public void setScreenFocus() {
+            setFocused(input);
+        }
+
+        @Override
+        public void fieldFocus() {
+            input.setFocused(true);
+        }
+
+        @Override
+        public void fieldFocusGuarded() {
+            if (input != null) {
+                input.setFocused(true);
+            }
+        }
+
+        @Override
+        public void fieldBlur() {
+            input.setFocused(false);
+        }
+
+        @Override
+        public void moveCaretTo(int pos) {
+            input.moveCursorTo(pos, false);
+        }
+    });
+
+    private final QuickPhrasePanel quickPhrasePanel = new QuickPhrasePanel(composer::append, this::accent);
+
+    /**
+     * The quick-phrase borrow (D16): the parked composer text, the add/edit
+     * lifecycle and what each panel action does to the screen. The composer is
+     * shared (D21 owns it, D18 borrows it too), so the domain keeps the parking
+     * ticket and this screen hands it the panel, D21's reads/writes, the focus
+     * and caret steps, and D24's read-only test.
+     */
+    private final QuickPhraseWiring quickPhraseWiring = new QuickPhraseWiring(new QuickPhraseWiring.Host() {
+        @Override
+        public QuickPhrasePanel panel() {
+            return quickPhrasePanel;
+        }
+
+        @Override
+        public String composerText() {
+            return composer.text();
+        }
+
+        @Override
+        public void setComposerText(String text) {
+            composer.setText(text);
+        }
+
+        @Override
+        public void appendToComposer(String text) {
+            composer.append(text);
+        }
+
+        @Override
+        public void focusComposer() {
+            composer.focus();
+        }
+
+        @Override
+        public void caretToEnd() {
+            composer.caretToEnd();
+        }
+
+        @Override
+        public boolean privateReadOnly() {
+            return isPrivateReadOnly();
+        }
+    });
+
     /**
      * Per-conversation history fold depth (world="", private=PlayerRef.key()).
      * Not remembered across screen instances: closing the panel forgets how far
-     * a conversation was unfolded, matching the public scroll reset.
+     * a conversation was unfolded, matching the public scroll reset. The state
+     * and the reveal compensation live in {@link HistoryFoldStore}; the wrappers
+     * below are the only entry points this shell keeps.
      */
-    private final Map<String, HistoryWindow> historyWindows = new HashMap<>();
-    /** Transient action acknowledgements (cache cleared, copied, save failed). */
-    private final ActionFeedback actionFeedback = new ActionFeedback();
-    private final Map<String, String> privateDrafts = new HashMap<>();
-    /** Draft for the public world channel; kept separately because the hidden
-     *  EditBox is shared by every chat page. */
-    private String worldDraft = "";
+    private final HistoryFoldStore historyFold = new HistoryFoldStore();
+    /**
+     * Notification banners, the jump behind their clicks and the action-feedback
+     * queue (D7). Every fact and side effect it needs from another domain goes
+     * through a port: this screen is itself D24's nav port (its own
+     * {@link #topPage}, {@link #activePrivateTarget}, {@link #openPrivateChat}
+     * and {@link #openWorldChat}), while D11's per-page scroll controllers (over
+     * D22's feed) and D21's composer are the two ports wired below. The layout,
+     * the message list view, the modal and read-only facts and the panel-space
+     * pointer are passed in per call; the leak probe and the language lookup go
+     * in as this screen's own functions, so the service keeps the exact
+     * measurement and copy the old code used.
+     */
+    private final NotificationJumpService notificationJump = new NotificationJumpService(
+            this,
+            new NotificationJumpService.ScrollPort() {
+                @Override
+                public List<ChatMessage> currentMessages() {
+                    return messageWiring.messagesForNav(topNav());
+                }
+
+                @Override
+                public ScrollController currentScroll() {
+                    return scrollForNav(topNav());
+                }
+            },
+            new NotificationJumpService.ComposerFocusPort() {
+                @Override
+                public boolean composerPresent() {
+                    return input != null;
+                }
+
+                @Override
+                public void focusComposer() {
+                    composer.focus();
+                }
+            },
+            CanvasLeakWatch::probe,
+            AtomChatScreen::tr);
+    /**
+     * The command/mention suggestion popup (D8): the anchored suggestor, the
+     * anchors it opens at, its render hook and the three input priorities it
+     * owns. The wiring holds the suggestor; this screen hands it the facts it
+     * reads — D21's one composer field, D10's layout and density, and the
+     * window's GUI scale.
+     */
+    private final SuggestorWiring suggestorWiring = new SuggestorWiring(new SuggestorWiring.Host() {
+        @Override
+        public EditBox input() {
+            return input;
+        }
+
+        @Override
+        public UiLayout layout() {
+            return AtomChatScreen.this.layout();
+        }
+
+        @Override
+        public double density() {
+            return uiDensity();
+        }
+
+        @Override
+        public double scaleFactor() {
+            return client.getWindow().getGuiScale();
+        }
+    });
+    /**
+     * Drawing primitives and theme tokens (D9): the composer's icon row, the
+     * inline SVG icon set, the ARGB blend the hover washes use and the
+     * press/hover state that row is drawn from. The buttons read three facts
+     * off this screen — the frame clock and whether the emoji / quick-phrase
+     * panel is open — and nothing else; geometry, the pointer and its
+     * conversion stay with the shell.
+     */
+    private final DrawPrimitives primitives = new DrawPrimitives(new DrawPrimitives.Host() {
+        @Override
+        public float frameDt() {
+            return frameDt;
+        }
+
+        @Override
+        public boolean emojiPanelOpen() {
+            return emojiPanel.isOpen();
+        }
+
+        @Override
+        public boolean phrasePanelOpen() {
+            return quickPhrasePanel.isOpen();
+        }
+    });
+    /**
+     * Scroll state, its scrollbar and the jump-to-latest pill (D11). The service
+     * owns the four controllers and the pill's spring/hover/fade; this screen
+     * hands it the frame clock, where the nav stack is (D24) and the drawing
+     * primitives (D9). The wrappers below are the only entry points this shell
+     * keeps, and the controllers it hands out are the same instances the pages
+     * draw with.
+     */
+    private final ScrollSyncService scrollSync = new ScrollSyncService(new ScrollSyncService.Host() {
+        @Override
+        public long frameDt() {
+            return frameDt;
+        }
+
+        @Override
+        public AppPage topPage() {
+            return AtomChatScreen.this.topPage();
+        }
+
+        @Override
+        public PlayerRef activePrivateTarget() {
+            return AtomChatScreen.this.activePrivateTarget();
+        }
+
+        @Override
+        public DrawPrimitives primitives() {
+            return primitives;
+        }
+    });
+    /**
+     * The image upload chain and the save-image path (D12): server-hosted media
+     * with the external host behind it, the CICode it drops into the draft, and
+     * the placeholder-hint state that goes with it. The pipeline owns the
+     * uploader and the hint (D21 reads the hint back every frame); this screen
+     * hands it the render-thread hop — its own client handle, never
+     * Minecraft.getInstance() (D3's precedent) — D21's two composer
+     * calls, D7's toast and D14's save dialog.
+     */
+    private final ImageUploadPipeline uploadPipeline =
+            new ImageUploadPipeline(new ImageUploadPipeline.Host() {
+                @Override
+                public Minecraft client() {
+                    return client;
+                }
+
+                @Override
+                public boolean composerEmpty() {
+                    return composer.text().isEmpty();
+                }
+
+                @Override
+                public void appendToComposer(String text) {
+                    composer.append(text);
+                }
+
+                @Override
+                public void toast(String key, boolean success) {
+                    feedback(key, success);
+                }
+
+                @Override
+                public Path pickSavePath(String suggestedName) {
+                    // D14's dialog plumbing, in the order the save path always
+                    // spelled out: suspend auto-iconify around the picker, hand
+                    // OS focus back, and only then let the caller download.
+                    suppressAutoIconify();
+                    Path target;
+                    try {
+                        target = FilePicker.pickSavePath(suggestedName);
+                    } finally {
+                        restoreAutoIconify();
+                    }
+                    refocusWindow();
+                    return target;
+                }
+            }, AtomChatScreen::tr);
+
+    /**
+     * File drops and clipboard pastes (D13): the window-wide drop callback's
+     * lifetime and the two entry points that turn external bytes into an upload.
+     * The domain owns the native slot and the clipboard read (both replaceable
+     * offline); this screen hands it its own client handle — the window the
+     * callback is installed on, never Minecraft.getInstance(), D3's
+     * precedent — D24's page test and D12's uploader.
+     */
+    private final DragDropPasteUpload dragDropPaste =
+            new DragDropPasteUpload(new DragDropPasteUpload.Host() {
+                @Override
+                public Minecraft client() {
+                    return client;
+                }
+
+                @Override
+                public boolean worldChatPage() {
+                    return isWorldChatPage();
+                }
+
+                @Override
+                public ImageUploadPipeline uploads() {
+                    return uploadPipeline;
+                }
+            });
+
+    /**
+     * The window plumbing every native picker needs (D14): suspend GLFW's
+     * auto-iconify while a dialog owns input, hand focus back when it closes,
+     * and the clipboard write the menus report with. The bridge owns the
+     * pairing, the clear-then-focus order and the "false, never throw" clipboard
+     * contract; this screen hands it its own client handle — never
+     * Minecraft.getInstance(), D3's precedent.
+     */
+    private final NativeDialogBridge dialogBridge = new NativeDialogBridge(new NativeDialogBridge.Host() {
+        @Override
+        public Minecraft client() {
+            return client;
+        }
+    });
+    /**
+     * Composer drafts per page, and the shared field they are loaded into. The
+     * draft text lives in {@link DraftStore}; the port below is this shell's half
+     * of it (the EditBox itself belongs to D21) — see {@link DraftStore.ComposerTextPort}
+     * for why a missing composer is passed through as null rather than "".
+     */
+    private final DraftStore draftStore = new DraftStore();
+    private final DraftStore.ComposerTextPort composerText = new DraftStore.ComposerTextPort() {
+        @Override
+        public String get() {
+            return composer.text();
+        }
+
+        @Override
+        public void set(String text) {
+            if (input != null) {
+                input.setValue(text);
+            }
+        }
+
+        @Override
+        public void moveCursorToStart() {
+            if (input != null) {
+                input.moveCursorToStart(false);
+            }
+        }
+    };
     /**
      * Reply bar state per conversation ("" = public feed), keyed like
-     * {@link #historyWindows}. The reply bar belongs to a page, not to the
-     * screen: one shared field leaked a reply armed in the public feed into the
-     * private composer, and it could not say which of two pages a transition
-     * composites the bar for.
+     * {@link HistoryFoldStore}'s windows. The bar belongs to a page, not to the screen, so the
+     * state lives in {@link ReplySlotStore} (moved out of the screen); the four
+     * wrappers below are the only entry points this shell keeps.
      */
-    private final Map<String, ChatMessage> replies = new HashMap<>();
-    /** Scroll state for root pages; shared across the root tabs, opening at the top. */
-    private final ScrollController rootScroll = new ScrollController(false);
-    /** Scroll state for pushed detail pages (settings/profile), opening at the top. */
-    private final ScrollController detailScroll = new ScrollController(false);
-    /** Armed reply of the page that currently owns the shared EditBox. */
-    private ChatMessage replyTarget;
-    private ChatMessage contextMessage;
-    private PlayerRef contextPlayer;
-    private float contextX;
-    private float contextY;
-    private ContextMenuMode contextMenuMode = ContextMenuMode.BUBBLE;
-
-    // Per-cell hover fade for the bubble context menu rows.
-    private final float[] contextMenuHover = new float[4];
-    /** Per-row menu bounce, indexed like {@link #contextMenuHover}. */
-    private final PressScale[] contextMenuScale = {PressScale.bounce(), PressScale.bounce(),
-            PressScale.bounce(), PressScale.bounce()};
-
-    // Root tab transition. The bottom bar owns the shared Animator; the screen
-    // keeps the from/to slot indexes and reuses the same Animator for the root
-    // page push so the capsule and content always move in lockstep.
-    private final BottomTabBar bottomTabBar = new BottomTabBar();
-    private final Animator rootTabAnim = bottomTabBar.indicatorAnimator();
-    private int rootTabFrom = -1;
-    private int rootTabTo = -1;
-
-    // Page push/pop transition (root <-> detail). The navigation entry changes
-    // only after the animation settles so the active page stays consistent.
-    // No tween clock: the SLIDE style rides navSlideProgress and the ZOOM
-    // style rides the serial state machine below — both exponential
-    // (UiMotion.expApproach), so the motion starts at full speed and decays
-    // instead of the eased tween's acceleration notch.
-    private float navSlideProgress;
-    private NavPage pageNavFrom;
-    private NavPage pageNavTo;
-    private boolean pageNavPopPending;
-    /** Resolved once per nav in {@link #startPageNav} by {@link #pageNavStyle()}:
-     *  true exactly while the configured style is ZOOM, for every page pair. */
-    private boolean pageNavZoom;
+    private final ReplySlotStore replySlots = new ReplySlotStore();
     /**
-     * Melodify-style serial zoom phases: the leaving page shrinks out first
-     * (EXIT, alpha 1 -> 0 at scale 1.0 -> 0.9), then the arriving page
-     * settles in (ENTER, alpha 0 -> 1 at scale 1.1 -> 1.0) — never two
-     * half-transparent pages composited at once.
+     * The send path (D3). Every fact and every side effect it needs from another
+     * domain goes through this Host: D24's stack top, D1's reply slots, D21's
+     * composer, D11's scroll controller, and the screen's own client handle —
+     * the last one deliberately as a getter, so the pipeline sees the same
+     * pre-{@code init()} null the old code saw.
      */
-    private static final int NAV_ZOOM_EXIT = 0;
-    private static final int NAV_ZOOM_ENTER = 1;
-    private int navZoomPhase = NAV_ZOOM_ENTER;
-    private float navExitAlpha;
-    private float navEnterAlpha;
+    private final SendPipeline sendPipeline = new SendPipeline(new SendPipeline.Host() {
+        @Override
+        public Minecraft client() {
+            return client;
+        }
 
-    // Root tab content transition, following the configured page-nav style
-    // like the root<->detail push: ZOOM = the same serial shrink-out/settle
-    // state machine, staged inside the list area; SLIDE = the two-page push
-    // driven by the same exponential family. The capsule shares the tab bar's
-    // animator as its value holder and is advanced from the same clock in
-    // {@link #stepRootNav}, so pill and pages always land together.
-    /** Resolved once per switch in {@link #switchRoot}: ZOOM while the config style is ZOOM. */
-    private boolean rootTabZoom;
-    /** Serial zoom phases for the tab content, mirroring {@link #navZoomPhase}. */
-    private static final int ROOT_ZOOM_EXIT = 0;
-    private static final int ROOT_ZOOM_ENTER = 1;
-    private int rootZoomPhase = ROOT_ZOOM_ENTER;
-    private float rootZoomExitAlpha;
-    private float rootZoomEnterAlpha;
-    /** Exponential 0->1 clock of the SLIDE tab push; the page-nav twin is {@link #navSlideProgress}. */
-    private float rootTabProgress;
+        @Override
+        public NavPage topNav() {
+            return navStack.topNav();
+        }
 
-    /** Hover wash behind the unified header back arrow. */
-    private float backButtonHover;
+        @Override
+        public ReplySlotStore replySlots() {
+            return replySlots;
+        }
+
+        @Override
+        public void clearComposer() {
+            composer.setText("");
+        }
+
+        @Override
+        public void focusComposer() {
+            composer.setFocused(true);
+        }
+
+        @Override
+        public void stickToBottom() {
+            currentScroll().stickToBottom();
+        }
+    });
+
+    /**
+     * The right-click menu (D19a): its three modes, its animation state and its
+     * drawing. The whole geometry — row count included — lives in
+     * {@link ContextMenuController}, so this screen's two hit tests and the two
+     * draw sites below all measure the same box; {@code M} is this screen's row
+     * identity, carried so the "same row again closes" toggle still compares the
+     * message itself. The menu's target crosses as a neutral subject, because the
+     * message type's chat component is spelled differently per mapping.
+     */
+    private final ContextMenuController<ChatMessage> contextMenu =
+            new ContextMenuController<>(new ContextMenuController.Host() {
+        @Override
+        public String label(String key) {
+            return tr(key);
+        }
+
+        @Override
+        public boolean isPlayerOnline(PlayerRef player) {
+            return contextActions.isOnlinePlayer(player);
+        }
+
+        @Override
+        public UiLayout.Rect panelRect() {
+            return layout().rect();
+        }
+
+        @Override
+        public float frameDt() {
+            return frameDt;
+        }
+
+        @Override
+        public void drawIcon(Canvas canvas, io.github.humbleui.skija.Path icon, float cx, float cy,
+                             float size, int color) {
+            drawIconCentered(canvas, icon, cx, cy, size, color);
+        }
+    });
+
+    /** The menu's neutral view of a message row: sender, image row, identity. */
+    private static ContextMenuController.Subject<ChatMessage> menuSubjectOf(ChatMessage msg) {
+        return msg == null ? null
+                : ContextMenuController.Subject.of(
+                        PlayerRef.of(msg.getSenderUuid(), msg.getProfileName()),
+                        Cicodes.extractImageUrl(msg.getRawText()) != null, msg);
+    }
+
+    /**
+     * What a menu row does (D19b): the avatar menu's four actions, the player
+     * card's three, the teleport command and the shared online test. The tab list
+     * crosses as neutral facts (so the matching rule is testable and this screen
+     * stays the only place that reads the tab list), the teleport probe stays here
+     * because it needs the client object, and a message crosses as
+     * {@link ContextMenuActions.MessageFacts} — the message type's chat component
+     * is spelled differently per mapping.
+     */
+    private final ContextMenuActions contextActions = new ContextMenuActions(new ContextMenuActions.Host() {
+        @Override
+        public java.util.List<ContextMenuActions.OnlinePlayer> onlinePlayers() {
+            if (client == null || client.getConnection() == null) {
+                return java.util.List.of();
+            }
+            java.util.List<ContextMenuActions.OnlinePlayer> out = new java.util.ArrayList<>();
+            for (PlayerInfo entry : client.getConnection().getOnlinePlayers()) {
+                out.add(ContextMenuActions.OnlinePlayer.of(entry.getProfile().getId(),
+                        entry.getProfile().getName()));
+            }
+            return out;
+        }
+
+        @Override
+        public boolean hasLocalPlayer() {
+            return client.player != null;
+        }
+
+        @Override
+        public String teleportCommand() {
+            // auto: probe the server command tree, fall back on failure replies.
+            return TeleportCommands.commandFor(client, AtomChatConfig.get().teleportCommandMode);
+        }
+
+        @Override
+        public void sendCommand(String command) {
+            client.player.connection.sendCommand(command);
+        }
+
+        @Override
+        public void appendToComposer(String text) {
+            composer.append(text);
+        }
+
+        @Override
+        public void privateChatWith(PlayerRef player) {
+            AtomChatScreen.this.openPrivateChat(player);
+        }
+
+        @Override
+        public void profileDetailFor(PlayerRef player) {
+            AtomChatScreen.this.openProfileDetail(player);
+        }
+
+        @Override
+        public PlayerRef currentOrLastPlayer() {
+            return contextMenu.currentOrLastPlayer();
+        }
+    });
+
+    /** The actions' neutral view of a message row (D19b): both names resolved here. */
+    private static ContextMenuActions.MessageFacts menuMessageOf(ChatMessage msg) {
+        return msg == null ? null
+                : ContextMenuActions.MessageFacts.of(msg.getSenderUuid(), msg.getProfileName(),
+                        msg.getSenderName(), msg.isOwn(), msg.isSystem());
+    }
+    // Root tab transition (D24b-1). The bottom bar is the screen's: it draws,
+    // hit-tests and holds the shared animator the capsule rides. Both transition
+    // state machines and their clocks live in the director, which is handed that
+    // animator; every read point below goes through it.
+    private final BottomTabBar bottomTabBar = new BottomTabBar();
+    /**
+     * The two transition state machines (D24b-1): the page push/pop clock and the
+     * root-tab clock, the one {@code pageNavStyle()} resolution they share, and
+     * the nav-layer geometry. Built here, before the nav port below, because that
+     * port forwards its ten transition steps to it. Its own port is the three
+     * steps this screen owns: the draft save and reply capture a nav starts with,
+     * and the pop a finished pop transition applies.
+     */
+    private final PageTransitionDirector director = new PageTransitionDirector(
+            new PageTransitionDirector.Host() {
+                @Override
+                public void persistCurrentDraft() {
+                    saveCurrentDraft();
+                }
+
+                @Override
+                public void captureReplySlot() {
+                    syncReplySlot();
+                }
+
+                @Override
+                public void applyPendingPop() {
+                    popNow();
+                }
+            },
+            bottomTabBar.indicatorAnimator());
 
     /**
      * Public-feed view filter (all / system only / players only), cycled by the
@@ -567,7 +1220,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
      * the unfiltered feed. A fresh screen instance starts at ALL, so closing
      * and reopening the panel resets it by construction.
      */
-    private MessageFilter worldFilter = MessageFilter.ALL;
+    private final WorldFeedFilter worldFeed = new WorldFeedFilter();
     /** Hover wash behind the header filter button (world chat only). */
     private float filterButtonHover;
     /** Hover washes for the emoji panel tab strip (owned by {@link EmojiPanel}). */
@@ -577,74 +1230,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
     // panel open/close rides the same exponential clock (PANEL_OPEN_TAU_MS on
     // the way in, the shorter PANEL_CLOSE_TAU_MS on the way out), so its shape
     // and fade resolve on one timeline per direction.
-    // Toolbar icons are kept as inline SVG path data (not assets): three tiny
-    // paths are cheaper than a resource pipeline, stay crisp at every scale,
-    // and are trivial to recolour for hover/pressed/theme states. The paths use
-    // a 20x20 logical space; drawIcon() fits them into the button bounds.
-    // Landscape photo glyph: a wide rounded rect (14x9 on the 20 grid), sun
-    // top-left, mountains inside — the old one was portrait and read as a
-    // phone photo instead of an image.
-    // Image glyph fills a ~14x12 box: fit-by-longest-edge scaling leaves the
-    // old 13x9 glyph visibly shorter than the emoji/send neighbours.
-    private static final String ICON_IMAGE_SVG = "M4.5 4 L15.5 4 A1.5 1.5 0 0 1 17 5.5 L17 14.5 A1.5 1.5 0 0 1 15.5 16 L4.5 16 A1.5 1.5 0 0 1 3 14.5 L3 5.5 A1.5 1.5 0 0 1 4.5 4 Z"
-            + " M7 7.2 m-1.3 0 a1.3 1.3 0 1 0 2.6 0 a1.3 1.3 0 1 0 -2.6 0"
-            + " M4 15 L8.6 10.9 L11.2 13.2 L13.6 10.6 L16 13.2";
-    private static final String ICON_EMOJI_SVG = "M10 3 a7 7 0 1 0 0 14 a7 7 0 1 0 0 -14"
-            + " M7 8.6 v1.3 M13 8.6 v1.3"
-            + " M6.8 12.2 C8.5 14.3 11.5 14.3 13.2 12.2";
-    // Feather-style send: one diagonal fold + the paper-plane outline.
-    private static final String ICON_SEND_SVG = "M18 2.5 L9.5 11"
-            + " M18 2.5 L13.5 18.5 L9.5 11 L2.5 7.5 Z";
-    // Context-menu icons, same 20x20 line-icon language as the toolbar.
-    private static final String ICON_COPY_SVG = "M5 3 L11 3 L11 9 L5 9 Z M8 7 L14 7 L14 13 L8 13 Z";
-    private static final String ICON_QUOTE_SVG = "M3 3 L17 3 L17 12 L10 12 L6 16 L7 12 L3 12 Z"
-            + " M7 6 L7 9 M10 6 L10 9";
-    private static final String ICON_SAVE_SVG = "M10 3 L10 11 M7 8 L10 11 L13 8"
-            + " M4 15 L4 17 L16 17 L16 15";
-    // Avatar context-menu icons, same 20x20 line-icon language.
-    // Lucide at-sign (ISC): a true "@" shape — inner circle plus the outer
-    // ring/tail stroke. Coordinates are in Lucide's 24x24 space and are fitted
-    // by drawIconCentered exactly like the other icon paths.
-    private static final String ICON_MENTION_SVG = "M12 8 a4 4 0 1 0 0 8 a4 4 0 1 0 0 -8"
-            + " M16 8 v5 a3 3 0 0 0 6 0 v-1 a10 10 0 1 0 -4 8";
-    private static final String ICON_WHISPER_SVG = "M3 4 L17 4 L17 14 L10 14 L6 18 L7 14 L3 14 Z";
-    private static final String ICON_TP_SVG = "M3 17 L17 3 M17 3 L10 3 M17 3 L17 10";
-    private static final String ICON_BLOCK_SVG = "M10 3 a7 7 0 1 0 0 14 a7 7 0 1 0 0 -14"
-            + " M4.5 4.5 L15.5 15.5";
-    private static final io.github.humbleui.skija.Path ICON_IMAGE_PATH =
-            io.github.humbleui.skija.Path.makeFromSVGString(ICON_IMAGE_SVG);
-    private static final io.github.humbleui.skija.Path ICON_EMOJI_PATH =
-            io.github.humbleui.skija.Path.makeFromSVGString(ICON_EMOJI_SVG);
-    /** Quick-phrase button: a lightning bolt (Lucide zap). */
-    private static final String ICON_PHRASE_SVG = "M13 2 3 14h9l-1 8 10-12h-9l1-8z";
-    private static final io.github.humbleui.skija.Path ICON_PHRASE_PATH =
-            io.github.humbleui.skija.Path.makeFromSVGString(ICON_PHRASE_SVG);
-    private static final io.github.humbleui.skija.Path ICON_SEND_PATH =
-            io.github.humbleui.skija.Path.makeFromSVGString(ICON_SEND_SVG);
-    private static final io.github.humbleui.skija.Path ICON_COPY_PATH =
-            io.github.humbleui.skija.Path.makeFromSVGString(ICON_COPY_SVG);
-    private static final io.github.humbleui.skija.Path ICON_QUOTE_PATH =
-            io.github.humbleui.skija.Path.makeFromSVGString(ICON_QUOTE_SVG);
-    private static final io.github.humbleui.skija.Path ICON_SAVE_PATH =
-            io.github.humbleui.skija.Path.makeFromSVGString(ICON_SAVE_SVG);
-    private static final io.github.humbleui.skija.Path ICON_MENTION_PATH =
-            io.github.humbleui.skija.Path.makeFromSVGString(ICON_MENTION_SVG);
-    private static final io.github.humbleui.skija.Path ICON_WHISPER_PATH =
-            io.github.humbleui.skija.Path.makeFromSVGString(ICON_WHISPER_SVG);
-    private static final io.github.humbleui.skija.Path ICON_TP_PATH =
-            io.github.humbleui.skija.Path.makeFromSVGString(ICON_TP_SVG);
-    private static final io.github.humbleui.skija.Path ICON_BLOCK_PATH =
-            io.github.humbleui.skija.Path.makeFromSVGString(ICON_BLOCK_SVG);
-    private static final String ICON_JUMP_DOWN_SVG = "M4 8 L10 14 M10 14 L16 8 M10 3 L10 14";
-    private static final io.github.humbleui.skija.Path ICON_JUMP_DOWN_PATH =
-            io.github.humbleui.skija.Path.makeFromSVGString(ICON_JUMP_DOWN_SVG);
-
     private static final int GLFW_KEY_V = 86;
-    /** Open-animation shape floor for the ZOOM style: the panel grows
-     * 0.94 -> 1 around its centre. The blur pre-pass reads the same mapping
-     * through panelOpenScale/panelOpenSlidePx, so the capture rect and the
-     * painted rect can never drift apart mid-flight. */
-    private static final float OPEN_MIN_SCALE = 0.94F;
     /** Slack around the panel in the fade layer, so bezel/shadow are not clipped. */
     private static final float LAYER_CHROME = 32.0F;
     private final long openStart = System.currentTimeMillis();
@@ -663,77 +1249,162 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
     /** Composer height seen by the previous blur-gate frame, for change detection. */
     private float lastBlurInputExtraH;
     private boolean blurDrawnThisFrame;
-    private int pressedButton = -1;
-    private long pressTime;
-    /** Button under a held press, for the icon-row press scale; -1 = none. */
-    private int pressedButtonHeld = -1;
-    /** Per-button press/hover scale (image / emoji / send / phrase), draw-only. */
-    // One width-budget bounce per key: the 4px per-side budget stays inside
-    // the s(6) gap these four share a row through, at any button width.
-    private final PressScale[] iconButtonScale = {PressScale.bounce(), PressScale.bounce(),
-            PressScale.bounce(), PressScale.bounce()};
 
     // Per-frame animation state (smooth hover/popup transitions)
-    private final float[] buttonHover = new float[4];
-    private float contextAnim;
-    private float jumpLatestAnim;
-    /** Eased hover of the jump-to-latest FAB, matching the composer keys' fade. */
-    private float jumpLatestHover;
-    /** Bounce spring for the FAB; the scaled shape is the round pill itself. */
-    private final PressScale jumpLatestScale = PressScale.bounce();
-    /** True while the FAB is held down, so the release can bounce back. */
-    private boolean jumpLatestHeld;
-    private ChatMessage lastContextMessage;
-    private PlayerRef lastContextPlayer;
-    private ContextMenuMode lastContextMenuMode = ContextMenuMode.BUBBLE;
     private long frameDt = 16;
     private long lastFrameMs = System.currentTimeMillis();
 
-    // Multi-line input: the bar grows upward by whole line heights, and once the
-    // text passes INPUT_MAX_LINES it scrolls inside the fixed box.
-    private float inputExtraH;
     /**
-     * Tracks the height transition as start/end/time rather than per-frame lerp:
-     * UiMotion.approach is unitless, so on a pixel-valued target it only covers
-     * a fraction of the distance per frame and leaves a multi-hundred-ms tail.
-     * Animator guarantees the bar reaches its target height within INPUT_GROW_MS.
+     * The nav stack's port (D24a). One method per step the controller cannot take
+     * itself, each a one-line call into the domain that already owns it: D1 reply
+     * slots, D2 drafts, D11 scroll, D15 settings, D18 signature and subject, D19
+     * online check, D21 composer, D25 transient bus — plus the two transition
+     * state machines the shell still owns (D24b), asked for rather than moved.
+     *
+     * <p>The names are deliberately unlike this screen's own method names: the
+     * source guards locate members by first textual occurrence, so a port that
+     * borrowed one of them would capture the guard's anchor.
      */
-    private final Animator inputHeightAnim = new Animator(t -> t);
-    private int inputScrollLine;
-    private String inputWrapText;
-    private float inputWrapWidth = -1.0F;
-    private List<String> inputWrapCache;
+    private final NavStackController.Host navHost = new NavStackController.Host() {
+        @Override
+        public boolean signatureEditLive() {
+            return profilePage.isSignatureEditing();
+        }
 
-    /** Set while an upload is in flight; the input placeholder reads it. */
-    private volatile boolean imageUploading;
-    /** Short-lived hint shown in the empty input placeholder (save errors etc). */
-    private volatile String transientHint;
-    private long transientHintSetAt;
-    /** GLFW drop callback, installed while this screen is open (MC sets none). */
-    private GLFWDropCallback dropCallback;
+        @Override
+        public void abortSignatureEdit() {
+            profilePage.endSignatureEdit(false);
+        }
 
-    private long lastAvatarClickTime;
-    private int lastAvatarClickIndex = -1;
-    /** Single-click→profile competition window (QQ standard), in ms. */
-    private static final long AVATAR_CLICK_WINDOW_MS = 300;
-    /** Rows revealed per "load earlier" click (and the initial visible window). */
-    private static final int HISTORY_WINDOW_BATCH = 100;
-    private long pendingAvatarClickTime;
-    private int pendingAvatarClickIndex = -1;
-    private ChatMessage pendingAvatarClickMessage;
-    // Input mouse drag selection (0.1.11): the hidden EditBox is single-line
-    // and its X shifts per caret (IME anchor), so its own hit-testing cannot
-    // serve the multi-line Skia input — map virtual coords to an index.
-    private boolean inputDragging;
-    private int inputDragAnchor = -1;
-    /** Last IME conversion state pushed to IMBlocker (English = typing a command). */
-    private boolean imeEnglishState;
+        @Override
+        public void persistCurrentDraft() {
+            saveCurrentDraft();
+        }
 
-    // Message text drag-selection state lives in MessageListView; the screen
-    // keeps only the click/drag coexistence flow (Task 8).
-    /** Pending click candidate used by the click/drag coexistence flow (Task 8). */
-    private ClickableSpan pendingClickSpan;
-    private boolean pendingClickMoved;
+        @Override
+        public void persistPrivateDraft(PlayerRef target, String text) {
+            savePrivateDraft(target, text);
+        }
+
+        @Override
+        public void adoptDraft(PlayerRef target) {
+            loadDraft(target);
+        }
+
+        @Override
+        public void adoptWorldDraft() {
+            loadWorldDraft();
+        }
+
+        @Override
+        public String composerTextNow() {
+            return composer.text();
+        }
+
+        @Override
+        public void armReplyFor(NavPage page) {
+            loadReplyFor(page);
+        }
+
+        @Override
+        public void clearWorldScroll() {
+            scrollSync.worldScroll().reset();
+        }
+
+        @Override
+        public void clearDetailScroll() {
+            scrollSync.detailScroll().reset();
+        }
+
+        @Override
+        public void clearRootScroll() {
+            scrollSync.rootScroll().reset();
+        }
+
+        @Override
+        public void clearSettingsPageState() {
+            resetSettingsUi();
+        }
+
+        @Override
+        public void clearTransientWorldUi() {
+            resetTransientWorldUi();
+        }
+
+        @Override
+        public boolean isPlayerOnline(PlayerRef target) {
+            return contextActions.isOnlinePlayer(target);
+        }
+
+        @Override
+        public void dropProfileSubject() {
+            profilePage.resetSubject();
+        }
+
+        @Override
+        public String copy(String key) {
+            return tr(key);
+        }
+
+        @Override
+        public void beginPageNav(NavPage from, NavPage to, boolean popPending) {
+            director.startPageNav(from, to, popPending);
+        }
+
+        @Override
+        public void abandonPageNav() {
+            director.abandonPageNav();
+        }
+
+        @Override
+        public void abandonRootTransition() {
+            director.clearRootTransition();
+        }
+
+        @Override
+        public boolean rootTransitionLive() {
+            return director.rootTransitionActive();
+        }
+
+        @Override
+        public boolean navStyleIsZoom() {
+            return director.navStyleIsZoom();
+        }
+
+        @Override
+        public void pinRootTabCapsule(AppPage from) {
+            director.pinTabCapsule(from);
+        }
+
+        @Override
+        public void markRootTabSpan(AppPage from, AppPage to) {
+            director.markTabSpan(from, to);
+        }
+
+        @Override
+        public void applyRootTabMotion(boolean zoom) {
+            director.applyTabMotion(zoom);
+        }
+
+        @Override
+        public void resetRootTabCapsule() {
+            director.resetTabCapsule();
+        }
+
+        @Override
+        public void selectTabNow(AppPage root) {
+            bottomTabBar.setSelectedImmediate(director.rootIndex(root));
+        }
+    };
+    /**
+     * The one holder of the nav stack. Built in the constructor, where every field
+     * the port above reads is already initialised; the screen keeps one delegating
+     * method per query and per cascade, so {@code PageHost} and
+     * {@code NotificationJumpService.NavPort} stay implemented here and every
+     * existing call site (this screen's own, and the pages handed {@code this})
+     * is untouched.
+     */
+    private final NavStackController navStack;
 
     public AtomChatScreen(String originalChatText) {
         this(originalChatText, AtomChatOpenMode.DIRECT_WORLD);
@@ -742,45 +1413,29 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
     public AtomChatScreen(String originalChatText, AtomChatOpenMode mode) {
         super(originalChatText);
         this.originalChatText = originalChatText;
-        this.worldDraft = originalChatText;
+        draftStore.seedWorld(originalChatText);
         // Screen objects are constructed fresh on every open (init() re-runs on
         // resize), so this is the right hook for picking up hand-edited config
         // — chat/whisper templates take effect without a game restart.
         AtomChatConfig.reload();
-        this.navigation = new NavigationStack<>(NavPage.of(AppPage.CHAT_LIST));
-        if (mode == AtomChatOpenMode.DIRECT_WORLD) {
-            navigation.replaceWithRoot(NavPage.of(AppPage.CHAT_LIST));
-            navigation.push(NavPage.of(AppPage.WORLD_CHAT));
-        } else {
-            List<NavPage> saved = AtomChatState.snapshot();
-            navigation.replaceWithRoot(saved.get(0));
-            for (int i = 1; i < saved.size(); i++) {
-                navigation.push(saved.get(i));
-            }
-        }
-        if (topPage().isRoot()) {
-            bottomTabBar.setSelectedImmediate(rootIndex(topPage()));
-        }
-        if (topPage() == AppPage.PRIVATE_CHAT) {
-            PrivateChatStore.setActive(activePrivateTarget());
-            ChatStore.setPublicActive(false);
-        } else if (topPage() == AppPage.WORLD_CHAT) {
-            ChatStore.setPublicActive(true);
-        } else {
-            ChatStore.setPublicActive(false);
-        }
+        // The stack, its queries and the three cascades live in the controller
+        // (D24a), loading included: one screen opening replays the saved stack
+        // (the AtomChat key) or pushes the public feed (the vanilla chat key),
+        // and lands the tab bar and the two active stores on the top page.
+        this.navStack = new NavStackController(navHost, mode == AtomChatOpenMode.RESTORE);
     }
 
     private NavPage topNav() {
-        return navigation.peek();
+        return navStack.topNav();
     }
 
-    private AppPage topPage() {
-        return navigation.peek().page();
+    @Override
+    public AppPage topPage() {
+        return navStack.topPage();
     }
 
     private boolean isPrivateReadOnly() {
-        return isPrivateReadOnlyFor(topNav());
+        return navStack.isPrivateReadOnly();
     }
 
     /**
@@ -789,25 +1444,17 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
      * sit on top of the stack while the other page is drawn.
      */
     private boolean isPrivateReadOnlyFor(NavPage page) {
-        if (page == null || page.page() != AppPage.PRIVATE_CHAT) {
-            return false;
-        }
-        PlayerRef target = page.target();
-        if (target == null) {
-            return true;
-        }
-        return !isOnlinePlayer(target) || BlockList.isBlocked(target);
+        return navStack.isPrivateReadOnlyFor(page);
     }
 
     /** Composer hint of a read-only private page, from that page's partner. */
     private String readOnlyHintForNav(NavPage page) {
-        return page != null && BlockList.isBlocked(page.target())
-                ? tr("atomchat.private.blocked") : tr("atomchat.private.offline");
+        return navStack.readOnlyHintForNav(page);
     }
 
-    private PlayerRef activePrivateTarget() {
-        NavPage top = navigation.peek();
-        return top != null && top.page() == AppPage.PRIVATE_CHAT ? top.target() : null;
+    @Override
+    public PlayerRef activePrivateTarget() {
+        return navStack.activePrivateTarget();
     }
 
     /**
@@ -816,30 +1463,114 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
      * sites but also covers PRIVATE_CHAT.
      */
     private boolean isWorldChatPage() {
-        AppPage page = topPage();
-        return page == AppPage.WORLD_CHAT || page == AppPage.PRIVATE_CHAT;
+        return navStack.isWorldChatPage();
     }
 
     private boolean isVanillaChatKey(int keyCode, int scanCode) {
         return client != null && client.options.keyChat.matches(keyCode, scanCode);
     }
 
-    /**
-     * Shared hit rect for the world-chat header's SVG back button. It is fixed
-     * to the left edge of the header card and vertically centered. The side comes
-     * from ACTION_BUTTON_SIZE, the same token the composer keys use, so the
-     * header button and those keys stay one size instead of drifting apart.
-     */
-    private UiLayout.Rect backButton() {
-        float size = UiTokens.ACTION_BUTTON_SIZE;
-        UiLayout.Rect header = layout().header;
-        float y = header.y() + (header.h() - size) / 2.0F;
-        return new UiLayout.Rect(header.x() + UiTokens.EDGE_CONTROL_INSET, y, size, size);
-    }
-
     /** Filter button: the back button's recipe, one slot to its right. */
+
+    /**
+     * The header's own chrome (D20): the back button's rect and hover, the fixed
+     * header a pushed page draws, and every title the bar can carry. The back
+     * button's rect is read back from here by the shell's header renders, and the
+     * hover spring is stepped here by both the settled frame and the pushed
+     * header — one value, the same positions as before. {@code suppressHeader} is
+     * deliberately NOT here: the shell reads it in two of its own gates (the
+     * settled header and the root header) and writes it in six transition spots,
+     * so it stays where both sides can see it.
+     */
+    private final HeaderChrome headerChrome = new HeaderChrome(new HeaderChrome.Host() {
+        @Override
+        public String label(String key) {
+            return tr(key);
+        }
+
+        @Override
+        public String activePrivateName() {
+            return activePrivateTarget() == null ? null : activePrivateTarget().realName();
+        }
+
+        @Override
+        public UiLayout.Rect headerRect() {
+            return layout().header;
+        }
+
+        @Override
+        public UiLayout.Rect pushedHeaderRect() {
+            return detailLayout().header;
+        }
+
+        @Override
+        public float frameDt() {
+            return frameDt;
+        }
+
+        @Override
+        public int textPrimary() {
+            return AtomChatScreen.this.textPrimary();
+        }
+    });
+    /**
+     * The transition frame compositor (D24b-2a). Nine port steps, each a one-line
+     * forward to something this screen owns -- the page body (by ruling), the root
+     * orchestration (until 24b-2b), the bezel, the two layouts, D20's header
+     * action, D25's suppressHeader field and the E group's view.
+     */
+    private final PageTransitionComposite composite = new PageTransitionComposite(
+            new PageTransitionComposite.Host() {
+                @Override
+                public AppPage topPage() {
+                    return AtomChatScreen.this.topPage();
+                }
+
+                @Override
+                public void suppressHeader(boolean value) {
+                    suppressHeader = value;
+                }
+
+                @Override
+                public PageTransitionComposite.ChatPageView viewFor(NavPage page) {
+                    return chatPageViewFor(page);
+                }
+
+                @Override
+                public void drawChatPageBody(Canvas canvas, UiLayout layout, int mouseX, int mouseY,
+                                             PageTransitionComposite.ChatPageView view) {
+                    AtomChatScreen.this.drawChatPageBody(canvas, layout, mouseX, mouseY, view);
+                }
+
+                @Override
+                public void drawRootScreen(Canvas canvas, int mouseX, int mouseY, AppPage rootPage) {
+                    AtomChatScreen.this.drawRootScreen(canvas, mouseX, mouseY, rootPage);
+                }
+
+                @Override
+                public void drawBezel(Canvas canvas, UiLayout layout) {
+                    AtomChatScreen.this.drawBezel(canvas, layout);
+                }
+
+                @Override
+                public UiLayout rootLayout() {
+                    return AtomChatScreen.this.rootLayout();
+                }
+
+                @Override
+                public UiLayout detailLayout() {
+                    return AtomChatScreen.this.detailLayout();
+                }
+
+                @Override
+                public ShellHeader.HeaderAction headerActionFor(NavPage page) {
+                    return AtomChatScreen.this.headerActionFor(page);
+                }
+            },
+            director, composer, headerChrome, primitives, contextMenu, contextActions,
+            profileWiring, settingsDetailPage);
     private UiLayout.Rect filterButton() {
-        UiLayout.Rect back = backButton();
+        UiLayout.Rect back = headerChrome.backButton();
         return new UiLayout.Rect(back.x() + back.w() + UiTokens.EDGE_CONTROL_INSET, back.y(), back.w(), back.h());
     }
 
@@ -849,7 +1580,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
 
     /** Cycles the feed filter and drops a selection that may span hidden rows. */
     private void cycleWorldFilter() {
-        worldFilter = worldFilter.next();
+        worldFeed.cycle();
         messageListView.clearSelection();
     }
 
@@ -861,19 +1592,9 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
      * open).
      */
     private ShellHeader.HeaderAction headerActionFor(NavPage page) {
-        if (page == null || page.page() != AppPage.WORLD_CHAT) {
-            return null;
-        }
-        io.github.humbleui.skija.Path icon =
-                worldFilter == MessageFilter.SYSTEM ? AppIcons.ICON_ANNOUNCE_PATH
-                        : worldFilter == MessageFilter.PLAYERS ? AppIcons.ICON_TAB_PROFILE_PATH
-                        : AppIcons.ICON_FILTER_PATH;
-        int color = worldFilter.isFiltering() ? accent() : textPrimary();
-        return new ShellHeader.HeaderAction(filterButton(), filterButtonHover, icon, color);
-    }
-
-    private boolean isBackButtonHit(float vmx, float vmy) {
-        return backButton().contains(vmx, vmy);
+        // The filter's state, icons and tint live in WorldFeedFilter; the button's
+        // rect and hover wash are header chrome and stay here (D20).
+        return worldFeed.headerActionFor(page, filterButton(), filterButtonHover);
     }
 
     @Override
@@ -898,390 +1619,62 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
     }
 
     private void pushNav(NavPage page) {
-        // Leaving the profile page must not carry a live signature edit into
-        // the next page: abort (never commit on navigation) before anything
-        // else touches the borrowed field.
-        if (profilePage.isSignatureEditing()) {
-            profilePage.endSignatureEdit(false);
-        }
-        saveCurrentDraft();
-        AppPage fromPage = topPage();
-        if (page.page() == AppPage.WORLD_CHAT) {
-            worldScroll.reset();
-        }
-        if (page.page() == AppPage.SETTINGS_SECTION) {
-            resetSettingsUi();
-        }
-        if (page.page() == AppPage.PROFILE_DETAIL) {
-            detailScroll.reset();
-        }
-        if (!page.isRoot() && fromPage.isRoot()) {
-            rootTabAnim.setValue(rootIndex(fromPage));
-            startPageNav(topNav(), page, false);
-        } else if (!page.isRoot() && !fromPage.isRoot()) {
-            // Public <-> private detail pages also use the full-width push/pop.
-            startPageNav(topNav(), page, false);
-        } else {
-            pageNavFrom = null;
-            pageNavTo = null;
-            pageNavPopPending = false;
-            navSlideProgress = 0.0F;
-        }
-        navigation.push(page);
-        ChatStore.setPublicActive(page.page() == AppPage.WORLD_CHAT);
-        if (page.page() == AppPage.PRIVATE_CHAT) {
-            PrivateChatStore.setActive(page.target());
-            loadDraft(page.target());
-        } else if (page.page() == AppPage.WORLD_CHAT) {
-            loadWorldDraft();
-        }
-        // The reply bar follows its page exactly like the draft above: the nav
-        // draws the leaving page's bar from its slot while the arriving page's
-        // is live in the field.
-        loadReplyFor(page);
-        if (!page.isRoot()) {
-            clearRootTransition();
-        }
+        navStack.pushNav(page);
     }
 
     @Override
     public void popPage() {
-        // Same rule as pushNav: a live signature edit never survives
-        // navigation, and it aborts (no commit) when the page goes away.
-        if (profilePage.isSignatureEditing()) {
-            profilePage.endSignatureEdit(false);
-        }
-        if (navigation.size() <= 1) {
-            return;
-        }
-        if (topPage().isRoot()) {
-            navigation.pop();
-            return;
-        }
-        // With decorative motion off there is no slide-out to wait for, so the
-        // pop can be applied right here instead of in finishPageNav().
-        if (!Animations.enabled()) {
-            popNow();
-            return;
-        }
-        NavPage from = topNav();
-        NavPage previous = navigation.snapshot().get(navigation.size() - 2);
-        // Keep the detail page on top while it slides out; the actual navigation
-        // pop happens in finishPageNav(). Both root and detail targets animate.
-        // The subject reset lives in popNow(): clearing it here would redraw the
-        // sliding-out page as the local player's profile mid-animation.
-        startPageNav(from, previous, true);
+        navStack.popPage();
     }
 
     /** Applies a pending pop and restores the page underneath it. */
     private void popNow() {
-        boolean leavingProfile = topPage() == AppPage.PROFILE_DETAIL;
-        if (topPage() == AppPage.PRIVATE_CHAT) {
-            savePrivateDraft(activePrivateTarget(), inputGetText());
-            PrivateChatStore.clearActive();
-        }
-        resetTransientWorldUi();
-        resetSettingsUi();
-        navigation.pop();
-        // Falling back to the local player only once the page is off the stack,
-        // so the Profile root tab never shows a stale injected subject.
-        if (leavingProfile) {
-            profilePage.resetSubject();
-        }
-        ChatStore.setPublicActive(topPage() == AppPage.WORLD_CHAT);
-        if (topPage() == AppPage.PRIVATE_CHAT) {
-            PrivateChatStore.setActive(activePrivateTarget());
-            loadDraft(activePrivateTarget());
-        } else if (topPage() == AppPage.WORLD_CHAT) {
-            worldScroll.reset();
-            loadWorldDraft();
-        }
-        // resetTransientWorldUi() above dropped every armed reply, so this only
-        // re-arms the page underneath when that rule ever loosens; the reply bar
-        // is loaded exactly like the draft, never left pointing at the page that
-        // was just popped.
-        loadReplyFor(topNav());
-    }
-
-    private boolean pageNavActive() {
-        if (pageNavFrom == null || pageNavTo == null) {
-            return false;
-        }
-        if (pageNavZoom) {
-            return !(navZoomPhase == NAV_ZOOM_ENTER && navEnterAlpha >= 0.999F);
-        }
-        return navSlideProgress < 0.999F;
+        navStack.popNow();
     }
 
     /**
-     * Advances the serial zoom: the leaving page drains to alpha 0 (handing
-     * over to ENTER at 0.02), then the arriving page fills to 1. With
-     * decorative motion off the tau is 0 and both phases snap in one frame.
-     * Sequential ifs on purpose: a fast exit can hand over to the enter
-     * phase within the same step.
+     * Clears the transient state of a settings sub-page when leaving it. The
+     * three-part cleanup and the chip memory live in {@link SettingsDetailPage}
+     * (D15b); this shell keeps the entry point the navigation paths call.
      */
-    private void stepZoomNav(float dtMs) {
-        float tau = Animations.enabled() ? UiMotion.PAGE_NAV_TAU_MS : 0.0F;
-        if (navZoomPhase == NAV_ZOOM_EXIT) {
-            navExitAlpha = UiMotion.expApproach(navExitAlpha, 0.0F, dtMs, tau);
-            if (navExitAlpha <= 0.02F) {
-                navExitAlpha = 0.0F;
-                navZoomPhase = NAV_ZOOM_ENTER;
-            }
-        }
-        if (navZoomPhase == NAV_ZOOM_ENTER && navEnterAlpha < 1.0F) {
-            navEnterAlpha = UiMotion.expApproach(navEnterAlpha, 1.0F, dtMs, tau);
-        }
-    }
-
-    /**
-     * Advances the SLIDE progress on the same exponential language as the
-     * zoom ({@link #stepZoomNav}): full-speed start, decaying tail, no eased
-     * tween's acceleration notch. With decorative motion off the tau is 0
-     * and the progress snaps in one frame.
-     */
-    private void stepSlideNav(float dtMs) {
-        float tau = Animations.enabled() ? UiMotion.PAGE_SLIDE_TAU_MS : 0.0F;
-        navSlideProgress = UiMotion.expApproach(navSlideProgress, 1.0F, dtMs, tau);
-    }
-
-    private void startPageNav(NavPage from, NavPage to, boolean popPending) {
-        saveCurrentDraft();
-        // The reply bar is captured with the draft: whichever page leaves keeps
-        // its own bar, so the incoming page's composer is never drawn with it.
-        syncReplySlot();
-        pageNavFrom = from;
-        pageNavTo = to;
-        pageNavPopPending = popPending;
-        // The style is resolved once per nav so push and pop can never
-        // disagree mid-flight, and every pair goes through the one resolver
-        // (pageNavStyle) — no page kind carries an animation rule of its own.
-        AtomChatConfig.PageNavStyle style = pageNavStyle();
-        pageNavZoom = style == AtomChatConfig.PageNavStyle.ZOOM;
-        if (pageNavZoom) {
-            // The zoom runs on its own two-phase clock (UiMotion.expApproach,
-            // Melodify's M3 step); pageNavActive() reads the state machine.
-            navZoomPhase = NAV_ZOOM_EXIT;
-            navExitAlpha = 1.0F;
-            navEnterAlpha = 0.0F;
-        } else {
-            // The slide rides the exponential progress; the Animations gate
-            // sits inside stepSlideNav's tau, so decorative-motion-off snaps
-            // there.
-            navSlideProgress = 0.0F;
-        }
-    }
-
-    /**
-     * The one resolution path for every page switch: root tabs, root<->detail,
-     * detail<->detail, pushes, pops and the banner-driven jumps all read the
-     * configured style here, in both directions (a pop mirrors its push).
-     *
-     * <p>The pair used to be split by kind — root<->detail followed the config
-     * while detail<->detail was pinned to SLIDE — which made the setting read
-     * as "does nothing" on the public<->private and chat<->profile hops and put
-     * a second, invisible rule next to the config field. No pair is special
-     * any more: the style is whatever {@link AtomChatConfig#pageNavStyle} says.
-     */
-    static AtomChatConfig.PageNavStyle pageNavStyle() {
-        return AtomChatConfig.get().pageNavStyle;
-    }
-
-    private void finishPageNav() {
-        if (pageNavPopPending) {
-            popNow();
-        }
-        pageNavFrom = null;
-        pageNavTo = null;
-        pageNavPopPending = false;
-        navSlideProgress = 0.0F;
-    }
-
-    /**
-     * True when a zoom layer has nothing left to composite: the scale is back
-     * at 1 and the layer is fully opaque. A full-panel saveLayer behind an
-     * identity transform is pure overdraw, so the nav branch and the settled
-     * shell panel skip the layer entirely in that state (motion off lands here
-     * from frame one).
-     */
-    private static boolean navLayerSkippable(float alpha, float scale) {
-        return alpha >= 0.999F && Math.abs(scale - 1.0F) < 0.001F;
-    }
-
-    /** Centers a nav scale around the panel middle. Draw-only: hit-tests
-     *  keep unscaled coordinates, like every other transform in this screen. */
-    private static void applyNavScale(Canvas canvas, UiLayout.Rect panelRect, float scale) {
-        if (scale == 1.0F) {
-            return;
-        }
-        float cx = panelRect.x() + panelRect.w() / 2.0F;
-        float cy = panelRect.y() + panelRect.h() / 2.0F;
-        canvas.translate(cx, cy);
-        canvas.scale(scale, scale);
-        canvas.translate(-cx, -cy);
-    }
-
-    /** Clears the transient state of a settings sub-page when leaving it. */
     private void resetSettingsUi() {
-        detailScroll.reset();
-        settingsSectionPage.reset();
-        chipScroll.clear();
-        chipScrollKey = "";
+        settingsDetailPage.resetSettingsUi();
     }
 
-    /** Saves the outgoing chip's scroll offset and restores the incoming one,
-     *  so each chip of a section page remembers where the user left it. */
-    private void syncChipScroll(SettingsSection section) {
-        String key = section.id() + ':' + settingsSectionPage.activeChipIndex(section);
-        if (!key.equals(chipScrollKey)) {
-            if (!chipScrollKey.isEmpty()) {
-                chipScroll.put(chipScrollKey, detailScroll.getScrollY());
-            }
-            chipScrollKey = key;
-            Float saved = chipScroll.get(key);
-            detailScroll.scrollTo(saved == null ? 0.0F : saved, false);
-        }
-    }
-
-    private float pageNavDx(float travel) {
-        float progress = navSlideProgress;
-        // Push: the incoming page enters from the right (travel -> 0).
-        // Pop: the outgoing page leaves to the right (0 -> travel).
-        // The old code decided by pageNavTo.isRoot(), which broke detail<->detail
-        // pops (the destination WORLD_CHAT is also non-root).
-        return pageNavPopPending ? travel * progress : travel * (1.0F - progress);
-    }
-
-    /** Opens another player's profile as a pushed detail page. */
+        /** Opens another player's profile as a pushed detail page. */
     public void openProfileDetail(PlayerRef player) {
-        if (player == null || player.realName() == null) {
-            return;
-        }
-        profilePage.setSubject(player);
-        pushPage(AppPage.PROFILE_DETAIL);
+        avatarWiring.openProfileDetail(player);
     }
 
     /** Opens the profile detail for a message's sender (avatar single click). */
     private void openProfileFor(ChatMessage msg) {
-        if (msg == null || msg.isSystem() || msg.isOwn()) {
-            return;
-        }
-        PlayerRef player = PlayerRef.of(msg.getSenderUuid(), msg.getProfileName());
-        if (player == null || player.realName() == null) {
-            return;
-        }
-        openProfileDetail(player);
+        avatarWiring.openProfileFor(factsOf(msg));
     }
+
+    /**
+     * The domain's neutral view of a message row. The message type itself is
+     * spelled differently per mapping ({@code Component} vs {@code Text}), so the
+     * shared layer never sees it — this screen converts, per click.
+     */
+    private static AvatarClickWiring.MessageFacts factsOf(ChatMessage msg) {
+        return msg == null ? null
+                : AvatarClickWiring.MessageFacts.of(msg.getSenderUuid(), msg.getProfileName(),
+                        msg.getSenderName(), msg.isOwn(), msg.isSystem());
+    }
+
+    /** Opens the profile detail for a message's sender (avatar single click). */
 
     @Override
     public void switchRoot(AppPage root) {
-        if (!root.isRoot()) {
-            return;
-        }
-        // Tab switches are the one navigation path that never runs pushNav or
-        // popPage, so the signature edit aborts here too (arriving OR leaving
-        // the profile tab).
-        if (profilePage.isSignatureEditing()) {
-            profilePage.endSignatureEdit(false);
-        }
-        AppPage from = topPage();
-        // Leaving the profile root falls back to the local player's page; the
-        // injected subject (open-profile-for-other-player) is transient.
-        if (from == AppPage.PROFILE && root != AppPage.PROFILE) {
-            profilePage.resetSubject();
-        }
-        saveCurrentDraft();
-        rootScroll.reset();
-        // With decorative motion off the tab change is instant: no indicator
-        // slide, no body push — the new root is simply on screen.
-        if (!Animations.enabled()) {
-            clearRootTransition();
-            bottomTabBar.setSelectedImmediate(rootIndex(root));
-            navigation.replaceWithRoot(NavPage.of(root));
-            ChatStore.setPublicActive(false);
-            return;
-        }
-        // If a previous tab transition is still running, snap it before
-        // re-arming: the clocks below always start from rest.
-        if (rootTransitionActive() && from.isRoot()) {
-            clearRootTransition();
-        }
-        navigation.replaceWithRoot(NavPage.of(root));
-        ChatStore.setPublicActive(false);
-        if (from.isRoot() && from != root) {
-            rootTabFrom = rootIndex(from);
-            rootTabTo = rootIndex(root);
-            // The content transition follows the configured page-nav style,
-            // resolved once per switch through the same resolver the push/pop
-            // path uses (one rule for every switch) so it can't change
-            // mid-flight; the capsule is pinned to the source tab and travels
-            // from the same clock in stepRootNav.
-            rootTabZoom = pageNavStyle() == AtomChatConfig.PageNavStyle.ZOOM;
-            if (rootTabZoom) {
-                rootZoomPhase = ROOT_ZOOM_EXIT;
-                rootZoomExitAlpha = 1.0F;
-                rootZoomEnterAlpha = 0.0F;
-            } else {
-                rootTabProgress = 0.0F;
-            }
-            rootTabAnim.setValue(rootTabFrom);
-        } else {
-            clearRootTransition();
-            bottomTabBar.setSelectedImmediate(rootIndex(root));
-        }
+        navStack.switchRoot(root);
     }
 
     private ScrollController currentScroll() {
-        if (topPage() == AppPage.PRIVATE_CHAT) {
-            PlayerRef target = activePrivateTarget();
-            if (target == null) {
-                return worldScroll;
-            }
-            return privateScrolls.computeIfAbsent(target.key(), k -> new ScrollController());
-        }
-        return worldScroll;
-    }
-
-    private List<ChatMessage> currentMessages() {
-        if (topPage() == AppPage.WORLD_CHAT) {
-            return ChatStore.get().snapshot();
-        }
-        if (topPage() == AppPage.PRIVATE_CHAT) {
-            return PrivateChatStore.messages(activePrivateTarget());
-        }
-        return List.of();
-    }
-
-    private List<ChatMessage> messagesForNav(NavPage page) {
-        if (page == null) {
-            return List.of();
-        }
-        if (page.page() == AppPage.WORLD_CHAT) {
-            List<ChatMessage> all = ChatStore.get().snapshot();
-            if (worldFilter == MessageFilter.ALL) {
-                return all;
-            }
-            // View filter only: the store, unread counts and previews always
-            // see the full feed.
-            List<ChatMessage> out = new ArrayList<>(all.size());
-            for (ChatMessage message : all) {
-                if (worldFilter.accepts(message)) {
-                    out.add(message);
-                }
-            }
-            return out;
-        }
-        if (page.page() == AppPage.PRIVATE_CHAT) {
-            return PrivateChatStore.messages(page.target());
-        }
-        return List.of();
+        return scrollSync.currentScroll();
     }
 
     private ScrollController scrollForNav(NavPage page) {
-        if (page != null && page.page() == AppPage.PRIVATE_CHAT && page.target() != null) {
-            return privateScrolls.computeIfAbsent(page.target().key(), k -> new ScrollController());
-        }
-        return worldScroll;
+        return scrollSync.scrollForNav(page);
     }
 
     /**
@@ -1292,13 +1685,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
      * showing the same text twice.
      */
     private String draftForNav(NavPage page) {
-        if (ownsInputField(page)) {
-            return inputGetText();
-        }
-        if (page != null && page.page() == AppPage.PRIVATE_CHAT && page.target() != null) {
-            return privateDrafts.getOrDefault(page.target().key(), "");
-        }
-        return page != null && page.page() == AppPage.WORLD_CHAT ? worldDraft : "";
+        return draftStore.draftForNav(page, ownsInputField(page), composerText);
     }
 
     /**
@@ -1308,42 +1695,24 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
      * left on a pop — and to the arriving page once the nav settles.
      */
     private boolean ownsInputField(NavPage page) {
-        NavPage top = navigation.peek();
+        NavPage top = navStack.topNav();
         return top != null && top.equals(page);
-    }
-
-    /** Reply slot key, using {@link #historyWindows}'s convention. */
-    private String replyKeyForNav(NavPage page) {
-        return page != null && page.page() == AppPage.PRIVATE_CHAT && page.target() != null
-                ? page.target().key() : "";
     }
 
     /** Persists the armed reply to the page that is currently open. A page that
      *  is not a chat page has no reply bar to persist. */
     private void syncReplySlot() {
-        AppPage page = topPage();
-        if (page != AppPage.WORLD_CHAT && page != AppPage.PRIVATE_CHAT) {
-            return;
-        }
-        if (replyTarget == null) {
-            replies.remove(replyKeyForNav(topNav()));
-        } else {
-            replies.put(replyKeyForNav(topNav()), replyTarget);
-        }
+        replySlots.syncReplySlot(topPage(), topNav());
     }
 
     /** Arms {@code page}'s saved reply, so the live field belongs to that page. */
     private void loadReplyFor(NavPage page) {
-        if (page == null || (page.page() != AppPage.WORLD_CHAT && page.page() != AppPage.PRIVATE_CHAT)) {
-            replyTarget = null;
-            return;
-        }
-        replyTarget = replies.get(replyKeyForNav(page));
+        replySlots.loadReplyFor(page);
     }
 
     /** Armed reply of a page: the live field when it owns the composer, else its slot. */
     private ChatMessage replyForNav(NavPage page) {
-        return ownsInputField(page) ? replyTarget : replies.get(replyKeyForNav(page));
+        return replySlots.replyForNav(page, ownsInputField(page));
     }
 
     /**
@@ -1353,35 +1722,17 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
      * {@code UiLayout.of} leaves at the panel origin when {@code replyH == 0}.
      */
     private boolean replyBarVisible() {
-        return replyTarget != null || replySlotArmed(pageNavFrom) || replySlotArmed(pageNavTo);
-    }
-
-    /** True when a chat page still holds an armed reply in its slot. */
-    private boolean replySlotArmed(NavPage page) {
-        if (page == null || (page.page() != AppPage.WORLD_CHAT && page.page() != AppPage.PRIVATE_CHAT)) {
-            return false;
-        }
-        return replies.get(replyKeyForNav(page)) != null;
+        return replySlots.replyBarVisible(director.pageNavFrom(), director.pageNavTo());
     }
 
     /** Fold window for a conversation, created on first view and kept across in-place growth. */
     private HistoryWindow historyWindowForNav(NavPage page, int total) {
-        String key = page.page() == AppPage.PRIVATE_CHAT && page.target() != null
-                ? page.target().key() : "";
-        HistoryWindow window = historyWindows.get(key);
-        if (window == null) {
-            window = new HistoryWindow(total, HISTORY_WINDOW_BATCH);
-            historyWindows.put(key, window);
-        } else {
-            // Follow sends/evictions without collapsing an unfolded history.
-            window.syncTotal(total);
-        }
-        return window;
+        return historyFold.historyWindowForNav(page, total);
     }
 
     /** Forgets every conversation's fold depth (world switch, history clear, disconnect). */
     private void resetHistoryWindows() {
-        historyWindows.clear();
+        historyFold.resetHistoryWindows();
     }
 
     /**
@@ -1391,59 +1742,24 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
      */
     private void applyLoadEarlierRequest(NavPage page, List<ChatMessage> messages, HistoryWindow window,
                                          UiLayout.Rect list, ScrollController scroll) {
-        if (!messageListView.consumeLoadEarlierRequest()) {
-            return;
-        }
-        int oldStart = window.visibleStart();
-        if (!window.loadEarlier()) {
-            return;
-        }
-        float inserted = messageListView.offsetBetween(messages, oldStart, window.visibleStart(), list.w());
-        scroll.scrollTo(scroll.getScrollY() + inserted, false);
-    }
-
-    private String currentPrivateKey() {
-        PlayerRef target = activePrivateTarget();
-        return target != null ? target.key() : null;
+        historyFold.applyLoadEarlierRequest(page, messages, window, list, scroll, messageListView);
     }
 
     /** Persists the hidden EditBox draft to the page that is currently open. */
     private void saveCurrentDraft() {
-        if (input == null) {
-            return;
-        }
-        if (topPage() == AppPage.WORLD_CHAT) {
-            worldDraft = input.getValue();
-        } else if (topPage() == AppPage.PRIVATE_CHAT) {
-            PlayerRef target = activePrivateTarget();
-            if (target != null) {
-                privateDrafts.put(target.key(), input.getValue());
-            }
-        }
+        draftStore.saveCurrentDraft(topPage(), activePrivateTarget(), composerText);
     }
 
     private void savePrivateDraft(PlayerRef target, String text) {
-        if (target != null) {
-            privateDrafts.put(target.key(), text);
-        }
+        draftStore.savePrivateDraft(target, text);
     }
 
     private void loadDraft(PlayerRef target) {
-        if (target == null) {
-            return;
-        }
-        String draft = privateDrafts.getOrDefault(target.key(), "");
-        if (input != null) {
-            input.setValue(draft);
-            input.moveCursorToStart(false);
-        }
+        draftStore.loadDraft(target, composerText);
     }
 
     private void loadWorldDraft() {
-        if (input != null) {
-            input.setValue(worldDraft);
-            input.moveCursorToStart(false);
-        }
+        draftStore.loadWorldDraft(composerText);
     }
 
     /**
@@ -1453,29 +1769,16 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
      * channel starts fresh at the bottom.
      */
     private void resetTransientWorldUi() {
-        worldScroll.reset();
+        scrollSync.worldScroll().reset();
         resetHistoryWindows();
-        closeContextMenu();
-        lastContextMessage = null;
-        lastContextPlayer = null;
-        lastContextMenuMode = ContextMenuMode.BUBBLE;
-        contextAnim = 0.0F;
-        for (int i = 0; i < contextMenuHover.length; i++) {
-            contextMenuHover[i] = 0.0F;
-        }
+        contextMenu.resetTransient();
         emojiPanel.resetTransient();
         endPhraseEdit(false);
         quickPhrasePanel.resetTransient();
-        replyTarget = null;
-        replies.clear();
+        replySlots.clearAll();
         messageListView.clearSelection();
-        pendingClickSpan = null;
-        pendingClickMoved = false;
+        messageWiring.clearClick();
         dismissSuggestor();
-    }
-
-    public String getOriginalChatText() {
-        return originalChatText;
     }
 
     @Override
@@ -1485,30 +1788,28 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
         // the target, so the equality below is the settle test — with
         // decorative motion off tau=0 lands this frame, closing included.
         long nowNanos = System.nanoTime();
-        float frameDtMs = Math.max(0.0F, Math.min(50.0F, (nowNanos - lastFrameNanos) / 1_000_000.0F));
+        float frameDtMs = PanelOpenMotion.frameDtMs(nowNanos, lastFrameNanos);
         lastFrameNanos = nowNanos;
-        float panelTarget = closing ? 0.0F : 1.0F;
-        float panelTau = !Animations.enabled() ? 0.0F
-                : closing ? UiMotion.PANEL_CLOSE_TAU_MS : UiMotion.PANEL_OPEN_TAU_MS;
-        panelProgress = UiMotion.expApproach(panelProgress, panelTarget, frameDtMs, panelTau);
-        boolean panelSettled = panelProgress == panelTarget;
+        panelProgress = PanelOpenMotion.stepProgress(panelProgress, closing, frameDtMs,
+                Animations.enabled());
+        boolean panelSettled = PanelOpenMotion.settled(panelProgress, closing);
         // Closing is cut at 6% left: past that the panel is a subpixel sliver
         // and the exponential tail would only delay setScreen(null) (see
         // PANEL_CLOSE_TAU_MS for why the close runs a shorter tau at all).
-        if (closing && (panelSettled || panelProgress < 0.06F)) {
+        if (PanelOpenMotion.closeDue(panelProgress, closing)) {
             this.client.setScreen(null);
             return;
         }
         // Feed the blur cadence gate: camera or panel-chrome motion keeps the
         // every-2-frames blur refresh; a still scene drops to the slow fallback
         // (see BlurMotionGate). The pre-pass below asks the gate per frame.
-        boolean chromeAnimating = !panelSettled
-                || Math.abs(inputExtraH - lastBlurInputExtraH) > 0.01F;
+        boolean chromeAnimating = PanelOpenMotion.chromeAnimating(panelSettled,
+                composer.extraH(), lastBlurInputExtraH);
         BlurMotionGate.noteFrame(System.currentTimeMillis(),
                 client.player != null ? client.player.getYRot() : 0.0F,
                 client.player != null ? client.player.getXRot() : 0.0F,
                 chromeAnimating);
-        lastBlurInputExtraH = inputExtraH;
+        lastBlurInputExtraH = composer.extraH();
 
         // The blur pre-pass is raw GL and must run before Skia paints the panel.
         // Load the shader first so drawPanel knows whether it may use the
@@ -1530,27 +1831,14 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
                     // The capture rect must be the rect drawPhone paints: the
                     // inset panel rect carried through the same open transform
                     // (zoom around the panel centre, then the slide offset).
-                    float scale = panelOpenScale(panelProgress);
-                    float slide = panelOpenSlidePx(panelProgress);
-                    float insetW = panelWidth() - strokeWidth * 2.0F;
-                    float insetH = panelHeight() - strokeWidth * 2.0F;
-                    float cx = panelX() + panelWidth() / 2.0F;
-                    float cy = panelY() + panelHeight() / 2.0F;
-                    float vx = cx + slide - insetW * scale / 2.0F;
-                    float vy = cy - insetH * scale / 2.0F;
-                    float vw = insetW * scale;
-                    float vh = insetH * scale;
-                    float vRadius = (UiTokens.panelRadius() - strokeWidth) * scale;
-                    double density = uiDensity();
-                    double scaleFactor = this.client.getWindow().getGuiScale();
-                    float gx = (float) (vx * density / scaleFactor);
-                    float gy = (float) (vy * density / scaleFactor);
-                    float gw = (float) (vw * density / scaleFactor);
-                    float gh = (float) (vh * density / scaleFactor);
-                    float gr = (float) (vRadius * density / scaleFactor);
+                    PanelOpenMotion.PanelRect capture = PanelOpenMotion.blurCapture(
+                            panelProgress, AtomChatConfig.get().pageNavStyle,
+                            panelX(), panelY(), panelWidth(), panelHeight(), strokeWidth,
+                            uiDensity(), this.client.getWindow().getGuiScale());
                     blurDrawnThisFrame = PanelBlurRenderer.render(
                             context.pose().last().pose(),
-                            gx, gy, gw, gh, gr, panelProgress);
+                            capture.x(), capture.y(), capture.w(), capture.h(), capture.radius(),
+                            panelProgress);
                 } catch (Throwable t) {
                     // One line, one stack trace, then the breaker: isAvailable()
                     // goes false, so the pre-pass is not even built on the next
@@ -1578,18 +1866,16 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
         // composer-only).
         if (!closing && input != null
                 && (isWorldChatPage() || profilePage.isSignatureEditing())) {
-            positionInputField(layout());
-            if (isWorldChatPage() && chatInputSuggestor != null) {
-                chatInputSuggestor.render(context, mouseX, mouseY);
-            }
+            composerPointer.positionField(layout());
+            suggestorWiring.render(context, mouseX, mouseY, isWorldChatPage());
         }
 
         // Hover tooltips are drawn through the vanilla pipeline after the Skia
         // panel and the suggestion popup so they stay readable on top of both.
-        // Root pages keep their own hover model; stale world spans must not show.
-        ClickableSpan hoveredSpan = isWorldChatPage()
-                ? messageListView.clickableSpanAt(toVirtualX(mouseX), toVirtualY(mouseY)).orElse(null)
-                : null;
+        // Whether a span is hovered at all is the domain's answer (D22), and it
+        // answers null on a root page so a stale world span cannot show there.
+        ClickableSpan hoveredSpan = messageWiring.hoverSpan(isWorldChatPage(),
+                toVirtualX(mouseX), toVirtualY(mouseY));
         Style hovered = hoveredSpan != null ? hoveredSpan.style() : null;
         if (hovered != null && hovered.getHoverEvent() != null) {
             context.renderComponentHoverEffect(this.font, hovered, mouseX, mouseY);
@@ -1602,167 +1888,100 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
      * the flag has to be handed to them; private controllers are created on
      * demand and therefore have to be refreshed too.
      */
-    private void syncScrollMotion() {
-        boolean on = Animations.enabled();
-        worldScroll.setDecorativeMotion(on);
-        rootScroll.setDecorativeMotion(on);
-        for (ScrollController controller : privateScrolls.values()) {
-            controller.setDecorativeMotion(on);
+    /**
+     * The composer's hidden field and the pointer around it (D21b): the IME
+     * anchor, the virtual-point→index hit test, the selection highlight and the
+     * drag state. It reads D21a's composer surface and writes nothing back, so the
+     * dependency runs one way; every {@code EditBox} call and the IMBlocker bridge
+     * sit behind {@link ComposerPointer.Field}, which keeps the anchor arithmetic
+     * testable without a game and this screen the only place that knows the field.
+     */
+    private final ComposerPointer composerPointer = new ComposerPointer(composer,
+            new ComposerPointer.Host() {
+        @Override
+        public double density() {
+            return uiDensity();
         }
+
+        @Override
+        public double guiScale() {
+            return client.getWindow().getGuiScale();
+        }
+
+        @Override
+        public int vanillaPrefixWidth(String prefix) {
+            return client.font.width(prefix);
+        }
+
+        @Override
+        public ProfilePage.SignatureAnchor signatureAnchor() {
+            return profilePage.signatureImeAnchor(listLayout(), listScroll().getScrollY());
+        }
+
+        @Override
+        public int clampInt(int value, int lo, int hi) {
+            return Mth.clamp(value, lo, hi);
+        }
+    }, new ComposerPointer.Field() {
+        @Override
+        public boolean present() {
+            return input != null;
+        }
+
+        @Override
+        public void setFieldX(int x) {
+            input.setX(x);
+        }
+
+        @Override
+        public void setFieldY(int y) {
+            input.setY(y);
+        }
+
+        @Override
+        public void setFieldWidth(int w) {
+            input.setWidth(w);
+        }
+
+        @Override
+        public void setFieldHeight(int h) {
+            input.setHeight(h);
+        }
+
+        @Override
+        public int cursorPosition() {
+            return input.cursorPos;
+        }
+
+        @Override
+        public int highlightPosition() {
+            return input.highlightPos;
+        }
+
+        @Override
+        public void setCommandMode(boolean commandMode) {
+            com.atom.chat.compat.IMBlockerCompat.setCommandMode(input, commandMode);
+        }
+    });
+
+    private void syncScrollMotion() {
+        scrollSync.syncScrollMotion();
     }
 
     /** Collapses the suggestion popup and clears the gray ghost suffix. */
     private void dismissSuggestor() {
-        if (chatInputSuggestor != null) {
-            chatInputSuggestor.hide();
-            input.setSuggestion(null);
-        }
-    }
-
-    /** GUI-space anchor for the suggestion window: bottom edge of the popup. */
-    private int anchorInputTopY() {
-        double density = uiDensity();
-        double scaleFactor = this.client.getWindow().getGuiScale();
-        // The popup must clear the whole input bar (button row + text row),
-        // not just the caret line; otherwise it overlaps the bar's top half.
-        return (int) Math.round((layout().inputBar.y() - s(4)) * density / scaleFactor);
-    }
-
-    private int anchorInputLeftX() {
-        double density = uiDensity();
-        double scaleFactor = this.client.getWindow().getGuiScale();
-        return (int) Math.round((layout().inputBar.x() + UiTokens.INPUT_TEXT_X) * density / scaleFactor);
-    }
-
-    private void positionInputField(UiLayout layout) {
-        double density = uiDensity();
-        double scaleFactor = this.client.getWindow().getGuiScale();
-        // While the signature editor borrows the field, the IME anchor parks on
-        // the signature row instead of the docked input bar: x keeps the same
-        // vanilla-prefix-width compensation, but the Skia side measures the
-        // prefix in the signature font, and y/width/height come from the edit
-        // row's own geometry (top of the line = baseline minus the row's line
-        // height). The page answers null when not editing, and then the
-        // composer path below runs exactly as before.
-        ProfilePage.SignatureAnchor signAnchor =
-                profilePage.signatureImeAnchor(listLayout(), listScroll().getScrollY());
-        if (signAnchor != null) {
-            String current = inputGetText();
-            int caret = caretIndex();
-            String wholePrefix = current.substring(0, Math.min(caret, current.length()));
-            Font signFont = FontManager.font(UiTokens.PROFILE_SIGN_FONT);
-            float skiaSignPrefixVirtual = SkiaFontRenderer.getStringWidth(signFont, wholePrefix);
-            int desiredGuiX = (int) Math.round((signAnchor.textX() + skiaSignPrefixVirtual)
-                    * density / scaleFactor);
-            int vanillaWholePrefixGuiWidth = this.client.font.width(wholePrefix);
-            input.setX(desiredGuiX - vanillaWholePrefixGuiWidth);
-            input.setY((int) Math.round(
-                    (signAnchor.baselineY() - signAnchor.lineH()) * density / scaleFactor));
-            input.setWidth((int) Math.max(10.0F,
-                    Math.round(signAnchor.textMaxW() * density / scaleFactor)));
-            input.setHeight((int) Math.round(signAnchor.lineH() * density / scaleFactor));
-            return;
-        }
-        // The hidden EditBox is what anchors the native IME composition window.
-        // EditBox computes its screen caret as fieldX + vanilla-font prefix
-        // width, while AtomChat draws the committed text with Skia. Shift the
-        // field's X so EditBox.getScreenX(caret) lands exactly on the Skia caret
-        // (no visible gap before the IME pre-edit box).
-        String current = inputGetText();
-        int caret = caretIndex();
-        String wholePrefix = current.substring(0, Math.min(caret, current.length()));
-        String linePrefix = inputLinePrefix(layout, caret);
-        Font inputFont = FontManager.font(UiTokens.FONT_INPUT);
-        float skiaLinePrefixVirtual = SkiaFontRenderer.getStringWidth(inputFont, linePrefix);
-        int desiredGuiX = (int) Math.round((layout.inputBar.x() + UiTokens.INPUT_TEXT_X + skiaLinePrefixVirtual)
-                * density / scaleFactor);
-        int vanillaWholePrefixGuiWidth = this.client.font.width(wholePrefix);
-        input.setX(desiredGuiX - vanillaWholePrefixGuiWidth);
-        // IMBlocker bridge: English IME while a command is being typed
-        // (e33chat parity). Change-guarded — the reflection call only fires
-        // when the command/native state actually flips.
-        boolean commandMode = current.startsWith("/");
-        if (commandMode != imeEnglishState) {
-            imeEnglishState = commandMode;
-            com.atom.chat.compat.IMBlockerCompat.setCommandMode(input, commandMode);
-        }
-        input.setY((int) Math.round(caretLineTopY() * density / scaleFactor));
-        input.setWidth((int) Math.max(10.0F, Math.round((layout.inputBar.w() - UiTokens.INPUT_TEXT_X * 2.0F) * density / scaleFactor)));
-        input.setHeight((int) Math.round(inputLineHeight() * density / scaleFactor));
+        suggestorWiring.dismiss();
     }
 
     /**
-     * Maps a virtual point inside the input text area to a text index. Rows
-     * are the Skia-wrapped lines; a point left of a character's midpoint
-     * selects that character, past the end selects the line end.
-     */
-    private int inputCaretIndexAt(UiLayout layout, float vmx, float vmy) {
-        List<String> lines = wrappedInput(layout.inputTextMaxWidth());
-        if (lines.isEmpty()) {
-            return 0;
-        }
-        int total = lines.size();
-        int shown = Math.min(UiTokens.INPUT_MAX_LINES, total);
-        int from = Math.min(inputScrollLine, Math.max(0, total - shown));
-        float lineH = inputLineHeight();
-        float firstTop = layout.inputTextCenterY - lineH / 2.0F;
-        int row = Mth.clamp((int) Math.floor((vmy - firstTop) / lineH), 0, shown - 1);
-        int line = Math.min(from + row, total - 1);
-        int lineStart = 0;
-        for (int i = 0; i < line; i++) {
-            lineStart += lines.get(i).length();
-        }
-        String s = lines.get(line);
-        float dx = vmx - (layout.inputBar.x() + UiTokens.INPUT_TEXT_X);
-        Font inputFont = FontManager.font(UiTokens.FONT_INPUT);
-        float acc = 0.0F;
-        // Code-point steps: a per-char loop returns indices inside surrogate
-        // pairs, and typing afterwards would split an emoji in half.
-        int i = 0;
-        while (i < s.length()) {
-            int cp = s.codePointAt(i);
-            int chars = Character.charCount(cp);
-            float cw = SkiaFontRenderer.getStringWidth(inputFont, s.substring(i, i + chars));
-            if (dx < acc + cw / 2.0F) {
-                return lineStart + i;
-            }
-            acc += cw;
-            i += chars;
-        }
-        return lineStart + s.length();
-    }
-
-    /** True when the private-chat partner is composing a message (WATUT). */
-    private boolean partnerTyping() {
-        return partnerTypingFor(topNav());
-    }
-
-    /**
-     * {@link #partnerTyping()} for one nav page: the hint belongs to the page
-     * whose composer is drawn, not to whatever is on top of the stack.
+     * The typing hint for one nav page: the hint belongs to the page
+     * whose composer is drawn, not to whatever is on top of the stack. The
+     * decision and the WATUT query live in {@link TypingIndicatorSource};
+     * whether the page is read-only is D24's rule
+     * ({@link #isPrivateReadOnlyFor}) and goes in as a fact.
      */
     private boolean partnerTypingFor(NavPage page) {
-        if (page == null || page.page() != AppPage.PRIVATE_CHAT || isPrivateReadOnlyFor(page)) {
-            return false;
-        }
-        PlayerRef partner = page.target();
-        return partner != null
-                && com.atom.chat.watut.WatutBridge.isTyping(partner.uuid());
-    }
-
-    /** Skia width of the committed text before the caret on the caret's wrapped line. */
-    private String inputLinePrefix(UiLayout layout, int caret) {
-        List<String> lines = wrappedInput(layout.inputTextMaxWidth());
-        if (lines.isEmpty()) {
-            return "";
-        }
-        int line = caretLine(lines, caret);
-        int lineStart = 0;
-        for (int i = 0; i < line; i++) {
-            lineStart += lines.get(i).length();
-        }
-        int col = Mth.clamp(caret - lineStart, 0, lines.get(line).length());
-        return lines.get(line).substring(0, col);
+        return TypingIndicatorSource.partnerTypingFor(page, isPrivateReadOnlyFor(page));
     }
 
     @Override
@@ -1774,177 +1993,62 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
     protected void init() {
         super.init();
         // Route incoming remote pokes to this screen while it is open.
-        PokeCompanionClient.setHandler(this::onPoked);
-        // Swap the vanilla suggestor for our anchored one on the same chat field;
-        // ChatScreen's changed listener drives whatever sits in chatInputSuggestor.
-        this.chatInputSuggestor = new AtomChatSuggestor(this.client, this, this.input,
-                this.client.font, false, false, 1, 10, true, -805306368,
-                this::anchorInputTopY, this::anchorInputLeftX);
-        this.chatInputSuggestor.setAllowHiding(false);
-        this.chatInputSuggestor.hide();
-        // Drive our anchored suggestor from the same EditBox responder vanilla
-        // ChatScreen would use for its package-private commandSuggestions.
-        this.input.setResponder(text -> {
-            if (this.chatInputSuggestor != null) {
-                this.chatInputSuggestor.setAllowSuggestions(!text.equals(originalChatText));
-                this.chatInputSuggestor.updateCommandInfo();
-            }
-        });
+        avatarWiring.poke().install();
+        // Swap the vanilla suggestor for our anchored one on the same chat field.
+        // The popup, its anchors and its responder live in the D8 wiring; the
+        // "may this popup be hidden" switch does not exist on 1.20.1, so the
+        // versions that have it set it here.
+        suggestorWiring.install(this.client, this, this.client.font, originalChatText)
+                .setAllowHiding(false);
         // init() also runs on every resize, hence the guard inside.
         installDropCallback();
     }
 
-    /** Composer text saved while the quick-phrase panel borrows the field. */
-    private String phraseSavedComposer = "";
-
-    private String inputGetText() {
-        return input != null ? input.getValue() : "";
-    }
-
-    private void inputSetText(String text) {
-        if (input != null) {
-            input.setValue(text == null ? "" : text);
-        }
-    }
-
-    private void inputAppend(String text) {
-        if (input == null) {
-            return;
-        }
-        String current = input.getValue();
-        if (current.length() + text.length() <= 256) {
-            input.setValue(current + text);
-        }
-        inputFocused = true;
-        setFocused(input);
-        input.setFocused(true);
-    }
-
     // ---- quick-phrase edit borrows the composer field (the IME carrier) ----
 
-    /** Begins adding ({@link QuickPhrasePanel#ADD_NEW}) or editing a phrase. */
+    /**
+     * Begins adding or editing a phrase. The read-only guard, committing whatever
+     * edit was already running, the parking ticket and the load-focus-caret
+     * sequence live in {@link QuickPhraseWiring} (D16); this shell keeps the
+     * entry point the panel's own callbacks use.
+     */
     private void beginPhraseEdit(int target) {
-        if (isPrivateReadOnly()) {
-            return;
-        }
-        if (quickPhrasePanel.isEditing()) {
-            endPhraseEdit(true);
-        }
-        phraseSavedComposer = inputGetText();
-        if (target == QuickPhrasePanel.ADD_NEW) {
-            inputSetText("");
-            quickPhrasePanel.startAdd();
-        } else {
-            inputSetText(quickPhrasePanel.phraseAt(target));
-            quickPhrasePanel.startEdit(target);
-        }
-        inputFocused = true;
-        setFocused(input);
-        input.setFocused(true);
-        setCaretAtEnd();
+        quickPhraseWiring.beginPhraseEdit(target);
     }
 
     /** Ends a phrase add/edit; commit=true saves the field text as the phrase. */
     private void endPhraseEdit(boolean commit) {
-        if (!quickPhrasePanel.isEditing()) {
-            return;
-        }
-        if (commit) {
-            quickPhrasePanel.commitText(inputGetText());
-        } else {
-            quickPhrasePanel.abortEdit();
-        }
-        inputSetText(phraseSavedComposer);
-        setCaretAtEnd();
+        quickPhraseWiring.endPhraseEdit(commit);
     }
 
     /** Closes the phrase panel; an in-progress edit commits (blur applies). */
     private void closePhrasePanel() {
-        if (quickPhrasePanel.isEditing()) {
-            endPhraseEdit(true);
-        }
-        quickPhrasePanel.close();
-    }
-
-    private void setCaretAtEnd() {
-        if (input != null) {
-            input.moveCursorTo(input.getValue().length(), false);
-        }
-    }
-
-    /** Turns a panel click into the screen-level side effects. */
-    private void handlePhraseAction(QuickPhrasePanel.Action action) {
-        switch (action.type()) {
-            case QuickPhrasePanel.Action.ADD -> beginPhraseEdit(QuickPhrasePanel.ADD_NEW);
-            case QuickPhrasePanel.Action.EDIT -> beginPhraseEdit(action.index());
-            case QuickPhrasePanel.Action.DELETE -> quickPhrasePanel.deleteAt(action.index());
-            case QuickPhrasePanel.Action.INSERT -> {
-                endPhraseEdit(true);
-                quickPhrasePanel.pickRow(action.index());
-            }
-            case QuickPhrasePanel.Action.INSERT_SERVER -> {
-                // The server's rows are read-only: they insert text and close,
-                // with no edit or delete path behind them.
-                endPhraseEdit(true);
-                java.util.List<String> serverPhrases =
-                        com.atom.chat.pack.ServerPackStore.current().phrases();
-                if (action.index() >= 0 && action.index() < serverPhrases.size()) {
-                    inputAppend(serverPhrases.get(action.index()));
-                }
-                quickPhrasePanel.close();
-            }
-            default -> {
-            }
-        }
+        quickPhraseWiring.closePhrasePanel();
     }
 
     /**
-     * Notification banners, painted after every page body so they sit on top
-     * regardless of which page is showing (the settings and profile branches
-     * return early from drawPanel). They live inside the panel layer, so they
-     * fade and slide with the panel instead of floating outside it.
+     * Turns a panel click into the screen-level side effects. The five action types —
+     * including the server rows' read-only insert-then-close — live in
+     * {@link QuickPhraseWiring} (D16).
      */
-    private static int leakProbeCount;
-
-    private static void probeCanvasLeak(String where, int before, Canvas canvas) {
-        int leaked = canvas.getSaveCount() - before;
-        if (leaked == 0 || !AtomChatConfig.get().debug) {
-            return;
-        }
-        leakProbeCount++;
-        if (leakProbeCount == 1 || leakProbeCount % 200 == 0) {
-            AtomChat.LOGGER.warn("Leak probe: {} leaked {} stack entries (occurrence {})",
-                    where, leaked, leakProbeCount);
-        }
+    private void handlePhraseAction(QuickPhrasePanel.Action action) {
+        quickPhraseWiring.handlePhraseAction(action);
     }
 
+    // The canvas save-stack leak probe -- its debug gate, its leak gate and its
+    // log throttle -- lives in CanvasLeakWatch (D25); this screen is one of its
+    // two callers.
+
+    /**
+     * Banners and action toasts (D7). The draw order — banners painted after the
+     * page body, the toast last, both inside the panel layer — lives with
+     * {@link NotificationJumpService#drawNotificationBanners}; the modal flag,
+     * the layout and the panel-space pointer are this shell's facts.
+     */
     private void drawNotificationBanners(Canvas canvas, int mouseX, int mouseY) {
-        // Modals own the top layer; a banner painted over them would be visible
-        // but unclickable (ModalInput swallows the click), so hide it until the
-        // modal closes. The 4s queue lifetime still lets it reappear.
-        if (imageCropper.isActive() || colorPicker.isActive() || imagePreview.isActive()) {
-            return;
-        }
-        UiLayout.Rect panel = layout().rect();
-        if (NotificationBanner.INSTANCE.hasActive()) {
-            float vmx = toVirtualX(mouseX);
-            float vmy = toVirtualY(mouseY);
-            int probeBefore = canvas.getSaveCount();
-            NotificationBanner.INSTANCE.renderInPanel(canvas, panel.x(), panel.y(), panel.w(), panel.h(),
-                    vmx, vmy);
-            probeCanvasLeak("banner render", probeBefore, canvas);
-        }
-        // Action feedback draws last, so it sits above a queued banner in the
-        // same floating layer: it acknowledges something the player just did and
-        // must stay in view. It is anchored where the eye already is — the top
-        // edge of the input bar — and rises up from behind it, rather than
-        // dropping in from the panel top away from the action. Pages without a
-        // composer (detail pages) fall back to the bottom of the list.
-        UiLayout toastLayout = layout();
-        float toastAnchor = toastLayout.inputBar.w() > 0.0F
-                ? toastLayout.inputBar.y() : toastLayout.list.bottom();
-        ActionToast.render(canvas, actionFeedback, panel.x(), panel.w(),
-                panel.y(), toastAnchor, System.currentTimeMillis(), AtomChatScreen::tr);
+        notificationJump.drawNotificationBanners(canvas,
+                imageCropper.isActive() || colorPicker.isActive() || imagePreview.isActive(),
+                layout(), toVirtualX(mouseX), toVirtualY(mouseY));
     }
 
     /**
@@ -1955,136 +2059,12 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
     private final class BannerInput implements InputHandler {
         @Override
         public boolean onClick(double mouseX, double mouseY, int button) {
-            if (button != 0 || !NotificationBanner.INSTANCE.hasActive()) {
-                return false;
-            }
-            float vmx = toVirtualX(mouseX);
-            float vmy = toVirtualY(mouseY);
-            // The send-style round button means "reply now": same jump plus
-            // composer focus. The rest of the banner just navigates. Both
-            // routes jump first and dismiss only once the jump landed, so a
-            // banner whose message can no longer be located stays on screen.
-            NotificationBanner.Active sendButton = NotificationBanner.INSTANCE.buttonHit(vmx, vmy);
-            if (sendButton != null) {
-                if (jumpToNotification(sendButton)) {
-                    NotificationBanner.INSTANCE.dismiss(sendButton);
-                    focusComposerForReply();
-                }
-                return true;
-            }
-            NotificationBanner.Active hit = NotificationBanner.INSTANCE.hitTest(vmx, vmy);
-            if (hit == null) {
-                return false;
-            }
-            if (jumpToNotification(hit)) {
-                NotificationBanner.INSTANCE.dismiss(hit);
-            }
-            return true;
+            // The click rules live in NotificationJumpService; the GUI->panel
+            // conversion, the layout, the list view and the read-only flag are
+            // this shell's facts.
+            return notificationJump.onBannerClick(button, toVirtualX(mouseX), toVirtualY(mouseY),
+                    isPrivateReadOnly(), layout(), messageListView);
         }
-    }
-
-    /** Composer focus for the banner send-button: one click from banner to typing. */
-    private void focusComposerForReply() {
-        if (input != null && !isPrivateReadOnly()) {
-            inputFocused = true;
-            setFocused(input);
-            input.setFocused(true);
-        }
-    }
-
-    /**
-     * Opens whatever page holds this notification and scrolls the message in.
-     *
-     * <p>Returns whether the jump landed; the caller dismisses the banner only
-     * on {@code true}. A whisper whose sender has no profile name (there is no
-     * conversation key to open), a message that is no longer in the target
-     * page's feed, or a page selection that did not take leaves the banner up
-     * instead of stranding the player on an unchanged panel.
-     */
-    private boolean jumpToNotification(NotificationBanner.Active banner) {
-        ChatMessage msg = banner.message();
-        if (msg == null) {
-            return false;
-        }
-        if (banner.type() == NotificationBanner.Type.WHISPER) {
-            PlayerRef target = PlayerRef.of(msg.getSenderUuid(), msg.getProfileName());
-            // PlayerRef.key() is name-based, so a ref without a profile name
-            // has no conversation to open.
-            if (target.realName() == null) {
-                return false;
-            }
-            if (!target.equals(activePrivateTarget())) {
-                openPrivateChat(target);
-            }
-            if (topPage() != AppPage.PRIVATE_CHAT || !target.equals(activePrivateTarget())) {
-                return false;
-            }
-        } else if (topPage() != AppPage.WORLD_CHAT) {
-            openWorldChat();
-            if (topPage() != AppPage.WORLD_CHAT) {
-                return false;
-            }
-        }
-        return scrollToMessage(msg);
-    }
-
-    /**
-     * Scrolls the current page's list so the message sits a third of the way
-     * down the viewport, then leaves a fading highlight on it. Anti-spam merges
-     * mean the target can be a merged bubble — that one is still the right
-     * destination, so merged messages are never un-merged here. Returns whether
-     * the message was located and the scroll/highlight applied.
-     */
-    private boolean scrollToMessage(ChatMessage msg) {
-        NavPage page = topNav();
-        List<ChatMessage> messages = messagesForNav(page);
-        int index = findMessageIndex(messages, msg);
-        if (index < 0) {
-            return false;
-        }
-        ScrollController scroll = scrollForNav(page);
-        UiLayout.Rect list = layout().list;
-        float offset = messageListView.offsetOf(messages, index, list.w());
-        // The page may have just been opened (fresh controller, maxScroll still
-        // zero). Feed it the real content height before the jump or the clamp
-        // inside scrollTo collapses the target to 0.
-        scroll.setContent(messageListView.offsetOf(messages, messages.size(), list.w()), list.h());
-        scroll.scrollTo(offset - list.h() / 3.0F, true);
-        messageListView.highlight(messages.get(index));
-        return true;
-    }
-
-    /**
-     * Resolves the banner's message to its current list slot. Anti-spam can
-     * replace the original object with a merged {@code xN} copy after the banner
-     * was queued, so fall back to the last same-content/sender row instead of
-     * giving up on an identity miss. Touches no screen state, so the jump's
-     * locate step is pinned by a test directly instead of through a live screen.
-     */
-    static int findMessageIndex(List<ChatMessage> messages, ChatMessage target) {
-        int exact = messages.indexOf(target);
-        if (exact >= 0) {
-            return exact;
-        }
-        for (int i = messages.size() - 1; i >= 0; i--) {
-            ChatMessage candidate = messages.get(i);
-            if (candidate.isOwn() != target.isOwn()
-                    || candidate.isSystem() != target.isSystem()
-                    || !java.util.Objects.equals(candidate.getQuoteName(), target.getQuoteName())
-                    || !java.util.Objects.equals(candidate.getQuoteText(), target.getQuoteText())
-                    || !java.util.Objects.equals(candidate.getContentText(), target.getContentText())) {
-                continue;
-            }
-            UUID a = candidate.getSenderUuid();
-            UUID b = target.getSenderUuid();
-            boolean sameSender = a != null && b != null
-                    ? a.equals(b)
-                    : java.util.Objects.equals(candidate.getProfileName(), target.getProfileName());
-            if (sameSender) {
-                return i;
-            }
-        }
-        return -1;
     }
 
     private void drawPhone(Canvas canvas, Image worldSnapshot, int mouseX, int mouseY, float delta) {
@@ -2092,39 +2072,36 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
         float y = panelY();
         float progress = panelProgress;
         // The one open transform, shared with the blur pre-pass's capture rect
-        // (panelOpenScale/panelOpenSlidePx): ZOOM grows around the panel
+        // (PanelOpenMotion.openScale/openSlidePx): ZOOM grows around the panel
         // centre, SLIDE pushes in from the left. Same mapping on both sides or
         // the blurred region drifts off the panel mid-flight.
-        float scale = panelOpenScale(progress);
-        float slide = panelOpenSlidePx(progress);
+        float scale = PanelOpenMotion.openScale(progress, AtomChatConfig.get().pageNavStyle);
+        float slide = PanelOpenMotion.openSlidePx(progress, AtomChatConfig.get().pageNavStyle);
         // Settled state: expApproach snaps to its target, so progress never
         // lingers in [0.999, 1) — past this point the fade is fully opaque and
         // scale/slide are exactly 1/0, so the full-panel layer is pure
         // overdraw and the panel draws directly (same call as the nav branch).
-        if (navLayerSkippable(Math.max(0.0F, Math.min(1.0F, progress)), scale)) {
+        if (PageTransitionDirector.navLayerSkippable(PanelOpenMotion.fade(progress), scale)) {
             int probeBefore = canvas.getSaveCount();
             drawPanel(canvas, x, y, worldSnapshot, mouseX, mouseY, delta);
             drawNotificationBanners(canvas, mouseX, mouseY);
-            probeCanvasLeak("drawPanel+banners", probeBefore, canvas);
+            CanvasLeakWatch.probe("drawPanel+banners", probeBefore, canvas);
             return;
         }
         canvas.save();
         try (Paint layer = new Paint()) {
             // expApproach never overshoots; the clamp keeps the fade safe anyway.
-            float fade = Math.max(0.0F, Math.min(1.0F, progress));
+            float fade = PanelOpenMotion.fade(progress);
             layer.setColor(Color.makeARGB((int) (255.0F * fade), 0, 0, 0));
             // The layer must cover the scaled panel plus its slide excursion
             // (LAYER_CHROME slack for the bezel/shadow), otherwise the fade
             // clips the bezel while the panel is still in flight.
-            float w = panelWidth() * scale;
-            float h = panelHeight() * scale;
             float cx = x + panelWidth() / 2.0F;
             float cy = y + panelHeight() / 2.0F;
-            float left = cx - w / 2.0F;
-            float top = cy - h / 2.0F;
-            float layerX = Math.min(left, left + slide) - LAYER_CHROME;
-            float layerW = w + LAYER_CHROME * 2.0F + Math.abs(slide);
-            canvas.saveLayer(Rect.makeXYWH(layerX, top - LAYER_CHROME, layerW, h + LAYER_CHROME * 2.0F), layer);
+            PanelOpenMotion.LayerRect layerRect = PanelOpenMotion.fadeLayer(progress,
+                    AtomChatConfig.get().pageNavStyle, x, y, panelWidth(), panelHeight(), LAYER_CHROME);
+            canvas.saveLayer(Rect.makeXYWH(layerRect.x(), layerRect.y(), layerRect.w(), layerRect.h()),
+                    layer);
             // Scale around the panel centre, then slide: the exact transform
             // the capture-rect math above mirrors.
             canvas.translate(cx + slide, cy);
@@ -2135,7 +2112,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
             int probeBefore = canvas.getSaveCount();
             drawPanel(canvas, x, y, worldSnapshot, mouseX, mouseY, delta);
             drawNotificationBanners(canvas, mouseX, mouseY);
-            probeCanvasLeak("drawPanel+banners", probeBefore, canvas);
+            CanvasLeakWatch.probe("drawPanel+banners", probeBefore, canvas);
             canvas.restore();
         }
         canvas.restore();
@@ -2150,58 +2127,25 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
      * registers no drop callback at all — the Win32 backend already calls
      * DragAcceptFiles, so the events have been arriving and being discarded.
      * The callback fires on the render thread, from inside glfwPollEvents.
+     * The slot, the guard and the free live in {@link DragDropPasteUpload}
+     * (D13); this shell keeps the lifecycle entry points init/removed call.
      */
     private void installDropCallback() {
-        if (dropCallback != null) {
-            return;
-        }
-        try {
-            dropCallback = GLFW.glfwSetDropCallback(this.client.getWindow().getWindow(),
-                    (win, count, names) -> onFilesDropped(count, names));
-        } catch (Throwable t) {
-            AtomChat.LOGGER.warn("Failed to install the file drop callback", t);
-        }
+        dragDropPaste.installDropCallback();
     }
 
     private void uninstallDropCallback() {
-        if (dropCallback == null) {
-            return;
-        }
-        try {
-            GLFW.glfwSetDropCallback(this.client.getWindow().getWindow(), null);
-            dropCallback.free();
-        } catch (Throwable t) {
-            AtomChat.LOGGER.warn("Failed to remove the file drop callback", t);
-        }
-        dropCallback = null;
+        dragDropPaste.uninstallDropCallback();
     }
 
     /** Window-wide: the drop event carries no cursor position we could hit-test with. */
     private void onFilesDropped(int count, long names) {
-        // File drops only feed the world-chat composer; root pages must ignore them.
-        if (!isWorldChatPage()) {
-            return;
-        }
-        try {
-            PointerBuffer buffer = MemoryUtil.memPointerBuffer(names, count);
-            for (int i = 0; i < count; i++) {
-                Path file = Path.of(MemoryUtil.memUTF8(buffer.get(i)));
-                if (ImageFiles.isImage(file)) {
-                    uploadAndAppend(file);
-                    return;
-                }
-            }
-            if (count > 0) {
-                AtomChat.LOGGER.info("Ignored {} dropped file(s): none was an image", count);
-            }
-        } catch (Throwable t) {
-            AtomChat.LOGGER.warn("Failed to handle dropped files", t);
-        }
+        dragDropPaste.onFilesDropped(count, names);
     }
 
     @Override
     public void removed() {
-        PokeCompanionClient.setHandler(null);
+        avatarWiring.poke().uninstall();
         // Hygiene on screen teardown: release the borrowed field so the parked
         // composer draft state cannot outlive the page that borrowed it.
         if (profilePage.isSignatureEditing()) {
@@ -2212,7 +2156,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
             PrivateChatStore.clearActive();
         }
         ChatStore.setPublicActive(false);
-        AtomChatState.save(navigation.snapshot());
+        AtomChatState.save(navStack.snapshot());
         uninstallDropCallback();
         // Give back the GPU texture the panel blur was sampling.
         graphics.releaseWorldSnapshot();
@@ -2221,26 +2165,15 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
     }
 
     private void drawPanel(Canvas canvas, float x, float y, Image worldSnapshot, int mouseX, int mouseY, float delta) {
-        inputFocused = input != null && input.isFocused();
-        if (isPrivateReadOnly() && input != null) {
-            input.setFocused(false);
-            inputFocused = false;
-        }
+        composer.syncFocusedFromField();
+        composer.blurOnReadOnlyPage(isPrivateReadOnly());
         long nowMs = System.currentTimeMillis();
-        frameDt = Math.min(50L, Math.max(1L, nowMs - lastFrameMs));
+        frameDt = PanelOpenMotion.domainFrameDtMs(nowMs, lastFrameMs);
         lastFrameMs = nowMs;
         // Single-click→profile competition window: fire when no second click
-        // arrived within the threshold.
-        if (pendingAvatarClickMessage != null) {
-            if (closing) {
-                pendingAvatarClickMessage = null;
-            } else if (nowMs - pendingAvatarClickTime >= AVATAR_CLICK_WINDOW_MS) {
-                ChatMessage pending = pendingAvatarClickMessage;
-                pendingAvatarClickMessage = null;
-                pendingAvatarClickIndex = -1;
-                openProfileFor(pending);
-            }
-        }
+        // arrived within the threshold. The verdict stays inside this frame —
+        // the domain only decides, the frame order is this method's.
+        avatarWiring.settlePendingAvatarClick(nowMs, closing);
         syncScrollMotion();
         emojiPanel.update(frameDt);
         quickPhrasePanel.update(frameDt);
@@ -2303,405 +2236,60 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
         // One unified shell header is drawn before page content on every page.
         // Root pages add their body and the bottom tab bar; pushed pages run
         // through the navigation machinery below.
-        if (topPage().isRoot()) {
-            drawRootScreen(canvas, mouseX, mouseY, topPage());
-            drawContextMenu(canvas, toVirtualX(mouseX), toVirtualY(mouseY));
-            drawBezel(canvas, layout);
-            return;
-        }
-
+        // The pointer is mapped here rather than inside the composite: the
+        // settled path below needs the same two values anyway.
         float vmx = toVirtualX(mouseX);
         float vmy = toVirtualY(mouseY);
-        boolean navRunning = pageNavActive();
-        // Open save-point for the moving page during a nav: the zoom layer's
-        // paint (restore + close) or the slide save (restore only). The
-        // settings/profile branches close it before their early returns; the
-        // chat page closes it after the shared tail below.
-        Paint navMovingLayer = null;
-        boolean navMovingSlide = false;
-        // Set inside the nav branch when the moving side is the zoom's
-        // invisible phase; the chat fall-through below then skips its draws
-        // (drawing without the layer would composite onto the visible side).
-        boolean navMovingHidden = false;
-        if (navRunning) {
-            if (pageNavZoom) {
-                stepZoomNav(frameDt);
-            } else {
-                stepSlideNav(frameDt);
-            }
-            if (!pageNavActive()) {
-                finishPageNav();
-                if (topPage().isRoot()) {
-                    drawRootScreen(canvas, mouseX, mouseY, topPage());
-                    drawBezel(canvas, layout);
-                    return;
-                }
-                // Push finished (or a detail-to-detail settle): the current
-                // detail page is now the settled top page.
-                navRunning = false;
-            } else if (pageNavFrom != null && pageNavTo != null
-                    && !pageNavFrom.isRoot() && !pageNavTo.isRoot()) {
-                // Detail-to-detail (public <-> private, chat <-> profile)
-                // full-width push/pop. Same style rule as root<->detail: SLIDE
-                // translates two whole pages, ZOOM runs the shared serial
-                // fade+scale. Each side is drawn from its own page view — the
-                // hidden EditBox is shared, so nothing may re-read topPage()
-                // state while the other page is composited — and no chrome is
-                // repainted fixed outside the moving layer: the composer deck
-                // belongs to its page and travels with it.
-                boolean popping = pageNavPopPending;
-                NavPage fromPage = pageNavFrom;
-                NavPage toPage = pageNavTo;
-                float travel = layout.list.w();
-                float progress = navSlideProgress;
-                // Both whole pages ride one pair of offsets, assigned by role
-                // and not by page kind: the page on top of the stack during the
-                // nav — the destination on a push, the page being left on a pop
-                // — uses the shared pageNavDx(travel) expression the
-                // root<->detail slide rides, and the other side its mirror.
-                float slideDx = pageNavDx(travel);
-                float fromDx = popping ? slideDx : -travel * progress;
-                float toDx = popping ? -travel * (1.0F - progress) : slideDx;
-                suppressHeader = true;
-                // Per-page render state: draft, read-only hint, reply bar and
-                // scroll come from the page they are drawn for. A page with no
-                // composer (settings sub-page, profile detail) has no view and
-                // is drawn by its own body method.
-                ChatPageView fromView = chatPageViewFor(fromPage);
-                ChatPageView toView = chatPageViewFor(toPage);
-                if (fromView != null || toView != null) {
-                    // Grow the bar before the list is measured, and grow it for
-                    // whichever side needs the taller composer: the composer is
-                    // part of the moving page now, so the shared layout has to
-                    // be final — and tall enough for both pages — before either
-                    // side paints.
-                    float width = layout.inputTextMaxWidth();
-                    layout = updateInputLayout(layout, inputGetText(),
-                            Math.max(inputExtraFor(fromView, width), inputExtraFor(toView, width)));
-                }
-                UiLayout.Rect panelRect = layout.rect();
-                if (pageNavZoom) {
-                    // ZOOM: one whole side per phase, on the shared serial clock
-                    // — the same navZoomPhase / navExitAlpha / navEnterAlpha the
-                    // root<->detail push rides, so the setting means the same
-                    // motion on every pair. EXIT drains the page being left
-                    // (alpha 1 -> 0 at scale 1.0 -> 0.9), ENTER settles the
-                    // arriving one (0 -> 1 at 1.1 -> 1.0). The invisible phase
-                    // is skipped outright, so the halves never double-expose,
-                    // and a settled alpha+scale skips the layer (pure overdraw,
-                    // the state decorative-motion-off lands in on frame one).
-                    // EXIT paints the leaving page whole and ENTER the arriving
-                    // one whole — never a bare message list with the chrome of
-                    // the other side left standing.
-                    boolean exiting = navZoomPhase == NAV_ZOOM_EXIT;
-                    NavPage visiblePage = exiting ? fromPage : toPage;
-                    ChatPageView visibleView = exiting ? fromView : toView;
-                    float alpha = exiting ? navExitAlpha : navEnterAlpha;
-                    float scale = exiting ? 0.9F + alpha * 0.1F : 1.1F - alpha * 0.1F;
-                    Paint layer = null;
-                    canvas.save();
-                    if (!navLayerSkippable(alpha, scale)) {
-                        layer = new Paint().setAlphaf(alpha);
-                        canvas.saveLayer(Rect.makeXYWH(panelRect.x(), panelRect.y(),
-                                panelRect.w(), panelRect.h()), layer);
-                    }
-                    // Same rounded panel clip and centre scale as the
-                    // root<->detail zoom: the moving body follows the bezel
-                    // corner radius instead of biting it with square edges.
-                    SkiaDraw.clip(canvas, panelRect.x(), panelRect.y(), panelRect.w(), panelRect.h(),
-                            UiTokens.panelRadius());
-                    applyNavScale(canvas, panelRect, scale);
-                    if (visibleView != null) {
-                        drawChatPageBody(canvas, layout, mouseX, mouseY, visibleView);
-                    } else if (visiblePage.page() == AppPage.PROFILE_DETAIL) {
-                        drawProfileDetail(canvas, mouseX, mouseY);
-                    } else if (visiblePage.page() == AppPage.SETTINGS_SECTION) {
-                        // The pages without a composer draw their own body.
-                        // Leaving this side blank would composite one page
-                        // against nothing for the whole transition.
-                        drawSettingsSection(canvas, mouseX, mouseY, visiblePage.section());
-                    }
-                    if (layer != null) {
-                        canvas.restore();
-                        layer.close();
-                    }
-                    canvas.restore();
-                } else {
-                    // SLIDE: both whole pages travel as one piece each — the
-                    // messages, reply bar, composer, scrollbar and jump-to-latest
-                    // of a chat page go together with it, so the composer never
-                    // sits still while its conversation slides past (and the
-                    // incoming one no longer pops in).
-                    canvas.save();
-                    SkiaDraw.clip(canvas, panelRect.x(), panelRect.y(), panelRect.w(), panelRect.h(),
-                            UiTokens.panelRadius());
-                    canvas.translate(fromDx, 0.0F);
-                    if (fromView != null) {
-                        drawChatPageBody(canvas, layout, mouseX, mouseY, fromView);
-                    } else if (fromPage.page() == AppPage.PROFILE_DETAIL) {
-                        drawProfileDetail(canvas, mouseX, mouseY);
-                    } else if (fromPage.page() == AppPage.SETTINGS_SECTION) {
-                        drawSettingsSection(canvas, mouseX, mouseY, fromPage.section());
-                    }
-                    canvas.restore();
-
-                    canvas.save();
-                    SkiaDraw.clip(canvas, panelRect.x(), panelRect.y(), panelRect.w(), panelRect.h(),
-                            UiTokens.panelRadius());
-                    canvas.translate(toDx, 0.0F);
-                    if (toView != null) {
-                        drawChatPageBody(canvas, layout, mouseX, mouseY, toView);
-                    } else if (toPage.page() == AppPage.PROFILE_DETAIL) {
-                        drawProfileDetail(canvas, mouseX, mouseY);
-                    } else if (toPage.page() == AppPage.SETTINGS_SECTION) {
-                        drawSettingsSection(canvas, mouseX, mouseY, toPage.section());
-                    }
-                    canvas.restore();
-                }
-                suppressHeader = false;
-                ShellHeader.render(canvas, layout.header, shellTitleFor(toPage), true,
-                        backButton(), backButtonHover, textPrimary(),
-                        toPage.page() == AppPage.PRIVATE_CHAT
-                                ? isOnlinePlayer(toPage.target()) : null,
-                        headerActionFor(toPage));
-                drawBezel(canvas, layout);
-                return;
-            } else {
-                // Full-width push/pop: root<->detail transitions. The header is
-                // drawn separately as a fixed "status bar" after both layers.
-                suppressHeader = true;
-                NavPage navRoot = pageNavTo.isRoot() ? pageNavTo : pageNavFrom;
-                NavPage moving = pageNavTo.isRoot() ? pageNavFrom : pageNavTo;
-                float travel = layout.rect().w();
-                float progress = navSlideProgress;
-                boolean pushing = !pageNavTo.isRoot();
-                // One eased clock, two paired layers. ZOOM gives the change
-                // depth: the moving page grows 0.94 -> 1 while fading in while
-                // the page underneath sinks 1 -> 0.96 and dims; a pop runs the
-                // same channels in reverse so the return matches its push (the
-                // old code slid every pop, whatever the style). SLIDE keeps
-                // the horizontal push. The fixed chrome (header, bezel) never
-                // joins the transforms.
-                boolean zoom = pageNavZoom;
-                // Melodify's serial zoom: while EXIT runs only the leaving
-                // page is composited (shrinking 1.0 -> 0.9 as it fades);
-                // while ENTER runs only the arriving page (settling
-                // 1.1 -> 1.0 as it fades in). The invisible side gets alpha
-                // 0 and is skipped below, so the phases never stack into a
-                // double-exposure. Slides keep the paired translation.
-                float movingAlpha;
-                float movingScale;
-                float rootAlpha;
-                float rootScale;
-                if (zoom) {
-                    if (navZoomPhase == NAV_ZOOM_EXIT) {
-                        float a = navExitAlpha;
-                        float s = 0.9F + a * 0.1F;
-                        if (pushing) {
-                            rootAlpha = a;
-                            rootScale = s;
-                            movingAlpha = 0.0F;
-                            movingScale = 1.0F;
-                        } else {
-                            movingAlpha = a;
-                            movingScale = s;
-                            rootAlpha = 0.0F;
-                            rootScale = 1.0F;
-                        }
-                    } else {
-                        float a = navEnterAlpha;
-                        float s = 1.1F - a * 0.1F;
-                        if (pushing) {
-                            movingAlpha = a;
-                            movingScale = s;
-                            rootAlpha = 0.0F;
-                            rootScale = 1.0F;
-                        } else {
-                            rootAlpha = a;
-                            rootScale = s;
-                            movingAlpha = 0.0F;
-                            movingScale = 1.0F;
-                        }
-                    }
-                } else {
-                    // The slide's alpha/scale channels are unused (it
-                    // translates); keeping the assignment local to the else
-                    // would leave them unassigned for the branch above.
-                    movingAlpha = pushing ? progress : 1.0F - progress;
-                    movingScale = pushing ? 0.94F + 0.06F * progress : 1.0F - 0.06F * progress;
-                    rootAlpha = pushing ? 1.0F - 0.5F * progress : 0.5F + 0.5F * progress;
-                    rootScale = pushing ? 1.0F - 0.04F * progress : 0.96F + 0.04F * progress;
-                }
-                float rootDx = pushing ? -travel * progress : -travel * (1.0F - progress);
-                UiLayout.Rect panelRect = layout.rect();
-                // Bottom layer: on a zoom it sinks and dims inside its own
-                // saveLayer (the layer bounds double as the panel clip); on a
-                // slide it just translates. save and saveLayer each push their
-                // own entry, so a zoom pairs two restores below; a skipped
-                // layer or a slide leaves just the plain save to pop. During
-                // the zoom phase where the root is the invisible side, both
-                // the layer and the draw are skipped.
-                boolean rootVisible = !zoom || rootAlpha > 0.001F;
-                canvas.save();
-                Paint rootLayer = null;
-                if (zoom) {
-                    if (rootVisible && !navLayerSkippable(rootAlpha, rootScale)) {
-                        rootLayer = new Paint().setAlphaf(rootAlpha);
-                        canvas.saveLayer(Rect.makeXYWH(panelRect.x(), panelRect.y(),
-                                panelRect.w(), panelRect.h()), rootLayer);
-                        // The layer bounds clip square, so round the layer's
-                        // content to the panel radius right away — the scaled
-                        // page must not paint into the bezel's corners.
-                        SkiaDraw.clip(canvas, panelRect.x(), panelRect.y(), panelRect.w(), panelRect.h(),
-                                UiTokens.panelRadius());
-                        applyNavScale(canvas, panelRect, rootScale);
-                    }
-                } else {
-                    SkiaDraw.clip(canvas, panelRect.x(), panelRect.y(), panelRect.w(), panelRect.h(),
-                            UiTokens.panelRadius());
-                    canvas.translate(rootDx, 0.0F);
-                }
-                if (rootVisible) {
-                    drawRootScreen(canvas, mouseX, mouseY, navRoot.page());
-                }
-                if (rootLayer != null) {
-                    // The zoom's saveLayer sits on top of the plain save; pop
-                    // it first so each entry pairs with its own restore.
-                    canvas.restore();
-                }
-                canvas.restore();
-                if (rootLayer != null) {
-                    rootLayer.close();
-                }
-
-                // Moving layer: on a zoom it fades+scales inside a saveLayer;
-                // on a slide it translates under a plain save. Exactly one
-                // save-point is opened here — the settings/profile branches
-                // close it before returning, the chat page falls through and
-                // closes it after the shared tail below. While the moving
-                // side is the zoom's invisible phase, no layer opens and the
-                // draws below are skipped (drawing without the layer would
-                // composite straight onto the visible side).
-                boolean movingVisible = !zoom || movingAlpha > 0.001F;
-                navMovingHidden = zoom && !movingVisible;
-                if (zoom) {
-                    if (movingVisible && !navLayerSkippable(movingAlpha, movingScale)) {
-                        navMovingLayer = new Paint().setAlphaf(movingAlpha);
-                        canvas.saveLayer(Rect.makeXYWH(panelRect.x(), panelRect.y(),
-                                panelRect.w(), panelRect.h()), navMovingLayer);
-                        // Same rounded layer clip as the root side above.
-                        SkiaDraw.clip(canvas, panelRect.x(), panelRect.y(), panelRect.w(), panelRect.h(),
-                                UiTokens.panelRadius());
-                        applyNavScale(canvas, panelRect, movingScale);
-                    }
-                } else {
-                    canvas.save();
-                    SkiaDraw.clip(canvas, panelRect.x(), panelRect.y(), panelRect.w(), panelRect.h(),
-                            UiTokens.panelRadius());
-                    canvas.translate(pageNavDx(travel), 0.0F);
-                    navMovingSlide = true;
-                }
-                // A settings sub-page has no composer tail to draw into the
-                // open layer, so it renders and closes its own layer here. The
-                // chat page leaves the layer open for the shared tail below.
-                if (moving.page() == AppPage.SETTINGS_SECTION) {
-                    if (movingVisible) {
-                        drawSettingsSection(canvas, mouseX, mouseY, moving.section());
-                    }
-                    if (navMovingLayer != null) {
-                        canvas.restore();
-                        navMovingLayer.close();
-                    } else if (navMovingSlide) {
-                        // The slide branch opened a save; a skipped zoom layer
-                        // opened nothing, so it must not pop past it.
-                        canvas.restore();
-                    }
-                    suppressHeader = false;
-                    // The header always names the destination, never the page
-                    // that is sliding away — a pop flips the title on frame one
-                    // too, which is what "click then title" expects.
-                    drawPushedHeader(canvas, vmx, vmy, pushing ? moving : navRoot);
-                    drawBezel(canvas, detailLayout());
-                    return;
-                }
-                if (moving.page() == AppPage.PROFILE_DETAIL) {
-                    if (movingVisible) {
-                        drawProfileDetail(canvas, mouseX, mouseY);
-                    }
-                    if (navMovingLayer != null) {
-                        canvas.restore();
-                        navMovingLayer.close();
-                    } else if (navMovingSlide) {
-                        // Same pairing as the settings branch above.
-                        canvas.restore();
-                    }
-                    suppressHeader = false;
-                    drawPushedHeader(canvas, vmx, vmy, pushing ? moving : navRoot);
-                    drawBezel(canvas, detailLayout());
-                    return;
-                }
-            }
+        if (composite.drawRootFrame(canvas, layout, mouseX, mouseY, vmx, vmy)) {
+            return;
+        }
+        PageTransitionComposite.NavFrame navFrame = composite.begin(canvas, layout, mouseX, mouseY,
+                vmx, vmy, frameDt);
+        if (navFrame.finished()) {
+            return;
         }
         // A settled settings sub-page: header + list, nothing else.
-        if (!navRunning && topPage() == AppPage.SETTINGS_SECTION) {
+        if (!navFrame.running() && topPage() == AppPage.SETTINGS_SECTION) {
             drawSettingsSection(canvas, mouseX, mouseY, topNav().section());
-            drawPushedHeader(canvas, vmx, vmy, topNav());
+            headerChrome.drawPushedHeader(canvas, vmx, vmy, topNav());
             drawBezel(canvas, detailLayout());
             return;
         }
         // A settled profile detail: same chrome, profile body.
-        if (!navRunning && topPage() == AppPage.PROFILE_DETAIL) {
+        if (!navFrame.running() && topPage() == AppPage.PROFILE_DETAIL) {
             drawProfileDetail(canvas, mouseX, mouseY);
-            drawPushedHeader(canvas, vmx, vmy, topNav());
+            headerChrome.drawPushedHeader(canvas, vmx, vmy, topNav());
             drawBezel(canvas, detailLayout());
             return;
         }
-        backButtonHover = UiMotion.approach(backButtonHover,
-                isBackButtonHit(vmx, vmy) ? 1.0F : 0.0F, frameDt, UiMotion.HOVER_MS);
+        headerChrome.stepBackButtonHover(vmx, vmy);
         filterButtonHover = UiMotion.approach(filterButtonHover,
                 topPage() == AppPage.WORLD_CHAT && isFilterButtonHit(vmx, vmy) ? 1.0F : 0.0F,
                 frameDt, UiMotion.HOVER_MS);
         if (!suppressHeader) {
-            ShellHeader.render(canvas, layout.header, shellTitleFor(topNav()), true,
-                    backButton(), backButtonHover, textPrimary(),
-                    topPage() == AppPage.PRIVATE_CHAT ? isOnlinePlayer(activePrivateTarget()) : null,
+            ShellHeader.render(canvas, layout.header, headerChrome.shellTitleFor(topNav()), true,
+                    headerChrome.backButton(), headerChrome.backButtonHover(), textPrimary(),
+                    topPage() == AppPage.PRIVATE_CHAT
+                            ? contextActions.isOnlinePlayer(activePrivateTarget()) : null,
                     headerActionFor(topNav()));
         }
 
         // Grow the input bar before the list is measured, so the list loses
         // exactly the height the bar gains.
-        layout = updateInputLayout(layout);
+        layout = composer.updateLayout(layout);
 
-        if (!navMovingHidden) {
+        if (!navFrame.movingHidden()) {
             drawChatPageBody(canvas, layout, mouseX, mouseY, chatPageViewFor(topNav()));
 
             emojiPanel.render(canvas, layout, toVirtualX(mouseX), toVirtualY(mouseY), frameDt);
             quickPhrasePanel.render(canvas, layout, toVirtualX(mouseX), toVirtualY(mouseY), frameDt);
-            drawContextMenu(canvas, toVirtualX(mouseX), toVirtualY(mouseY));
+            contextMenu.draw(canvas, toVirtualX(mouseX), toVirtualY(mouseY));
             // Last inside the panel: a modal over the page it was opened from.
             imagePreview.render(canvas, layout.rect(), toVirtualX(mouseX), toVirtualY(mouseY));
         }
 
-        if (navRunning) {
-            if (navMovingLayer != null) {
-                canvas.restore();
-                navMovingLayer.close();
-            } else if (navMovingSlide) {
-                canvas.restore();
-            }
-            suppressHeader = false;
-            // Fixed status-bar header: it never slides with the page bodies.
-            if (!pageNavTo.isRoot()) {
-                ShellHeader.render(canvas, layout.header, shellTitleFor(pageNavTo), true,
-                        backButton(), backButtonHover, textPrimary(),
-                        pageNavTo.page() == AppPage.PRIVATE_CHAT
-                                ? isOnlinePlayer(pageNavTo.target()) : null,
-                        headerActionFor(pageNavTo));
-            } else {
-                UiLayout root = rootLayout();
-                ShellHeader.render(canvas, root.header, shellTitleFor(pageNavTo), false, null, 0.0F,
-                        textPrimary());
-            }
+        if (navFrame.running()) {
+            composite.end(canvas, layout, navFrame);
         }
 
         // Bezel ring last: nothing at the panel edge can sit on top of it.
@@ -2717,18 +2305,13 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
      * top-page helpers — which is exactly how the arriving page's draft used to
      * be painted onto the leaving page.
      */
-    private record ChatPageView(NavPage page, String draft, boolean readOnly, String readOnlyHint,
-                               boolean partnerTyping, ChatMessage reply, ScrollController scroll,
-                               boolean ownsField) {
-    }
-
     /** Render state of a chat page, or null for a page that has no composer. */
-    private ChatPageView chatPageViewFor(NavPage page) {
+    private PageTransitionComposite.ChatPageView chatPageViewFor(NavPage page) {
         if (page == null || (page.page() != AppPage.WORLD_CHAT && page.page() != AppPage.PRIVATE_CHAT)) {
             return null;
         }
         boolean readOnly = isPrivateReadOnlyFor(page);
-        return new ChatPageView(page, draftForNav(page), readOnly,
+        return new PageTransitionComposite.ChatPageView(page, draftForNav(page), readOnly,
                 readOnly ? readOnlyHintForNav(page) : "",
                 partnerTypingFor(page), replyForNav(page), scrollForNav(page),
                 ownsInputField(page));
@@ -2742,19 +2325,20 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
      * caller: the header is a fixed status bar during pushes, and the overlays
      * belong to the screen, not the sliding page.
      */
-    private void drawChatPageBody(Canvas canvas, UiLayout layout, int mouseX, int mouseY, ChatPageView view) {
+    private void drawChatPageBody(Canvas canvas, UiLayout layout, int mouseX, int mouseY,
+                                  PageTransitionComposite.ChatPageView view) {
         if (view == null) {
             return;
         }
         NavPage page = view.page();
         int probeBefore = canvas.getSaveCount();
-        List<ChatMessage> messages = messagesForNav(page);
+        List<ChatMessage> messages = messageWiring.messagesForNav(page);
         HistoryWindow window = historyWindowForNav(page, messages.size());
         messageListView.setVisibleStart(window.visibleStart());
         messageListView.setLoadEarlierHovered(toVirtualX(mouseX), toVirtualY(mouseY));
         messageListView.draw(canvas, layout.list.x(), layout.list.y(), layout.list.w(), layout.list.h(),
                 messages, view.scroll());
-        probeCanvasLeak("messageListView.draw", probeBefore, canvas);
+        CanvasLeakWatch.probe("messageListView.draw", probeBefore, canvas);
         applyLoadEarlierRequest(page, messages, window, layout.list, view.scroll());
 
         // Reply bar floats above the input bar. It is drawn after the message
@@ -2837,7 +2421,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
         // the leaving page keeps its own draft while the arriving page's sits in
         // the shared EditBox.
         Font inputFont = FontManager.font(UiTokens.FONT_INPUT);
-        float lineH = inputLineHeight();
+        float lineH = composer.lineHeight();
         String current = view.draft();
         float textX = bar.x() + UiTokens.INPUT_TEXT_X;
         float clipTop = layout.inputTextCenterY - lineH / 2.0F;
@@ -2849,19 +2433,19 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
                     SkiaFontRenderer.centerBaselineY(inputFont, layout.inputTextCenterY), textSecondary());
             canvas.restore();
         } else {
-            List<String> lines = wrappedInput(current, layout.inputTextMaxWidth());
+            List<String> lines = composer.wrappedInput(current, layout.inputTextMaxWidth());
             int total = lines.size();
             // Caret and selection belong to the page that owns the field; the
             // other side draws its text without them instead of borrowing the
             // live caret position.
             boolean ownComposer = view.ownsField();
-            int caretRow = ownComposer && total > 0 ? caretLine(lines, caretIndex()) : 0;
+            int caretRow = ownComposer && total > 0 ? ComposerInput.caretLine(lines, composer.caretIndex()) : 0;
             if (ownComposer) {
-                scrollInputToCaret(caretRow, total);
+                composer.scrollToCaret(caretRow, total);
             }
             int shown = Math.min(UiTokens.INPUT_MAX_LINES, total);
             int from = total == 0 ? 0
-                    : Math.min(ownComposer ? inputScrollLine : 0, Math.max(0, total - shown));
+                    : Math.min(ownComposer ? composer.scrollLine() : 0, Math.max(0, total - shown));
             // Placeholder stays visible while the field is focused: ChatScreen
             // focuses the chat field the moment the screen opens, so a hint gated
             // on "not focused" was literally never on screen. It doubles as the
@@ -2871,14 +2455,15 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
                 String hintText;
                 if (quickPhrasePanel.isEditing()) {
                     hintText = tr("atomchat.input.phrase_hint");
-                } else if (imageUploading) {
+                } else if (uploadPipeline.uploading()) {
                     hintText = tr("atomchat.input.uploading");
                 } else if (view.partnerTyping()) {
                     // QQ-style: WATUT reports the partner composing a message
                     // (only the private page asks; silent no-op without WATUT).
                     hintText = tr("atomchat.private.typing");
-                } else if (transientHint != null && System.currentTimeMillis() - transientHintSetAt < 4000L) {
-                    hintText = transientHint;
+                } else if (uploadPipeline.transientHint() != null
+                        && System.currentTimeMillis() - uploadPipeline.transientHintSetAt() < 4000L) {
+                    hintText = uploadPipeline.transientHint();
                 } else {
                     hintText = tr("atomchat.input.placeholder");
                 }
@@ -2887,7 +2472,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
                         SkiaFontRenderer.centerBaselineY(inputFont, layout.inputTextCenterY), textSecondary());
             } else {
                 if (ownComposer) {
-                    drawInputSelection(canvas, inputFont, lines, from, shown, textX, layout.inputTextCenterY, lineH);
+                    composerPointer.drawSelection(canvas, inputFont, lines, from, shown, textX, layout.inputTextCenterY, lineH);
                 }
                 for (int i = from; i < from + shown && i < total; i++) {
                     float cy = layout.inputTextCenterY + (i - from) * lineH;
@@ -2895,9 +2480,9 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
                             SkiaFontRenderer.centerBaselineY(inputFont, cy), textPrimary());
                 }
             }
-            if (ownComposer && inputFocused && input != null
+            if (ownComposer && composer.focused() && composer.fieldFocused()
                     && (System.currentTimeMillis() / 500L) % 2L == 0L) {
-                int caret = caretIndex();
+                int caret = composer.caretIndex();
                 float cursorY;
                 String measure;
                 if (total == 0) {
@@ -2945,23 +2530,21 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
     }
 
     private UiLayout rootLayout() {
-        return UiLayout.ofRoot(panelX(), panelY(), panelWidth(), panelHeight());
+        return ScreenMetrics.rootLayout(client.getWindow());
     }
 
     /** A pushed settings sub-page: no composer, no tab bar, tallest possible list. */
     private UiLayout detailLayout() {
-        return UiLayout.ofDetail(panelX(), panelY(), panelWidth(), panelHeight());
+        return ScreenMetrics.detailLayout(client.getWindow());
     }
 
     /** Layout and scroll controller of whatever list the top page is showing. */
     private UiLayout listLayout() {
-        return topPage() == AppPage.SETTINGS_SECTION || topPage() == AppPage.PROFILE_DETAIL
-                ? detailLayout() : rootLayout();
+        return ScreenMetrics.listLayout(client.getWindow(), topPage());
     }
 
     private ScrollController listScroll() {
-        return topPage() == AppPage.SETTINGS_SECTION || topPage() == AppPage.PROFILE_DETAIL
-                ? detailScroll : rootScroll;
+        return scrollSync.listScroll();
     }
 
     private float measureRootContent(UiLayout root, AppPage page) {
@@ -2979,22 +2562,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
      * affordance) is drawn fixed on top so it never slides with the list.
      */
     private void drawSettingsSection(Canvas canvas, int mouseX, int mouseY, SettingsSection section) {
-        if (section == null) {
-            return;
-        }
-        UiLayout layout = detailLayout();
-        float vmx = toVirtualX(mouseX);
-        float vmy = toVirtualY(mouseY);
-        detailScroll.setContent(settingsSectionPage.measureContent(layout, section), layout.list.h());
-        syncChipScroll(section);
-        detailScroll.updateAnimation(System.currentTimeMillis());
-        settingsSectionPage.render(canvas, layout, section, vmx, vmy, detailScroll.getScrollY(), accent());
-        drawScrollbar(canvas, layout, vmx, vmy, detailScroll);
-        // Modal overlays on top of the whole panel: the cropper must render on
-        // this path too — it is opened from here (wallpaper pick), and an
-        // active-but-unrendered modal eats every click and freezes the screen.
-        imageCropper.render(canvas, layout.rect(), vmx, vmy);
-        colorPicker.render(canvas, layout.rect(), vmx, vmy, accent());
+        settingsDetailPage.drawSettingsSection(canvas, mouseX, mouseY, section);
     }
 
     /**
@@ -3003,30 +2571,12 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
      * field (and the IME behind it) lives here.
      */
     private void syncProfileSignatureDraft() {
-        if (profilePage.isSignatureEditing()) {
-            boolean focused = inputFocused && input != null && input.isFocused();
-            profilePage.setSignatureDraft(inputGetText(), focused);
-        }
+        profileWiring.syncProfileSignatureDraft();
     }
 
     /** Body of a pushed profile detail page (another player's profile). */
     private void drawProfileDetail(Canvas canvas, int mouseX, int mouseY) {
-        UiLayout layout = detailLayout();
-        float vmx = toVirtualX(mouseX);
-        float vmy = toVirtualY(mouseY);
-        detailScroll.setContent(profilePage.measureContent(layout), layout.list.h());
-        detailScroll.updateAnimation(System.currentTimeMillis());
-        syncProfileSignatureDraft();
-        profilePage.render(canvas, layout, vmx, vmy, detailScroll.getScrollY());
-        drawScrollbar(canvas, layout, vmx, vmy, detailScroll);
-    }
-
-    /** Fixed header (with back affordance) for a pushed settings sub-page. */
-    private void drawPushedHeader(Canvas canvas, float vmx, float vmy, NavPage nav) {
-        backButtonHover = UiMotion.approach(backButtonHover,
-                isBackButtonHit(vmx, vmy) ? 1.0F : 0.0F, frameDt, UiMotion.HOVER_MS);
-        ShellHeader.render(canvas, detailLayout().header, shellTitleFor(nav), true,
-                backButton(), backButtonHover, textPrimary(), null);
+        profileWiring.drawProfileDetail(canvas, mouseX, mouseY);
     }
 
     /** Renders the full root screen (header + page body + bottom tab bar). */
@@ -3035,17 +2585,17 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
         float vmx = toVirtualX(mouseX);
         float vmy = toVirtualY(mouseY);
         bottomTabBar.update(frameDt, vmx, vmy, root.tabBar);
-        stepRootNav(frameDt);
+        director.stepRootNav(frameDt);
         if (!suppressHeader) {
-            ShellHeader.render(canvas, root.header, shellTitleFor(rootPage), false, null, 0.0F,
+            ShellHeader.render(canvas, root.header, headerChrome.shellTitleFor(rootPage), false, null, 0.0F,
                     textPrimary());
         }
         rootMouseX = vmx;
         rootMouseY = vmy;
-        rootScroll.setContent(measureRootContent(root, rootPage), root.list.h());
-        rootScroll.updateAnimation(System.currentTimeMillis());
+        scrollSync.rootScroll().setContent(measureRootContent(root, rootPage), root.list.h());
+        scrollSync.rootScroll().updateAnimation(System.currentTimeMillis());
         drawRootPage(canvas, root, rootPage);
-        drawScrollbar(canvas, root, vmx, vmy, rootScroll);
+        drawScrollbar(canvas, root, vmx, vmy, scrollSync.rootScroll());
         drawBottomTabBar(canvas, root, rootPage);
         // Modal avatar cropper on top of everything inside the panel.
         imageCropper.render(canvas, root.rect(), vmx, vmy);
@@ -3053,11 +2603,11 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
     }
 
     private void drawRootPage(Canvas canvas, UiLayout layout, AppPage rootPage) {
-        if (!rootTransitionActive()) {
+        if (!director.rootTransitionActive()) {
             drawRootPageBody(canvas, layout, rootPage, 0.0F);
             return;
         }
-        if (rootTabZoom) {
+        if (director.rootTabZoom()) {
             drawRootPageZoom(canvas, layout, rootPage);
             return;
         }
@@ -3066,14 +2616,14 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
         // the incoming page enters from that side. The progress is the same
         // exponential clock that positions the capsule (stepRootNav), so pill
         // and pages land together without the eased tween's notch.
-        float progress = rootTabProgress;
+        float progress = director.rootTabProgress();
         canvas.save();
         try {
             SkiaDraw.clip(canvas, layout.list.x(), layout.list.y(),
                     layout.list.w(), layout.list.h(), 0.0F);
             float travel = layout.list.w();
-            float sign = rootTabTo > rootTabFrom ? 1.0F : -1.0F;
-            drawRootPageBody(canvas, layout, rootPageForIndex(rootTabFrom),
+            float sign = director.rootTabTo() > director.rootTabFrom() ? 1.0F : -1.0F;
+            drawRootPageBody(canvas, layout, director.rootPageForIndex(director.rootTabFrom()),
                     -sign * travel * progress);
             drawRootPageBody(canvas, layout, rootPage,
                     sign * travel * (1.0F - progress));
@@ -3093,18 +2643,18 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
      */
     private void drawRootPageZoom(Canvas canvas, UiLayout layout, AppPage rootPage) {
         UiLayout.Rect list = layout.list;
-        boolean exiting = rootZoomPhase == ROOT_ZOOM_EXIT;
-        float alpha = exiting ? rootZoomExitAlpha : rootZoomEnterAlpha;
+        boolean exiting = director.rootZoomExiting();
+        float alpha = exiting ? director.rootZoomExitAlpha() : director.rootZoomEnterAlpha();
         float scale = exiting ? 0.9F + alpha * 0.1F : 1.1F - alpha * 0.1F;
-        AppPage page = exiting ? rootPageForIndex(rootTabFrom) : rootPage;
-        if (alpha <= 0.001F || navLayerSkippable(alpha, scale)) {
+        AppPage page = exiting ? director.rootPageForIndex(director.rootTabFrom()) : rootPage;
+        if (alpha <= 0.001F || PageTransitionDirector.navLayerSkippable(alpha, scale)) {
             return;
         }
         canvas.save();
         try (Paint layer = new Paint().setAlphaf(alpha)) {
             canvas.saveLayer(Rect.makeXYWH(list.x(), list.y(), list.w(), list.h()), layer);
             SkiaDraw.clip(canvas, list.x(), list.y(), list.w(), list.h(), 0.0F);
-            applyNavScale(canvas, list, scale);
+            PageTransitionDirector.applyNavScale(canvas, list, scale);
             drawRootPageBody(canvas, layout, page, 0.0F);
             // save() and saveLayer() pushed two entries; both must be popped.
             // This restore pairs with the layer, the finally's with the plain
@@ -3122,13 +2672,13 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
         canvas.translate(dx, 0.0F);
         try {
             switch (page) {
-                case CHAT_LIST -> conversationListPage.render(canvas, layout, rootMouseX, rootMouseY, rootScroll.getScrollY());
+                case CHAT_LIST -> conversationListPage.render(canvas, layout, rootMouseX, rootMouseY, scrollSync.rootScroll().getScrollY());
                 case PROFILE -> {
                     syncProfileSignatureDraft();
-                    profilePage.render(canvas, layout, rootMouseX, rootMouseY, rootScroll.getScrollY());
+                    profilePage.render(canvas, layout, rootMouseX, rootMouseY, scrollSync.rootScroll().getScrollY());
                 }
                 case SETTINGS -> settingsHomePage.render(canvas, layout, rootMouseX, rootMouseY,
-                        rootScroll.getScrollY());
+                        scrollSync.rootScroll().getScrollY());
                 case WORLD_CHAT, PRIVATE_CHAT ->
                         throw new IllegalStateException("Root page body cannot render chat/detail pages");
             }
@@ -3137,120 +2687,9 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
         }
     }
 
-    private boolean rootTransitionActive() {
-        if (rootTabFrom < 0 || rootTabTo < 0 || rootTabFrom == rootTabTo) {
-            return false;
-        }
-        if (rootTabZoom) {
-            return !(rootZoomPhase == ROOT_ZOOM_ENTER && rootZoomEnterAlpha >= 0.999F);
-        }
-        return rootTabProgress < 0.999F;
-    }
-
-    private void clearRootTransition() {
-        rootTabFrom = -1;
-        rootTabTo = -1;
-    }
-
-    /**
-     * Advances the tab transition, style-aware like the page nav. The capsule
-     * shares the tab bar's animator as its value holder and is written from
-     * the same clock as the content: on a slide the pill position is the
-     * progress mapped across the from->to cells (perfect lockstep), on a zoom
-     * it keeps its own exponential travel at the zoom tau so it lands as the
-     * enter phase settles. A transition that completes here is cleared at
-     * once, so the same frame already draws the settled page.
-     */
-    private void stepRootNav(float dtMs) {
-        if (!rootTransitionActive()) {
-            return;
-        }
-        boolean enabled = Animations.enabled();
-        if (rootTabZoom) {
-            float tau = enabled ? UiMotion.PAGE_NAV_TAU_MS : 0.0F;
-            if (rootZoomPhase == ROOT_ZOOM_EXIT) {
-                rootZoomExitAlpha = UiMotion.expApproach(rootZoomExitAlpha, 0.0F, dtMs, tau);
-                if (rootZoomExitAlpha <= 0.02F) {
-                    rootZoomExitAlpha = 0.0F;
-                    rootZoomPhase = ROOT_ZOOM_ENTER;
-                }
-            }
-            if (rootZoomPhase == ROOT_ZOOM_ENTER && rootZoomEnterAlpha < 1.0F) {
-                rootZoomEnterAlpha = UiMotion.expApproach(rootZoomEnterAlpha, 1.0F, dtMs, tau);
-            }
-            rootTabAnim.setValue(UiMotion.expApproach(rootTabAnim.getValue(), rootTabTo, dtMs, tau));
-        } else {
-            float tau = enabled ? UiMotion.PAGE_SLIDE_TAU_MS : 0.0F;
-            rootTabProgress = UiMotion.expApproach(rootTabProgress, 1.0F, dtMs, tau);
-            rootTabAnim.setValue(rootTabFrom + (rootTabTo - rootTabFrom) * rootTabProgress);
-        }
-        if (!rootTransitionActive()) {
-            clearRootTransition();
-        }
-    }
-
-    private AppPage rootPageForIndex(int index) {
-        return switch (index) {
-            case 0 -> AppPage.CHAT_LIST;
-            case 1 -> AppPage.PROFILE;
-            case 2 -> AppPage.SETTINGS;
-            default -> throw new IllegalStateException("Unexpected root tab index " + index);
-        };
-    }
-
-    private int rootIndex(AppPage page) {
-        return switch (page) {
-            case CHAT_LIST -> 0;
-            case PROFILE -> 1;
-            case SETTINGS -> 2;
-            case WORLD_CHAT, PRIVATE_CHAT, SETTINGS_SECTION, PROFILE_DETAIL ->
-                    throw new IllegalStateException("Pushed pages have no bottom tab index");
-        };
-    }
-
-    private String shellTitle() {
-        return shellTitleFor(topNav());
-    }
-
-    private String shellTitleFor(NavPage nav) {
-        if (nav.page() == AppPage.PRIVATE_CHAT && nav.target() != null) {
-            return nav.target().realName();
-        }
-        if (nav.page() == AppPage.SETTINGS_SECTION && nav.section() != null) {
-            return settingsTitle(nav.section());
-        }
-        return shellTitleFor(nav.page());
-    }
-
-    private static String settingsTitle(SettingsSection section) {
-        return switch (section) {
-            case APPEARANCE -> tr("atomchat.settings.appearance");
-            case CHAT -> tr("atomchat.settings.chat");
-            case PRIVACY -> tr("atomchat.settings.privacy");
-            case ABOUT -> tr("atomchat.settings.about");
-        };
-    }
-
-    private String shellTitleFor(AppPage page) {
-        return switch (page) {
-            case CHAT_LIST -> tr("atomchat.tab.chat");
-            case PROFILE -> tr("atomchat.page.profile.title");
-            case SETTINGS -> tr("atomchat.tab.settings");
-            case WORLD_CHAT -> tr("atomchat.channel.world");
-            case PRIVATE_CHAT -> activePrivateTarget() != null
-                    ? activePrivateTarget().realName() : tr("atomchat.channel.private");
-            case SETTINGS_SECTION -> tr("atomchat.tab.settings");
-            case PROFILE_DETAIL -> tr("atomchat.page.profile.title");
-        };
-    }
-
-    private void drawBottomTabBar(Canvas canvas, UiLayout layout, AppPage rootPage) {
-        int selectedIndex = rootIndex(rootPage);
+            private void drawBottomTabBar(Canvas canvas, UiLayout layout, AppPage rootPage) {
+        int selectedIndex = director.rootIndex(rootPage);
         bottomTabBar.render(canvas, layout.tabBar, selectedIndex, textPrimary(), accent());
-    }
-
-    private void drawBottomTabBar(Canvas canvas, UiLayout layout) {
-        drawBottomTabBar(canvas, layout, topPage());
     }
 
     /** Routes a root-page click on one of the three bottom tab cells. */
@@ -3279,50 +2718,14 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
         return Component.translatable(key, args).getString();
     }
 
+    /**
+     * Composer button drawing (D9). The geometry comes from the layout and the
+     * pointer is converted here — both belong to the screen — while the
+     * primitives, their press/hover state and the icon set live in
+     * {@link DrawPrimitives}.
+     */
     private void drawIconButton(Canvas canvas, float bx, float by, int id, int mouseX, int mouseY) {
-        boolean hover = inputButtonHovered(bx, by, UiTokens.ACTION_BUTTON_SIZE,
-                UiTokens.ACTION_BUTTON_SIZE, mouseX, mouseY);
-        boolean pressed = buttonPressed(id);
-        boolean pressedHeld = pressedButtonHeld == id;
-        buttonHover[id] = UiMotion.approach(buttonHover[id], hover ? 1.0F : 0.0F, frameDt, UiMotion.HOVER_MS);
-        // Same bounce spring as every other control; the spring keeps running
-        // until it settles, so the release overshoot is drawn even after the
-        // pointer is up.
-        PressScale scale = iconButtonScale[id];
-        // The scaled shape is the ACTION_BUTTON_SIZE icon square itself.
-        scale.update(hover, pressedHeld, frameDt, Animations.enabled(), UiTokens.ACTION_BUTTON_SIZE);
-        canvas.save();
-        if (scale.scale() != 1.0F) {
-            float keyHalf = UiTokens.ACTION_BUTTON_SIZE / 2.0F;
-            canvas.translate(bx + keyHalf, by + keyHalf);
-            canvas.scale(scale.scale(), scale.scale());
-            canvas.translate(-(bx + keyHalf), -(by + keyHalf));
-        }
-        // Same art language as the header buttons: the icon sits on the composer,
-        // and a hover draws an inset rounded wash in the accent. No standing
-        // plate and no hairline - a plate would make the row read as three cards,
-        // and the hairline was only there to separate that plate from the panel.
-        float hoverWash = buttonHover[id];
-        float pressedWash = pressed ? 1.0F : 0.0F;
-        float wash = Math.max(hoverWash, pressedWash);
-        if (wash > 0.01F) {
-            float inset = UiTokens.EDGE_CONTROL_INSET;
-            SkiaDraw.drawRoundedRect(canvas, bx + inset, by + inset,
-                    UiTokens.ACTION_BUTTON_SIZE - inset * 2.0F,
-                    UiTokens.ACTION_BUTTON_SIZE - inset * 2.0F,
-                    UiTokens.radius(8), UiTokens.cardHover(wash));
-        }
-        // Active states take the accent colour: the emoji button while its
-        // panel is open (a toggle), any button for a moment after a press.
-        boolean activeTint = (id == 1 && emojiPanel.isOpen()) || (id == 3 && quickPhrasePanel.isOpen())
-                || pressed;
-        io.github.humbleui.skija.Path icon = switch (id) {
-            case 0 -> ICON_IMAGE_PATH;
-            case 3 -> ICON_PHRASE_PATH;
-            default -> ICON_EMOJI_PATH;
-        };
-        drawIcon(canvas, icon, bx, by, activeTint ? accent() : textPrimary());
-        canvas.restore();
+        primitives.drawIconButton(canvas, bx, by, id, toVirtualX(mouseX), toVirtualY(mouseY));
     }
 
     /**
@@ -3332,83 +2735,17 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
      */
     private boolean inputButtonHovered(float bx, float by, float w, float h,
                                        int mouseX, int mouseY) {
-        float vmx = toVirtualX(mouseX);
-        float vmy = toVirtualY(mouseY);
-        return vmx >= bx && vmx <= bx + w && vmy >= by && vmy <= by + h;
+        return primitives.inputButtonHovered(bx, by, w, h, toVirtualX(mouseX), toVirtualY(mouseY));
     }
 
     private void drawSendButton(Canvas canvas, float bx, float by, int mouseX, int mouseY) {
-        boolean hover = inputButtonHovered(bx, by, UiTokens.BUTTON_W, UiTokens.BUTTON_H,
-                mouseX, mouseY);
-        boolean pressed = buttonPressed(2);
-        boolean pressedHeld = pressedButtonHeld == 2;
-        buttonHover[2] = UiMotion.approach(buttonHover[2], hover ? 1.0F : 0.0F, frameDt, UiMotion.HOVER_MS);
-        // Same press/hover scale as the icon buttons and the bottom tab bar.
-        PressScale scale = iconButtonScale[2];
-        // The scaled shape is the send button itself (BUTTON_W capsule).
-        scale.update(hover, pressedHeld, frameDt, Animations.enabled(), UiTokens.BUTTON_W);
-        canvas.save();
-        if (scale.scale() != 1.0F) {
-            canvas.translate(bx + UiTokens.BUTTON_W / 2.0F, by + UiTokens.BUTTON_H / 2.0F);
-            canvas.scale(scale.scale(), scale.scale());
-            canvas.translate(-(bx + UiTokens.BUTTON_W / 2.0F), -(by + UiTokens.BUTTON_H / 2.0F));
-        }
-        SkiaDraw.drawRoundedRect(canvas, bx, by, UiTokens.BUTTON_W, UiTokens.BUTTON_H, UiTokens.BUTTON_RADIUS, accent());
-        float overlay = buttonHover[2] * 55.0F + (pressed ? 90.0F : 0.0F);
-        if (overlay > 0.5F) {
-            SkiaDraw.drawRoundedRect(canvas, bx, by, UiTokens.BUTTON_W, UiTokens.BUTTON_H, UiTokens.BUTTON_RADIUS,
-                    Color.makeARGB((int) Math.min(160, overlay), 255, 255, 255));
-        }
-        // Icon ink derives from the solid accent fill it sits on (same language
-        // as the selected bottom tab), not from the panel's text colour: a pale
-        // accent capsule needs dark glyphs even on a dark panel.
-        drawIcon(canvas, ICON_SEND_PATH, bx, by, UiTokens.BUTTON_W, UiTokens.BUTTON_H,
-                UiTokens.onAccent(accent()));
-        canvas.restore();
-    }
-
-    /**
-     * Draws one of the inline SVG-path toolbar icons, centered in its button
-     * and scaled to fit an {@code ICON_SIZE} box. Stroke width scales with the
-     * rendered icon size so every icon keeps the same optical line weight.
-     */
-    private void drawIcon(Canvas canvas, io.github.humbleui.skija.Path icon, float bx, float by, int color) {
-        drawIcon(canvas, icon, bx, by, UiTokens.ACTION_BUTTON_SIZE, UiTokens.ACTION_BUTTON_SIZE, color);
-    }
-
-    /**
-     * Draws one of the inline SVG-path toolbar icons, centred in the box it is
-     * given. The stroke width follows the rendered glyph size, so both button
-     * families keep the same optical line weight.
-     */
-    private void drawIcon(Canvas canvas, io.github.humbleui.skija.Path icon, float bx, float by,
-                          float boxW, float boxH, int color) {
-        drawIconCentered(canvas, icon, bx + boxW / 2.0F, by + boxH / 2.0F, s(18), color);
+        primitives.drawSendButton(canvas, bx, by, toVirtualX(mouseX), toVirtualY(mouseY));
     }
 
     /** Draws an icon centered on an arbitrary point; used by toolbar and menus. */
     private void drawIconCentered(Canvas canvas, io.github.humbleui.skija.Path icon, float cx, float cy,
                                   float size, int color) {
-        Rect b = icon.getBounds();
-        if (b == null || b.isEmpty()) {
-            return;
-        }
-        float scale = size / Math.max(b.getWidth(), b.getHeight());
-        canvas.save();
-        try {
-            canvas.translate(cx - (b.getLeft() + b.getRight()) / 2.0F * scale,
-                    cy - (b.getTop() + b.getBottom()) / 2.0F * scale);
-            canvas.scale(scale, scale);
-            try (Paint paint = new Paint().setColor(color).setAntiAlias(true)
-                    .setMode(PaintMode.STROKE)
-                    .setStrokeWidth(UiTokens.iconStroke(size) / scale)
-                    .setStrokeCap(PaintStrokeCap.ROUND)
-                    .setStrokeJoin(PaintStrokeJoin.ROUND)) {
-                canvas.drawPath(icon, paint);
-            }
-        } finally {
-            canvas.restore();
-        }
+        primitives.drawIconCentered(canvas, icon, cx, cy, size, color);
     }
 
     /**
@@ -3416,53 +2753,6 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
      * wrapped input lines. AtomChat renders its own text, so the vanilla field's
      * selection highlight would otherwise be invisible.
      */
-    private void drawInputSelection(Canvas canvas, Font font, List<String> lines, int from, int shown,
-                                    float textX, float centerY, float lineH) {
-        if (input == null || lines.isEmpty()) {
-            return;
-        }
-        int len = inputGetText().length();
-        int a = Mth.clamp(input.cursorPos, 0, len);
-        int b = Mth.clamp(input.highlightPos, 0, len);
-        int selStart = Math.min(a, b);
-        int selEnd = Math.max(a, b);
-        if (selStart >= selEnd) {
-            return;
-        }
-
-        for (int i = from; i < from + shown && i < lines.size(); i++) {
-            int lineStart = 0;
-            for (int j = 0; j < i; j++) {
-                lineStart += lines.get(j).length();
-            }
-            int lineLen = lines.get(i).length();
-            int lineEnd = lineStart + lineLen;
-            if (selEnd <= lineStart || selStart >= lineEnd) {
-                continue;
-            }
-            int c0 = Math.max(0, Math.min(selStart - lineStart, lineLen));
-            int c1 = Math.max(0, Math.min(selEnd - lineStart, lineLen));
-            if (c0 >= c1) {
-                continue;
-            }
-            String line = lines.get(i);
-            float x0 = textX + SkiaFontRenderer.getStringWidth(font, line.substring(0, c0));
-            float x1 = textX + SkiaFontRenderer.getStringWidth(font, line.substring(0, c1));
-            float cy = centerY + (i - from) * lineH;
-            SkiaDraw.drawRoundedRect(canvas, x0, cy - lineH / 2.0F, Math.max(1.0F, x1 - x0), lineH, s(2), 0xE02D6FD6);
-        }
-    }
-
-
-    private boolean buttonPressed(int id) {
-        return pressedButton == id && System.currentTimeMillis() - pressTime < 150L;
-    }
-
-    private void pressButton(int id) {
-        pressedButton = id;
-        pressTime = System.currentTimeMillis();
-    }
-
     /**
      * Rounded scrollbar: fades in only while the pointer is near the track or
      * while dragged, and fades straight back out otherwise.
@@ -3470,46 +2760,12 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
      */
     private void drawScrollbar(Canvas canvas, UiLayout layout, float vmx, float vmy,
                                ScrollController controller) {
-        long now = System.currentTimeMillis();
-
-        UiLayout.Rect list = layout.list;
-        float trackW = s(6);
-        float trackH = list.h();
-        float visibleRatio = Math.min(1.0F, trackH / (trackH + controller.getMaxScroll()));
-        float thumbH = Math.max(s(30), trackH * visibleRatio);
-        // Deliberately computed before drag updates below, matching the original
-        // frame ordering: the thumb is drawn from the offset captured at frame start.
-        float thumbY = list.y() + (trackH - thumbH) * (controller.getScrollY() / controller.getMaxScroll());
-
-        if (controller.updateScrollbarFade(now, vmx, vmy, list, controller.isDragging(), trackW, frameDt) <= 0.0F) {
-            return;
-        }
-
-        if (controller.isDragging()) {
-            controller.dragTo(vmy, trackH);
-        }
-
-        float w = trackW + controller.getScrollEmphasis() * s(3);
-        // The thumb rides the accent channel the whole way — a static white
-        // thumb vanishes on light panels, so the idle low-alpha state reads
-        // accent too, same emphasis language as the docked bar's active tab.
-        int r = (accent() >> 16) & 0xFF;
-        int g = (accent() >> 8) & 0xFF;
-        int bch = accent() & 0xFF;
-        int alpha = Mth.clamp((int) ((170 + 60 * controller.getScrollEmphasis())
-                * controller.getScrollBarAlpha()), 0, 255);
-        int color = (alpha << 24) | (r << 16) | (g << 8) | bch;
-        float trackX = list.right() - trackW - s(2);
-        SkiaDraw.drawRoundedRect(canvas, trackX - (w - trackW) / 2.0F, thumbY, w, thumbH, w / 2.0F, color);
+        scrollSync.drawScrollbar(canvas, layout, vmx, vmy, controller);
     }
 
     private boolean overScrollbarTrack(UiLayout layout, float vmx, float vmy,
                                        ScrollController controller) {
-        float trackW = s(6);
-        float trackX = layout.list.right() - trackW - s(2);
-        return controller.getMaxScroll() > 0.0F
-                && vmx >= trackX - s(8) && vmx <= trackX + trackW + s(8)
-                && vmy >= layout.list.y() && vmy <= layout.list.bottom();
+        return scrollSync.overScrollbarTrack(layout, vmx, vmy, controller);
     }
 
 
@@ -3526,55 +2782,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
      */
     private void drawJumpLatest(Canvas canvas, UiLayout layout, float vmx, float vmy,
                                 ScrollController scroll, boolean advance) {
-        boolean show = scroll.getMaxScroll() > 0.0F && !scroll.isAtBottom();
-        float size = s(38);
-        float x = layout.list.right() - size - s(12);
-        float y = layout.list.bottom() - size - s(12);
-        boolean hover = vmx >= x && vmx <= x + size && vmy >= y && vmy <= y + size;
-        // Same interaction language as every other control: the hover grey is
-        // eased rather than switched, and the pill rides the shared bounce spring
-        // so the press squashes it and the release bounces back. Both are stepped
-        // BEFORE the fade gate below, because the click that presses the pill also
-        // scrolls to the bottom and hides it on the very next frame — behind the
-        // gate the release half of the bounce would never be drawn.
-        if (advance) {
-            jumpLatestAnim = UiMotion.approach(jumpLatestAnim, show ? 1.0F : 0.0F, frameDt, UiMotion.POPUP_MS);
-            jumpLatestHover = UiMotion.approach(jumpLatestHover, hover ? 1.0F : 0.0F,
-                    frameDt, UiMotion.HOVER_MS);
-            jumpLatestScale.update(hover, jumpLatestHeld, frameDt, Animations.enabled(), size);
-        }
-        // The fade and spring are shared screen state stepped by the owning page,
-        // so a side that does not own the composer must not draw the pill from
-        // them: it would show a pill belonging to the other page's scroll.
-        if (jumpLatestAnim < 0.01F || (!advance && !show)) {
-            return;
-        }
-        canvas.save();
-        try (Paint layer = new Paint()) {
-            layer.setColor(Color.makeARGB((int) (255.0F * jumpLatestAnim), 0, 0, 0));
-            canvas.saveLayer(Rect.makeXYWH(x - s(4), y - s(4), size + s(8), size + s(8)), layer);
-            float cx = x + size / 2.0F;
-            float cy = y + size / 2.0F;
-            jumpLatestScale.begin(canvas, cx, cy);
-            try {
-                // Fixed dark floating pill (the jump FAB floats over arbitrary
-                // message content, whose polarity no theme token knows), same fixed
-                // polarity family as the popups; hover lifts the grey a notch.
-                int bg = lerpArgb(Color.makeARGB(235, 52, 58, 70), Color.makeARGB(245, 70, 76, 90),
-                        jumpLatestHover);
-                SkiaDraw.drawRoundedRect(canvas, x, y, size, size, size / 2.0F, bg);
-                SkiaDraw.drawRoundedShadow(canvas, x, y, size, size, size / 2.0F, s(8), UiTokens.CHROME_SHADOW);
-                // Glyph pinned white like the pill itself: the pill is fixed dark,
-                // so a themed text colour would go dark-on-dark on light themes.
-                drawIconCentered(canvas, ICON_JUMP_DOWN_PATH, cx, cy, s(18),
-                        Color.makeARGB(255, 255, 255, 255));
-            } finally {
-                canvas.restore();
-            }
-            canvas.restore();
-        } finally {
-            canvas.restore();
-        }
+        scrollSync.drawJumpLatest(canvas, layout, vmx, vmy, scroll, advance);
     }
 
     /**
@@ -3583,28 +2791,11 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
      * translucent overlay on a fixed grey.
      */
     private static int lerpArgb(int from, int to, float t) {
-        if (t <= 0.0F) {
-            return from;
-        }
-        if (t >= 1.0F) {
-            return to;
-        }
-        int a = (int) (((from >>> 24) & 0xFF) + (((to >>> 24) & 0xFF) - ((from >>> 24) & 0xFF)) * t);
-        int r = (int) (((from >> 16) & 0xFF) + (((to >> 16) & 0xFF) - ((from >> 16) & 0xFF)) * t);
-        int g = (int) (((from >> 8) & 0xFF) + (((to >> 8) & 0xFF) - ((from >> 8) & 0xFF)) * t);
-        int b = (int) ((from & 0xFF) + ((to & 0xFF) - (from & 0xFF)) * t);
-        return Color.makeARGB(a, r, g, b);
+        return DrawPrimitives.lerpArgb(from, to, t);
     }
 
     private boolean overJumpLatest(UiLayout layout, float vmx, float vmy) {
-        ScrollController scroll = currentScroll();
-        if (jumpLatestAnim < 0.01F || scroll.getMaxScroll() <= 0.0F || scroll.isAtBottom()) {
-            return false;
-        }
-        float size = s(38);
-        float x = layout.list.right() - size - s(12);
-        float y = layout.list.bottom() - size - s(12);
-        return vmx >= x && vmx <= x + size && vmy >= y && vmy <= y + size;
+        return scrollSync.overJumpLatest(layout, vmx, vmy);
     }
 
     /**
@@ -3617,388 +2808,32 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
         if (this.client.mouseHandler != null) {
             ((MouseHandlerAccessor) this.client.mouseHandler).atomchat$setActiveButton(0);
         }
-        Thread worker = new Thread(() -> {
-            Path file = FilePicker.pickImage(this::suppressAutoIconify, this::restoreAutoIconify,
-                    EmoteStore::isSupportedName);
-            refocusWindow();
-            if (file == null) {
-                return;
-            }
-            this.client.execute(() -> emojiPanel.addEmote(file));
-        }, "AtomChat-EmotePicker");
-        worker.setDaemon(true);
-        worker.start();
+        emojiWiring.pickEmoteFile();
     }
 
     /**
-     * Row count for a context menu. Drawing and every click hit-test go through
-     * this one helper so their geometry cannot drift apart: the player-card menu
-     * grew a third row (block/unblock) while the root-page click test stayed at
-     * two, which made "取消屏蔽" unclickable.
+     * Puts a message's text on the clipboard. The failure contract — false
+     * instead of a throw, so a refused clipboard cannot leave the context menu
+     * stuck open — lives in {@link NativeDialogBridge} (D14); this shell keeps
+     * the entry point the menu handlers and the colour picker call.
      */
-    private static int contextMenuRows(ContextMenuMode mode, boolean imageMessage) {
-        if (mode == ContextMenuMode.AVATAR) {
-            return 4;
-        }
-        if (mode == ContextMenuMode.PLAYER_CARD) {
-            return 3;
-        }
-        return imageMessage ? 3 : 2;
-    }
-
-    private void drawContextMenu(Canvas canvas, float vmx, float vmy) {
-        boolean hasCurrent = contextMessage != null || contextPlayer != null;
-        boolean hasLast = lastContextMessage != null || lastContextPlayer != null;
-        if (!hasCurrent && !hasLast) {
-            contextAnim = 0.0F;
-            return;
-        }
-        float target = hasCurrent ? 1.0F : 0.0F;
-        contextAnim = UiMotion.approach(contextAnim, target, frameDt, Animations.ms(UiMotion.POPUP_MS));
-        if (contextAnim < 0.01F) {
-            if (!hasCurrent) {
-                lastContextMessage = null;
-                lastContextPlayer = null;
-                contextAnim = 0.0F;
-            }
-            return;
-        }
-        ContextMenuMode mode = hasCurrent ? contextMenuMode : lastContextMenuMode;
-        boolean avatarMenu = mode == ContextMenuMode.AVATAR;
-        boolean playerMenu = mode == ContextMenuMode.PLAYER_CARD;
-        boolean bubbleMenu = !avatarMenu && !playerMenu;
-        ChatMessage shown = contextMessage != null ? contextMessage : lastContextMessage;
-        boolean imageMessage = bubbleMenu && shown != null && Cicodes.extractImageUrl(shown.getRawText()) != null;
-        int rows = contextMenuRows(mode, imageMessage);
-        float rowH = UiTokens.MENU_H / 2.0F;
-        float menuH = rowH * rows;
-        float menuW = UiTokens.MENU_W;
-        float menuX = Math.min(contextX, panelX() + panelWidth() - menuW - s(8));
-        float menuY = Math.min(contextY, panelY() + panelHeight() - menuH - s(8));
-        for (int row = 0; row < rows; row++) {
-            float rowY = menuY + row * rowH;
-            boolean overRow = vmx >= menuX && vmx <= menuX + menuW
-                    && vmy >= rowY && vmy <= rowY + rowH;
-            contextMenuHover[row] = UiMotion.approach(contextMenuHover[row], overRow ? 1.0F : 0.0F, frameDt, UiMotion.HOVER_MS);
-            MenuPopup.updateRowBounce(contextMenuScale[row], overRow, frameDt, menuW);
-        }
-        canvas.save();
-        try (Paint layer = new Paint()) {
-            layer.setColor(Color.makeARGB((int) (255.0F * contextAnim), 0, 0, 0));
-            canvas.saveLayer(Rect.makeXYWH(menuX - s(20), menuY - s(20), menuW + s(40), menuH + s(40)), layer);
-            float sc = 0.94F + 0.06F * contextAnim;
-            canvas.translate(menuX + menuW / 2.0F, menuY);
-            canvas.scale(sc, sc);
-            canvas.translate(-(menuX + menuW / 2.0F), -menuY);
-            // The one right-click-menu language (MenuPopup owns the plate for
-            // every menu in the mod): fixed dark surface (35,39,47), radius
-            // and shadow tokens. Fixed polarity by design.
-            MenuPopup.drawSurface(canvas, menuX, menuY, menuW, menuH);
-            Font menuFont = FontManager.font(UiTokens.FONT_BUTTON);
-            for (int row = 0; row < rows; row++) {
-                float rowY = menuY + row * rowH;
-                float hov = contextMenuHover[row];
-                // One bounce per row, the shared menu language: wash, icon and
-                // label all travel with the row's own PressScale, centred on
-                // the row like the profile avatar menu's items.
-                MenuPopup.beginRowBounce(canvas, contextMenuScale[row], menuX + menuW / 2.0F, rowY + rowH / 2.0F);
-                try {
-                    MenuPopup.drawRowWash(canvas, menuX, rowY, menuW, rowH, hov);
-                    String label;
-                    io.github.humbleui.skija.Path icon;
-                    if (playerMenu) {
-                        label = playerCardContextLabel(row);
-                        icon = playerCardContextIcon(row);
-                    } else if (avatarMenu) {
-                        label = avatarContextLabel(row);
-                        icon = avatarContextIcon(row);
-                    } else {
-                        label = bubbleContextLabel(row, imageMessage);
-                        icon = bubbleContextIcon(row, imageMessage);
-                    }
-                    // Overlay surfaces keep the fixed overlay palette: they sit on
-                    // their own opaque dark cards and must not follow the
-                    // interface text colour setting.
-                    int textColor = Color.makeARGB(255, 255, 255, 255);
-                    if (playerMenu && row == 1 && !isOnlinePlayer(contextPlayer != null ? contextPlayer : lastContextPlayer)) {
-                        textColor = Color.makeARGB(110, 255, 255, 255);
-                    } else if (avatarMenu && row == 2) {
-                        ChatMessage avatarMsg = contextMessage != null ? contextMessage : lastContextMessage;
-                        if (avatarMsg != null) {
-                            PlayerRef avatarPlayer = PlayerRef.of(avatarMsg.getSenderUuid(), avatarMsg.getProfileName());
-                            if (avatarPlayer != null && !isOnlinePlayer(avatarPlayer)) {
-                                textColor = Color.makeARGB(110, 255, 255, 255);
-                            }
-                        }
-                    }
-                    drawIconCentered(canvas, icon, menuX + s(18), rowY + rowH / 2.0F, UiTokens.CONTEXT_ICON_SIZE, textColor);
-                    SkiaFontRenderer.drawText(canvas, menuFont, label, menuX + s(36),
-                            SkiaFontRenderer.centerBaselineY(menuFont, rowY + rowH / 2.0F), textColor);
-                } finally {
-                    MenuPopup.endRowBounce(canvas);
-                }
-            }
-            canvas.restore();
-        }
-        canvas.restore();
-    }
-
-    private static String bubbleContextLabel(int row, boolean imageMessage) {
-        if (!imageMessage) {
-            return switch (row) {
-                case 0 -> tr("atomchat.context.copy");
-                case 1 -> tr("atomchat.context.quote");
-                default -> tr("atomchat.context.save");
-            };
-        }
-        return switch (row) {
-            case 0 -> tr("atomchat.context.copy");
-            case 1 -> tr("atomchat.context.quote");
-            case 2 -> tr("atomchat.context.save");
-            default -> "";
-        };
-    }
-
-    private static io.github.humbleui.skija.Path bubbleContextIcon(int row, boolean imageMessage) {
-        if (!imageMessage) {
-            return switch (row) {
-                case 0 -> ICON_COPY_PATH;
-                case 1 -> ICON_QUOTE_PATH;
-                default -> ICON_SAVE_PATH;
-            };
-        }
-        return switch (row) {
-            case 0 -> ICON_COPY_PATH;
-            case 1 -> ICON_QUOTE_PATH;
-            case 2 -> ICON_SAVE_PATH;
-            default -> ICON_SAVE_PATH;
-        };
-    }
-
-    private String avatarContextLabel(int row) {
-        ChatMessage target = contextMessage != null ? contextMessage : lastContextMessage;
-        if (row == 3 && target != null) {
-            PlayerRef p = PlayerRef.of(target.getSenderUuid(), target.getProfileName());
-            return BlockList.isBlocked(p) ? tr("atomchat.context.unblock") : tr("atomchat.context.block");
-        }
-        return switch (row) {
-            case 0 -> tr("atomchat.context.mention");
-            case 1 -> tr("atomchat.context.whisper");
-            case 2 -> tr("atomchat.context.tp");
-            default -> "";
-        };
-    }
-
-    private static io.github.humbleui.skija.Path avatarContextIcon(int row) {
-        return switch (row) {
-            case 0 -> ICON_MENTION_PATH;
-            case 1 -> ICON_WHISPER_PATH;
-            case 2 -> ICON_TP_PATH;
-            case 3 -> ICON_BLOCK_PATH;
-            default -> ICON_MENTION_PATH;
-        };
-    }
-
-    private String playerCardContextLabel(int row) {
-        return switch (row) {
-            case 0 -> tr("atomchat.context.profile");
-            case 1 -> tr("atomchat.context.tp");
-            case 2 -> isBlockedContextPlayer() ? tr("atomchat.context.unblock") : tr("atomchat.context.block");
-            default -> "";
-        };
-    }
-
-    private static io.github.humbleui.skija.Path playerCardContextIcon(int row) {
-        return switch (row) {
-            case 0 -> com.atom.chat.ui.AppIcons.ICON_TAB_PROFILE_PATH;
-            case 1 -> ICON_TP_PATH;
-            case 2 -> ICON_BLOCK_PATH;
-            default -> ICON_TP_PATH;
-        };
-    }
-
-    private boolean isBlockedContextPlayer() {
-        PlayerRef p = contextPlayer != null ? contextPlayer : lastContextPlayer;
-        return p != null && BlockList.isBlocked(p);
-    }
-
-    private static boolean isOnlinePlayer(PlayerRef player) {
-        if (player == null) {
-            return false;
-        }
-        Minecraft client = Minecraft.getInstance();
-        if (client == null || client.getConnection() == null) {
-            return false;
-        }
-        for (PlayerInfo entry : client.getConnection().getOnlinePlayers()) {
-            if (player.uuid() != null && player.uuid().equals(entry.getProfile().getId())) {
-                return true;
-            }
-            if (player.realName() != null && player.realName().equalsIgnoreCase(entry.getProfile().getName())) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    /**
-     * Hands the open menu over to lastContextMessage so it can play the closing
-     * animation instead of vanishing. Never recurse: it used to call itself,
-     * which left contextMessage set forever and blew the stack on the caller.
-     */
-    private void closeContextMenu() {
-        if (contextMessage != null) {
-            lastContextMessage = contextMessage;
-            lastContextMenuMode = contextMenuMode;
-            contextMessage = null;
-        }
-        if (contextPlayer != null) {
-            lastContextPlayer = contextPlayer;
-            lastContextMenuMode = contextMenuMode;
-            contextPlayer = null;
-        }
-    }
-
-    /** Avatar menus only make sense for another player with a real sender identity. */
-    private static boolean canOpenAvatarMenu(ChatMessage msg) {
-        if (msg == null || msg.isSystem() || msg.isOwn()) {
-            return false;
-        }
-        return msg.getSenderName() != null || msg.getProfileName() != null;
-    }
-
-    /**
-     * Avatar context-menu actions. Row 0 (@ mention) is already wired because it
-     * is the direct replacement for the old single-left-click behavior. Whisper /
-     * Teleport / Block intentionally do nothing yet — the menu framework is the
-     * current step, and each action is wired in its own feature pass.
-     */
-    private void performAvatarMenuAction(int row, ChatMessage message) {
-        PlayerRef player = PlayerRef.of(message.getSenderUuid(), message.getProfileName());
-        if (player == null || player.realName() == null) {
-            return;
-        }
-        if (row == 0) {
-            // Insert the real profile name, not the decorated label: the label
-            // reaches other clients as uncoloured plain text (the title colour
-            // cannot survive a vanilla chat string) and a decorated @token also
-            // defeats mention detection that looks for @ProfileName.
-            inputAppend("@" + player.realName() + " ");
-        } else if (row == 1) {
-            openPrivateChat(player);
-        } else if (row == 2) {
-            if (isOnlinePlayer(player)) {
-                sendTeleportCommand(player);
-            }
-        } else if (row == 3) {
-            toggleBlock(player);
-        }
-    }
-
-    private void performPlayerCardAction(int row) {
-        PlayerRef player = contextPlayer != null ? contextPlayer : lastContextPlayer;
-        if (player == null) {
-            return;
-        }
-        if (row == 0) {
-            openProfileDetail(player);
-        } else if (row == 1) {
-            if (isOnlinePlayer(player)) {
-                sendTeleportCommand(player);
-            }
-        } else if (row == 2) {
-            toggleBlock(player);
-        }
-    }
-
-    private void sendTeleportCommand(PlayerRef player) {
-        if (this.client.player == null || player == null || player.realName() == null) {
-            return;
-        }
-        // auto: probe the server command tree, fall back on failure replies.
-        String command = TeleportCommands.commandFor(client, AtomChatConfig.get().teleportCommandMode);
-        this.client.player.connection.sendCommand(command.substring(1) + " " + player.realName());
-        TeleportCommands.noteTeleportSent();
-    }
-
-    private void toggleBlock(PlayerRef player) {
-        if (player == null) {
-            return;
-        }
-        boolean nowBlocked = BlockList.isBlocked(player);
-        BlockList.setBlocked(player, !nowBlocked);
-    }
-
     private boolean copyToClipboard(String text) {
-        try {
-            this.client.keyboardHandler.setClipboard(text);
-            return true;
-        } catch (Throwable t) {
-            // Never let a clipboard failure abort the click handler: it used to
-            // leave the menu stuck open with no clue why. The boolean lets the
-            // caller show a failure instead of a success.
-            AtomChat.LOGGER.warn("Failed to copy message to clipboard", t);
-            return false;
-        }
+        return dialogBridge.copyToClipboard(text);
     }
 
     /** Raises a transient action acknowledgement in the panel's floating layer. */
     private void feedback(String key, boolean success) {
-        actionFeedback.show(key, success ? ActionFeedback.Outcome.SUCCESS : ActionFeedback.Outcome.ERROR,
-                System.currentTimeMillis());
+        notificationJump.feedback(key, success);
     }
 
     /** Raises an acknowledgement whose text carries an argument (a player name). */
     private void feedback(String key, String label, boolean success) {
-        actionFeedback.show(key, label, success ? ActionFeedback.Outcome.SUCCESS : ActionFeedback.Outcome.ERROR,
-                System.currentTimeMillis());
+        notificationJump.feedback(key, label, success);
     }
 
-    /**
-     * Pokes {@code target}: the local wobble and cue play either way, and a
-     * real poke is sent when the server negotiated the companion channel. The
-     * wobble plays for the sender immediately; the target's client wobbles when
-     * the server relays it.
-     */
-    private void sendPoke(ChatMessage target) {
-        UUID uuid = target == null ? null : target.getSenderUuid();
-        if (uuid == null) {
-            return;
-        }
-        messageListView.poke(uuid, System.currentTimeMillis());
-        com.atom.chat.notification.NotificationController.playPokeSound();
-        // The toast is truthful about delivery: without the companion channel the
-        // poke is local only (the wobble still plays), so the label says so.
-        boolean sent = PokeCompanionClient.send(uuid);
-        feedback(sent ? "atomchat.feedback.poked" : "atomchat.feedback.pokedLocal",
-                tr(sent ? "atomchat.feedback.poked" : "atomchat.feedback.pokedLocal",
-                        messageSenderName(target)), true);
-    }
-
-    /** Incoming poke from {@code from}: wobble that player's row, cue and toast. */
-    private void onPoked(UUID from) {
-        if (from == null || from.equals(client.player == null ? null : client.player.getUUID())) {
-            return;
-        }
-        // A blocked player's poke is dropped like their chat: no cue, no toast.
-        if (com.atom.chat.chat.BlockList.isBlocked(displayNameFor(from))) {
-            return;
-        }
-        messageListView.poke(from, System.currentTimeMillis());
-        com.atom.chat.notification.NotificationController.playPokeSound();
-        feedback("atomchat.feedback.pokeReceived", tr("atomchat.feedback.pokeReceived", displayNameFor(from)), true);
-    }
-
-    /**
-     * A poke simulated by {@code /atomchat test poke}, addressed to somebody
-     * else. The cue already played on the client side; the wobble and the toast
-     * are what this adds. Kept apart from {@link #onPoked} on purpose: that path
-     * rejects a poke from yourself, and the test is always addressed to another
-     * player, so routing it there would drop every test poke silently.
-     */
+    /** The test-poke command's door: {@code /atomchat test poke} lands here. */
     public void onTestPoked(UUID target, String targetName) {
-        messageListView.poke(target, System.currentTimeMillis());
-        feedback("atomchat.feedback.pokeReceived", tr("atomchat.feedback.pokeReceived", targetName), true);
+        avatarWiring.poke().tested(target, targetName);
     }
 
     /** A player's display name from the tab list, falling back to the raw uuid. */
@@ -4017,19 +2852,15 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
      * drawn through the open transform (zoom/slide) but hit tests run on the
      * settled virtual layout, so a click mid-animation would land somewhere
      * other than where it looks — swallowed whole until the panel settles,
-     * same rule as the page nav's navMovingHidden.
+     * same rule as the page nav's hidden-side skip. The gate owns that rule;
+     * this answers it.
      */
-    private boolean panelInFlight() {
-        return panelProgress != (closing ? 0.0F : 1.0F);
-    }
 
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double horizontalAmount, double verticalAmount) {
-        if (panelInFlight()) {
-            return true;
-        }
-        if (inputRouter.scroll(mouseX, mouseY, horizontalAmount, verticalAmount)) {
-            return true;
+        Boolean direct = gate.scroll(mouseX, mouseY, horizontalAmount, verticalAmount);
+        if (direct != null) {
+            return direct;
         }
         return super.mouseScrolled(mouseX, mouseY, horizontalAmount, verticalAmount);
     }
@@ -4046,52 +2877,49 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
                     (int) mouseX, (int) mouseY,
                     (int) toVirtualX(mouseX), (int) toVirtualY(mouseY), button);
         }
-        if (panelInFlight()) {
-            return true;
-        }
-        if (inputRouter.click(mouseX, mouseY, button)) {
-            return true;
+        Boolean direct = gate.click(mouseX, mouseY, button);
+        if (direct != null) {
+            return direct;
         }
         return super.mouseClicked(mouseX, mouseY, button);
     }
 
     @Override
     public boolean mouseDragged(double mouseX, double mouseY, int button, double dragX, double dragY) {
-        if (panelInFlight()) {
-            return true;
-        }
-        if (inputRouter.drag(mouseX, mouseY, button, dragX, dragY)) {
-            return true;
+        Boolean direct = gate.drag(mouseX, mouseY, button, dragX, dragY);
+        if (direct != null) {
+            return direct;
         }
         return super.mouseDragged(mouseX, mouseY, button, dragX, dragY);
     }
 
     @Override
     public boolean mouseReleased(double mouseX, double mouseY, int button) {
-        if (panelInFlight()) {
-            return true;
-        }
-        if (inputRouter.release(mouseX, mouseY, button)) {
-            return true;
+        Boolean direct = gate.release(mouseX, mouseY, button);
+        if (direct != null) {
+            return direct;
         }
         return super.mouseReleased(mouseX, mouseY, button);
     }
 
     @Override
     public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
-        if (inputRouter.key(keyCode, scanCode, modifiers)) {
-            return true;
+        Boolean direct = gate.key(keyCode, scanCode, modifiers);
+        if (direct != null) {
+            return direct;
         }
         return super.keyPressed(keyCode, scanCode, modifiers);
     }
 
     @Override
     public boolean charTyped(char chr, int modifiers) {
-        if (inputRouter.charTyped(chr, modifiers)) {
-            return true;
+        Boolean direct = gate.charTyped(chr, modifiers);
+        if (direct != null) {
+            return direct;
         }
         return super.charTyped(chr, modifiers);
     }
+
 
     private void pickAndUploadImage() {
         // The native AWT dialog grabs OS input; release MC's held keys/button so
@@ -4115,440 +2943,147 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
     }
 
     /**
-     * Saves another player's CICode image to a local file. The save dialog runs
-     * on the same worker-thread pattern as the open picker; the actual download
-     * happens off-thread via {@link ImageSaver} so the raw bytes stay identical.
+     * Saves another player's CICode image to a local file. Url extraction, the
+     * dialog, the download and both failure surfaces live in
+     * {@link ImageUploadPipeline} (D12); this shell keeps the entry point the
+     * context menu calls.
      */
     private void saveImage(ChatMessage message) {
-        String url = Cicodes.extractImageUrl(message.getRawText());
-        if (url == null) {
-            return;
-        }
-        Thread worker = new Thread(() -> {
-            suppressAutoIconify();
-            Path target;
-            try {
-                target = FilePicker.pickSavePath(fileNameFromUrl(url));
-            } finally {
-                restoreAutoIconify();
-            }
-            refocusWindow();
-            if (target == null) {
-                return;
-            }
-            ImageSaver.save(url, target).whenComplete((path, throwable) -> {
-                if (throwable != null) {
-                    // Both surfaces: the composer hint is only visible with an
-                    // empty draft, so the toast carries the failure when a
-                    // draft is present.
-                    this.client.execute(() -> {
-                        showTransientHint(tr("atomchat.input.save_failed"));
-                        feedback("atomchat.feedback.saveFailed", false);
-                    });
-                } else {
-                    AtomChat.LOGGER.info("Saved chat image to {}", path);
-                    this.client.execute(() -> feedback("atomchat.feedback.saved", true));
-                }
-            });
-        }, "AtomChat-ImageSavePicker");
-        worker.setDaemon(true);
-        worker.start();
-    }
-
-    /** URL last path segment, stripped of query/fragment; falls back to image.png. */
-    private static String fileNameFromUrl(String url) {
-        return ImageFileNames.fromUrl(url);
-    }
-
-    private void showTransientHint(String text) {
-        transientHint = text;
-        transientHintSetAt = System.currentTimeMillis();
+        uploadPipeline.saveImage(message);
     }
 
     /**
      * Uploads an image and drops its CICode into the draft. Shared by the file
-     * picker and by Ctrl+V pastes.
+     * picker and by Ctrl+V pastes; the chain itself (server media → uguu
+     * fallback, CICode assembly, the hop back to the render thread) lives in
+     * {@link ImageUploadPipeline} (D12).
      */
     private void uploadAndAppend(Path file) {
-        int[] size = ImageFiles.dimensions(file);
-        imageUploading = true;
-        // The server decides: when it hosts media, upload there first; any
-        // failure (or a server without the companion) falls back to uguu.
-        if (MediaCompanionClient.hostingEnabled()) {
-            MediaCompanionClient.uploadFile(file,
-                    url -> appendImageCode(url, file, size),
-                    error -> {
-                        AtomChat.LOGGER.warn("Server media upload failed ({}), falling back to uguu", error);
-                        uploadToUguu(file, size);
-                    });
-        } else {
-            if (AtomChatConfig.get().debug) {
-                AtomChat.LOGGER.info("[media] server media hosting unavailable; using the external host");
-            }
-            uploadToUguu(file, size);
-        }
-    }
-
-    private void uploadToUguu(Path file, int[] size) {
-        imageUploader.upload(file,
-                url -> {
-                    // Keep the choice auditable: server-hosted uploads already
-                    // log "Stored hosted media", so the external path logs too.
-                    AtomChat.LOGGER.info("Uploaded chat image to the external host: {}", url);
-                    appendImageCode(url, file, size);
-                },
-                error -> {
-                    AtomChat.LOGGER.warn("Image upload failed: {}", error);
-                    this.client.execute(() -> imageUploading = false);
-                });
-    }
-
-    private void appendImageCode(String url, Path file, int[] size) {
-        StringBuilder code = new StringBuilder("[[CICode,url=").append(url)
-                .append(",name=").append(file.getFileName());
-        // Carry the intrinsic size so any client receiving this can lay the
-        // bubble out at the right aspect ratio before the download lands —
-        // that is what keeps the height from jumping when it arrives.
-        if (size != null) {
-            code.append(",w=").append(size[0]).append(",h=").append(size[1]);
-        }
-        code.append("]]");
-        String text = code.toString();
-        // The upload callbacks run off the render thread; the chat field is
-        // only safe to touch from the render thread.
-        this.client.execute(() -> {
-            imageUploading = false;
-            inputAppend(inputGetText().isEmpty() ? text : " " + text);
-        });
+        uploadPipeline.uploadAndAppend(file);
     }
 
     /**
      * Ctrl+V with a picture on the clipboard. The payload is read off the render
      * thread — a screenshot is several megabytes and converting it is not free —
-     * then uploaded and appended.
+     * then uploaded and appended. The worker, the read and the D12 hand-off live
+     * in {@link DragDropPasteUpload} (D13); this shell keeps the entry point the
+     * Ctrl+V interception calls.
      */
     private void pasteFromClipboard(DataFlavor flavor) {
-        Thread worker = new Thread(() -> {
-            Path file = ClipboardImages.read(flavor);
-            if (file == null) {
-                AtomChat.LOGGER.warn("Clipboard held no usable image; Ctrl+V fell back to a text paste");
-                return;
-            }
-            uploadAndAppend(file);
-        }, "AtomChat-Paste");
-        worker.setDaemon(true);
-        worker.start();
+        dragDropPaste.pasteFromClipboard(flavor);
     }
 
     /**
      * GLFW iconifies a fullscreen window as soon as it loses focus
      * (GLFW_AUTO_ICONIFY defaults to true and Minecraft leaves it there), so a
      * picker that takes focus would minimise the game every time. Suspension
-     * lasts exactly as long as the picker is open.
+     * lasts exactly as long as the picker is open. The pairing (and the hop onto
+     * the render thread) lives in {@link NativeDialogBridge} (D14); this shell
+     * keeps the two halves the picker workers pass as method references.
      */
     private void suppressAutoIconify() {
-        setAutoIconify(false);
+        dialogBridge.suppressAutoIconify();
     }
 
     private void restoreAutoIconify() {
-        setAutoIconify(true);
-    }
-
-    private void setAutoIconify(boolean value) {
-        runOnRender(() -> {
-            try {
-                GLFW.glfwSetWindowAttrib(this.client.getWindow().getWindow(),
-                        GLFW.GLFW_AUTO_ICONIFY, value ? GLFW.GLFW_TRUE : GLFW.GLFW_FALSE);
-            } catch (Throwable t) {
-                AtomChat.LOGGER.warn("Failed to toggle GLFW_AUTO_ICONIFY for the image picker", t);
-            }
-        });
-    }
-
-    /** Runs a GLFW call on the render thread and waits for it to land. */
-    private void runOnRender(Runnable task) {
-        CountDownLatch done = new CountDownLatch(1);
-        this.client.execute(() -> {
-            try {
-                task.run();
-            } finally {
-                done.countDown();
-            }
-        });
-        try {
-            done.await(2L, TimeUnit.SECONDS);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        }
+        dialogBridge.restoreAutoIconify();
     }
 
     /**
      * Returns OS focus to the game window after the native picker closes, and
-     * clears any key/button state the dialog left behind. GLFW window calls are
-     * not thread-safe, so the work hops onto the render thread.
+     * clears any key/button state the dialog left behind. The clear-then-focus
+     * order and the hop onto the render thread live in
+     * {@link NativeDialogBridge} (D14); this shell keeps the entry point the
+     * picker workers call.
      */
     private void refocusWindow() {
-        this.client.execute(() -> {
-            KeyMapping.releaseAll();
-            if (this.client.mouseHandler != null) {
-                ((MouseHandlerAccessor) this.client.mouseHandler).atomchat$setActiveButton(0);
-            }
-            try {
-                GLFW.glfwFocusWindow(this.client.getWindow().getWindow());
-            } catch (Throwable t) {
-                AtomChat.LOGGER.warn("Failed to refocus the window after the image picker", t);
-            }
-        });
+        dialogBridge.refocusWindow();
     }
 
-    private static String quoteTextFor(ChatMessage message) {
-        if (message == null) {
-            return null;
-        }
-        String contentText = message.getContentText();
-        if (Cicodes.extractImageUrl(message.getRawText()) != null
-                || (contentText != null && Cicodes.extractImageUrl(contentText) != null)) {
-            return tr("atomchat.hud.image");
-        }
-        return abbreviate(message.getContentText(), 30);
-    }
-
+    /** Sends whatever the composer holds; the pipeline owns the whole order. */
     private void sendMessage(String text) {
-        String normalized = normalizeInput(text);
-        if (normalized.isEmpty()) {
-            return;
-        }
-        if (this.client.player == null) {
-            return;
-        }
-        String quoteName = null;
-        String quoteText = null;
-        // The typed body stays separate from the wire text: the quote prefix
-        // travels with the message, but the local bubble must not show it.
-        String body = normalized;
-        if (replyTarget != null) {
-            quoteName = messageSenderName(replyTarget);
-            quoteText = quoteTextFor(replyTarget);
-            // Quote travels with the message so other players can see it too.
-            normalized = "「引用 @" + quoteName + ": " + quoteText + "」" + body;
-        }
-
-        boolean privateChat = topPage() == AppPage.PRIVATE_CHAT;
-        PlayerRef privateTarget = privateChat ? activePrivateTarget() : null;
-        if (privateChat) {
-            sendPrivateMessage(normalized, body, privateTarget);
-            return;
-        }
-
-        boolean command = normalized.startsWith("/");
-        if (command) {
-            this.client.player.connection.sendCommand(normalized.substring(1));
-        } else {
-            if (!normalized.startsWith("「引用")
-                    && (normalized.startsWith("http://") || normalized.startsWith("https://"))
-                    && !normalized.contains("CICode")
-                    && ImageFiles.isImageUrl(normalized)) {
-                normalized = "[[CICode,url=" + normalized + ",name=图片]]";
-            }
-            this.client.player.connection.sendChat(normalized);
-            // Arm echo suppression: the server relays this line back through the
-            // identity-less path on NCR-style servers (e33chat parity).
-            PublicEchoTracker.markSent(normalized);
-        }
-        this.client.gui.getChat().addRecentChat(normalized);
-        // Vanilla never echoes commands back into the chat feed as your own
-        // message, so do not manufacture a local bubble for them either.
-        // Non-command chat still gets an immediate local echo so the UI feels
-        // like a phone messenger even before the server relays the message.
-        if (!command) {
-            UUID ownUuid = this.client.player.getUUID();
-            String ownProfile = this.client.player.getName().getString();
-            // Own bubbles show the decorated self name (titles/team prefix),
-            // e33chat parity — the bare profile name stays for identity fields.
-            ChatStore.get().add(LocalEcho.build(normalized, body, quoteName, quoteText,
-                    ownUuid, ownProfile, OwnIdentity.displayNameRich()));
-        }
-        inputSetText("");
-        replyTarget = null;
-        // The armed reply is consumed with the send: drop its slot too, or
-        // navigating away and back would re-arm a reply that was already sent.
-        syncReplySlot();
-        inputFocused = true;
-        currentScroll().stickToBottom();
+        sendPipeline.sendMessage(text);
     }
 
-    private void sendPrivateMessage(String normalized, String body, PlayerRef target) {
-        if (target == null || BlockList.isBlocked(target)) {
-            return;
-        }
-        boolean command = normalized.startsWith("/");
-        String historyText = normalized;
-        String sendText = command ? normalized
-                : "/msg " + target.realName() + " " + normalized;
-        this.client.player.connection.sendCommand(sendText.startsWith("/")
-                ? sendText.substring(1) : sendText);
-        this.client.gui.getChat().addRecentChat(historyText);
-
-        if (!command) {
-            UUID ownUuid = this.client.player.getUUID();
-            String ownProfile = this.client.player.getName().getString();
-            // Decorated self name on the outgoing bubble, e33chat parity.
-            PrivateChatStore.addOutgoing(target,
-                    LocalEcho.build(historyText, body,
-                            replyTarget != null ? messageSenderName(replyTarget) : null,
-                            replyTarget != null ? quoteTextFor(replyTarget) : null,
-                            ownUuid, ownProfile, OwnIdentity.displayNameRich()));
-            PrivateEchoTracker.markOutgoing(target);
-        }
-        inputSetText("");
-        replyTarget = null;
-        // Consumed with the send — see sendMessage's matching call.
-        syncReplySlot();
-        inputFocused = true;
-        currentScroll().stickToBottom();
-    }
-
-    private static String normalizeInput(String text) {
-        return StringUtil.trimChatMessage(StringUtils.normalizeSpace(text.trim()));
-    }
-
-
+    /** The local player's name, or the "(me)" stand-in outside a world. */
     private String ownName() {
-        return this.client.player != null ? this.client.player.getName().getString() : tr("atomchat.sender.me");
+        return sendPipeline.ownName();
     }
-
-    /**
+        /**
      * Display name for a message row. Own messages use the local player; other
      * messages prefer the structured sender name from the capture pipeline and
      * only fall back to the old hard-coded label when identity is unavailable.
      */
     private String messageSenderName(ChatMessage msg) {
-        if (msg.isOwn()) {
-            return ownName();
-        }
-        String name = msg.getSenderName();
-        if (name != null && !name.isBlank()) {
-            return name;
-        }
-        return tr("atomchat.sender.player");
+        return sendPipeline.messageSenderName(msg);
     }
-
+    /** Head-truncates with an ellipsis — the reply bar formats its quote with it. */
     private static String abbreviate(String text, int maxChars) {
-        if (text.length() <= maxChars) {
-            return text;
-        }
-        return text.substring(0, maxChars) + "…";
+        return SendPipeline.abbreviate(text, maxChars);
     }
-
     private int accent() {
-        return AtomChatConfig.get().accentColor;
-    }
-
-    private int ownBubble() {
-        return AtomChatConfig.get().ownBubbleColor;
-    }
-
-    private int otherBubble() {
-        return AtomChatConfig.get().otherBubbleColor;
+        return primitives.accent();
     }
 
     private int textPrimary() {
-        return AtomChatConfig.get().textPrimaryColor;
+        return primitives.textPrimary();
     }
 
     private int textSecondary() {
-        return AtomChatConfig.get().textSecondaryColor;
-    }
-
-    /** Component inside a chat bubble (body rich text and quoted text). */
-    private int bubbleText(ChatMessage msg) {
-        return msg != null && msg.isOwn()
-                ? AtomChatConfig.get().bubbleTextColor
-                : AtomChatConfig.get().otherBubbleTextColor;
+        return primitives.textSecondary();
     }
 
     private float panelWidth() {
-        return Math.min(UiTokens.s(AtomChatConfig.get().panelWidth) / contentScale(), vw() - 32.0F);
+        return ScreenMetrics.panelWidth(client.getWindow());
     }
 
     private float panelHeight() {
-        return Math.min(UiTokens.s(AtomChatConfig.get().panelHeight) / contentScale(), vh() - 32.0F);
+        return ScreenMetrics.panelHeight(client.getWindow());
     }
 
-    // Virtual UI space: independent of vanilla GUI scale, anchored at 1080p.
-    /**
-     * Content-only zoom axis, clamped to the config's slider span [0.8, 1.5].
-     * Multiplies the density (so every inner token's pixel size) while
-     * panelWidth/panelHeight divide their virtual size by the same factor:
-     * the two cancel exactly on the panel frame, so the box's pixel size
-     * tracks uiScale only and the content inside zooms.
-     */
+    /** Content zoom (D10): see {@link ScreenMetrics#contentScale()} for the clamp and why it cancels on the frame. */
     private float contentScale() {
-        return Math.max(0.8F, Math.min(AtomChatConfig.get().contentScale, 1.5F));
+        return ScreenMetrics.contentScale();
     }
 
-    /**
-     * Design density: the 1080p-anchored base times the AtomChat UI scale
-     * times the content zoom. Every virtual-coordinate conversion in this
-     * screen funnels through here, so scaling this one value scales the whole
-     * virtual space — fonts, icons, hit rects and the blur pre-pass included
-     * — without touching UiTokens. The panel frame opts back out via the
-     * division in panelWidth/panelHeight/panelX.
-     */
+    /** Design density (D10): the 1080p-anchored funnel every conversion goes through. */
     private float uiDensity() {
-        var window = this.client.getWindow();
-        float base = Math.max(1.0F, window.getHeight() / 1080.0F);
-        return base * Math.max(0.5F, AtomChatConfig.get().uiScale) * contentScale();
+        return ScreenMetrics.uiDensity(client.getWindow());
     }
 
     private float vw() {
-        return this.client.getWindow().getWidth() / uiDensity();
+        return ScreenMetrics.vw(client.getWindow());
     }
 
     private float vh() {
-        return this.client.getWindow().getHeight() / uiDensity();
+        return ScreenMetrics.vh(client.getWindow());
     }
 
-    /**
-     * The anchor is part of the panel frame, whose pixel size is
-     * contentScale-invariant, so the physical left margin must be too: the
-     * virtual constant divides back out against the density's content factor.
-     */
+    /** Panel anchor (D10): contentScale-invariant, see {@link ScreenMetrics#panelX()}. */
     private float panelX() {
-        return UiTokens.PANEL_ANCHOR_X / contentScale();
+        return ScreenMetrics.panelX();
     }
 
     private float panelY() {
-        return (vh() - panelHeight()) / 2.0F;
+        return ScreenMetrics.panelY(client.getWindow());
     }
 
-    /**
-     * The one progress→shape mapping of the open/close animation, shared by
-     * drawPhone and the blur pre-pass — the capture rect must stay identical
-     * to the painted rect or the blurred region drifts off the panel
-     * mid-flight. ZOOM follows {@link AtomChatConfig.PageNavStyle#ZOOM} and
-     * grows the panel around its centre; SLIDE pushes it in from the left.
-     */
-    private float panelOpenScale(float progress) {
-        return AtomChatConfig.get().pageNavStyle == AtomChatConfig.PageNavStyle.ZOOM
-                ? OPEN_MIN_SCALE + (1.0F - OPEN_MIN_SCALE) * progress
-                : 1.0F;
-    }
-
-    private float panelOpenSlidePx(float progress) {
-        return AtomChatConfig.get().pageNavStyle == AtomChatConfig.PageNavStyle.SLIDE
-                ? (progress - 1.0F) * s(24)
-                : 0.0F;
-    }
+    // The one progress->shape mapping of the open/close animation, and the
+    // capture rect that mirrors it, live in PanelOpenMotion (D25): one
+    // derivation for both sides, so the blurred region cannot drift off the
+    // panel mid-flight.
 
     /**
      * The one and only way to build the layout. Rendering and every hit test go
      * through it so the input bar's animated height can never desync a click
-     * from what was drawn.
+     * from what was drawn. The frame itself comes from {@link ScreenMetrics};
+     * the two facts it adds here — the animated bar height (D21) and whether a
+     * reply bar is reserved (D1) — stay in this shell, so the assembly is
+     * unchanged.
      */
     private UiLayout layout() {
         float replyH = replyBarVisible() ? s(34) : 0.0F;
-        return UiLayout.of(panelX(), panelY(), panelWidth(), panelHeight(), inputExtraH, replyH);
+        return UiLayout.of(panelX(), panelY(), panelWidth(), panelHeight(), composer.extraH(), replyH);
     }
 
     // ---------------------------------------------------------------- input box
@@ -4564,127 +3099,13 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
      *
      * @return a layout rebuilt with the updated height.
      */
-    private UiLayout updateInputLayout(UiLayout current) {
-        return updateInputLayout(current, inputGetText(), 0.0F);
-    }
-
-    /**
-     * Wraps the draft the shared EditBox holds, with a floor on the bar's extra
-     * height. The floor is what a transition needs: its two pages are drawn in
-     * one layout, so a second line belonging to the page that does not own the
-     * field would otherwise be clipped until the nav landed and the field
-     * switched. {@link #inputExtraFor} supplies that floor.
-     *
-     * @param draft    composer text to measure (normally the field's own)
-     * @param minExtra lower bound for the animated extra height
-     * @return a layout rebuilt with the updated height.
-     */
-    private UiLayout updateInputLayout(UiLayout current, String draft, float minExtra) {
-        float lineH = inputLineHeight();
-        List<String> lines = wrappedInput(draft, current.inputTextMaxWidth());
-        int targetLines = Math.min(UiTokens.INPUT_MAX_LINES, Math.max(1, lines.size()));
-        float targetExtra = Math.max(minExtra, (targetLines - 1) * lineH);
-        ScrollController activeScroll = currentScroll();
-        if (Math.abs(targetExtra - inputExtraH) > 0.5F
-                && activeScroll.getTarget() >= activeScroll.getMaxScroll() - 3.0F) {
-            activeScroll.stickToBottom();
-        }
-        inputHeightAnim.animateTo(UiMotion.INPUT_GROW_MS, targetExtra);
-        inputHeightAnim.update(frameDt);
-        inputExtraH = inputHeightAnim.getValue();
-        return layout();
-    }
-
     /** Extra input-bar height a page's own draft needs (read-only pages need none). */
-    private float inputExtraFor(ChatPageView view, float maxWidth) {
-        if (view == null || view.readOnly()) {
-            return 0.0F;
-        }
-        int lines = Math.min(UiTokens.INPUT_MAX_LINES,
-                Math.max(1, wrappedInput(view.draft(), maxWidth).size()));
-        return (lines - 1) * inputLineHeight();
-    }
-
-    private float inputLineHeight() {
-        return SkiaFontRenderer.getHeight(FontManager.font(UiTokens.FONT_INPUT));
-    }
-
-    /** Wrapped input text, cached until the text or the available width changes. */
-    private List<String> wrappedInput(float maxWidth) {
-        return wrappedInput(inputGetText(), maxWidth);
-    }
-
-    /**
-     * Wraps an explicit composer text. A transition draws two pages with two
-     * different drafts, so the wrap cannot assume the shared EditBox's text; the
-     * cache stays keyed on the text and width, exactly as before.
-     */
-    private List<String> wrappedInput(String text, float maxWidth) {
-        if (inputWrapCache == null || inputWrapWidth != maxWidth || !text.equals(inputWrapText)) {
-            inputWrapText = text;
-            inputWrapWidth = maxWidth;
-            inputWrapCache = SkiaFontRenderer.wrap(FontManager.font(UiTokens.FONT_INPUT), text, maxWidth);
-        }
-        return inputWrapCache;
-    }
-
-    /**
-     * Absolute index of the line holding the caret. wrap() drops the whitespace
-     * at a break point, so line lengths can sum to slightly less than the full
-     * text — the mapping is exact everywhere except right at a break.
-     */
-    private static int caretLine(List<String> lines, int caret) {
-        int pos = 0;
-        for (int i = 0; i < lines.size(); i++) {
-            pos += lines.get(i).length();
-            if (caret <= pos) {
-                return i;
-            }
-        }
-        return Math.max(0, lines.size() - 1);
-    }
-
-    private int caretIndex() {
-        return input == null ? 0 : Mth.clamp(input.getCursorPosition(), 0, inputGetText().length());
-    }
-
-    /** Keeps the caret's line inside the visible window, clamping to the ends. */
-    private void scrollInputToCaret(int caretLine, int totalLines) {
-        int max = UiTokens.INPUT_MAX_LINES;
-        if (totalLines <= max) {
-            inputScrollLine = 0;
-            return;
-        }
-        if (caretLine < inputScrollLine) {
-            inputScrollLine = caretLine;
-        } else if (caretLine > inputScrollLine + max - 1) {
-            inputScrollLine = caretLine - max + 1;
-        }
-        inputScrollLine = Math.max(0, Math.min(inputScrollLine, totalLines - max));
-    }
-
-    /** Virtual-space top edge of the line the caret sits on, for IME anchoring. */
-    private float caretLineTopY() {
-        UiLayout l = layout();
-        Font font = FontManager.font(UiTokens.FONT_INPUT);
-        float lineH = SkiaFontRenderer.getHeight(font);
-        List<String> lines = wrappedInput(l.inputTextMaxWidth());
-        if (lines.isEmpty()) {
-            return l.inputTextCenterY - lineH / 2.0F;
-        }
-        int line = caretLine(lines, caretIndex());
-        int shown = Math.min(UiTokens.INPUT_MAX_LINES, lines.size());
-        int from = Math.min(inputScrollLine, lines.size() - shown);
-        int row = Math.max(0, Math.min(line - from, shown - 1));
-        return l.inputTextCenterY + row * lineH - lineH / 2.0F;
-    }
-
     private float toVirtualX(double guiX) {
-        return (float) (guiX * this.client.getWindow().getGuiScale() / uiDensity());
+        return ScreenMetrics.toVirtualX(client.getWindow(), guiX);
     }
 
     private float toVirtualY(double guiY) {
-        return (float) (guiY * this.client.getWindow().getGuiScale() / uiDensity());
+        return ScreenMetrics.toVirtualY(client.getWindow(), guiY);
     }
 
     @Override
@@ -4695,7 +3116,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
 
     // ------------------------------------------------------------------ input handlers
     //
-    // Ordered by the registration sequence in `inputRouter`. Each handler owns
+    // Ordered by the registration sequence in `gate`. Each handler owns
     // one interaction domain and answers events with consume/pass; nothing may
     // ever be inserted "into the middle of a chain" again.
 
@@ -4898,57 +3319,6 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
         }
     }
 
-    /** Inline numeric editor for integer sliders (retention days). */
-    private final class NumberEditInput implements InputHandler {
-        @Override
-        public boolean onClick(double mouseX, double mouseY, int button) {
-            if (!settingsSectionPage.isEditingNumber()) {
-                return false;
-            }
-            float mx = toVirtualX(mouseX);
-            float my = toVirtualY(mouseY);
-            if (settingsSectionPage.isInsideNumberEditRow(mx, my)) {
-                return true;
-            }
-            // Click outside the editor commits the typed value and lets the
-            // click continue to whatever the user actually aimed at.
-            settingsSectionPage.commitNumberEdit();
-            return false;
-        }
-
-        @Override
-        public boolean onKey(int keyCode, int scanCode, int modifiers) {
-            if (!settingsSectionPage.isEditingNumber()) {
-                return false;
-            }
-            if (keyCode == 256) { // Esc: cancel
-                settingsSectionPage.cancelNumberEdit();
-            } else if (keyCode == 257 || keyCode == 335) { // Enter
-                settingsSectionPage.commitNumberEdit();
-            } else if (keyCode == 259) { // Backspace
-                settingsSectionPage.backspaceNumber();
-            } else if (keyCode >= 48 && keyCode <= 57) { // top-row digits
-                settingsSectionPage.appendNumberChar((char) ('0' + keyCode - 48));
-            } else if (keyCode >= 320 && keyCode <= 329) { // numpad digits
-                settingsSectionPage.appendNumberChar((char) ('0' + keyCode - 320));
-            }
-            return true;
-        }
-
-        @Override
-        public boolean onChar(char chr, int modifiers) {
-            // Digits are appended from onKey. Minecraft also delivers a char
-            // callback for the same press; appending here would double every
-            // digit (1 became 11). Swallow the char so it never reaches chat.
-            return settingsSectionPage.isEditingNumber();
-        }
-
-        @Override
-        public boolean onScroll(double mouseX, double mouseY, double horizontalAmount, double verticalAmount) {
-            return settingsSectionPage.isEditingNumber();
-        }
-    }
-
     /**
      * Esc closes the whole AtomChat screen with its animated close — from any
      * page, including pushed sub-pages. Closing everything at once is the
@@ -4982,25 +3352,17 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
             UiLayout pageLayout = listLayout();
             ScrollController pageScroll = listScroll();
             // Root-page player-card context menu gets priority over row clicks.
-            if (contextPlayer != null || lastContextPlayer != null) {
-                // Player-card menus are always the 3-row layout (profile / tp /
-                // block), so the hit test must use the same row count as the
-                // drawing. Two rows left "取消屏蔽" permanently unclickable.
-                int rows = contextMenuRows(ContextMenuMode.PLAYER_CARD, false);
-                float rowH = UiTokens.MENU_H / 2.0F;
-                float menuH = rowH * rows;
-                float menuW = UiTokens.MENU_W;
-                float menuX = Math.min(contextX, panelX() + panelWidth() - menuW - s(8));
-                float menuY = Math.min(contextY, panelY() + panelHeight() - menuH - s(8));
-                boolean inside = mx >= menuX && mx <= menuX + menuW
-                        && my >= menuY && my <= menuY + menuH;
-                if (inside && button == 0) {
-                    int row = (int) ((my - menuY) / rowH);
-                    performPlayerCardAction(row);
-                    closeContextMenu();
+            // The box (row count included) comes from the menu itself — the same
+            // source its drawing measures with: two rows here once left
+            // "取消屏蔽" permanently unclickable.
+            if (contextMenu.hasPlayerCardMenu()) {
+                int row = contextMenu.hitPlayerCardRow(mx, my);
+                if (row >= 0 && button == 0) {
+                    contextActions.performPlayerCardAction(row);
+                    contextMenu.close();
                     return true;
                 }
-                closeContextMenu();
+                contextMenu.close();
             }
             if (button == 0 && overScrollbarTrack(pageLayout, mx, my, pageScroll)) {
                 pageScroll.beginDrag(my);
@@ -5008,7 +3370,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
             }
             // A pushed settings sub-page: back arrow, then switch rows.
             if (topPage() == AppPage.SETTINGS_SECTION) {
-                if (button == 0 && isBackButtonHit(mx, my)) {
+                if (button == 0 && headerChrome.isBackButtonHit(mx, my)) {
                     popPage();
                     return true;
                 }
@@ -5083,15 +3445,15 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
             }
             // A pushed profile detail: back arrow, then copyable rows/tiles.
             if (topPage() == AppPage.PROFILE_DETAIL) {
-                if (button == 0 && isBackButtonHit(mx, my)) {
+                if (button == 0 && headerChrome.isBackButtonHit(mx, my)) {
                     popPage();
                     return true;
                 }
                 if (button == 0) {
-                    profilePage.onClick(mx, my, detailLayout(), detailScroll.getScrollY());
+                    profilePage.onClick(mx, my, detailLayout(), scrollSync.detailScroll().getScrollY());
                 } else if (button == 1) {
                     // Right-click on the banner card clears the custom banner.
-                    profilePage.onRightClick(mx, my, detailLayout(), detailScroll.getScrollY());
+                    profilePage.onRightClick(mx, my, detailLayout(), scrollSync.detailScroll().getScrollY());
                 }
                 return true;
             }
@@ -5131,11 +3493,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
                             return true;
                         }
                         if (button == 1) {
-                            contextMenuMode = ContextMenuMode.PLAYER_CARD;
-                            contextPlayer = hit.row().player();
-                            contextX = mx;
-                            contextY = my;
-                            contextMessage = null;
+                            contextMenu.openPlayerCard(hit.row().player(), mx, my);
                             return true;
                         }
                     }
@@ -5276,14 +3634,14 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
             UiLayout layout = layout();
 
             // Vanilla suggestion layer gets first pick on clicks too (prevents click-through).
-            if (chatInputSuggestor != null && chatInputSuggestor.mouseClicked((int) mouseX, (int) mouseY, button)) {
+            if (suggestorWiring.mouseClicked((int) mouseX, (int) mouseY, button)) {
                 return true;
             }
 
             // Back to the conversation list before any composer/emoji/message hit.
             // resetTransientWorldUi() runs inside popPage() after any slide-out
             // animation so the world page still looks intact while it leaves.
-            if (button == 0 && isBackButtonHit(mx, my)) {
+            if (button == 0 && headerChrome.isBackButtonHit(mx, my)) {
                 ShellHeader.armBackPress();
                 popPage();
                 return true;
@@ -5312,9 +3670,9 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
             // dismisses" rule, otherwise closing and reopening in the same click nets
             // back to open and the button can never toggle the panel off.
             if (button == 0 && layout.emojiBtn.contains((float) mx, (float) my)) {
-                pressButton(1);
-                pressedButtonHeld = 1;
-                inputFocused = true;
+                primitives.pressButton(1);
+                primitives.setButtonHeld(1);
+                composer.setFocused(true);
                 closePhrasePanel();
                 emojiPanel.toggle();
                 return true;
@@ -5322,9 +3680,9 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
 
             // Quick-phrase toggle: same pre-dismiss ordering as the emoji button.
             if (button == 0 && layout.phraseBtn.contains((float) mx, (float) my)) {
-                pressButton(3);
-                pressedButtonHeld = 3;
-                inputFocused = true;
+                primitives.pressButton(3);
+                primitives.setButtonHeld(3);
+                composer.setFocused(true);
                 emojiPanel.close();
                 if (quickPhrasePanel.isOpen()) {
                     closePhrasePanel();
@@ -5339,7 +3697,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
                 if (emojiPanel.overPanel(layout, mx, my)) {
                     String inserted = emojiPanel.click(layout, mx, my);
                     if (inserted != null && !inserted.isEmpty()) {
-                        inputAppend(inserted);
+                        composer.append(inserted);
                     }
                     return true;
                 }
@@ -5359,45 +3717,35 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
 
             // Context menu click. Remember the target before dismissing so a
             // right-click on the same bubble/avatar toggles instead of reopening.
-            ChatMessage menuBefore = contextMessage;
-            ContextMenuMode menuBeforeMode = contextMenuMode;
-            if (contextMessage != null) {
-                float menuW = UiTokens.MENU_W;
-                boolean avatarMenu = contextMenuMode == ContextMenuMode.AVATAR;
-                boolean imageMessage = !avatarMenu && Cicodes.extractImageUrl(contextMessage.getRawText()) != null;
-                int rows = contextMenuRows(contextMenuMode, imageMessage);
-                float rowH = UiTokens.MENU_H / 2.0F;
-                float menuH = rowH * rows;
-                float menuX = Math.min(contextX, panelX + panelWidth() - menuW - s(8));
-                float menuY = Math.min(contextY, panelY + panelHeight() - menuH - s(8));
-                boolean inside = (float) mx >= menuX && (float) mx <= menuX + menuW
-                        && (float) my >= menuY && (float) my <= menuY + menuH;
-                if (inside && button == 0) {
-                    int row = (int) ((my - menuY) / rowH);
-                    if (avatarMenu) {
-                        performAvatarMenuAction(row, contextMessage);
+            ChatMessage menuBefore = contextMenu.currentRow();
+            boolean menuBeforeAvatar = contextMenu.isAvatarMode();
+            if (contextMenu.hasMessageMenu()) {
+                int row = contextMenu.hitRow((float) mx, (float) my);
+                if (row >= 0 && button == 0) {
+                    if (menuBeforeAvatar) {
+                        contextActions.performAvatarMenuAction(row, menuMessageOf(menuBefore));
                     } else if (row == 0) {
-                        feedback("atomchat.feedback.copied", copyToClipboard(contextMessage.getContentText()));
+                        feedback("atomchat.feedback.copied", copyToClipboard(menuBefore.getContentText()));
                     } else if (row == 1) {
-                        replyTarget = contextMessage;
-                        inputFocused = true;
+                        replySlots.arm(menuBefore);
+                        composer.setFocused(true);
                         setFocused(input);
                         input.setFocused(true);
                     } else {
-                        saveImage(contextMessage);
+                        saveImage(menuBefore);
                     }
-                    closeContextMenu();
+                    contextMenu.close();
                     return true;
                 }
                 // Any other click — including a right-click aimed at another bubble —
                 // dismisses first; the handlers below may then open a new menu.
-                closeContextMenu();
+                contextMenu.close();
             }
 
             // Jump-to-latest bubble sits above the message list and takes priority
             // over ordinary message clicks when it is visible.
             if (button == 0 && overJumpLatest(layout, mx, my)) {
-                jumpLatestHeld = true;
+                scrollSync.pressJumpLatest();
                 currentScroll().scrollToBottom(true);
                 return true;
             }
@@ -5405,44 +3753,44 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
             // Button row: image / emoji / send share one row and one size,
             // geometry comes from UiLayout so hits can never drift from the drawing.
             if (button == 0 && layout.imageBtn.contains((float) mx, (float) my)) {
-                pressButton(0);
-                pressedButtonHeld = 0;
-                inputFocused = true;
+                primitives.pressButton(0);
+                primitives.setButtonHeld(0);
+                composer.setFocused(true);
                 pickAndUploadImage();
                 return true;
             }
             // Inserting an emoji must NOT close the panel: users often want to pick several
             // in a row. The panel still closes on any outside click or the toggle button.
             if (button == 0 && layout.sendBtn.contains((float) mx, (float) my)) {
-                pressButton(2);
-                pressedButtonHeld = 2;
+                primitives.pressButton(2);
+                primitives.setButtonHeld(2);
                 if (quickPhrasePanel.isEditing()) {
                     // In phrase-edit mode the send button commits the phrase.
                     endPhraseEdit(true);
                     return true;
                 }
-                sendMessage(inputGetText());
+                sendMessage(composer.text());
                 return true;
             }
 
             // Input box focus
-            inputFocused = false;
+            composer.setFocused(false);
             dismissSuggestor();
             if (button == 0 && layout.inputBar.contains((float) mx, (float) my)) {
-                inputFocused = true;
+                composer.setFocused(true);
                 setFocused(input);
                 input.setFocused(true);
                 // Click-to-position / drag-select on the multi-line Skia input:
                 // map the virtual point to a text index ourselves (the hidden
                 // EditBox geometry is caret-shifted and single-line, useless here).
-                int idx = inputCaretIndexAt(layout, (float) mx, (float) my);
-                if (hasShiftDown() && inputDragAnchor >= 0) {
+                int idx = composerPointer.caretIndexAt(layout, (float) mx, (float) my);
+                if (hasShiftDown() && composerPointer.dragAnchor() >= 0) {
                     input.setHighlightPos(idx);
                 } else {
-                    inputDragAnchor = idx;
+                    composerPointer.setDragAnchor(idx);
                     input.moveCursorTo(idx, false);
                 }
-                inputDragging = true;
+                composerPointer.setDragging(true);
                 return true;
             }
             setFocused(null);
@@ -5458,8 +3806,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
             // This covers clickable sender names and any clickable span outside bubble
             // text; the text-line branch below may overwrite it with the same result.
             if (button == 0) {
-                pendingClickSpan = messageListView.clickableSpanAt(mx, my).orElse(null);
-                pendingClickMoved = false;
+                messageWiring.armClickAt(mx, my);
                 // The folded-history button floats over the top of the list, so it
                 // claims the press before any message row beneath it can.
                 if (messageListView.loadEarlierHitAt(mx, my)) {
@@ -5479,8 +3826,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
                         imagePreview.open(bitmap);
                         // This press belongs to the modal now: nothing was armed
                         // for a clickable span or a selection on the way here.
-                        pendingClickSpan = null;
-                        pendingClickMoved = false;
+                        messageWiring.clearClick();
                         return true;
                     }
                 }
@@ -5497,15 +3843,12 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
                 if (button == 1 && hit.avatarSize() > 0F
                         && mx >= hit.avatarX() && mx <= hit.avatarX() + hit.avatarSize()
                         && my >= hit.avatarY() && my <= hit.avatarY() + hit.avatarSize()
-                        && canOpenAvatarMenu(hit.message())) {
+                        && ContextMenuActions.canOpenAvatarMenu(menuMessageOf(hit.message()))) {
                     // Right-clicking the avatar the avatar menu is already on closes it.
-                    if (menuBefore == hit.message() && menuBeforeMode == ContextMenuMode.AVATAR) {
+                    if (menuBefore == hit.message() && menuBeforeAvatar) {
                         return true;
                     }
-                    contextMenuMode = ContextMenuMode.AVATAR;
-                    contextMessage = hit.message();
-                    contextX = mx;
-                    contextY = my;
+                    contextMenu.openAvatar(menuSubjectOf(hit.message()), mx, my);
                     return true;
                 }
                 if (button == 1 && !hit.message().isSystem()
@@ -5515,10 +3858,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
                     if (menuBefore == hit.message()) {
                         return true;
                     }
-                    contextMenuMode = ContextMenuMode.BUBBLE;
-                    contextMessage = hit.message();
-                    contextX = mx;
-                    contextY = my;
+                    contextMenu.openBubble(menuSubjectOf(hit.message()), mx, my);
                     return true;
                 }
                 if (button == 0) {
@@ -5532,8 +3872,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
                             // selection anchor is armed. Dragging from this point will
                             // select text instead of firing the click; a clean click
                             // (no drag) will fire it on mouse release.
-                            pendingClickSpan = messageListView.clickableSpanAt(mx, my).orElse(null);
-                            pendingClickMoved = false;
+                            messageWiring.armClickAt(mx, my);
                             messageListView.beginSelection(hit, line, mx);
                             return true;
                         }
@@ -5542,33 +3881,10 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
                 if (button == 0 && hit.avatarSize() > 0F
                         && mx >= hit.avatarX() && mx <= hit.avatarX() + hit.avatarSize()
                         && my >= hit.avatarY() && my <= hit.avatarY() + hit.avatarSize()) {
-                    long now = System.currentTimeMillis();
-                    // Poke is a nudge at *someone else*: your own avatar has no
-                    // one to notify, so it falls straight through to the profile.
-                    boolean pokeEnabled = Animations.avatarPoke() && Animations.enabled()
-                            && !hit.message().isOwn() && hit.message().getSenderUuid() != null;
-                    boolean doubleClick = pokeEnabled
-                            && lastAvatarClickIndex == hit.index()
-                            && now - lastAvatarClickTime < AVATAR_CLICK_WINDOW_MS;
-                    if (doubleClick) {
-                        // Double click → poke; cancels the pending single click.
-                        lastAvatarClickTime = 0;
-                        pendingAvatarClickMessage = null;
-                        sendPoke(hit.message());
-                    } else if (pokeEnabled) {
-                        // QQ-style competition window: the single click waits for
-                        // the double-click threshold before opening the profile.
-                        lastAvatarClickTime = now;
-                        lastAvatarClickIndex = hit.index();
-                        pendingAvatarClickTime = now;
-                        pendingAvatarClickIndex = hit.index();
-                        pendingAvatarClickMessage = hit.message();
-                    } else {
-                        // With poke (or decorative motion) off a double click does
-                        // nothing, so there is nothing to compete with: jump at once.
-                        lastAvatarClickTime = 0;
-                        openProfileFor(hit.message());
-                    }
+                    // The competition window's three branches and their order
+                    // are the domain's (D18b); the frame's clock is this click's.
+                    avatarWiring.handleAvatarClick(System.currentTimeMillis(),
+                            factsOf(hit.message()), hit.index());
                     return true;
                 }
             }
@@ -5581,15 +3897,15 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
                 return false;
             }
             // Input drag selection: extend from the press anchor to the pointer.
-            if (inputDragging && button == 0 && input != null) {
-                int idx = inputCaretIndexAt(layout(), toVirtualX(mouseX), toVirtualY(mouseY));
+            if (composerPointer.dragging() && button == 0 && input != null) {
+                int idx = composerPointer.caretIndexAt(layout(), toVirtualX(mouseX), toVirtualY(mouseY));
                 input.setHighlightPos(idx);
                 return true;
             }
             // Any drag while a click is pending must suppress the click-on-release,
             // including drags that do not start a text selection (e.g. name bars).
-            if (button == 0 && pendingClickSpan != null) {
-                pendingClickMoved = true;
+            if (button == 0 && messageWiring.hasPendingClick()) {
+                messageWiring.markMoved();
             }
             if (button == 0 && messageListView.isSelecting()) {
                 float mx = toVirtualX(mouseX);
@@ -5612,28 +3928,24 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
             // The composer buttons live in THIS handler, so their held-press state
             // is cleared here: parked in RootPageInput.onRelease it never ran (the two
             // guards are opposites) and the button stayed squashed at 0.92.
-            pressedButtonHeld = -1;
+            primitives.setButtonHeld(-1);
             // Same for the folded-history capsule and the jump-to-latest FAB: both
             // are armed on press and must be released here, or the bounce never
             // gets its release half.
             messageListView.setLoadEarlierPressed(false);
-            jumpLatestHeld = false;
+            scrollSync.releaseJumpLatest();
             if (button == 0) {
                 float mx = toVirtualX(mouseX);
                 float my = toVirtualY(mouseY);
                 boolean wasSelecting = messageListView.isSelecting();
-                ClickableSpan pending = pendingClickSpan;
-                pendingClickSpan = null;
-                ClickableSpan released = messageListView.clickableSpanAt(mx, my).orElse(null);
-                boolean shouldClick = pending != null && !pendingClickMoved
-                        && pending.style().getClickEvent() != null
-                        && pending.equals(released);
+                ClickableSpan pending = messageWiring.takePending();
+                boolean shouldClick = messageWiring.shouldFireClick(pending, mx, my);
                 if (wasSelecting) {
                     messageListView.endSelection();
                 }
-                pendingClickMoved = false;
-                if (inputDragging) {
-                    inputDragging = false;
+                messageWiring.clearMoved();
+                if (composerPointer.dragging()) {
+                    composerPointer.setDragging(false);
                 }
                 if (shouldClick) {
                     handleComponentClicked(pending.style());
@@ -5658,7 +3970,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
             float mx = toVirtualX(mouseX);
             float my = toVirtualY(mouseY);
             // Suggestion popup scrolls first when open.
-            if (chatInputSuggestor != null && chatInputSuggestor.mouseScrolled(verticalAmount)) {
+            if (suggestorWiring.mouseScrolled(verticalAmount)) {
                 return true;
             }
             if (emojiPanel.isOpen() && emojiPanel.overPanel(layout(), mx, my)) {
@@ -5708,23 +4020,23 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
                 }
             }
             // Vanilla suggestion layer gets first pick (Tab/arrows over the popup).
-            if (chatInputSuggestor != null && chatInputSuggestor.keyPressed(keyCode, scanCode, modifiers)) {
+            if (suggestorWiring.keyPressed(keyCode, scanCode, modifiers)) {
                 return true;
             }
             if (keyCode == 257 || keyCode == 335) { // Enter
-                if (inputFocused) {
-                    sendMessage(inputGetText());
+                if (composer.focused()) {
+                    sendMessage(composer.text());
                 }
                 return true;
             }
             // Up/Down become caret navigation as soon as the text wraps onto a second
             // line (>= INPUT_MAX_LINES). Once multiline, Up/Down never fall back to
             // vanilla chat history — that remains a single-line behaviour.
-            if (inputFocused && input != null && (keyCode == 265 || keyCode == 264)) {
-                List<String> lines = wrappedInput(layout().inputTextMaxWidth());
+            if (composer.focused() && composer.fieldFocused() && (keyCode == 265 || keyCode == 264)) {
+                List<String> lines = composer.wrappedInput(layout().inputTextMaxWidth());
                 if (lines.size() >= UiTokens.INPUT_MAX_LINES) {
-                    int caret = caretIndex();
-                    int row = caretLine(lines, caret);
+                    int caret = composer.caretIndex();
+                    int row = ComposerInput.caretLine(lines, caret);
                     int target = (keyCode == 265) ? row - 1 : row + 1;
                     if (target >= 0 && target < lines.size()) {
                         int rowStart = 0;
@@ -5744,7 +4056,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
                     return true;
                 }
             }
-            if (inputFocused && AtomChatConfig.get().debug) {
+            if (composer.focused() && AtomChatConfig.get().debug) {
                 AtomChat.LOGGER.info("keyPressed: {} (sc {}) mod {}", keyCode, scanCode, modifiers);
             }
             // Falls through to super (ChatScreen): the focused input consumes
@@ -5759,7 +4071,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost {
             }
             if (AtomChatConfig.get().debug) {
                 AtomChat.LOGGER.info("charTyped: '{}' (U+{}) focused={} field={}",
-                        chr, Integer.toHexString(chr), inputFocused, input != null && input.isFocused());
+                        chr, Integer.toHexString(chr), composer.focused(), composer.fieldFocused());
             }
             return false;
         }

@@ -4,6 +4,7 @@ import com.atom.chat.config.AtomChatConfig;
 import com.atom.chat.font.FontManager;
 import com.atom.chat.render.SkiaDraw;
 import com.atom.chat.render.SkiaFontRenderer;
+import static com.atom.chat.ui.UiTokens.s;
 import io.github.humbleui.skija.Canvas;
 import io.github.humbleui.skija.Color;
 import io.github.humbleui.skija.Font;
@@ -97,10 +98,6 @@ public final class QuickPhrasePanel {
     public QuickPhrasePanel(Host host, IntSupplier accent) {
         this.host = host;
         this.accent = accent;
-    }
-
-    private static float s(float v) {
-        return UiTokens.s(v);
     }
 
     /** Rows of the scrolling list: the player's phrases, a group label, the server's. */

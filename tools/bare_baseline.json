@@ -1,0 +1,39 @@
+{
+  "_comment": [
+    "裸值基线（棘轮）：每文件的 `s(数字)` 出现次数。只许减不许增。",
+    "重写：python3 tools/bare_scan.py --update",
+    "拆块迁移后允许 +N，但 commit message 必须写明「+N 处系迁移自 AtomChatScreen，非新造」，",
+    "且 N 要与该块 git diff 里迁入的 `s(N)` 数逐一对得上。",
+    "口径见 tools/bare_scan.py 顶部注释。"
+  ],
+  "total": 517,
+  "files": {
+    "shared/src/main/java/com/atom/chat/config/AtomChatConfig.java": 1,
+    "shared/src/main/java/com/atom/chat/image/ImagePreviewOverlay.java": 1,
+    "shared/src/main/java/com/atom/chat/render/DrawPrimitives.java": 1,
+    "shared/src/main/java/com/atom/chat/render/SkiaDraw.java": 2,
+    "shared/src/main/java/com/atom/chat/ui/ActionFeedback.java": 1,
+    "shared/src/main/java/com/atom/chat/ui/ActionToast.java": 9,
+    "shared/src/main/java/com/atom/chat/ui/ComposerPointer.java": 1,
+    "shared/src/main/java/com/atom/chat/ui/ContextMenuController.java": 8,
+    "shared/src/main/java/com/atom/chat/ui/MenuPopup.java": 1,
+    "shared/src/main/java/com/atom/chat/ui/PanelOpenMotion.java": 1,
+    "shared/src/main/java/com/atom/chat/ui/ScrollController.java": 8,
+    "shared/src/main/java/com/atom/chat/ui/ScrollSyncService.java": 20,
+    "shared/src/main/java/com/atom/chat/ui/ShellHeader.java": 3,
+    "shared/src/main/java/com/atom/chat/ui/UiCards.java": 3,
+    "layers/mapping/official/src/main/java/com/atom/chat/avatar/ColorPickerOverlay.java": 57,
+    "layers/mapping/official/src/main/java/com/atom/chat/avatar/ImageCropper.java": 13,
+    "layers/mapping/official/src/main/java/com/atom/chat/chat/Cicodes.java": 1,
+    "layers/mapping/official/src/main/java/com/atom/chat/notification/NotificationBanner.java": 14,
+    "layers/mapping/official/src/main/java/com/atom/chat/page/ConversationListPage.java": 30,
+    "layers/mapping/official/src/main/java/com/atom/chat/page/MessageListView.java": 39,
+    "layers/mapping/official/src/main/java/com/atom/chat/page/ProfilePage.java": 60,
+    "layers/mapping/official/src/main/java/com/atom/chat/screen/SuggestorWiring.java": 1,
+    "layers/mapping/official/src/main/java/com/atom/chat/settings/SettingsCatalog.java": 1,
+    "layers/mapping/official/src/main/java/com/atom/chat/settings/SettingsHomePage.java": 1,
+    "layers/mapping/official/src/main/java/com/atom/chat/settings/SettingsSectionPage.java": 127,
+    "layers/mapping/official/src/main/java/com/atom/chat/ui/EmojiPanel.java": 58,
+    "layers/mapping/official/src/main/java/com/atom/chat/ui/QuickPhrasePanel.java": 55
+  }
+}

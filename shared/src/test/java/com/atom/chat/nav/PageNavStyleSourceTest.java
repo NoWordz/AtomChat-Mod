@@ -49,6 +49,22 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 class PageNavStyleSourceTest {
 
+    /** The extracted nav stack (D24a), where the cascades now live. */
+    private static final String CONTROLLER =
+            "shared/src/main/java/com/atom/chat/nav/NavStackController.java";
+
+    /** Both transition state machines (D24b-1), where the clocks now live. */
+    private static final String DIRECTOR =
+            "shared/src/main/java/com/atom/chat/nav/PageTransitionDirector.java";
+
+    /**
+     * The composite that block D24b-2a extracted: the detail&lt;-&gt;detail branch
+     * (and its per-side draws) live here now, so the five guards about that branch
+     * are asserted on this source.
+     */
+    private static final String COMPOSITE =
+            "shared/src/main/java/com/atom/chat/nav/PageTransitionComposite.java";
+
     /** The three screen sources, repo-root relative, in a fixed order. */
     private static final List<String> SCREENS = List.of(
             "platforms/1.20.1-forge/src/main/java/com/atom/chat/screen/AtomChatScreen.java",
@@ -111,6 +127,19 @@ class PageNavStyleSourceTest {
         return haystack.indexOf(needle);
     }
 
+    /**
+     * The profile detail door may push directly ({@code pushPage(AppPage.PROFILE_DETAIL)})
+     * or hand off to the D18b domain, which pushes on the screen's behalf through the
+     * {@code openProfileDetailPage} fact. Both links are checked: what must never happen
+     * is a hand-rolled navigation somewhere else, or a fact that stops going through
+     * {@code pushPage}.
+     */
+    private static boolean profileDetailPushesThroughPushPage(String door, String fact) {
+        boolean doorGoesThroughPushPage = door.contains("pushPage(")
+                || door.contains("avatarWiring.openProfileDetail(");
+        return doorGoesThroughPushPage && fact.contains("pushPage(AppPage.PROFILE_DETAIL)");
+    }
+
     /** The text from {@code from} on, clamped: a -1 search result must not turn
      *  a failure message into a StringIndexOutOfBoundsException. */
     private static String tail(String text, int from) {
@@ -127,10 +156,16 @@ class PageNavStyleSourceTest {
     }
 
     /** The public&lt;-&gt;private / chat&lt;-&gt;profile detail-to-detail branch. */
+    /**
+     * The detail&lt;-&gt;detail compositor. It used to be a commented block inside the
+     * screen's nav branch; block D24b-2a made it a method, so the guard is anchored on
+     * the two signatures that now bound it. The comment markers are gone with the code
+     * — anchoring on a comment would have gone quiet rather than red.
+     */
     private static String detailToDetailBranch(String source) {
         return slice(source,
-                "// Detail-to-detail",
-                "// Full-width push/pop: root<->detail transitions.");
+                "private NavFrame detailToDetail(",
+                "private NavFrame rootToDetail(");
     }
 
     /** Call sites of a method, skipping its own declaration ({@code void name(}). */
@@ -154,7 +189,7 @@ class PageNavStyleSourceTest {
     @Test
     void resolverReadsTheConfigWithNoPerPairException() throws IOException {
         for (String screen : SCREENS) {
-            String resolver = body(source(screen), "AtomChatConfig.PageNavStyle pageNavStyle(");
+            String resolver = body(source(DIRECTOR), "AtomChatConfig.PageNavStyle pageNavStyle(");
             assertTrue(resolver.contains("AtomChatConfig.get().pageNavStyle"),
                     screen + ": the resolver must read AtomChatConfig.pageNavStyle");
             assertFalse(resolver.contains("isRoot"),
@@ -170,18 +205,30 @@ class PageNavStyleSourceTest {
     void styleIsResolvedOncePerNavAndEverySwitchReadsIt() throws IOException {
         for (String screen : SCREENS) {
             String src = source(screen);
-            String startNav = body(src, "private void startPageNav(");
+            // Since 24b-1 the machine is the director's; the facts are unchanged --
+            // one resolution point, one assignment of the style flag.
+            String startNav = body(source(DIRECTOR), "public void startPageNav(");
             assertTrue(startNav.contains("pageNavStyle()"),
                     screen + ": startPageNav must resolve the style through pageNavStyle()");
-            assertEquals(1, occurrences(src, "pageNavZoom ="),
+            assertEquals(1, occurrences(source(DIRECTOR), "pageNavZoom ="),
                     screen + ": pageNavZoom may only be assigned by the single resolution point");
             assertTrue(startNav.contains("pageNavZoom ="),
                     screen + ": pageNavZoom must be assigned inside startPageNav");
             // Root tab switches never run pushNav/popPage, so they must resolve
             // the style through the same helper rather than reading a second
             // path of their own.
-            assertTrue(body(src, "public void switchRoot(AppPage").contains("pageNavStyle()"),
-                    screen + ": the root tab switch must resolve the style through pageNavStyle()");
+            // Since D24a the tab switch is the controller's and since 24b-1 the
+            // machine is the director's, so the resolution is reached through two
+            // forwards; what must never come back is a second path of its own.
+            assertTrue(body(src, "public boolean navStyleIsZoom()").contains("director.navStyleIsZoom()"),
+                    screen + ": the root tab switch must resolve the style through the director,"
+                            + " never by reading the config itself");
+            assertTrue(body(source(DIRECTOR), "public boolean navStyleIsZoom()").contains("pageNavStyle()"),
+                    "the director's style answer must come from the one resolver");
+            assertTrue(body(source(CONTROLLER), "public void switchRoot(AppPage")
+                            .contains("host.navStyleIsZoom()"),
+                    "the tab switch must resolve the style through the one resolver, by asking the"
+                            + " screen, never by page kind");
         }
     }
 
@@ -192,17 +239,29 @@ class PageNavStyleSourceTest {
             String src = source(screen);
             String pushNav = body(src, "private void pushNav(NavPage");
             String popPage = body(src, "public void popPage()");
+            // The three arms are the controller's now; the screen keeps exactly one
+            // call site, inside the port method the controller arms the nav through.
             List<Integer> starts = callSites(src, "startPageNav(");
-            assertEquals(3, starts.size(),
-                    screen + ": expected exactly the two push call sites plus the pop one, got " + starts);
-            int pushAt = indexOf(src, pushNav);
-            int popAt = indexOf(src, popPage);
-            for (int i : starts) {
-                boolean inPush = i >= pushAt && i < pushAt + pushNav.length();
-                boolean inPop = i >= popAt && i < popAt + popPage.length();
+            assertEquals(1, starts.size(),
+                    screen + ": exactly one startPageNav call site may remain (the port's"
+                            + " beginPageNav), got " + starts);
+            String port = body(src, "public void beginPageNav(NavPage from, NavPage to, boolean popPending)");
+            int portAt = indexOf(src, port);
+            assertTrue(starts.get(0) >= portAt && starts.get(0) < portAt + port.length(),
+                    screen + ": the remaining startPageNav call escaped the port, so the controller"
+                            + " would arm nothing");
+            String controller = source(CONTROLLER);
+            List<Integer> arms = callSites(controller, "host.beginPageNav(");
+            assertEquals(3, arms.size(),
+                    "expected exactly the two push arms plus the pop one in the controller, got " + arms);
+            int cPushAt = indexOf(controller, body(controller, "public void pushNav(NavPage"));
+            int cPopAt = indexOf(controller, body(controller, "public void popPage()"));
+            for (int i : arms) {
+                boolean inPush = i >= cPushAt && i < cPushAt + body(controller, "public void pushNav(NavPage").length();
+                boolean inPop = i >= cPopAt && i < cPopAt + body(controller, "public void popPage()").length();
                 assertTrue(inPush || inPop,
-                        screen + ": a startPageNav call escaped pushNav/popPage, so it bypasses"
-                                + " the single resolution path");
+                        "a host.beginPageNav call escaped pushNav/popPage, so it bypasses the single"
+                                + " resolution path");
             }
             // The public entry points must delegate, not drive the nav state.
             assertTrue(body(src, "public void openWorldChat()").contains("pushPage(AppPage.WORLD_CHAT)"),
@@ -213,7 +272,9 @@ class PageNavStyleSourceTest {
                     screen + ": the settings push must go through pushNav");
             assertTrue(body(src, "public void pushPage(AppPage").contains("pushNav("),
                     screen + ": the profile/settings push must go through pushNav");
-            assertTrue(body(src, "public void openProfileDetail(PlayerRef").contains("pushPage("),
+            assertTrue(profileDetailPushesThroughPushPage(
+                            body(src, "public void openProfileDetail(PlayerRef"),
+                            body(src, "public void openProfileDetailPage()")),
                     screen + ": the profile push must go through pushPage");
         }
     }
@@ -226,16 +287,15 @@ class PageNavStyleSourceTest {
      */
     @Test
     void detailToDetailFollowsTheResolvedStyle() throws IOException {
-        for (String screen : SCREENS) {
-            String branch = slice(source(screen),
-                    "// Detail-to-detail",
-                    "// Full-width push/pop: root<->detail transitions.");
+        {
+            String screen = COMPOSITE;
+            String branch = detailToDetailBranch(source(COMPOSITE));
             assertTrue(branch.contains("pageNavZoom"),
                     screen + ": the detail<->detail branch must consult the resolved style");
-            assertTrue(branch.contains("navZoomPhase") && branch.contains("navExitAlpha")
+            assertTrue(branch.contains("zoomExiting") && branch.contains("navExitAlpha")
                             && branch.contains("navEnterAlpha"),
                     screen + ": the detail<->detail zoom must ride the shared serial zoom clock"
-                            + " (navZoomPhase / navExitAlpha / navEnterAlpha), not a private one");
+                            + " (the EXIT phase / navExitAlpha / navEnterAlpha), not a private one");
             assertTrue(branch.contains("navLayerSkippable") && branch.contains("applyNavScale"),
                     screen + ": the detail<->detail zoom must reuse the nav layer helpers"
                             + " (pure-overdraw skip + panel-centred scale)");
@@ -253,8 +313,9 @@ class PageNavStyleSourceTest {
      */
     @Test
     void worldPrivatePairMovesTheWholeChatBody() throws IOException {
-        for (String screen : SCREENS) {
-            String branch = detailToDetailBranch(source(screen));
+        {
+            String screen = COMPOSITE;
+            String branch = detailToDetailBranch(source(COMPOSITE));
             assertTrue(branch.contains("drawChatPageBody("),
                     screen + ": the world<->private pair must draw the whole chat body"
                             + " (messages + reply bar + composer), not only a message layer.\n" + branch);
@@ -283,8 +344,9 @@ class PageNavStyleSourceTest {
      */
     @Test
     void theSlideOffsetsAreAssignedByRoleNotByPosition() throws IOException {
-        for (String screen : SCREENS) {
-            String branch = detailToDetailBranch(source(screen));
+        {
+            String screen = COMPOSITE;
+            String branch = detailToDetailBranch(source(COMPOSITE));
             Map<String, String[]> roles = slideRoles(branch);
             assertEquals(2, roles.size(),
                     screen + ": expected exactly the fromDx and toDx declarations in the"
@@ -348,8 +410,9 @@ class PageNavStyleSourceTest {
      */
     @Test
     void everyCompositeSideDrawsABody() throws IOException {
-        for (String screen : SCREENS) {
-            String branch = detailToDetailBranch(source(screen));
+        {
+            String screen = COMPOSITE;
+            String branch = detailToDetailBranch(source(COMPOSITE));
             for (String side : List.of("visible", "from", "to")) {
                 assertTrue(branch.contains(side + "View != null"),
                         screen + ": the " + side + " side must draw a chat page when it has"
@@ -373,16 +436,25 @@ class PageNavStyleSourceTest {
      * <p>The gate cannot be exercised without a Skija surface, so it is asserted
      * at the source: the guard must consult both {@code advance} (the owner
      * steps the state) and the side's own {@code show}.
+     *
+     * <p>Since block 11/25 the pill is drawn by {@code ScrollSyncService} (D11),
+     * so the gate is asserted where it now lives and the three screens are held
+     * to forwarding to it — the same pair of facts, one indirection deeper.
      */
     @Test
     void theJumpLatestPillIsOwnerAndVisibilityGated() throws IOException {
         for (String screen : SCREENS) {
             String body = body(source(screen), "private void drawJumpLatest(");
-            assertTrue(body.contains("!advance && !show"),
-                    screen + ": drawJumpLatest must not draw a non-owner side whose own scroll"
-                            + " says there is no pill; the guard reads only the shared animation"
-                            + " state.\n" + body);
+            assertTrue(body.contains("scrollSync.drawJumpLatest("),
+                    screen + ": the pill's drawing lives in the D11 service now, so this screen"
+                            + " must forward to it instead of drawing its own.\n" + body);
         }
+        String service = body(source("shared/src/main/java/com/atom/chat/ui/ScrollSyncService.java"),
+                "public void drawJumpLatest(");
+        assertTrue(service.contains("!advance && !show"),
+                "ScrollSyncService.drawJumpLatest must not draw a non-owner side whose own scroll"
+                        + " says there is no pill; the guard reads only the shared animation"
+                        + " state.\n" + service);
     }
 
     /**
@@ -394,8 +466,9 @@ class PageNavStyleSourceTest {
      */
     @Test
     void fixedChromeIsPaintedAfterTheBodyLayerRestores() throws IOException {
-        for (String screen : SCREENS) {
-            String branch = detailToDetailBranch(source(screen));
+        {
+            String screen = COMPOSITE;
+            String branch = detailToDetailBranch(source(COMPOSITE));
             int lastBody = lastIndexOfAny(branch,
                     "drawChatPageBody(", "drawMessageLayerForNav(", "drawProfileDetail(",
                     "drawSettingsSection(");
@@ -426,12 +499,16 @@ class PageNavStyleSourceTest {
     void theFiveChatEntryPointsStillShareTheOneStartHelper() throws IOException {
         for (String screen : SCREENS) {
             String src = source(screen);
-            assertTrue(body(src, "private void pushNav(NavPage").contains("startPageNav("),
-                    screen + ": pushNav must drive the one animated nav start");
-            assertTrue(body(src, "public void popPage()").contains("startPageNav("),
-                    screen + ": popPage must drive the one animated nav start");
-            assertTrue(body(src, "private void startPageNav(").contains("pageNavStyle()"),
+            assertTrue(body(src, "private void pushNav(NavPage").contains("navStack.pushNav(page)"),
+                    screen + ": the screen's pushNav must stay the funnel and delegate");
+            assertTrue(body(src, "public void popPage()").contains("navStack.popPage()"),
+                    screen + ": the screen's popPage must stay the door and delegate");
+            assertTrue(body(source(DIRECTOR), "public void startPageNav(").contains("pageNavStyle()"),
                     screen + ": startPageNav is the one place the nav style is resolved");
+            assertTrue(body(source(CONTROLLER), "public void pushNav(NavPage").contains("host.beginPageNav("),
+                    "the controller's pushNav must drive the one animated nav start");
+            assertTrue(body(source(CONTROLLER), "public void popPage()").contains("host.beginPageNav("),
+                    "the controller's popPage must drive the one animated nav start");
             assertTrue(body(src, "public void openWorldChat()").contains("pushPage(AppPage.WORLD_CHAT)"),
                     screen + ": openWorldChat must delegate into pushPage");
             assertTrue(body(src, "public void openPrivateChat(PlayerRef").contains("pushNav("),
@@ -440,7 +517,9 @@ class PageNavStyleSourceTest {
                     screen + ": openSettingsSection must delegate into pushNav");
             assertTrue(body(src, "public void pushPage(AppPage").contains("pushNav("),
                     screen + ": pushPage must delegate into pushNav");
-            assertTrue(body(src, "public void openProfileDetail(PlayerRef").contains("pushPage("),
+            assertTrue(profileDetailPushesThroughPushPage(
+                            body(src, "public void openProfileDetail(PlayerRef"),
+                            body(src, "public void openProfileDetailPage()")),
                     screen + ": openProfileDetail must delegate into pushPage");
         }
     }
@@ -451,16 +530,23 @@ class PageNavStyleSourceTest {
         for (String screen : SCREENS) {
             String src = source(screen);
             List<String> gated = new ArrayList<>(List.of(
-                    body(src, "private void stepZoomNav("),
-                    body(src, "private void stepSlideNav(")));
+                    body(source(DIRECTOR), "public void stepZoomNav("),
+                    body(source(DIRECTOR), "public void stepSlideNav(")));
             for (String step : gated) {
                 assertTrue(step.contains("Animations.enabled()"),
                         screen + ": both nav clocks must zero their tau when decorative motion is off");
             }
-            assertTrue(body(src, "public void popPage()").contains("!Animations.enabled()"),
-                    screen + ": a pop with decorative motion off must land without waiting");
-            assertTrue(body(src, "public void switchRoot(AppPage").contains("!Animations.enabled()"),
-                    screen + ": a tab switch with decorative motion off must land without waiting");
+            // The gates moved with the cascades (D24a); both must keep facing the
+            // screen's own delegates, or motion-off would stop snapping.
+            String controller = source(CONTROLLER);
+            assertTrue(body(controller, "public void popPage()").contains("!Animations.enabled()"),
+                    "a pop with decorative motion off must land without waiting");
+            assertTrue(body(controller, "public void switchRoot(AppPage").contains("!Animations.enabled()"),
+                    "a tab switch with decorative motion off must land without waiting");
+            assertTrue(body(src, "public void popPage()").contains("navStack.popPage()"),
+                    screen + ": the screen must keep facing the controller's pop");
+            assertTrue(body(src, "public void switchRoot(AppPage").contains("navStack.switchRoot(root)"),
+                    screen + ": the screen must keep facing the controller's tab switch");
         }
     }
 }

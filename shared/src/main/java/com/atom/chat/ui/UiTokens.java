@@ -662,32 +662,21 @@ public final class UiTokens {
     public static final float THEME_CARD_W = s(96);
     public static final float THEME_CARD_H = s(116);
     public static final float THEME_CARD_GAP = s(10);
-    /**
-     * About-page hero: a light geometric ground with the red wordmark
-     * contained and centred on it, over a taller-than-row band so the emblem
-     * reads as a banner rather than a line item.
-     */
-    public static final float SETTINGS_HERO_H = s(136);
-    /**
-     * The hero's inner padding, s(28): the wordmark never comes closer than
-     * this to the card edge, whatever width the panel hands the row.
-     */
-    public static final float SETTINGS_HERO_PAD = s(28);
-    /**
-     * The wordmark's ceiling, s(300) by s(56). Contain picks the smaller of
-     * the two fits, so the mark grows with the card up to this box and shrinks
-     * below it — it is never stretched past either number.
-     */
-    public static final float SETTINGS_HERO_WORDMARK_MAX_W = s(300);
-    public static final float SETTINGS_HERO_WORDMARK_MAX_H = s(56);
-    /** The fallback title's size, used only when the wordmark asset is missing. */
-    public static final float SETTINGS_HERO_FONT = s(24);
-    /**
-     * The hero ground's own base tone (the warm off-white the art is painted
-     * on). The card is filled with it so a card wider than the art letterboxes
-     * into the same colour and the seam is invisible.
-     */
-    public static final int SETTINGS_HERO_GROUND = 0xFFF8F6F2;
+    /** Selected About design A: centered app icon, flat wordmark and version. */
+    public static final float SETTINGS_HERO_H = s(160);
+    public static final float SETTINGS_HERO_PAD = s(20);
+    public static final float SETTINGS_HERO_ICON_SIZE = s(55);
+    public static final float SETTINGS_HERO_ICON_RADIUS = s(15);
+    public static final float SETTINGS_HERO_ICON_SHADOW = s(3);
+    public static final float SETTINGS_HERO_GAP = s(9);
+    public static final float SETTINGS_HERO_WORDMARK_MAX_W = s(141);
+    public static final float SETTINGS_HERO_WORDMARK_MAX_H = s(27);
+    public static final float SETTINGS_HERO_FONT = s(22);
+    public static final int SETTINGS_HERO_BRAND_COLOR = 0xFFC44337;
+    public static final float SETTINGS_HERO_VERSION_FONT = s(10);
+    public static final float SETTINGS_HERO_VERSION_H = s(20);
+    public static final float SETTINGS_HERO_VERSION_PAD = s(8);
+    public static final float SETTINGS_HERO_VERSION_RADIUS = s(5);
     public static final float SETTINGS_ROW_GAP = s(8);
     public static final float SETTINGS_ROW_PAD = s(14);
     public static float settingsRowRadius() {

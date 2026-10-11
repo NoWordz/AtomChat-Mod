@@ -23,7 +23,11 @@ import com.atom.chat.ui.UiLayout;
 import com.atom.chat.ui.UiMotion;
 import com.atom.chat.ui.UiCards;
 import com.atom.chat.ui.UiTokens;
+import static com.atom.chat.ui.UiTokens.s;
 import io.github.humbleui.skija.Canvas;
+import io.github.humbleui.skija.BlendMode;
+import io.github.humbleui.skija.ColorFilter;
+import io.github.humbleui.types.Rect;
 import io.github.humbleui.skija.Color;
 import io.github.humbleui.skija.Font;
 import io.github.humbleui.skija.Image;
@@ -40,9 +44,10 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Body of one settings section: a vertical list of cards in the same visual
+ * Body of one settings section: a vertical list of rows in the same visual
  * language as the conversation list — switch rows, slider rows, read-only info
- * rows (optionally linking out) and the blocked-player list.
+ * rows (optionally linking out), the standalone About brand row and the
+ * blocked-player list.
  *
  * <p>Row geometry comes from {@link #rows(SettingsSection)} for order and
  * {@link #rowRect(SettingsSection, List, int, float, UiLayout)} for position,
@@ -481,10 +486,6 @@ public final class SettingsSectionPage {
     private long settleStart;
     private int hoveredIndex = -1;
     private long lastFrameMs = System.currentTimeMillis();
-
-    private static float s(float v) {
-        return UiTokens.s(v);
-    }
 
     /** Title/value/verb/icon colour — follows the interface text colour setting. */
     private static int textPrimary() {
@@ -1321,12 +1322,15 @@ public final class SettingsSectionPage {
             drawLabel(canvas, row, rect);
             return;
         }
-        UiCards.drawCard(canvas, rect.x(), rect.y(), rect.w(), rect.h(),
-                UiTokens.settingsRowRadius(), hover);
+        if (row.kind() != RowKind.HERO) {
+            UiCards.drawCard(canvas, rect.x(), rect.y(), rect.w(), rect.h(),
+                    UiTokens.settingsRowRadius(), hover);
+        }
         drawRowContent(canvas, row, rect, hover, buttonFont, accent, dtMs);
     }
 
-    /** Everything a non-label row draws <em>inside</em> its card surface.
+    /** Draws content for a settings row. {@link #drawRow} paints its card
+     *  surface where applicable; the About hero is a standalone brand row.
      *  Split from {@link #drawRow} so the merged third-party card can lay
      *  its child rows on one shared surface instead of a card each. */
     private void drawRowContent(Canvas canvas, Row row, UiLayout.Rect rect, float hover,
@@ -1909,121 +1913,92 @@ public final class SettingsSectionPage {
         }
     }
 
-    /**
-     * About-page hero: the light geometric ground drawn inside the card, the
-     * de-keyed red {@code AtomChat} wordmark contained and centred on top of
-     * it. No version or licence copy lives here — that is the mod-info card
-     * below — and the mark is the full logotype, never the two-letter
-     * abbreviation.
-     *
-     * <p>Three decisions shape this. Both layers are static shipped PNGs,
-     * because neither can be redrawn per frame at this size: the ground keeps
-     * its geometry and its negative space, and the wordmark carries the mark's
-     * own red instead of a colour approximated from a font. Both layers are
-     * <em>contained</em> — the card's width follows the panel, so a stretch
-     * would smear the geometry and squash the mark, and a cover crop would eat
-     * the negative space and clip the mark. And the card is filled with the
-     * ground's own base tone, so a card wider than the art letterboxes into the
-     * same colour and the seam disappears.</p>
-     *
-     * <p>Missing art is a packaging mistake, not a crash: a missing ground
-     * leaves the plain card fill, and a missing wordmark falls back to the full
-     * product name as text.</p>
-     */
+    /** Application identity: icon, flat red wordmark and version, without a hero card. */
     private void drawHero(Canvas canvas, UiLayout.Rect rect) {
-        float radius = UiTokens.settingsRowRadius();
-        UiCards.drawCard(canvas, rect.x(), rect.y(), rect.w(), rect.h(), radius, 0.0F,
-                UiTokens.CARD_SHADOW, s(6), UiTokens.SETTINGS_HERO_GROUND);
-        Image art = heroImage();
-        if (art != null) {
-            UiLayout.Rect ground = heroGroundRect(rect, art.getWidth(), art.getHeight());
-            if (ground.w() > 0.0F && ground.h() > 0.0F) {
-                SkiaDraw.drawRoundedImage(canvas, art, ground.x(), ground.y(),
-                        ground.w(), ground.h(), radius, SamplingMode.LINEAR);
-            }
+        float available = rect.w() - 2.0F * UiTokens.SETTINGS_HERO_PAD;
+        if (available <= 0.0F) {
+            return;
         }
+        float iconSize = Math.min(UiTokens.SETTINGS_HERO_ICON_SIZE, available);
+        float top = heroBrandTop(rect);
+        float iconX = rect.x() + (rect.w() - iconSize) / 2.0F;
+        Image icon = heroAppIcon();
+        if (icon != null) {
+            SkiaDraw.drawRoundedShadow(canvas, iconX, top, iconSize, iconSize,
+                    UiTokens.SETTINGS_HERO_ICON_RADIUS, UiTokens.SETTINGS_HERO_ICON_SHADOW,
+                    UiTokens.CARD_SHADOW);
+            SkiaDraw.drawRoundedImage(canvas, icon, iconX, top, iconSize, iconSize,
+                    UiTokens.SETTINGS_HERO_ICON_RADIUS, SamplingMode.LINEAR);
+        }
+        float markY = top + iconSize + UiTokens.SETTINGS_HERO_GAP;
         Image mark = heroWordmark();
         if (mark != null) {
             UiLayout.Rect box = heroWordmarkRect(rect, mark.getWidth(), mark.getHeight());
             if (box.w() > 0.0F && box.h() > 0.0F) {
-                SkiaDraw.drawRoundedImage(canvas, mark, box.x(), box.y(), box.w(), box.h(),
-                        0.0F, SamplingMode.LINEAR);
+                try (ColorFilter tint = ColorFilter.makeBlend(UiTokens.SETTINGS_HERO_BRAND_COLOR,
+                        BlendMode.SRC_IN);
+                     Paint paint = new Paint().setAntiAlias(true).setColorFilter(tint)) {
+                    canvas.drawImageRect(mark,
+                            Rect.makeXYWH(0, 0, mark.getWidth(), mark.getHeight()),
+                            Rect.makeXYWH(box.x(), box.y(), box.w(), box.h()),
+                            SamplingMode.LINEAR, paint, false);
+                }
             }
-            return;
+        } else {
+            Font font = FontManager.font(UiTokens.SETTINGS_HERO_FONT);
+            SkiaFontRenderer.drawTextCentered(canvas, font, tr("atomchat.screen.title"),
+                    rect.x() + rect.w() / 2.0F,
+                    markY + UiTokens.SETTINGS_HERO_WORDMARK_MAX_H / 2.0F, textPrimary());
         }
-        // No wordmark on the classpath: title the hero with the full product
-        // name — the two-letter abbreviation is not the logotype. The ink comes
-        // from the ground's own luminance ({@link UiTokens#onAccent}'s rule), not
-        // from the panel's textPrimary: the ground is near-white on every theme,
-        // so the default white primary would be invisible on it.
-        Font heroFont = FontManager.font(UiTokens.SETTINGS_HERO_FONT);
-        String title = tr("atomchat.screen.title");
-        SkiaFontRenderer.drawText(canvas, heroFont, title,
-                rect.x() + (rect.w() - SkiaFontRenderer.getStringWidth(heroFont, title)) / 2.0F,
-                SkiaFontRenderer.centerBaselineY(heroFont, rect.y() + rect.h() / 2.0F),
-                UiTokens.onAccent(UiTokens.SETTINGS_HERO_GROUND));
+        Font versionFont = FontManager.font(UiTokens.SETTINGS_HERO_VERSION_FONT);
+        String version = AtomChat.version();
+        float versionW = Math.min(available, SkiaFontRenderer.getStringWidth(versionFont, version)
+                + 2.0F * UiTokens.SETTINGS_HERO_VERSION_PAD);
+        float versionX = rect.x() + (rect.w() - versionW) / 2.0F;
+        float versionY = markY + UiTokens.SETTINGS_HERO_WORDMARK_MAX_H + UiTokens.SETTINGS_HERO_GAP;
+        SkiaDraw.drawRoundedRect(canvas, versionX, versionY, versionW,
+                UiTokens.SETTINGS_HERO_VERSION_H, UiTokens.SETTINGS_HERO_VERSION_RADIUS, sec(12));
+        SkiaFontRenderer.drawTextCentered(canvas, versionFont, version,
+                rect.x() + rect.w() / 2.0F,
+                versionY + UiTokens.SETTINGS_HERO_VERSION_H / 2.0F, sec(255));
     }
 
-    /**
-     * The rect the hero ground occupies inside a hero card: the largest box
-     * carrying the art's own aspect that fits the card, centred on both axes.
-     * Contain geometry, never a cover crop — the card's width follows the panel,
-     * so zooming to fill would overflow the row and eat the negative space the
-     * brief asks for. Pure arithmetic, so a test can pin it without a canvas.
-     *
-     * @param artW the decoded ground's width, {@code > 0}
-     * @param artH the decoded ground's height, {@code > 0}
-     * @return a zero-sized rect when the card or the art has no extent
-     */
-    static UiLayout.Rect heroGroundRect(UiLayout.Rect hero, float artW, float artH) {
-        if (artW <= 0.0F || artH <= 0.0F || hero.w() <= 0.0F || hero.h() <= 0.0F) {
-            return new UiLayout.Rect(hero.x(), hero.y(), 0.0F, 0.0F);
-        }
-        float scale = Math.min(hero.w() / artW, hero.h() / artH);
-        float w = artW * scale;
-        float h = artH * scale;
-        return new UiLayout.Rect(hero.x() + (hero.w() - w) / 2.0F,
-                hero.y() + (hero.h() - h) / 2.0F, w, h);
+    private static float heroBrandTop(UiLayout.Rect hero) {
+        float iconSize = Math.min(UiTokens.SETTINGS_HERO_ICON_SIZE,
+                Math.max(0.0F, hero.w() - 2.0F * UiTokens.SETTINGS_HERO_PAD));
+        float groupH = iconSize + 2.0F * UiTokens.SETTINGS_HERO_GAP
+                + UiTokens.SETTINGS_HERO_WORDMARK_MAX_H + UiTokens.SETTINGS_HERO_VERSION_H;
+        return hero.y() + Math.max(0.0F, (hero.h() - groupH) / 2.0F);
     }
 
-    /**
-     * The rect the wordmark occupies inside a hero card: the largest box
-     * carrying the mark's own aspect that fits the padded card under the
-     * wordmark's max width and max height, centred on both axes. Contain
-     * geometry — the mark is never stretched, never cropped, and never spills
-     * past the card at any width the panel can produce. Pure arithmetic, so a
-     * test can pin it without a canvas.
-     *
-     * @param markW the decoded wordmark's width, {@code > 0}
-     * @param markH the decoded wordmark's height, {@code > 0}
-     * @return a zero-sized rect when the card has no room; the caller skips it
-     */
+    /** Contain the wordmark in the middle slot of the application-identity stack. */
     static UiLayout.Rect heroWordmarkRect(UiLayout.Rect hero, float markW, float markH) {
         float availW = hero.w() - 2.0F * UiTokens.SETTINGS_HERO_PAD;
-        float availH = hero.h() - 2.0F * UiTokens.SETTINGS_HERO_PAD;
-        if (markW <= 0.0F || markH <= 0.0F || availW <= 0.0F || availH <= 0.0F) {
+        if (markW <= 0.0F || markH <= 0.0F || availW <= 0.0F
+                || hero.h() <= 2.0F * UiTokens.SETTINGS_HERO_PAD) {
             return new UiLayout.Rect(hero.x(), hero.y(), 0.0F, 0.0F);
         }
-        float scale = Math.min(Math.min(availW / markW, availH / markH),
+        float scale = Math.min(availW / markW,
                 Math.min(UiTokens.SETTINGS_HERO_WORDMARK_MAX_W / markW,
                         UiTokens.SETTINGS_HERO_WORDMARK_MAX_H / markH));
         float w = markW * scale;
         float h = markH * scale;
+        float iconSize = Math.min(UiTokens.SETTINGS_HERO_ICON_SIZE, availW);
         return new UiLayout.Rect(hero.x() + (hero.w() - w) / 2.0F,
-                hero.y() + (hero.h() - h) / 2.0F, w, h);
+                heroBrandTop(hero) + iconSize + UiTokens.SETTINGS_HERO_GAP
+                        + (UiTokens.SETTINGS_HERO_WORDMARK_MAX_H - h) / 2.0F, w, h);
     }
 
-    private static Image heroImage;
-    private static Image heroWordmark;
+    private static Image heroAppIcon;
 
-    /** The bundled hero ground, decoded once and cached for the session. */
-    private static Image heroImage() {
-        if (heroImage != null) {
-            return heroImage;
+    private static Image heroAppIcon() {
+        if (heroAppIcon == null) {
+            heroAppIcon = loadBundled("/assets/atomchat/logo.png");
         }
-        heroImage = loadBundled("/assets/atomchat/about_hero.png");
-        return heroImage;
+        return heroAppIcon;
     }
+
+    private static Image heroWordmark;
 
     /**
      * The bundled red {@code AtomChat} wordmark with its white ground keyed out
@@ -2047,7 +2022,7 @@ public final class SettingsSectionPage {
             }
         } catch (Exception ignored) {
             // Missing art is a packaging mistake, not a crash: the caller
-            // falls back to the card-and-wordmark shape.
+            // falls back to the product name as text.
         }
         return null;
     }

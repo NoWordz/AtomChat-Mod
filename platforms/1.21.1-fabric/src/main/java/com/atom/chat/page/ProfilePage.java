@@ -18,6 +18,7 @@ import com.atom.chat.ui.PressScale;
 import com.atom.chat.ui.UiMotion;
 import com.atom.chat.ui.UiSpring;
 import com.atom.chat.ui.UiTokens;
+import static com.atom.chat.ui.UiTokens.s;
 import io.github.humbleui.skija.Canvas;
 import it.unimi.dsi.fastutil.objects.Object2IntMap;
 import net.minecraft.stat.Stat;
@@ -500,10 +501,6 @@ public final class ProfilePage {
             return String.format(java.util.Locale.ROOT, "%.1f km", cm / 100_000.0);
         }
         return (cm / 100L) + " m";
-    }
-
-    private static float s(float v) {
-        return UiTokens.s(v);
     }
 
     /** Title/value colour — follows the interface text colour setting. */

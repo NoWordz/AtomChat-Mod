@@ -1,9 +1,18 @@
 # AtomChat 项目状态
 
 > 交接文档：给下一个会话（或未来的自己）快速定位「现在在哪、下一步做什么」。
-> 更新于 **R35 预览发版轮（0.3.0-Preview 已推送新仓库 NoWordz/AtomChat-Mod）**。
+> 更新于 **2026-10-11：阶段 3 第一批与真机反馈修复验收通过，版本仍为 0.3.0-Preview**。
 
-## 当前位置
+## 本轮收口
+
+- 分支：`refactor/screen-split`，推送目标 `origin`（NoWordz/AtomChat-Mod）；本轮仅提交与推送此分支，不合并 main、不移动版本 tag、不更新 Release 附件。
+- 用户已确认横幅跳转交互与关于页 A 稿验收通过；验收平台未另行指定，不能据此声称三端均完成运行期验收。
+- 横幅修复：`7a59c8a`。目标页成功打开即移除被点击条目；消息定位失败不阻止移除，其他排队通知保留。
+- 关于页：去掉外围装饰与整块卡片，改为小应用图标、平色红字标、版本标签组成的居中身份组；下方信息卡片保留。
+- 证据复用：横幅三端回归 fabric 1168 / forge 1156 / neo 1156、golden 各 12 场景零差异、bare 517、孪生 67 未归类 0；A 稿三端 offline assemble 和 verify_jars 全通过。本轮 Fabric 关于页单类 9 项通过（0 skipped / failures / errors），独立审查收口；未重跑完整电池，不登记新的全量基线。
+- 验收 jar 位于 `platforms/*/build/libs/atomchat-*-0.3.0-Preview.jar`。外部交接正本：`D:/Claude_ds/atomchat-split-audit/RESUME.md`、`D:/Claude_ds/_phase3/FIX_ABOUT-01.md`。
+
+## R35 历史发布快照（以下不是本轮部署状态）
 
 - **版本**：`0.3.0-Preview`（`gradle.properties:17`）；tag `v0.3.0-Preview` 与 main 已推送**新仓库** `NoWordz/AtomChat-Mod`（旧仓库 `E33EPUS/AtomChat` 被封，remote 改名 `banned-old` 保留，`origin` 指向新仓库）。
 - **构建**：`bash /d/Claude_ds/_atomchat_build_all.sh` → 三平台 BUILD SUCCESSFUL + 守卫 + `_parity_check.py` PASS。

@@ -74,6 +74,15 @@ class OffscreenRenderTest {
     private static final float PANEL_H = 780.0F;
     private static final int ACCENT = 0xFF3B82F6;
 
+    /**
+     * Floors for {@link #assertLandedInsideTheFrame}: the emoji / quick-phrase
+     * panels measure ~300px and ~480px tall and ~400px wide, while the
+     * off-canvas failure mode leaves a ~10px sliver. Anything in between still
+     * passes, which is intended — these catch "not in the frame", not "moved".
+     */
+    private static final int PANEL_CONTENT_MIN_H = 150;
+    private static final int PANEL_CONTENT_MIN_W = 200;
+
     @TempDir
     static Path platformRoot;
 
@@ -163,6 +172,76 @@ class OffscreenRenderTest {
         } finally {
             bitmap.close();
         }
+    }
+
+    /**
+     * Bounding box of the frame's non-transparent pixels as {@code [x1, y1, x2, y2]},
+     * or {@code null} when the frame is fully transparent.
+     *
+     * <p>Why a geometry probe and not just {@link #drawnBytes}: a panel drawn
+     * OUTSIDE the frame still leaves a few non-zero bytes behind — its drop
+     * shadow's edge lands in row 0..9. "Something was painted" is therefore
+     * satisfied by a panel nobody can see (measured: a 10px sliver, and the
+     * emoji and phrase frames came out byte-identical to each other). The
+     * bounding box is what tells the two apart.
+     */
+    private static int[] drawnBounds(Surface surface) {
+        Bitmap bitmap = new Bitmap();
+        try {
+            bitmap.allocN32Pixels(SURFACE_W, SURFACE_H);
+            assertTrue(surface.readPixels(bitmap, 0, 0), "could not read the raster surface back");
+            byte[] pixels = bitmap.readPixels();
+            int x1 = Integer.MAX_VALUE;
+            int y1 = Integer.MAX_VALUE;
+            int x2 = -1;
+            int y2 = -1;
+            // N32 premultiplied: the alpha byte is the 4th of every pixel.
+            for (int y = 0; y < SURFACE_H; y++) {
+                for (int x = 0; x < SURFACE_W; x++) {
+                    if (pixels[(y * SURFACE_W + x) * 4 + 3] != 0) {
+                        if (x < x1) {
+                            x1 = x;
+                        }
+                        if (x > x2) {
+                            x2 = x;
+                        }
+                        if (y < y1) {
+                            y1 = y;
+                        }
+                        if (y > y2) {
+                            y2 = y;
+                        }
+                    }
+                }
+            }
+            return x2 < 0 ? null : new int[]{x1, y1, x2, y2};
+        } finally {
+            bitmap.close();
+        }
+    }
+
+    /**
+     * The page really landed inside the frame: its content spans a real band and
+     * starts below the list's top edge.
+     *
+     * <p>The floors are deliberately loose (the measured bands are ~300px and
+     * ~480px tall, ~400px wide) — they are here to catch "drawn off-canvas, only
+     * the shadow is visible", not to pin a layout that has every right to move.
+     */
+    private static void assertLandedInsideTheFrame(Surface surface, UiLayout layout, String what) {
+        int[] box = drawnBounds(surface);
+        assertNotNull(box, what + " painted nothing at all");
+        int width = box[2] - box[0] + 1;
+        int height = box[3] - box[1] + 1;
+        assertTrue(height >= PANEL_CONTENT_MIN_H,
+                what + " content is only " + height + "px tall (bbox " + box[0] + "," + box[1]
+                        + " -> " + box[2] + "," + box[3] + ") - the panel is probably drawn off-canvas,"
+                        + " leaving only its shadow edge in the frame");
+        assertTrue(box[1] >= (int) layout.list.y(),
+                what + " content starts at y=" + box[1] + ", above the list top (y=" + layout.list.y()
+                        + ") - same failure mode");
+        assertTrue(width >= PANEL_CONTENT_MIN_W,
+                what + " content is only " + width + "px wide");
     }
 
     @Test
@@ -471,6 +550,7 @@ class OffscreenRenderTest {
                 panel.paintedFrame("emoji panel",
                         canvas -> panelUi.render(canvas, layout, -1.0F, -1.0F, 200L));
             }
+            assertLandedInsideTheFrame(panel.surface, layout, "emoji panel");
         }
     }
 
@@ -486,6 +566,7 @@ class OffscreenRenderTest {
                 panel.paintedFrame("quick phrase panel",
                         canvas -> panelUi.render(canvas, layout, -1.0F, -1.0F, 200L));
             }
+            assertLandedInsideTheFrame(panel.surface, layout, "quick phrase panel");
         }
     }
 

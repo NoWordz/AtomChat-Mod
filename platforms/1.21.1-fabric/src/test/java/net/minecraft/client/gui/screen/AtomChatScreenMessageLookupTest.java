@@ -1,6 +1,7 @@
 package net.minecraft.client.gui.screen;
 
 import com.atom.chat.chat.ChatMessage;
+import com.atom.chat.notification.NotificationJumpService;
 import net.minecraft.text.Text;
 import org.junit.jupiter.api.Test;
 
@@ -12,7 +13,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 /**
  * A banner click only dismisses once its message has been located in the target
  * page's feed, so the locate step is the half of that contract a test can still
- * pin without a live {@code MinecraftClient}: {@link AtomChatScreen#findMessageIndex}
+ * pin without a live {@code MinecraftClient}: {@link NotificationJumpService#findMessageIndex}
  * is a pure scan over the feed.
  *
  * <p>Anti-spam merges replace the stored row object after the banner was queued,
@@ -32,7 +33,7 @@ class AtomChatScreenMessageLookupTest {
     void theSameRowObjectResolvesToItsOwnSlot() {
         ChatMessage first = message("hi", false, ALICE, "Alice");
         ChatMessage second = message("yo", false, ALICE, "Alice");
-        assertEquals(1, AtomChatScreen.findMessageIndex(List.of(first, second), second));
+        assertEquals(1, NotificationJumpService.findMessageIndex(List.of(first, second), second));
     }
 
     @Test
@@ -40,21 +41,21 @@ class AtomChatScreenMessageLookupTest {
         ChatMessage first = message("hi", false, ALICE, "Alice");
         ChatMessage second = message("hi", false, ALICE, "Alice");
         ChatMessage queued = message("hi", false, ALICE, "Alice");
-        assertEquals(1, AtomChatScreen.findMessageIndex(List.of(first, second), queued));
+        assertEquals(1, NotificationJumpService.findMessageIndex(List.of(first, second), queued));
     }
 
     @Test
     void anotherSendersIdenticalTextIsNotTheTarget() {
         ChatMessage fromAlice = message("hi", false, ALICE, "Alice");
         ChatMessage fromBob = message("hi", false, BOB, "Bob");
-        assertEquals(-1, AtomChatScreen.findMessageIndex(List.of(fromAlice), fromBob));
+        assertEquals(-1, NotificationJumpService.findMessageIndex(List.of(fromAlice), fromBob));
     }
 
     @Test
     void ownFlagMismatchIsNotTheTarget() {
         ChatMessage own = message("hi", true, ALICE, "Alice");
         ChatMessage other = message("hi", false, ALICE, "Alice");
-        assertEquals(-1, AtomChatScreen.findMessageIndex(List.of(own), other));
+        assertEquals(-1, NotificationJumpService.findMessageIndex(List.of(own), other));
     }
 
     @Test
@@ -62,7 +63,7 @@ class AtomChatScreenMessageLookupTest {
         ChatMessage quoted = new ChatMessage(Text.literal("hi"), false, false, "Bob", "yo",
                 ALICE, "Alice", "Alice", "hi");
         ChatMessage plain = message("hi", false, ALICE, "Alice");
-        assertEquals(-1, AtomChatScreen.findMessageIndex(List.of(quoted), plain));
+        assertEquals(-1, NotificationJumpService.findMessageIndex(List.of(quoted), plain));
     }
 
     @Test
@@ -70,12 +71,12 @@ class AtomChatScreenMessageLookupTest {
         ChatMessage first = message("hi", false, ALICE, "Alice");
         ChatMessage second = message("yo", false, ALICE, "Alice");
         ChatMessage gone = message("gone", false, BOB, "Bob");
-        assertEquals(-1, AtomChatScreen.findMessageIndex(List.of(first, second), gone));
+        assertEquals(-1, NotificationJumpService.findMessageIndex(List.of(first, second), gone));
     }
 
     @Test
     void anEmptyFeedReturnsMinusOne() {
         ChatMessage queued = message("hi", false, ALICE, "Alice");
-        assertEquals(-1, AtomChatScreen.findMessageIndex(List.of(), queued));
+        assertEquals(-1, NotificationJumpService.findMessageIndex(List.of(), queued));
     }
 }
