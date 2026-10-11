@@ -354,11 +354,10 @@ public final class SettingsSectionPage {
     private static final long CONFIRM_ARM_MS = 3000L;
     private String armedActionId;
     private long armedActionAt;
-    /** Collapsed colour groups; session-only. The appearance "advanced" group
-     *  starts collapsed by design: theme + everyday knobs on top, the twelve
-     *  colour rows tucked away until asked for. */
+    /** Session-only user folds. Every group starts expanded; a click may
+     *  collapse it until this settings page instance is discarded. */
     private final java.util.Set<String> collapsedColorGroups =
-            new java.util.HashSet<>(java.util.List.of("appearance_advanced", "notification_audio", "feedback_audio"));
+            new java.util.HashSet<>();
     /**
      * Time constant of the fold animation: a group's children neither pop in
      * nor pop out any more, they grow/shrink behind an exponential settle at
@@ -766,7 +765,7 @@ public final class SettingsSectionPage {
                 // so its continuous slider lives in the theme chip, showing
                 // the current value; 0 gives square corners everywhere.
                 addSliders(rows, SettingsSection.APPEARANCE, "corner_radius");
-                // The full colour palette, folded away by default.
+                // The full colour palette starts expanded, like every group.
                 addGroup(rows, LABEL_APPEARANCE_ADVANCED, () -> {
                     for (SettingsColor color : SettingsCatalog.colors(SettingsSection.APPEARANCE)) {
                         rows.add(Row.ofColor(color));

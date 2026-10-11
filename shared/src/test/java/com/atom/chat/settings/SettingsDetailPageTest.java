@@ -311,6 +311,25 @@ class SettingsDetailPageTest {
         }
     }
 
+    @Test
+    void allSettingsGroupsStartExpanded() {
+        var page = new SettingsSectionPage();
+        assertTrue(page.rows(SettingsSection.APPEARANCE).stream()
+                .anyMatch(row -> row.kind() == SettingsSectionPage.RowKind.COLOR),
+                "appearance color controls must be visible without expanding a group");
+        int notify = java.util.stream.IntStream.range(0, page.chips(SettingsSection.CHAT).size())
+                .filter(i -> page.chips(SettingsSection.CHAT).get(i).id().equals("notify"))
+                .findFirst().orElseThrow();
+        page.selectChip(SettingsSection.CHAT, notify);
+        var ids = page.rows(SettingsSection.CHAT).stream().filter(row -> row.item() != null)
+                .map(row -> row.item().id()).collect(java.util.stream.Collectors.toSet());
+        assertTrue(ids.containsAll(java.util.Set.of("notification", "mention_sound", "whisper_sound",
+                "feedback", "feedback_button", "feedback_send", "feedback_panel")),
+                "notification and feedback controls must start visible");
+        assertTrue(page.rows(SettingsSection.ABOUT).stream().anyMatch(row -> row.item() != null
+                && row.item().id().equals("debug")), "the about advanced group must start expanded");
+    }
+
     /** A retention-days style slider whose commit lands in an int the test can read. */
     private static SettingsSlider slider() {
         return slider(new AtomicInteger(-1));
