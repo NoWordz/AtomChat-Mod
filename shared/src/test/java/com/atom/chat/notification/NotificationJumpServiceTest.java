@@ -26,6 +26,7 @@ import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -241,6 +242,24 @@ class NotificationJumpServiceTest {
     }
 
     @Test
+    void aWhisperWithoutMessageNeverNavigatesOrLooksUpAScroller() {
+        Harness h = new Harness();
+        boolean navigated;
+
+        try {
+            navigated = h.service.jumpToNotification(whisper(null), h.layout, h.view);
+        } catch (RuntimeException failure) {
+            throw new AssertionError("a banner with no message must be rejected without throwing", failure);
+        }
+        assertFalse(navigated,
+                "a banner with no message cannot navigate");
+        assertTrue(h.screen.openedPrivate.isEmpty(), "no private page was requested");
+        assertEquals(AppPage.SETTINGS, h.screen.page, "the current page remains unchanged");
+        assertEquals(0, h.screen.worldOpens, "no world page was requested");
+        assertEquals(0, h.screen.scrollLookups, "there is no target to look up");
+    }
+
+    @Test
     void aWhisperOpensTheConversationAndLandsOnTheMessage() {
         Harness h = new Harness();
         h.screen.messages = feed(40);
@@ -312,14 +331,16 @@ class NotificationJumpServiceTest {
     }
 
     @Test
-    void aMessageThatLeftTheFeedDoesNotLandAndNeverAsksForAScroller() {
+    void aMessageThatLeftTheFeedStillCompletesNavigationWithoutCreatingAScroller() {
         Harness h = new Harness();
         h.screen.messages = feed(5);
         ChatMessage gone = line("this row is gone", ALICE_UUID, "Alice");
 
-        assertFalse(h.service.jumpToNotification(mention(gone), h.layout, h.view));
+        assertTrue(h.service.jumpToNotification(mention(gone), h.layout, h.view),
+                "the destination page was reached even though its feed no longer has the message");
+        assertEquals(AppPage.WORLD_CHAT, h.screen.page, "the destination page is open");
         assertEquals(0, h.screen.scrollLookups,
-                "the page's controller is created only once a target was located");
+                "a missing message never asks for a scroll controller");
     }
 
     @Test
@@ -406,10 +427,11 @@ class NotificationJumpServiceTest {
     }
 
     @Test
-    void aClickThatCannotLandLeavesTheBannerUpAndTheComposerAlone() {
+    void aClickWhosePageSelectionDidNotTakeLeavesTheBannerUpAndTheComposerAlone() {
         Harness h = new Harness();
         ChatMessage target = line("hi", ALICE_UUID, "Alice");
-        h.screen.messages = List.of();                 // the row is no longer in the feed
+        h.screen.messages = List.of(target);
+        h.screen.navigationTakes = false;
         h.screen.composerPresent = true;
         NotificationBanner.INSTANCE.enqueue(NotificationBanner.Type.WHISPER, "Alice", "hi", target);
         settleAndRender(h);
@@ -418,8 +440,65 @@ class NotificationJumpServiceTest {
         assertTrue(h.service.onBannerClick(0, button[0], button[1], false, h.layout, h.view),
                 "the click is consumed either way: the banner owns it");
         assertTrue(NotificationBanner.INSTANCE.hasActive(),
-                "a jump that did not land must leave the banner on screen");
+                "a destination page that did not open must leave the banner on screen");
+        assertEquals(AppPage.SETTINGS, h.screen.page, "the failed navigation leaves the current page");
+        assertEquals(0, h.screen.scrollLookups, "scrolling cannot start after navigation failed");
         assertEquals(0, h.screen.focusWrites, "and must not steal the composer focus");
+    }
+
+    @Test
+    void aNamelessWhisperButtonLeavesTheBannerUpAndTheComposerAlone() {
+        Harness h = new Harness();
+        ChatMessage nameless = line("psst", ALICE_UUID, null);
+        h.screen.composerPresent = true;
+        NotificationBanner.INSTANCE.enqueue(NotificationBanner.Type.WHISPER, "Alice", "psst", nameless);
+        NotificationBanner.Active clicked = NotificationBanner.INSTANCE.newest();
+        settleAndRender(h);
+
+        float[] button = sendButtonPoint(h.layout, clicked);
+        assertTrue(h.service.onBannerClick(0, button[0], button[1], false, h.layout, h.view),
+                "the button click is consumed by the banner");
+        assertSame(clicked, NotificationBanner.INSTANCE.newest(), "an invalid destination keeps that banner");
+        assertEquals(AppPage.SETTINGS, h.screen.page, "no private page can open without a profile name");
+        assertEquals(0, h.screen.scrollLookups, "the lookup cannot run without a destination");
+        assertEquals(0, h.screen.focusWrites, "an invalid destination cannot focus the composer");
+    }
+
+    @Test
+    void aMissingMessageDismissesOnlyTheClickedBannerForBothTypesAndRoutes() {
+        for (NotificationBanner.Type type : List.of(
+                NotificationBanner.Type.WHISPER, NotificationBanner.Type.MENTION)) {
+            for (boolean sendButton : List.of(false, true)) {
+                drainTheBannerStack();
+                Harness h = new Harness();
+                h.screen.messages = List.of();
+                h.screen.composerPresent = true;
+
+                ChatMessage queuedMessage = line("queued", BOB_UUID, "Bob");
+                NotificationBanner.INSTANCE.enqueue(NotificationBanner.Type.QUOTE,
+                        "Bob", "queued", queuedMessage);
+                NotificationBanner.Active remaining = NotificationBanner.INSTANCE.newest();
+                ChatMessage missing = line("missing", ALICE_UUID, "Alice");
+                NotificationBanner.INSTANCE.enqueue(type, "Alice", "missing", missing);
+                NotificationBanner.Active clicked = NotificationBanner.INSTANCE.newest();
+                settleAndRender(h);
+
+                float[] point = sendButton
+                        ? sendButtonPoint(h.layout, clicked)
+                        : bannerBodyPoint(h.layout, clicked);
+                assertTrue(h.service.onBannerClick(0, point[0], point[1], false, h.layout, h.view),
+                        "the rendered banner owns its " + type + " " + (sendButton ? "button" : "body") + " click");
+                assertEquals(type == NotificationBanner.Type.WHISPER
+                                ? AppPage.PRIVATE_CHAT : AppPage.WORLD_CHAT,
+                        h.screen.page, "navigation succeeds even when the target message is absent");
+                assertEquals(0, h.screen.scrollLookups, "a missing message does not create a scroller");
+                assertEquals(sendButton ? 1 : 0, h.screen.focusWrites,
+                        "only the writable send-button route focuses the composer");
+                assertTrue(NotificationBanner.INSTANCE.hasActive(), "the other queued banner remains");
+                assertSame(remaining, NotificationBanner.INSTANCE.newest(),
+                        "only the banner under the actual click was removed");
+            }
+        }
     }
 
     @Test
@@ -541,10 +620,14 @@ class NotificationJumpServiceTest {
      * sits outside its resting rect.
      */
     private static float[] sendButtonPoint(UiLayout layout) {
+        return sendButtonPoint(layout, NotificationBanner.INSTANCE.newest());
+    }
+
+    private static float[] sendButtonPoint(UiLayout layout, NotificationBanner.Active expected) {
         UiLayout.Rect panel = layout.rect();
         for (float x = panel.right() + 64.0F; x > panel.x() - 64.0F; x -= 1.0F) {
             for (float y = panel.y() - 64.0F; y < panel.bottom() + 64.0F; y += 1.0F) {
-                if (NotificationBanner.INSTANCE.buttonHit(x, y) != null) {
+                if (NotificationBanner.INSTANCE.buttonHit(x, y) == expected) {
                     return new float[]{x, y};
                 }
             }
@@ -554,10 +637,14 @@ class NotificationJumpServiceTest {
 
     /** A point on the newest banner that is not its send button. */
     private static float[] bannerBodyPoint(UiLayout layout) {
+        return bannerBodyPoint(layout, NotificationBanner.INSTANCE.newest());
+    }
+
+    private static float[] bannerBodyPoint(UiLayout layout, NotificationBanner.Active expected) {
         UiLayout.Rect panel = layout.rect();
         for (float x = panel.x() - 64.0F; x < panel.right() + 64.0F; x += 1.0F) {
             for (float y = panel.y() - 64.0F; y < panel.bottom() + 64.0F; y += 1.0F) {
-                if (NotificationBanner.INSTANCE.hitTest(x, y) != null
+                if (NotificationBanner.INSTANCE.hitTest(x, y) == expected
                         && NotificationBanner.INSTANCE.buttonHit(x, y) == null) {
                     return new float[]{x, y};
                 }

@@ -185,8 +185,8 @@ public final class NotificationJumpService {
         }
         // The send-style round button means "reply now": same jump plus
         // composer focus. The rest of the banner just navigates. Both
-        // routes jump first and dismiss only once the jump landed, so a
-        // banner whose message can no longer be located stays on screen.
+        // routes navigate first and dismiss once the destination page is
+        // reached. A missing feed row does not undo a successful navigation.
         NotificationBanner.Active sendButton = NotificationBanner.INSTANCE.buttonHit(vmx, vmy);
         if (sendButton != null) {
             if (jumpToNotification(sendButton, layout, view)) {
@@ -219,13 +219,14 @@ public final class NotificationJumpService {
     }
 
     /**
-     * Opens whatever page holds this notification and scrolls the message in.
+     * Opens whatever page holds this notification and scrolls the message in when present.
      *
-     * <p>Returns whether the jump landed; the caller dismisses the banner only
-     * on {@code true}. A whisper whose sender has no profile name (there is no
-     * conversation key to open), a message that is no longer in the target
-     * page's feed, or a page selection that did not take leaves the banner up
-     * instead of stranding the player on an unchanged panel.
+     * <p>Returns whether the destination page was reached; the caller dismisses
+     * the banner only on {@code true}. A whisper whose sender has no profile
+     * name (there is no conversation key to open), or a page selection that did
+     * not take leaves the banner up. Once the page is reached, locating the
+     * message is best-effort: a message missing from its feed does not undo the
+     * navigation and never requests a scroll controller.
      *
      * @param layout the frame's layout (D10), for the list rect the scroll is measured against
      * @param view   the message list view (D22), whose row metrics the scroll needs
@@ -254,7 +255,8 @@ public final class NotificationJumpService {
                 return false;
             }
         }
-        return scrollToMessage(msg, layout, view);
+        scrollToMessage(msg, layout, view);
+        return true;
     }
 
     /**
