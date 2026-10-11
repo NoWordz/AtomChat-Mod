@@ -246,7 +246,7 @@ public final class FrameProfile {
     /** 让"谁在用这把尺子"一眼可见。 */
     static {
         if (threads == null) {
-            AtomChat.LOGGER.debug("Thread allocation counting unavailable; the render profile omits alloc");
+            AtomChat.LOGGER.debug(com.atom.chat.diagnostics.AtomChatLog.message("render", "Thread allocation counting unavailable; the render profile omits alloc"));
         }
     }
 }

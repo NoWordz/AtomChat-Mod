@@ -142,6 +142,7 @@ public final class SendPipeline {
             ChatStore.get().add(LocalEcho.build(normalized, body, quoteName, quoteText,
                     ownUuid, ownProfile, OwnIdentity.displayNameRich()));
         }
+        com.atom.chat.audio.FeedbackSoundController.play(com.atom.chat.audio.FeedbackCue.SEND);
         host.clearComposer();
         host.replySlots().disarm();
         // The armed reply is consumed with the send: drop its slot too, or
@@ -181,6 +182,7 @@ public final class SendPipeline {
                             ownUuid, ownProfile, OwnIdentity.displayNameRich()));
             PrivateEchoTracker.markOutgoing(target);
         }
+        com.atom.chat.audio.FeedbackSoundController.play(com.atom.chat.audio.FeedbackCue.SEND);
         host.clearComposer();
         host.replySlots().disarm();
         // Consumed with the send — see sendMessage's matching call.

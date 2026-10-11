@@ -776,4 +776,33 @@ class OffscreenRenderTest {
         public void pickEmoteFile() {
         }
     }
+
+    @Test
+    void funEffectsPaintWithinPanelAndRestoreCanvasAcrossFrames() {
+        UiLayout layout=UiLayout.of(PANEL_X,PANEL_Y,PANEL_W,PANEL_H);
+        try (Panel panel=new Panel()) {
+            for(var type:com.atom.chat.fun.ChatEffectType.values()) {
+                var session=new com.atom.chat.fun.ChatEffectSession();
+                session.trigger(type,0);
+                for(long time:new long[]{700,1500,2500}) {
+                    panel.paintedFrame("fun "+type+" @"+time, canvas ->
+                            com.atom.chat.fun.ChatEffectRenderer.draw(canvas,layout,session,time));
+                    try(Bitmap pixels=new Bitmap()) {
+                        pixels.allocN32Pixels(SURFACE_W,SURFACE_H);
+                        assertTrue(panel.surface.readPixels(pixels,0,0));
+                        byte[] data=pixels.readPixels();
+                        for(int y=0;y<SURFACE_H;y++) for(int x=0;x<SURFACE_W;x++) {
+                            if(x<layout.panelX || x>=layout.panelX+layout.panelW
+                                    || y<layout.panelY || y>=layout.panelY+layout.panelH)
+                                assertEquals(0,data[(y*SURFACE_W+x)*4+3],"effect escaped panel");
+                        }
+                    }
+                }
+                session.clear();
+                panel.frame("cleared effect",canvas ->
+                        com.atom.chat.fun.ChatEffectRenderer.draw(canvas,layout,session,2600));
+                assertEquals(0,drawnBytes(panel.surface));
+            }
+        }
+    }
 }

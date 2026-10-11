@@ -82,7 +82,7 @@ public final class EnvironmentSummary {
     public static void logOnce(String reportedVersion, Path artifact) {
         try {
             if (IDENTITY_DONE.compareAndSet(false, true)) {
-                AtomChat.LOGGER.info(identityLine(reportedVersion, artifact));
+                AtomChat.LOGGER.info(com.atom.chat.diagnostics.AtomChatLog.message("startup", identityLine(reportedVersion, artifact)));
             }
             // 原生库探一次，**不跟着 debug 走**：拿不到时那一行是玩家与接手 issue 的人唯一的
             // 解释，而 debug 默认关着 —— 挂在详细块里等于没有。探过之后每次再问都只是读结果。
@@ -92,10 +92,10 @@ public final class EnvironmentSummary {
             // 只有这一处本来每帧就握着 debug 开关，而热路径上多一次配置读取是白花的。
             FrameProfile.setEnabled(config.debug);
             if (config.debug && DEBUG_BLOCK_DONE.compareAndSet(false, true)) {
-                AtomChat.LOGGER.info(debugBlock(reportedVersion, artifact, config, EnvironmentSummary::gpuLine));
+                AtomChat.LOGGER.info(com.atom.chat.diagnostics.AtomChatLog.message("startup", debugBlock(reportedVersion, artifact, config, EnvironmentSummary::gpuLine)));
             }
         } catch (Throwable t) {
-            AtomChat.LOGGER.warn("AtomChat environment summary failed", t);
+            AtomChat.LOGGER.warn(com.atom.chat.diagnostics.AtomChatLog.message("startup", "AtomChat environment summary failed"), t);
         }
     }
 
@@ -176,8 +176,8 @@ public final class EnvironmentSummary {
         Class<?> own = tryLoad(SHADED_LAF, loader);
         if (own == null) {
             // 这是真的异常：重定位产物没进来，选择器会退成系统外观。
-            AtomChat.LOGGER.warn("The bundled {}(relocated) FlatLaf is not on the classpath; "
-                    + "the file picker will fall back to the system look and feel", SHADED_LAF);
+            AtomChat.LOGGER.warn(com.atom.chat.diagnostics.AtomChatLog.message("startup", "The bundled {}(relocated) FlatLaf is not on the classpath; "
+                    + "the file picker will fall back to the system look and feel"), SHADED_LAF);
             sb.append(SHADED_LAF).append(" NOT RESOLVABLE");
         } else {
             sb.append(SHADED_LAF).append(" <- ").append(originOf(own));

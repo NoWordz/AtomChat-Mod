@@ -991,8 +991,8 @@ public final class MessageListView {
      */
     private static void noteImageMessagesDisabled() {
         if (IMAGE_MESSAGES_OFF_NOTED.compareAndSet(false, true)) {
-            AtomChat.LOGGER.warn("Incoming image messages are switched off in AtomChat's settings; "
-                    + "arriving images show the image placeholder and nothing is downloaded");
+            AtomChat.LOGGER.warn(com.atom.chat.diagnostics.AtomChatLog.message("compat", "Incoming image messages are switched off in AtomChat's settings; "
+                    + "arriving images show the image placeholder and nothing is downloaded"));
         }
     }
 

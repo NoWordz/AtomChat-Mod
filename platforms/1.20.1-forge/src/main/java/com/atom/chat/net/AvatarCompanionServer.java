@@ -75,11 +75,11 @@ public final class AvatarCompanionServer {
         long now = System.currentTimeMillis();
         Long last = lastUploadMs.get(uuid);
         if (last != null && now - last < UPLOAD_INTERVAL_MS) {
-            AtomChat.LOGGER.warn("Rejected avatar upload from {}: rate limited", player.getName().getString());
+            AtomChat.LOGGER.warn(com.atom.chat.diagnostics.AtomChatLog.message("avatar", "Rejected avatar upload from {}: rate limited"), player.getName().getString());
             return;
         }
         if (data == null || data.length == 0 || data.length > MAX_BYTES || !isPng(data)) {
-            AtomChat.LOGGER.warn("Rejected avatar upload from {}: invalid payload", player.getName().getString());
+            AtomChat.LOGGER.warn(com.atom.chat.diagnostics.AtomChatLog.message("avatar", "Rejected avatar upload from {}: invalid payload"), player.getName().getString());
             return;
         }
         lastUploadMs.put(uuid, now);
@@ -90,10 +90,10 @@ public final class AvatarCompanionServer {
             Path tmp = dir.resolve(uuid + ".png.tmp");
             Files.write(tmp, data);
             Files.move(tmp, target, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
-            AtomChat.LOGGER.info("Stored avatar for {} ({} bytes)", player.getName().getString(), data.length);
+            AtomChat.LOGGER.info(com.atom.chat.diagnostics.AtomChatLog.message("avatar", "Stored avatar for {} ({} bytes)"), player.getName().getString(), data.length);
             broadcastChanged(player, uuid);
         } catch (IOException e) {
-            AtomChat.LOGGER.warn("Failed to store avatar for {}", uuid, e);
+            AtomChat.LOGGER.warn(com.atom.chat.diagnostics.AtomChatLog.message("avatar", "Failed to store avatar for {}"), uuid, e);
         }
     }
 
@@ -143,7 +143,7 @@ public final class AvatarCompanionServer {
                 }
             }
         } catch (IOException e) {
-            AtomChat.LOGGER.warn("Failed to read avatar for {}", uuid, e);
+            AtomChat.LOGGER.warn(com.atom.chat.diagnostics.AtomChatLog.message("avatar", "Failed to read avatar for {}"), uuid, e);
         }
         AvatarPayloads.CHANNEL.send(PacketDistributor.PLAYER.with(() -> player),
                 new AvatarPayloads.AvatarDataPayload(uuid, data));

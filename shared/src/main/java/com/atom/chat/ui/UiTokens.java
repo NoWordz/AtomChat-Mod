@@ -8,6 +8,10 @@ public final class UiTokens {
     /** Global multiplier — bump this to scale the whole UI. */
     public static final float SCALE = 1.25F;
 
+    /** Reference size and scaled font size for decorative chat emoji. */
+    public static final float CHAT_EFFECT_EMOJI_BASE_SIZE = 24F;
+    public static final float CHAT_EFFECT_EMOJI_SIZE = s(CHAT_EFFECT_EMOJI_BASE_SIZE);
+
     public static float s(float v) {
         return v * SCALE;
     }

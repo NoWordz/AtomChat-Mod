@@ -50,7 +50,7 @@ public final class TestCompanionServer {
                                         .then(CommandManager.argument("sender", StringArgumentType.greedyString())
                                                 .executes(context -> firePoke(context.getSource(),
                                                         StringArgumentType.getString(context, "sender"))))))));
-        AtomChat.LOGGER.info("AtomChat test command registered (server side)");
+        AtomChat.LOGGER.info(com.atom.chat.diagnostics.AtomChatLog.message("test", "AtomChat test command registered (server side)"));
     }
 
     /** {@code … banner <kind> [text]} — one branch per kind, so tab-completion spells them out. */
@@ -86,7 +86,7 @@ public final class TestCompanionServer {
         }
         ServerPlayNetworking.send(player, new TestPayloads.TestEventS2CPayload(
                 kind, player.getUuid(), player.getName().getString(), text));
-        AtomChat.LOGGER.info("[test] {} asked for a {} banner", player.getName().getString(), kind);
+        AtomChat.LOGGER.info(com.atom.chat.diagnostics.AtomChatLog.message("test", "[test] {} asked for a {} banner"), player.getName().getString(), kind);
         source.sendFeedback(() -> Text.translatable("atomchat.command.test.bannerSent",
                 Text.translatable("atomchat.test.kind." + kind)), false);
         return 1;
@@ -103,7 +103,7 @@ public final class TestCompanionServer {
         }
         ServerPlayNetworking.send(player, new TestPayloads.TestEventS2CPayload(
                 TestPayloads.KIND_POKE, player.getUuid(), sender, ""));
-        AtomChat.LOGGER.info("[test] {} asked for a poke cue", player.getName().getString());
+        AtomChat.LOGGER.info(com.atom.chat.diagnostics.AtomChatLog.message("test", "[test] {} asked for a poke cue"), player.getName().getString());
         source.sendFeedback(() -> Text.translatable("atomchat.command.test.pokeSent"), false);
         return 1;
     }

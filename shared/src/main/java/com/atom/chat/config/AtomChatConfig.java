@@ -286,6 +286,13 @@ public class AtomChatConfig {
     public boolean whisperSoundEnabled = true;
     /** Master volume multiplier for all AtomChat notification sounds (0..1). */
     public float notifyVolume = 1.0F;
+    public boolean notificationSoundEnabled = true;
+    public boolean feedbackSoundEnabled = true;
+    public float feedbackVolume = 0.5F;
+    public boolean feedbackButtonEnabled = true;
+    public boolean feedbackSendEnabled = true;
+    public boolean feedbackPanelEnabled = true;
+    public boolean funEffectsEnabled = true;
     /**
      * User-defined quick phrases, shown in the chat composer's phrase panel.
      * Clicking one inserts it into the input box (never sends it straight
@@ -417,6 +424,8 @@ public class AtomChatConfig {
                     config.migrateCornerStyle();
                     config.migratePixelRadius();
                     config.clampContentScale();
+                    config.notifyVolume = com.atom.chat.audio.FeedbackSoundPolicy.volume(true,true,config.notifyVolume);
+                    config.feedbackVolume = com.atom.chat.audio.FeedbackSoundPolicy.volume(true,true,config.feedbackVolume);
                     // Write the merged instance straight back: options added in
                     // newer builds are absent from an older file, and Gson drops
                     // unknown keys — so without this a new option could never be
@@ -427,7 +436,7 @@ public class AtomChatConfig {
                     return config;
                 }
             } catch (Exception e) {
-                AtomChat.LOGGER.error("Failed to load AtomChat config, using defaults", e);
+                AtomChat.LOGGER.error(com.atom.chat.diagnostics.AtomChatLog.message("config", "Failed to load AtomChat config, using defaults"), e);
             }
         }
         AtomChatConfig config = new AtomChatConfig();
@@ -447,7 +456,7 @@ public class AtomChatConfig {
             Files.createDirectories(path.getParent());
             Files.writeString(path, GSON.toJson(config), StandardCharsets.UTF_8);
         } catch (IOException e) {
-            AtomChat.LOGGER.error("Failed to save AtomChat config", e);
+            AtomChat.LOGGER.error(com.atom.chat.diagnostics.AtomChatLog.message("config", "Failed to save AtomChat config"), e);
         }
     }
 }

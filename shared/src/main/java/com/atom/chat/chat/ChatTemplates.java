@@ -100,7 +100,7 @@ public final class ChatTemplates {
             switch (ph.group(1)) {
                 case "name" -> {
                     if (hasName) {
-                        LOG.warning(() -> "[atomchat] template rejected (duplicate {name}): " + template);
+                        LOG.warning(com.atom.chat.diagnostics.AtomChatLog.message("capture", () -> "[atomchat] template rejected (duplicate {name}): " + template));
                         return null;
                     }
                     if (knownNames.isEmpty()) {
@@ -119,7 +119,7 @@ public final class ChatTemplates {
                 }
                 case "display_name" -> {
                     if (hasDisplayName) {
-                        LOG.warning(() -> "[atomchat] template rejected (duplicate {display_name}): " + template);
+                        LOG.warning(com.atom.chat.diagnostics.AtomChatLog.message("capture", () -> "[atomchat] template rejected (duplicate {display_name}): " + template));
                         return null;
                     }
                     rx.append("(?<gdisp>.{1,64}?)");
@@ -136,7 +136,7 @@ public final class ChatTemplates {
                 case "sep" -> rx.append("[\\s:：,，>»|~\\-–—·•]{0,4}");
                 case "content" -> {
                     if (hasContent) {
-                        LOG.warning(() -> "[atomchat] template rejected (duplicate {content}): " + template);
+                        LOG.warning(com.atom.chat.diagnostics.AtomChatLog.message("capture", () -> "[atomchat] template rejected (duplicate {content}): " + template));
                         return null;
                     }
                     rx.append("(?<gcontent>.+)");
@@ -150,7 +150,7 @@ public final class ChatTemplates {
         }
         rx.append(Pattern.quote(template.substring(last)));
         if (!hasContent || !(hasName || hasDisplayName)) {
-            LOG.warning(() -> "[atomchat] template rejected (needs one {content} and a name placeholder): " + template);
+            LOG.warning(com.atom.chat.diagnostics.AtomChatLog.message("capture", () -> "[atomchat] template rejected (needs one {content} and a name placeholder): " + template));
             return null;
         }
         try {
@@ -158,7 +158,7 @@ public final class ChatTemplates {
                     hasName, hasDisplayName, hasPrefix, hasSuffix);
         } catch (PatternSyntaxException e) {
             // e33chat 2.2.7: an unguarded compile crashed every entry path.
-            LOG.warning("[atomchat] template rejected (regex compile failed): " + template);
+            LOG.warning(com.atom.chat.diagnostics.AtomChatLog.message("capture", "[atomchat] template rejected (regex compile failed): " + template));
             return null;
         }
     }

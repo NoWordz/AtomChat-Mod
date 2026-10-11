@@ -37,7 +37,7 @@ public final class PokeCompanionClient {
                         });
                     }
                 });
-        AtomChat.LOGGER.info("AtomChat poke companion registered (client side)");
+        AtomChat.LOGGER.info(com.atom.chat.diagnostics.AtomChatLog.message("network", "AtomChat poke companion registered (client side)"));
     }
 
     public static void setHandler(Consumer<UUID> handler) {

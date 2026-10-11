@@ -37,7 +37,7 @@ public class AtomChatClient implements ClientModInitializer {
         // Idempotent second call: the client-only mixin plugin claimed AWT
         // before Minecraft's Main ran. This log line reports the outcome of
         // whichever call won, so it is the picker's field diagnostic.
-        AtomChat.LOGGER.info("AWT toolkit: {}", AwtDisplay.claim());
+        AtomChat.LOGGER.info(com.atom.chat.diagnostics.AtomChatLog.message("startup", "AWT toolkit: {}"), AwtDisplay.claim());
         AtomChatConfig.get();
         CacheDirs.migrateFromOldConfigPaths();
         WallpaperStore.init(
@@ -69,7 +69,7 @@ public class AtomChatClient implements ClientModInitializer {
                 PanelBlurRenderer.resetShader();
             }
         });
-        AtomChat.LOGGER.info("AtomChat client initialized");
+        AtomChat.LOGGER.info(com.atom.chat.diagnostics.AtomChatLog.message("startup", "AtomChat client initialized"));
 
         ClientPlayConnectionEvents.JOIN.register((handler, sender, client) -> {
             // Adopt the world key first so a saved history can be loaded before
@@ -97,6 +97,7 @@ public class AtomChatClient implements ClientModInitializer {
         com.atom.chat.net.ConfigScreenClient.onDisconnect();
         });
         NotificationController.registerSound();
+        com.atom.chat.audio.FeedbackSoundController.registerSound();
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             // First tick only (self-guarded): identity always, the detailed
             // block when debug is on. It lives here rather than in client init

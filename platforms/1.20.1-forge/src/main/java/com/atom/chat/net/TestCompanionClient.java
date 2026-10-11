@@ -31,8 +31,7 @@ public final class TestCompanionClient {
             if (client.screen instanceof com.atom.chat.screen.AtomChatScreen screen) {
                 screen.onTestPoked(payload.senderUuid(), sender);
             } else {
-                AtomChat.LOGGER.info(
-                        "[test] poke cue played; open the panel for the wobble and the toast");
+                AtomChat.LOGGER.info(com.atom.chat.diagnostics.AtomChatLog.message("test", "[test] poke cue played; open the panel for the wobble and the toast"));
             }
             return;
         }
@@ -47,7 +46,7 @@ public final class TestCompanionClient {
         String text = payload.text().isBlank()
                 ? Component.translatable("atomchat.test.text." + type.name()).getString()
                 : payload.text();
-        AtomChat.LOGGER.info("[test] simulated {} banner from {}", type, sender);
+        AtomChat.LOGGER.info(com.atom.chat.diagnostics.AtomChatLog.message("test", "[test] simulated {} banner from {}"), type, sender);
         NotificationController.onTestBanner(type, payload.senderUuid(), sender, text);
     }
 }

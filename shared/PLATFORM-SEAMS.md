@@ -13,7 +13,7 @@
 分组是编译期事实：甲组少一个类型，那个目标当场编不过。判据用简单名的词边界匹配
 （覆盖 import 全限定名与同包简单名两种写法），偏保守 —— 注释里的提及也算，宁可多列。
 
-当前：甲组 **122** 个，乙组 **50** 个。
+当前：甲组 **123** 个，乙组 **53** 个。
 
 ## 甲：共用代码引用了的（接缝）
 
@@ -45,6 +45,7 @@
 | `com.atom.chat.chat.TeleportCommands` | 1.21.1-fabric |
 | `com.atom.chat.chat.TellClickDetector` | 1.21.1-fabric |
 | `com.atom.chat.config.ServerConfigScreen` | 1.20.1-forge, 1.21.1-fabric, 1.21.1-neoforge |
+| `com.atom.chat.fun.ChatEffectEventsTest` | 1.21.1-fabric |
 | `com.atom.chat.history.ChatHistory` | 1.20.1-forge, 1.21.1-fabric, 1.21.1-neoforge |
 | `com.atom.chat.image.AvatarRenderer` | 1.21.1-fabric |
 | `com.atom.chat.image.DragDropPasteUpload` | 1.21.1-fabric |
@@ -112,6 +113,7 @@
 | 目标 | 类型 |
 |---|---|
 | 1.20.1-forge | `com.atom.chat.AtomChatClient` |
+| 1.20.1-forge | `com.atom.chat.audio.FeedbackSoundController` |
 | 1.20.1-forge | `com.atom.chat.mixin.AtomChatMixinPlugin` |
 | 1.20.1-forge | `com.atom.chat.net.AvatarPayloads` |
 | 1.20.1-forge | `com.atom.chat.net.ConfigScreenServer` |
@@ -128,6 +130,7 @@
 | 1.20.1-forge | `com.atom.chat.net.AvatarCompanionServerTest` |
 | 1.20.1-forge | `com.atom.chat.screen.AtomChatScreenMessageLookupTest` |
 | 1.21.1-fabric | `com.atom.chat.AtomChatClient` |
+| 1.21.1-fabric | `com.atom.chat.audio.FeedbackSoundController` |
 | 1.21.1-fabric | `com.atom.chat.mixin.AtomChatMixinPlugin` |
 | 1.21.1-fabric | `com.atom.chat.net.AvatarPayloads` |
 | 1.21.1-fabric | `com.atom.chat.net.ConfigScreenServer` |
@@ -147,6 +150,7 @@
 | 1.21.1-fabric | `com.atom.chat.ui.QuickPhrasePanelHitZoneTest` |
 | 1.21.1-fabric | `net.minecraft.client.gui.screen.AtomChatScreenMessageLookupTest` |
 | 1.21.1-neoforge | `com.atom.chat.AtomChatClient` |
+| 1.21.1-neoforge | `com.atom.chat.audio.FeedbackSoundController` |
 | 1.21.1-neoforge | `com.atom.chat.mixin.AtomChatMixinPlugin` |
 | 1.21.1-neoforge | `com.atom.chat.net.AvatarPayloads` |
 | 1.21.1-neoforge | `com.atom.chat.net.ConfigScreenServer` |

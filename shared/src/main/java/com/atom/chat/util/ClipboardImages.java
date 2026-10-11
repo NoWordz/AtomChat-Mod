@@ -46,7 +46,7 @@ public final class ClipboardImages {
                 return DataFlavor.javaFileListFlavor;
             }
         } catch (Throwable t) {
-            AtomChat.LOGGER.warn("Could not inspect the clipboard, falling back to a text paste", t);
+            AtomChat.LOGGER.warn(com.atom.chat.diagnostics.AtomChatLog.message("resource", "Could not inspect the clipboard, falling back to a text paste"), t);
         }
         return null;
     }
@@ -71,7 +71,7 @@ public final class ClipboardImages {
                 }
             }
         } catch (Throwable t) {
-            AtomChat.LOGGER.warn("Could not read the clipboard image", t);
+            AtomChat.LOGGER.warn(com.atom.chat.diagnostics.AtomChatLog.message("resource", "Could not read the clipboard image"), t);
         }
         return null;
     }

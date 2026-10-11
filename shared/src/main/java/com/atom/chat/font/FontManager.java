@@ -40,11 +40,11 @@ public final class FontManager {
             if (in != null) {
                 defaultTypeface = mediumWeight(Typeface.makeFromData(Data.makeFromBytes(in.readAllBytes())));
                 usingFallbackTypeface = false;
-                AtomChat.LOGGER.info("Loaded bundled font {}", BUNDLED_FONT);
+                AtomChat.LOGGER.info(com.atom.chat.diagnostics.AtomChatLog.message("resource", "Loaded bundled font {}"), BUNDLED_FONT);
                 return defaultTypeface;
             }
         } catch (Exception e) {
-            AtomChat.LOGGER.warn("Failed to load bundled font, falling back to system font", e);
+            AtomChat.LOGGER.warn(com.atom.chat.diagnostics.AtomChatLog.message("resource", "Failed to load bundled font, falling back to system font"), e);
         }
 
         // System fallbacks (Windows/other).
@@ -54,12 +54,12 @@ public final class FontManager {
             Typeface tf = Typeface.makeFromName(name, FontStyle.NORMAL);
             if (tf != null && !tf.getFamilyName().toLowerCase(Locale.ROOT).contains("arial") || tf != null && tf.getFamilyName().toLowerCase(Locale.ROOT).contains("yahei")) {
                 defaultTypeface = tf;
-                AtomChat.LOGGER.info("Using system font {}", tf.getFamilyName());
+                AtomChat.LOGGER.info(com.atom.chat.diagnostics.AtomChatLog.message("resource", "Using system font {}"), tf.getFamilyName());
                 return defaultTypeface;
             }
             if (tf != null) {
                 defaultTypeface = tf;
-                AtomChat.LOGGER.info("Using system font {}", tf.getFamilyName());
+                AtomChat.LOGGER.info(com.atom.chat.diagnostics.AtomChatLog.message("resource", "Using system font {}"), tf.getFamilyName());
                 return defaultTypeface;
             }
         }
@@ -74,7 +74,7 @@ public final class FontManager {
                 return face.makeClone(new FontVariation("wght", 500));
             }
         } catch (Throwable t) {
-            AtomChat.LOGGER.warn("Variable font weight clone failed, using default instance", t);
+            AtomChat.LOGGER.warn(com.atom.chat.diagnostics.AtomChatLog.message("resource", "Variable font weight clone failed, using default instance"), t);
         }
         return face;
     }
@@ -126,10 +126,10 @@ public final class FontManager {
         try (InputStream in = FontManager.class.getResourceAsStream(BUNDLED_BOLD_FONT)) {
             if (in != null) {
                 boldTypeface = Typeface.makeFromData(Data.makeFromBytes(in.readAllBytes()));
-                AtomChat.LOGGER.info("Loaded bundled bold font {}", BUNDLED_BOLD_FONT);
+                AtomChat.LOGGER.info(com.atom.chat.diagnostics.AtomChatLog.message("resource", "Loaded bundled bold font {}"), BUNDLED_BOLD_FONT);
             }
         } catch (Exception e) {
-            AtomChat.LOGGER.warn("Failed to load bundled bold font, falling back to faux bold", e);
+            AtomChat.LOGGER.warn(com.atom.chat.diagnostics.AtomChatLog.message("resource", "Failed to load bundled bold font, falling back to faux bold"), e);
         }
         return boldTypeface;
     }

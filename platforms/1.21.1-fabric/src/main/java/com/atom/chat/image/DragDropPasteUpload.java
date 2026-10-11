@@ -220,7 +220,7 @@ public final class DragDropPasteUpload {
             if (installed != null) {
                 dropSlot.release(installed);
             }
-            AtomChat.LOGGER.warn("Failed to install the file drop callback", t);
+            AtomChat.LOGGER.warn(com.atom.chat.diagnostics.AtomChatLog.message("resource", "Failed to install the file drop callback"), t);
         }
     }
 
@@ -239,7 +239,7 @@ public final class DragDropPasteUpload {
             dropSlot.bind(window.getAsLong(), null);
             dropSlot.release(installed);
         } catch (Throwable t) {
-            AtomChat.LOGGER.warn("Failed to remove the file drop callback", t);
+            AtomChat.LOGGER.warn(com.atom.chat.diagnostics.AtomChatLog.message("resource", "Failed to remove the file drop callback"), t);
         }
     }
 
@@ -259,10 +259,10 @@ public final class DragDropPasteUpload {
                 }
             }
             if (count > 0) {
-                AtomChat.LOGGER.info("Ignored {} dropped file(s): none was an image", count);
+                AtomChat.LOGGER.info(com.atom.chat.diagnostics.AtomChatLog.message("resource", "Ignored {} dropped file(s): none was an image"), count);
             }
         } catch (Throwable t) {
-            AtomChat.LOGGER.warn("Failed to handle dropped files", t);
+            AtomChat.LOGGER.warn(com.atom.chat.diagnostics.AtomChatLog.message("resource", "Failed to handle dropped files"), t);
         }
     }
 
@@ -275,7 +275,7 @@ public final class DragDropPasteUpload {
         Thread worker = new Thread(() -> {
             Path file = clipboard.read(flavor);
             if (file == null) {
-                AtomChat.LOGGER.warn("Clipboard held no usable image; Ctrl+V fell back to a text paste");
+                AtomChat.LOGGER.warn(com.atom.chat.diagnostics.AtomChatLog.message("resource", "Clipboard held no usable image; Ctrl+V fell back to a text paste"));
                 return;
             }
             host.uploads().uploadAndAppend(file);

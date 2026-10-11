@@ -146,12 +146,12 @@ public final class ImageUploadPipeline {
             MediaCompanionClient.uploadFile(file,
                     url -> appendImageCode(url, file, size),
                     error -> {
-                        AtomChat.LOGGER.warn("Server media upload failed ({}), falling back to uguu", error);
+                        AtomChat.LOGGER.warn(com.atom.chat.diagnostics.AtomChatLog.message("resource", "Server media upload failed ({}), falling back to uguu"), error);
                         uploadToUguu(file, size);
                     });
         } else {
             if (AtomChatConfig.get().debug) {
-                AtomChat.LOGGER.info("[media] server media hosting unavailable; using the external host");
+                AtomChat.LOGGER.info(com.atom.chat.diagnostics.AtomChatLog.message("media", "[media] server media hosting unavailable; using the external host"));
             }
             uploadToUguu(file, size);
         }
@@ -162,11 +162,11 @@ public final class ImageUploadPipeline {
                 url -> {
                     // Keep the choice auditable: server-hosted uploads already
                     // log "Stored hosted media", so the external path logs too.
-                    AtomChat.LOGGER.info("Uploaded chat image to the external host: {}", url);
+                    AtomChat.LOGGER.info(com.atom.chat.diagnostics.AtomChatLog.message("resource", "Uploaded chat image to the external host: {}"), url);
                     appendImageCode(url, file, size);
                 },
                 error -> {
-                    AtomChat.LOGGER.warn("Image upload failed: {}", error);
+                    AtomChat.LOGGER.warn(com.atom.chat.diagnostics.AtomChatLog.message("resource", "Image upload failed: {}"), error);
                     renderHop.accept(() -> imageUploading = false);
                 });
     }
@@ -215,7 +215,7 @@ public final class ImageUploadPipeline {
                         host.toast("atomchat.feedback.saveFailed", false);
                     });
                 } else {
-                    AtomChat.LOGGER.info("Saved chat image to {}", path);
+                    AtomChat.LOGGER.info(com.atom.chat.diagnostics.AtomChatLog.message("resource", "Saved chat image to {}"), path);
                     renderHop.accept(() -> host.toast("atomchat.feedback.saved", true));
                 }
             });

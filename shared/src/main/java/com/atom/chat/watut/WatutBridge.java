@@ -46,7 +46,7 @@ public final class WatutBridge {
             chatTypingState = chatState.getField("CHAT_TYPING").get(null);
             available = true;
         } catch (Throwable t) {
-            AtomChat.LOGGER.debug("WATUT bridge unavailable: {}", t.toString());
+            AtomChat.LOGGER.debug(com.atom.chat.diagnostics.AtomChatLog.message("compat", "WATUT bridge unavailable: {}"), t.toString());
         }
     }
 

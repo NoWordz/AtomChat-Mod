@@ -253,6 +253,7 @@ public final class EmojiPanel {
                     refreshEmotes();
                 }
                 startTabTransition(from, t);
+                com.atom.chat.audio.FeedbackSoundController.play(com.atom.chat.audio.FeedbackCue.BUTTON);
             }
             return "";
         }

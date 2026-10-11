@@ -160,9 +160,9 @@ public final class AvatarRenderer {
                 }
             }
             faceImg.writeTo(dir.resolve("atomchat-debug-face.png"));
-            AtomChat.LOGGER.info("Avatar debug dumps written to {}", dir);
+            AtomChat.LOGGER.info(com.atom.chat.diagnostics.AtomChatLog.message("avatar", "Avatar debug dumps written to {}"), dir);
         } catch (Throwable t) {
-            AtomChat.LOGGER.warn("Avatar debug dump failed", t);
+            AtomChat.LOGGER.warn(com.atom.chat.diagnostics.AtomChatLog.message("avatar", "Avatar debug dump failed"), t);
         }
     }
 }

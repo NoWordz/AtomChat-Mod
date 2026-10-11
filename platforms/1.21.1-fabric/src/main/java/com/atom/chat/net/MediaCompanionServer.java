@@ -64,7 +64,7 @@ public final class MediaCompanionServer {
                 (payload, context) -> onFinish(context.player(), payload));
         ServerPlayNetworking.registerGlobalReceiver(MediaPayloads.Fetch.ID,
                 (payload, context) -> onFetch(context.player(), payload));
-        AtomChat.LOGGER.info("AtomChat media companion registered (server side)");
+        AtomChat.LOGGER.info(com.atom.chat.diagnostics.AtomChatLog.message("media", "AtomChat media companion registered (server side)"));
     }
 
     private static void sendState(ServerPlayerEntity player) {
@@ -148,10 +148,10 @@ public final class MediaCompanionServer {
                 Files.move(tmp, file, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
             }
             CompanionMaintenance.pruneMedia();
-            AtomChat.LOGGER.info("Stored hosted media {} ({} bytes)", mediaId, content.length);
+            AtomChat.LOGGER.info(com.atom.chat.diagnostics.AtomChatLog.message("media", "Stored hosted media {} ({} bytes)"), mediaId, content.length);
             result(player, uploadId, mediaId, "");
         } catch (IOException e) {
-            AtomChat.LOGGER.warn("Failed to store hosted media", e);
+            AtomChat.LOGGER.warn(com.atom.chat.diagnostics.AtomChatLog.message("media", "Failed to store hosted media"), e);
             result(player, uploadId, "", "io");
         }
     }

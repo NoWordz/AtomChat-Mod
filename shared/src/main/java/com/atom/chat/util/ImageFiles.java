@@ -82,7 +82,7 @@ public final class ImageFiles {
                 }
             }
         } catch (Exception e) {
-            AtomChat.LOGGER.warn("Could not read image dimensions of {}", file, e);
+            AtomChat.LOGGER.warn(com.atom.chat.diagnostics.AtomChatLog.message("resource", "Could not read image dimensions of {}"), file, e);
         }
         return null;
     }

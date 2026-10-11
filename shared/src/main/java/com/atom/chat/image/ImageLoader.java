@@ -314,7 +314,7 @@ public final class ImageLoader {
                 fail(url);
             }
         } catch (Exception e) {
-            AtomChat.LOGGER.warn("Failed to load chat image {}", url, e);
+            AtomChat.LOGGER.warn(com.atom.chat.diagnostics.AtomChatLog.message("resource", "Failed to load chat image {}"), url, e);
             fail(url);
         } finally {
             pending.remove(url);
@@ -362,7 +362,7 @@ public final class ImageLoader {
                 return data.getBytes();
             }
         } catch (Throwable ignored) {
-            AtomChat.LOGGER.warn("Could not encode image for disk cache");
+            AtomChat.LOGGER.warn(com.atom.chat.diagnostics.AtomChatLog.message("resource", "Could not encode image for disk cache"));
         }
         return null;
     }
@@ -379,7 +379,7 @@ public final class ImageLoader {
             Files.write(tmp, bytes);
             Files.move(tmp, disk, StandardCopyOption.REPLACE_EXISTING);
         } catch (Exception e) {
-            AtomChat.LOGGER.warn("Failed to write image cache for {}", disk, e);
+            AtomChat.LOGGER.warn(com.atom.chat.diagnostics.AtomChatLog.message("resource", "Failed to write image cache for {}"), disk, e);
         } finally {
             if (tmp != null) {
                 try {
@@ -434,7 +434,7 @@ public final class ImageLoader {
                     try {
                         Files.deleteIfExists(p);
                     } catch (IOException e) {
-                        AtomChat.LOGGER.warn("Failed to expire image cache file {}", p, e);
+                        AtomChat.LOGGER.warn(com.atom.chat.diagnostics.AtomChatLog.message("resource", "Failed to expire image cache file {}"), p, e);
                     }
                     continue;
                 }
@@ -453,11 +453,11 @@ public final class ImageLoader {
                     Files.deleteIfExists(oldest);
                     total -= size;
                 } catch (IOException e) {
-                    AtomChat.LOGGER.warn("Failed to trim image cache file {}", oldest, e);
+                    AtomChat.LOGGER.warn(com.atom.chat.diagnostics.AtomChatLog.message("resource", "Failed to trim image cache file {}"), oldest, e);
                 }
             }
         } catch (IOException e) {
-            AtomChat.LOGGER.warn("Failed to scan image cache directory {}", dir, e);
+            AtomChat.LOGGER.warn(com.atom.chat.diagnostics.AtomChatLog.message("resource", "Failed to scan image cache directory {}"), dir, e);
         }
     }
 
@@ -475,7 +475,7 @@ public final class ImageLoader {
                 }
             }
         } catch (IOException e) {
-            AtomChat.LOGGER.warn("Failed to size image cache directory {}", dir, e);
+            AtomChat.LOGGER.warn(com.atom.chat.diagnostics.AtomChatLog.message("resource", "Failed to size image cache directory {}"), dir, e);
         }
         return total;
     }
@@ -504,11 +504,11 @@ public final class ImageLoader {
                         deleted++;
                     }
                 } catch (IOException e) {
-                    AtomChat.LOGGER.warn("Failed to delete image cache file {}", p, e);
+                    AtomChat.LOGGER.warn(com.atom.chat.diagnostics.AtomChatLog.message("resource", "Failed to delete image cache file {}"), p, e);
                 }
             }
         } catch (IOException e) {
-            AtomChat.LOGGER.warn("Failed to clear image cache directory {}", dir, e);
+            AtomChat.LOGGER.warn(com.atom.chat.diagnostics.AtomChatLog.message("resource", "Failed to clear image cache directory {}"), dir, e);
             return -1;
         }
         return deleted;

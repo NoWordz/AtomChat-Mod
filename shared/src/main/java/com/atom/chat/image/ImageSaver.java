@@ -55,7 +55,7 @@ public final class ImageSaver {
                 Files.write(target, body);
                 return target;
             } catch (Exception e) {
-                AtomChat.LOGGER.warn("Failed to save image {} to {}", url, target, e);
+                AtomChat.LOGGER.warn(com.atom.chat.diagnostics.AtomChatLog.message("resource", "Failed to save image {} to {}"), url, target, e);
                 throw new RuntimeException("Failed to save image", e);
             }
         }, EXECUTOR);

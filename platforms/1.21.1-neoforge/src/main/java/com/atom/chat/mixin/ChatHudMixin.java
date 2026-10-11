@@ -145,7 +145,7 @@ public class ChatHudMixin {
         if (AtomChatConfig.get().debug) {
             // Whether the channel-level capture landed at all: a missing meta is
             // why an own line falls through to the text heuristics (2026-09-11).
-            AtomChat.LOGGER.info("[capture] meta={} line={}", meta != null, raw);
+            AtomChat.LOGGER.info(com.atom.chat.diagnostics.AtomChatLog.message("capture", "[capture] meta={} line={}"), meta != null, raw);
         }
         // Machine-to-machine chat protocols must never be claimed as player chat
         // or suppressed as an own echo. e33chat routes them to the system channel
@@ -241,7 +241,7 @@ public class ChatHudMixin {
                 // The local bubble already exists; only keep the server-decorated
                 // label as the self-name cache source (e33chat parity).
                 if (AtomChatConfig.get().debug) {
-                    AtomChat.LOGGER.info("[echo] own line dropped (identity={} text={}) name={} line={}",
+                    AtomChat.LOGGER.info(com.atom.chat.diagnostics.AtomChatLog.message("echo", "[echo] own line dropped (identity={} text={}) name={} line={}"),
                             ownIdentity, ownEchoText, displayName, raw);
                 }
                 OwnIdentity.cache(senderRichParsed);
@@ -280,7 +280,7 @@ public class ChatHudMixin {
             own = ownEchoText;
         }
         if (AtomChatConfig.get().debug) {
-            AtomChat.LOGGER.info("[route] own={} textEcho={} uuid={} sender={} profile={} text={}",
+            AtomChat.LOGGER.info(com.atom.chat.diagnostics.AtomChatLog.message("route", "[route] own={} textEcho={} uuid={} sender={} profile={} text={}"),
                     own, ownEchoText, meta.senderUuid(), meta.senderName(), meta.profileName(), raw);
         }
         if (own) {
@@ -478,7 +478,7 @@ public class ChatHudMixin {
             return sender;
         }
         if (AtomChatConfig.get().debug) {
-            AtomChat.LOGGER.info("[sender] team colour fallback applied ({})", team.getName());
+            AtomChat.LOGGER.info(com.atom.chat.diagnostics.AtomChatLog.message("sender", "[sender] team colour fallback applied ({})"), team.getName());
         }
         return sender.mapStyles(style -> style.getColor() != null ? style : style.withColor(color));
     }
@@ -567,7 +567,7 @@ public class ChatHudMixin {
             return;
         }
         boolean hasTemplates = !cfg.chatTemplates.isEmpty() || !cfg.whisperTemplates.isEmpty();
-        AtomChat.LOGGER.info("[atomchat] chat parse miss (guard{} matched nothing): {}",
+        AtomChat.LOGGER.info(com.atom.chat.diagnostics.AtomChatLog.message("capture", "[atomchat] chat parse miss (guard{} matched nothing): {}"),
                 hasTemplates ? "+templates" : "", raw);
     }
 

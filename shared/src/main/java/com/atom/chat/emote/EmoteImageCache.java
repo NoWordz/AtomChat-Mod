@@ -56,7 +56,7 @@ public final class EmoteImageCache {
             return null;
         } catch (Exception e) {
             failed.add(file);
-            AtomChat.LOGGER.warn("Emote decode failed: {}", file.getName(), e);
+            AtomChat.LOGGER.warn(com.atom.chat.diagnostics.AtomChatLog.message("resource", "Emote decode failed: {}"), file.getName(), e);
             return null;
         }
     }

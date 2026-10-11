@@ -36,7 +36,7 @@ public final class IMBlockerCompat {
             available = true;
         } catch (Throwable t) {
             // IMBlocker is not installed — degrade to no-op.
-            AtomChat.LOGGER.debug("IMBlocker not present, IME state sync disabled: {}", t.toString());
+            AtomChat.LOGGER.debug(com.atom.chat.diagnostics.AtomChatLog.message("compat", "IMBlocker not present, IME state sync disabled: {}"), t.toString());
         }
     }
 
@@ -53,7 +53,7 @@ public final class IMBlockerCompat {
         try {
             setPreferredEnglishState.invoke(textField, command);
         } catch (Throwable t) {
-            AtomChat.LOGGER.debug("IMBlocker sync failed: {}", t.toString());
+            AtomChat.LOGGER.debug(com.atom.chat.diagnostics.AtomChatLog.message("compat", "IMBlocker sync failed: {}"), t.toString());
         }
     }
 }

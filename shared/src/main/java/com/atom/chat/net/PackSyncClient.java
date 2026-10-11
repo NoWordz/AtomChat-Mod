@@ -289,7 +289,7 @@ public final class PackSyncClient {
                 contents = PackManifestFile.completeWithExisting(dir, pack, downloaded);
                 PackManifestFile.install(CacheDirs.packsRoot(), installKey, pack, contents);
             } catch (IOException e) {
-                AtomChat.LOGGER.warn("Failed to store the server pack", e);
+                AtomChat.LOGGER.warn(com.atom.chat.diagnostics.AtomChatLog.message("pack", "Failed to store the server pack"), e);
                 Host.execute(() -> abort("write_failed"));
                 return;
             }
@@ -298,14 +298,14 @@ public final class PackSyncClient {
                 active = false;
                 ServerPackStore.refresh(CacheDirs.packsRoot(), installKey);
                 send(new PackMessage.Ack(true, count + " file(s) " + hash));
-                AtomChat.LOGGER.info("Server pack {} synced ({} file(s), {} KB)", hash, count,
+                AtomChat.LOGGER.info(com.atom.chat.diagnostics.AtomChatLog.message("pack", "Server pack {} synced ({} file(s), {} KB)"), hash, count,
                         pack.totalBytes() / 1024);
             });
         });
     }
 
     private static void abort(String reason) {
-        AtomChat.LOGGER.warn("Server pack sync failed: {}", reason);
+        AtomChat.LOGGER.warn(com.atom.chat.diagnostics.AtomChatLog.message("pack", "Server pack sync failed: {}"), reason);
         detail = reason;
         active = false;
         send(new PackMessage.Ack(false, reason));

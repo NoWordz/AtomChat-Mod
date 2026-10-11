@@ -64,7 +64,7 @@ public class AtomChat implements ModInitializer {
                 com.atom.chat.net.CompanionMaintenance.onPlayerLogout(handler.player.getUuid());
             }
         });
-        LOGGER.info("AtomChat initialized");
+        LOGGER.info(com.atom.chat.diagnostics.AtomChatLog.message("startup", "AtomChat initialized"));
     }
 
     /**

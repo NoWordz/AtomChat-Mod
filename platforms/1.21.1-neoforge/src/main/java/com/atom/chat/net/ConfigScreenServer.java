@@ -44,7 +44,7 @@ public final class ConfigScreenServer {
                         .then(Commands.literal("gui")
                                 .requires(ConfigScreenServer::mayEdit)
                                 .executes(context -> openGui(context.getSource())))));
-        AtomChat.LOGGER.info("AtomChat config screen registered (server side)");
+        AtomChat.LOGGER.info(com.atom.chat.diagnostics.AtomChatLog.message("config", "AtomChat config screen registered (server side)"));
     }
 
     /**
@@ -95,7 +95,7 @@ public final class ConfigScreenServer {
         int version = VERSION.incrementAndGet();
         PacketDistributor.sendToPlayer(player, new ConfigPayloads.Result(true, ""));
         player.sendSystemMessage(Component.translatable("atomchat.server.saved"));
-        AtomChat.LOGGER.info("Server config saved by {} (version {}, hosting {}, packs {})",
+        AtomChat.LOGGER.info(com.atom.chat.diagnostics.AtomChatLog.message("config", "Server config saved by {} (version {}, hosting {}, packs {})"),
                 player.getName().getString(), version, values.hostingEnabled(), values.packEnabled());
     }
 
@@ -125,7 +125,7 @@ public final class ConfigScreenServer {
 
     private static void deny(ServerPlayer player, String error) {
         PacketDistributor.sendToPlayer(player, new ConfigPayloads.Result(false, error));
-        AtomChat.LOGGER.info("Refused a server config save from {}: {}",
+        AtomChat.LOGGER.info(com.atom.chat.diagnostics.AtomChatLog.message("config", "Refused a server config save from {}: {}"),
                 player.getName().getString(), error);
     }
 }

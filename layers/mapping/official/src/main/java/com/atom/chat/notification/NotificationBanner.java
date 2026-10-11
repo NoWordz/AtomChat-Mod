@@ -685,7 +685,7 @@ public final class NotificationBanner {
     /** Whether the sound for this type is enabled. */
     public static boolean soundEnabled(Type type) {
         AtomChatConfig config = AtomChatConfig.get();
-        return switch (type) {
+        return config.notificationSoundEnabled && switch (type) {
             case MENTION, QUOTE -> config.mentionSoundEnabled;
             case WHISPER -> config.whisperSoundEnabled;
         };

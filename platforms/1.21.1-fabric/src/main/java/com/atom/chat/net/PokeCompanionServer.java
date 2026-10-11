@@ -47,7 +47,7 @@ public final class PokeCompanionServer {
                         ServerPlayNetworking.send(receiver, new PokePayloads.PokeS2CPayload(sender.getUuid()));
                     }
                 });
-        AtomChat.LOGGER.info("AtomChat poke companion registered (server side)");
+        AtomChat.LOGGER.info(com.atom.chat.diagnostics.AtomChatLog.message("network", "AtomChat poke companion registered (server side)"));
     }
 
     /** Drops a disconnected player's timestamp so the map cannot grow forever. */

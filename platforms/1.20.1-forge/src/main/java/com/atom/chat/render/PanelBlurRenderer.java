@@ -65,7 +65,7 @@ public final class PanelBlurRenderer {
                             DefaultVertexFormat.POSITION),
                     shader -> kawaseShader = shader);
         } catch (Exception e) {
-            AtomChat.LOGGER.warn("AtomChat panel blur shaders failed to load; blur disabled", e);
+            AtomChat.LOGGER.warn(com.atom.chat.diagnostics.AtomChatLog.message("render", "AtomChat panel blur shaders failed to load; blur disabled"), e);
             roundedShader = null;
             kawaseShader = null;
         }
@@ -189,8 +189,8 @@ public final class PanelBlurRenderer {
             return;
         }
         disabled = true;
-        AtomChat.LOGGER.warn("AtomChat panel blur disabled for this session after the first failure "
-                + "({}); the panel keeps its solid background", reason);
+        AtomChat.LOGGER.warn(com.atom.chat.diagnostics.AtomChatLog.message("render", "AtomChat panel blur disabled for this session after the first failure "
+                + "({}); the panel keeps its solid background"), reason);
     }
 
     public static boolean isAvailable() {

@@ -83,7 +83,7 @@ public class AtomChat {
             AtomChatClient.init(modEventBus);
         }
 
-        LOGGER.info("AtomChat initialized");
+        LOGGER.info(com.atom.chat.diagnostics.AtomChatLog.message("startup", "AtomChat initialized"));
     }
 
     /**

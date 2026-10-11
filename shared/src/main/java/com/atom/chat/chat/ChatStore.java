@@ -32,6 +32,7 @@ public final class ChatStore {
             }
         }
         messages.add(message);
+        com.atom.chat.fun.ChatEffectEvents.publish(message);
         com.atom.chat.history.ChatHistory.markDirty();
         if (!message.isOwn() && !publicActive) {
             publicUnread++;

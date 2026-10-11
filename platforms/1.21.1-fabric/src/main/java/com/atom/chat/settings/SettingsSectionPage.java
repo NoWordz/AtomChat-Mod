@@ -244,7 +244,7 @@ public final class SettingsSectionPage {
             new SectionChip("messages", "atomchat.settings.group.chat.messages"),
             new SectionChip("history", "atomchat.settings.group.chat.history"),
             new SectionChip("notify", "atomchat.settings.group.chat.notify"),
-            new SectionChip("teleport", "atomchat.settings.group.chat.teleport"));
+            new SectionChip("advanced", "atomchat.settings.group.chat.advanced"));
     /** Crossfade duration of a chip switch. */
     private static final long CHIP_SWITCH_MS = 110L;
     /** Active chip index per section id (chip-less sections never read it). */
@@ -358,7 +358,7 @@ public final class SettingsSectionPage {
      *  starts collapsed by design: theme + everyday knobs on top, the twelve
      *  colour rows tucked away until asked for. */
     private final java.util.Set<String> collapsedColorGroups =
-            new java.util.HashSet<>(java.util.List.of("appearance_advanced"));
+            new java.util.HashSet<>(java.util.List.of("appearance_advanced", "notification_audio", "feedback_audio"));
     /**
      * Time constant of the fold animation: a group's children neither pop in
      * nor pop out any more, they grow/shrink behind an exponential settle at
@@ -402,6 +402,12 @@ public final class SettingsSectionPage {
      * child rows when collapsed.
      */
     private static String foldableGroup(String labelKey) {
+        if ("atomchat.settings.sounds.notification".equals(labelKey)) {
+            return "notification_audio";
+        }
+        if ("atomchat.settings.sounds.feedback".equals(labelKey)) {
+            return "feedback_audio";
+        }
         if (LABEL_ADVANCED.equals(labelKey)) {
             return "advanced";
         }
@@ -695,6 +701,19 @@ public final class SettingsSectionPage {
 
     /** One chip of the chat page: the rows of that group, no group label
      *  (the chip itself names the group). */
+    private List<Row> soundRows() {
+        List<Row> rows = new ArrayList<>();
+        addGroup(rows, "atomchat.settings.sounds.notification", () -> {
+            addSwitches(rows, SettingsSection.CHAT, "notification", "mention_sound", "whisper_sound");
+            addSliders(rows, SettingsSection.CHAT, "notify_volume");
+            rows.add(Row.ofAction(ACTION_TEST_SOUND, testSoundItem()));
+        });
+        addGroup(rows, "atomchat.settings.sounds.feedback", () -> {
+            addSwitches(rows, SettingsSection.CHAT, "feedback", "feedback_button", "feedback_send", "feedback_panel");
+            addSliders(rows, SettingsSection.CHAT, "feedback_volume");
+        });
+        return rows;
+    }
     private List<Row> chatRows(String chip) {
         List<Row> rows = new ArrayList<>();
         switch (chip == null ? "messages" : chip) {
@@ -705,12 +724,14 @@ public final class SettingsSectionPage {
             }
             case "notify" -> {
                 addSwitches(rows, SettingsSection.CHAT,
-                        "mention_banner", "mention_sound", "whisper_banner", "whisper_sound");
-                addSliders(rows, SettingsSection.CHAT, "notify_volume");
-                rows.add(Row.ofAction(ACTION_TEST_SOUND, testSoundItem()));
+                        "mention_banner", "whisper_banner");
+                rows.addAll(soundRows());
+
             }
-            case "teleport" ->
-                    rows.add(Row.ofAction(ACTION_TELEPORT_MODE, teleportModeItem()));
+            case "advanced" -> {
+                rows.add(Row.ofAction(ACTION_TELEPORT_MODE, teleportModeItem()));
+                addSwitches(rows, SettingsSection.CHAT, "fun_effects");
+            }
             default -> {
                 addSwitches(rows, SettingsSection.CHAT,
                         "entry", "poke", "images", "anti_spam", "compact_messages");
@@ -2652,15 +2673,15 @@ public final class SettingsSectionPage {
     /** Applies a hit: flips a switch, opens a link, fires an action, folds a
      *  colour group, or unblocks. Destructive actions go through the two-step
      *  confirm. */
-    public void perform(RowHit hit) {
+    public boolean perform(RowHit hit) {
         if (hit == null) {
-            return;
+            return false;
         }
         switch (hit.row().kind()) {
             case SWITCH -> {
                 SettingsItem item = hit.row().item();
                 if (!item.available()) {
-                    return;
+                    return false;
                 }
                 item.set(!item.value());
                 // One-shot pulse on the control the click flipped: the bounce
@@ -2675,12 +2696,12 @@ public final class SettingsSectionPage {
             case INFO -> {
                 if (hit.row().info().isLink()) {
                     openUri(hit.row().info().uri());
-                }
+                } else { return false; }
             }
             case LABEL -> {
                 String group = foldableGroup(hit.row().labelKey());
                 if (group == null) {
-                    return;
+                    return false;
                 }
                 if (!collapsedColorGroups.remove(group)) {
                     collapsedColorGroups.add(group);
@@ -2688,7 +2709,7 @@ public final class SettingsSectionPage {
             }
             case ACTION -> {
                 if (!hit.row().item().available() || actionHandler == null) {
-                    return;
+                    return false;
                 }
                 String actionId = hit.row().actionId();
                 if (needsConfirm(actionId)) {
@@ -2697,7 +2718,7 @@ public final class SettingsSectionPage {
                     if (!actionArmed(actionId) || now - armedActionAt > CONFIRM_ARM_MS) {
                         armedActionId = actionId;
                         armedActionAt = now;
-                        return;
+                        return true;
                     }
                     armedActionId = null;
                 }
@@ -2706,11 +2727,11 @@ public final class SettingsSectionPage {
             case BLOCKED -> {
                 if (hit.row().player() != null) {
                     BlockList.setBlocked(hit.row().player(), false);
-                }
+                } else { return false; }
             }
-            default -> {
-            }
+            default -> { return false; }
         }
+        return true;
     }
 
     /** Shell callback for action cards; the screen owns the file picker. */
@@ -2728,7 +2749,7 @@ public final class SettingsSectionPage {
         try {
             net.minecraft.util.Util.getOperatingSystem().open(java.net.URI.create(uri));
         } catch (Exception e) {
-            AtomChat.LOGGER.warn("Failed to open link {}", uri, e);
+            AtomChat.LOGGER.warn(com.atom.chat.diagnostics.AtomChatLog.message("ui", "Failed to open link {}"), uri, e);
         }
     }
 

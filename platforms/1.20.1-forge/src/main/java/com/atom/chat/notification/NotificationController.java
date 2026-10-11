@@ -48,7 +48,7 @@ public final class NotificationController {
             // A missing registration only costs us Holder/network lookups; the
             // cue still resolves by location for client-side playback. Losing
             // the sound must never take the whole panel down.
-            AtomChat.LOGGER.warn("Failed to register notification sound, continuing without it", e);
+            AtomChat.LOGGER.warn(com.atom.chat.diagnostics.AtomChatLog.message("notify", "Failed to register notification sound, continuing without it"), e);
         }
     }
 
@@ -58,7 +58,8 @@ public final class NotificationController {
         if (client == null) {
             return;
         }
-        float volume = Math.max(0.0F, Math.min(1.0F, AtomChatConfig.get().notifyVolume));
+        float volume = com.atom.chat.audio.FeedbackSoundPolicy.volume(AtomChatConfig.get().notificationSoundEnabled, true, AtomChatConfig.get().notifyVolume);
+        if (volume <= 0) return;
         // SimpleSoundInstance.forUI(SoundEvent, pitch, volume) — in 1.21.1
         // the second float is pitch and the third is volume. Passing notifyVolume
         // as the second float made the slider change pitch at full volume.
@@ -79,7 +80,8 @@ public final class NotificationController {
         if (!POKE_GATE.allow(System.currentTimeMillis())) {
             return;
         }
-        float volume = Math.max(0.0F, Math.min(1.0F, AtomChatConfig.get().notifyVolume));
+        float volume = com.atom.chat.audio.FeedbackSoundPolicy.volume(AtomChatConfig.get().notificationSoundEnabled, true, AtomChatConfig.get().notifyVolume);
+        if (volume <= 0) return;
         client.getSoundManager().play(SimpleSoundInstance.forUI(NOTIFICATION_SOUND, 1.25F, volume));
     }
 
@@ -167,7 +169,8 @@ public final class NotificationController {
             return;
         }
         lastSoundMs = now;
-        float volume = Math.max(0.0F, Math.min(1.0F, AtomChatConfig.get().notifyVolume));
+        float volume = com.atom.chat.audio.FeedbackSoundPolicy.volume(AtomChatConfig.get().notificationSoundEnabled, true, AtomChatConfig.get().notifyVolume);
+        if (volume <= 0) return;
         debug("playSound playing type=" + type + " volume=" + volume);
         // SimpleSoundInstance.forUI(SoundEvent, pitch, volume) — see
         // playTestSound() for the same parameter-order note.
@@ -177,7 +180,7 @@ public final class NotificationController {
     /** Debug-only diagnostics; silent unless the About-page debug switch is on. */
     private static void debug(String message) {
         if (AtomChatConfig.get().debug) {
-            AtomChat.LOGGER.info("[notify] {}", message);
+            AtomChat.LOGGER.info(com.atom.chat.diagnostics.AtomChatLog.message("notify", "[notify] {}"), message);
         }
     }
 }

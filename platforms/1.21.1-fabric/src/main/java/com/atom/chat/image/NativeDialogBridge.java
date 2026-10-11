@@ -105,7 +105,7 @@ public final class NativeDialogBridge {
                     GLFW.glfwSetWindowAttrib(host.client().getWindow().getHandle(),
                             GLFW.GLFW_AUTO_ICONIFY, value ? GLFW.GLFW_TRUE : GLFW.GLFW_FALSE);
                 } catch (Throwable t) {
-                    AtomChat.LOGGER.warn("Failed to toggle GLFW_AUTO_ICONIFY for the image picker", t);
+                    AtomChat.LOGGER.warn(com.atom.chat.diagnostics.AtomChatLog.message("resource", "Failed to toggle GLFW_AUTO_ICONIFY for the image picker"), t);
                 }
             }
 
@@ -114,7 +114,7 @@ public final class NativeDialogBridge {
                 try {
                     GLFW.glfwFocusWindow(host.client().getWindow().getHandle());
                 } catch (Throwable t) {
-                    AtomChat.LOGGER.warn("Failed to refocus the window after the image picker", t);
+                    AtomChat.LOGGER.warn(com.atom.chat.diagnostics.AtomChatLog.message("resource", "Failed to refocus the window after the image picker"), t);
                 }
             }
 
@@ -226,7 +226,7 @@ public final class NativeDialogBridge {
             // Never let a clipboard failure abort the click handler: it used to
             // leave the menu stuck open with no clue why. The boolean lets the
             // caller show a failure instead of a success.
-            AtomChat.LOGGER.warn("Failed to copy message to clipboard", t);
+            AtomChat.LOGGER.warn(com.atom.chat.diagnostics.AtomChatLog.message("resource", "Failed to copy message to clipboard"), t);
             return false;
         }
     }

@@ -505,6 +505,11 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
     private boolean suppressHeader;
 
     private final SkiaGraphics graphics = new SkiaGraphics();
+    private boolean feedbackOpened;
+    private final com.atom.chat.fun.ChatEffectPresentation chatEffects =
+            new com.atom.chat.fun.ChatEffectPresentation((message, partner) -> !this.closing &&
+                    (partner == null ? topPage() == AppPage.WORLD_CHAT && this.worldFeed.accepts(message)
+                            : topPage() == AppPage.PRIVATE_CHAT && partner.equals(activePrivateTarget())));
     private final String originalChatText;
     /**
      * Ordered input routing (D23a). Priority (first registered wins): closing
@@ -1620,11 +1625,13 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
 
     private void pushNav(NavPage page) {
         navStack.pushNav(page);
+                com.atom.chat.audio.FeedbackSoundController.play(com.atom.chat.audio.FeedbackCue.BUTTON);
     }
 
     @Override
     public void popPage() {
         navStack.popPage();
+                com.atom.chat.audio.FeedbackSoundController.play(com.atom.chat.audio.FeedbackCue.BUTTON);
     }
 
     /** Applies a pending pop and restores the page underneath it. */
@@ -1667,6 +1674,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
     @Override
     public void switchRoot(AppPage root) {
         navStack.switchRoot(root);
+                com.atom.chat.audio.FeedbackSoundController.play(com.atom.chat.audio.FeedbackCue.BUTTON);
     }
 
     private ScrollController currentScroll() {
@@ -1846,7 +1854,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
                     // stack trace every frame for as long as the panel stayed
                     // open, which is how a real one-line cause turns into an
                     // unreadable log.
-                    AtomChat.LOGGER.warn("AtomChat panel blur pre-pass failed, using solid background", t);
+                    AtomChat.LOGGER.warn(com.atom.chat.diagnostics.AtomChatLog.message("ui", "AtomChat panel blur pre-pass failed, using solid background"), t);
                     PanelBlurRenderer.disable(t.getClass().getSimpleName());
                     blurDrawnThisFrame = false;
                 }
@@ -1992,6 +2000,11 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
     @Override
     protected void init() {
         super.init();
+        chatEffects.install();
+        if (!feedbackOpened) {
+            feedbackOpened = true;
+            com.atom.chat.audio.FeedbackSoundController.play(com.atom.chat.audio.FeedbackCue.PANEL_OPEN);
+        }
         // Route incoming remote pokes to this screen while it is open.
         avatarWiring.poke().install();
         // Swap the vanilla suggestor for our anchored one on the same chat field.
@@ -2033,6 +2046,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
      */
     private void handlePhraseAction(QuickPhrasePanel.Action action) {
         quickPhraseWiring.handlePhraseAction(action);
+        if (action.type() != QuickPhrasePanel.Action.NONE) com.atom.chat.audio.FeedbackSoundController.play(com.atom.chat.audio.FeedbackCue.BUTTON);
     }
 
     // The canvas save-stack leak probe -- its debug gate, its leak gate and its
@@ -2145,6 +2159,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
 
     @Override
     public void removed() {
+        chatEffects.close();
         avatarWiring.poke().uninstall();
         // Hygiene on screen teardown: release the borrowed field so the parked
         // composer draft state cannot outlive the page that borrowed it.
@@ -2167,6 +2182,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
     private void drawPanel(Canvas canvas, float x, float y, Image worldSnapshot, int mouseX, int mouseY, float delta) {
         composer.syncFocusedFromField();
         composer.blurOnReadOnlyPage(isPrivateReadOnly());
+        chatEffects.session();
         long nowMs = System.currentTimeMillis();
         frameDt = PanelOpenMotion.domainFrameDtMs(nowMs, lastFrameMs);
         lastFrameMs = nowMs;
@@ -2292,6 +2308,8 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
             composite.end(canvas, layout, navFrame);
         }
 
+        com.atom.chat.fun.ChatEffectRenderer.draw(canvas, layout, chatEffects.session(),
+                com.atom.chat.fun.ChatEffectPresentation.nowMs());
         // Bezel ring last: nothing at the panel edge can sit on top of it.
         drawBezel(canvas, layout);
     }
@@ -2705,7 +2723,9 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
             case 2 -> AppPage.SETTINGS;
             default -> throw new IllegalStateException("Unexpected bottom tab index " + index);
         };
+        boolean changed = topPage() != root;
         switchRoot(root);
+        if (changed) com.atom.chat.audio.FeedbackSoundController.play(com.atom.chat.audio.FeedbackCue.BUTTON);
         return true;
     }
 
@@ -2873,15 +2893,18 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         // else" — and the virtual pair is what decides which element was under
         // the pointer. Debug-gated: one line per click is fine to opt into.
         if (AtomChatConfig.get().debug) {
-            AtomChat.LOGGER.info("click: gui=({}, {}) virtual=({}, {}) button={}",
+            AtomChat.LOGGER.info(com.atom.chat.diagnostics.AtomChatLog.message("ui", "click: gui=({}, {}) virtual=({}, {}) button={}"),
                     (int) mouseX, (int) mouseY,
                     (int) toVirtualX(mouseX), (int) toVirtualY(mouseY), button);
         }
-        Boolean direct = gate.click(mouseX, mouseY, button);
-        if (direct != null) {
-            return direct;
+        com.atom.chat.audio.FeedbackSoundController.beginAction();
+        try {
+            Boolean direct = gate.click(mouseX, mouseY, button);
+            if (direct != null) return direct;
+            return super.mouseClicked(mouseX, mouseY, button);
+        } finally {
+            com.atom.chat.audio.FeedbackSoundController.endAction();
         }
-        return super.mouseClicked(mouseX, mouseY, button);
     }
 
     @Override
@@ -3158,16 +3181,19 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
             // on the dim backdrop or the close key dismisses it.
             if (imagePreview.isActive()) {
                 imagePreview.onClick(toVirtualX(mouseX), toVirtualY(mouseY), layout().rect());
+                if (!imagePreview.isActive()) com.atom.chat.audio.FeedbackSoundController.play(com.atom.chat.audio.FeedbackCue.BUTTON);
                 return true;
             }
             // The avatar cropper is modal: while it is open it owns every click.
             if (imageCropper.isActive()) {
                 imageCropper.onClick(toVirtualX(mouseX), toVirtualY(mouseY), layout().rect());
+                if (!imageCropper.isActive()) com.atom.chat.audio.FeedbackSoundController.play(com.atom.chat.audio.FeedbackCue.BUTTON);
                 return true;
             }
             // So is the colour picker.
             if (colorPicker.isActive()) {
                 colorPicker.onClick(toVirtualX(mouseX), toVirtualY(mouseY), layout().rect());
+                if (!colorPicker.isActive()) com.atom.chat.audio.FeedbackSoundController.play(com.atom.chat.audio.FeedbackCue.BUTTON);
                 return true;
             }
             return false;
@@ -3359,6 +3385,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
                 int row = contextMenu.hitPlayerCardRow(mx, my);
                 if (row >= 0 && button == 0) {
                     contextActions.performPlayerCardAction(row);
+                com.atom.chat.audio.FeedbackSoundController.play(com.atom.chat.audio.FeedbackCue.BUTTON);
                     contextMenu.close();
                     return true;
                 }
@@ -3380,6 +3407,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
                         // Same press-bounce arming the bottom tab bar uses.
                         settingsSectionPage.setPressedChip(chip);
                         settingsSectionPage.selectChip(topNav().section(), chip);
+                com.atom.chat.audio.FeedbackSoundController.play(com.atom.chat.audio.FeedbackCue.BUTTON);
                         return true;
                     }
                 }
@@ -3423,8 +3451,10 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
                         settingsSectionPage.setPressedSwatch(colorHit.plus() ? -1 : colorHit.swatchIndex());
                         if (colorHit.plus()) {
                             colorPicker.open(colorHit.color());
+                            com.atom.chat.audio.FeedbackSoundController.play(com.atom.chat.audio.FeedbackCue.BUTTON);
                         } else {
                             settingsSectionPage.applyColor(colorHit);
+                com.atom.chat.audio.FeedbackSoundController.play(com.atom.chat.audio.FeedbackCue.BUTTON);
                         }
                         return true;
                     }
@@ -3435,7 +3465,9 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
                         // hit-tests stay unscaled.
                         settingsSectionPage.setPressedRow(hit.index());
                         if (hit.onAction(mx, my)) {
-                            settingsSectionPage.perform(hit);
+                            if (settingsSectionPage.perform(hit)) {
+                                com.atom.chat.audio.FeedbackSoundController.play(com.atom.chat.audio.FeedbackCue.BUTTON);
+                            }
                             return true;
                         }
                     }
@@ -3494,6 +3526,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
                         }
                         if (button == 1) {
                             contextMenu.openPlayerCard(hit.row().player(), mx, my);
+                    com.atom.chat.audio.FeedbackSoundController.play(com.atom.chat.audio.FeedbackCue.BUTTON);
                             return true;
                         }
                     }
@@ -3652,6 +3685,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
             if (button == 0 && topPage() == AppPage.WORLD_CHAT && isFilterButtonHit(mx, my)) {
                 ShellHeader.armActionPress();
                 cycleWorldFilter();
+                com.atom.chat.audio.FeedbackSoundController.play(com.atom.chat.audio.FeedbackCue.BUTTON);
                 return true;
             }
 
@@ -3671,16 +3705,19 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
             // back to open and the button can never toggle the panel off.
             if (button == 0 && layout.emojiBtn.contains((float) mx, (float) my)) {
                 primitives.pressButton(1);
+                com.atom.chat.audio.FeedbackSoundController.play(com.atom.chat.audio.FeedbackCue.BUTTON);
                 primitives.setButtonHeld(1);
                 composer.setFocused(true);
                 closePhrasePanel();
                 emojiPanel.toggle();
+                com.atom.chat.audio.FeedbackSoundController.play(com.atom.chat.audio.FeedbackCue.BUTTON);
                 return true;
             }
 
             // Quick-phrase toggle: same pre-dismiss ordering as the emoji button.
             if (button == 0 && layout.phraseBtn.contains((float) mx, (float) my)) {
                 primitives.pressButton(3);
+                com.atom.chat.audio.FeedbackSoundController.play(com.atom.chat.audio.FeedbackCue.BUTTON);
                 primitives.setButtonHeld(3);
                 composer.setFocused(true);
                 emojiPanel.close();
@@ -3698,6 +3735,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
                     String inserted = emojiPanel.click(layout, mx, my);
                     if (inserted != null && !inserted.isEmpty()) {
                         composer.append(inserted);
+                        com.atom.chat.audio.FeedbackSoundController.play(com.atom.chat.audio.FeedbackCue.BUTTON);
                     }
                     return true;
                 }
@@ -3724,15 +3762,20 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
                 if (row >= 0 && button == 0) {
                     if (menuBeforeAvatar) {
                         contextActions.performAvatarMenuAction(row, menuMessageOf(menuBefore));
+                        com.atom.chat.audio.FeedbackSoundController.play(com.atom.chat.audio.FeedbackCue.BUTTON);
                     } else if (row == 0) {
-                        feedback("atomchat.feedback.copied", copyToClipboard(menuBefore.getContentText()));
+                        boolean copied = copyToClipboard(menuBefore.getContentText());
+                        feedback("atomchat.feedback.copied", copied);
+                        if (copied) com.atom.chat.audio.FeedbackSoundController.play(com.atom.chat.audio.FeedbackCue.BUTTON);
                     } else if (row == 1) {
                         replySlots.arm(menuBefore);
+                        com.atom.chat.audio.FeedbackSoundController.play(com.atom.chat.audio.FeedbackCue.BUTTON);
                         composer.setFocused(true);
                         setFocused(input);
                         input.setFocused(true);
                     } else {
                         saveImage(menuBefore);
+                        com.atom.chat.audio.FeedbackSoundController.play(com.atom.chat.audio.FeedbackCue.BUTTON);
                     }
                     contextMenu.close();
                     return true;
@@ -3747,6 +3790,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
             if (button == 0 && overJumpLatest(layout, mx, my)) {
                 scrollSync.pressJumpLatest();
                 currentScroll().scrollToBottom(true);
+                com.atom.chat.audio.FeedbackSoundController.play(com.atom.chat.audio.FeedbackCue.BUTTON);
                 return true;
             }
 
@@ -3754,6 +3798,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
             // geometry comes from UiLayout so hits can never drift from the drawing.
             if (button == 0 && layout.imageBtn.contains((float) mx, (float) my)) {
                 primitives.pressButton(0);
+                com.atom.chat.audio.FeedbackSoundController.play(com.atom.chat.audio.FeedbackCue.BUTTON);
                 primitives.setButtonHeld(0);
                 composer.setFocused(true);
                 pickAndUploadImage();
@@ -3846,9 +3891,11 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
                         && ContextMenuActions.canOpenAvatarMenu(menuMessageOf(hit.message()))) {
                     // Right-clicking the avatar the avatar menu is already on closes it.
                     if (menuBefore == hit.message() && menuBeforeAvatar) {
+                        com.atom.chat.audio.FeedbackSoundController.play(com.atom.chat.audio.FeedbackCue.BUTTON);
                         return true;
                     }
                     contextMenu.openAvatar(menuSubjectOf(hit.message()), mx, my);
+                    com.atom.chat.audio.FeedbackSoundController.play(com.atom.chat.audio.FeedbackCue.BUTTON);
                     return true;
                 }
                 if (button == 1 && !hit.message().isSystem()
@@ -3856,9 +3903,11 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
                         && my >= hit.bubbleY() && my <= hit.bubbleBottom()) {
                     // Right-clicking the bubble the menu is already on closes it.
                     if (menuBefore == hit.message()) {
+                        com.atom.chat.audio.FeedbackSoundController.play(com.atom.chat.audio.FeedbackCue.BUTTON);
                         return true;
                     }
                     contextMenu.openBubble(menuSubjectOf(hit.message()), mx, my);
+                    com.atom.chat.audio.FeedbackSoundController.play(com.atom.chat.audio.FeedbackCue.BUTTON);
                     return true;
                 }
                 if (button == 0) {
@@ -4057,7 +4106,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
                 }
             }
             if (composer.focused() && AtomChatConfig.get().debug) {
-                AtomChat.LOGGER.info("keyPressed: {} (sc {}) mod {}", keyCode, scanCode, modifiers);
+                AtomChat.LOGGER.info(com.atom.chat.diagnostics.AtomChatLog.message("ui", "keyPressed: {} (sc {}) mod {}"), keyCode, scanCode, modifiers);
             }
             // Falls through to super (ChatScreen): the focused input consumes
             // backspace/ctrl+v/arrows/IME input; up/down drive vanilla chat history.
@@ -4070,7 +4119,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
                 return false;
             }
             if (AtomChatConfig.get().debug) {
-                AtomChat.LOGGER.info("charTyped: '{}' (U+{}) focused={} field={}",
+                AtomChat.LOGGER.info(com.atom.chat.diagnostics.AtomChatLog.message("ui", "charTyped: '{}' (U+{}) focused={} field={}"),
                         chr, Integer.toHexString(chr), composer.focused(), composer.fieldFocused());
             }
             return false;

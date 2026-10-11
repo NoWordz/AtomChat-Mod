@@ -122,12 +122,12 @@ public final class PackSyncServer {
             try {
                 bytes = Files.readAllBytes(dir.resolve(entry.name()));
             } catch (IOException e) {
-                AtomChat.LOGGER.warn("Server pack file {} vanished before it could be sent", name);
+                AtomChat.LOGGER.warn(com.atom.chat.diagnostics.AtomChatLog.message("pack", "Server pack file {} vanished before it could be sent"), name);
                 continue;
             }
             if (bytes.length != entry.size()
                     || !ServerPack.sha256Hex(bytes).equals(entry.sha256Hex())) {
-                AtomChat.LOGGER.info("Server pack file {} changed on disk mid-sync; skipped", name);
+                AtomChat.LOGGER.info(com.atom.chat.diagnostics.AtomChatLog.message("pack", "Server pack file {} changed on disk mid-sync; skipped"), name);
                 continue;
             }
             download.add(entry.name(), bytes);
@@ -150,10 +150,10 @@ public final class PackSyncServer {
         String hash = current == null ? "-" : current.pack().packHash().substring(0, 8);
         String name = Host.playerName(player);
         if (ack.ok()) {
-            AtomChat.LOGGER.info("Player {} verified the server pack {} ({})", name, hash,
+            AtomChat.LOGGER.info(com.atom.chat.diagnostics.AtomChatLog.message("pack", "Player {} verified the server pack {} ({})"), name, hash,
                     ack.detail().isEmpty() ? "up to date" : ack.detail());
         } else {
-            AtomChat.LOGGER.warn("Player {} could not sync the server pack {}: {}", name, hash,
+            AtomChat.LOGGER.warn(com.atom.chat.diagnostics.AtomChatLog.message("pack", "Player {} could not sync the server pack {}: {}"), name, hash,
                     ack.detail());
         }
     }
@@ -239,7 +239,7 @@ public final class PackSyncServer {
         try {
             return Files.isRegularFile(icon) ? Files.readAllBytes(icon) : null;
         } catch (IOException e) {
-            AtomChat.LOGGER.warn("Failed to read server-icon.png", e);
+            AtomChat.LOGGER.warn(com.atom.chat.diagnostics.AtomChatLog.message("pack", "Failed to read server-icon.png"), e);
             return null;
         }
     }

@@ -62,7 +62,7 @@ public final class ImageUploader {
                 }
                 return "ERROR: HTTP " + response.statusCode();
             } catch (Exception e) {
-                AtomChat.LOGGER.error("Failed to upload image", e);
+                AtomChat.LOGGER.error(com.atom.chat.diagnostics.AtomChatLog.message("resource", "Failed to upload image"), e);
                 return "ERROR: " + e.getMessage();
             }
         }, executor).whenComplete((url, throwable) -> {
@@ -108,7 +108,7 @@ public final class ImageUploader {
                 }
             }
         } catch (Exception e) {
-            AtomChat.LOGGER.warn("Failed to parse uguu response: {}", json, e);
+            AtomChat.LOGGER.warn(com.atom.chat.diagnostics.AtomChatLog.message("resource", "Failed to parse uguu response: {}"), json, e);
         }
         return null;
     }

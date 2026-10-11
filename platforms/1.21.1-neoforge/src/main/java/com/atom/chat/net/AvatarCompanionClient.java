@@ -211,7 +211,7 @@ public final class AvatarCompanionClient {
                     debug("companion: decode returned null for " + uuid + " (" + data.length + " bytes)");
                 }
             } catch (Throwable t) {
-                AtomChat.LOGGER.warn("Failed to decode companion avatar for {}", uuid, t);
+                AtomChat.LOGGER.warn(com.atom.chat.diagnostics.AtomChatLog.message("avatar", "Failed to decode companion avatar for {}"), uuid, t);
             } finally {
                 decoding.remove(uuid);
             }
@@ -223,7 +223,7 @@ public final class AvatarCompanionClient {
     /** Debug-only diagnostics; silent unless the About-page debug switch is on. */
     private static void debug(String message) {
         if (AtomChatConfig.get().debug) {
-            AtomChat.LOGGER.info("[avatar] {}", message);
+            AtomChat.LOGGER.info(com.atom.chat.diagnostics.AtomChatLog.message("avatar", "[avatar] {}"), message);
         }
     }
 }

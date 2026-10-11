@@ -173,9 +173,9 @@ public final class MediaCompanionClient {
         // ended up on some website", so the reason has to be in the log. The
         // previous-state comparison keeps a repeated state packet from spamming.
         if (!enabled && (previous == null || previous.enabled())) {
-            com.atom.chat.AtomChat.LOGGER.warn("This server has AtomChat media hosting switched off "
+            com.atom.chat.AtomChat.LOGGER.warn(com.atom.chat.diagnostics.AtomChatLog.message("media", "This server has AtomChat media hosting switched off "
                     + "(hostingEnabled=false in its atomchat-server.json); images you send will be "
-                    + "uploaded to the public image host instead of being stored on the server");
+                    + "uploaded to the public image host instead of being stored on the server"));
         }
     }
 

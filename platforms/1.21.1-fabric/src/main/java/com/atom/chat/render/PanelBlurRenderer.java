@@ -172,8 +172,8 @@ public final class PanelBlurRenderer {
             return;
         }
         disabled = true;
-        AtomChat.LOGGER.warn("AtomChat panel blur disabled for this session after the first failure "
-                + "({}); the panel keeps its solid background", reason);
+        AtomChat.LOGGER.warn(com.atom.chat.diagnostics.AtomChatLog.message("render", "AtomChat panel blur disabled for this session after the first failure "
+                + "({}); the panel keeps its solid background"), reason);
     }
 
     public static void ensureLoaded() {
@@ -201,7 +201,7 @@ public final class PanelBlurRenderer {
                         ROUNDED_SHADER_NAME,
                         VertexFormats.POSITION_TEXTURE_COLOR);
             } catch (Throwable t) {
-                AtomChat.LOGGER.warn("AtomChat panel blur shader failed to load; blur disabled", t);
+                AtomChat.LOGGER.warn(com.atom.chat.diagnostics.AtomChatLog.message("render", "AtomChat panel blur shader failed to load; blur disabled"), t);
                 roundedShader = null;
             }
         }
@@ -217,7 +217,7 @@ public final class PanelBlurRenderer {
                         KAWASE_SHADER_NAME,
                         VertexFormats.POSITION);
             } catch (Throwable t) {
-                AtomChat.LOGGER.warn("AtomChat Kawase blur shader failed to load; blur disabled", t);
+                AtomChat.LOGGER.warn(com.atom.chat.diagnostics.AtomChatLog.message("render", "AtomChat Kawase blur shader failed to load; blur disabled"), t);
                 kawaseShader = null;
             }
         }

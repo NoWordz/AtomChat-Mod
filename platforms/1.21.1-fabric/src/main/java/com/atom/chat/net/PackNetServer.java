@@ -36,7 +36,7 @@ public final class PackNetServer implements Net.ServerSide, Host.ServerSide {
         ServerPlayNetworking.registerGlobalReceiver(PackPayloads.Ack.ID,
                 (payload, context) -> onServer(context.player(),
                         () -> PackSyncServer.onAck(context.player(), PackPayloads.toMessage(payload))));
-        AtomChat.LOGGER.info("AtomChat pack distribution registered (server side)");
+        AtomChat.LOGGER.info(com.atom.chat.diagnostics.AtomChatLog.message("pack", "AtomChat pack distribution registered (server side)"));
     }
 
     private PackNetServer() {

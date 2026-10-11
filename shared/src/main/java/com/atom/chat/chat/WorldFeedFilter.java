@@ -37,6 +37,8 @@ public final class WorldFeedFilter {
      * span rows the new filter hides); that belongs to the list, so it stays
      * with the caller.
      */
+    public boolean accepts(ChatMessage message) { return worldFilter.accepts(message); }
+
     public void cycle() {
         worldFilter = worldFilter.next();
     }

@@ -187,10 +187,10 @@ public final class MediaCompanionServer {
                 Files.move(tmp, file, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
             }
             CompanionMaintenance.pruneMedia();
-            AtomChat.LOGGER.info("Stored hosted media {} ({} bytes)", mediaId, content.length);
+            AtomChat.LOGGER.info(com.atom.chat.diagnostics.AtomChatLog.message("media", "Stored hosted media {} ({} bytes)"), mediaId, content.length);
             result(player, uploadId, mediaId, "");
         } catch (IOException e) {
-            AtomChat.LOGGER.warn("Failed to store hosted media", e);
+            AtomChat.LOGGER.warn(com.atom.chat.diagnostics.AtomChatLog.message("media", "Failed to store hosted media"), e);
             result(player, uploadId, "", "io");
         }
     }

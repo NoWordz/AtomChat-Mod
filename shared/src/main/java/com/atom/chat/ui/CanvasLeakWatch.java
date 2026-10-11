@@ -36,7 +36,7 @@ public final class CanvasLeakWatch {
         }
         occurrences++;
         if (shouldLog(occurrences)) {
-            AtomChat.LOGGER.warn("Leak probe: {} leaked {} stack entries (occurrence {})",
+            AtomChat.LOGGER.warn(com.atom.chat.diagnostics.AtomChatLog.message("render", "Leak probe: {} leaked {} stack entries (occurrence {})"),
                     where, leaked, occurrences);
         }
     }

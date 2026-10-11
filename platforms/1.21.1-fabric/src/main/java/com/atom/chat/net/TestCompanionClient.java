@@ -23,7 +23,7 @@ public final class TestCompanionClient {
     public static void init() {
         ClientPlayNetworking.registerGlobalReceiver(TestPayloads.TestEventS2CPayload.ID,
                 (payload, context) -> context.client().execute(() -> handle(payload)));
-        AtomChat.LOGGER.info("AtomChat test companion registered (client side)");
+        AtomChat.LOGGER.info(com.atom.chat.diagnostics.AtomChatLog.message("test", "AtomChat test companion registered (client side)"));
     }
 
     private static void handle(TestPayloads.TestEventS2CPayload payload) {
@@ -38,8 +38,7 @@ public final class TestCompanionClient {
             if (client.currentScreen instanceof net.minecraft.client.gui.screen.AtomChatScreen screen) {
                 screen.onTestPoked(payload.senderUuid(), sender);
             } else {
-                AtomChat.LOGGER.info(
-                        "[test] poke cue played; open the panel for the wobble and the toast");
+                AtomChat.LOGGER.info(com.atom.chat.diagnostics.AtomChatLog.message("test", "[test] poke cue played; open the panel for the wobble and the toast"));
             }
             return;
         }
@@ -54,7 +53,7 @@ public final class TestCompanionClient {
         String text = payload.text().isBlank()
                 ? Text.translatable("atomchat.test.text." + type.name()).getString()
                 : payload.text();
-        AtomChat.LOGGER.info("[test] simulated {} banner from {}", type, sender);
+        AtomChat.LOGGER.info(com.atom.chat.diagnostics.AtomChatLog.message("test", "[test] simulated {} banner from {}"), type, sender);
         NotificationController.onTestBanner(type, payload.senderUuid(), sender, text);
     }
 }

@@ -64,8 +64,8 @@ public final class SkiaSupport {
                 if (current == null) {
                     current = probe(SkiaSupport::loadBundled);
                     if (!current.available()) {
-                        AtomChat.LOGGER.warn(unavailableLine(System.getProperty("os.name"),
-                                System.getProperty("os.arch"), current.reason()));
+                        AtomChat.LOGGER.warn(com.atom.chat.diagnostics.AtomChatLog.message("render", unavailableLine(System.getProperty("os.name"),
+                                System.getProperty("os.arch"), current.reason())));
                     }
                     decided = current;
                 }

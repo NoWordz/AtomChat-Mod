@@ -56,7 +56,7 @@ public final class ServerEmoteMigration {
                     .filter(path -> !path.getFileName().toString().startsWith("."))
                     .toList();
         } catch (IOException e) {
-            LOGGER.warn("Could not read the old server emote folder {}", legacyDir, e);
+            LOGGER.warn(com.atom.chat.diagnostics.AtomChatLog.message("pack", "Could not read the old server emote folder {}"), legacyDir, e);
             return 0;
         }
         if (sources.isEmpty()) {
@@ -65,7 +65,7 @@ public final class ServerEmoteMigration {
         try {
             Files.createDirectories(targetDir);
         } catch (IOException e) {
-            LOGGER.warn("Could not create the server emote folder {}", targetDir, e);
+            LOGGER.warn(com.atom.chat.diagnostics.AtomChatLog.message("pack", "Could not create the server emote folder {}"), targetDir, e);
             return 0;
         }
         int copied = 0;
@@ -75,12 +75,12 @@ public final class ServerEmoteMigration {
                 Files.copy(source, target, StandardCopyOption.REPLACE_EXISTING);
                 copied++;
             } catch (IOException e) {
-                LOGGER.warn("Could not move server emote {} to {}", source, target, e);
+                LOGGER.warn(com.atom.chat.diagnostics.AtomChatLog.message("pack", "Could not move server emote {} to {}"), source, target, e);
             }
         }
         if (copied > 0) {
-            LOGGER.info("Moved {} server emote file(s) from {} to {} - servers now keep the emotes "
-                    + "they hand out separate from a player's own stickers", copied, legacyDir, targetDir);
+            LOGGER.info(com.atom.chat.diagnostics.AtomChatLog.message("pack", "Moved {} server emote file(s) from {} to {} - servers now keep the emotes "
+                    + "they hand out separate from a player's own stickers"), copied, legacyDir, targetDir);
         }
         return copied;
     }

@@ -51,7 +51,7 @@ public final class PackBuilder {
         ServerPack pack = new ServerPack(hash, files, phrases, serverName, icon);
         // Decision 28: the console has no /atomchat info command, so this line
         // is the admin's only way to see what the server is actually offering.
-        AtomChat.LOGGER.info("Server pack {} built: {} file(s), {} KB, {} phrase(s), name '{}', icon {}",
+        AtomChat.LOGGER.info(com.atom.chat.diagnostics.AtomChatLog.message("pack", "Server pack {} built: {} file(s), {} KB, {} phrase(s), name '{}', icon {}"),
                 hash.substring(0, 8), files.size(), pack.totalBytes() / 1024, phrases.size(),
                 serverName.isEmpty() ? "-" : serverName,
                 icon == null ? "none" : icon.length + " B");
@@ -72,7 +72,7 @@ public final class PackBuilder {
                 }
             }
         } catch (IOException e) {
-            AtomChat.LOGGER.warn("Failed to list the server emote directory {}", dir, e);
+            AtomChat.LOGGER.warn(com.atom.chat.diagnostics.AtomChatLog.message("pack", "Failed to list the server emote directory {}"), dir, e);
             return List.of();
         }
         // Lowercased name order keeps the manifest stable across filesystems and
@@ -108,8 +108,8 @@ public final class PackBuilder {
             files.add(new ServerPack.FileEntry(name, ServerPack.sha256Hex(bytes), bytes.length));
         }
         if (skipped > 0) {
-            AtomChat.LOGGER.info("Server pack skipped {} file(s): over the {} file / {} KB cap, "
-                    + "duplicate after lowercasing, or outside the name whitelist",
+            AtomChat.LOGGER.info(com.atom.chat.diagnostics.AtomChatLog.message("pack", "Server pack skipped {} file(s): over the {} file / {} KB cap, "
+                    + "duplicate after lowercasing, or outside the name whitelist"),
                     skipped, fileCap, byteCap / 1024);
         }
         return files;
@@ -138,7 +138,7 @@ public final class PackBuilder {
                     : trimmed);
         }
         if (overCap) {
-            AtomChat.LOGGER.info("Server pack kept the first {} phrases; the rest were ignored",
+            AtomChat.LOGGER.info(com.atom.chat.diagnostics.AtomChatLog.message("pack", "Server pack kept the first {} phrases; the rest were ignored"),
                     ServerPack.MAX_PHRASES);
         }
         return List.copyOf(phrases);
@@ -149,12 +149,12 @@ public final class PackBuilder {
             return null;
         }
         if (png.length > ServerPack.MAX_ICON_BYTES) {
-            AtomChat.LOGGER.info("Ignoring server-icon.png: {} B is over the {} B cap",
+            AtomChat.LOGGER.info(com.atom.chat.diagnostics.AtomChatLog.message("pack", "Ignoring server-icon.png: {} B is over the {} B cap"),
                     png.length, ServerPack.MAX_ICON_BYTES);
             return null;
         }
         if (!isPng(png)) {
-            AtomChat.LOGGER.info("Ignoring server-icon.png: not a PNG");
+            AtomChat.LOGGER.info(com.atom.chat.diagnostics.AtomChatLog.message("pack", "Ignoring server-icon.png: not a PNG"));
             return null;
         }
         return png;

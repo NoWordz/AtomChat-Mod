@@ -90,7 +90,7 @@ public final class GifDecoder {
             return new AnimatedImage(frames, trimmed, codec.getRepetitionCount(), nowMs);
         } catch (Throwable t) {
             closeFrames(frames);
-            AtomChat.LOGGER.warn("Failed to decode animated GIF ({} bytes)",
+            AtomChat.LOGGER.warn(com.atom.chat.diagnostics.AtomChatLog.message("resource", "Failed to decode animated GIF ({} bytes)"),
                     bytes == null ? 0 : bytes.length, t);
             return null;
         } finally {

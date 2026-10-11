@@ -120,9 +120,9 @@ public final class CacheDirs {
         Path retired = configRoot.resolve("atomchat.json.migrated-bak");
         try {
             Files.move(legacy, retired, StandardCopyOption.REPLACE_EXISTING);
-            AtomChat.LOGGER.info("Retired the pre-0.2.4 flat config {} -> {}", legacy, retired);
+            AtomChat.LOGGER.info(com.atom.chat.diagnostics.AtomChatLog.message("resource", "Retired the pre-0.2.4 flat config {} -> {}"), legacy, retired);
         } catch (IOException e) {
-            AtomChat.LOGGER.warn("Could not retire the legacy flat config {}", legacy, e);
+            AtomChat.LOGGER.warn(com.atom.chat.diagnostics.AtomChatLog.message("resource", "Could not retire the legacy flat config {}"), legacy, e);
         }
     }
 
@@ -143,10 +143,10 @@ public final class CacheDirs {
                 deleteEmptyTree(newDir);
             }
             Files.move(oldDir, newDir, StandardCopyOption.ATOMIC_MOVE);
-            AtomChat.LOGGER.info("Migrated AtomChat {} from {} to {}", label, oldDir, newDir);
+            AtomChat.LOGGER.info(com.atom.chat.diagnostics.AtomChatLog.message("resource", "Migrated AtomChat {} from {} to {}"), label, oldDir, newDir);
         } catch (Exception e) {
             // Never fail startup over a cache move; the old path simply stays.
-            AtomChat.LOGGER.warn("Failed to migrate AtomChat {} from {} to {}",
+            AtomChat.LOGGER.warn(com.atom.chat.diagnostics.AtomChatLog.message("resource", "Failed to migrate AtomChat {} from {} to {}"),
                     label, oldDir, newDir, e);
         }
     }
@@ -168,9 +168,9 @@ public final class CacheDirs {
         }
         try {
             deleteTree(oldDir);
-            AtomChat.LOGGER.info("Removed migrated AtomChat {} at {}", label, oldDir);
+            AtomChat.LOGGER.info(com.atom.chat.diagnostics.AtomChatLog.message("resource", "Removed migrated AtomChat {} at {}"), label, oldDir);
         } catch (IOException e) {
-            AtomChat.LOGGER.warn("Failed to remove migrated AtomChat {} at {}",
+            AtomChat.LOGGER.warn(com.atom.chat.diagnostics.AtomChatLog.message("resource", "Failed to remove migrated AtomChat {} at {}"),
                     label, oldDir, e);
         }
     }
@@ -213,7 +213,7 @@ public final class CacheDirs {
                                 + "\n\nThe files here are no longer read and may be deleted.\n");
             }
         } catch (IOException e) {
-            AtomChat.LOGGER.warn("Failed to write migration marker in {}", dir, e);
+            AtomChat.LOGGER.warn(com.atom.chat.diagnostics.AtomChatLog.message("resource", "Failed to write migration marker in {}"), dir, e);
         }
     }
 }

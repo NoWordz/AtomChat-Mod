@@ -46,7 +46,7 @@ public final class AtomChatClient {
         // Idempotent second call: the client-only mixin plugin claimed AWT
         // before Minecraft's Main ran. This log line reports the outcome of
         // whichever call won, so it is the picker's field diagnostic.
-        AtomChat.LOGGER.info("AWT toolkit: {}", AwtDisplay.claim());
+        AtomChat.LOGGER.info(com.atom.chat.diagnostics.AtomChatLog.message("startup", "AWT toolkit: {}"), AwtDisplay.claim());
 
         modEventBus.addListener(PanelBlurRenderer::registerShaders);
         modEventBus.addListener(AtomChatClient::onClientSetup);
@@ -56,6 +56,7 @@ public final class AtomChatClient {
         // happen after the registries are already frozen (see
         // NotificationController#registerSound).
         modEventBus.addListener(NotificationController::registerSound);
+        modEventBus.addListener(com.atom.chat.audio.FeedbackSoundController::registerSound);
 
         MinecraftForge.EVENT_BUS.addListener(AtomChatClient::onPlayerJoin);
         MinecraftForge.EVENT_BUS.addListener(AtomChatClient::onPlayerDisconnect);
@@ -73,7 +74,7 @@ public final class AtomChatClient {
         com.atom.chat.net.PokeCompanionClient.init();
         com.atom.chat.net.MediaCompanionClient.init();
         com.atom.chat.history.ChatHistory.init(FMLPaths.CONFIGDIR.get().resolve("atomchat/history"));
-        AtomChat.LOGGER.info("AtomChat client initialized");
+        AtomChat.LOGGER.info(com.atom.chat.diagnostics.AtomChatLog.message("startup", "AtomChat client initialized"));
     }
 
     private static void registerKeyMappings(RegisterKeyMappingsEvent event) {

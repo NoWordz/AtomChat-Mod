@@ -137,7 +137,7 @@ public final class ChatHistory {
             try {
                 Files.deleteIfExists(file);
             } catch (IOException e) {
-                AtomChat.LOGGER.warn("Failed to delete chat history {}", file, e);
+                AtomChat.LOGGER.warn(com.atom.chat.diagnostics.AtomChatLog.message("history", "Failed to delete chat history {}"), file, e);
             }
         });
     }
@@ -179,7 +179,7 @@ public final class ChatHistory {
                 Files.createDirectories(file.getParent());
                 Files.write(file, finalLines, StandardCharsets.UTF_8);
             } catch (IOException e) {
-                AtomChat.LOGGER.warn("Failed to write chat history {}", file, e);
+                AtomChat.LOGGER.warn(com.atom.chat.diagnostics.AtomChatLog.message("history", "Failed to write chat history {}"), file, e);
             }
         });
     }
@@ -193,7 +193,7 @@ public final class ChatHistory {
         try {
             raw = Files.readAllLines(file, StandardCharsets.UTF_8);
         } catch (IOException e) {
-            AtomChat.LOGGER.warn("Failed to read chat history {}", file, e);
+            AtomChat.LOGGER.warn(com.atom.chat.diagnostics.AtomChatLog.message("history", "Failed to read chat history {}"), file, e);
             return;
         }
         List<ChatMessage> loadedPublic = new ArrayList<>();

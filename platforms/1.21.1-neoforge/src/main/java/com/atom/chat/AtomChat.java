@@ -56,7 +56,7 @@ public class AtomChat {
             }
         });
         version = modContainer.getModInfo().getVersion().toString();
-        LOGGER.info("AtomChat initialized");
+        LOGGER.info(com.atom.chat.diagnostics.AtomChatLog.message("startup", "AtomChat initialized"));
     }
 
     private static void onRegisterPayloads(RegisterPayloadHandlersEvent event) {

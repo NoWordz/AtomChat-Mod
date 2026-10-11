@@ -112,7 +112,7 @@ public class AtomChatServerConfig {
                     return config;
                 }
             } catch (Exception e) {
-                AtomChat.LOGGER.error("Failed to load AtomChat server config, using defaults", e);
+                AtomChat.LOGGER.error(com.atom.chat.diagnostics.AtomChatLog.message("config", "Failed to load AtomChat server config, using defaults"), e);
             }
         }
         AtomChatServerConfig config = new AtomChatServerConfig();
@@ -126,7 +126,7 @@ public class AtomChatServerConfig {
             Files.createDirectories(path.getParent());
             Files.writeString(path, GSON.toJson(config), StandardCharsets.UTF_8);
         } catch (IOException e) {
-            AtomChat.LOGGER.error("Failed to save AtomChat server config", e);
+            AtomChat.LOGGER.error(com.atom.chat.diagnostics.AtomChatLog.message("config", "Failed to save AtomChat server config"), e);
         }
     }
 }

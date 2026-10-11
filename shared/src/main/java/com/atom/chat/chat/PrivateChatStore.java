@@ -73,6 +73,7 @@ public final class PrivateChatStore {
             }
         }
         c.messages.add(message);
+        com.atom.chat.fun.ChatEffectEvents.publish(message, partner);
         com.atom.chat.history.ChatHistory.markDirty();
         if (c.messages.size() > MAX_MESSAGES_PER_CONVERSATION) {
             c.messages.remove(0);
@@ -101,6 +102,7 @@ public final class PrivateChatStore {
             }
         }
         c.messages.add(message);
+        com.atom.chat.fun.ChatEffectEvents.publish(message, partner);
         com.atom.chat.history.ChatHistory.markDirty();
         if (c.messages.size() > MAX_MESSAGES_PER_CONVERSATION) {
             c.messages.remove(0);

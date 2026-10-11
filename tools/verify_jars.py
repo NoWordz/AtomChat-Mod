@@ -46,7 +46,8 @@ def find_jar(project):
 
 def verify(project):
     print(f"\n=== {project} ===")
-    jars = find_jar(project)
+    candidate = Path(project)
+    jars = [candidate] if candidate.suffix == ".jar" and candidate.is_file() else find_jar(project)
     if len(jars) != 1:
         check(f"{project}: 恰好一个发布 jar", False,
               f"找到 {len(jars)} 个: {[p.name for p in jars]}")

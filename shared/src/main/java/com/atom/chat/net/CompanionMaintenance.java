@@ -140,7 +140,7 @@ public final class CompanionMaintenance {
                 total += sizeOrZero(p);
             }
         } catch (IOException e) {
-            AtomChat.LOGGER.warn("Failed to scan hosted data directory {}", dir, e);
+            AtomChat.LOGGER.warn(com.atom.chat.diagnostics.AtomChatLog.message("network", "Failed to scan hosted data directory {}"), dir, e);
             return -1L;
         }
         for (Path p : stale) {
@@ -170,7 +170,7 @@ public final class CompanionMaintenance {
 
     private static void logFreed(Path dir, long freed) {
         if (freed > 0L) {
-            AtomChat.LOGGER.info("Pruned {} KB of hosted data from {}", freed / 1024L, dir);
+            AtomChat.LOGGER.info(com.atom.chat.diagnostics.AtomChatLog.message("network", "Pruned {} KB of hosted data from {}"), freed / 1024L, dir);
         }
     }
 

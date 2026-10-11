@@ -105,7 +105,7 @@ public final class BlurMotionGate {
     private static void logCadenceChange(boolean still) {
         if (still != lastLoggedStill) {
             lastLoggedStill = still;
-            AtomChat.LOGGER.info("AtomChat panel blur cadence: {}",
+            AtomChat.LOGGER.info(com.atom.chat.diagnostics.AtomChatLog.message("render", "AtomChat panel blur cadence: {}"),
                     still ? "fallback (scene still, refresh at most every 500ms)"
                           : "fast (motion, refresh every 2 frames)");
         }

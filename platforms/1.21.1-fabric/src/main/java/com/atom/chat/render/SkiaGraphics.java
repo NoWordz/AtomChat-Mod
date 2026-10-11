@@ -112,7 +112,7 @@ public class SkiaGraphics {
             createSurface();
         }
         if (canvas == null) {
-            AtomChat.LOGGER.warn("Skia canvas is null after createSurface, skipping frame");
+            AtomChat.LOGGER.warn(com.atom.chat.diagnostics.AtomChatLog.message("render", "Skia canvas is null after createSurface, skipping frame"));
             return;
         }
         if (density <= 0.0F) {
@@ -148,7 +148,7 @@ public class SkiaGraphics {
                 leakLogCount++;
                 // Throttled: a per-frame leak used to spam the log line-by-line.
                 if (leakLogCount == 1 || leakLogCount % 200 == 0) {
-                    AtomChat.LOGGER.warn("Skia canvas stack leak: {} unbalanced save/saveLayer (occurrence {})",
+                    AtomChat.LOGGER.warn(com.atom.chat.diagnostics.AtomChatLog.message("render", "Skia canvas stack leak: {} unbalanced save/saveLayer (occurrence {})"),
                             leaked, leakLogCount);
                 }
             }
@@ -161,7 +161,7 @@ public class SkiaGraphics {
         // 到报告点就打一份分布（六十帧一次，约十秒）。这个类自己不打日志：格式留在 FrameProfile
         // 里，于是它的每一行都能在单测里拼出来 —— 一个要装全局渲染状态才能测的诊断类没人测。
         if (FrameProfile.frame(profileStart, allocatedBefore)) {
-            AtomChat.LOGGER.info(FrameProfile.summary());
+            AtomChat.LOGGER.info(com.atom.chat.diagnostics.AtomChatLog.message("render", FrameProfile.summary()));
         }
     }
 

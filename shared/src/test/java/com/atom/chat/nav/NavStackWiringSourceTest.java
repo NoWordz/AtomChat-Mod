@@ -144,7 +144,10 @@ class NavStackWiringSourceTest {
     }
 
     private static String source(String relative) throws IOException {
-        return Files.readString(repoRoot().resolve(relative), StandardCharsets.UTF_8);
+        // Git permits native Windows CRLF in the working tree; declarations
+        // are checked structurally using a normalized newline convention.
+        return Files.readString(repoRoot().resolve(relative), StandardCharsets.UTF_8)
+                .replace("\r\n", "\n").replace('\r', '\n');
     }
 
     /** A member body: declaration up to the first 4-space closing brace. */

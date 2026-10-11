@@ -87,7 +87,7 @@ public final class FilePicker {
                 }
                 result.set(showChooser(nameFilter));
             } catch (Throwable t) {
-                AtomChat.LOGGER.warn("Image picker failed", t);
+                AtomChat.LOGGER.warn(com.atom.chat.diagnostics.AtomChatLog.message("compat", "Image picker failed"), t);
             } finally {
                 try {
                     if (afterShow != null) {
@@ -147,7 +147,7 @@ public final class FilePicker {
                     frame.dispose();
                 }
             } catch (Throwable t) {
-                AtomChat.LOGGER.warn("Image save dialog failed", t);
+                AtomChat.LOGGER.warn(com.atom.chat.diagnostics.AtomChatLog.message("compat", "Image save dialog failed"), t);
             } finally {
                 done.countDown();
             }
@@ -175,11 +175,11 @@ public final class FilePicker {
     private static void reportHeadless() {
         Throwable failure = AwtDisplay.failure();
         if (failure != null) {
-            AtomChat.LOGGER.error("Image picker unavailable: AWT could not be initialised ({}). "
-                    + "Headless state: {}", AwtDisplay.outcome(), failure.toString(), failure);
+            AtomChat.LOGGER.error(com.atom.chat.diagnostics.AtomChatLog.message("compat", "Image picker unavailable: AWT could not be initialised ({}). "
+                    + "Headless state: {}"), AwtDisplay.outcome(), failure.toString(), failure);
         } else {
-            AtomChat.LOGGER.error("Image picker unavailable: AWT is headless ({}). "
-                    + "Another mod most likely reached AWT first.", AwtDisplay.outcome());
+            AtomChat.LOGGER.error(com.atom.chat.diagnostics.AtomChatLog.message("compat", "Image picker unavailable: AWT is headless ({}). "
+                    + "Another mod most likely reached AWT first."), AwtDisplay.outcome());
         }
         try {
             MinecraftClient client = MinecraftClient.getInstance();
@@ -192,11 +192,11 @@ public final class FilePicker {
                         client.inGameHud.getChatHud().addMessage(Text.translatable("atomchat.picker.headless"));
                     }
                 } catch (Throwable t) {
-                    AtomChat.LOGGER.warn("Could not tell the player the picker is unavailable", t);
+                    AtomChat.LOGGER.warn(com.atom.chat.diagnostics.AtomChatLog.message("compat", "Could not tell the player the picker is unavailable"), t);
                 }
             });
         } catch (Throwable t) {
-            AtomChat.LOGGER.warn("Could not reach the client to report the headless picker", t);
+            AtomChat.LOGGER.warn(com.atom.chat.diagnostics.AtomChatLog.message("compat", "Could not reach the client to report the headless picker"), t);
         }
     }
 
@@ -277,13 +277,13 @@ public final class FilePicker {
             // earns its keep if the class really comes from our own bundle, and
             // that is exactly the claim that used to be false (another mod's
             // copy won the race). One line answers it at the moment of truth.
-            AtomChat.LOGGER.info("Image picker look and feel: {} <- {}", lafClass.getName(), origin(lafClass));
+            AtomChat.LOGGER.info(com.atom.chat.diagnostics.AtomChatLog.message("compat", "Image picker look and feel: {} <- {}"), lafClass.getName(), origin(lafClass));
         } catch (Throwable t) {
-            AtomChat.LOGGER.warn("FlatLaf unavailable, falling back to the system look and feel", t);
+            AtomChat.LOGGER.warn(com.atom.chat.diagnostics.AtomChatLog.message("compat", "FlatLaf unavailable, falling back to the system look and feel"), t);
             try {
                 UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
             } catch (Throwable t2) {
-                AtomChat.LOGGER.warn("System look and feel unavailable too, keeping the Swing default", t2);
+                AtomChat.LOGGER.warn(com.atom.chat.diagnostics.AtomChatLog.message("compat", "System look and feel unavailable too, keeping the Swing default"), t2);
             }
         }
     }

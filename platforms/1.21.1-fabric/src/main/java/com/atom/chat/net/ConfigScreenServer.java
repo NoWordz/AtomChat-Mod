@@ -46,7 +46,7 @@ public final class ConfigScreenServer {
                 onServerThread(context.player(), () -> onSave(context.player(), payload)));
         ServerPlayNetworking.registerGlobalReceiver(ConfigPayloads.Refresh.ID, (payload, context) ->
                 onServerThread(context.player(), () -> onRefresh(context.player())));
-        AtomChat.LOGGER.info("AtomChat config screen registered (server side)");
+        AtomChat.LOGGER.info(com.atom.chat.diagnostics.AtomChatLog.message("config", "AtomChat config screen registered (server side)"));
     }
 
     /**
@@ -125,13 +125,13 @@ public final class ConfigScreenServer {
         int version = VERSION.incrementAndGet();
         ServerPlayNetworking.send(player, new ConfigPayloads.Result(true, ""));
         player.sendMessage(Text.translatable("atomchat.server.saved"), false);
-        AtomChat.LOGGER.info("Server config saved by {} (version {}, hosting {}, packs {})",
+        AtomChat.LOGGER.info(com.atom.chat.diagnostics.AtomChatLog.message("config", "Server config saved by {} (version {}, hosting {}, packs {})"),
                 player.getName().getString(), version, values.hostingEnabled(), values.packEnabled());
     }
 
     private static void deny(ServerPlayerEntity player, String error) {
         ServerPlayNetworking.send(player, new ConfigPayloads.Result(false, error));
-        AtomChat.LOGGER.info("Refused a server config save from {}: {}",
+        AtomChat.LOGGER.info(com.atom.chat.diagnostics.AtomChatLog.message("config", "Refused a server config save from {}: {}"),
                 player.getName().getString(), error);
     }
 }
