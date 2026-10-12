@@ -9,6 +9,8 @@ public final class ProfileCompanionClient {
     private static final java.util.Map<Long, Pending> pending = new java.util.HashMap<>();
     private static final com.atom.chat.profile.ProfileRequestLedger requests =
             new com.atom.chat.profile.ProfileRequestLedger(System::currentTimeMillis);
+    private static final com.atom.chat.profile.ProfileRequestLedger roleRequests =
+            new com.atom.chat.profile.ProfileRequestLedger(System::currentTimeMillis);
     private static long sequence;
     private static boolean ownReceived;
     private static boolean imagesPending;
@@ -22,8 +24,9 @@ public final class ProfileCompanionClient {
             public void request(java.util.UUID uuid) {
                 if (!available()) return;
                 long token = requests.issue(uuid);
+                roleRequests.track(token, uuid);
                 try { PacketDistributor.sendToServer(new ProfilePayloads.ProfileRequestPayload(uuid, token)); }
-                catch (RuntimeException e) { requests.cancel(token); }
+                catch (RuntimeException e) { requests.cancel(token); roleRequests.cancel(token); }
             }
             public void submit(com.atom.chat.profile.ProfilePatch patch, java.util.function.Consumer<String> result) {
                 ProfileCompanionClient.submit(patch, result);
@@ -51,6 +54,7 @@ public final class ProfileCompanionClient {
     }
     public static void onJoin() {
         pending.clear(); requests.clear(); ownReceived = false; imagesPending = false;
+        roleRequests.clear();
         com.atom.chat.profile.ProfileSync.clearConnection();
     }
     public static void onLeave() { onJoin(); }
@@ -63,6 +67,7 @@ public final class ProfileCompanionClient {
             }
         }
         requests.expire();
+        roleRequests.expire();
         if (!available()) return;
         var client = Minecraft.getInstance();
         if (!ownReceived) com.atom.chat.profile.ProfileSync.record(client.player.getUUID());
@@ -81,6 +86,12 @@ public final class ProfileCompanionClient {
             pending.remove(token); result.accept("send_failed");
         }
     }
+    public static void onRole(ProfilePayloads.ProfileRolePayload payload) {
+        if (!roleRequests.accept(payload.token(), payload.uuid())) return;
+        com.atom.chat.profile.ProfileSync.receivedOperator(payload.uuid(), payload.token(),
+                payload.state() == 0 ? null : payload.state() == 2);
+    }
+
     public static void onData(ProfilePayloads.ProfileDataPayload payload) {
         Pending acknowledgement = null;
         if (payload.token() < 0) {

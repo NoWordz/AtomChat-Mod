@@ -13,9 +13,15 @@ public final class ProfileRequestLedger {
         if (uuid == null) throw new IllegalArgumentException("missing_uuid");
         expire();
         long token = -(++sequence);
+        track(token, uuid);
+        return token;
+    }
+    /** Tracks an independent response to the same profile read. */
+    public void track(long token, UUID uuid) {
+        if (token >= 0 || uuid == null) throw new IllegalArgumentException("invalid_profile_request");
+        expire();
         issued.put(token, new Request(uuid, clock.getAsLong() + 15000));
         while (issued.size() > 512) issued.remove(issued.keySet().iterator().next());
-        return token;
     }
     public boolean accept(long token, UUID uuid) {
         Request request = issued.get(token);

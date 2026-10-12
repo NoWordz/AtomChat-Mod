@@ -65,6 +65,7 @@ public final class ProfileCompanionServer {
     }
     private static void request(ServerPlayer player, ProfilePayloads.ProfileRequestPayload payload) {
         if (payload.token() >= 0 || !allow(player, false)) return;
+        answerRole(player, payload.uuid(), payload.token());
         try { answer(player, repository(player).get(payload.uuid()), payload.token(), ""); }
         catch (java.io.IOException | RuntimeException e) {
             com.atom.chat.AtomChat.LOGGER.warn(com.atom.chat.diagnostics.AtomChatLog.message(
@@ -72,6 +73,16 @@ public final class ProfileCompanionServer {
             answer(player, ProfileRecord.empty(payload.uuid()), payload.token(), "sync_failed");
         }
     }
+    private static void answerRole(ServerPlayer requester, UUID uuid, long token) {
+        var server = requester.getServer();
+        if (server == null || !NetworkRegistry.hasChannel(
+                requester.connection, ProfilePayloads.ProfileRolePayload.TYPE.id())) return;
+        var target = server.getPlayerList().getPlayer(uuid);
+        int state = target == null ? 0 : target.hasPermissions(2) ? 2 : 1;
+        PacketDistributor.sendToPlayer(requester,
+                new ProfilePayloads.ProfileRolePayload(uuid, token, state));
+    }
+
     private static void answer(ServerPlayer player, ProfileRecord record, long token, String error) {
         ProfilePayloads.ProfileDataPayload payload = new ProfilePayloads.ProfileDataPayload(record.uuid(), token,
                 record.signature(), record.avatar(), record.banner(), record.revision(), record.imageFields(), error);

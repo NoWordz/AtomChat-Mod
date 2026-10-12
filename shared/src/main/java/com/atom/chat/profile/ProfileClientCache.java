@@ -9,6 +9,7 @@ import java.util.function.LongSupplier;
 public final class ProfileClientCache {
     private static final int CAPACITY = 512;
     private static final long RETRY_MS = 5000;
+    private static final long ROLE_REFRESH_MS = 30000;
     private final Consumer<UUID> request;
     private final LongSupplier clock;
     private final LinkedHashMap<UUID, Slot> entries = new LinkedHashMap<>(32, .75F, true);
@@ -17,6 +18,10 @@ public final class ProfileClientCache {
         ProfileRecord record;
         long minimumRevision;
         long requestedAt = Long.MIN_VALUE;
+        boolean roleRequested;
+        Boolean operator;
+        long roleReceivedAt = Long.MIN_VALUE;
+        long roleToken;
     }
     public ProfileClientCache(Consumer<UUID> request, LongSupplier clock) {
         this.request = request;
@@ -26,13 +31,36 @@ public final class ProfileClientCache {
         if (uuid == null) return ProfileRecord.empty(null);
         Slot slot = entries.computeIfAbsent(uuid, ignored -> new Slot());
         trim();
-        if (slot.record != null) return slot.record;
         long now = clock.getAsLong();
-        if (slot.requestedAt == Long.MIN_VALUE || now - slot.requestedAt >= RETRY_MS) {
+        long interval = slot.record == null ? RETRY_MS : ROLE_REFRESH_MS;
+        if ((slot.record == null || slot.roleRequested)
+                && (slot.requestedAt == Long.MIN_VALUE || now - slot.requestedAt >= interval)) {
             slot.requestedAt = now;
             request.accept(uuid);
         }
-        return ProfileRecord.empty(uuid);
+        return slot.record != null ? slot.record : ProfileRecord.empty(uuid);
+    }
+    /** Unknown and expired server answers stay hidden. */
+    public Boolean operator(UUID uuid) {
+        if (uuid == null) return null;
+        Slot slot = entries.computeIfAbsent(uuid, ignored -> new Slot());
+        slot.roleRequested = true;
+        trim();
+        get(uuid);
+        long now = clock.getAsLong();
+        return slot.roleReceivedAt != Long.MIN_VALUE
+                && now - slot.roleReceivedAt < ROLE_REFRESH_MS
+                ? slot.operator : null;
+    }
+    public void acceptOperator(UUID uuid, long token, Boolean operator) {
+        if (uuid == null || token >= 0) throw new IllegalArgumentException("invalid_profile_role");
+        Slot slot = entries.computeIfAbsent(uuid, ignored -> new Slot());
+        // New read tokens are more negative; older replies cannot restore stale roles.
+        if (slot.roleToken != 0 && token >= slot.roleToken) return;
+        slot.roleToken = token;
+        slot.operator = operator;
+        slot.roleReceivedAt = clock.getAsLong();
+        trim();
     }
     public void accept(ProfileRecord record) {
         if (record == null || record.uuid() == null || record.revision() < 0
@@ -54,6 +82,8 @@ public final class ProfileClientCache {
         if (slot != null) {
             slot.record = null;
             slot.requestedAt = Long.MIN_VALUE;
+            slot.operator = null;
+            slot.roleReceivedAt = Long.MIN_VALUE;
         }
     }
     public void clear() { entries.clear(); epoch++; }

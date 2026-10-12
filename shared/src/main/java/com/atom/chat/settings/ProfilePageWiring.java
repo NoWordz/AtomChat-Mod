@@ -21,9 +21,9 @@ import java.util.UUID;
  * committing, and their call sites stay in the shell.</p>
  *
  * <p>Two contracts are easy to break by "improving" them: the role row answers
- * <em>only</em> for the local player ({@code hasPermissions(2)}), and returns
- * null for everyone else — null means "unknown", which hides the row until a
- * server companion can answer. And the mutex with the other composer borrows is
+ * for the local player ({@code hasPermissions(2)}) or from a current server
+ * companion answer for another player. Null means "unknown" and hides the
+ * row. And the mutex with the other composer borrows is
  * only carried over: which editor may start is the shell's business.</p>
  *
  * <p>Ports on {@link Host}: D18's page, D21's composer reads and writes, the
@@ -99,8 +99,8 @@ public final class ProfilePageWiring {
     }
 
     /**
-     * The role row's resolver: the local player's own permission level, or null
-     * ("unknown" — the row stays hidden) for anybody else.
+     * The local player's permission level or a current companion answer.
+     * Unknown server answers keep the row hidden.
      */
     public ProfilePage.RoleResolver roleResolver() {
         return (uuid, name) -> {
@@ -108,7 +108,7 @@ public final class ProfilePageWiring {
             if (uuid != null && local != null && uuid.equals(local)) {
                 return host.localPlayerHasPermissions(2);
             }
-            return null;
+            return com.atom.chat.profile.ProfileSync.operator(uuid);
         };
     }
 

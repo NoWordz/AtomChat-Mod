@@ -33,6 +33,10 @@ public final class ProfileSync {
     public static boolean available() { return transport != null && transport.available(); }
     public static ProfileRecord record(UUID uuid) { return CACHE.get(uuid); }
     public static void received(ProfileRecord record) { CACHE.accept(record); }
+    public static Boolean operator(UUID uuid) { return CACHE.operator(uuid); }
+    public static void receivedOperator(UUID uuid, long token, Boolean operator) {
+        CACHE.acceptOperator(uuid, token, operator);
+    }
     public static void changed(UUID uuid) { CACHE.invalidate(uuid); }
     public static Image image(UUID uuid, ProfileField field) {
         ProfileRecord data = record(uuid);

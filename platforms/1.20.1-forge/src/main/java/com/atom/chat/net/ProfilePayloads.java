@@ -18,6 +18,7 @@ public final class ProfilePayloads {
     public static final ResourceLocation CHANNEL_NAME = ResourceLocation.fromNamespaceAndPath(AtomChat.MOD_ID, "profile");
     public static final int ID_UPLOAD = 0, ID_REQUEST = 1, ID_DATA = 2, ID_CHANGED = 3;
     public static SimpleChannel CHANNEL;
+    public static SimpleChannel ROLE_CHANNEL;
     public record ProfileUpdatePayload(long token, ProfilePatch patch) {
         public static void encode(ProfileUpdatePayload payload, FriendlyByteBuf buf) { buf.writeLong(payload.token());
             int flags = (payload.patch().signature() != null ? 1 : 0) | (payload.patch().avatar() != null ? 2 : 0) | (payload.patch().banner() != null ? 4 : 0);
@@ -46,7 +47,38 @@ public final class ProfilePayloads {
         public static void encode(ProfileChangedPayload payload, FriendlyByteBuf buf) { buf.writeUUID(payload.uuid()); }
         public static ProfileChangedPayload decode(FriendlyByteBuf buf) { return new ProfileChangedPayload(buf.readUUID()); }
     }
+    /** 0 unknown, 1 member, 2 operator; registered on a separate optional channel. */
+    public record ProfileRolePayload(UUID uuid, long token, int state) {
+        public ProfileRolePayload {
+            if (state < 0 || state > 2) throw new IllegalArgumentException("invalid_profile_role");
+        }
+        public static void encode(ProfileRolePayload payload, FriendlyByteBuf buf) {
+            buf.writeUUID(payload.uuid());
+            buf.writeLong(payload.token());
+            buf.writeByte(payload.state());
+        }
+        public static ProfileRolePayload decode(FriendlyByteBuf buf) {
+            return new ProfileRolePayload(buf.readUUID(), buf.readLong(), buf.readUnsignedByte());
+        }
+    }
+
     public static void register() {
+        ROLE_CHANNEL = NetworkRegistry.newSimpleChannel(
+                ResourceLocation.fromNamespaceAndPath(AtomChat.MOD_ID, "profile_role"),
+                () -> PROTOCOL,
+                NetworkRegistry.acceptMissingOr(PROTOCOL),
+                NetworkRegistry.acceptMissingOr(PROTOCOL));
+        ROLE_CHANNEL.messageBuilder(ProfileRolePayload.class, 0, NetworkDirection.PLAY_TO_CLIENT)
+                .encoder(ProfileRolePayload::encode)
+                .decoder(ProfileRolePayload::decode)
+                .consumerMainThread((payload, ctx) -> {
+                    if (FMLEnvironment.dist == Dist.CLIENT) {
+                        ctx.get().enqueueWork(() -> ProfileCompanionClient.onRole(payload));
+                    }
+                    ctx.get().setPacketHandled(true);
+                })
+                .add();
+
         CHANNEL = NetworkRegistry.newSimpleChannel(
                 CHANNEL_NAME,
                 () -> PROTOCOL,

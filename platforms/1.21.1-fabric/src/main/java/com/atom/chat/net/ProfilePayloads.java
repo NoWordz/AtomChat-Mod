@@ -52,10 +52,31 @@ public final class ProfilePayloads {
         private static ProfileChangedPayload read(RegistryByteBuf buf) { return new ProfileChangedPayload(buf.readUuid()); }
         @Override public CustomPayload.Id<? extends CustomPayload> getId() { return ID; }
     }
+    /** 0 unknown, 1 member, 2 operator; existing payloads keep their wire format. */
+    public record ProfileRolePayload(UUID uuid, long token, int state) implements CustomPayload {
+        public ProfileRolePayload {
+            if (state < 0 || state > 2) throw new IllegalArgumentException("invalid_profile_role");
+        }
+        public static final CustomPayload.Id<ProfileRolePayload> ID =
+                new CustomPayload.Id<>(Identifier.of(AtomChat.MOD_ID, "profile_role"));
+        public static final PacketCodec<RegistryByteBuf, ProfileRolePayload> CODEC =
+                PacketCodec.of(ProfileRolePayload::write, ProfileRolePayload::read);
+        private static void write(ProfileRolePayload payload, RegistryByteBuf buf) {
+            buf.writeUuid(payload.uuid());
+            buf.writeLong(payload.token());
+            buf.writeByte(payload.state());
+        }
+        private static ProfileRolePayload read(RegistryByteBuf buf) {
+            return new ProfileRolePayload(buf.readUuid(), buf.readLong(), buf.readUnsignedByte());
+        }
+        @Override public CustomPayload.Id<? extends CustomPayload> getId() { return ID; }
+    }
+
     public static void register() {
         PayloadTypeRegistry.playC2S().register(ProfileUpdatePayload.ID, ProfileUpdatePayload.CODEC);
         PayloadTypeRegistry.playC2S().register(ProfileRequestPayload.ID, ProfileRequestPayload.CODEC);
         PayloadTypeRegistry.playS2C().register(ProfileDataPayload.ID, ProfileDataPayload.CODEC);
         PayloadTypeRegistry.playS2C().register(ProfileChangedPayload.ID, ProfileChangedPayload.CODEC);
+        PayloadTypeRegistry.playS2C().register(ProfileRolePayload.ID, ProfileRolePayload.CODEC);
     }
 }

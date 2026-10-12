@@ -57,8 +57,36 @@ public final class ProfilePayloads {
         };
         @Override public Type<? extends CustomPacketPayload> type() { return TYPE; }
     }
+    /** 0 unknown, 1 member, 2 operator; existing payloads keep their wire format. */
+    public record ProfileRolePayload(UUID uuid, long token, int state) implements CustomPacketPayload {
+        public ProfileRolePayload {
+            if (state < 0 || state > 2) throw new IllegalArgumentException("invalid_profile_role");
+        }
+        public static final Type<ProfileRolePayload> TYPE =
+                new Type<>(ResourceLocation.fromNamespaceAndPath(AtomChat.MOD_ID, "profile_role"));
+        public static final StreamCodec<RegistryFriendlyByteBuf, ProfileRolePayload> STREAM_CODEC =
+                new StreamCodec<>() {
+                    @Override public ProfileRolePayload decode(RegistryFriendlyByteBuf buf) {
+                        return new ProfileRolePayload(buf.readUUID(), buf.readLong(), buf.readUnsignedByte());
+                    }
+                    @Override public void encode(RegistryFriendlyByteBuf buf, ProfileRolePayload payload) {
+                        buf.writeUUID(payload.uuid());
+                        buf.writeLong(payload.token());
+                        buf.writeByte(payload.state());
+                    }
+                };
+        @Override public Type<? extends CustomPacketPayload> type() { return TYPE; }
+    }
+
     public static void register(RegisterPayloadHandlersEvent event) {
         PayloadRegistrar registrar = event.registrar("1").optional();
+        registrar.playToClient(ProfileRolePayload.TYPE, ProfileRolePayload.STREAM_CODEC,
+                (payload, ctx) -> {
+                    if (net.neoforged.fml.loading.FMLEnvironment.dist == net.neoforged.api.distmarker.Dist.CLIENT) {
+                        ctx.enqueueWork(() -> ProfileCompanionClient.onRole(payload));
+                    }
+                });
+
         registrar.playToServer(ProfileUpdatePayload.TYPE, ProfileUpdatePayload.STREAM_CODEC,
                 ProfileCompanionServer::handleUpdate);
         registrar.playToServer(ProfileRequestPayload.TYPE, ProfileRequestPayload.STREAM_CODEC,
