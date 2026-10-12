@@ -82,6 +82,11 @@ public class AtomChatServerConfig {
         return Math.max(1L, maxTotalMb) * 1024L * 1024L;
     }
 
+    /** Durable profile images per world; separate from legacy avatar/cache quotas. */
+    public int maxProfileTotalMb = 64;
+
+    public long maxProfileTotalBytes() { return Math.max(1L, maxProfileTotalMb) * 1024L * 1024L; }
+
     public long maxAvatarTotalBytes() {
         return Math.max(1L, maxAvatarTotalMb) * 1024L * 1024L;
     }

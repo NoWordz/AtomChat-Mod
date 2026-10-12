@@ -61,6 +61,7 @@ public class AtomChat {
 
     private static void onRegisterPayloads(RegisterPayloadHandlersEvent event) {
         com.atom.chat.net.AvatarPayloads.register(event);
+        com.atom.chat.net.ProfilePayloads.register(event);
         // Poke companion: a remote poke, rate limited server-side.
         com.atom.chat.net.PokePayloads.register(event);
         // Simulation harness for a single-player session (/atomchat test).

@@ -42,7 +42,7 @@ def violations(text):
     for call in CALL.finditer(text):
         start=call.end(); end=first_end(text,start); expr=text[start:end].strip()
         if not expr.startswith(WRAP): errors.append(('missing',call.start()))
-        elif not re.match(re.escape(WRAP)+r'"[a-z][a-z0-9.]*",',expr): errors.append(('chain',call.start()))
+        elif not re.match(re.escape(WRAP)+r'\s*"[a-z][a-z0-9.]*"\s*,',expr): errors.append(('chain',call.start()))
         if '[AtomChat][AtomChat]' in expr or re.search(r'\[AtomChat\]\[[^]]+\].*?\[AtomChat\]\[',expr): errors.append(('duplicate',call.start()))
     if re.search(r'\bSystem\.(?:out|err)\.|\.printStackTrace\(',text): errors.append(('unowned-outlet',0))
     return errors

@@ -39,6 +39,7 @@ public class AtomChat {
         // both logical sides).
         modEventBus.addListener((FMLCommonSetupEvent event) -> event.enqueueWork(() -> {
             com.atom.chat.net.AvatarPayloads.register();
+            com.atom.chat.net.ProfilePayloads.register();
             // Poke companion: a remote poke, rate limited server-side.
             com.atom.chat.net.PokePayloads.register();
             // Media companion: server-hosted chat images / GIFs, same dual

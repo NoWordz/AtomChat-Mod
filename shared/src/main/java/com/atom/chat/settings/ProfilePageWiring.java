@@ -139,7 +139,9 @@ public final class ProfilePageWiring {
             }
             AtomChatConfig cfg = AtomChatConfig.get();
             cfg.playerSignature = text;
+            cfg.profileSignatureEdited = true;
             AtomChatConfig.save(cfg);
+            com.atom.chat.profile.ProfileSync.signatureEdited(text);
         }
         host.setComposerText(signatureSavedComposer);
         host.caretToEnd();

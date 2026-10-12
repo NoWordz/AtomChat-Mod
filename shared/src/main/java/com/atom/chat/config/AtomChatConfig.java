@@ -98,6 +98,11 @@ public class AtomChatConfig {
      * players' profiles show the placeholder line instead. Empty = unset.
      */
     public String playerSignature = "";
+    /** Explicit empty edits must sync; a fresh client should not erase server data. */
+    public boolean profileSignatureEdited;
+    public boolean profileAvatarCleared;
+    public boolean profileBannerCleared;
+    public boolean profileSignatureMigrationDone;
 
     /**
      * Master switch for the custom profile banner

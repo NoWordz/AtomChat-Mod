@@ -226,7 +226,7 @@ public final class ProfilePage {
     /** The signature shown for the current subject; others get none. */
     private String signatureOfSubject() {
         if (!subjectIsSelf()) {
-            return "";
+            return com.atom.chat.profile.ProfileSync.record(subjectUuid()).signature();
         }
         String sig = com.atom.chat.config.AtomChatConfig.get().playerSignature;
         return sig == null ? "" : sig;
@@ -759,11 +759,16 @@ public final class ProfilePage {
      * edge — that clears the cardRadius corner curve, so the chip never hangs
      * over the card's rounded-off area.
      */
+    private String bannerBadgeLabel() {
+        return tr(com.atom.chat.profile.ProfileSync.unsynced()
+                ? "atomchat.profile.unsynced.badge" : "atomchat.profile.banner.change");
+    }
+
     private UiLayout.Rect bannerBadgeRect(UiLayout layout, float scrollY) {
         UiLayout.Rect banner = bannerRect(layout, scrollY);
         Font font = FontManager.font(UiTokens.PROFILE_TILE_LABEL_FONT);
         float h = s(20);
-        float w = SkiaFontRenderer.getStringWidth(font, tr("atomchat.profile.banner.change")) + s(16);
+        float w = SkiaFontRenderer.getStringWidth(font, bannerBadgeLabel()) + s(16);
         return new UiLayout.Rect(
                 banner.right() - s(8) - w,
                 banner.bottom() - s(8) - h,
@@ -830,7 +835,7 @@ public final class ProfilePage {
                         handler.openAvatarPicker();
                         return true;
                     }
-                    if (!avatarStore.isSet()) {
+                    if (!customAvatarActive()) {
                         // Disabled row: consume the click, keep the menu open.
                         return true;
                     }
@@ -906,9 +911,21 @@ public final class ProfilePage {
      * image = off — {@code BannerStore.isSet()} is the everyday half of the
      * switch.
      */
+    private boolean customAvatarActive() {
+        return avatarStore.isSet() || com.atom.chat.profile.ProfileSync.hasOwnImage(com.atom.chat.profile.ProfileField.AVATAR);
+    }
+
+    private Image profileBannerImage() {
+        if (subjectIsSelf()) {
+            if (!com.atom.chat.config.AtomChatConfig.get().customBannerEnabled) return null;
+            if (BannerStore.isSet()) return BannerImage.current(BannerStore.current());
+        }
+        return com.atom.chat.profile.ProfileSync.image(subjectUuid(), com.atom.chat.profile.ProfileField.BANNER);
+    }
+
     private static boolean customBannerActive() {
         return com.atom.chat.config.AtomChatConfig.get().customBannerEnabled
-                && BannerStore.isSet();
+                && (BannerStore.isSet() || com.atom.chat.profile.ProfileSync.hasOwnImage(com.atom.chat.profile.ProfileField.BANNER));
     }
 
     // ------------------------------------------------------------------
@@ -971,7 +988,7 @@ public final class ProfilePage {
         infoCardScale.update(infoCard.contains(vmx, vmy), false, dt,
                 Animations.enabled(), infoCard.w());
         for (int i = 0; i < menuItemHover.length; i++) {
-            boolean enabled = i == 0 || avatarStore.isSet();
+            boolean enabled = i == 0 || customAvatarActive();
             boolean over = avatarMenuOpen && enabled
                     && menuItemRect(layout, scrollY, i).contains(vmx, vmy);
             menuItemHover[i] = UiMotion.approach(menuItemHover[i], over ? 1.0F : 0.0F, dt, UiMotion.HOVER_MS);
@@ -1016,8 +1033,7 @@ public final class ProfilePage {
         canvas.save();
         try {
             SkiaDraw.clip(canvas, banner.x(), banner.y(), banner.w(), banner.h(), radius);
-            Image custom = subjectIsSelf() && customBannerActive()
-                    ? BannerImage.current(BannerStore.current()) : null;
+            Image custom = profileBannerImage();
             if (custom != null) {
                 // Cover crop at draw time: the banner's aspect follows the
                 // panel width, which the decode cache cannot know about. No
@@ -1080,7 +1096,7 @@ public final class ProfilePage {
                     chip.h() / 2.0F, Color.makeARGB((int) (60.0F * bannerHover), 255, 255, 255));
         }
         Font font = FontManager.font(UiTokens.PROFILE_TILE_LABEL_FONT);
-        SkiaFontRenderer.drawText(canvas, font, tr("atomchat.profile.banner.change"),
+        SkiaFontRenderer.drawText(canvas, font, bannerBadgeLabel(),
                 chip.x() + s(8), SkiaFontRenderer.centerBaselineY(font, chip.y() + chip.h() / 2.0F),
                 Color.makeARGB(255, 255, 255, 255));
     }
@@ -1189,8 +1205,8 @@ public final class ProfilePage {
             text = tr("atomchat.profile.signature.placeholder");
             alpha = (int) (170 + 60 * signatureHover);
         } else if (!own) {
-            // Other players' line is display-only: the QQ lazy placeholder.
-            text = tr("atomchat.profile.signature.placeholder");
+            // Other players' signatures are read-only; only unset text uses the placeholder.
+            text = sig.isEmpty() ? tr("atomchat.profile.signature.placeholder") : sig;
             alpha = 200;
         } else {
             text = sig;
@@ -1473,7 +1489,7 @@ public final class ProfilePage {
         }
         UiLayout.Rect menu = menuRect(layout, scrollY);
         float rowH = UiTokens.MENU_H / 2.0F;
-        boolean clearEnabled = avatarStore.isSet();
+        boolean clearEnabled = customAvatarActive();
         boolean clearArmed = clearEnabled && clearArmIndex == 1
                 && System.currentTimeMillis() - clearArmedAt <= CLEAR_ARM_MS;
         String[] labels = {

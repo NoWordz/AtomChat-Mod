@@ -23,9 +23,13 @@ public final class PlayerAvatar {
         if (own != null) {
             return own;
         }
-        Image companion = CompanionPlayerAvatarSource.INSTANCE.face(uuid, name);
-        if (companion != null) {
-            return companion;
+        Image profile = com.atom.chat.profile.ProfileSync.image(uuid, com.atom.chat.profile.ProfileField.AVATAR);
+        if (profile != null) return profile;
+        // A current profile's empty avatar is authoritative; don't resurrect
+        // a previously uploaded legacy avatar after an explicit clear.
+        if ((com.atom.chat.profile.ProfileSync.record(uuid).imageFields() & 1) == 0) {
+            Image companion = CompanionPlayerAvatarSource.INSTANCE.face(uuid, name);
+            if (companion != null) return companion;
         }
         PlayerAvatarSource current = source;
         return current != null ? current.face(uuid, name) : null;

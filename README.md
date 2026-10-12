@@ -10,7 +10,7 @@
 
 ## What it is
 
-A client-side mod that replaces the vanilla chat screen with a vector-drawn phone panel: rounded message bubbles, real skin avatars, private chat sessions, quote replies, image and GIF messages. The interface is drawn entirely with [Skija](https://github.com/HumbleUI/skija) and does not use vanilla chat textures. Image messages follow the `[[CICode]]` protocol and interoperate with the E33Chat / ChatImage family. Installing the mod on the server is optional; it enables server-side media hosting and custom avatar sync.
+A client-side mod that replaces the vanilla chat screen with a vector-drawn phone panel: rounded message bubbles, real skin avatars, private chat sessions, quote replies, image and GIF messages. The interface is drawn entirely with [Skija](https://github.com/HumbleUI/skija) and does not use vanilla chat textures. Image messages follow the `[[CICode]]` protocol and interoperate with the E33Chat / ChatImage family. Installing the mod on the server is optional; it enables media hosting and synchronization of custom avatars, profile headers and signatures.
 
 ## Features
 
@@ -19,6 +19,9 @@ A client-side mod that replaces the vanilla chat screen with a vector-drawn phon
 - **Image messages** — upload via picker, drag-and-drop or Ctrl+V; GIFs loop inside the bubble; left-click for a fullscreen preview, right-click to save the original.
 - **Private chat and notifications** — per-session drafts and scroll positions; banners for mentions, quotes and DMs with click-to-jump; double-click an avatar to poke.
 - **Appearance** — nine themes including two translucent ones, per-color adjustment with live preview, custom wallpaper / header / avatar, content scale slider.
+- **Feedback sounds** — button, send and panel-open feedback share a soft CC0 bubble source; notification and feedback sounds have separate switches and volumes.
+- **Experimental chat effects** — hearts, birthday cakes and fireworks appear inside the open chat panel for matching Chinese or English phrases, controlled in Chat and notifications → Advanced.
+- **Player profiles** — the server synchronizes signatures and cropped headers; hosted profile images are preserved per world, with later joins and reconnects supported.
 - **Controls and settings** — world-chat view filters, cross-message drag selection and copy, block list; settings apply instantly and persist; chat history can be saved per server or world.
 
 ## Compatibility
@@ -29,11 +32,13 @@ A client-side mod that replaces the vanilla chat screen with a vector-drawn phon
 | NeoForge 1.21.1 | NeoForge 21.1+ |
 | Forge 1.20.1 | Forge 47+ |
 
-Java 21 for the 1.21.1 targets, Java 17 for Forge 1.20.1. **Windows x64 only** — the jar bundles just the Windows x64 Skija native. All three targets work client-side; install the same jar on the server for media hosting and avatar sync.
+Java 21 for the 1.21.1 targets, Java 17 for Forge 1.20.1. **Windows x64 only** — the jar bundles just the Windows x64 Skija native. All three targets work client-side; install the same jar on the server for media hosting and profile synchronization.
 
 ## Configuration
 
-Client config lives at `config/atomchat/atomchat-client.json` and every option applies instantly. Common keys: `panelWidth`, `uiScale`, `contentScale`, `pageNavStyle` (slide or zoom), `animationEnabled`, `blurEnabled`, `hostingEnabled`, `retentionDays`, `maxFileKb`, `emoteMax`, `debug`. Local avatars, wallpapers and emotes are stored in the same folder.
+Client config lives at `config/atomchat/atomchat-client.json` and every option applies instantly. Common client keys: panelWidth, uiScale, contentScale, pageNavStyle (slide or zoom), animationEnabled, blurEnabled, notificationSoundEnabled, notifyVolume, feedbackSoundEnabled, feedbackVolume, funEffectsEnabled and debug. Local avatars, wallpapers and emotes are stored in the same folder.
+
+Server policy lives in config/atomchat/atomchat-server.json, including hostingEnabled, retentionDays and maxFileKb. Durable profile data lives under the world save's atomchat/profiles/; maxProfileTotalMb sets its image capacity (default 64 MiB per world, configured in the file). Temporary chat-media expiry does not delete the durable copy; external-host links can still expire. All settings fold groups start expanded.
 
 ## Known limitations
 
@@ -44,7 +49,7 @@ Client config lives at `config/atomchat/atomchat-client.json` and every option a
 
 ## FAQ
 
-**Is the server install required?** — No for your own use; it adds media hosting and avatar sync for everyone.
+**Is the server install required?** — No for your own use; it adds media hosting and profile synchronization for everyone, including LAN hosts.
 
 **Do images go to the server or an image host?** — To the server when it runs AtomChat with `hostingEnabled=true`, otherwise to the fallback host. `Stored hosted media` in the client log means hosting was used.
 

@@ -70,6 +70,7 @@ public class AtomChatClient {
         com.atom.chat.net.AvatarCompanionClient.init();
         com.atom.chat.net.PokeCompanionClient.init();
         com.atom.chat.net.MediaCompanionClient.init();
+        com.atom.chat.net.ProfileCompanionClient.init();
         com.atom.chat.history.ChatHistory.init(
                 net.neoforged.fml.loading.FMLPaths.CONFIGDIR.get().resolve("atomchat/history"));
         AtomChat.LOGGER.info(com.atom.chat.diagnostics.AtomChatLog.message("startup", "AtomChat client initialized"));
@@ -91,6 +92,7 @@ public class AtomChatClient {
         com.atom.chat.page.ProfilePage.noteJoin();
         com.atom.chat.net.AvatarCompanionClient.onJoin();
         com.atom.chat.net.MediaCompanionClient.onJoin();
+            com.atom.chat.net.ProfileCompanionClient.onJoin();
         com.atom.chat.net.PackSyncClient.onJoin();
         com.atom.chat.chat.OwnIdentity.reset();
         com.atom.chat.chat.TeleportCommands.reset();
@@ -107,6 +109,7 @@ public class AtomChatClient {
         com.atom.chat.chat.SeenPlayers.clear();
         com.atom.chat.chat.OwnIdentity.reset();
         com.atom.chat.net.MediaCompanionClient.onDisconnect();
+            com.atom.chat.net.ProfileCompanionClient.onLeave();
         com.atom.chat.net.PokeCompanionClient.setHandler(null);
         com.atom.chat.net.PackSyncClient.onDisconnect();
         com.atom.chat.net.ConfigScreenClient.onDisconnect();
@@ -121,6 +124,7 @@ public class AtomChatClient {
         com.atom.chat.diagnostics.EnvironmentSummary.logOnce(AtomChat.version(), AtomChat.artifactPath());
         com.atom.chat.history.ChatHistory.tick(client);
         com.atom.chat.net.MediaCompanionClient.tick();
+        com.atom.chat.net.ProfileCompanionClient.tick();
         com.atom.chat.net.PackSyncClient.tick();
         // Expires banners regardless of whether the panel is open: their 4s
         // lifetime starts at enqueue, so a banner queued while the panel was

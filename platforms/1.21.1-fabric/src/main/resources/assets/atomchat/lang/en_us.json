@@ -290,5 +290,7 @@
   "atomchat.settings.sounds.feedback_volume": "Interaction volume",
   "atomchat.settings.experimental.fun": "Experimental: Fun effects",
   "atomchat.settings.experimental.fun.desc": "Emoji effects for love, birthday and New Year phrases in new messages",
-  "atomchat.settings.group.chat.advanced": "Advanced"
+  "atomchat.settings.group.chat.advanced": "Advanced",
+  "atomchat.profile.unsynced": "Profile not synced; others still see the last saved profile",
+  "atomchat.profile.unsynced.badge": "Not synced"
 }

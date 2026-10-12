@@ -24,6 +24,8 @@ public class AtomChat implements ModInitializer {
         // Avatar companion: codecs on both logical sides, receivers on the
         // game-server side (dedicated server or an integrated double-open).
         com.atom.chat.net.AvatarPayloads.register();
+            com.atom.chat.net.ProfilePayloads.register();
+        com.atom.chat.net.ProfileCompanionServer.register();
         com.atom.chat.net.AvatarCompanionServer.register();
         // Poke companion: a remote poke, rate limited server-side.
         com.atom.chat.net.PokePayloads.register();

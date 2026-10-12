@@ -290,5 +290,7 @@
   "atomchat.settings.sounds.feedback_volume": "反馈音量",
   "atomchat.settings.experimental.fun": "实验性：趣味特效",
   "atomchat.settings.experimental.fun.desc": "新消息中的爱意、生日与新年祝福触发 emoji 特效",
-  "atomchat.settings.group.chat.advanced": "高级"
+  "atomchat.settings.group.chat.advanced": "高级",
+  "atomchat.profile.unsynced": "资料未同步；其他玩家仍显示上次保存的资料",
+  "atomchat.profile.unsynced.badge": "资料未同步"
 }

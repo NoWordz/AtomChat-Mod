@@ -265,6 +265,10 @@ public final class AvatarClickWiring {
             public void clearAvatar() {
                 boolean removed = host.clearAvatar();
                 AvatarImage.release();
+                if (removed || com.atom.chat.profile.ProfileSync.remoteOnlyImage(com.atom.chat.profile.ProfileField.AVATAR)) {
+                    com.atom.chat.profile.ProfileSync.imageCleared(com.atom.chat.profile.ProfileField.AVATAR);
+                    removed = true;
+                }
                 host.feedback(removed ? "atomchat.feedback.avatarCleared"
                         : "atomchat.feedback.avatarClearFailed", removed);
             }
@@ -279,6 +283,10 @@ public final class AvatarClickWiring {
                 // Delete image = off: the file goes, the accent gradient returns.
                 boolean removed = host.clearBanner();
                 BannerImage.release();
+                if (removed || com.atom.chat.profile.ProfileSync.remoteOnlyImage(com.atom.chat.profile.ProfileField.BANNER)) {
+                    com.atom.chat.profile.ProfileSync.imageCleared(com.atom.chat.profile.ProfileField.BANNER);
+                    removed = true;
+                }
                 host.feedback(removed ? "atomchat.feedback.bannerCleared"
                         : "atomchat.feedback.bannerClearFailed", removed);
             }

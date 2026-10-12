@@ -2,10 +2,13 @@
 
 ## v0.3.0
 
-> 本段合并 0.3.0 官方轮与部署后修补轮（R31–R35）；对外首次发布于新仓库 NoWordz/AtomChat-Mod，版本 0.3.0-Preview（预览版），许可换回 MIT。
+> 本段合并 0.3.0 官方轮与部署后修补轮（R31–R35）；对外首次发布于新仓库 NoWordz/AtomChat-Mod，版本 0.3.0-Preview（预览版），许可换回 MIT。 当前 main 增量尚未另建 Release，安装包版本保持 0.3.0-Preview。
 
 **新增**
 
+- 聊天关键词触发爱心、蛋糕和烟花 emoji 特效，支持中文短语与常见英文缩写。
+- 按钮、发送和开屏使用同一 CC0 气泡母音派生反馈音，通知与反馈可独立静音和调音量。
+- 三端同步玩家签名和头图，服务端个性资料图片按世界长期保存。
 - **服务端实验命令 `/atomchat test`**：单人档无法产生提及/引用/私聊横幅，也没有第二个玩家来戳你，而双开客户端会让 debug 日志互相干扰。现在可以让服务端扮演对方：`/atomchat test banner mention|quote|whisper [文本]` 与 `/atomchat test poke [对方名]`。横幅走真实的通知链路（设置开关、音效门、去重都照常生效），戳一戳走完整的网络往返；横幅只弹横幅，不会写进聊天记录。需要先在 AtomChat 设置里打开「调试模式」，权限与 `/atomchat gui` 一致（单机放行，否则 OP 2 级）。
 - **图片预览**：左键聊天里已加载的图片打开等比全尺寸预览（背景变暗、淡入缩放进入，底部 X / 暗背景 / Esc 关闭）；加载中的占位与 `[图片]` 胶囊不响应左键。
 - **全入口统一导航动画**：列表卡片、头像右键菜单、通知横幅、头像单击、列表卡片右键菜单五个入口共用全局 slide/zoom；公屏↔私聊切换时消息列表、回复条与输入栏（含文字与按钮）作为整层一起转场，顶栏与外框固定。
@@ -34,6 +37,9 @@
 
 **修复**
 
+- 他人档案无法显示头图和个性签名。
+- 清空图片后断线重连复活旧资料、旧回包串服及旧头像协议兼容回退。
+- 所有设置折叠分组默认展开，自有日志统一项目与链路前缀。
 - 个性签名无法输入文字（非聊天页吞掉按键）。
 - 自定义头图底部被渐变遮罩洗出一条亮带。
 - 自定义壁纸后「背景模糊」开关的副标题显示成原始键名。
@@ -61,10 +67,13 @@
 
 ----
 
-> This section merges the 0.3.0 official round with the post-deployment patch rounds (R31-R35); first published externally on the new repository NoWordz/AtomChat-Mod as 0.3.0-Preview (a preview), with the license moved back to MIT.
+> This section merges the 0.3.0 official round with the post-deployment patch rounds (R31-R35); first published externally on the new repository NoWordz/AtomChat-Mod as 0.3.0-Preview (a preview), with the license moved back to MIT. The current main additions have not received a separate release; the package version remains 0.3.0-Preview.
 
 **Added**
 
+- Heart, cake and fireworks emoji effects for Chinese phrases and common English abbreviations.
+- Button, send and panel-open feedback derived from one CC0 bubble source, with independent notification and feedback controls.
+- Cross-loader signature and header synchronization with durable world-scoped profile images.
 - **Server-side test command `/atomchat test`**: a single-player session cannot produce a mention / quote / whisper banner, and has no second player to poke you, while running two clients at once muddies the very debug log you are reading. The server can now play the other party: `/atomchat test banner mention|quote|whisper [text]` and `/atomchat test poke [name]`. Banners go through the real notification path (settings toggles, sound gate and dedupe all still apply) and the poke is a full network round-trip. Banners only pop a banner - nothing is written into the chat history. Requires Debug mode in AtomChat settings; permission matches `/atomchat gui` (single-player always, otherwise OP level 2).
 - **Image preview**: left-click a loaded chat image for a full-size, aspect-kept preview (dimmed backdrop, fade-and-zoom entry, closed by the bottom X, the backdrop or Esc); loading placeholders and the `[image]` capsule stay inert.
 - **One navigation rule for every entry point**: the list card, the avatar context menu, the notification banner, the avatar click and the list-card menu all follow the global slide/zoom; world <-> private chat moves messages, reply bar and composer (text and buttons included) as one layer while the header and frame stay fixed.
@@ -93,6 +102,9 @@
 
 **Fixed**
 
+- Other players could not see custom profile headers or signatures.
+- Cleared images returning after reconnect, stale cross-server replies and legacy avatar fallback.
+- All settings groups now start expanded, and project logs use consistent project and chain prefixes.
 - The profile signature could not be typed into (non-chat pages swallowed the keys).
 - A custom banner's lower edge was washed into a bright band by a gradient.
 - With a custom wallpaper set, the blur switch's subtitle showed a raw key name.

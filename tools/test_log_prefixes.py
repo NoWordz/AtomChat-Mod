@@ -13,4 +13,10 @@ class LogPrefixGuardTest(unittest.TestCase):
         self.assertFalse(violations('AtomChat.LOGGER.error(com.atom.chat.diagnostics.AtomChatLog.message("resource", template()),failure);'))
     def test_repeated_real_chain_prefix_fails(self):
         self.assertTrue(violations('LOGGER.info(com.atom.chat.diagnostics.AtomChatLog.message("notify", "[AtomChat][notify] [AtomChat][notify] bad"));'))
+
+    def test_multiline_constant_chain_is_valid_but_dynamic_or_invalid_chain_is_not(self):
+        prefix = 'LOGGER.warn(com.atom.chat.diagnostics.AtomChatLog.message(\n    '
+        self.assertFalse(violations(prefix + '"profile"  , "failed"), problem);'))
+        self.assertTrue(violations(prefix + 'chainVariable, "failed"), problem);'))
+        self.assertTrue(violations(prefix + '"Bad_Tag", "failed"), problem);'))
 if __name__=='__main__': unittest.main()

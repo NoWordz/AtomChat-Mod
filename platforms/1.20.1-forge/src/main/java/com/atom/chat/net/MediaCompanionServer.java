@@ -216,6 +216,7 @@ public final class MediaCompanionServer {
         Path dir = mediaDir();
         try {
             Path file = dir == null ? null : dir.resolve(mediaId);
+            if (file == null || !Files.isRegularFile(file)) file = ProfileCompanionServer.media(player, mediaId);
             if (file == null || !Files.isRegularFile(file)) {
                 missing(player, mediaId);
                 return;

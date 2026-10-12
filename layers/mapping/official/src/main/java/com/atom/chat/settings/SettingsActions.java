@@ -122,11 +122,15 @@ public final class SettingsActions {
                 if ("avatar".equals(targetId)) {
                     if (avatarStore.setPng(pngBytes)) {
                         AvatarImage.release();
+                        com.atom.chat.profile.ProfileSync.imageSelected(com.atom.chat.profile.ProfileField.AVATAR);
                         // Companion push: skipped only when the server has no
                         // companion channels at all (negotiation, not a timeout).
-                        if (client.player != null) {
-                            com.atom.chat.net.AvatarCompanionClient.uploadOwnAvatar(
-                                    client.player.getUUID(), pngBytes);
+                        if (client != null && client.player != null) {
+                            if (com.atom.chat.profile.ProfileSync.available()) {
+                                com.atom.chat.profile.ProfileSync.imageEdited(com.atom.chat.profile.ProfileField.AVATAR, avatarStore.current());
+                            } else {
+                                com.atom.chat.net.AvatarCompanionClient.uploadOwnAvatar(client.player.getUUID(), pngBytes);
+                            }
                         }
                     }
                 } else if ("wallpaper".equals(targetId)) {
@@ -136,6 +140,7 @@ public final class SettingsActions {
                 } else if ("banner".equals(targetId)) {
                     if (BannerStore.setPng(pngBytes)) {
                         BannerImage.release();
+                        com.atom.chat.profile.ProfileSync.imageEdited(com.atom.chat.profile.ProfileField.BANNER, BannerStore.current());
                     }
                 }
             }

@@ -95,6 +95,10 @@ public final class MediaCompanionClient {
      * false so the caller falls back to uguu rather than silently dropping an
      * image.
      */
+    public static boolean hostingStateKnown() {
+        return state != null || !serverSupportsMedia();
+    }
+
     public static boolean hostingEnabled() {
         State current = state;
         if (current != null) {

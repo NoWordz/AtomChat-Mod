@@ -1,0 +1,41 @@
+world-root-probe.txt
+[Forge 1.20.1 mapped_official 47.4.10]
+  public java.nio.file.Path getWorldPath(net.minecraft.world.level.storage.LevelResource);
+    descriptor: (Lnet/minecraft/world/level/storage/LevelResource;)Ljava/nio/file/Path;
+[NeoForge 1.21.1 cached NeoForm mapped output]
+  public java.nio.file.Path getWorldPath(net.minecraft.world.level.storage.LevelResource);
+    descriptor: (Lnet/minecraft/world/level/storage/LevelResource;)Ljava/nio/file/Path;
+[Fabric 1.21.1 Yarn build.3]
+  public java.nio.file.Path getSavePath(net.minecraft.util.WorldSavePath);
+    descriptor: (Lnet/minecraft/util/WorldSavePath;)Ljava/nio/file/Path;
+
+world-root-constants.txt
+[Forge/NeoForge LevelResource.ROOT]
+  public static final net.minecraft.world.level.storage.LevelResource ROOT;
+  public static final net.minecraft.world.level.storage.LevelResource ROOT;
+[Fabric WorldSavePath.ROOT]
+  public static final net.minecraft.util.WorldSavePath ROOT;
+
+forge-direction-probe.txt
+Forge 1.20.1 API probe; offline official-mappings jar: Forge 1.20.1-47.4.10.
+Configured target: minecraft_version=1.20.1 and forge_version=47.4.10 in platforms/1.20.1-forge/gradle.properties:7-9; build dependency is interpolated in platforms/1.20.1-forge/build.gradle:96.
+Three-line javap probe, run with Git Bash through PowerShell:
+1. "/c/Program Files/Java/jdk-21.0.11/bin/javap.exe" -classpath "C:/Users/NIUQU/.gradle/caches/forge_gradle/minecraft_user_repo/net/minecraftforge/forge/1.20.1-47.4.10_mapped_official_1.20.1/forge-1.20.1-47.4.10_mapped_official_1.20.1.jar" -public -s net.minecraftforge.network.simple.SimpleChannel | grep -A1 messageBuilder
+2. "/c/Program Files/Java/jdk-21.0.11/bin/javap.exe" -classpath "C:/Users/NIUQU/.gradle/caches/forge_gradle/minecraft_user_repo/net/minecraftforge/forge/1.20.1-47.4.10_mapped_official_1.20.1/forge-1.20.1-47.4.10_mapped_official_1.20.1.jar" -public -s net.minecraftforge.network.NetworkDirection | grep -A1 -E "PLAY_TO_SERVER|PLAY_TO_CLIENT|getReceptionSide"
+3. "/c/Program Files/Java/jdk-21.0.11/bin/javap.exe" -classpath "C:/Users/NIUQU/.gradle/caches/forge_gradle/minecraft_user_repo/net/minecraftforge/forge/1.20.1-47.4.10_mapped_official_1.20.1/forge-1.20.1-47.4.10_mapped_official_1.20.1.jar" -public -s net.minecraftforge.network.NetworkEvent\$Context | grep -A1 getDirection
+
+Verified signatures:
+SimpleChannel.messageBuilder(Class<M>, int) -> MessageBuilder<M>; descriptor (Ljava/lang/Class;I)Lnet/minecraftforge/network/simple/SimpleChannel$MessageBuilder;.
+SimpleChannel.messageBuilder(Class<M>, int, NetworkDirection) -> MessageBuilder<M>; descriptor (Ljava/lang/Class;ILnet/minecraftforge/network/NetworkDirection;)Lnet/minecraftforge/network/simple/SimpleChannel$MessageBuilder;.
+NetworkDirection.PLAY_TO_SERVER and PLAY_TO_CLIENT are public static final fields; each descriptor Lnet/minecraftforge/network/NetworkDirection;.
+NetworkDirection.getReceptionSide() -> net.minecraftforge.fml.LogicalSide; descriptor ()Lnet/minecraftforge/fml/LogicalSide;.
+NetworkEvent.Context.getDirection() -> NetworkDirection; descriptor ()Lnet/minecraftforge/network/NetworkDirection;.
+Correction: getReceptionSide belongs to NetworkDirection, not NetworkEvent.Context.
+
+The javap signatures and supplementary direction probe both exited successfully; exact verified signatures are listed above.
+No source implementation was changed; no build or client was run.
+
+fabric-bounded-string-probe.txt
+PacketByteBuf.readString(int) -> java.lang.String; descriptor (I)Ljava/lang/String;; verified by javap and the bounded-only confirmation.
+PacketByteBuf.writeString(java.lang.String, int) -> PacketByteBuf; descriptor (Ljava/lang/String;I)Lnet/minecraft/network/PacketByteBuf;; verified by javap and the bounded-only confirmation.
+RegistryByteBuf extends PacketByteBuf, so both bounded overloads are inherited; hierarchy confirmed against the Yarn 1.21.1 build.3 mapped jar, probe exit 0.
