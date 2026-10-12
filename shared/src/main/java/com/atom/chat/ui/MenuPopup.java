@@ -77,10 +77,11 @@ public final class MenuPopup {
      * the fade and scale-in apply to it for free.
      */
     public static void drawSurface(Canvas canvas, float x, float y, float w, float h) {
-        com.atom.chat.render.SkiaDraw.drawRoundedShadow(canvas, x, y, w, h,
-                UiTokens.radius(SURFACE_RADIUS), UiTokens.s(SURFACE_SHADOW_BLUR), UiTokens.CHROME_SHADOW);
+        // Preserve the accepted inset-light gradient shared with the emoji panel.
         com.atom.chat.render.SkiaDraw.drawRoundedRect(canvas, x, y, w, h,
                 UiTokens.radius(SURFACE_RADIUS), SURFACE_COLOR);
+        com.atom.chat.render.SkiaDraw.drawRoundedShadow(canvas, x, y, w, h,
+                UiTokens.radius(SURFACE_RADIUS), UiTokens.s(SURFACE_SHADOW_BLUR), UiTokens.CHROME_SHADOW);
     }
 
     /**
