@@ -15,96 +15,503 @@
     "",
     "命中的规则用 `--verbose` 可以看每条命中多少次：0 命中的规则该删，命中异常多的要看一眼。"
   ],
-
   "rules": [
-    { "yarn": "Text", "official": "Component", "note": "net.minecraft.text.Text ↔ net.minecraft.network.chat.Component" },
-    { "yarn": "MutableText", "official": "MutableComponent" },
-    { "yarn": "MinecraftClient", "official": "Minecraft" },
-    { "yarn": "PlayerListEntry", "official": "PlayerInfo" },
-    { "yarn": "networkHandler", "official": "connection" },
-    { "yarn": "getNetworkHandler", "official": "getConnection" },
-    { "yarn": "getPlayerList", "official": "getOnlinePlayers" },
-    { "yarn": "getPlayerListEntry", "official": "getPlayerInfo" },
-    { "yarn": "Identifier", "official": "ResourceLocation" },
-    { "yarn": "withUnderline", "official": "withUnderlined" },
-    { "yarn": "getUuid", "official": "getUUID" },
-    { "yarn": "getRgb", "official": "getValue", "note": "TextColor/Style colour: yarn getRgb() ↔ 官方 getValue()" },
-    { "yarn": "getStat", "official": "getValue", "note": "StatsCounter: yarn getStat() ↔ 官方 getValue()" },
-    { "yarn": "getOrCreateStat", "official": "get" },
-    { "yarn": "getStatHandler", "official": "getStats" },
-    { "yarn": "StatHandler", "official": "StatsCounter" },
-    { "yarn": "statMap", "official": "stats" },
-    { "yarn": "MINED", "official": "BLOCK_MINED" },
-    { "yarn": "KILLED", "official": "ENTITY_KILLED" },
-    { "yarn": "getServer", "official": "getSingleplayerServer" },
-    { "yarn": "getCurrentServerEntry", "official": "getCurrentServer" },
-    { "yarn": "address", "official": "ip", "note": "ServerInfo: yarn address ↔ 官方 ip" },
-    { "yarn": "ChatInputSuggestor", "official": "CommandSuggestions" },
-    { "yarn": "SuggestionWindow", "official": "SuggestionsList" },
-    { "yarn": "atomchat$getWindow", "official": "atomchat$getSuggestions", "literal": true, "note": "建议弹窗的访问器：yarn atomchat$getWindow() ↔ 官方 atomchat$getSuggestions()。缩到带前缀的字面量是必须的 —— 短词 getWindow 同时也是【窗口句柄】的官方名，通用形态会把 client.getWindow() 误判成同一处改名（D13 DragDropPasteUpload 孪生核对时发现）" },
-    { "yarn": "slashOptional", "official": "commandsOnly" },
-    { "yarn": "suggestingWhenEmpty", "official": "onlyShowIfCursorPastError" },
-    { "yarn": "inWindowIndexOffset", "official": "lineStartOffset" },
-    { "yarn": "maxSuggestionSize", "official": "suggestionLineLimit" },
-    { "yarn": "chatScreenSized", "official": "anchorToBottom" },
-    { "yarn": "showSuggestions", "official": "show" },
-    { "yarn": "area", "official": "rect", "note": "SuggestionWindow 的矩形字段：yarn area ↔ 官方 rect" },
-    { "yarn": "getArea", "official": "getRect" },
-    { "yarn": "setArea", "official": "setRect" },
-    { "yarn": "DrawContext", "official": "GuiGraphics", "note": "绘制上下文（D8 SuggestorWiring 的 render 钩子要用）：yarn DrawContext ↔ 官方 GuiGraphics，与 AtomChatSuggestor 同一次核对" },
-    { "yarn": "TextFieldWidget", "official": "EditBox" },
-    { "yarn": "TextRenderer", "official": "Font", "note": "MC 的字体渲染器：yarn TextRenderer ↔ 官方 Font（与 Skija 的 Font 同名但形态一致，两侧同套规则）" },
-    { "yarn": "MathHelper", "official": "Mth" },
-    { "yarn": "ChatComponent", "official": "ChatHud" },
-    { "yarn": "getChatHud", "official": "getChat" },
-    { "yarn": "inGameHud", "official": "gui" },
-    { "yarn": "getMainRenderTarget", "official": "getFramebuffer" },
-    { "yarn": "fbo", "official": "frameBufferId" },
-    { "yarn": "textureWidth", "official": "width" },
-    { "yarn": "textureHeight", "official": "height" },
-    { "yarn": "setColor", "official": "setPixelRGBA" },
-    { "yarn": "getGlId", "official": "getId" },
-    { "yarn": "writeTo", "official": "writeToFile" },
-    { "yarn": "fillColor", "official": "color" },
-    { "yarn": "getWithStyle", "official": "toFlatList" },
-    { "yarn": "Formatting", "official": "net.minecraft.ChatFormatting" },
-    { "yarn": "MessageHandler", "official": "ChatListener" },
-    { "yarn": "processChatMessageInternal", "official": "handlePlayerChatMessage" },
-    { "yarn": "captureSignedBeforeAdd", "official": "capturePlayerChat" },
-    { "yarn": "captureProfilelessBeforeAdd", "official": "captureDisguised" },
-    { "yarn": "captureGameBeforeAdd", "official": "captureSystem" },
-    { "yarn": "handleSystemMessage", "official": "onGameMessage" },
-    { "yarn": "applyChatDecoration", "official": "decorate" },
-    { "yarn": "method_45745", "official": "handleDisguisedChatMessage", "note": "yarn 的混淆中间名 ↔ 官方名（同一方法）" },
-    { "yarn": "currentScreen", "official": "screen" },
-    { "yarn": "MouseHandler", "official": "Mouse" },
-    { "yarn": "KeyBinding", "official": "KeyMapping", "note": "按键绑定类型：net.minecraft.client.option.KeyBinding ↔ net.minecraft.client.KeyMapping（1.20.1 官方名同为 KeyMapping）；D14 NativeDialogBridge 逐字核对" },
-    { "yarn": "unpressAll", "official": "releaseAll", "note": "松开全部按键：yarn KeyBinding.unpressAll() ↔ 官方 KeyMapping.releaseAll()；picker 关闭后清残留按压（D14 NativeDialogBridge 逐字核对）" },
-    { "yarn": "host.client().mouse", "official": "host.client().mouseHandler", "note": "鼠标处理器字段：yarn MinecraftClient.mouse ↔ 官方 Minecraft.mouseHandler。用限定形态而不是裸 mouse/keyboard —— 裸词会把别的 mouseX 之类语境卷进来（D13 收窄规则的同一条教训）" },
-    { "yarn": "host.client().keyboard", "official": "host.client().keyboardHandler", "note": "键盘处理器字段：yarn MinecraftClient.keyboard ↔ 官方 Minecraft.keyboardHandler；同上用限定形态" },
-    { "yarn": "getHandle", "official": "getWindow", "note": "窗口句柄（GLFW 窗口指针）：yarn Window.getHandle() ↔ 官方 Window.getWindow()，两边都返回 long；D13 DragDropPasteUpload 落 official 层时逐字核对" },
-    { "yarn": "getFramebufferWidth", "official": "getWidth", "note": "窗口像素宽：yarn Window.getFramebufferWidth() ↔ 官方 Window.getWidth()（同一个 com.mojang.blaze3d.platform.Window；yarn 的 getWidth() 是 GUI 缩放后的宽，语义不同，D10 ScreenMetrics 孪生逐字核对）" },
-    { "yarn": "getFramebufferHeight", "official": "getHeight", "note": "窗口像素高：yarn Window.getFramebufferHeight() ↔ 官方 Window.getHeight()（同一窗口类，同上核对）" },
-    { "yarn": "getScaleFactor", "official": "getGuiScale", "note": "窗口 GUI 缩放比：yarn Window.getScaleFactor() ↔ 官方 Window.getGuiScale()（两边都返回 double，D10 ScreenMetrics 孪生核对）" },
-
-    { "yarn": "net.minecraft.text.", "official": "net.minecraft.network.chat.", "note": "整包迁移：1.21 里 yarn 的 text 包 = 官方的 network.chat 包" },
-    { "yarn": "net.minecraft.text.TranslatableTextContent", "official": "net.minecraft.network.chat.contents.TranslatableContents", "note": "整个限定名一起换：官方把 TranslatableContents 放在 network.chat.contents 子包，yarn 没有该子包" },
-    { "yarn": "TranslatableTextContent", "official": "TranslatableContents" },
-    { "yarn": "getContent", "official": "getContents", "note": "ChatMessage/Component 取内容：yarn getContent() ↔ 官方 getContents()" },
-    { "yarn": "getDisplayName", "official": "getTabListDisplayName", "note": "PlayerListEntry：yarn getDisplayName() ↔ 官方 getTabListDisplayName()" },
-    { "yarn": "getCommandDispatcher", "official": "getCommands" },
-    { "yarn": "byCode", "official": "getByCode", "note": "ChatFormatting：yarn byCode() ↔ 官方 getByCode()" },
-    { "yarn": "net.minecraft.client.util.math.Rect2i", "official": "net.minecraft.client.renderer.Rect2i" },
-    { "yarn": "net.minecraft.util.Util", "official": "net.minecraft.Util" },
-    { "yarn": "net.minecraft.util.math.MathHelper", "official": "net.minecraft.util.Mth" },
-    { "yarn": "net.minecraft.stat.", "official": "net.minecraft.stats.", "note": "yarn 的 stat 包 = 官方的 stats 包（1.20.1 forge 侧写成 net.minecraft.stats.）" },
-
-    { "yarn": "getOperatingSystem().open(", "official": "getPlatform().openUri(", "literal": true, "note": "Util 打开链接：整段一起换，避免把通用的 open 单词做成规则" },
-    { "yarn": "@Accessor(\"window\")", "official": "@Accessor(\"suggestions\")", "literal": true, "note": "访问器目标字段名：yarn window ↔ 官方 suggestions；连注解一起换，避免把通用的 window 词做成规则" },
-    { "yarn": "sendChatCommand", "official": "sendCommand", "note": "网络发包：yarn sendChatCommand（去斜杠后发出）↔ 官方 sendCommand；D3 SendPipeline 与三副本原代码逐字核对" },
-    { "yarn": "sendChatMessage", "official": "sendChat", "note": "网络发包：yarn sendChatMessage ↔ 官方 sendChat（同上核对）" },
-    { "yarn": "addToMessageHistory", "official": "addRecentChat", "note": "聊天历史：yarn ChatHud.addToMessageHistory ↔ 官方 ChatComponent.addRecentChat（同上核对）" },
-    { "yarn": "StringHelper", "official": "StringUtil", "note": "net.minecraft.util.StringHelper（yarn）↔ net.minecraft.util.StringUtil（官方）" },
-    { "yarn": "truncateChat", "official": "trimChatMessage", "note": "聊天文本裁剪：yarn StringHelper.truncateChat ↔ 官方 StringUtil.trimChatMessage（D3 normalizeInput 在用）" }
+    {
+      "yarn": "Text",
+      "official": "Component",
+      "note": "net.minecraft.text.Text ↔ net.minecraft.network.chat.Component"
+    },
+    {
+      "yarn": "MutableText",
+      "official": "MutableComponent"
+    },
+    {
+      "yarn": "MinecraftClient",
+      "official": "Minecraft"
+    },
+    {
+      "yarn": "PlayerListEntry",
+      "official": "PlayerInfo"
+    },
+    {
+      "yarn": "networkHandler",
+      "official": "connection"
+    },
+    {
+      "yarn": "getNetworkHandler",
+      "official": "getConnection"
+    },
+    {
+      "yarn": "getPlayerList",
+      "official": "getOnlinePlayers"
+    },
+    {
+      "yarn": "getPlayerListEntry",
+      "official": "getPlayerInfo"
+    },
+    {
+      "yarn": "Identifier",
+      "official": "ResourceLocation"
+    },
+    {
+      "yarn": "withUnderline",
+      "official": "withUnderlined"
+    },
+    {
+      "yarn": "getUuid",
+      "official": "getUUID"
+    },
+    {
+      "yarn": "getRgb",
+      "official": "getValue",
+      "note": "TextColor/Style colour: yarn getRgb() ↔ 官方 getValue()"
+    },
+    {
+      "yarn": "getStat",
+      "official": "getValue",
+      "note": "StatsCounter: yarn getStat() ↔ 官方 getValue()"
+    },
+    {
+      "yarn": "getOrCreateStat",
+      "official": "get"
+    },
+    {
+      "yarn": "getStatHandler",
+      "official": "getStats"
+    },
+    {
+      "yarn": "StatHandler",
+      "official": "StatsCounter"
+    },
+    {
+      "yarn": "statMap",
+      "official": "stats"
+    },
+    {
+      "yarn": "MINED",
+      "official": "BLOCK_MINED"
+    },
+    {
+      "yarn": "KILLED",
+      "official": "ENTITY_KILLED"
+    },
+    {
+      "yarn": "getServer",
+      "official": "getSingleplayerServer"
+    },
+    {
+      "yarn": "getCurrentServerEntry",
+      "official": "getCurrentServer"
+    },
+    {
+      "yarn": "address",
+      "official": "ip",
+      "note": "ServerInfo: yarn address ↔ 官方 ip"
+    },
+    {
+      "yarn": "ChatInputSuggestor",
+      "official": "CommandSuggestions"
+    },
+    {
+      "yarn": "SuggestionWindow",
+      "official": "SuggestionsList"
+    },
+    {
+      "yarn": "atomchat$getWindow",
+      "official": "atomchat$getSuggestions",
+      "literal": true,
+      "note": "建议弹窗的访问器：yarn atomchat$getWindow() ↔ 官方 atomchat$getSuggestions()。缩到带前缀的字面量是必须的 —— 短词 getWindow 同时也是【窗口句柄】的官方名，通用形态会把 client.getWindow() 误判成同一处改名（D13 DragDropPasteUpload 孪生核对时发现）"
+    },
+    {
+      "yarn": "slashOptional",
+      "official": "commandsOnly"
+    },
+    {
+      "yarn": "suggestingWhenEmpty",
+      "official": "onlyShowIfCursorPastError"
+    },
+    {
+      "yarn": "inWindowIndexOffset",
+      "official": "lineStartOffset"
+    },
+    {
+      "yarn": "maxSuggestionSize",
+      "official": "suggestionLineLimit"
+    },
+    {
+      "yarn": "chatScreenSized",
+      "official": "anchorToBottom"
+    },
+    {
+      "yarn": "showSuggestions",
+      "official": "show"
+    },
+    {
+      "yarn": "area",
+      "official": "rect",
+      "note": "SuggestionWindow 的矩形字段：yarn area ↔ 官方 rect"
+    },
+    {
+      "yarn": "getArea",
+      "official": "getRect"
+    },
+    {
+      "yarn": "setArea",
+      "official": "setRect"
+    },
+    {
+      "yarn": "DrawContext",
+      "official": "GuiGraphics",
+      "note": "绘制上下文（D8 SuggestorWiring 的 render 钩子要用）：yarn DrawContext ↔ 官方 GuiGraphics，与 AtomChatSuggestor 同一次核对"
+    },
+    {
+      "yarn": "TextFieldWidget",
+      "official": "EditBox"
+    },
+    {
+      "yarn": "TextRenderer",
+      "official": "Font",
+      "note": "MC 的字体渲染器：yarn TextRenderer ↔ 官方 Font（与 Skija 的 Font 同名但形态一致，两侧同套规则）"
+    },
+    {
+      "yarn": "MathHelper",
+      "official": "Mth"
+    },
+    {
+      "yarn": "ChatComponent",
+      "official": "ChatHud"
+    },
+    {
+      "yarn": "getChatHud",
+      "official": "getChat"
+    },
+    {
+      "yarn": "inGameHud",
+      "official": "gui"
+    },
+    {
+      "yarn": "getMainRenderTarget",
+      "official": "getFramebuffer"
+    },
+    {
+      "yarn": "fbo",
+      "official": "frameBufferId"
+    },
+    {
+      "yarn": "textureWidth",
+      "official": "width"
+    },
+    {
+      "yarn": "textureHeight",
+      "official": "height"
+    },
+    {
+      "yarn": "setColor",
+      "official": "setPixelRGBA"
+    },
+    {
+      "yarn": "getGlId",
+      "official": "getId"
+    },
+    {
+      "yarn": "writeTo",
+      "official": "writeToFile"
+    },
+    {
+      "yarn": "fillColor",
+      "official": "color"
+    },
+    {
+      "yarn": "getWithStyle",
+      "official": "toFlatList"
+    },
+    {
+      "yarn": "Formatting",
+      "official": "net.minecraft.ChatFormatting"
+    },
+    {
+      "yarn": "MessageHandler",
+      "official": "ChatListener"
+    },
+    {
+      "yarn": "processChatMessageInternal",
+      "official": "showMessageToPlayer",
+      "note": "实际投递 HUD 的同一原生处理函数；两映射源码已核对，不能映射到会入延迟队列的公开入口。"
+    },
+    {
+      "yarn": "captureSignedBeforeAdd",
+      "official": "capturePlayerChat"
+    },
+    {
+      "yarn": "captureProfilelessBeforeAdd",
+      "official": "captureDisguised"
+    },
+    {
+      "yarn": "captureGameBeforeAdd",
+      "official": "captureSystem"
+    },
+    {
+      "yarn": "handleSystemMessage",
+      "official": "onGameMessage"
+    },
+    {
+      "yarn": "applyChatDecoration",
+      "official": "decorate"
+    },
+    {
+      "yarn": "currentScreen",
+      "official": "screen"
+    },
+    {
+      "yarn": "MouseHandler",
+      "official": "Mouse"
+    },
+    {
+      "yarn": "KeyBinding",
+      "official": "KeyMapping",
+      "note": "按键绑定类型：net.minecraft.client.option.KeyBinding ↔ net.minecraft.client.KeyMapping（1.20.1 官方名同为 KeyMapping）；D14 NativeDialogBridge 逐字核对"
+    },
+    {
+      "yarn": "unpressAll",
+      "official": "releaseAll",
+      "note": "松开全部按键：yarn KeyBinding.unpressAll() ↔ 官方 KeyMapping.releaseAll()；picker 关闭后清残留按压（D14 NativeDialogBridge 逐字核对）"
+    },
+    {
+      "yarn": "host.client().mouse",
+      "official": "host.client().mouseHandler",
+      "note": "鼠标处理器字段：yarn MinecraftClient.mouse ↔ 官方 Minecraft.mouseHandler。用限定形态而不是裸 mouse/keyboard —— 裸词会把别的 mouseX 之类语境卷进来（D13 收窄规则的同一条教训）"
+    },
+    {
+      "yarn": "host.client().keyboard",
+      "official": "host.client().keyboardHandler",
+      "note": "键盘处理器字段：yarn MinecraftClient.keyboard ↔ 官方 Minecraft.keyboardHandler；同上用限定形态"
+    },
+    {
+      "yarn": "getHandle",
+      "official": "getWindow",
+      "note": "窗口句柄（GLFW 窗口指针）：yarn Window.getHandle() ↔ 官方 Window.getWindow()，两边都返回 long；D13 DragDropPasteUpload 落 official 层时逐字核对"
+    },
+    {
+      "yarn": "getFramebufferWidth",
+      "official": "getWidth",
+      "note": "窗口像素宽：yarn Window.getFramebufferWidth() ↔ 官方 Window.getWidth()（同一个 com.mojang.blaze3d.platform.Window；yarn 的 getWidth() 是 GUI 缩放后的宽，语义不同，D10 ScreenMetrics 孪生逐字核对）"
+    },
+    {
+      "yarn": "getFramebufferHeight",
+      "official": "getHeight",
+      "note": "窗口像素高：yarn Window.getFramebufferHeight() ↔ 官方 Window.getHeight()（同一窗口类，同上核对）"
+    },
+    {
+      "yarn": "getScaleFactor",
+      "official": "getGuiScale",
+      "note": "窗口 GUI 缩放比：yarn Window.getScaleFactor() ↔ 官方 Window.getGuiScale()（两边都返回 double，D10 ScreenMetrics 孪生核对）"
+    },
+    {
+      "yarn": "net.minecraft.text.",
+      "official": "net.minecraft.network.chat.",
+      "note": "整包迁移：1.21 里 yarn 的 text 包 = 官方的 network.chat 包"
+    },
+    {
+      "yarn": "net.minecraft.text.TranslatableTextContent",
+      "official": "net.minecraft.network.chat.contents.TranslatableContents",
+      "note": "整个限定名一起换：官方把 TranslatableContents 放在 network.chat.contents 子包，yarn 没有该子包"
+    },
+    {
+      "yarn": "TranslatableTextContent",
+      "official": "TranslatableContents"
+    },
+    {
+      "yarn": "getContent",
+      "official": "getContents",
+      "note": "ChatMessage/Component 取内容：yarn getContent() ↔ 官方 getContents()"
+    },
+    {
+      "yarn": "getDisplayName",
+      "official": "getTabListDisplayName",
+      "note": "PlayerListEntry：yarn getDisplayName() ↔ 官方 getTabListDisplayName()"
+    },
+    {
+      "yarn": "getCommandDispatcher",
+      "official": "getCommands"
+    },
+    {
+      "yarn": "byCode",
+      "official": "getByCode",
+      "note": "ChatFormatting：yarn byCode() ↔ 官方 getByCode()"
+    },
+    {
+      "yarn": "net.minecraft.client.util.math.Rect2i",
+      "official": "net.minecraft.client.renderer.Rect2i"
+    },
+    {
+      "yarn": "net.minecraft.util.Util",
+      "official": "net.minecraft.Util"
+    },
+    {
+      "yarn": "net.minecraft.util.math.MathHelper",
+      "official": "net.minecraft.util.Mth"
+    },
+    {
+      "yarn": "net.minecraft.stat.",
+      "official": "net.minecraft.stats.",
+      "note": "yarn 的 stat 包 = 官方的 stats 包（1.20.1 forge 侧写成 net.minecraft.stats.）"
+    },
+    {
+      "yarn": "getOperatingSystem().open(",
+      "official": "getPlatform().openUri(",
+      "literal": true,
+      "note": "Util 打开链接：整段一起换，避免把通用的 open 单词做成规则"
+    },
+    {
+      "yarn": "@Accessor(\"window\")",
+      "official": "@Accessor(\"suggestions\")",
+      "literal": true,
+      "note": "访问器目标字段名：yarn window ↔ 官方 suggestions；连注解一起换，避免把通用的 window 词做成规则"
+    },
+    {
+      "yarn": "sendChatCommand",
+      "official": "sendCommand",
+      "note": "网络发包：yarn sendChatCommand（去斜杠后发出）↔ 官方 sendCommand；D3 SendPipeline 与三副本原代码逐字核对"
+    },
+    {
+      "yarn": "sendChatMessage",
+      "official": "sendChat",
+      "note": "网络发包：yarn sendChatMessage ↔ 官方 sendChat（同上核对）"
+    },
+    {
+      "yarn": "addToMessageHistory",
+      "official": "addRecentChat",
+      "note": "聊天历史：yarn ChatHud.addToMessageHistory ↔ 官方 ChatComponent.addRecentChat（同上核对）"
+    },
+    {
+      "yarn": "StringHelper",
+      "official": "StringUtil",
+      "note": "net.minecraft.util.StringHelper（yarn）↔ net.minecraft.util.StringUtil（官方）"
+    },
+    {
+      "yarn": "truncateChat",
+      "official": "trimChatMessage",
+      "note": "聊天文本裁剪：yarn StringHelper.truncateChat ↔ 官方 StringUtil.trimChatMessage（D3 normalizeInput 在用）"
+    },
+    {
+      "yarn": "SignedMessage",
+      "official": "PlayerChatMessage",
+      "literal": false,
+      "note": "消息反应原生投递接线：依据本地 Yarn 1.21.1 映射与 Mojang 1.20.1/1.21.1 源码核对；限制为具体类型/完整表达式，不吞业务差异。"
+    },
+    {
+      "yarn": "MessageType.Parameters",
+      "official": "ChatType.Bound",
+      "literal": true,
+      "note": "消息反应原生投递接线：依据本地 Yarn 1.21.1 映射与 Mojang 1.20.1/1.21.1 源码核对；限制为具体类型/完整表达式，不吞业务差异。"
+    },
+    {
+      "yarn": "ServerPlayNetworkHandler",
+      "official": "ServerGamePacketListenerImpl",
+      "literal": false,
+      "note": "消息反应原生投递接线：依据本地 Yarn 1.21.1 映射与 Mojang 1.20.1/1.21.1 源码核对；限制为具体类型/完整表达式，不吞业务差异。"
+    },
+    {
+      "yarn": "ServerPlayerEntity",
+      "official": "ServerPlayer",
+      "literal": false,
+      "note": "消息反应原生投递接线：依据本地 Yarn 1.21.1 映射与 Mojang 1.20.1/1.21.1 源码核对；限制为具体类型/完整表达式，不吞业务差异。"
+    },
+    {
+      "yarn": "MessageSignatureData",
+      "official": "MessageSignature",
+      "literal": false,
+      "note": "消息反应原生投递接线：依据本地 Yarn 1.21.1 映射与 Mojang 1.20.1/1.21.1 源码核对；限制为具体类型/完整表达式，不吞业务差异。"
+    },
+    {
+      "yarn": "MessageIndicator",
+      "official": "GuiMessageTag",
+      "literal": false,
+      "note": "消息反应原生投递接线：依据本地 Yarn 1.21.1 映射与 Mojang 1.20.1/1.21.1 源码核对；限制为具体类型/完整表达式，不吞业务差异。"
+    },
+    {
+      "yarn": "message.signature().data()",
+      "official": "message.signature().bytes()",
+      "literal": true,
+      "note": "消息反应原生投递接线：依据本地 Yarn 1.21.1 映射与 Mojang 1.20.1/1.21.1 源码核对；限制为具体类型/完整表达式，不吞业务差异。"
+    },
+    {
+      "yarn": "message.signedBody().timestamp()",
+      "official": "message.signedBody().timeStamp()",
+      "literal": true,
+      "note": "消息反应原生投递接线：依据本地 Yarn 1.21.1 映射与 Mojang 1.20.1/1.21.1 源码核对；限制为具体类型/完整表达式，不吞业务差异。"
+    },
+    {
+      "yarn": "message.getSender()",
+      "official": "message.sender()",
+      "literal": true,
+      "note": "消息反应原生投递接线：依据本地 Yarn 1.21.1 映射与 Mojang 1.20.1/1.21.1 源码核对；限制为具体类型/完整表达式，不吞业务差异。"
+    },
+    {
+      "yarn": "message.getSignedContent()",
+      "official": "message.signedContent()",
+      "literal": true,
+      "note": "消息反应原生投递接线：依据本地 Yarn 1.21.1 映射与 Mojang 1.20.1/1.21.1 源码核对；限制为具体类型/完整表达式，不吞业务差异。"
+    },
+    {
+      "yarn": "\"sendChatMessage\"",
+      "official": "\"sendPlayerChatMessage\"",
+      "literal": true,
+      "note": "消息反应原生投递接线：依据本地 Yarn 1.21.1 映射与 Mojang 1.20.1/1.21.1 源码核对；限制为具体类型/完整表达式，不吞业务差异。"
+    },
+    {
+      "yarn": "net.minecraft.server.network.ServerPlayNetworkHandler",
+      "official": "net.minecraft.server.network.ServerGamePacketListenerImpl",
+      "literal": true,
+      "note": "消息反应原生投递接线：依据本地 Yarn 1.21.1 映射与 Mojang 1.20.1/1.21.1 源码核对；限制为具体类型/完整表达式，不吞业务差异。"
+    },
+    {
+      "yarn": "net.minecraft.server.network.ServerPlayerEntity",
+      "official": "net.minecraft.server.level.ServerPlayer",
+      "literal": true,
+      "note": "消息反应原生投递接线：依据本地 Yarn 1.21.1 映射与 Mojang 1.20.1/1.21.1 源码核对；限制为具体类型/完整表达式，不吞业务差异。"
+    },
+    {
+      "yarn": "net.minecraft.network.message.SignedMessage",
+      "official": "net.minecraft.network.chat.PlayerChatMessage",
+      "literal": true,
+      "note": "消息反应原生投递接线：依据本地 Yarn 1.21.1 映射与 Mojang 1.20.1/1.21.1 源码核对；限制为具体类型/完整表达式，不吞业务差异。"
+    },
+    {
+      "yarn": "net.minecraft.network.message.MessageType.Parameters",
+      "official": "net.minecraft.network.chat.ChatType.Bound",
+      "literal": true,
+      "note": "消息反应原生投递接线：依据本地 Yarn 1.21.1 映射与 Mojang 1.20.1/1.21.1 源码核对；限制为具体类型/完整表达式，不吞业务差异。"
+    },
+    {
+      "yarn": "net.minecraft.client.network.message.MessageHandler",
+      "official": "net.minecraft.client.multiplayer.chat.ChatListener",
+      "literal": true,
+      "note": "消息反应原生投递接线：依据本地 Yarn 1.21.1 映射与 Mojang 1.20.1/1.21.1 源码核对；限制为具体类型/完整表达式，不吞业务差异。"
+    },
+    {
+      "yarn": "Lnet/minecraft/client/gui/hud/ChatHud;addMessage(Lnet/minecraft/text/Text;Lnet/minecraft/network/message/MessageSignatureData;Lnet/minecraft/client/gui/hud/MessageIndicator;)V",
+      "official": "Lnet/minecraft/client/gui/components/ChatComponent;addMessage(Lnet/minecraft/network/chat/Component;Lnet/minecraft/network/chat/MessageSignature;Lnet/minecraft/client/GuiMessageTag;)V",
+      "literal": true,
+      "note": "消息反应原生投递接线：依据本地 Yarn 1.21.1 映射与 Mojang 1.20.1/1.21.1 源码核对；限制为具体类型/完整表达式，不吞业务差异。"
+    },
+    {
+      "yarn": "message.filterMask().isPassThrough() ? message.getContent()",
+      "official": "message.filterMask().isEmpty() ? message.decoratedContent()",
+      "literal": true,
+      "note": "限定SignedMessage过滤正文调用：Yarn FilterMask.getFilteredText与Mojang FilterMask.applyWithFormatting是同一原生实现；保持显示过滤后的正文，不混同Component.getContent。"
+    },
+    {
+      "yarn": "message.filterMask().getFilteredText(message.getSignedContent())",
+      "official": "message.filterMask().applyWithFormatting(message.signedContent())",
+      "literal": true,
+      "note": "限定SignedMessage过滤正文调用：Yarn FilterMask.getFilteredText与Mojang FilterMask.applyWithFormatting是同一原生实现；保持显示过滤后的正文，不混同Component.getContent。"
+    },
+    {
+      "yarn": "message.filterMask().isPassThrough()",
+      "official": "message.filterMask().isEmpty()",
+      "literal": true,
+      "note": "已读Mojang FilterMask源码：isEmpty为PASS_THROUGH；Yarn同一状态方法为isPassThrough。限定native filterMask，不泛化其他isEmpty。"
+    }
   ]
 }

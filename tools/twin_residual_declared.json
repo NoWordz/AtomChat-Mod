@@ -16,8 +16,8 @@
     "",
     "【本轮登记的现状（2026-10-09，第二轮）】13 对文件有残差，其中两条是**真漂移**（不是接缝）：",
     "  1. text/RichText.java —— official 的 splice() 调 mergeRuns(out)，fabric 漏调（:190 vs :198）",
-    "  2. mixin/MessageHandlerMixin.java —— 两侧是两套不同实现（HEAD+decoratedContent vs INVOKE+getContents）",
-    "这两条已上报主会话，等拍板；在此之前按「既有分歧」登记，任何改动都会让它重新变红。"
+    "这两条已上报主会话，等拍板；在此之前按「既有分歧」登记，任何改动都会让它重新变红。",
+    "2026-10-12：MessageHandlerMixin 的HEAD/实际投递真漂移已修复；只保留独立复审确认并按精确指纹锁定的加载器注入结构差异。"
   ],
   "declared": {
     "src/main/java/com/atom/chat/image/AvatarRenderer.java": [
@@ -196,69 +196,6 @@
     ],
     "src/main/java/com/atom/chat/mixin/MessageHandlerMixin.java": [
       {
-        "fingerprint": "543ee33f5ac4",
-        "kind": "code",
-        "reason": "pending user decision 2026-10-09：两侧是两套不同实现（官方侧 @Inject(HEAD)+message.decoratedContent()，fabric 侧 @Inject(INVOKE ChatHud.addMessage)+message.getContents()，fabric 版为 2026-09-03 审计后的精确注入）。主会话已上报用户待拍板，本轮只登记不改码",
-        "sample_a": " * Channel-level capture (NeoForge ChatListener variant).",
-        "sample_b": " * Channel-level capture."
-      },
-      {
-        "fingerprint": "1b38aab12d96",
-        "kind": "code",
-        "reason": "pending user decision 2026-10-09：两侧是两套不同实现（官方侧 @Inject(HEAD)+message.decoratedContent()，fabric 侧 @Inject(INVOKE ChatHud.addMessage)+message.getContents()，fabric 版为 2026-09-03 审计后的精确注入）。主会话已上报用户待拍板，本轮只登记不改码",
-        "sample_a": " * <p>Architecture ported from e33chat's NeoForge ChatListenerMixin (MIT, same",
-        "sample_b": " * <p>Unlike a naive HEAD-of-public-method capture, the injects are placed"
-      },
-      {
-        "fingerprint": "c75c1174c8f8",
-        "kind": "code",
-        "reason": "pending user decision 2026-10-09：两侧是两套不同实现（官方侧 @Inject(HEAD)+message.decoratedContent()，fabric 侧 @Inject(INVOKE ChatHud.addMessage)+message.getContents()，fabric 版为 2026-09-03 审计后的精确注入）。主会话已上报用户待拍板，本轮只登记不改码",
-        "sample_a": "    @Inject(method = \"handlePlayerChatMessage\", at = @At(\"HEAD\"))",
-        "sample_b": "    /**"
-      },
-      {
-        "fingerprint": "fbdac1110c34",
-        "kind": "code",
-        "reason": "pending user decision 2026-10-09：两侧是两套不同实现（官方侧 @Inject(HEAD)+message.decoratedContent()，fabric 侧 @Inject(INVOKE ChatHud.addMessage)+message.getContents()，fabric 版为 2026-09-03 审计后的精确注入）。主会话已上报用户待拍板，本轮只登记不改码",
-        "sample_a": "        // decoratedContent() keeps the server/plugin rich body (unsigned",
-        "sample_b": "        String content = message.getContents().getString();"
-      },
-      {
-        "fingerprint": "b9ae23125b19",
-        "kind": "code",
-        "reason": "pending user decision 2026-10-09：两侧是两套不同实现（官方侧 @Inject(HEAD)+message.decoratedContent()，fabric 侧 @Inject(INVOKE ChatHud.addMessage)+message.getContents()，fabric 版为 2026-09-03 审计后的精确注入）。主会话已上报用户待拍板，本轮只登记不改码",
-        "sample_a": "                senderComponent, contentComponent));",
-        "sample_b": "                params.name(), message.getContents()));"
-      },
-      {
-        "fingerprint": "9326b1dc6a20",
-        "kind": "code",
-        "reason": "pending user decision 2026-10-09：两侧是两套不同实现（官方侧 @Inject(HEAD)+message.decoratedContent()，fabric 侧 @Inject(INVOKE ChatHud.addMessage)+message.getContents()，fabric 版为 2026-09-03 审计后的精确注入）。主会话已上报用户待拍板，本轮只登记不改码",
-        "sample_a": "    @Inject(method = \"handleDisguisedChatMessage\", at = @At(\"HEAD\"))",
-        "sample_b": "    /**"
-      },
-      {
-        "fingerprint": "e34503837b9a",
-        "kind": "code",
-        "reason": "pending user decision 2026-10-09：两侧是两套不同实现（官方侧 @Inject(HEAD)+message.decoratedContent()，fabric 侧 @Inject(INVOKE ChatHud.addMessage)+message.getContents()，fabric 版为 2026-09-03 审计后的精确注入）。主会话已上报用户待拍板，本轮只登记不改码",
-        "sample_a": "                PlayerInfo info = ChatClassifier.resolveOnlinePlayer(display);",
-        "sample_b": "                var info = ChatClassifier.resolveOnlinePlayer(display);"
-      },
-      {
-        "fingerprint": "f837a62db536",
-        "kind": "code",
-        "reason": "pending user decision 2026-10-09：两侧是两套不同实现（官方侧 @Inject(HEAD)+message.decoratedContent()，fabric 侧 @Inject(INVOKE ChatHud.addMessage)+message.getContents()，fabric 版为 2026-09-03 审计后的精确注入）。主会话已上报用户待拍板，本轮只登记不改码",
-        "sample_a": "                    senderComponent, message));",
-        "sample_b": "                    params.name(), message));"
-      },
-      {
-        "fingerprint": "d9bf31d5375d",
-        "kind": "code",
-        "reason": "pending user decision 2026-10-09：两侧是两套不同实现（官方侧 @Inject(HEAD)+message.decoratedContent()，fabric 侧 @Inject(INVOKE ChatHud.addMessage)+message.getContents()，fabric 版为 2026-09-03 审计后的精确注入）。主会话已上报用户待拍板，本轮只登记不改码",
-        "sample_a": "        SenderMeta parsed = ChatPipeline.tryParsePlayerLine(decoratedStr);",
-        "sample_b": "        SenderMeta parsed = ChatPipeline.tryParsePlayerLine(decorated);"
-      },
-      {
         "fingerprint": "50a7c4fb4286",
         "kind": "code",
         "reason": "pending user decision 2026-10-09：两侧是两套不同实现（官方侧 @Inject(HEAD)+message.decoratedContent()，fabric 侧 @Inject(INVOKE ChatHud.addMessage)+message.getContents()，fabric 版为 2026-09-03 审计后的精确注入）。主会话已上报用户待拍板，本轮只登记不改码",
@@ -271,6 +208,13 @@
         "reason": "pending user decision 2026-10-09：两侧是两套不同实现（官方侧 @Inject(HEAD)+message.decoratedContent()，fabric 侧 @Inject(INVOKE ChatHud.addMessage)+message.getContents()，fabric 版为 2026-09-03 审计后的精确注入）。主会话已上报用户待拍板，本轮只登记不改码",
         "sample_a": "",
         "sample_b": ""
+      },
+      {
+        "fingerprint": "8189bae81581",
+        "kind": "loader-seam",
+        "reason": "2026-10-12 用户批准工作流与原生私聊/反应方案，6.1-sol独立复审确认：Yarn method_45745 含实际HUD投递，Mojang handleDisguisedChatMessage 会排入BooleanSupplier延迟队列；故前者在投递前Inject，后者Redirect包装执行中的回调并finally清除capture。同一身份捕获边界，非HEAD提前捕获。依据本地Forge/NeoForge ChatListener源与Yarn映射核对，精确锁此残差；正文/身份/私聊业务逻辑已统一。",
+        "sample_a": "    @Shadow private void handleMessage(MessageSignature signature, BooleanSupplier callback) { throw new AssertionError(); }",
+        "sample_b": "    /**"
       }
     ],
     "src/main/java/com/atom/chat/screen/SuggestorWiring.java": [

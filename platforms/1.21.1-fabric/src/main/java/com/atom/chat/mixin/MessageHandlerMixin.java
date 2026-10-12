@@ -7,6 +7,7 @@ import com.atom.chat.chat.PrivateChatParser;
 import com.atom.chat.chat.SenderMeta;
 import com.mojang.authlib.GameProfile;
 import net.minecraft.client.network.message.MessageHandler;
+import net.minecraft.client.MinecraftClient;
 import net.minecraft.network.message.MessageType;
 import net.minecraft.network.message.SignedMessage;
 import net.minecraft.text.Text;
@@ -20,41 +21,37 @@ import java.time.Instant;
 import java.util.UUID;
 
 /**
- * Channel-level capture.
- *
- * <p>Minecraft routes chat through {@link MessageHandler}; the decorated line
- * only reaches {@code ChatHud.addMessage} later, by which time structured
- * identity (UUID/profile/type) is gone. This mixin captures that structure and
- * hands it to {@link ChatHudMixin} through {@link MessageCapture}.
- *
- * <p>Unlike a naive HEAD-of-public-method capture, the injects are placed
- * immediately before the real {@code ChatHud.addMessage} calls. That keeps the
- * single-slot handoff correct under vanilla's chat-delay queue and under
- * messages that are filtered/blocked before reaching the HUD (no set without a
- * matching consume, so a stale meta cannot leak onto the next unrelated line).
- *
- * <p>Architecture ported from e33chat's ChatListenerMixin (MIT, same author),
- * trimmed to AtomChat's current needs: no whisper banners, no server templates.
- * Own-echo suppression happens at the HUD layer in {@link ChatHudMixin}.
+ * Captures identity at actual HUD delivery, preserving private routing and visible filtered bodies.
+ * Native reaction identity is carried separately from display content.
  */
 @Mixin(value = MessageHandler.class, priority = 500)
 public class MessageHandlerMixin {
-    /**
-     * Signed chat. Two {@code ChatHud.addMessage} branches exist in
-     * {@code processChatMessageInternal} (pass-through filter and filtered
-     * text); this handler runs before either one, so it only fires when the
-     * message is actually going to be displayed.
-     */
+    /** Capture only when the native listener actually delivers a visible message. */
     @Inject(method = "processChatMessageInternal", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/gui/hud/ChatHud;addMessage(Lnet/minecraft/text/Text;Lnet/minecraft/network/message/MessageSignatureData;Lnet/minecraft/client/gui/hud/MessageIndicator;)V"))
-    private void atomchat$captureSignedBeforeAdd(MessageType.Parameters params, SignedMessage message,
-                                                 Text decorated, GameProfile gameProfile,
-                                                 boolean onlyShowSecure, Instant instant,
-                                                 CallbackInfoReturnable<Boolean> cir) {
+    private void atomchat$captureSignedBeforeAdd(MessageType.Parameters bound, SignedMessage message, Text decorated,
+                                            GameProfile gameProfile, boolean secure, Instant instant, CallbackInfoReturnable<Boolean> ci) {
         UUID uuid = message.getSender() != null ? message.getSender() : gameProfile.getId();
         String profile = gameProfile.getName();
-        String content = message.getContent().getString();
+        // Never restore masked content through the native unsigned/decorated body.
+        Text contentComponent = message.filterMask().isPassThrough() ? message.getContent()
+                : message.filterMask().getFilteredText(message.getSignedContent());
+        if (contentComponent == null) return;
+        String content = contentComponent.getString();
+        Text senderComponent = bound.name();
+        Text visible = bound.applyChatDecoration(contentComponent);
+        SenderMeta privateMeta = PrivateChatParser.tryParse(visible);
+        if (privateMeta != null) {
+            if (privateMeta.system()) { MessageCapture.set(privateMeta); return; }
+            var local = MinecraftClient.getInstance().player;
+            boolean outgoing = local != null && uuid.equals(local.getUuid());
+            // Incoming identity comes from the native message, not the nickname lookup.
+            String partner = outgoing ? privateMeta.whisperPartner() : profile;
+            MessageCapture.set(new SenderMeta(uuid, privateMeta.senderName(), profile, content, false, true,
+                    partner, privateMeta.senderComponent(), contentComponent));
+            return;
+        }
         MessageCapture.set(new SenderMeta(uuid, profile, profile, content, false,
-                params.name(), message.getContent()));
+                senderComponent, contentComponent));
     }
 
     /**
@@ -63,12 +60,16 @@ public class MessageHandlerMixin {
      * the text-level parser on the decorated line instead of the raw body.
      */
     @Inject(method = "method_45745", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/gui/hud/ChatHud;addMessage(Lnet/minecraft/text/Text;)V"))
-    private void atomchat$captureProfilelessBeforeAdd(MessageType.Parameters params, Text message,
+    private void atomchat$captureProfilelessBeforeAdd(MessageType.Parameters bound, Text message,
                                                       Instant instant,
-                                                      CallbackInfoReturnable<Boolean> cir) {
-        String decorated = params.applyChatDecoration(message).getString();
-        if (params.name() != null && !params.name().getString().isBlank()) {
-            String display = params.name().getString();
+                                                      CallbackInfoReturnable<Boolean> ci) {
+        Text decorated = bound.applyChatDecoration(message);
+        SenderMeta privateMeta = PrivateChatParser.tryParse(decorated);
+        if (privateMeta != null) { MessageCapture.set(privateMeta); return; }
+        String decoratedStr = decorated.getString();
+        Text senderComponent = bound.name();
+        if (senderComponent != null && !senderComponent.getString().isBlank()) {
+            String display = senderComponent.getString();
             String profile = display;
             UUID uuid = ChatClassifier.resolveUuid(display);
             if (uuid != null) {
@@ -78,10 +79,10 @@ public class MessageHandlerMixin {
                 }
             }
             MessageCapture.set(new SenderMeta(uuid, display, profile, null, false,
-                    params.name(), message));
+                    senderComponent, message));
             return;
         }
-        SenderMeta parsed = ChatPipeline.tryParsePlayerLine(decorated);
+        SenderMeta parsed = ChatPipeline.tryParsePlayerLine(decoratedStr);
         if (parsed != null) {
             MessageCapture.set(parsed);
         }
