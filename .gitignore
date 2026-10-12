@@ -15,3 +15,9 @@ golden/
 
 # Subagent review/intermediate artifacts (never shipped)
 .review-*
+
+# 本轮工作目录（部署脚本、构建/测试日志、备份清单）—— 临时产物，不进仓库
+.work/
+
+# Python 工具缓存
+__pycache__/
