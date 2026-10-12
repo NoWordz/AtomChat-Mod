@@ -166,6 +166,7 @@ public final class AvatarCompanionServer {
     }
 
     static boolean isPng(byte[] data) {
+        if (!com.atom.chat.image.PngDimensions.within(data, 32_000_000L)) return false;
         if (data.length < PNG_MAGIC.length) {
             return false;
         }

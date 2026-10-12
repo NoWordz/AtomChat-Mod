@@ -194,7 +194,7 @@ public final class AvatarCompanionClient {
         }
         Thread worker = new Thread(() -> {
             try {
-                Image image = Image.makeFromEncoded(data);
+                Image image = com.atom.chat.image.ImageLoader.decodeStatic(data, 256);
                 if (image != null && generation == GENERATION.get()) {
                     decoded.put(uuid, image);
                     debug("companion: avatar for " + uuid + " ready (" + image.getWidth() + "x" + image.getHeight() + ")");

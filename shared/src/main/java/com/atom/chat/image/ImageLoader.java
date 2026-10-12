@@ -66,6 +66,9 @@ import java.util.function.LongSupplier;
 public final class ImageLoader {
     /** LRU capacity in decoded images. */
     public static final int MAX_CACHED = 48;
+    public static final int MAX_SOURCE_BYTES = 16 * 1024 * 1024;
+    public static final long MAX_SOURCE_PIXELS = 32_000_000L;
+    public static final int MAX_FAILURES = 512;
     /** Longest allowed side of a cached bitmap, in pixels. */
     public static final int MAX_DIM = 768;
     /** How long a failed URL stays blacklisted. */
@@ -179,7 +182,23 @@ public final class ImageLoader {
      * {@code maxDim}. The emote grid renders at cell size, so it uses this
      * instead of the animated path.
      */
+    private static void validateSource(byte[] bytes) {
+        if(bytes==null || bytes.length==0 || bytes.length>MAX_SOURCE_BYTES) throw new IllegalArgumentException("image_source_bytes");
+        try(io.github.humbleui.skija.Data data=io.github.humbleui.skija.Data.makeFromBytes(bytes);
+            io.github.humbleui.skija.Codec codec=io.github.humbleui.skija.Codec.makeFromData(data)) {
+            if(codec==null) throw new IllegalArgumentException("image_source_codec");
+            var info=codec.getImageInfo();
+            if(info.getWidth()<=0 || info.getHeight()<=0 || (long)info.getWidth()*info.getHeight()>MAX_SOURCE_PIXELS)
+                throw new IllegalArgumentException("image_source_pixels");
+        }
+    }
+    private static byte[] readSource(java.io.InputStream input) throws java.io.IOException {
+        byte[] bytes=input.readNBytes(MAX_SOURCE_BYTES+1);
+        if(bytes.length>MAX_SOURCE_BYTES) throw new java.io.IOException("image_source_bytes");
+        return bytes;
+    }
     public static Image decodeStatic(byte[] bytes, int maxDim) {
+        validateSource(bytes);
         long startedAt = com.atom.chat.diagnostics.FrameProfile.start();
         try {
             return downscale(Image.makeFromEncoded(bytes), maxDim);
@@ -194,15 +213,15 @@ public final class ImageLoader {
             if (companion == null) {
                 throw new IllegalStateException("No media companion fetcher registered");
             }
-            return companion.fetch(url);
+            byte[] bytes=companion.fetch(url);
+            if(bytes==null || bytes.length>MAX_SOURCE_BYTES) throw new java.io.IOException("image_source_bytes");
+            return bytes;
         }
         HttpResponse<byte[]> response = HttpClientHolder.CLIENT.send(
                 HttpRequest.newBuilder().uri(URI.create(url)).timeout(Duration.ofSeconds(10)).GET().build(),
-                HttpResponse.BodyHandlers.ofByteArray()
+                info -> new BoundedImageBodySubscriber(info.headers().firstValueAsLong("Content-Length").orElse(-1)>MAX_SOURCE_BYTES ? -1 : MAX_SOURCE_BYTES)
         );
-        if (response.statusCode() != 200) {
-            throw new IllegalStateException("HTTP " + response.statusCode());
-        }
+        if (response.statusCode() != 200) throw new IllegalStateException("HTTP " + response.statusCode());
         return response.body();
     }
 
@@ -242,6 +261,7 @@ public final class ImageLoader {
         if (failed != null && clock.getAsLong() < failed) {
             return null;
         }
+        if (failed != null) failedUntil.remove(url, failed);
         Path disk = diskFile(url);
         if (visible && (disk != null || isFetchable(url))
                 && pending.putIfAbsent(url, Boolean.TRUE) == null) {
@@ -274,7 +294,10 @@ public final class ImageLoader {
     private void load(String url, Path disk) {
         try {
             boolean fromDisk = disk != null && Files.exists(disk);
-            byte[] bytes = fromDisk ? Files.readAllBytes(disk) : fetcher.fetch(url);
+            byte[] bytes;
+            if(fromDisk) { try(java.io.InputStream input=Files.newInputStream(disk)) { bytes=readSource(input); } }
+            else bytes=fetcher.fetch(url);
+            validateSource(bytes);
             if (fromDisk) {
                 // The stamp means "last used", not "first downloaded": a picture
                 // the player keeps scrolling past must not expire on age alone.
@@ -393,7 +416,16 @@ public final class ImageLoader {
     }
 
     private void fail(String url) {
-        failedUntil.put(url, clock.getAsLong() + FAILURE_TTL_MS);
+        synchronized(failedUntil) {
+            long now=clock.getAsLong();
+            failedUntil.entrySet().removeIf(entry -> entry.getValue()<=now);
+            while(failedUntil.size()>=MAX_FAILURES) {
+                var iterator=failedUntil.keySet().iterator();
+                if(!iterator.hasNext()) break;
+                failedUntil.remove(iterator.next());
+            }
+            failedUntil.put(url,now+FAILURE_TTL_MS);
+        }
     }
 
     /** Refreshes a cache file's last-used stamp; failure only ages it sooner. */

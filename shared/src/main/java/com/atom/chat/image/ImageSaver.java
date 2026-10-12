@@ -69,7 +69,7 @@ public final class ImageSaver {
                         .timeout(Duration.ofSeconds(30))
                         .GET()
                         .build(),
-                HttpResponse.BodyHandlers.ofByteArray());
+                info -> new BoundedImageBodySubscriber(info.headers().firstValueAsLong("Content-Length").orElse(-1)>ImageLoader.MAX_SOURCE_BYTES ? -1 : ImageLoader.MAX_SOURCE_BYTES));
         if (response.statusCode() != 200) {
             throw new IOException("HTTP " + response.statusCode());
         }
