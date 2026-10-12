@@ -21,6 +21,39 @@ class ReactionWireTest {
         assertThrows(IllegalArgumentException.class,()->ReactionWire.readAction(Arrays.copyOf(good,good.length+1)));
         assertThrows(IllegalArgumentException.class,()->ReactionWire.readServer(new byte[ReactionWire.MAX_BYTES+1]));
     }
+    private static ReactionWire.Snapshot legacySnapshot(int count) {
+        List<ReactionWire.Entry> entries=new ArrayList<>();
+        for(int i=0;i<count;i++) {
+            entries.add(new ReactionWire.Entry(ReactionEmoji.ALL.get(i),
+                    List.of(new ReactionWire.Member(UUID.randomUUID(),"Player"+i))));
+        }
+        return new ReactionWire.Snapshot(UUID.randomUUID(),1L,entries);
+    }
+    @Test void legacySnapshotsDecodeButRetainOnlyTheFirstFiveKinds() {
+        for(int count:new int[]{6,20}) {
+            var legacy=legacySnapshot(count);
+            var decoded=(ReactionWire.Snapshot)ReactionWire.readServer(ReactionWire.snapshot(legacy));
+            assertEquals(new ReactionWire.Snapshot(legacy.id(),legacy.revision(),
+                    legacy.entries().subList(0,5)),decoded);
+        }
+    }
+    @Test void snapshotsOverTheLegacyTwentyKindLimitAreRejected() {
+        assertThrows(IllegalArgumentException.class,
+                ()->ReactionWire.readServer(ReactionWire.snapshot(legacySnapshot(21))));
+    }
+    @Test void discardedLegacyKindsAreStillValidatedAndTrailingBytesAreRejected() {
+        var legacy=legacySnapshot(6);
+        List<ReactionWire.Entry> entries=new ArrayList<>(legacy.entries());
+        entries.set(5,new ReactionWire.Entry(entries.get(0).emoji(),entries.get(5).members()));
+        assertThrows(IllegalArgumentException.class,()->ReactionWire.readServer(ReactionWire.snapshot(
+                new ReactionWire.Snapshot(legacy.id(),legacy.revision(),entries))));
+        entries.set(5,new ReactionWire.Entry(ReactionEmoji.ALL.get(5),List.of()));
+        assertThrows(IllegalArgumentException.class,()->ReactionWire.readServer(ReactionWire.snapshot(
+                new ReactionWire.Snapshot(legacy.id(),legacy.revision(),entries))));
+        byte[] packet=ReactionWire.snapshot(legacy);
+        assertThrows(IllegalArgumentException.class,
+                ()->ReactionWire.readServer(Arrays.copyOf(packet,packet.length+1)));
+    }
     @Test void unsignedIdentityUsesWirePrecisionAndNotSessionReconstruction() {
         UUID author=UUID.randomUUID(); Instant nano=Instant.parse("2026-10-12T00:00:00.123456789Z");
         assertEquals(ReactionFingerprint.of(author,null,nano,0,"hi"),ReactionFingerprint.of(author,null,Instant.ofEpochMilli(nano.toEpochMilli()),0,"hi"));

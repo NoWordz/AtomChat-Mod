@@ -34,18 +34,43 @@ class ReactionLedgerTest {
         for(int i=0;i<8;i++) assertEquals("",ledger.apply(player,connection,"Alice",new ReactionWire.Action(key,"😀",true),0));
         assertEquals("rate_limited",ledger.apply(player,connection,"Alice",new ReactionWire.Action(key,"😀",true),0));
     }
-    @Test void personLimitAndMessageKindLimitAreServerAuthoritative() {
+    @Test void messageLimitIsFiveDistinctKindsAcrossAllPlayers() {
         ReactionLedger ledger=new ReactionLedger();
-        // One player, eight distinct kinds, one per second (rate window resets).
-        for(int i=0;i<8;i++) assertEquals("",ledger.apply(player,connection,"Alice",new ReactionWire.Action(key,ReactionEmoji.ALL.get(i),true),i*2000L));
-        assertEquals("per_player_limit",ledger.apply(player,connection,"Alice",new ReactionWire.Action(key,ReactionEmoji.ALL.get(8),true),20000L));
-        // Other players may still add kinds up to the per-message ceiling.
-        for(int i=8;i<20;i++) {
+        for(int i=0;i<5;i++) {
             UUID who=UUID.randomUUID();
             assertEquals("",ledger.apply(who,new Object(),"P",new ReactionWire.Action(key,ReactionEmoji.ALL.get(i),true),0));
         }
-        assertEquals("per_message_limit",ledger.apply(UUID.randomUUID(),new Object(),"P",new ReactionWire.Action(key,ReactionEmoji.ALL.get(20),true),0));
-        assertEquals(20,ledger.snapshot(key).entries().size());
+        assertEquals(5,ledger.snapshot(key).entries().size());
+        assertEquals("per_message_limit",ledger.apply(UUID.randomUUID(),new Object(),"P",new ReactionWire.Action(key,ReactionEmoji.ALL.get(5),true),0));
+        assertEquals(5,ledger.snapshot(key).entries().size());
+    }
+
+    @Test void repeatedEmojiFromAnotherPlayerDoesNotUseAnotherKindSlot() {
+        ReactionLedger ledger=new ReactionLedger();
+        for(int i=0;i<5;i++) {
+            UUID who=UUID.randomUUID();
+            assertEquals("",ledger.apply(who,new Object(),"P",new ReactionWire.Action(key,ReactionEmoji.ALL.get(i),true),0));
+        }
+        UUID sixthPlayer=UUID.randomUUID();
+        assertEquals("",ledger.apply(sixthPlayer,new Object(),"Q",new ReactionWire.Action(key,ReactionEmoji.ALL.get(0),true),0));
+        assertEquals(5,ledger.snapshot(key).entries().size());
+        assertEquals(2,ledger.snapshot(key).entries().get(0).members().size());
+    }
+
+    @Test void recreatedKeyGetsNewerRevisionAfterEvictionEvenForNoOpRemoval() {
+        ReactionLedger ledger=new ReactionLedger();
+        assertEquals("",ledger.apply(player,new Object(),"Alice",new ReactionWire.Action(key,"😀",true),0));
+        long previousRevision=ledger.revision(key);
+        for(int i=0;i<4096;i++) {
+            UUID otherKey=new UUID(0L,i+1L);
+            assertEquals("",ledger.apply(UUID.randomUUID(),new Object(),"P",
+                    new ReactionWire.Action(otherKey,"😀",true),0));
+        }
+        assertEquals(-1L,ledger.revision(key),"the original key was evicted");
+
+        assertEquals("",ledger.apply(player,new Object(),"Alice",new ReactionWire.Action(key,"😀",false),0));
+        assertTrue(ledger.snapshot(key).revision()>previousRevision,
+                "the empty recreated snapshot must supersede the client's old state");
     }
     @Test void contentKeyDependsOnAuthorAndBodyOnly() {
         assertEquals(ReactionFingerprint.contentKey("Alice","hi"),ReactionFingerprint.contentKey("Alice","hi"));

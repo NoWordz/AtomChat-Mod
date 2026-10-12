@@ -1,10 +1,12 @@
 package com.atom.chat.image;
 
 import com.atom.chat.chat.ChatMessage;
+import com.atom.chat.platform.Platform;
 import com.atom.chat.ui.ActionToast;
 import com.atom.chat.util.ImageFileNames;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -47,6 +49,18 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class ImageUploadPipelineTest {
     /** Keys pass straight through: this file asserts order and text, not copy. */
     private static final ActionToast.Translator KEYS = key -> key;
+
+    @TempDir
+    static Path platformRoot;
+
+    @BeforeAll
+    static void installTemporaryPlatform() {
+        Platform.install(new Platform.Provider() {
+            @Override public Path configDir() { return platformRoot.resolve("config"); }
+            @Override public Path gameDir() { return platformRoot.resolve("game"); }
+            @Override public boolean isModLoaded(String modId) { return false; }
+        });
+    }
 
     @TempDir
     Path tmp;
@@ -160,32 +174,65 @@ class ImageUploadPipelineTest {
     }
 
     @Test
-    void anOccupiedDraftGetsTheSeparatorAndNoSizeWhenTheHeaderIsUnreadable() {
+    void anOccupiedDraftGetsTheSeparatorAndDimensionsForAValidImage() throws Exception {
         StubHost host = new StubHost();
         host.composerEmpty = false;
         StubUploader uploader = new StubUploader(host.calls, "https://uguu.se/abc.png", null);
         ImageUploadPipeline pipeline = pipeline(host, uploader);
 
-        // No such file: ImageFiles.dimensions returns null, so no w/h is carried.
-        pipeline.uploadAndAppend(Path.of("not-an-image.png"));
+        pipeline.uploadAndAppend(png(120, 80));
 
         assertEquals(List.of(
-                "upload:not-an-image.png",
+                "upload:shot.png",
                 "composerEmpty",
-                "append: [[CICode,url=https://uguu.se/abc.png,name=not-an-image.png]]"), host.calls);
+                "append: [[CICode,url=https://uguu.se/abc.png,name=shot.png,w=120,h=80]]"), host.calls);
         assertFalse(pipeline.uploading());
     }
 
     @Test
-    void uploadFailureClearsTheFlagAndAppendsNothing() {
+    void uploadFailureClearsTheFlagAndAppendsNothing() throws Exception {
         StubHost host = new StubHost();
         StubUploader uploader = new StubUploader(host.calls, null, "HTTP 500");
         ImageUploadPipeline pipeline = pipeline(host, uploader);
 
-        pipeline.uploadAndAppend(Path.of("not-an-image.png"));
+        pipeline.uploadAndAppend(png(1, 1));
 
-        assertEquals(List.of("upload:not-an-image.png"), host.calls);
+        assertEquals(List.of("upload:shot.png"), host.calls);
         assertFalse(pipeline.uploading(), "a failed upload must not pin the placeholder on 'uploading'");
+    }
+
+    @Test
+    void oversizeLocalImageNeverReachesEitherUploaderOrTheComposer() throws Exception {
+        Path file = png(1, 1);
+        java.nio.file.Files.write(file, java.util.Arrays.copyOf(
+                java.nio.file.Files.readAllBytes(file), 16 * 1024 * 1024 + 1));
+        assertRejectedBeforeUpload(file, "atomchat.input.image_too_large");
+    }
+
+    @Test
+    void excessivePixelsAndInvalidHeadersAreReportedWithoutUpload() throws Exception {
+        Path file = tmp.resolve("large.png");
+        java.nio.file.Files.write(file, ImageBoundsFixtures.png(32000001, 1));
+        assertRejectedBeforeUpload(file, "atomchat.input.image_too_many_pixels");
+        java.nio.file.Files.write(file, new byte[64]);
+        assertRejectedBeforeUpload(file, "atomchat.input.image_invalid");
+    }
+
+    private void assertRejectedBeforeUpload(Path file, String errorKey) {
+        for (boolean hosting : new boolean[]{false, true}) {
+            StubHost host = new StubHost();
+            ImageUploadPipeline.Uploader forbidden = (path, success, error) -> {
+                throw new AssertionError("invalid local file reached an uploader; hosting=" + hosting);
+            };
+            // Additional injection seam: external uploader, render hop, hosting flag, hosted uploader.
+            ImageUploadPipeline pipeline = new ImageUploadPipeline(host, key -> "translated:" + key,
+                    forbidden, Runnable::run, () -> hosting, forbidden);
+            pipeline.uploadAndAppend(file);
+            assertFalse(pipeline.uploading());
+            assertEquals(List.of("toast:" + errorKey + ":false"), host.calls,
+                    "invalid input must not append a CICode or fall back to the external host");
+            assertEquals("translated:" + errorKey, pipeline.transientHint());
+        }
     }
 
     @Test

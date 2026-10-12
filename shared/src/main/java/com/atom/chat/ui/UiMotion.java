@@ -95,11 +95,11 @@ public final class UiMotion {
      * is a content change inside a row, closer to a message entrance than to a
      * panel pop.
      */
-    public static final long REACTION_CHIP_MS = 160;
+    public static final long REACTION_CHIP_MS = 220;
     /** Reaction count bump after the number changes. */
     public static final long REACTION_PULSE_MS = 120;
     /** Extra delay before the glyph starts its own pop, so the capsule leads. */
-    public static final long REACTION_SYMBOL_DELAY_MS = 40;
+    public static final long REACTION_SYMBOL_DELAY_MS = 60;
     /**
      * How long after a chip's state arrives it still counts as "fresh" and
      * plays its entrance. Anything already on screen when it scrolls into view

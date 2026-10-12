@@ -15,9 +15,9 @@ import static org.junit.jupiter.api.Assertions.*;
  * the number. All of it is draw-free, so it is testable without a canvas.
  */
 class ReactionChipAnimTest {
-    private static final long ENTER = 160L;
+    private static final long ENTER = 220L;
     private static final long PULSE = 120L;
-    private static final long SYMBOL_DELAY = 40L;
+    private static final long SYMBOL_DELAY = 60L;
     private static final long FRESH = 400L;
 
     private static ReactionChipAnim anim() {
@@ -28,6 +28,12 @@ class ReactionChipAnimTest {
         LinkedHashMap<String,Integer> m = new LinkedHashMap<>();
         m.put(emoji, count);
         return m;
+    }
+
+    @Test
+    void productionTokensUseTheUpdatedSharedEntranceTimeline() {
+        assertEquals(220L, UiMotion.REACTION_CHIP_MS);
+        assertEquals(60L, UiMotion.REACTION_SYMBOL_DELAY_MS);
     }
 
     @Test

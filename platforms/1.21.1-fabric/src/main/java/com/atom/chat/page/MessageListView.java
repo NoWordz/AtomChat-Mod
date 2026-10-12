@@ -346,7 +346,7 @@ public final class MessageListView {
                         // bubble is never clipped by its own offscreen layer.
                         float travel = UiTokens.MESSAGE_SLIDE;
                         // Two curves, one timeline: the slide decelerates with
-                        // a small back-ease overshoot (<=5%, UiSpring.messageEase)
+                        // a back-ease overshoot (~9%, UiSpring.messageEase)
                         // while the fade ramps gently across the whole entrance
                         // (quad), so the opacity change is still happening while
                         // the bubble is still moving. The fade must never

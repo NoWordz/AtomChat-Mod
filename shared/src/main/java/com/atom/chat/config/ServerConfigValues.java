@@ -20,7 +20,7 @@ public record ServerConfigValues(boolean hostingEnabled, boolean packEnabled,
                                  int retentionDays, int uploadCooldownMs,
                                  int packMaxFiles, int packMaxMb,
                                  String packName, List<String> phrases) {
-    public static final int MAX_FILE_KB_LIMIT = 65536;
+    public static final int MAX_FILE_KB_LIMIT = 16384;
     public static final int MAX_STORE_MB_LIMIT = 65536;
     public static final int MAX_RETENTION_DAYS = 3650;
     public static final int MAX_COOLDOWN_MS = 600_000;

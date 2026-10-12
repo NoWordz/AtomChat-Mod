@@ -207,6 +207,13 @@ public final class ReactionChips {
         return true;
     }
 
+    /** Any pointer-owning overlay suppresses the reaction tooltip. */
+    public static boolean tooltipSuppressed(boolean emojiOpen, boolean quickPhraseOpen,
+                                            boolean messageMenuOpen, boolean playerCardOpen,
+                                            boolean imagePreviewOpen) {
+        return emojiOpen || quickPhraseOpen || messageMenuOpen || playerCardOpen || imagePreviewOpen;
+    }
+
     /**
      * Paints the hover tooltip. {@code suppress} is true while an overlay owns
      * the pointer, which fades the tooltip out instead of freezing it visible.

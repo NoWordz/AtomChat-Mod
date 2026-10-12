@@ -132,8 +132,8 @@ class SpringAnimTest {
         }
         assertEquals(0.0F, UiSpring.messageEase(0.0F), 1e-4F, "curve starts at 0");
         assertEquals(1.0F, UiSpring.messageEase(1.0F), 1e-4F, "curve lands exactly on 1");
-        assertTrue(peak > 1.0F && peak <= 1.05F,
-                "message entrance overshoot must be at most 5%, got " + (100 * (peak - 1)) + "%");
+        assertTrue(peak >= 1.085F && peak <= 1.095F,
+                "shared message and reaction entrance overshoot must be about 9%, got " + (100 * (peak - 1)) + "%");
     }
 
     /**

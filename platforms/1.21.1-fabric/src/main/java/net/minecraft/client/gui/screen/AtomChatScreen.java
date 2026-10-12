@@ -2316,9 +2316,10 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
             drawChatPageBody(canvas, layout, mouseX, mouseY, chatPageViewFor(topNav()));
 
             messageListView.drawReactionHover(canvas, toVirtualX(mouseX), toVirtualY(mouseY),
-                    !emojiPanel.isOpen() && !quickPhrasePanel.isOpen()
-                            && !contextMenu.hasMessageMenu() && !contextMenu.hasPlayerCardMenu()
-                            && !imagePreview.isActive());
+                    com.atom.chat.ui.ReactionChips.tooltipSuppressed(
+                            emojiPanel.isOpen(), quickPhrasePanel.isOpen(),
+                            contextMenu.hasMessageMenu(), contextMenu.hasPlayerCardMenu(),
+                            imagePreview.isActive()));
             emojiPanel.render(canvas, layout, toVirtualX(mouseX), toVirtualY(mouseY), frameDt);
             quickPhrasePanel.render(canvas, layout, toVirtualX(mouseX), toVirtualY(mouseY), frameDt);
             contextMenu.draw(canvas, toVirtualX(mouseX), toVirtualY(mouseY));
@@ -3807,6 +3808,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
                         reactionTarget = menuBefore;
                         closePhrasePanel();
                         emojiPanel.openReaction();
+                        com.atom.chat.audio.FeedbackSoundController.play(com.atom.chat.audio.FeedbackCue.BUTTON);
                     } else {
                         saveImage(menuBefore);
                         com.atom.chat.audio.FeedbackSoundController.play(com.atom.chat.audio.FeedbackCue.BUTTON);
@@ -3828,7 +3830,10 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
                 return true;
             }
 
-            if (button == 0 && messageListView.clickReaction(mx, my)) return true;
+            if (button == 0 && messageListView.clickReaction(mx, my)) {
+                com.atom.chat.audio.FeedbackSoundController.play(com.atom.chat.audio.FeedbackCue.BUTTON);
+                return true;
+            }
 
             // Button row: image / emoji / send share one row and one size,
             // geometry comes from UiLayout so hits can never drift from the drawing.

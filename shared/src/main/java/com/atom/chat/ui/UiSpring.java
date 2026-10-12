@@ -44,12 +44,11 @@ public final class UiSpring {
     public static final float PANEL_DAMPING_RATIO = 1.0F;
 
     /**
-     * Overshoot constant of the message-entrance ease. Standard easeOutBack
-     * (1.70158) peaks at ~10%, which is a bounce for a content reveal; the
-     * peak overshoot of the curve is (4/27)*c1^3/(c1+1)^2, and c1 1.15 lands
-     * at ~4.9% — inside the "restrained, at most 5%" budget.
+     * Overshoot constant shared by message entrances and reaction chip pops.
+     * The curve's peak overshoot is (4/27)*c1^3/(c1+1)^2; c1 1.6 gives
+     * about 9%, making the bounce visible while both entrances settle at 1.
      */
-    public static final float MESSAGE_EASE_C1 = 1.15F;
+    public static final float MESSAGE_EASE_C1 = 1.6F;
 
     private UiSpring() {
     }

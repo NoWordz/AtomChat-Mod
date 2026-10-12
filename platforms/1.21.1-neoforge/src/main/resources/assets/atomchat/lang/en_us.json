@@ -1,4 +1,7 @@
 {
+  "atomchat.input.image_too_large": "Image exceeds the 16 MiB file limit. Choose a smaller image.",
+  "atomchat.input.image_too_many_pixels": "Image exceeds 32 million pixels. Reduce its dimensions.",
+  "atomchat.input.image_invalid": "Invalid or incomplete image. Use PNG, JPEG, GIF, WebP or BMP.",
   "atomchat.screen.title": "AtomChat",
   "atomchat.channel.world": "Public",
   "atomchat.conversation.world": "Public",
@@ -231,7 +234,7 @@
   "atomchat.config.packs": "Offer emotes and phrases",
   "atomchat.config.on": "on",
   "atomchat.config.off": "off",
-  "atomchat.config.max_file_kb": "Max file (KB)",
+  "atomchat.config.max_file_kb": "Max file (KiB, up to 16384 / 16 MiB)",
   "atomchat.config.max_total_mb": "Media store (MB)",
   "atomchat.config.max_avatar_mb": "Avatar store (MB)",
   "atomchat.config.retention_days": "Keep days (0 = forever)",

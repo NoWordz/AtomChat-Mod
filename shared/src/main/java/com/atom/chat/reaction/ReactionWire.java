@@ -6,7 +6,9 @@ import java.util.*;
 /** Bounded optional-channel protocol. Player identity always comes from the connection. */
 public final class ReactionWire {
     public static final int MAX_BYTES = 262144;
-    public static final int MAX_KINDS = 20;
+    public static final int MAX_KINDS = 5;
+    /** Older companions can send up to twenty kinds; the current UI retains five. */
+    private static final int MAX_WIRE_KINDS = 20;
     public static final int MAX_MEMBERS = 256;
     public record Member(UUID uuid, String name) {}
     public record Entry(String emoji, List<Member> members) {
@@ -73,7 +75,7 @@ public final class ReactionWire {
             if (kind == 0) result = new Receipt(uuid(in), uuid(in));
             else if (kind == 1) {
                 UUID id = uuid(in); long revision = in.readLong(); int count = in.readUnsignedByte();
-                if (revision < 0 || count > MAX_KINDS) throw new IOException("reaction_snapshot_limit");
+                if (revision < 0 || count > MAX_WIRE_KINDS) throw new IOException("reaction_snapshot_limit");
                 List<Entry> entries = new ArrayList<>(); Set<String> kinds = new HashSet<>();
                 for (int i = 0; i < count; i++) {
                     String emoji = text(in, 16); int members = in.readUnsignedShort();
@@ -85,7 +87,7 @@ public final class ReactionWire {
                         if (!seen.add(person)) throw new IOException("reaction_duplicate_member");
                         people.add(new Member(person, name));
                     }
-                    entries.add(new Entry(emoji, people));
+                    if (i < MAX_KINDS) entries.add(new Entry(emoji, people));
                 }
                 result = new Snapshot(id, revision, entries);
             } else if (kind == 2) result = new Rejection(text(in, 64));

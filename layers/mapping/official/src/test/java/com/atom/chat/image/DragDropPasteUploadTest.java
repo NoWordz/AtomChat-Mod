@@ -9,6 +9,7 @@ import org.junit.jupiter.api.io.TempDir;
 import org.lwjgl.system.MemoryUtil;
 
 import java.awt.datatransfer.DataFlavor;
+import java.awt.image.BufferedImage;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
@@ -19,6 +20,7 @@ import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import javax.imageio.ImageIO;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -214,7 +216,12 @@ class DragDropPasteUploadTest {
     }
 
     private Path file(String name) throws Exception {
-        return Files.createFile(tmp.resolve(name));
+        Path path = tmp.resolve(name);
+        if (name.endsWith(".png")) {
+            ImageIO.write(new BufferedImage(1, 1, BufferedImage.TYPE_INT_ARGB), "png", path.toFile());
+            return path;
+        }
+        return Files.createFile(path);
     }
 
     @Test

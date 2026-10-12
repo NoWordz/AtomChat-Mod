@@ -8,6 +8,8 @@ import com.atom.chat.net.MediaCompanionClient;
 import com.atom.chat.ui.ActionToast;
 import com.atom.chat.util.ImageFileNames;
 import com.atom.chat.util.ImageFiles;
+import java.io.IOException;
+import java.util.function.BooleanSupplier;
 import net.minecraft.client.MinecraftClient;
 
 import java.nio.file.Path;
@@ -103,6 +105,8 @@ public final class ImageUploadPipeline {
     private final Host host;
     private final ActionToast.Translator translator;
     private final Uploader imageUploader;
+    private final BooleanSupplier hostingEnabled;
+    private final Uploader hostedUploader;
     /**
      * The hop back to the render thread. The production value is
      * {@code host.client().execute(task)} — same handle, same null before
@@ -127,10 +131,18 @@ public final class ImageUploadPipeline {
      */
     ImageUploadPipeline(Host host, ActionToast.Translator translator, Uploader imageUploader,
                         Consumer<Runnable> renderHop) {
+        this(host, translator, imageUploader, renderHop,
+                MediaCompanionClient::hostingEnabled, MediaCompanionClient::uploadFile);
+    }
+
+    ImageUploadPipeline(Host host, ActionToast.Translator translator, Uploader imageUploader,
+                        Consumer<Runnable> renderHop, BooleanSupplier hostingEnabled, Uploader hostedUploader) {
         this.host = host;
         this.translator = translator;
         this.imageUploader = imageUploader;
         this.renderHop = renderHop;
+        this.hostingEnabled = hostingEnabled;
+        this.hostedUploader = hostedUploader;
     }
 
     /**
@@ -138,12 +150,28 @@ public final class ImageUploadPipeline {
      * picker and by Ctrl+V pastes.
      */
     public void uploadAndAppend(Path file) {
-        int[] size = ImageFiles.dimensions(file);
+        ImageBounds.Inspection inspection;
+        try {
+            inspection = ImageBounds.inspect(file);
+        } catch (IOException | SecurityException error) {
+            rejectImage("atomchat.input.image_invalid");
+            return;
+        }
+        String rejection = inspection.rejection();
+        if (rejection != null) {
+            rejectImage(switch (rejection) {
+                case "too_large" -> "atomchat.input.image_too_large";
+                case "too_many_pixels" -> "atomchat.input.image_too_many_pixels";
+                default -> "atomchat.input.image_invalid";
+            });
+            return;
+        }
+        int[] size = inspection.dimensions();
         imageUploading = true;
         // The server decides: when it hosts media, upload there first; any
         // failure (or a server without the companion) falls back to uguu.
-        if (MediaCompanionClient.hostingEnabled()) {
-            MediaCompanionClient.uploadFile(file,
+        if (hostingEnabled.getAsBoolean()) {
+            hostedUploader.upload(file,
                     url -> appendImageCode(url, file, size),
                     error -> {
                         AtomChat.LOGGER.warn(com.atom.chat.diagnostics.AtomChatLog.message("resource", "Server media upload failed ({}), falling back to uguu"), error);
@@ -155,6 +183,14 @@ public final class ImageUploadPipeline {
             }
             uploadToUguu(file, size);
         }
+    }
+
+    private void rejectImage(String key) {
+        renderHop.accept(() -> {
+            imageUploading = false;
+            showTransientHint(translator.text(key));
+            host.toast(key, false);
+        });
     }
 
     private void uploadToUguu(Path file, int[] size) {

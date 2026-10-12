@@ -75,7 +75,12 @@ public class AtomChatServerConfig {
     }
 
     public int maxFileBytes() {
-        return Math.max(1, maxFileKb) * 1024;
+        return Math.min(16384, Math.max(1, maxFileKb)) * 1024;
+    }
+
+    /** Normalize legacy file settings before persisting and advertising them to the UI. */
+    void normalizeFileLimit() {
+        maxFileKb = maxFileBytes() / 1024;
     }
 
     public long maxTotalBytes() {
@@ -113,6 +118,7 @@ public class AtomChatServerConfig {
                     // unknown keys, so without this a new option could never be
                     // switched on by editing the file. Existing values survive
                     // the round trip.
+                    config.normalizeFileLimit();
                     save(config);
                     return config;
                 }

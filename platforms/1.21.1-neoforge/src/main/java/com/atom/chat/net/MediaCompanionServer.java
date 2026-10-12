@@ -171,11 +171,12 @@ public final class MediaCompanionServer {
     }
 
     private static void store(ServerPlayer player, UUID uploadId, byte[] content) {
-        String ext = MediaIds.extensionOf(content);
-        if (ext == null) {
-            result(player, uploadId, "", "unsupported");
+        String rejection = com.atom.chat.image.ImageBounds.rejection(content);
+        if (rejection != null) {
+            result(player, uploadId, "", rejection);
             return;
         }
+        String ext = MediaIds.extensionOf(content);
         String mediaId = MediaIds.idFor(content, ext);
         try {
             Path dir = mediaDir();

@@ -26,6 +26,8 @@ public final class ReactionLedger {
 
     private final LinkedHashMap<UUID, Message> byKey = new LinkedHashMap<>();
     private final WeakHashMap<Object, Window> windows = new WeakHashMap<>();
+    /** Session-wide versions stay monotonic when an evicted message key returns. */
+    private long revisionSequence;
 
     public String apply(UUID player, Object connection, String name, ReactionWire.Action action, long now) {
         Window window = windows.get(connection);
@@ -33,7 +35,12 @@ public final class ReactionLedger {
         windows.put(connection, new Window(window.started(), window.count() + 1));
         if (window.count() >= 8) return "rate_limited";
         if (!ReactionEmoji.allowed(action.emoji())) return "invalid_emoji";
-        Message message = byKey.computeIfAbsent(action.id(), ignored -> new Message());
+        Message message = byKey.computeIfAbsent(action.id(), ignored -> {
+            Message created = new Message();
+            // An empty snapshot must also supersede a client's previous generation.
+            created.revision = ++revisionSequence;
+            return created;
+        });
         while (byKey.size() > MAX_MESSAGES) {
             var oldest = byKey.entrySet().iterator();
             oldest.next();
@@ -55,7 +62,7 @@ public final class ReactionLedger {
             if (people == null || people.remove(player) == null) return "";
             if (people.isEmpty()) message.entries.remove(action.emoji());
         }
-        message.revision++;
+        message.revision = ++revisionSequence;
         return "";
     }
 

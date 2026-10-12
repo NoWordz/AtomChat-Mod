@@ -1,4 +1,7 @@
 {
+  "atomchat.input.image_too_large": "图片超过 16 MiB 文件上限，请选择更小的图片。",
+  "atomchat.input.image_too_many_pixels": "图片超过 3200 万像素，请缩小图片尺寸。",
+  "atomchat.input.image_invalid": "图片无效或不完整，请使用 PNG、JPEG、GIF、WebP 或 BMP。",
   "atomchat.screen.title": "AtomChat",
   "atomchat.channel.world": "公屏",
   "atomchat.conversation.world": "公屏",
@@ -231,7 +234,7 @@
   "atomchat.config.packs": "下发本服内容",
   "atomchat.config.on": "开",
   "atomchat.config.off": "关",
-  "atomchat.config.max_file_kb": "单文件上限（KB）",
+  "atomchat.config.max_file_kb": "单文件上限（KiB，最高 16384 / 16 MiB）",
   "atomchat.config.max_total_mb": "媒体库上限（MB）",
   "atomchat.config.max_avatar_mb": "头像库上限（MB）",
   "atomchat.config.retention_days": "保留天数（0 = 永久）",
