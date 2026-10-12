@@ -89,6 +89,7 @@ public final class ContextMenuController<M> {
 
     /** What the screen hands over: labels, the online test, the panel and the sinks. */
     public interface Host {
+        default boolean canReact(Object row) { return false; }
         /** D7: the language lookup for a context-menu label key. */
         String label(String key);
 
@@ -242,8 +243,14 @@ public final class ContextMenuController<M> {
      * The menu's box for a mode and an image-row decision — the one geometry the
      * drawing and both hit tests measure with.
      */
+    private int menuRows(ContextMenuMode forMode, boolean imageMessage) {
+        Subject<M> shown = subject != null ? subject : lastSubject;
+        return rows(forMode, imageMessage) + (forMode == ContextMenuMode.BUBBLE && shown != null
+                && host.canReact(shown.row()) ? 1 : 0);
+    }
+
     private Bounds bounds(ContextMenuMode forMode, boolean imageMessage) {
-        int count = rows(forMode, imageMessage);
+        int count = menuRows(forMode, imageMessage);
         float menuW = UiTokens.MENU_W;
         float menuH = rowHeight() * count;
         UiLayout.Rect panel = host.panelRect();
@@ -269,7 +276,7 @@ public final class ContextMenuController<M> {
             return -1;
         }
         Bounds b = bounds(mode, imageRow(mode, subject));
-        if (vmx < b.x() || vmx > b.x() + b.w() || vmy < b.y() || vmy > b.y() + b.h()) {
+        if (vmx < b.x() || vmx >= b.x() + b.w() || vmy < b.y() || vmy >= b.y() + b.h()) {
             return -1;
         }
         return (int) ((vmy - b.y()) / rowHeight());
@@ -285,7 +292,7 @@ public final class ContextMenuController<M> {
             return -1;
         }
         Bounds b = bounds(ContextMenuMode.PLAYER_CARD, false);
-        if (vmx < b.x() || vmx > b.x() + b.w() || vmy < b.y() || vmy > b.y() + b.h()) {
+        if (vmx < b.x() || vmx >= b.x() + b.w() || vmy < b.y() || vmy >= b.y() + b.h()) {
             return -1;
         }
         return (int) ((vmy - b.y()) / rowHeight());
@@ -321,7 +328,7 @@ public final class ContextMenuController<M> {
         float menuW = b.w();
         float menuH = b.h();
         float rowH = rowHeight();
-        int count = rows(shownMode, imageMessage);
+        int count = menuRows(shownMode, imageMessage);
         for (int row = 0; row < count; row++) {
             float rowY = menuY + row * rowH;
             boolean overRow = vmx >= menuX && vmx <= menuX + menuW
@@ -354,7 +361,10 @@ public final class ContextMenuController<M> {
                     MenuPopup.drawRowWash(canvas, menuX, rowY, menuW, rowH, hov);
                     String label;
                     Path icon;
-                    if (playerMenu) {
+                    if (shownMode == ContextMenuMode.BUBBLE && row == rows(shownMode, imageMessage)) {
+                        label = host.label("atomchat.context.react");
+                        icon = DrawPrimitives.ICON_EMOJI_PATH;
+                    } else if (playerMenu) {
                         label = playerCardContextLabel(row);
                         icon = playerCardContextIcon(row);
                     } else if (avatarMenu) {

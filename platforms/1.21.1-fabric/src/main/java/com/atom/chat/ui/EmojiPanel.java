@@ -74,24 +74,7 @@ public final class EmojiPanel {
             "atomchat.emoji.tab.emote"
     };
 
-    private static final String[] EMOJIS = {
-            "😀", "😃", "😄", "😁", "😆", "😅", "🤣", "😂",
-            "🙂", "😉", "😊", "😇", "🥰", "😍", "🤩", "😘",
-            "😋", "😛", "😜", "🤪", "😎", "🤗", "🤔", "😐",
-            "😢", "😭", "😤", "😡", "🥺", "😴", "😷", "🤒",
-            "🐱", "🐶", "🐼", "🐨", "🐰", "🦊", "🐸", "🐵",
-            "🐭", "🐹", "🐮", "🦁", "🐯", "🐻", "🐧", "🐤",
-            "🐴", "🦄", "🐝", "🐞", "🦋", "🐙", "🦀", "🐠",
-            "🐷", "🐖",
-            "❤️", "🧡", "💛", "💚", "💙", "💜", "🖤", "💔",
-            "💕", "💖", "💗", "💘", "💝", "💟", "❣️", "💌",
-            "👍", "👎", "👏", "🙌", "💪", "🤝", "👋", "✌️",
-            "🎮", "🎯", "🎨", "🎵", "🎶", "🎤", "🎧", "🎼",
-            "⭐", "🌟", "🔥", "💧", "🌈", "❄️", "🎉", "🎊",
-            "🍕", "🍔", "🌮", "🍩", "🍪", "🎂", "☕", "🍺",
-            "⬆️", "⬇️", "✅", "❌", "❓", "❗", "💤", "💡",
-            "💀", "🗿", "🤡", "👀", "💯", "💢", "💬", "💭",
-    };
+    private static final String[] EMOJIS = com.atom.chat.reaction.ReactionEmoji.ALL.toArray(new String[0]);
 
     private static final String[] KAOMOJI = {
             "(｡•̀ᴗ-)✧", "(๑˃̵ᴗ˂̵)و", "(๑•̀ㅂ•́)و✧", "(◍•ᴗ•◍)",
@@ -104,6 +87,12 @@ public final class EmojiPanel {
             "(∪.∪ )...zzz",
     };
 
+    private boolean reactionMode;
+    public void openReaction() {
+        reactionMode = true; open = true; tab = 0; scroll = 0; tabAnimFrom = -1;
+        tabIndicatorAnim.animateTo(0, 0.0F); tabContentAnim.animateTo(0, 1.0F);
+        cellHover.clear(); cellScale.clear(); pressedCellKey = -1;
+    }
     private final Host host;
     /** Local emote pack plus the joined server's read-only one; see {@link EmoteStore}. */
     private final EmoteStore emoteStore;
@@ -183,6 +172,7 @@ public final class EmojiPanel {
      * files dropped in by hand appear, and clears stale cell highlights.
      */
     public void toggle() {
+        reactionMode = false;
         open = !open;
         if (open) {
             refreshEmotes();
@@ -420,7 +410,8 @@ public final class EmojiPanel {
         tabIndicatorAnim.animateTo(UiMotion.TAB_MS, to);
     }
 
-    private static String[] tabLabels() {
+    private String[] tabLabels() {
+        if (reactionMode) return new String[]{Text.translatable(TAB_KEYS[0]).getString()};
         String[] labels = new String[TAB_KEYS.length];
         for (int i = 0; i < labels.length; i++) {
             labels[i] = Text.translatable(TAB_KEYS[i]).getString();

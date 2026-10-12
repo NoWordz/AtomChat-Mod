@@ -268,9 +268,14 @@ public final class MessageListView {
                 UiTokens.s(8), Color.makeARGB((int) (60.0F * t), 255, 255, 255));
     }
 
+    private final com.atom.chat.ui.ReactionChips reactionChips = new com.atom.chat.ui.ReactionChips();
+    public boolean clickReaction(float x, float y) { return reactionChips.click(x, y); }
+    public void drawReactionHover(Canvas canvas, float x, float y, boolean suppress) { reactionChips.hover(canvas, x, y, suppress); }
+
     public void draw(Canvas canvas, float x, float y, float width, float height,
                      List<ChatMessage> messages, ScrollController scroll) {
         hits.clear();
+        reactionChips.begin(x, y, width, height);
         clickableSpans.clear();
         currentMessages = messages;
         // Drop an expired jump highlight even when its message left the list;
@@ -364,6 +369,8 @@ public final class MessageListView {
                     drawJumpHighlight(canvas, msg, x, cursorY, width, h);
                     int spanStart = clickableSpans.size();
                     MessageHit hit = drawMessage(canvas, msg, x, cursorY, width, hits.size(), grouped);
+                    reactionChips.draw(canvas, msg, msg.isOwn() ? hit.bubbleX()+hit.bubbleWidth() : hit.bubbleX(), hit.bubbleBottom(),
+                            Math.max(UiTokens.REACTION_MIN_WIDTH, width - UiTokens.BUBBLE_RETRACT), scroll.getScrollY());
                     // Clickable spans are recorded in content space (like hits
                     // before conversion); convert them to screen space so later
                     // hit-testing can compare them directly against the mouse.
@@ -1454,6 +1461,11 @@ public final class MessageListView {
      * A grouped continuation omits the name/avatar band.
      */
     private float messageHeight(ChatMessage msg, float maxWidth, boolean grouped) {
+        return messageBodyHeight(msg, maxWidth, grouped)
+                + reactionChips.extraHeight(msg, Math.max(UiTokens.REACTION_MIN_WIDTH, maxWidth - UiTokens.BUBBLE_RETRACT));
+    }
+
+    private float messageBodyHeight(ChatMessage msg, float maxWidth, boolean grouped) {
         if (msg.isSystem()) {
             Font font = FontManager.font(UiTokens.FONT_QUOTE);
             float lineHeight = SkiaFontRenderer.getHeight(font);

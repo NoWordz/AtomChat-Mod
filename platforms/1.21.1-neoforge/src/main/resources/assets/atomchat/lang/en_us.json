@@ -292,5 +292,11 @@
   "atomchat.settings.experimental.fun.desc": "Emoji effects for love, birthday and New Year phrases in new messages",
   "atomchat.settings.group.chat.advanced": "Advanced",
   "atomchat.profile.unsynced": "Profile not synced; others still see the last saved profile",
-  "atomchat.profile.unsynced.badge": "Not synced"
+  "atomchat.profile.unsynced.badge": "Not synced",
+  "atomchat.context.react": "React",
+  "atomchat.reaction.rate_limited": "Too many reactions; try again shortly",
+  "atomchat.reaction.per_player_limit": "You can add up to 8 different emoji per message",
+  "atomchat.reaction.per_message_limit": "A message can have up to 20 different emoji",
+  "atomchat.reaction.participant_limit": "This reaction has reached its participant limit",
+  "atomchat.reaction.invalid_emoji": "This emoji is not supported"
 }

@@ -49,6 +49,7 @@ public class AtomChatClient implements ClientModInitializer {
         ImageLoader.get().init(CacheDirs.imageCacheDir());
         com.atom.chat.net.AvatarCompanionClient.init();
         com.atom.chat.net.PokeCompanionClient.init();
+        com.atom.chat.net.ReactionCompanionClient.init();
         // Test command receiver: turns a simulated event into the same reaction
         // the real one produces (/atomchat test on the server side).
         com.atom.chat.net.TestCompanionClient.init();
@@ -95,6 +96,7 @@ public class AtomChatClient implements ClientModInitializer {
             com.atom.chat.chat.OwnIdentity.reset();
             com.atom.chat.net.MediaCompanionClient.onDisconnect();
             com.atom.chat.net.ProfileCompanionClient.onLeave();
+            com.atom.chat.reaction.ReactionClient.reset();
             com.atom.chat.net.PokeCompanionClient.setHandler(null);
         com.atom.chat.net.PackSyncClient.onDisconnect();
         com.atom.chat.net.ConfigScreenClient.onDisconnect();

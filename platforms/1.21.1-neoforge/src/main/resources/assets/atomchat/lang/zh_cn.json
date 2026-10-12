@@ -292,5 +292,11 @@
   "atomchat.settings.experimental.fun.desc": "新消息中的爱意、生日与新年祝福触发 emoji 特效",
   "atomchat.settings.group.chat.advanced": "高级",
   "atomchat.profile.unsynced": "资料未同步；其他玩家仍显示上次保存的资料",
-  "atomchat.profile.unsynced.badge": "资料未同步"
+  "atomchat.profile.unsynced.badge": "资料未同步",
+  "atomchat.context.react": "反应",
+  "atomchat.reaction.rate_limited": "操作太快，请稍后再试",
+  "atomchat.reaction.per_player_limit": "每人每条消息最多添加 8 种表情",
+  "atomchat.reaction.per_message_limit": "每条消息最多显示 20 种表情",
+  "atomchat.reaction.participant_limit": "该表情的参与人数已达上限",
+  "atomchat.reaction.invalid_emoji": "不支持这个表情"
 }

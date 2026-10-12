@@ -42,6 +42,7 @@ public class AtomChat {
             com.atom.chat.net.ProfilePayloads.register();
             // Poke companion: a remote poke, rate limited server-side.
             com.atom.chat.net.PokePayloads.register();
+        com.atom.chat.net.ReactionPayloads.register();
             // Media companion: server-hosted chat images / GIFs, same dual
             // entrypoint pattern and master hosting switch as the avatar side.
             com.atom.chat.net.MediaPayloads.register();

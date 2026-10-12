@@ -810,6 +810,17 @@ public final class UiTokens {
                 (rgb >>> 16) & 0xFF, (rgb >>> 8) & 0xFF, rgb & 0xFF);
     }
 
+    // Message reaction chips share their measurement, paint and hit geometry.
+    public static final float REACTION_CHIP_H = s(24);
+    public static final float REACTION_GAP = s(4);
+    public static final float REACTION_MIN_WIDTH = s(48);
+    public static final float REACTION_COUNT_PAD = s(34);
+    public static final float REACTION_EMOJI_CENTER = s(13);
+    public static final float REACTION_COUNT_X = s(26);
+    public static final float REACTION_TOOLTIP_PAD = s(16);
+    public static final float REACTION_TOOLTIP_INSET = s(8);
+    public static final float REACTION_RADIUS = 7;
+
     private UiTokens() {
     }
 }

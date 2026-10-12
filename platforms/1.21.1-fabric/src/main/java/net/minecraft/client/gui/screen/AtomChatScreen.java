@@ -662,6 +662,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
             dialogBridge.refocusWindow();
         }
     });
+    private ChatMessage reactionTarget;
     private final EmojiPanel emojiPanel = new EmojiPanel(emojiWiring.panelHost());
 
     /**
@@ -1096,6 +1097,9 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
      */
     private final ContextMenuController<ChatMessage> contextMenu =
             new ContextMenuController<>(new ContextMenuController.Host() {
+        @Override public boolean canReact(Object row) {
+            return row instanceof ChatMessage message && com.atom.chat.reaction.ReactionClient.available(message);
+        }
         @Override
         public String label(String key) {
             return tr(key);
@@ -1790,6 +1794,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         scrollSync.worldScroll().reset();
         resetHistoryWindows();
         contextMenu.resetTransient();
+        reactionTarget = null;
         emojiPanel.resetTransient();
         endPhraseEdit(false);
         quickPhrasePanel.resetTransient();
@@ -2202,6 +2207,8 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         // the domain only decides, the frame order is this method's.
         avatarWiring.settlePendingAvatarClick(nowMs, closing);
         syncScrollMotion();
+        String reactionFailure = com.atom.chat.reaction.ReactionClient.takeError();
+        if (reactionFailure != null) feedback("atomchat.reaction." + reactionFailure, false);
         emojiPanel.update(frameDt);
         quickPhrasePanel.update(frameDt);
         UiLayout layout = layout();
@@ -2308,6 +2315,10 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         if (!navFrame.movingHidden()) {
             drawChatPageBody(canvas, layout, mouseX, mouseY, chatPageViewFor(topNav()));
 
+            messageListView.drawReactionHover(canvas, toVirtualX(mouseX), toVirtualY(mouseY),
+                    !emojiPanel.isOpen() && !quickPhrasePanel.isOpen()
+                            && !contextMenu.hasMessageMenu() && !contextMenu.hasPlayerCardMenu()
+                            && !imagePreview.isActive());
             emojiPanel.render(canvas, layout, toVirtualX(mouseX), toVirtualY(mouseY), frameDt);
             quickPhrasePanel.render(canvas, layout, toVirtualX(mouseX), toVirtualY(mouseY), frameDt);
             contextMenu.draw(canvas, toVirtualX(mouseX), toVirtualY(mouseY));
@@ -3721,6 +3732,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
                 primitives.setButtonHeld(1);
                 composer.setFocused(true);
                 closePhrasePanel();
+                reactionTarget = null;
                 emojiPanel.toggle();
                 com.atom.chat.audio.FeedbackSoundController.play(com.atom.chat.audio.FeedbackCue.BUTTON);
                 return true;
@@ -3746,12 +3758,16 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
                 if (emojiPanel.overPanel(layout, mx, my)) {
                     String inserted = emojiPanel.click(layout, mx, my);
                     if (inserted != null && !inserted.isEmpty()) {
-                        composer.append(inserted);
+                        if (reactionTarget != null) {
+                            com.atom.chat.reaction.ReactionClient.toggle(reactionTarget, inserted);
+                            emojiPanel.close(); reactionTarget = null;
+                        } else composer.append(inserted);
                         com.atom.chat.audio.FeedbackSoundController.play(com.atom.chat.audio.FeedbackCue.BUTTON);
                     }
                     return true;
                 }
                 emojiPanel.close();
+                reactionTarget = null;
             }
 
             // Quick-phrase panel: every action is settled by the screen so an
@@ -3785,6 +3801,12 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
                         composer.setFocused(true);
                         setFocused(chatField);
                         chatField.setFocused(true);
+                    } else if (row == ContextMenuController.rows(ContextMenuController.ContextMenuMode.BUBBLE,
+                            Cicodes.extractImageUrl(menuBefore.getRawText()) != null)
+                            && com.atom.chat.reaction.ReactionClient.available(menuBefore)) {
+                        reactionTarget = menuBefore;
+                        closePhrasePanel();
+                        emojiPanel.openReaction();
                     } else {
                         saveImage(menuBefore);
                         com.atom.chat.audio.FeedbackSoundController.play(com.atom.chat.audio.FeedbackCue.BUTTON);
@@ -3805,6 +3827,8 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
                 com.atom.chat.audio.FeedbackSoundController.play(com.atom.chat.audio.FeedbackCue.BUTTON);
                 return true;
             }
+
+            if (button == 0 && messageListView.clickReaction(mx, my)) return true;
 
             // Button row: image / emoji / send share one row and one size,
             // geometry comes from UiLayout so hits can never drift from the drawing.

@@ -13,7 +13,7 @@
 分组是编译期事实：甲组少一个类型，那个目标当场编不过。判据用简单名的词边界匹配
 （覆盖 import 全限定名与同包简单名两种写法），偏保守 —— 注释里的提及也算，宁可多列。
 
-当前：甲组 **123** 个，乙组 **62** 个。
+当前：甲组 **123** 个，乙组 **71** 个。
 
 ## 甲：共用代码引用了的（接缝）
 
@@ -125,6 +125,9 @@
 | 1.20.1-forge | `com.atom.chat.net.ProfileCompanionClient` |
 | 1.20.1-forge | `com.atom.chat.net.ProfileCompanionServer` |
 | 1.20.1-forge | `com.atom.chat.net.ProfilePayloads` |
+| 1.20.1-forge | `com.atom.chat.net.ReactionCompanionClient` |
+| 1.20.1-forge | `com.atom.chat.net.ReactionCompanionServer` |
+| 1.20.1-forge | `com.atom.chat.net.ReactionPayloads` |
 | 1.20.1-forge | `com.atom.chat.net.TestCompanionClient` |
 | 1.20.1-forge | `com.atom.chat.net.TestCompanionServer` |
 | 1.20.1-forge | `com.atom.chat.net.TestPayloads` |
@@ -145,6 +148,9 @@
 | 1.21.1-fabric | `com.atom.chat.net.ProfileCompanionClient` |
 | 1.21.1-fabric | `com.atom.chat.net.ProfileCompanionServer` |
 | 1.21.1-fabric | `com.atom.chat.net.ProfilePayloads` |
+| 1.21.1-fabric | `com.atom.chat.net.ReactionCompanionClient` |
+| 1.21.1-fabric | `com.atom.chat.net.ReactionCompanionServer` |
+| 1.21.1-fabric | `com.atom.chat.net.ReactionPayloads` |
 | 1.21.1-fabric | `com.atom.chat.net.TestCompanionClient` |
 | 1.21.1-fabric | `com.atom.chat.net.TestCompanionServer` |
 | 1.21.1-fabric | `com.atom.chat.net.TestPayloads` |
@@ -168,6 +174,9 @@
 | 1.21.1-neoforge | `com.atom.chat.net.ProfileCompanionClient` |
 | 1.21.1-neoforge | `com.atom.chat.net.ProfileCompanionServer` |
 | 1.21.1-neoforge | `com.atom.chat.net.ProfilePayloads` |
+| 1.21.1-neoforge | `com.atom.chat.net.ReactionCompanionClient` |
+| 1.21.1-neoforge | `com.atom.chat.net.ReactionCompanionServer` |
+| 1.21.1-neoforge | `com.atom.chat.net.ReactionPayloads` |
 | 1.21.1-neoforge | `com.atom.chat.net.TestCompanionClient` |
 | 1.21.1-neoforge | `com.atom.chat.net.TestCompanionServer` |
 | 1.21.1-neoforge | `com.atom.chat.net.TestPayloads` |

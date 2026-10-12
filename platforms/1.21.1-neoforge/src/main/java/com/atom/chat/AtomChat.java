@@ -64,6 +64,7 @@ public class AtomChat {
         com.atom.chat.net.ProfilePayloads.register(event);
         // Poke companion: a remote poke, rate limited server-side.
         com.atom.chat.net.PokePayloads.register(event);
+        com.atom.chat.net.ReactionPayloads.register(event);
         // Simulation harness for a single-player session (/atomchat test).
         com.atom.chat.net.TestPayloads.register(event);
         // Server pack distribution (0.2.9): emotes, phrases and the server

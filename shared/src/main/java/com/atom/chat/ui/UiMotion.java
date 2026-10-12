@@ -88,6 +88,27 @@ public final class UiMotion {
     /** Input bar growing/shrinking by one line. */
     public static final long INPUT_GROW_MS = 110;
     /**
+     * Reaction chip enter/exit. One duration covers both halves: the entrance
+     * pops the capsule and lets the glyph trail behind it, the exit fades the
+     * whole chip out and then releases its layout slot (see
+     * {@code ReactionChipAnim}). Longer than {@link #POPUP_MS} because a chip
+     * is a content change inside a row, closer to a message entrance than to a
+     * panel pop.
+     */
+    public static final long REACTION_CHIP_MS = 160;
+    /** Reaction count bump after the number changes. */
+    public static final long REACTION_PULSE_MS = 120;
+    /** Extra delay before the glyph starts its own pop, so the capsule leads. */
+    public static final long REACTION_SYMBOL_DELAY_MS = 40;
+    /**
+     * How long after a chip's state arrives it still counts as "fresh" and
+     * plays its entrance. Anything already on screen when it scrolls into view
+     * (a reload, a reconnect, scrolling back through history) is older than
+     * this and paints immediately — the same never-replay rule the message
+     * entrance uses.
+     */
+    public static final long REACTION_FRESH_MS = 400;
+    /**
      * Toggle-switch knob travel. Sits between hover (90) and tab push (200):
      * this is a direct-manipulation control, so it has to read as a slide
      * rather than a jump while still landing before the finger lifts.
