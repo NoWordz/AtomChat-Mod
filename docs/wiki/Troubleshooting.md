@@ -45,16 +45,37 @@ On Linux the panel opens and text is fine, but the emoji panel's emoji and part 
 
 The bundled `bundled.otf` is a **Noto Sans SC subset** (about 7,500 glyphs): it covers common Han and kana, but **no emoji, no halfwidth katakana, no Thai, no Hangul and only part of the symbol ranges**. Those gaps are filled from **system fonts**: Windows ships Segoe UI Emoji and YaHei, so it looks correct; a slim Linux (including the default WSL image) often has only DejaVu and Ubuntu, which do not cover them. Measured on such a system: 88 of the emoji panel's 122 emoji codepoints were boxes, and about 10 kaomoji symbols (`｡ ﾉ ￢ ゛ ゜ ー ㅂ ︵ ฅ ๑`) had no font at all.
 
-Install two fonts (Ubuntu / Debian):
+Install three fonts (Ubuntu / Debian):
 
 ```
-sudo apt install fonts-noto-cjk fonts-noto-color-emoji
+sudo apt install fonts-noto-cjk fonts-noto-color-emoji fonts-tlwg-garuda-ttf
 fc-cache -f
 ```
 
-`fonts-noto-cjk` covers Han/kana (measured: kaomoji boxes drop from 10 to 2) and `fonts-noto-color-emoji` covers color emoji (measured: emoji boxes drop from 88 to 0). Both are standard Ubuntu archive packages; restart the game afterwards. The mod's glyph fallback picks them up automatically; without them the characters stay as boxes.
+- `fonts-noto-cjk` covers Han/kana — measured, kaomoji boxes drop from 10 to 2;
+- `fonts-noto-color-emoji` covers color emoji — measured, emoji boxes drop from 88 to 0;
+- `fonts-tlwg-garuda-ttf` covers Thai, including the remaining `ฅ` and `๑` characters. In this WSL offscreen check, missing codepoints across the 29 built-in kaomoji dropped to zero; the user also confirmed the missing glyphs were resolved in game.
 
-(WSL users: this is not a WSL fault — any slim Linux may lack these two fonts. A few symbols that remain boxes after installing — Thai `ฅ ๑` in the example above — have no coverage in any system font and cannot be shown yet.)
+All three are standard Ubuntu archive packages. The mod's glyph fallback picks them up automatically; without them the characters stay as boxes. **Exit the game completely and start it again** afterwards (returning to the main menu is not enough) so the new fonts are picked up.
+
+(WSL users: this is not a WSL fault — any slim Linux may lack these fonts.)
+
+## Very low frame rate under WSL / WSLg (OpenGL falling back to software rendering)
+
+When the game runs at a very low frame rate inside WSL (WSLg), confirm the renderer in the log first: search for `OpenGL renderer`, or look at the `gpu` line of the `AtomChat environment summary` block.
+
+- `llvmpipe` means **CPU software rendering**, a performance bottleneck to address first. This alone does not establish whether AtomChat adds any further overhead;
+- a renderer such as `D3D12 (Intel(R) UHD Graphics)` or `D3D12 (NVIDIA GeForce ...)` indicates the corresponding hardware backend. Frame rate still needs to be measured.
+
+To move WSLg off llvmpipe, set the environment variable `GALLIUM_DRIVER=d3d12` (Mesa's D3D12 backend) on **that instance** in the launcher. On a machine with several GPUs, pick the adapter with `MESA_D3D12_DEFAULT_ADAPTER_NAME` (for example `NVIDIA`, or the adapter's actual name). In Prism Launcher this goes under "Instance settings → Environment variables", one name and value per line — which avoids hand-editing `instance.cfg`:
+
+- [Prism Launcher environment variables](https://prismlauncher.org/wiki/help-pages/environment-variables/)
+- [WSLg GPU selection guide](https://github.com/microsoft/wslg/wiki/GPU-selection-in-WSLg)
+- [Upstream WSLg report on llvmpipe / D3D12 selection](https://github.com/microsoft/wslg/issues/1332)
+
+Note these variables only make sense for a WSL instance; do not set them on a normal Linux desktop. Whether they take effect is decided by **the renderer the game actually reports** — if it still says `llvmpipe`, it did not switch.
+
+Mouse capture failures and delayed click sounds need separate verification; the renderer name alone does not establish their cause. Correct GPU selection first and test again, then compare with AtomChat disabled if either symptom persists. [WSLg has an upstream mouse capture report](https://github.com/microsoft/wslg/issues/240), but that report does not prove the same cause applies to this machine.
 
 
 ## Turning on debug, and which lines to send

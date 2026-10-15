@@ -26,6 +26,13 @@
 
 ## 验证
 
+### WSL 环境排障（2026-10-15，继续使用 0.3.0-Preview）
+
+- 用户截图四个方框对应泰文 `๑`（U+0E51，2 处）和 `ฅ`（U+0E05，2 处）。WSL 已有 Noto CJK / Color Emoji，但没有覆盖这两个码位的字体；安装 `fonts-tlwg-garuda-ttf` 后，当前 Preview JAR 的真实 `fontFor` / `drawRuns` 离屏检查中，29 条内置颜文字缺失码位数由 2 降为 0（隔离字体配置对照复现原四框）。未改模组代码或 JAR。
+- 原游戏日志为 `llvmpipe` 软件渲染；独立 EGL 探针复现，并验证 D3D12 可用。Prism 实例 `Env` 原值不是有效 JSON，备份并修正序列化后重启实例，23:09 新游戏日志确认 `D3D12 (NVIDIA GeForce RTX 5060 Laptop GPU)` / OpenGL 4.6。
+- 用户已实机确认**音效延迟与颜文字缺字解决，Linux 可运行性验证目标达成**。帧率仅略有提升、仍不到 100 FPS，鼠标不锁定准星仍存在；两者未定因，本轮暂缓。日志确认音频引擎正常启动，不能据此判断音效延迟消失的单一原因。
+- 多模型团队：负责人直接排障和验收，Command Code GOAT / `deepseek/deepseek-v4.1-flash-fast` 经 ZCode 独立会话收集证据、修改双语排查文档；负责人复核并纠正文档过强归因和引用。用户已授权本轮文档本地提交；未推送、升版或更新 Linux JAR。详见 [WSL 验证记录](verification/2026-10-15-wsl.md)。
+
 ### 0.3.0 本轮本地验证（2026-10-15）
 
 - compileJava --no-daemon：Forge 1.20.1、Fabric 1.21.1、NeoForge 1.21.1 均成功。
@@ -43,7 +50,7 @@
 ## 待验收与限制
 
 - 反应入口与气泡贴纸观感**已由用户实机验收通过**。多人同步、私聊隔离、重连、延迟队列等更强场景尚未逐项实机覆盖。
-- 尚无游戏内 CPU/GPU 性能剖析数据；Skija 原生资源按 Windows x64 / Linux x64 分包。Linux x64 JAR 已在 WSL 成功加载 Skija 原生库并完成 16×16 CPU 光栅 PNG 冒烟；Linux / WSLg 游戏启动、主帧缓冲/GPU、文件选择、拖放与剪贴板仍待实机验收。**Linux 字体回退修复尚未在游戏内实机验收**：WSL 上系统只装 DejaVu/Ubuntu，需先 `apt install fonts-noto-cjk fonts-noto-color-emoji` 再重启游戏确认方框消失。
+- 尚无游戏内 CPU/GPU 耗时剖析与 FPS 对照数据；Skija 原生资源按 Windows x64 / Linux x64 分包。WSLg 游戏启动和独显选择已通过日志核实，颜文字及音效已由用户实机确认正常，当前 Preview 的 Linux 可运行性目标达成；性能和鼠标问题暂缓，文件选择、拖放与剪贴板仍待逐项实机验收。当前 WSL 已装 Noto CJK / Color Emoji 和 Garuda 泰文字体；正式 0.3.0 Linux JAR 尚未在该实例复验。
 - 小本本（延期）：悬停名单只显示前 6 人及剩余人数，未补完整列表。
 
 ## 续写与资料
