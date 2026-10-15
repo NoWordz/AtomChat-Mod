@@ -29,7 +29,7 @@
 ### 0.3.0 本轮本地验证（2026-10-15）
 
 - compileJava --no-daemon：Forge 1.20.1、Fabric 1.21.1、NeoForge 1.21.1 均成功。
-- 静态守卫：tools/gen_seams.py --check（甲 123 / 乙 71）与 tools/verify_targets.py 通过；三端六份中英语言 JSON、作者头像素材副本哈希与根版本 0.3.0 检查通过。
+- 静态守卫：tools/bare_scan.py（505 / 505）、tools/gen_seams.py --check（甲 123 / 乙 71）与 tools/verify_targets.py 通过；三端六份中英语言 JSON、作者头像素材副本哈希与根版本 0.3.0 检查通过。
 - NeoForge 1.21.1 Windows x64 发布 JAR 由 jar --no-daemon 生成；tools/verify_chat_assets.py 与 tools/verify_jars.py --platform windows-x64 均通过，产物只内嵌 Windows x64 native。
 - 已部署到日常实例“Mechanomania-航空学”；旧 Preview JAR 备份在 atomchat-backup/2026-10-15-0.3.0，实例 mods 目录现只有 atomchat-NeoForge-1.21.1-0.3.0.jar。SHA-256：e75c01af88665049b82c7a78cc775a87931f7c9c560952486547356f3f5da2a4。
 - 本轮未运行测试或启动游戏，头像间距、折叠动画点击与作者磁贴观感仍待实机验收；Forge/Fabric JAR 未在本轮打包或部署。

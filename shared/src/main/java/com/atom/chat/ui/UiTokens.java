@@ -657,6 +657,8 @@ public final class UiTokens {
 
     // Settings section rows (switch items, blocked players, about entries).
     public static final float SETTINGS_ROW_H = s(56);
+    /** About page row height for the paired author tiles. */
+    public static final float SETTINGS_AUTHOR_ROW_H = s(112);
     /**
      * Theme-preview row: title line up top, then the horizontally scrollable
      * mini-panel cards, then the theme name under each card.

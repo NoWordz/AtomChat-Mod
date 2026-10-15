@@ -537,7 +537,7 @@ public final class SettingsSectionPage {
             case SLIDER, COLOR -> UiTokens.SETTINGS_SLIDER_ROW_H;
             case THEMES -> UiTokens.SETTINGS_THEME_ROW_H;
             case HERO -> UiTokens.SETTINGS_HERO_H;
-            case AUTHORS -> s(112);
+            case AUTHORS -> UiTokens.SETTINGS_AUTHOR_ROW_H;
             default -> UiTokens.SETTINGS_ROW_H;
         };
     }
