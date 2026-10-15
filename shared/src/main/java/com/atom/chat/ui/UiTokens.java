@@ -688,6 +688,12 @@ public final class UiTokens {
     }
     /** Group heading inside a section (e.g. the blocked-players list title). */
     public static final float SETTINGS_LABEL_H = s(32);
+    public static final float SETTINGS_FOLD_CHEVRON_SIZE = s(7);
+    public static final float SETTINGS_FOLD_LIFT = s(4);
+    /** E33Chat's ordinary avatar hat is two units wider than the face. */
+    public static final float E33CHAT_HAT_OUTSET = s(1);
+    /** Profile reference: face 40, hat 46; multiply by the already-scaled face size. */
+    public static final float E33CHAT_PROFILE_HAT_OUTSET_RATIO = 3.0F / 40.0F;
     /** Glyph size for the "nothing here" empty state under a group heading. */
     public static final float SETTINGS_EMPTY_ICON = s(40);
     /** Avatar inside a blocked-player row. */

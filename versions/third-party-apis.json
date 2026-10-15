@@ -12,9 +12,9 @@
     "改这里要同时改各平台的 build.gradle（Fabric 用 include()，NeoForge/Forge 用 jarJar()）。"
   ],
   "io.github.humbleui": {
-    "artifact": "skija-shared / skija-windows-x64 / types",
+    "artifact": "skija-shared / skija-windows-x64 / skija-linux-x64 / types",
     "license": "Apache-2.0",
-    "why": "Skija：Skia 的 Java 绑定，整个界面由它矢量绘制；windows-x64 原生库一起嵌进 jar"
+    "why": "Skija：Skia 的 Java 绑定，整个界面由它矢量绘制；按操作系统分包，每个 jar 仅嵌入 windows-x64 或 linux-x64 的一份原生库"
   },
   "com.formdev.flatlaf": {
     "artifact": "flatlaf",

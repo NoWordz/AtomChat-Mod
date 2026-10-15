@@ -17,8 +17,8 @@ A client-side mod that replaces the vanilla chat screen with a vector-drawn phon
 - **Phone panel** — frosted-glass or wallpaper background, three bottom tabs (chat / profile / settings), slide and zoom page transitions, switchable globally.
 - **Bubbles and identity** — own messages right, others left; real player names with round skin avatars, quote capsules, @ highlights, flood grouping, history folding at 100 messages per batch.
 - **Image messages** — upload via picker, drag-and-drop or Ctrl+V; GIFs loop inside the bubble; left-click for a fullscreen preview, right-click to save the original.
-- **Private chat and notifications** — per-session drafts and scroll positions; banners for mentions, quotes and DMs with click-to-jump; double-click an avatar to poke.
-- **Appearance** — nine themes including two translucent ones, per-color adjustment with live preview, custom wallpaper / header / avatar, content scale slider.
+- **Private chat and notifications** — a foldable conversation list; per-session drafts and scroll positions; banners for mentions, quotes and DMs with click-to-jump; double-click an avatar to poke.
+- **Appearance** — nine themes including two translucent ones, per-color adjustment with live preview, custom wallpaper / header, selectable AtomChat or E33Chat player-avatar style, content scale slider.
 - **Feedback sounds** — button, send and panel-open feedback share a soft CC0 bubble source; notification and feedback sounds have separate switches and volumes.
 - **Experimental chat effects** — hearts, birthday cakes and fireworks appear inside the open chat panel for matching Chinese or English phrases, controlled in Chat and notifications → Advanced.
 - **Player profiles** — the server synchronizes signatures and cropped headers; hosted profile images are preserved per world, with later joins and reconnects supported.
@@ -32,17 +32,17 @@ A client-side mod that replaces the vanilla chat screen with a vector-drawn phon
 | NeoForge 1.21.1 | NeoForge 21.1+ |
 | Forge 1.20.1 | Forge 47+ |
 
-Java 21 for the 1.21.1 targets, Java 17 for Forge 1.20.1. **Windows x64 only** — the jar bundles just the Windows x64 Skija native. All three targets work client-side; install the same jar on the server for media hosting and profile synchronization.
+Java 21 for the 1.21.1 targets, Java 17 for Forge 1.20.1. **Windows x64 and Linux x64 have separate JARs.** Choose exactly one for your OS; Linux files contain `linux-x64` in the name. Each JAR bundles only its matching Skija native. Linux needs EGL/OpenGL libraries (Ubuntu/Debian: `sudo apt install libegl1 libgl1`). All three targets work client-side; install the same jar on the server for media hosting and profile synchronization.
 
 ## Configuration
 
-Client config lives at `config/atomchat/atomchat-client.json` and every option applies instantly. Common client keys: panelWidth, uiScale, contentScale, pageNavStyle (slide or zoom), animationEnabled, blurEnabled, notificationSoundEnabled, notifyVolume, feedbackSoundEnabled, feedbackVolume, funEffectsEnabled and debug. Local avatars, wallpapers and emotes are stored in the same folder.
+Client config lives at `config/atomchat/atomchat-client.json` and every option applies instantly. Common client keys: panelWidth, uiScale, contentScale, pageNavStyle (slide or zoom), avatarStyle (ATOMCHAT or E33CHAT), animationEnabled, blurEnabled, notificationSoundEnabled, notifyVolume, feedbackSoundEnabled, feedbackVolume, funEffectsEnabled and debug. Local avatars, wallpapers and emotes are stored in the same folder.
 
 Server policy lives in config/atomchat/atomchat-server.json, including hostingEnabled, retentionDays and maxFileKb. Durable profile data lives under the world save's atomchat/profiles/; maxProfileTotalMb sets its image capacity (default 64 MiB per world, configured in the file). Temporary chat-media expiry does not delete the durable copy; external-host links can still expire. All settings fold groups start expanded.
 
 ## Known limitations
 
-- Windows x64 only; the panel cannot start on Linux or macOS.
+- Linux x64 packaging is available; Linux/WSLg game startup and UI interactions still need in-game verification. macOS and ARM64 natives are not bundled.
 - Without the server mod, images fall back to a third-party host (roughly 3-hour expiry); files above `maxFileKb` are not uploaded.
 - Player identity parsing is best-effort — exotic nickname-plugin formats degrade to grey system messages.
 - The dedicated-server hosting path has only been tested against singleplayer and LAN hosts.

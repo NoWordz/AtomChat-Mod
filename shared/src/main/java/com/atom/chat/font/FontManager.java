@@ -47,9 +47,12 @@ public final class FontManager {
             AtomChat.LOGGER.warn(com.atom.chat.diagnostics.AtomChatLog.message("resource", "Failed to load bundled font, falling back to system font"), e);
         }
 
-        // System fallbacks (Windows/other).
+        // System fallbacks. Windows first (unchanged), then the CJK fonts Linux
+        // distributions ship, so a dev run without the bundled asset still gets
+        // a readable face instead of the process default.
         usingFallbackTypeface = true;
-        String[] candidates = {"Microsoft YaHei", "PingFang SC", "Noto Sans CJK SC", "Arial"};
+        String[] candidates = {"Microsoft YaHei", "PingFang SC", "Noto Sans CJK SC", "Noto Sans SC",
+                "WenQuanYi Micro Hei", "WenQuanYi Zen Hei", "Arial", "DejaVu Sans"};
         for (String name : candidates) {
             Typeface tf = Typeface.makeFromName(name, FontStyle.NORMAL);
             if (tf != null && !tf.getFamilyName().toLowerCase(Locale.ROOT).contains("arial") || tf != null && tf.getFamilyName().toLowerCase(Locale.ROOT).contains("yahei")) {

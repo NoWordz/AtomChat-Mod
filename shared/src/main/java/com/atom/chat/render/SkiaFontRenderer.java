@@ -392,19 +392,107 @@ public final class SkiaFontRenderer {
         }
     }
 
-    /** Families probed for glyphs the bundled subset cannot render. */
-    private static final String[] FALLBACK_FAMILIES = {
+    /**
+     * Families probed for glyphs the bundled subset cannot render, in order.
+     *
+     * <p><strong>Windows families stay first</strong> so a Windows machine
+     * resolves exactly the faces it did before. The Linux / cross-platform tail
+     * covers the fonts distributions actually ship — Noto, WenQuanYi, DejaVu,
+     * Ubuntu — which is what a Linux player has instead of YaHei/DengXian. An
+     * absent name simply matches nothing and is skipped, so the tail costs a
+     * Windows user nothing.
+     */
+    static final String[] FALLBACK_FAMILIES = {
             "Microsoft YaHei", "DengXian", "Segoe UI", "Segoe UI Symbol",
             "MS Gothic", "Yu Gothic UI", "Malgun Gothic", "Leelawadee UI",
-            "Cambria", "Calibri", "Arial", "Noto Sans CJK SC"
+            "Cambria", "Calibri", "Arial",
+            // Linux / cross-platform tail (the fonts distro packages install).
+            "Noto Sans CJK SC", "Noto Sans CJK TC", "Noto Sans SC",
+            "Source Han Sans SC", "WenQuanYi Micro Hei", "WenQuanYi Zen Hei",
+            "AR PL UMing CN", "Droid Sans Fallback",
+            "Noto Sans Symbols 2", "Noto Sans Symbols",
+            "DejaVu Sans", "FreeSans", "Ubuntu"
     };
 
     /**
+     * Emoji-capable families tried before the general fallback, in order.
+     * {@code Segoe UI Emoji} stays first so Windows is unchanged; the rest are
+     * the emoji fonts Linux ships — {@code Noto Color Emoji} is the standard
+     * Ubuntu/Debian/Fedora package. A candidate is accepted only when it
+     * actually carries the codepoint, so non-emoji residents of the emoji
+     * blocks (e.g. ✧ U+2727) still fall through to {@link #FALLBACK_FAMILIES}.
+     */
+    static final String[] EMOJI_FAMILIES = {
+            "Segoe UI Emoji", "Noto Color Emoji", "Noto Emoji",
+            "Apple Color Emoji", "Twemoji Mozilla", "JoyPixels",
+            "EmojiOne Color", "Symbola"
+    };
+
+    /**
+     * First family in {@code families} for which {@code hasGlyph} reports true,
+     * or {@code null} when none does. Pure — no native calls — so the ordering
+     * contract is testable on a machine that has none of these fonts; the
+     * renderer passes a predicate that asks the live {@code FontMgr}.
+     */
+    static String firstFamilyWithGlyph(String[] families, java.util.function.Predicate<String> hasGlyph) {
+        for (String family : families) {
+            if (hasGlyph.test(family)) {
+                return family;
+            }
+        }
+        return null;
+    }
+
+    /** True when {@code family} resolves on this machine and carries {@code codepoint}. */
+    private static boolean familyCarriesGlyph(io.github.humbleui.skija.FontMgr mgr, String family, int codepoint) {
+        try (io.github.humbleui.skija.Typeface face =
+                     mgr.matchFamilyStyle(family, io.github.humbleui.skija.FontStyle.NORMAL)) {
+            return face != null && face.getUTF32Glyph(codepoint) != 0;
+        }
+    }
+
+    /** Set once so the missing-emoji-font warning is emitted a single time, not per emoji per frame. */
+    private static final java.util.concurrent.atomic.AtomicBoolean NO_EMOJI_FONT_REPORTED =
+            new java.util.concurrent.atomic.AtomicBoolean();
+
+    /**
+     * One line the first time an emoji codepoint finds no emoji-capable font.
+     *
+     * <p><strong>Probed with a representative emoji, not the codepoint that
+     * just missed.</strong> Non-emoji symbols live in the emoji blocks too —
+     * ✧ (U+2727) is missing from Segoe UI Emoji and is drawn correctly by
+     * Segoe UI Symbol — so keying the warning off "this codepoint missed" would
+     * fire on a stock Windows box that has emoji fonts and needs none. Asking
+     * "does any emoji font carry 😀 (U+1F600)" answers the real question.
+     *
+     * <p>On a slim Linux without an emoji font this is <em>the</em> reason the
+     * panel fills with boxes, and without the line the symptom is silent — Skia
+     * just draws .notdef. Once per process; the renderer runs every frame.
+     */
+    private static void reportNoEmojiFontIfMissing(io.github.humbleui.skija.FontMgr mgr) {
+        if (!NO_EMOJI_FONT_REPORTED.compareAndSet(false, true)) {
+            return;
+        }
+        boolean hasEmojiFont = firstFamilyWithGlyph(EMOJI_FAMILIES,
+                name -> familyCarriesGlyph(mgr, name, 0x1F600)) != null;
+        if (hasEmojiFont || com.atom.chat.AtomChat.LOGGER == null) {
+            return;
+        }
+        com.atom.chat.AtomChat.LOGGER.warn(com.atom.chat.diagnostics.AtomChatLog.message("render",
+                "No emoji-capable font found (tried: {}); emoji will render as boxes. "
+                        + "On Linux install fonts-noto-color-emoji (Ubuntu/Debian: apt install)."),
+                String.join(", ", EMOJI_FAMILIES));
+    }
+
+    /**
      * Glyph-level fallback: codepoints missing from the primary (bundled subset)
-     * resolve through the system FontMgr. Emoji-range codepoints first try Segoe
-     * UI Emoji, but only when that font actually contains the glyph — many
-     * non-emoji symbols share the 0x2600-0x27BF block (e.g. ✧ U+2727) and would
-     * otherwise render as tofu even though Segoe UI Symbol has them.
+     * resolve through the system FontMgr. Emoji-range codepoints first try the
+     * {@link #EMOJI_FAMILIES} list (Segoe UI Emoji on Windows; Noto Color Emoji
+     * and friends on Linux), but only when the candidate actually contains the
+     * glyph — many non-emoji symbols share the 0x2600-0x27BF block (e.g. ✧
+     * U+2727) and would otherwise render as tofu even though a symbol font has
+     * them. Whatever the emoji pass does not claim falls to
+     * {@link #FALLBACK_FAMILIES}.
      */
     private static Font fontFor(Font primary, int codepoint) {
         java.util.BitSet known = PRIMARY_GLYPH_HITS.get(primary);
@@ -430,18 +518,22 @@ public final class SkiaFontRenderer {
             if (mgr != null) {
                 io.github.humbleui.skija.Typeface match = null;
                 if (isEmojiCodepoint(codepoint)) {
-                    io.github.humbleui.skija.Typeface emoji =
-                            mgr.matchFamilyStyle("Segoe UI Emoji", io.github.humbleui.skija.FontStyle.NORMAL);
-                    if (emoji != null && emoji.getUTF32Glyph(codepoint) != 0) {
-                        match = emoji;
+                    String emojiFamily = firstFamilyWithGlyph(EMOJI_FAMILIES,
+                            name -> familyCarriesGlyph(mgr, name, codepoint));
+                    if (emojiFamily != null) {
+                        match = mgr.matchFamilyStyle(emojiFamily, io.github.humbleui.skija.FontStyle.NORMAL);
+                    } else {
+                        reportNoEmojiFontIfMissing(mgr);
                     }
                 }
                 if (match == null) {
                     // The bundled font is a GB2312 subset, so kaomoji lean on
                     // exotic ranges (kana, Thai, Hangul, phonetic, symbols). A
-                    // narrow list leaves tofu even though Windows has the glyphs:
-                    // DengXian/MS Gothic cover kana, Malgun Gothic covers Hangul,
-                    // Leelawadee UI covers Thai, Cambria/Calibri cover symbols.
+                    // narrow list leaves tofu even though the system has the
+                    // glyphs: DengXian/MS Gothic cover kana, Malgun Gothic
+                    // covers Hangul, Leelawadee UI covers Thai, Cambria/Calibri
+                    // cover symbols — and on Linux the Noto/DejaVu/WenQuanYi
+                    // tail stands in for all of them.
                     match = mgr.matchFamiliesStyleCharacter(
                             FALLBACK_FAMILIES,
                             io.github.humbleui.skija.FontStyle.NORMAL, null, codepoint);

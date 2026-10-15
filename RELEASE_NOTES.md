@@ -2,21 +2,26 @@
 
 ## v0.3.0
 
-> 对外首次发布于新仓库 NoWordz/AtomChat-Mod，版本 0.3.0-Preview（预览版）；许可由 Apache-2.0 换回 MIT。
+> 从 0.3.0-Preview 升级的 0.3.0 正式版，面向 Fabric 1.21.1、NeoForge 1.21.1 与 Forge 1.20.1。
 
 本版重做了整套界面动效与个人档案页，统一了卡片与描边语言，加入双轴缩放与自适应边框。三个发布目标（Fabric 1.21.1 / NeoForge 1.21.1 / Forge 1.20.1）同步。
 
 **新增**
 
+- **玩家头像样式**：在「设置 > 聊天 > 消息」选择 AtomChat 原生或 E33Chat，默认原生；本机保存并立即应用到所有玩家头像。E33Chat 使用方形皮肤脸部与外扩帽层。
+- **私聊列表折叠**：点击标题分割线展开或收起，沿用设置页折叠动效；聊天面板关闭时重置为展开。
+- **关于页作者磁贴**：并排展示 E33EPUS 与 NoWordz 的头像和名字。
+- **Linux x64 支持**：三种加载器均提供独立 Linux JAR，并补齐 Linux 字体回退；Windows JAR 只包含 Windows 原生库。
 - **导航动画风格**单项选择（滑动 / 缩放，默认缩放），标签页与页面切换共用。
 - **新主题「薄暮」「薄荷」**（半透明面板），主题总数增至九张。
-- **自定义壁纸 / 头图 / 头像裁剪**，图片本地托管。
+- **自定义壁纸 / 头图裁剪**，图片本地托管。
 - **「内容缩放」滑条**：手机大小不变，内部文字与按钮随其缩放。
 - **图片预览**：左键聊天里已加载的图片打开等比全尺寸预览（背景变暗、淡入缩放进入，底部 X / 暗背景 / Esc 关闭）。
 - **全入口统一导航动画**：五个入口共用全局 slide/zoom；公屏↔私聊切换时消息、回复条与输入栏作为整层一起转场，顶栏与外框固定。
 
 **更改**
 
+- **个人档案头像改为只读**：禁用更换与清除操作，但保留已有自定义头像数据；AtomChat 样式继续显示自定义头像，E33Chat 样式显示玩家皮肤。
 - **动效照指数趋近重做**：页面切换、开屏与关屏统一为帧率无关的启动快、落定稳；开屏跟随导航风格（缩放 0.94 放大 / 滑动横入），关屏更快。
 - **个人档案页按 QQ 主页重做**：可自定义头图（带裁剪）、头像跨压头图下沿、统计瓦片、信息大卡与身份卡，头像与头图加大。
 - **整卡语言统一**（关于页第三方、mod 信息、档案信息区与身份卡），行间发丝分割、整卡缩放；悬停高亮统一为强调色染色。
@@ -42,21 +47,26 @@
 
 ----
 
-> First published externally on the new repository NoWordz/AtomChat-Mod as 0.3.0-Preview (a preview); the license moves back from Apache-2.0 to MIT.
+> The full 0.3.0 release follows 0.3.0-Preview and targets Fabric 1.21.1, NeoForge 1.21.1 and Forge 1.20.1.
 
 This release rebuilds the interface motion and the profile page, unifies the card and border language, and adds dual-axis scaling and adaptive outlines. All three targets (Fabric 1.21.1 / NeoForge 1.21.1 / Forge 1.20.1) ship together.
 
 **Added**
 
+- **Player avatar styles**: choose AtomChat or E33Chat in Settings > Chat > Messages. AtomChat is the default; the client saves the choice locally and applies it to every player avatar immediately. E33Chat uses a square skin face with an enlarged hat layer.
+- **Collapsible private chat list**: click the heading to fold or expand it with the settings animation; it starts expanded again after the chat panel is reopened.
+- **Author tiles on About**: E33EPUS and NoWordz appear side by side with their avatars and names.
+- **Linux x64 support**: each loader has a separate Linux JAR with Linux font fallback; Windows JARs contain only the Windows native library.
 - **Navigation animation style** single choice (slide / zoom, default zoom), shared by tabs and page pushes.
 - **Two new themes "Dusk" and "Mint"** (translucent panels); nine themes in total.
-- **Custom wallpaper / banner / avatar cropping**, images hosted locally.
+- **Custom wallpaper / banner cropping**, images hosted locally.
 - **"Content scale" slider**: the phone frame keeps its size while the contents scale.
 - **Image preview**: left-click a loaded chat image for a full-size, aspect-kept preview (dimmed backdrop, fade-and-zoom entry, closed by the bottom X, the backdrop or Esc).
 - **One navigation rule for every entry point**: all five entries share the global slide/zoom; world <-> private chat moves messages, reply bar and composer as one layer while the header and frame stay fixed.
 
 **Changed**
 
+- **Profile avatars are read-only**: replacing and clearing are disabled while saved custom-avatar data is preserved. AtomChat style keeps showing custom avatars; E33Chat style shows player skins.
 - **Motion rebuilt on an exponential approach**: transitions, open and close are frame-rate independent, fast to start and settled at the end; opening follows the navigation style (zoom from 0.94 / slide in from the side) and closing is faster.
 - **The profile page is rebuilt after the QQ home page**: a customisable banner (with cropping), an avatar straddling its edge, stat tiles, one merged info card and an identity card; avatar and banner are larger.
 - **One card language** (about's third-party list, mod info, profile info block and identity card) with hairline dividers and whole-card scaling; hover highlights are one accent-tinted language.

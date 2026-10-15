@@ -7,11 +7,15 @@ plugins {
 
 // 共享层装配：读仓库级身份 + 把 shared/ 与本目标挂载的层接进源集。
 // 判定依据在 versions/*.json，本平台不做任何目标名硬编码。
+apply from: '../../gradle/atomchat-native-platform.gradle'
 apply from: '../../gradle/atomchat-layers.gradle'
 
 version = project.mod_version
 group = project.maven_group
 archivesBaseName = project.archives_base_name
+if (project.atomchatNativePlatform == 'linux-x64') {
+    archivesBaseName += project.atomchatNativeSuffix
+}
 
 repositories {
     mavenCentral()
@@ -28,8 +32,8 @@ dependencies {
     // Skija (HumbleUI Skia bindings) — same line as the Tuui mod used.
     include(implementation("io.github.humbleui:skija-shared:${project.skija_version}"))
     include(implementation("io.github.humbleui:types:0.1.1"))
-    // Windows x64 native. Add linux/mac natives when publishing cross-platform.
-    include(implementation("io.github.humbleui:skija-windows-x64:${project.skija_version}"))
+    // Bundle only the selected operating system native; never both.
+    include(implementation("io.github.humbleui:${project.atomchatNativeArtifact}:${project.skija_version}"))
 
     // FlatLaf gives the Swing image picker a modern flat look instead of the
     // dated default Metal one. Bundled as a RELOCATED copy (private package, see
@@ -40,8 +44,7 @@ dependencies {
 
     testImplementation platform('org.junit:junit-bom:5.11.4')
     testImplementation 'org.junit.jupiter:junit-jupiter'
-    // CI test hosts run on Linux; the bundled jar targets Windows only, so the
-    // Linux Skija native is test-scoped and never packaged.
+    // Linux hosts can test either variant. Test dependencies are not bundled.
     testImplementation "io.github.humbleui:skija-linux-x64:${project.skija_version}"
 }
 
@@ -85,7 +88,7 @@ loom {
 
 // Store-facing version label, following the jar naming habit:
 // Fabric-<mc_version>-<mod_version>, e.g. Fabric-1.21.1-0.2.2
-def storeVersion = "Fabric-${project.minecraft_version}-${project.mod_version}"
+def storeVersion = "Fabric-${project.minecraft_version}-${project.mod_version}${project.atomchatNativeSuffix}"
 
 def changelogFor(version) {
     // 单分支之后 RELEASE_NOTES.md 只有仓库根那一份，各平台不再各存一份

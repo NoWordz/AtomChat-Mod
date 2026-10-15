@@ -39,6 +39,8 @@ public final class AvatarRenderer {
     private static final int HAT_U = 40;
 
     private static final Map<ResourceLocation, Image> FACE_CACHE = new HashMap<>();
+    private static final Map<ResourceLocation, Image> SKIN_FACE_CACHE = new HashMap<>();
+    private static final Map<ResourceLocation, Image> HAT_CACHE = new HashMap<>();
     private static final Set<ResourceLocation> FAILED = new HashSet<>();
     private static boolean dumped;
 
@@ -63,6 +65,24 @@ public final class AvatarRenderer {
         return sampled;
     }
 
+    public static Image skinFace(ResourceLocation skin) {
+        face(skin);
+        return SKIN_FACE_CACHE.get(skin);
+    }
+
+    public static Image hat(ResourceLocation skin) {
+        face(skin);
+        return HAT_CACHE.get(skin);
+    }
+
+    private static Image layerImage(byte[] pixels, int side) {
+        Bitmap bitmap = new Bitmap();
+        bitmap.allocN32Pixels(side, side, false);
+        bitmap.installPixels(io.github.humbleui.skija.ImageInfo.makeN32Premul(side, side),
+                pixels, side * 4L);
+        return Image.makeFromBitmap(bitmap);
+    }
+
     private static Image sample(ResourceLocation skin) {
         try {
             Minecraft client = Minecraft.getInstance();
@@ -85,6 +105,8 @@ public final class AvatarRenderer {
             // 8x nearest-neighbour upscale so the avatar stays crisp when drawn large.
             int scale = 8;
             byte[] pixels = new byte[FACE_SIZE * scale * FACE_SIZE * scale * 4];
+            byte[] skinPixels = new byte[pixels.length];
+            byte[] hatPixels = new byte[pixels.length];
             for (int y = 0; y < FACE_SIZE; y++) {
                 int srcRow = (FACE_V + y) * SKIN_SIZE;
                 for (int x = 0; x < FACE_SIZE; x++) {
@@ -105,6 +127,15 @@ public final class AvatarRenderer {
                             pixels[dst + 1] = grn;
                             pixels[dst + 2] = red;
                             pixels[dst + 3] = (byte) 255;
+                            // Independent BGRA layers; the hat must be premultiplied.
+                            skinPixels[dst] = buf.get(faceIdx + 2);
+                            skinPixels[dst + 1] = buf.get(faceIdx + 1);
+                            skinPixels[dst + 2] = buf.get(faceIdx);
+                            skinPixels[dst + 3] = (byte) 255;
+                            hatPixels[dst] = (byte) ((buf.get(hatIdx + 2) & 0xFF) * hatA / 255);
+                            hatPixels[dst + 1] = (byte) ((buf.get(hatIdx + 1) & 0xFF) * hatA / 255);
+                            hatPixels[dst + 2] = (byte) ((buf.get(hatIdx) & 0xFF) * hatA / 255);
+                            hatPixels[dst + 3] = (byte) hatA;
                         }
                     }
                 }
@@ -114,6 +145,8 @@ public final class AvatarRenderer {
             bitmap.allocN32Pixels(FACE_SIZE * scale, FACE_SIZE * scale, false);
             bitmap.installPixels(io.github.humbleui.skija.ImageInfo.makeN32Premul(FACE_SIZE * scale, FACE_SIZE * scale),
                     pixels, FACE_SIZE * scale * 4L);
+            SKIN_FACE_CACHE.put(skin, layerImage(skinPixels, FACE_SIZE * scale));
+            HAT_CACHE.put(skin, layerImage(hatPixels, FACE_SIZE * scale));
             maybeDump(buf, pixels);
             // Keep the bitmap alive: makeFromBitmap may share the pixel ref.
             return Image.makeFromBitmap(bitmap);

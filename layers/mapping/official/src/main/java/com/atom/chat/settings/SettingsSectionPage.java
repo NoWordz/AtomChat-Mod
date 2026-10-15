@@ -54,7 +54,7 @@ import java.util.Map;
  * so rendering, hit-testing and measurement can never disagree.</p>
  */
 public final class SettingsSectionPage {
-    public enum RowKind { HERO, SWITCH, SLIDER, COLOR, INFO, BLOCKED, LABEL, ACTION, THEMES }
+    public enum RowKind { HERO, AUTHORS, SWITCH, SLIDER, COLOR, INFO, BLOCKED, LABEL, ACTION, THEMES }
 
     public record Row(RowKind kind, SettingsItem item, SettingsSlider slider,
                       SettingsColor color, SettingsCatalog.InfoRow info, PlayerRef player,
@@ -81,6 +81,10 @@ public final class SettingsSectionPage {
 
         static Row ofLabel(String key) {
             return new Row(RowKind.LABEL, null, null, null, null, null, key, null);
+        }
+
+        static Row ofAuthors() {
+            return new Row(RowKind.AUTHORS, null, null, null, null, null, null, null);
         }
 
         static Row ofHero() {
@@ -151,6 +155,7 @@ public final class SettingsSectionPage {
     private static final String ACTION_WALLPAPER_CLEAR = "wallpaper_clear";
     private static final String ACTION_TELEPORT_MODE = "teleport_mode";
     private static final String ACTION_PAGE_NAV_STYLE = "page_nav_style";
+    private static final String ACTION_AVATAR_STYLE = "avatar_style";
     private static final String ACTION_HISTORY_CLEAR = "history_clear";
     private static final String ACTION_CACHE_CLEAR = "cache_clear";
     private static final String ACTION_TEST_SOUND = "test_sound";
@@ -196,6 +201,14 @@ public final class SettingsSectionPage {
      * tapping cycles between the two and saves (the handler lives on the
      * screen, like every other action card).
      */
+    private SettingsItem avatarStyleItem() {
+        return new SettingsItem("avatar_style",
+                "atomchat.settings.chat.avatar_style",
+                "atomchat.settings.chat.avatar_style.desc",
+                () -> true, v -> {
+        });
+    }
+
     private SettingsItem pageNavStyleItem() {
         return new SettingsItem("page_nav_style",
                 "atomchat.settings.appearance.page_nav_style",
@@ -364,7 +377,7 @@ public final class SettingsSectionPage {
      * the same 50ms tau the ZOOM page-nav phases use (~170ms to visually
      * land), so folding reads as one continuous motion of the same family.
      */
-    private static final float GROUP_FOLD_TAU_MS = 50.0F;
+    public static final float GROUP_FOLD_TAU_MS = 50.0F;
     /** Live expansion of each fold group, group id → 0..1 (1 = fully
      *  expanded). Stepped every frame toward the target the collapsed set
      *  names; rows of a group scale their height, alpha and hit bounds by
@@ -524,6 +537,7 @@ public final class SettingsSectionPage {
             case SLIDER, COLOR -> UiTokens.SETTINGS_SLIDER_ROW_H;
             case THEMES -> UiTokens.SETTINGS_THEME_ROW_H;
             case HERO -> UiTokens.SETTINGS_HERO_H;
+            case AUTHORS -> s(112);
             default -> UiTokens.SETTINGS_ROW_H;
         };
     }
@@ -576,6 +590,11 @@ public final class SettingsSectionPage {
         } else if (ACTION_TELEPORT_MODE.equals(row.actionId())) {
             String mode = AtomChatConfig.get().teleportCommandMode;
             subtitle = tr("atomchat.settings.chat.teleport." + (mode == null ? "auto" : mode));
+            verb = tr("atomchat.settings.action.cycle");
+        } else if (ACTION_AVATAR_STYLE.equals(row.actionId())) {
+            subtitle = tr(AtomChatConfig.get().effectiveAvatarStyle() == AtomChatConfig.AvatarStyle.E33CHAT
+                    ? "atomchat.settings.chat.avatar_style.e33chat"
+                    : "atomchat.settings.chat.avatar_style.atomchat");
             verb = tr("atomchat.settings.action.cycle");
         } else if (ACTION_PAGE_NAV_STYLE.equals(row.actionId())) {
             subtitle = tr(AtomChatConfig.get().pageNavStyle
@@ -732,6 +751,7 @@ public final class SettingsSectionPage {
                 addSwitches(rows, SettingsSection.CHAT, "fun_effects");
             }
             default -> {
+                rows.add(Row.ofAction(ACTION_AVATAR_STYLE, avatarStyleItem()));
                 addSwitches(rows, SettingsSection.CHAT,
                         "entry", "poke", "images", "anti_spam", "compact_messages");
                 addSliders(rows, SettingsSection.CHAT, "timestamp");
@@ -791,6 +811,8 @@ public final class SettingsSectionPage {
     private List<Row> aboutRows() {
         List<Row> rows = new ArrayList<>();
         rows.add(Row.ofHero());
+        rows.add(Row.ofLabel("atomchat.settings.about.authors"));
+        rows.add(Row.ofAuthors());
         addGroup(rows, LABEL_MOD_INFO, () -> {
             for (SettingsCatalog.InfoRow info : SettingsCatalog.aboutCoreRows()) {
                 rows.add(Row.ofInfo(info));
@@ -1134,6 +1156,7 @@ public final class SettingsSectionPage {
                 // LABEL rows hover only when they fold a group - a plain
                 // heading is not clickable, so it must not answer the pointer.
                 boolean over = interactive
+                        && row.kind() != RowKind.AUTHORS
                         && (row.kind() != RowKind.LABEL || foldableGroup(row.labelKey()) != null)
                         && vmx >= rect.x() && vmx <= rect.right()
                         && vmy >= rect.y() && vmy <= rect.bottom();
@@ -1161,7 +1184,8 @@ public final class SettingsSectionPage {
                 // Foldable LABEL rows take a spring too: they toggle whole
                 // colour groups on click and used to sit dead under the
                 // pointer. Plain headings still get none.
-                PressScale press = row.kind() == RowKind.LABEL && foldableGroup(row.labelKey()) == null ? null
+                PressScale press = row.kind() == RowKind.AUTHORS
+                        || (row.kind() == RowKind.LABEL && foldableGroup(row.labelKey()) == null) ? null
                         : interactive ? rowPress.computeIfAbsent(i, k -> PressScale.bounce())
                         : rowPress.get(i);
                 if (press != null && interactive) {
@@ -1178,7 +1202,7 @@ public final class SettingsSectionPage {
                         // exactly the resting layout. The padded saveLayer
                         // keeps press overshoot and shadow tail inside the
                         // fade instead of punching through at full weight.
-                        canvas.translate(0.0F, UiTokens.s(4) * (1.0F - expansion));
+                        canvas.translate(0.0F, UiTokens.SETTINGS_FOLD_LIFT * (1.0F - expansion));
                         float pad = UiTokens.s(12);
                         foldFade = new Paint().setAlphaf(expansion);
                         canvas.saveLayer(io.github.humbleui.types.Rect.makeXYWH(
@@ -1342,7 +1366,7 @@ public final class SettingsSectionPage {
             drawLabel(canvas, row, rect);
             return;
         }
-        if (row.kind() != RowKind.HERO) {
+        if (row.kind() != RowKind.HERO && row.kind() != RowKind.AUTHORS) {
             UiCards.drawCard(canvas, rect.x(), rect.y(), rect.w(), rect.h(),
                     UiTokens.settingsRowRadius(), hover);
         }
@@ -1357,6 +1381,7 @@ public final class SettingsSectionPage {
                                 Font buttonFont, int accent, float dtMs) {
         switch (row.kind()) {
             case HERO -> drawHero(canvas, rect);
+            case AUTHORS -> drawAuthors(canvas, rect);
             case SWITCH -> drawSwitch(canvas, row, rect, accent, dtMs);
             case SLIDER -> drawSlider(canvas, row, rect, accent);
             case COLOR -> drawColor(canvas, row, rect, dtMs);
@@ -1433,7 +1458,7 @@ public final class SettingsSectionPage {
                 // from up to s(4) below its slot while fading with the group
                 // expansion; the padded saveLayer keeps press overshoot and
                 // shadow tail inside the fade.
-                canvas.translate(0.0F, UiTokens.s(4) * (1.0F - expansion));
+                canvas.translate(0.0F, UiTokens.SETTINGS_FOLD_LIFT * (1.0F - expansion));
                 float fadePad = UiTokens.s(12);
                 foldFade = new Paint().setAlphaf(expansion);
                 canvas.saveLayer(io.github.humbleui.types.Rect.makeXYWH(
@@ -2009,6 +2034,49 @@ public final class SettingsSectionPage {
                         + (UiTokens.SETTINGS_HERO_WORDMARK_MAX_H - h) / 2.0F, w, h);
     }
 
+    private static final String[] AUTHOR_NAMES = { "E33EPUS", "NoWordz" };
+    private static final Image[] AUTHOR_IMAGES = new Image[AUTHOR_NAMES.length];
+    private static final boolean[] AUTHOR_IMAGES_LOADED = new boolean[AUTHOR_NAMES.length];
+
+    private static Image authorImage(int index) {
+        if (!AUTHOR_IMAGES_LOADED[index]) {
+            AUTHOR_IMAGES_LOADED[index] = true;
+            AUTHOR_IMAGES[index] = loadBundled("/assets/atomchat/authors/"
+                    + (index == 0 ? "e33epus.png" : "nowordz.png"));
+        }
+        return AUTHOR_IMAGES[index];
+    }
+
+    private static void drawAuthors(Canvas canvas, UiLayout.Rect rect) {
+        float gap = UiTokens.SETTINGS_TILE_GAP;
+        float width = Math.max(0.0F, (rect.w() - gap) / 2.0F);
+        float avatarSize = Math.min(s(40), Math.max(0.0F, width - s(20)));
+        Font font = FontManager.boldFont(UiTokens.SETTINGS_TILE_SUB);
+        float textHeight = SkiaFontRenderer.textHeight(font);
+        float innerGap = s(10);
+        float groupHeight = avatarSize + innerGap + textHeight;
+        for (int i = 0; i < AUTHOR_NAMES.length; i++) {
+            float x = rect.x() + i * (width + gap);
+            float cx = x + width / 2.0F;
+            float top = rect.y() + (rect.h() - groupHeight) / 2.0F;
+            UiCards.drawCard(canvas, x, rect.y(), width, rect.h(),
+                    UiTokens.settingsTileRadius(), 0.0F);
+            Image image = authorImage(i);
+            if (image != null) {
+                float scale = Math.min(avatarSize / image.getWidth(), avatarSize / image.getHeight());
+                float imageW = image.getWidth() * scale;
+                float imageH = image.getHeight() * scale;
+                SkiaDraw.drawRoundedImage(canvas, image, cx - imageW / 2.0F,
+                        top + (avatarSize - imageH) / 2.0F,
+                        imageW, imageH, 0.0F, SamplingMode.DEFAULT);
+            }
+            String name = SkiaFontRenderer.truncate(font, AUTHOR_NAMES[i],
+                    Math.max(0.0F, width - s(16)));
+            SkiaFontRenderer.drawTextCentered(canvas, font, name, cx,
+                    top + avatarSize + innerGap + textHeight / 2.0F, textPrimary());
+        }
+    }
+
     private static Image heroAppIcon;
 
     private static Image heroAppIcon() {
@@ -2115,11 +2183,12 @@ public final class SettingsSectionPage {
         float cy = rect.y() + rect.h() / 2.0F;
 
         SkiaFontRenderer.drawText(canvas, font,
-                SkiaFontRenderer.truncate(font, text, Math.max(0.0F, rightX - textX - s(24))),
+                SkiaFontRenderer.truncate(font, text,
+                        Math.max(0.0F, rightX - textX - UiTokens.SETTINGS_FOLD_CHEVRON_SIZE - s(16))),
                 textX, SkiaFontRenderer.centerBaselineY(font, cy), textColor);
 
         if (group != null) {
-            float chevron = s(7);
+            float chevron = UiTokens.SETTINGS_FOLD_CHEVRON_SIZE;
             drawChevron(canvas, rightX - chevron / 2.0F, cy, chevron,
                     expansionOf(group), textColor);
         }
@@ -2140,7 +2209,7 @@ public final class SettingsSectionPage {
      *  close: fill mode auto-closes, and Path.close() is the resource-release
      *  method (contour close is closePath()) — calling it inside the block
      *  frees the native path before drawPath runs (crashed). */
-    private static void drawChevron(Canvas canvas, float cx, float cy, float size,
+    public static void drawChevron(Canvas canvas, float cx, float cy, float size,
                                     float expansion, int color) {
         try (io.github.humbleui.skija.Path path = new io.github.humbleui.skija.Path();
              Paint paint = new Paint()) {
@@ -2387,22 +2456,28 @@ public final class SettingsSectionPage {
     private void drawBlocked(Canvas canvas, Row row, UiLayout.Rect rect, float hover, Font buttonFont) {
         float avatar = UiTokens.SETTINGS_ROW_AVATAR;
         float avatarY = rect.y() + (rect.h() - avatar) / 2.0F;
-        Image face = row.player() != null
-                ? PlayerAvatar.face(row.player().uuid(), row.player().realName()) : null;
-        if (face != null) {
-            SkiaDraw.drawRoundedImage(canvas, face, rect.x() + UiTokens.SETTINGS_ROW_PAD, avatarY,
-                    avatar, avatar, avatar / 2.0F, SamplingMode.LINEAR);
-        } else {
-            // Avatar stand-in: an opaque neutral, fixed on purpose — it is a
-            // placeholder face, not a themed surface, and reads on any panel.
-            SkiaDraw.drawRoundedRect(canvas, rect.x() + UiTokens.SETTINGS_ROW_PAD, avatarY,
-                    avatar, avatar, avatar / 2.0F, Color.makeARGB(255, 120, 130, 145));
+        boolean e33Style = PlayerAvatar.drawE33Chat(canvas,
+                row.player() != null ? row.player().uuid() : null,
+                row.player() != null ? row.player().realName() : null,
+                rect.x() + UiTokens.SETTINGS_ROW_PAD, avatarY, avatar);
+        if (!e33Style) {
+            Image face = row.player() != null
+                    ? PlayerAvatar.face(row.player().uuid(), row.player().realName()) : null;
+            if (face != null) {
+                SkiaDraw.drawRoundedImage(canvas, face, rect.x() + UiTokens.SETTINGS_ROW_PAD, avatarY,
+                        avatar, avatar, avatar / 2.0F, SamplingMode.LINEAR);
+            } else {
+                // Avatar stand-in: an opaque neutral, fixed on purpose — it is a
+                // placeholder face, not a themed surface, and reads on any panel.
+                SkiaDraw.drawRoundedRect(canvas, rect.x() + UiTokens.SETTINGS_ROW_PAD, avatarY,
+                        avatar, avatar, avatar / 2.0F, Color.makeARGB(255, 120, 130, 145));
+            }
+            // Hairline rim hugging the avatar's outer edge (face or placeholder):
+            // polarity-adaptive UiTokens.rim separates the circle from the row
+            // card behind it. Same ring language as the swatches.
+            SkiaDraw.drawRing(canvas, rect.x() + UiTokens.SETTINGS_ROW_PAD + avatar / 2.0F, avatarY + avatar / 2.0F,
+                    avatar / 2.0F + s(0.75F), s(1.0F), UiTokens.rim());
         }
-        // Hairline rim hugging the avatar's outer edge (face or placeholder):
-        // polarity-adaptive UiTokens.rim separates the circle from the row
-        // card behind it. Same ring language as the swatches.
-        SkiaDraw.drawRing(canvas, rect.x() + UiTokens.SETTINGS_ROW_PAD + avatar / 2.0F, avatarY + avatar / 2.0F,
-                avatar / 2.0F + s(0.75F), s(1.0F), UiTokens.rim());
 
         String name = row.player() != null ? row.player().realName() : "";
         Font nameFont = FontManager.font(UiTokens.SETTINGS_TILE_TITLE);
@@ -2437,6 +2512,9 @@ public final class SettingsSectionPage {
             }
             UiLayout.Rect rect = rowRect(section, rows, i, scrollY, layout);
             RowKind kind = rows.get(i).kind();
+            if (kind == RowKind.AUTHORS) {
+                continue;
+            }
             RowHit hit = new RowHit(rows.get(i), i, rect.x(), rect.y(), rect.w(), rect.h(),
 
                     actionX(rows.get(i), rect, buttonFont));

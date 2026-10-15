@@ -17,7 +17,7 @@
 ## 三条先知道
 
 1. **纯客户端模组** —— 服务端不装也能用（图片走第三方图床）；服务端也装一份，才会解锁**服务端媒体托管**与**自定义头像同步**。
-2. **目前只支持 Windows x64** —— JAR 内只打包了 Skija 的 Windows x64 原生库，Linux / macOS 装上后聊天面板起不来。
+2. **Windows x64 / Linux x64 分包** —— 按系统选择一个 JAR；Linux 文件名带 `linux-x64`，需要系统 EGL/GL 库。Linux 游戏内运行待实机验收；macOS / ARM64 暂未打包。
 3. **界面全部由 Skija 矢量绘制**，不依赖原版聊天纹理；图片消息沿用 E33Chat 的 `[[CICode]]` 协议，可与 E33Chat / ChatImage 系模组互通。
 
 ## 快捷键

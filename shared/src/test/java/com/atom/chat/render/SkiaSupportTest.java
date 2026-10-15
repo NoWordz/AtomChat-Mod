@@ -122,7 +122,10 @@ class SkiaSupportTest {
         assertTrue(line.contains("Linux/amd64"), line);
         assertTrue(line.contains("UnsatisfiedLinkError: no skija"), line);
         assertTrue(line.contains("vanilla chat is unchanged"), line);
-        assertTrue(line.contains("Windows x64 native only"), line);
+        assertTrue(line.contains("Windows x64 and Linux x64 only"), line);
+        assertTrue(line.contains("macOS/ARM64 are not packaged"), line);
+        assertTrue(line.contains("Linux also needs EGL/GL system libraries"), line);
+        assertFalse(line.contains("Windows x64 native only"), line);
     }
 
     /**

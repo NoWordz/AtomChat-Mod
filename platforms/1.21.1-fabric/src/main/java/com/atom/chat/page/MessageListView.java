@@ -856,6 +856,9 @@ public final class MessageListView {
         if (name == null || name.isBlank()) {
             name = host.senderName(msg);
         }
+        if (PlayerAvatar.drawE33Chat(canvas, uuid, name, avatarX, avatarY, UiTokens.AVATAR_SIZE)) {
+            return;
+        }
         Image face = PlayerAvatar.face(uuid, name);
         if (face != null) {
             SkiaDraw.drawRoundedImage(canvas, face, avatarX, avatarY, UiTokens.AVATAR_SIZE, UiTokens.AVATAR_SIZE,

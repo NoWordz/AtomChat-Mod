@@ -46,6 +46,13 @@ public class AtomChatConfig {
     public enum PageNavStyle { SLIDE, ZOOM }
     /** Double-clicking another player's avatar performs the QQ-style poke shake. */
     public boolean avatarPokeEnabled = true;
+    /** Local display preference; custom-avatar data is never changed by this choice. */
+    public enum AvatarStyle { ATOMCHAT, E33CHAT }
+    public AvatarStyle avatarStyle = AvatarStyle.ATOMCHAT;
+
+    public AvatarStyle effectiveAvatarStyle() {
+        return avatarStyle == null ? AvatarStyle.ATOMCHAT : avatarStyle;
+    }
     /**
      * When true, public messages from blocked players are dropped at capture
      * time. When false they are shown normally — the conversation card stays
@@ -416,16 +423,33 @@ public class AtomChatConfig {
         }
     }
 
+    /** Keep malformed avatar-style values from discarding the rest of the config. */
+    private static String sanitizeAvatarStyle(String json) {
+        com.google.gson.JsonObject obj = GSON.fromJson(json, com.google.gson.JsonObject.class);
+        if (obj != null && obj.has("avatarStyle")) {
+            try {
+                String raw = obj.get("avatarStyle").getAsString();
+                obj.addProperty("avatarStyle",
+                        AvatarStyle.valueOf(raw.trim().toUpperCase(java.util.Locale.ROOT)).name());
+            } catch (RuntimeException ignored) {
+                obj.remove("avatarStyle");
+            }
+            return obj.toString();
+        }
+        return json;
+    }
+
     private static AtomChatConfig load() {
         Path path = com.atom.chat.platform.Platform.configDir().resolve("atomchat/atomchat-client.json");
         if (Files.exists(path)) {
             try {
                 String json = Files.readString(path, StandardCharsets.UTF_8);
-                AtomChatConfig config = GSON.fromJson(sanitizePageNavStyle(json), AtomChatConfig.class);
+                AtomChatConfig config = GSON.fromJson(sanitizePageNavStyle(sanitizeAvatarStyle(json)), AtomChatConfig.class);
                 if (config != null) {
                     if (config.blockedPlayers == null) {
                         config.blockedPlayers = new java.util.ArrayList<>();
                     }
+                    config.avatarStyle = config.effectiveAvatarStyle();
                     config.migrateCornerStyle();
                     config.migratePixelRadius();
                     config.clampContentScale();

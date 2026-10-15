@@ -11,7 +11,6 @@ import com.atom.chat.render.SkiaDraw;
 import com.atom.chat.render.SkiaFontRenderer;
 import com.atom.chat.ui.Animations;
 import com.atom.chat.ui.AppIcons;
-import com.atom.chat.ui.MenuPopup;
 import com.atom.chat.ui.UiCards;
 import com.atom.chat.ui.UiLayout;
 import com.atom.chat.ui.PressScale;
@@ -60,13 +59,10 @@ import java.util.UUID;
  * the quick-phrase editor) — Enter commits, Esc cancels. On someone else's
  * page it is a non-editable placeholder line.</p>
  *
- * <p>Avatar interactions keep the grilled decision: the edit badge always
- * opens the file picker; tapping the avatar itself opens a local
- * change/clear menu when a custom avatar is set, and the picker otherwise.
- * With no custom avatar the skin is displayed. The banner card (local player
- * only) opens the system image picker on click — the pick is copied to
- * {@code <config>/atomchat/banner.*} and hot-loads — and right-click clears
- * it back to the gradient.</p>
+ * <p>Avatars are display-only on this page. AtomChat keeps the custom-avatar
+ * fallback chain; E33Chat draws the square skin face and its outset hat.
+ * Avatar and former edit-badge hits are consumed before banner editing.
+ * The local banner still supports click-to-pick and right-click-to-clear.</p>
  */
 public final class ProfilePage {
     /** Actions the shell performs on behalf of this page. */
@@ -118,7 +114,6 @@ public final class ProfilePage {
     }
 
     private final Handler handler;
-    private final AvatarStore avatarStore;
     /** Session start (client JOIN); 0 = unknown. */
     private static volatile long sessionStartMs;
     /** Cached stat totals; the synced-stat sum runs at most once a second. */
@@ -133,17 +128,8 @@ public final class ProfilePage {
     private RoleResolver roleResolver;
 
     private long lastFrameMs = System.currentTimeMillis();
-    private float avatarHover;
-    private float badgeHover;
     /** Hover scrim on the banner card (local player's page only). */
     private float bannerHover;
-    /**
-     * Bounce for the avatar and its edit badge: both are discrete taps, so
-     * they scale on their own width budget. Draw-only, like every other
-     * scale on this page - the hit-tests keep using the unscaled rects.
-     */
-    private final PressScale avatarScale = PressScale.bounce();
-    private final PressScale badgeScale = PressScale.bounce();
     /**
      * Per-row hover wash alpha, keyed by row index. Each row approaches its
      * own target every frame (the {@link #copyHover} state machine), so the
@@ -163,9 +149,6 @@ public final class ProfilePage {
      * hit tests keep the unscaled geometry.
      */
     private final PressScale infoCardScale = PressScale.bounce();
-    private final float[] menuItemHover = new float[2];
-    /** Per-item menu bounce, indexed like {@link #menuItemHover}. */
-    private final PressScale[] menuItemScale = {PressScale.bounce(), PressScale.bounce()};
 
     private static int accentColor() {
         return com.atom.chat.config.AtomChatConfig.get().accentColor;
@@ -364,21 +347,8 @@ public final class ProfilePage {
         }
         return false;
     }
-    private boolean avatarMenuOpen;
-    /**
-     * Two-step confirm on the "restore skin" row: the first tap arms the row
-     * red ("Restore skin?"), the second tap within the window really clears.
-     * Same language as the settings page's destructive actions.
-     */
-    private static final long CLEAR_ARM_MS = 3000L;
-    private int clearArmIndex = -1;
-    private long clearArmedAt;
-    /** Fade/scale progress of the avatar menu; keeps drawing while fading out. */
-    private float menuAnim;
-
-    public ProfilePage(Handler handler, AvatarStore avatarStore) {
+    public ProfilePage(Handler handler, AvatarStore ignoredAvatarStore) {
         this.handler = handler;
-        this.avatarStore = avatarStore;
     }
 
     /** Subject injection point for the future avatar-click profile navigation. */
@@ -673,6 +643,18 @@ public final class ProfilePage {
                 size, size);
     }
 
+    /** Shared occlusion guard for both buttons and the banner hover. */
+    private boolean onAvatarArea(UiLayout layout, float scrollY, float vmx, float vmy) {
+        UiLayout.Rect avatar = avatarRect(layout, scrollY);
+        float outset = PlayerAvatar.isE33Chat()
+                ? avatar.w() * UiTokens.E33CHAT_PROFILE_HAT_OUTSET_RATIO
+                : UiTokens.PROFILE_AVATAR_RING + s(1.25F);
+        UiLayout.Rect bounds = new UiLayout.Rect(
+                avatar.x() - outset, avatar.y() - outset,
+                avatar.w() + outset * 2.0F, avatar.h() + outset * 2.0F);
+        return bounds.contains(vmx, vmy) || badgeRect(layout, scrollY).contains(vmx, vmy);
+    }
+
     private UiLayout.Rect badgeRect(UiLayout layout, float scrollY) {
         UiLayout.Rect avatar = avatarRect(layout, scrollY);
         float badge = UiTokens.PROFILE_EDIT_BADGE;
@@ -775,44 +757,13 @@ public final class ProfilePage {
                 w, h);
     }
 
-    /**
-     * The local avatar menu (change/clear); anchored under the avatar itself
-     * and wide enough for its longest label — the fixed conversation-menu
-     * width truncates "Change avatar".
-     */
-    private UiLayout.Rect menuRect(UiLayout layout, float scrollY) {
-        UiLayout.Rect avatar = avatarRect(layout, scrollY);
-        float w = menuWidth();
-        float h = UiTokens.MENU_H;
-        float x = Math.max(layout.list.x() + s(8),
-                Math.min(avatar.x() + avatar.w() / 2.0F - w / 2.0F,
-                        layout.list.right() - w - s(8)));
-        return new UiLayout.Rect(x, avatar.bottom() + s(6), w, h);
-    }
-
-    private float menuWidth() {
-        Font font = FontManager.font(UiTokens.FONT_BUTTON);
-        float w = UiTokens.MENU_W;
-        w = Math.max(w, s(36) + SkiaFontRenderer.getStringWidth(font,
-                tr("atomchat.profile.avatar.change")) + s(14));
-        w = Math.max(w, s(36) + SkiaFontRenderer.getStringWidth(font,
-                tr("atomchat.profile.avatar.clear")) + s(14));
-        return w;
-    }
-
-    private UiLayout.Rect menuItemRect(UiLayout layout, float scrollY, int index) {
-        UiLayout.Rect menu = menuRect(layout, scrollY);
-        float rowH = UiTokens.MENU_H / 2.0F;
-        return new UiLayout.Rect(menu.x(), menu.y() + index * rowH, menu.w(), rowH);
-    }
-
     // ------------------------------------------------------------------
     // Interaction
     // ------------------------------------------------------------------
 
     /**
-     * Handles a left click. Returns true when the click was consumed (menu
-     * action, avatar, badge, signature line or copy button); false lets the
+     * Handles a left click. Returns true when the click was consumed (avatar,
+     * former badge, banner, signature line or copy button); false lets the
      * shell keep it.
      */
     public boolean onClick(float vmx, float vmy, UiLayout layout, float scrollY) {
@@ -826,55 +777,14 @@ public final class ProfilePage {
                 return true;
             }
         }
-        if (avatarMenuOpen) {
-            for (int i = 0; i < 2; i++) {
-                if (menuItemRect(layout, scrollY, i).contains(vmx, vmy)) {
-                    if (i == 0) {
-                        clearArmIndex = -1;
-                        avatarMenuOpen = false;
-                        handler.openAvatarPicker();
-                        return true;
-                    }
-                    if (!customAvatarActive()) {
-                        // Disabled row: consume the click, keep the menu open.
-                        return true;
-                    }
-                    long now = System.currentTimeMillis();
-                    if (clearArmIndex != i || now - clearArmedAt > CLEAR_ARM_MS) {
-                        // Arm: the row turns red and the menu stays open.
-                        clearArmIndex = i;
-                        clearArmedAt = now;
-                        return true;
-                    }
-                    clearArmIndex = -1;
-                    avatarMenuOpen = false;
-                    handler.clearAvatar();
-                    return true;
-                }
-            }
-            // Any click outside the menu dismisses it; the click is consumed
-            // so it cannot fall through onto the rows underneath.
-            avatarMenuOpen = false;
-            clearArmIndex = -1;
-            return true;
-        }
-        if (subjectIsSelf() && badgeRect(layout, scrollY).contains(vmx, vmy)) {
-            handler.openAvatarPicker();
-            return true;
-        }
-        if (subjectIsSelf() && avatarRect(layout, scrollY).contains(vmx, vmy)) {
-            // The avatar tap is always the management entry: the menu opens
-            // with or without a custom avatar ("use skin" disabled without
-            // one). The badge is the shortcut straight to the picker.
-            clearArmIndex = -1;
-            avatarMenuOpen = true;
+        if (onAvatarArea(layout, scrollY, vmx, vmy)) {
             return true;
         }
         if (subjectIsSelf() && bannerRect(layout, scrollY).contains(vmx, vmy)) {
             // The banner card is the custom-banner entry (the chip names it):
             // the pick lands in <config>/atomchat/banner.* and hot-loads. The
-            // avatar's top half overlaps this card but the avatar check above
-            // already consumed those points, so its menu stays authoritative.
+            // avatar's top half overlaps this card; the guard above consumes
+            // those points, including the hat outset and former edit badge.
             handler.openBannerPicker();
             return true;
         }
@@ -897,22 +807,15 @@ public final class ProfilePage {
      * image.
      */
     public boolean onRightClick(float vmx, float vmy, UiLayout layout, float scrollY) {
+        if (onAvatarArea(layout, scrollY, vmx, vmy)) {
+            return true;
+        }
         if (subjectIsSelf() && customBannerActive()
                 && bannerRect(layout, scrollY).contains(vmx, vmy)) {
             handler.clearBanner();
             return true;
         }
         return false;
-    }
-
-    /**
-     * Whether the custom banner layer is live for the current page: local
-     * player, config master switch on, and a banner file on disk. Delete
-     * image = off — {@code BannerStore.isSet()} is the everyday half of the
-     * switch.
-     */
-    private boolean customAvatarActive() {
-        return avatarStore.isSet() || com.atom.chat.profile.ProfileSync.hasOwnImage(com.atom.chat.profile.ProfileField.AVATAR);
     }
 
     private Image profileBannerImage() {
@@ -944,35 +847,22 @@ public final class ProfilePage {
         try {
             SkiaDraw.clip(canvas, layout.list.x(), layout.list.y(), layout.list.w(), layout.list.h(), 0.0F);
             drawBanner(canvas, layout, scrollY);
-            drawAvatar(canvas, layout, vmx, vmy, scrollY);
+            drawAvatar(canvas, layout, scrollY);
             drawNameSignature(canvas, layout, vmx, vmy, scrollY);
             drawStatTiles(canvas, layout, vmx, vmy, scrollY);
             drawInfoRows(canvas, layout, vmx, vmy, scrollY);
             drawIdentityCard(canvas, layout, scrollY);
-            drawAvatarMenu(canvas, layout, vmx, vmy, scrollY);
         } finally {
             canvas.restore();
         }
 
-        UiLayout.Rect avatar = avatarRect(layout, scrollY);
-        boolean overAvatar = avatar.contains(vmx, vmy);
-        UiLayout.Rect badge = badgeRect(layout, scrollY);
-        boolean overBadge = badge.contains(vmx, vmy);
-        avatarHover = UiMotion.approach(avatarHover, overAvatar ? 1.0F : 0.0F, dt, UiMotion.HOVER_MS);
-        badgeHover = UiMotion.approach(badgeHover, overBadge ? 1.0F : 0.0F, dt, UiMotion.HOVER_MS);
         boolean overSign = subjectIsSelf() && !signatureEditing
                 && signatureRect(layout, scrollY).contains(vmx, vmy);
         signatureHover = UiMotion.approach(signatureHover, overSign ? 1.0F : 0.0F, dt, UiMotion.HOVER_MS);
         boolean overBanner = subjectIsSelf() && !signatureEditing
+                && !onAvatarArea(layout, scrollY, vmx, vmy)
                 && bannerRect(layout, scrollY).contains(vmx, vmy);
         bannerHover = UiMotion.approach(bannerHover, overBanner ? 1.0F : 0.0F, dt, UiMotion.HOVER_MS);
-        // The avatar, badge and menu bounces below pass pressed = false: the
-        // page is never told which of them is held down, so the hover lift is
-        // the only live half of their language and the press dip stays dormant.
-        // Since the info-card merge the rows carry hover wash only — no press
-        // half of their own.
-        avatarScale.update(overAvatar && subjectIsSelf(), false, dt, Animations.enabled(), avatar.w());
-        badgeScale.update(overBadge && subjectIsSelf(), false, dt, Animations.enabled(), badge.w());
         List<InfoRow> rows = infoRows();
         for (int i = 0; i < rows.size(); i++) {
             boolean over = rowRect(layout, i, scrollY).contains(vmx, vmy);
@@ -987,19 +877,6 @@ public final class ProfilePage {
         UiLayout.Rect infoCard = infoCardRect(layout, rows.size(), scrollY);
         infoCardScale.update(infoCard.contains(vmx, vmy), false, dt,
                 Animations.enabled(), infoCard.w());
-        for (int i = 0; i < menuItemHover.length; i++) {
-            boolean enabled = i == 0 || customAvatarActive();
-            boolean over = avatarMenuOpen && enabled
-                    && menuItemRect(layout, scrollY, i).contains(vmx, vmy);
-            menuItemHover[i] = UiMotion.approach(menuItemHover[i], over ? 1.0F : 0.0F, dt, UiMotion.HOVER_MS);
-            MenuPopup.updateRowBounce(menuItemScale[i], over, dt,
-                    menuItemRect(layout, scrollY, i).w());
-        }
-        // Popup fade respects the decorative-motion switch like every other
-        // overlay: when animations are off the duration is 0 and the menu
-        // simply appears/disappears.
-        menuAnim = UiMotion.approach(menuAnim, avatarMenuOpen ? 1.0F : 0.0F, dt,
-                Animations.ms(UiMotion.POPUP_MS));
     }
 
     /**
@@ -1055,12 +932,16 @@ public final class ProfilePage {
                 Image face = PlayerAvatar.face(subjectUuid(), subjectName());
                 if (face != null) {
                     float side = Math.min(banner.w(), banner.h());
-                    // SamplingMode.DEFAULT is the nearest-neighbour mode in this
-                    // Skija (0.116.8): it packs FilterMipmap(FilterMode.NEAREST,
-                    // MipmapMode.NONE) — the enlargement stays crisp pixels.
-                    SkiaDraw.drawRoundedImage(canvas, face,
-                            banner.x() + (banner.w() - side) / 2.0F,
-                            banner.y(), side, side, 0.0F, SamplingMode.DEFAULT);
+                    float faceX = banner.x() + (banner.w() - side) / 2.0F;
+                    // In E33Chat style the face and its outset hat must be
+                    // drawn as separate square layers. Native style keeps the
+                    // existing face image and nearest-neighbour enlargement.
+                    if (!PlayerAvatar.drawE33Chat(canvas, subjectUuid(), subjectName(),
+                            faceX, banner.y(), side,
+                            side * UiTokens.E33CHAT_PROFILE_HAT_OUTSET_RATIO)) {
+                        SkiaDraw.drawRoundedImage(canvas, face,
+                                faceX, banner.y(), side, side, 0.0F, SamplingMode.DEFAULT);
+                    }
                 }
                 SkiaDraw.drawVerticalGradient(canvas, banner.x(), banner.y(), banner.w(), banner.h(), 0.0F,
                         UiTokens.withAlpha(panelRgb(), 140), UiTokens.withAlpha(panelRgb(), 255));
@@ -1101,12 +982,19 @@ public final class ProfilePage {
                 Color.makeARGB(255, 255, 255, 255));
     }
 
-    private void drawAvatar(Canvas canvas, UiLayout layout, float vmx, float vmy, float scrollY) {
+    private void drawAvatar(Canvas canvas, UiLayout layout, float scrollY) {
         UiLayout.Rect avatar = avatarRect(layout, scrollY);
-        if (avatar.bottom() < layout.list.y() || avatar.y() > layout.list.bottom()) {
+        float outset = PlayerAvatar.isE33Chat()
+                ? avatar.w() * UiTokens.E33CHAT_PROFILE_HAT_OUTSET_RATIO : 0.0F;
+        if (avatar.bottom() + outset < layout.list.y()
+                || avatar.y() - outset > layout.list.bottom()) {
             return;
         }
-        avatarScale.begin(canvas, avatar.x() + avatar.w() / 2.0F, avatar.y() + avatar.h() / 2.0F);
+        if (PlayerAvatar.drawE33Chat(canvas, subjectUuid(), subjectName(),
+                avatar.x(), avatar.y(), avatar.w(), outset)) {
+            return;
+        }
+        canvas.save();
         try {
             // The panelBg ring under the bitmap is the QQ separator: an opaque
             // panel-coloured circle one ring wider than the avatar, so the
@@ -1128,15 +1016,6 @@ public final class ProfilePage {
                 SkiaDraw.drawRoundedRect(canvas, avatar.x(), avatar.y(), avatar.w(), avatar.h(),
                         avatar.w() / 2.0F, Color.makeARGB(255, 120, 130, 145));
             }
-            // Hover feedback regardless of whether an avatar is set: with no
-            // custom avatar the tap opens the picker directly, so the affordance
-            // must not vanish exactly when the avatar is clickable.
-            if (avatarHover > 0.01F && subjectIsSelf()) {
-                // Image scrim, not a card wash: the white lift sits on the avatar
-                // bitmap itself, whose polarity no theme token knows about.
-                SkiaDraw.drawRoundedRect(canvas, avatar.x(), avatar.y(), avatar.w(), avatar.h(),
-                        avatar.w() / 2.0F, Color.makeARGB((int) (40.0F * avatarHover), 255, 255, 255));
-            }
             // Hairline rim OUTSIDE the panelBg separator ring: it hugs the
             // separator's outer edge (avatar radius + PROFILE_AVATAR_RING),
             // polarity-adaptive UiTokens.rim, so the avatar assembly reads
@@ -1146,29 +1025,6 @@ public final class ProfilePage {
                     avatar.w() / 2.0F + ring + UiTokens.s(0.75F), UiTokens.s(1.0F), UiTokens.rim());
         } finally {
             canvas.restore();
-        }
-
-        // Persistent edit badge at the avatar's bottom-right; only the local
-        // player's avatar is editable.
-        if (subjectIsSelf()) {
-            UiLayout.Rect badge = badgeRect(layout, scrollY);
-            badgeScale.begin(canvas, badge.x() + badge.w() / 2.0F, badge.y() + badge.h() / 2.0F);
-            try {
-                // Badge is a fixed dark glass chip over an arbitrary avatar
-                // bitmap: the fixed dark base plus white glyph/overlay is the
-                // polarity-independent scrim language, so it stays literal.
-                SkiaDraw.drawRoundedRect(canvas, badge.x(), badge.y(), badge.w(), badge.h(),
-                        badge.w() / 2.0F, Color.makeARGB(215, 20, 22, 30));
-                if (badgeHover > 0.01F) {
-                    SkiaDraw.drawRoundedRect(canvas, badge.x(), badge.y(), badge.w(), badge.h(),
-                            badge.w() / 2.0F, Color.makeARGB((int) (60.0F * badgeHover), 255, 255, 255));
-                }
-                drawIconCentered(canvas, AppIcons.ICON_EDIT_PATH,
-                        badge.x() + badge.w() / 2.0F, badge.y() + badge.h() / 2.0F,
-                        UiTokens.PROFILE_EDIT_BADGE * 0.55F, Color.makeARGB(255, 255, 255, 255));
-            } finally {
-                canvas.restore();
-            }
         }
     }
 
@@ -1480,76 +1336,6 @@ public final class ProfilePage {
                     card.x() + pad, SkiaFontRenderer.centerBaselineY(labelFont, cy2), textPrimary());
             SkiaFontRenderer.drawTextRight(canvas, valueFont, tr("atomchat.profile.blocked.yes"),
                     card.right() - pad, cy2, Color.makeARGB(255, 235, 64, 52));
-        }
-    }
-
-    private void drawAvatarMenu(Canvas canvas, UiLayout layout, float vmx, float vmy, float scrollY) {
-        if (menuAnim < 0.01F) {
-            return;
-        }
-        UiLayout.Rect menu = menuRect(layout, scrollY);
-        float rowH = UiTokens.MENU_H / 2.0F;
-        boolean clearEnabled = customAvatarActive();
-        boolean clearArmed = clearEnabled && clearArmIndex == 1
-                && System.currentTimeMillis() - clearArmedAt <= CLEAR_ARM_MS;
-        String[] labels = {
-                tr("atomchat.profile.avatar.change"),
-                tr(clearArmed ? "atomchat.profile.avatar.clear.confirm" : "atomchat.profile.avatar.clear")
-        };
-        Path[] icons = {AppIcons.ICON_EDIT_PATH, AppIcons.ICON_TAB_PROFILE_PATH};
-        Font font = FontManager.font(UiTokens.FONT_BUTTON);
-        canvas.save();
-        try (Paint layer = new Paint()) {
-            // Same entrance language as the bubble context menu: layer alpha
-            // fade plus a subtle scale from the menu's top centre.
-            layer.setColor(Color.makeARGB((int) (255.0F * menuAnim), 0, 0, 0));
-            canvas.saveLayer(Rect.makeXYWH(menu.x() - s(20), menu.y() - s(20),
-                    menu.w() + s(40), menu.h() + s(40)), layer);
-            float sc = 0.94F + 0.06F * menuAnim;
-            canvas.translate(menu.x() + menu.w() / 2.0F, menu.y());
-            canvas.scale(sc, sc);
-            canvas.translate(-(menu.x() + menu.w() / 2.0F), -menu.y());
-            // The one right-click-menu language (MenuPopup owns the plate for
-            // every menu in the mod): fixed dark surface (35,39,47), radius
-            // and shadow tokens. Popups keep their own fixed polarity, so no
-            // theme token applies.
-            MenuPopup.drawSurface(canvas, menu.x(), menu.y(), menu.w(), menu.h());
-            for (int i = 0; i < labels.length; i++) {
-                float rowY = menu.y() + i * rowH;
-                float cy = rowY + rowH / 2.0F;
-                // Each item bounces around its own rect centre, so the icon and
-                // label travel with the capsule instead of drifting out of it.
-                MenuPopup.beginRowBounce(canvas, menuItemScale[i], menu.x() + menu.w() / 2.0F, cy);
-                try {
-                    // The wash, inset and bounce budget all live in MenuPopup —
-                    // the shared language of every right-click menu.
-                    MenuPopup.drawRowWash(canvas, menu.x(), rowY, menu.w(), rowH, menuItemHover[i]);
-                    boolean rowEnabled = i == 0 || clearEnabled;
-                    // Literal ink colours on the fixed dark menu: armed red is the
-                    // destructive-confirm language, grey the disabled state, white
-                    // the resting label — none of them follow the theme.
-                    int labelColor;
-                    if (i == 1 && clearArmed) {
-                        labelColor = Color.makeARGB(255, 235, 64, 52);
-                    } else if (!rowEnabled) {
-                        labelColor = Color.makeARGB(255, 130, 140, 155);
-                    } else {
-                        labelColor = Color.makeARGB(255, 255, 255, 255);
-                    }
-                    drawIconCentered(canvas, icons[i], menu.x() + s(18), cy,
-                            UiTokens.CONTEXT_ICON_SIZE, labelColor);
-                    SkiaFontRenderer.drawText(canvas, font, labels[i], menu.x() + s(36),
-                            SkiaFontRenderer.centerBaselineY(font, cy), labelColor);
-                } finally {
-                    MenuPopup.endRowBounce(canvas);
-                }
-            }
-            // Close the saveLayer; the finally below closes the outer save().
-            // A saveLayer per frame with no matching restore leaks one matrix
-            // level per frame and drags the whole UI off-screen.
-            canvas.restore();
-        } finally {
-            canvas.restore();
         }
     }
 

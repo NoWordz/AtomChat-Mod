@@ -11,7 +11,7 @@ Build a high-quality, highly customizable phone-app-style chat UI for Minecraft,
 - **Skija (HumbleUI Skia bindings, 0.116.8)** — same engine used by the Tuui mod.
 - Draw directly onto Minecraft's main framebuffer via `BackendRenderTarget.makeGL` + `Surface.wrapBackendRenderTarget`.
 - Save/restore GL state around Skia drawing (`GlStateUtil`).
-- Bundled native libraries (`skija-windows-x64`) are auto-extracted by Skija at runtime.
+- Bundled native libraries (`skija-windows-x64` or `skija-linux-x64`, selected per artifact) are auto-extracted by Skija at runtime.
 
 ## Architecture (learned from Tuui)
 

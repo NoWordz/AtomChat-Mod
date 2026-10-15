@@ -95,6 +95,7 @@ jobs:
         run: |
           chmod +x ./gradlew
           ./gradlew build --no-daemon
+          ./gradlew build -Patomchat.nativePlatform=linux-x64 --no-daemon
 
       # 发出去的字节更要查这一条：标签是在干净 checkout 上检出的，所以戳里的
       # git_dirty 只有 true 一种错法，而它会让人以为发行版来自未提交的源码。
@@ -102,30 +103,33 @@ jobs:
         working-directory: ${{ matrix.project }}
         run: |
           set -euo pipefail
-          jar=$(find build/libs -name "*.jar" ! -name "*sources*" ! -name "*-slim*" | head -1)
-          test -n "$jar"
+          while IFS= read -r jar; do
           echo "构建戳（$jar）："
           unzip -p "$jar" atomchat-build.properties
           if unzip -p "$jar" atomchat-build.properties | grep -q '^git_dirty=true'; then
             echo "::error::发行 jar 的构建戳写着 git_dirty=true，但标签是在干净的 checkout 上检出的"
             exit 1
           fi
+          done < <(find build/libs build/linux-x64/libs -name "*.jar" ! -name "*sources*" ! -name "*-slim*")
 
       # 发出去的字节更要查这一层：单测跑的是类路径，看不出打包时少塞了一个嵌套 jar。
       - name: 断言产物内容
-        run: python3 tools/verify_jars.py "${{ matrix.project }}"
+        run: |
+          python3 tools/test_verify_jars.py
+          python3 tools/verify_jars.py --platform windows-x64 "${{ matrix.project }}"
+          python3 tools/verify_jars.py --platform linux-x64 "${{ matrix.project }}"
 
       - name: 取产物（-slim 与 sources 一律不要）
         working-directory: ${{ matrix.project }}
         run: |
           set -euo pipefail
           mkdir -p "$GITHUB_WORKSPACE/dist"
-          find build/libs -name "*.jar" ! -name "*sources*" ! -name "*-slim*" \
+          find build/libs build/linux-x64/libs -name "*.jar" ! -name "*sources*" ! -name "*-slim*" \
             -exec cp {} "$GITHUB_WORKSPACE/dist/" \;
           ls -la "$GITHUB_WORKSPACE/dist"
           count=$(find "$GITHUB_WORKSPACE/dist" -name "*.jar" | wc -l)
-          if [ "$count" -ne 1 ]; then
-            echo "::error::期望恰好一个发布 jar，实际 $count 个 —— 产物名有歧义时取件规则要重新定"
+          if [ "$count" -ne 2 ]; then
+            echo "::error::期望恰好 Windows / Linux 两个发布 jar，实际 $count 个 —— 产物名有歧义时取件规则要重新定"
             exit 1
           fi
           if find "$GITHUB_WORKSPACE/dist" -name "*-slim*" | grep -q .; then
@@ -148,7 +152,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - name: 取回三个 jar
+      - name: 取回六个 jar
         uses: actions/download-artifact@v8
         with:
           path: artifacts
@@ -162,8 +166,8 @@ jobs:
           ls -la release-out
           count=$(find release-out -name "*.jar" | wc -l)
           echo "Release 将挂上 ${count} 个 jar"
-          if [ "$count" -lt 1 ]; then
-            echo "::error::一个 jar 都没有"
+          if [ "$count" -ne 6 ]; then
+            echo "::error::Release 期望 6 个发布 JAR（3 个加载器 × 2 个操作系统），实际 ${count} 个"
             exit 1
           fi
 
@@ -251,7 +255,12 @@ jobs:
         working-directory: ${{ matrix.project }}
         run: |
           chmod +x ./gradlew
-          ./gradlew build publishMods --no-daemon
+          ./gradlew build --no-daemon
+          ./gradlew build -Patomchat.nativePlatform=linux-x64 --no-daemon
+          python3 ../../tools/verify_jars.py --platform windows-x64 "$PWD"
+          python3 ../../tools/verify_jars.py --platform linux-x64 "$PWD"
+          ./gradlew publishMods --no-daemon
+          ./gradlew publishMods -Patomchat.nativePlatform=linux-x64 --no-daemon
         env:
           MODRINTH_TOKEN: ${{ secrets.MODRINTH_TOKEN }}
           CURSEFORGE_TOKEN: ${{ secrets.CURSEFORGE_TOKEN }}

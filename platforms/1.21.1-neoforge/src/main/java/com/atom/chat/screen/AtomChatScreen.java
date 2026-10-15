@@ -3527,6 +3527,14 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
                     // page times the pulse itself because opening the chat ends
                     // the interaction before any release could arrive.
                     conversationListPage.pulseRow(hit.index());
+                    if (hit.row().kind() == ConversationListPage.RowKind.DIVIDER) {
+                        if (button == 0) {
+                            conversationListPage.togglePrivateGroup();
+                            com.atom.chat.audio.FeedbackSoundController.play(
+                                    com.atom.chat.audio.FeedbackCue.BUTTON);
+                        }
+                        return true;
+                    }
                     if (hit.row().kind() == ConversationListPage.RowKind.PUBLIC && button == 0) {
                         openWorldChat();
                         return true;

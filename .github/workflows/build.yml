@@ -76,6 +76,7 @@ jobs:
         run: |
           chmod +x ./gradlew
           ./gradlew build --no-daemon
+          ./gradlew build -Patomchat.nativePlatform=linux-x64 --no-daemon
 
       # 构建戳是拿到 jar 的人判断「这些字节来自哪次提交」的唯一依据，而它只在 checkout
       # 真的干净时才说真话。这一步既把戳打进日志（验收时看得见），也在它说谎时让构建红。
@@ -86,20 +87,23 @@ jobs:
         working-directory: ${{ matrix.project }}
         run: |
           set -euo pipefail
-          jar=$(find build/libs -name "*.jar" ! -name "*sources*" ! -name "*-slim*" | head -1)
-          test -n "$jar"
+          while IFS= read -r jar; do
           echo "构建戳（$jar）："
           unzip -p "$jar" atomchat-build.properties
           if unzip -p "$jar" atomchat-build.properties | grep -q '^git_dirty=true'; then
             echo "::error::发行 jar 的构建戳写着 git_dirty=true，但 CI 是从干净的 checkout 构建的 —— 拿到它的人会以为这些字节来自未提交的源码"
             exit 1
           fi
+          done < <(find build/libs build/linux-x64/libs -name "*.jar" ! -name "*sources*" ! -name "*-slim*")
 
       # 产物级断言：单测跑的是类路径、构建闸盯的是源码目录与 AP 输出 —— 两者都拦不住
       # "打包这一步少塞了一个嵌套 jar"或者"重定位只做了一半"。这几条看的是 jar 里面，
       # 规则原本只在本地跑，现在每次构建都由 CI 跑一遍。
       - name: 断言产物内容
-        run: python3 tools/verify_jars.py "${{ matrix.project }}"
+        run: |
+          python3 tools/test_verify_jars.py
+          python3 tools/verify_jars.py --platform windows-x64 "${{ matrix.project }}"
+          python3 tools/verify_jars.py --platform linux-x64 "${{ matrix.project }}"
 
       # -slim 那个包不含内嵌依赖，发出去的表现是"缺库"而不是构建失败 ——
       # 取件规则必须把排除写死，取完再断言一次，两道都要有。
@@ -108,12 +112,12 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p "$GITHUB_WORKSPACE/dist"
-          find build/libs -name "*.jar" ! -name "*sources*" ! -name "*-slim*" \
+          find build/libs build/linux-x64/libs -name "*.jar" ! -name "*sources*" ! -name "*-slim*" \
             -exec cp {} "$GITHUB_WORKSPACE/dist/" \;
           ls -la "$GITHUB_WORKSPACE/dist"
           count=$(find "$GITHUB_WORKSPACE/dist" -name "*.jar" | wc -l)
-          if [ "$count" -ne 1 ]; then
-            echo "::error::期望恰好一个发布 jar，实际 $count 个 —— 产物名有歧义时取件规则要重新定"
+          if [ "$count" -ne 2 ]; then
+            echo "::error::期望恰好 Windows / Linux 两个发布 jar，实际 $count 个 —— 产物名有歧义时取件规则要重新定"
             exit 1
           fi
           if find "$GITHUB_WORKSPACE/dist" -name "*-slim*" | grep -q .; then

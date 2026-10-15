@@ -10,13 +10,14 @@ plugins {
 
 // 共享层装配：读仓库级身份 + 把 shared/ 与本目标挂载的层接进源集。
 // 判定依据在 versions/*.json，本平台不做任何目标名硬编码。
+apply from: '../../gradle/atomchat-native-platform.gradle'
 apply from: '../../gradle/atomchat-layers.gradle'
 
 version = project.mod_version
 group = project.mod_group_id
 
 base {
-    archivesName = "${project.mod_id}-Forge-${project.minecraft_version}"
+    archivesName = "${project.mod_id}-Forge-${project.minecraft_version}${project.atomchatNativeSuffix}"
 }
 
 // Forge 1.20.1 runs on Java 17, so the mod targets 17 instead of the 21 the
@@ -44,7 +45,7 @@ minecraft {
             // Forge's production runtime names are SRG, so the refmap has to be
             // remapped against the SRG file ForgeGradle generates.
             jvmArg '-Dmixin.env.remapRefMap=true'
-            jvmArg "-Dmixin.env.refMapRemappingFile=${projectDir}/build/createSrgToMcp/output.srg"
+            jvmArg "-Dmixin.env.refMapRemappingFile=${layout.buildDirectory.get().asFile}/createSrgToMcp/output.srg"
 
             mods {
                 "${mod_id}" {
@@ -102,8 +103,8 @@ dependencies {
     // Skija-shipping mod can agree on one copy.
     jarJar(implementation("io.github.humbleui:skija-shared:[${project.skija_version},0.117)"))
     jarJar(implementation("io.github.humbleui:types:[0.1.1,0.2)"))
-    // Windows x64 native. Add linux/mac natives when publishing cross-platform.
-    jarJar(implementation("io.github.humbleui:skija-windows-x64:[${project.skija_version},0.117)"))
+    // Bundle only the selected operating system native; never both.
+    jarJar(implementation("io.github.humbleui:${project.atomchatNativeArtifact}:[${project.skija_version},0.117)"))
 
     // FlatLaf gives the Swing image picker a modern flat look instead of the
     // dated default Metal one. Bundled as a RELOCATED copy (private package, see
@@ -115,8 +116,7 @@ dependencies {
     testImplementation platform('org.junit:junit-bom:5.11.4')
     testImplementation 'org.junit.jupiter:junit-jupiter'
     testImplementation 'org.junit.platform:junit-platform-launcher'
-    // CI test hosts run on Linux; the bundled jar targets Windows only, so the
-    // Linux Skija native is test-scoped and never packaged.
+    // Linux hosts can test either variant. Test dependencies are not bundled.
     testImplementation "io.github.humbleui:skija-linux-x64:${project.skija_version}"
 }
 
@@ -236,7 +236,7 @@ publishing {
 // Release publishing (Modrinth + CurseForge), same shape as the other branches
 // ---------------------------------------------------------------------------
 
-def storeVersion = "Forge-${project.minecraft_version}-${project.mod_version}"
+def storeVersion = "Forge-${project.minecraft_version}-${project.mod_version}${project.atomchatNativeSuffix}"
 
 def changelogFor(version) {
     // 单分支之后 RELEASE_NOTES.md 只有仓库根那一份，各平台不再各存一份

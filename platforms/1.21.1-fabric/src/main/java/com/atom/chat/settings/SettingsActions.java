@@ -200,6 +200,11 @@ public final class SettingsActions {
             };
             TeleportCommands.reset();
             AtomChatConfig.save(cfg);
+        } else if ("avatar_style".equals(actionId)) {
+            AtomChatConfig cfg = AtomChatConfig.get();
+            cfg.avatarStyle = cfg.effectiveAvatarStyle() == AtomChatConfig.AvatarStyle.E33CHAT
+                    ? AtomChatConfig.AvatarStyle.ATOMCHAT : AtomChatConfig.AvatarStyle.E33CHAT;
+            AtomChatConfig.save(cfg);
         } else if ("page_nav_style".equals(actionId)) {
             // Style pick: tap cycles SLIDE <-> ZOOM and saves, like the
             // teleport-mode cycle above. Takes effect on the next nav.

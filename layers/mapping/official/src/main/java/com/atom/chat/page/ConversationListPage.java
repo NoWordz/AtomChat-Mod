@@ -121,6 +121,31 @@ public final class ConversationListPage {
     private int hoverRowIndex = -1;
     private int hoveredIndex = -1;
     private long lastFrameMs = System.currentTimeMillis();
+    private boolean privateCollapsed;
+    private float privateExpansion = 1.0F;
+    private long foldMeasuredAtMs = System.currentTimeMillis();
+    private static final float FOLD_TAU_MS = SettingsSectionPage.GROUP_FOLD_TAU_MS;
+    private static final float FOLD_MIN_DRAWN = 0.01F;
+
+    public void togglePrivateGroup() {
+        privateCollapsed = !privateCollapsed;
+        if (!Animations.enabled()) {
+            privateExpansion = privateCollapsed ? 0.0F : 1.0F;
+        }
+    }
+
+    private float rowHeight(Row row) {
+        return row.kind() == RowKind.DIVIDER ? DIVIDER_H
+                : ROW_H * (row.kind() == RowKind.PLAYER ? privateExpansion : 1.0F);
+    }
+
+    /** Each gap belongs to the following row, including the first private gap. */
+    private float rowAdvance(List<Row> rows, int index) {
+        float gap = index + 1 < rows.size()
+                ? ROW_GAP * (rows.get(index + 1).kind() == RowKind.PLAYER ? privateExpansion : 1.0F)
+                : 0.0F;
+        return rowHeight(rows.get(index)) + gap;
+    }
 
     public enum RowKind { PUBLIC, PLAYER, DIVIDER }
 
@@ -266,21 +291,19 @@ public final class ConversationListPage {
     }
 
     public float measureContent(UiLayout layout) {
+        // Measurement takes the frame's expansion snapshot. Draw and hit only
+        // read it, so all three consumers walk exactly the same row geometry.
+        long now = System.currentTimeMillis();
+        float dt = Math.min(50.0F, Math.max(0.0F, now - foldMeasuredAtMs));
+        foldMeasuredAtMs = now;
+        float target = privateCollapsed ? 0.0F : 1.0F;
+        privateExpansion = Animations.enabled()
+                ? UiMotion.expApproach(privateExpansion, target, dt, FOLD_TAU_MS) : target;
         List<Row> rows = rows();
-        if (rows.isEmpty()) {
-            return UiTokens.ROOT_CONTENT_GAP;
-        }
         float total = UiTokens.ROOT_CONTENT_GAP;
-        int cards = 0;
-        for (Row row : rows) {
-            if (row.kind() == RowKind.DIVIDER) {
-                total += DIVIDER_H;
-            } else {
-                total += ROW_H;
-                cards++;
-            }
+        for (int i = 0; i < rows.size(); i++) {
+            total += rowAdvance(rows, i);
         }
-        total += (rows.size() - 1) * ROW_GAP;
         return total;
     }
 
@@ -291,8 +314,6 @@ public final class ConversationListPage {
         List<Row> rows = rows();
         int hovered = -1;
         float emptyTop = 0.0F;
-        // Decided from the data, not from what happens to be on screen — a
-        // scrolled view can hide every card without the list being empty.
         boolean hasPlayers = rows.stream().anyMatch(r -> r.kind() == RowKind.PLAYER);
         canvas.save();
         try {
@@ -300,51 +321,69 @@ public final class ConversationListPage {
             float y = contentTop(layout, scrollY);
             for (int i = 0; i < rows.size(); i++) {
                 Row row = rows.get(i);
-                float h = row.kind() == RowKind.DIVIDER ? DIVIDER_H : ROW_H;
-                // Culled in the same scrolled space the cards are drawn in, so a
-                // row leaves the loop exactly when it leaves the viewport.
-                if (y + h >= layout.list.y() && y <= layout.list.bottom()) {
+                float h = rowHeight(row);
+                if ((row.kind() != RowKind.PLAYER || privateExpansion >= FOLD_MIN_DRAWN)
+                        && y + h >= layout.list.y() && y <= layout.list.bottom()) {
                     if (row.kind() == RowKind.DIVIDER) {
-                        drawDivider(canvas, layout.list.x(), y, layout.list.w(), h);
-                    } else {
-                        // One geometry object satisfies both readers: the hover
-                        // test and the draw take the rect from the same value, so
-                        // a card can never be drawn somewhere it cannot be
-                        // clicked, and the horizontal inset lives in one place.
                         RowHit rect = rowRect(i, layout, y);
-                        boolean over = rect.contains(vmx, vmy);
+                        boolean over = rect.contains(vmx, vmy) && layout.list.contains(vmx, vmy);
+                        PressScale press = rowScale.computeIfAbsent(i, k -> PressScale.bounce());
+                        press.update(over, pressedRow == i && now - pressedRowAtMs < ROW_PULSE_MS,
+                                dt, Animations.enabled(), rect.w());
+                        press.begin(canvas, rect.x() + rect.w() / 2.0F, y + h / 2.0F);
+                        try {
+                            drawDivider(canvas, rect.x(), y, rect.w(), h);
+                        } finally {
+                            canvas.restore();
+                        }
+                    } else {
+                        RowHit rect = rowRect(i, layout, y);
+                        boolean over = rect.contains(vmx, vmy) && layout.list.contains(vmx, vmy);
                         if (over) {
                             hovered = i;
                         }
-                        // Animated value only — see drawRow; forcing 1 while hovered
-                        // is what made the highlight snap in instead of fading.
                         boolean pulsing = pressedRow == i
-                                && System.currentTimeMillis() - pressedRowAtMs < ROW_PULSE_MS;
-                        drawRow(canvas, row, rect.x(), y, rect.w(),
-                                i == hoverRowIndex ? rowHover : 0.0F, i, over, pulsing, dt);
+                                && now - pressedRowAtMs < ROW_PULSE_MS;
+                        if (row.kind() == RowKind.PLAYER && privateExpansion < 1.0F) {
+                            canvas.save();
+                            try {
+                                SkiaDraw.clip(canvas, layout.list.x(), y, layout.list.w(), h, 0.0F);
+                                try (Paint alpha = new Paint().setAlphaf(privateExpansion)) {
+                                    canvas.saveLayer(Rect.makeXYWH(layout.list.x(), y, layout.list.w(), h), alpha);
+                                    try {
+                                        canvas.translate(0.0F, UiTokens.SETTINGS_FOLD_LIFT
+                                                * (1.0F - privateExpansion));
+                                        drawRow(canvas, row, rect.x(), y, rect.w(),
+                                                i == hoverRowIndex ? rowHover : 0.0F, i, over, pulsing, dt);
+                                    } finally {
+                                        // Composite before the alpha Paint is closed.
+                                        canvas.restore();
+                                    }
+                                }
+                            } finally {
+                                canvas.restore();
+                            }
+                        } else {
+                            drawRow(canvas, row, rect.x(), y, rect.w(),
+                                    i == hoverRowIndex ? rowHover : 0.0F, i, over, pulsing, dt);
+                        }
                         if (row.kind() == RowKind.PUBLIC) {
                             emptyTop = y + h + ROW_GAP;
                         }
                     }
                 }
-                y += h + ROW_GAP;
+                y += rowAdvance(rows, i);
             }
         } finally {
             canvas.restore();
         }
         hoveredIndex = hovered;
-        // One shared alpha plus the row it belongs to. Moving between adjacent
-        // cards keeps it at 1 (no blink); entering fades in and leaving fades
-        // out over the same 90ms the toolbar buttons use.
         rowHover = UiMotion.approach(rowHover, hovered >= 0 ? 1.0F : 0.0F, dt, UiMotion.HOVER_MS);
         if (hovered >= 0) {
             hoverRowIndex = hovered;
         } else if (rowHover <= 0.0F) {
             hoverRowIndex = -1;
         }
-
-        // No conversation partner at all: an illustrated empty state instead of
-        // a bare list with one card and a lot of nothing.
         if (!hasPlayers) {
             UiLayout.Rect area = new UiLayout.Rect(layout.list.x(), emptyTop,
                     layout.list.w(), Math.max(s(120), layout.list.bottom() - emptyTop));
@@ -361,21 +400,18 @@ public final class ConversationListPage {
         float textX = x + padX;
         float rightX = x + w - padX;
         float cy = y + h / 2.0F;
-        SkiaFontRenderer.drawText(canvas, font, text, textX,
-                SkiaFontRenderer.centerBaselineY(font, cy), textPrimary());
+        SkiaFontRenderer.drawText(canvas, font,
+                SkiaFontRenderer.truncate(font, text,
+                        Math.max(0.0F, rightX - textX - UiTokens.SETTINGS_LABEL_H)),
+                textX, SkiaFontRenderer.centerBaselineY(font, cy), textPrimary());
+        float chevron = UiTokens.SETTINGS_FOLD_CHEVRON_SIZE;
+        SettingsSectionPage.drawChevron(canvas, rightX - chevron / 2.0F, cy, chevron,
+                privateExpansion, textPrimary());
         float lineY = y + h - UiTokens.s(5);
         SkiaDraw.drawRoundedRect(canvas, textX, lineY,
                 Math.max(0.0F, rightX - textX), UiTokens.s(1), UiTokens.s(0.5F), lineColor);
     }
 
-    /**
-     * Left edge of a card: the list's card column, inset on both sides by the
-     * clearance the hover bounce needs, or the rounded ends get sheared flat by
-     * the clip. The rule itself lives in {@link UiLayout#cardColumnX} because the
-     * notification banner draws into the same column and is handed the panel rect
-     * rather than a layout: one definition with one reader per shape, instead of
-     * two expressions that are merely supposed to stay equal.
-     */
     private static float cardX(UiLayout layout) {
         return UiLayout.cardColumnX(layout.panelX);
     }
@@ -408,35 +444,41 @@ public final class ConversationListPage {
      */
     private RowHit rowRect(int index, UiLayout layout, float y) {
         List<Row> rows = rows();
-        return new RowHit(rows.get(index), index, cardX(layout), y, cardW(layout), ROW_H);
+        Row row = rows.get(index);
+        boolean divider = row.kind() == RowKind.DIVIDER;
+        float x = divider
+                ? layout.list.x() + UiTokens.ROW_CLIP_INSET
+                : cardX(layout);
+        float w = divider
+                ? layout.list.w() - UiTokens.ROW_CLIP_INSET * 2.0F
+                : cardW(layout);
+        return new RowHit(row, index, x, y, w, rowHeight(row));
     }
 
     /**
-     * Hit-tests cards through {@link #rowRect}; dividers are not interactive.
+     * Hit-tests cards and the fold heading through the same geometry as drawing.
      * The band keeps a running offset instead of asking rowRect for every index,
      * because hit() runs on every mouse move and a per-index prefix sum would
      * make that quadratic in the row count.
      */
     public RowHit hit(float vmx, float vmy, UiLayout layout, float scrollY) {
+        if (!layout.list.contains(vmx, vmy)) {
+            return null;
+        }
         List<Row> rows = rows();
         float y = contentTop(layout, scrollY);
         for (int i = 0; i < rows.size(); i++) {
             Row row = rows.get(i);
-            boolean divider = row.kind() == RowKind.DIVIDER;
             RowHit hit = rowRect(i, layout, y);
-            if (!divider && hit.contains(vmx, vmy)) {
+            if ((row.kind() != RowKind.PLAYER || privateExpansion >= FOLD_MIN_DRAWN)
+                    && hit.contains(vmx, vmy)) {
                 return hit;
             }
-            y += (divider ? DIVIDER_H : ROW_H) + ROW_GAP;
+            y += rowAdvance(rows, i);
         }
         return null;
     }
 
-    /**
-     * Arms the pressed dip for one row. Called by the screen from the same
-     * unscaled {@link #hit} the click used, so the spring can never land on a
-     * neighbouring row.
-     */
     public void pulseRow(int index) {
         pressedRow = index;
         pressedRowAtMs = System.currentTimeMillis();
@@ -592,6 +634,9 @@ public final class ConversationListPage {
     }
 
     private static void drawPlayerAvatar(Canvas canvas, PlayerRef player, float x, float y, float size) {
+        if (PlayerAvatar.drawE33Chat(canvas, player.uuid(), player.realName(), x, y, size)) {
+            return;
+        }
         Image face = PlayerAvatar.face(player.uuid(), player.realName());
         if (face != null) {
             SkiaDraw.drawRoundedImage(canvas, face, x, y, size, size, size / 2.0F, SamplingMode.LINEAR);

@@ -559,20 +559,26 @@ public final class NotificationBanner {
                 float avatarX = x + padX;
                 float avatarY = y + (h - avatarSize) / 2.0F;
                 ChatMessage msg = b.message();
-                Image face = msg != null ? PlayerAvatar.face(msg.getSenderUuid(), msg.getProfileName()) : null;
-                if (face != null) {
-                    SkiaDraw.drawRoundedImage(canvas, face, avatarX, avatarY, avatarSize, avatarSize,
-                            avatarSize / 2.0F, SamplingMode.LINEAR);
-                } else {
-                    SkiaDraw.drawRoundedRect(canvas, avatarX, avatarY, avatarSize, avatarSize,
-                            avatarSize / 2.0F, UiTokens.onFloatSurfaceTint(fill));
+                boolean skinStyle = PlayerAvatar.drawE33Chat(canvas,
+                        msg != null ? msg.getSenderUuid() : null,
+                        msg != null ? msg.getProfileName() : null,
+                        avatarX, avatarY, avatarSize);
+                if (!skinStyle) {
+                    Image face = msg != null ? PlayerAvatar.face(msg.getSenderUuid(), msg.getProfileName()) : null;
+                    if (face != null) {
+                        SkiaDraw.drawRoundedImage(canvas, face, avatarX, avatarY, avatarSize, avatarSize,
+                                avatarSize / 2.0F, SamplingMode.LINEAR);
+                    } else {
+                        SkiaDraw.drawRoundedRect(canvas, avatarX, avatarY, avatarSize, avatarSize,
+                                avatarSize / 2.0F, UiTokens.onFloatSurfaceTint(fill));
+                    }
+                    // Hairline rim hugging the avatar's outer edge (face or
+                    // placeholder): polarity-adaptive UiTokens.rim separates the
+                    // circle from the banner card behind it. Same ring language
+                    // as the swatches.
+                    SkiaDraw.drawRing(canvas, avatarX + avatarSize / 2.0F, avatarY + avatarSize / 2.0F,
+                            avatarSize / 2.0F + UiTokens.s(0.75F), UiTokens.s(1.0F), UiTokens.rim(fill));
                 }
-                // Hairline rim hugging the avatar's outer edge (face or
-                // placeholder): polarity-adaptive UiTokens.rim separates the
-                // circle from the banner card behind it. Same ring language
-                // as the swatches.
-                SkiaDraw.drawRing(canvas, avatarX + avatarSize / 2.0F, avatarY + avatarSize / 2.0F,
-                        avatarSize / 2.0F + UiTokens.s(0.75F), UiTokens.s(1.0F), UiTokens.rim(fill));
 
                 float btnX = x + w - padX - BUTTON_SIZE;
                 float btnY = y + (h - BUTTON_SIZE) / 2.0F;

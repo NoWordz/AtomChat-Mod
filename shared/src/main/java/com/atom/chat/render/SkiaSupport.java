@@ -5,8 +5,8 @@ import com.atom.chat.AtomChat;
 /**
  * 这台机器上 Skija 的原生库到底能不能用 —— 正面探测一次，答案留给所有要问的人。
  *
- * <p><strong>为什么不看 {@code os.name}。</strong>打包进去的原生库只有 Windows x64 一份
- * （三端 build.gradle 都是），而"包里有没有那一份"和"这台机器加载得起来没有"是两件事：
+ * <p><strong>为什么不看 {@code os.name}。</strong>每个发行包仅带 Windows x64 或 Linux x64 的一份原生库，
+ * 而"包里有没有那一份"和"这台机器加载得起来没有"是两件事：
  * 换了架构、缺了系统的图形库、或者被别的东西抢先占了库名，平台自述都对不上。
  * 所以探的是能力本身 —— 真的去加载一次。这和 0.2.11 里 LAF 那个守卫是同一个道理。
  *
@@ -107,7 +107,8 @@ public final class SkiaSupport {
     static String unavailableLine(String os, String arch, String reason) {
         return "Skija natives unavailable on " + text(os) + "/" + text(arch) + " (" + text(reason)
                 + "): the AtomChat panel stays disabled and vanilla chat is unchanged. "
-                + "This build bundles the Windows x64 native only.";
+                + "Available native packages: Windows x64 and Linux x64 only; macOS/ARM64 are not packaged. "
+                + "Linux also needs EGL/GL system libraries.";
     }
 
     /** 真加载：就是我们自己包里那一个。 */

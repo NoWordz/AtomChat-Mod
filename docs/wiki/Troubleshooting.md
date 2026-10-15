@@ -34,9 +34,28 @@ Before 0.2.8, opening the panel on Forge 1.20.1 could turn the whole screen blac
 
 ## Known unsupported
 
-- **Linux / macOS:** the jar carries only Skija's Windows x64 native library, so the panel cannot start.
+- **Linux x64:** use the `linux-x64` JAR and remove the Windows JAR. Ubuntu/Debian needs `libegl1 libgl1`; inspect the native-loading reason in the log if the panel stays disabled.
+- **macOS / ARM64:** matching native libraries are not bundled, so the panel cannot start.
 - **Quark:** the emote menu does not appear when Quark is installed; compatibility work is in progress.
 - **Other MC versions / loaders:** currently Fabric and NeoForge 1.21.1, plus Forge 1.20.1.
+
+## Emoji / kaomoji render as empty boxes on Linux (missing fonts)
+
+On Linux the panel opens and text is fine, but the emoji panel's emoji and part of the kaomoji come out as a row of empty boxes. That is not a broken mod — **the system has no font that can draw those characters.**
+
+The bundled `bundled.otf` is a **Noto Sans SC subset** (about 7,500 glyphs): it covers common Han and kana, but **no emoji, no halfwidth katakana, no Thai, no Hangul and only part of the symbol ranges**. Those gaps are filled from **system fonts**: Windows ships Segoe UI Emoji and YaHei, so it looks correct; a slim Linux (including the default WSL image) often has only DejaVu and Ubuntu, which do not cover them. Measured on such a system: 88 of the emoji panel's 122 emoji codepoints were boxes, and about 10 kaomoji symbols (`｡ ﾉ ￢ ゛ ゜ ー ㅂ ︵ ฅ ๑`) had no font at all.
+
+Install two fonts (Ubuntu / Debian):
+
+```
+sudo apt install fonts-noto-cjk fonts-noto-color-emoji
+fc-cache -f
+```
+
+`fonts-noto-cjk` covers Han/kana (measured: kaomoji boxes drop from 10 to 2) and `fonts-noto-color-emoji` covers color emoji (measured: emoji boxes drop from 88 to 0). Both are standard Ubuntu archive packages; restart the game afterwards. The mod's glyph fallback picks them up automatically; without them the characters stay as boxes.
+
+(WSL users: this is not a WSL fault — any slim Linux may lack these two fonts. A few symbols that remain boxes after installing — Thai `ฅ ๑` in the example above — have no coverage in any system font and cannot be shown yet.)
+
 
 ## Turning on debug, and which lines to send
 
