@@ -1685,14 +1685,14 @@ public final class MessageListView {
     // ------------------------------------------------------------------ tokens
 
     /**
-     * Breathing gap between the avatar and the list edge: the rim ring extends
-     * s(1.25) past the avatar box (radius s(0.75) plus half the s(1.0) stroke),
-     * so the avatar sits s(1.5) inside the list clip and the full circle stays
-     * visible. Bubbles shift with it (nameOffset) so the avatar-bubble gap is
-     * still AVATAR_GAP.
+     * Reserve the scaled E33Chat hat's reach inside the list clip. AtomChat's
+     * circular rim keeps its existing s(1.5) inset. Bubbles and hit areas read
+     * this same inset so their positions stay aligned with the avatar.
      */
     private static float avatarEdgeInset() {
-        return s(1.5F);
+        float hatOutset = PlayerAvatar.isE33Chat()
+                ? UiTokens.AVATAR_SIZE * UiTokens.E33CHAT_HAT_OUTSET_RATIO : 0.0F;
+        return Math.max(s(1.5F), hatOutset);
     }
 
     /** Minecraft language lookup for all AtomChat UI copy. */

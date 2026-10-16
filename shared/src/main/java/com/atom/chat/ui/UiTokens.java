@@ -692,8 +692,8 @@ public final class UiTokens {
     public static final float SETTINGS_LABEL_H = s(32);
     public static final float SETTINGS_FOLD_CHEVRON_SIZE = s(7);
     public static final float SETTINGS_FOLD_LIFT = s(4);
-    /** E33Chat's ordinary avatar hat is two units wider than the face. */
-    public static final float E33CHAT_HAT_OUTSET = s(1);
+    /** Ordinary reference: face 20, hat 22; scale each side's outset with the face. */
+    public static final float E33CHAT_HAT_OUTSET_RATIO = 1.0F / 20.0F;
     /** Profile reference: face 40, hat 46; multiply by the already-scaled face size. */
     public static final float E33CHAT_PROFILE_HAT_OUTSET_RATIO = 3.0F / 40.0F;
     /** Glyph size for the "nothing here" empty state under a group heading. */
@@ -749,6 +749,12 @@ public final class UiTokens {
     public static final float PROFILE_HERO_BELOW_H = PROFILE_AVATAR / 2.0F
             + PROFILE_NAME_BAND + PROFILE_SIGN_BAND + PROFILE_SIGN_TO_TILES;
     public static final float PROFILE_EDIT_BADGE = s(28);
+    /** Native profile avatar menu geometry, shared by both mapping families. */
+    public static final float PROFILE_AVATAR_MENU_GAP = s(6);
+    public static final float PROFILE_AVATAR_MENU_TEXT_X = s(36);
+    public static final float PROFILE_AVATAR_MENU_END_PAD = s(14);
+    public static final float PROFILE_AVATAR_MENU_ICON_X = s(18);
+    public static final float PROFILE_AVATAR_MENU_SHADOW_PAD = s(20);
     public static final float PROFILE_NAME_FONT = s(20);
     /** Info row height, compacted from s(48) in the QQ-home pass. */
     public static final float PROFILE_ROW_H = s(42);

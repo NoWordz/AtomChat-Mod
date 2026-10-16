@@ -47,11 +47,14 @@ public final class PlayerAvatar {
     /**
      * Draw the E33Chat skin layers and consume this draw even while the skin
      * is unavailable. False leaves the caller's original AtomChat path intact.
-     * E33Chat uses baseSize + 2 for the hat, centred one unit outside the face.
+     * The ordinary style keeps E33Chat's native 20:22 face-to-hat proportion:
+     * the hat outset is {@link UiTokens#E33CHAT_HAT_OUTSET_RATIO} of the face
+     * size, so the hat layer rides the face size instead of a fixed pixel count.
      */
     public static boolean drawE33Chat(Canvas canvas, UUID uuid, String name,
                                       float x, float y, float size) {
-        return drawE33Chat(canvas, uuid, name, x, y, size, UiTokens.E33CHAT_HAT_OUTSET);
+        return drawE33Chat(canvas, uuid, name, x, y, size,
+                size * UiTokens.E33CHAT_HAT_OUTSET_RATIO);
     }
 
     /** Draw with a per-side hat outset expressed in the same scaled units as size. */
