@@ -660,6 +660,79 @@ public final class SkiaFontRenderer {
         return lines;
     }
 
+    /**
+     * Word-aware wrapping for settings copy. CJK has no spaces, so it falls
+     * back to the existing code-point wrap; Latin text breaks at whitespace
+     * first and only splits a word that cannot fit a line by itself.
+     */
+    public static List<String> wrapWords(Font font, String text, float maxWidth) {
+        return wrapWords(text, maxWidth, s -> getStringWidth(font, s));
+    }
+
+    static List<String> wrapWords(String text, float maxWidth,
+                                  java.util.function.Function<String, Float> measure) {
+        List<String> lines = new ArrayList<>();
+        if (text == null || text.isEmpty()) {
+            return lines;
+        }
+        StringBuilder current = new StringBuilder();
+        float currentWidth = 0.0F;
+        for (int i = 0; i < text.length(); ) {
+            int cp = text.codePointAt(i);
+            int count = Character.charCount(cp);
+            if (cp == '\n') {
+                lines.add(current.toString());
+                current.setLength(0);
+                currentWidth = 0.0F;
+                i += count;
+                continue;
+            }
+            String glyph = text.substring(i, i + count);
+            float width = measure.apply(glyph);
+            if (currentWidth + width > maxWidth && current.length() > 0) {
+                int split = current.length();
+                while (split > 0 && !Character.isWhitespace(current.charAt(split - 1))) {
+                    split--;
+                }
+                if (split > 0) {
+                    while (split > 0 && Character.isWhitespace(current.charAt(split - 1))) {
+                        split--;
+                    }
+                    String tail = current.substring(split).stripLeading();
+                    if (split > 0) {
+                        lines.add(current.substring(0, split));
+                        current.setLength(0);
+                        current.append(tail);
+                        currentWidth = measure.apply(tail);
+                    }
+                }
+                if (currentWidth + width > maxWidth && current.length() > 0) {
+                    lines.add(current.toString());
+                    current.setLength(0);
+                    currentWidth = 0.0F;
+                }
+                if (Character.isWhitespace(cp)) {
+                    // A reflow can move the line break to an earlier space,
+                    // leaving a carried word on the new line. In that case this
+                    // whitespace still separates it from the next word.
+                    if (current.length() > 0) {
+                        current.append(' ');
+                        currentWidth += width;
+                    }
+                    i += count;
+                    continue;
+                }
+            }
+            current.append(glyph);
+            currentWidth += width;
+            i += count;
+        }
+        if (current.length() > 0) {
+            lines.add(current.toString());
+        }
+        return lines;
+    }
+
     private static int getColorFromCode(String code, int currentColor, int originalColor) {
         if (code == null) {
             return currentColor;

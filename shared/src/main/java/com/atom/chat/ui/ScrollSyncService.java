@@ -190,7 +190,8 @@ public final class ScrollSyncService {
                 * controller.getScrollBarAlpha()), 0), 255);
         int color = (alpha << 24) | (r << 16) | (g << 8) | bch;
         float trackX = list.right() - trackW - UiTokens.s(2);
-        SkiaDraw.drawRoundedRect(canvas, trackX - (w - trackW) / 2.0F, thumbY, w, thumbH, w / 2.0F, color);
+        SkiaDraw.drawRoundedRect(canvas, trackX - (w - trackW) / 2.0F, thumbY, w, thumbH,
+                UiTokens.radius(w / (2.0F * UiTokens.SCALE)), color);
     }
 
     public boolean overScrollbarTrack(UiLayout layout, float vmx, float vmy,
@@ -255,8 +256,9 @@ public final class ScrollSyncService {
                 // polarity family as the popups; hover lifts the grey a notch.
                 int bg = DrawPrimitives.lerpArgb(Color.makeARGB(235, 52, 58, 70),
                         Color.makeARGB(245, 70, 76, 90), jumpLatestHover);
-                SkiaDraw.drawRoundedRect(canvas, x, y, size, size, size / 2.0F, bg);
-                SkiaDraw.drawRoundedShadow(canvas, x, y, size, size, size / 2.0F, UiTokens.s(8),
+                float fabRadius = UiTokens.radius(size / (2.0F * UiTokens.SCALE));
+                SkiaDraw.drawRoundedRect(canvas, x, y, size, size, fabRadius, bg);
+                SkiaDraw.drawRoundedShadow(canvas, x, y, size, size, fabRadius, UiTokens.s(8),
                         UiTokens.CHROME_SHADOW);
                 // Glyph pinned white like the pill itself: the pill is fixed dark,
                 // so a themed text colour would go dark-on-dark on light themes.

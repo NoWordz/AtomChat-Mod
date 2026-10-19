@@ -17,5 +17,14 @@ class ChatEffectSessionTest {
    for(var p:a) { assertTrue(Float.isFinite(p.x())); assertTrue(Float.isFinite(p.y())); assertTrue(p.alpha()>=0&&p.alpha()<=1); }
   }
  }
+ @Test void goodnightStarsStayInsideTheContentAreaAndStayCheap() {
+  var particles=ChatEffectParticles.frame(ChatEffectType.STAR,0.5f,17);
+  assertTrue(particles.size()<=12);
+  assertEquals(particles,ChatEffectParticles.frame(ChatEffectType.STAR,0.5f,17));
+  for(var p:particles) {
+   assertTrue(p.x()>=0&&p.x()<=1); assertTrue(p.y()>=0&&p.y()<=1);
+   assertTrue(p.alpha()>=0&&p.alpha()<=.36f);
+  }
+ }
 }
 

@@ -184,4 +184,111 @@ class DraftStoreTest {
         assertEquals("", store.draftForNav(world(), false, null));
         assertFalse(composer.text.isEmpty(), "the text stays in the composer, it is not destroyed");
     }
+
+    @Test
+    void emptyInitialTextRestoresTheSessionDraftButExplicitTextWins() {
+        DraftStore store = new DraftStore();
+        StubComposer composer = new StubComposer();
+        composer.text = "unfinished";
+        store.saveCurrentDraft(AppPage.WORLD_CHAT, null, composer, true);
+
+        composer.text = "";
+        store.seedWorld("");
+        store.loadWorldDraft(composer);
+        assertEquals("unfinished", composer.text, "an empty constructor argument restores the draft");
+
+        store.seedWorld("/msg Alice pending");
+        store.loadWorldDraft(composer);
+        assertEquals("/msg Alice pending", composer.text,
+                "a non-empty initial composer value overrides the saved draft");
+    }
+
+    @Test
+    void disabledRetentionLeavesCachedTextUntouchedAndDoesNotSaveTheClosingField() {
+        DraftStore store = new DraftStore();
+        StubComposer composer = new StubComposer();
+        composer.text = "first";
+        store.saveCurrentDraft(AppPage.WORLD_CHAT, null, composer, true);
+
+        composer.text = "not retained";
+        store.saveCurrentDraft(AppPage.WORLD_CHAT, null, composer, false);
+        assertEquals("first", store.draftForNav(world(), false, null),
+                "turning the option off stops the closing composer from overwriting the cache");
+        assertEquals("not retained", composer.text, "the live composer is not mutated on close");
+    }
+
+    @Test
+    void sessionHolderSurvivesScreenReplacementAndResetsAtConnectionBoundary() {
+        DraftSessionStore.reset();
+        StubComposer firstScreen = new StubComposer();
+        firstScreen.text = "survives this screen";
+        DraftSessionStore.current().saveCurrentDraft(
+                AppPage.WORLD_CHAT, null, firstScreen, true);
+
+        StubComposer reopenedScreen = new StubComposer();
+        DraftSessionStore.current().loadWorldDraft(reopenedScreen);
+        assertEquals("survives this screen", reopenedScreen.text);
+
+        DraftSessionStore.reset();
+        StubComposer newServerScreen = new StubComposer();
+        DraftSessionStore.current().loadWorldDraft(newServerScreen);
+        assertEquals("", newServerScreen.text, "JOIN/DISCONNECT starts a fresh session");
+    }
+
+    @Test
+    void disabledCrossScreenRetentionStillPreservesDraftsForInPanelNavigation() {
+        DraftSessionStore.reset();
+        DraftStore screenDrafts = new DraftStore();
+        StubComposer composer = new StubComposer();
+        composer.text = "still switching pages";
+
+        DraftSessionStore.saveForScreen(screenDrafts, AppPage.WORLD_CHAT, null,
+                composer, false, DraftSessionStore.generation());
+        assertEquals("still switching pages",
+                screenDrafts.draftForNav(world(), false, null),
+                "disabling cross-screen retention must not erase the live panel's drafts");
+
+        StubComposer reopenedPanel = new StubComposer();
+        DraftSessionStore.current().loadWorldDraft(reopenedPanel);
+        assertEquals("", reopenedPanel.text,
+                "the same disabled switch still prevents a draft from crossing screen instances");
+    }
+
+    @Test
+    void staleScreenCannotWriteIntoTheConnectionThatReplacedIt() {
+        DraftSessionStore.reset();
+        DraftStore oldScreen = DraftSessionStore.current();
+        long oldGeneration = DraftSessionStore.generation();
+        StubComposer oldComposer = new StubComposer();
+        oldComposer.text = "old server draft";
+
+        DraftSessionStore.reset();
+        assertEquals(-1L, DraftSessionStore.saveForScreen(oldScreen, AppPage.WORLD_CHAT,
+                null, oldComposer, true, oldGeneration));
+
+        StubComposer newScreen = new StubComposer();
+        DraftSessionStore.current().loadWorldDraft(newScreen);
+        assertEquals("", newScreen.text, "a late removed() must not repopulate the new session");
+    }
+
+    @Test
+    void aScreenCanReenableRetentionAfterItsOwnDisabledSave() {
+        DraftSessionStore.reset();
+        DraftStore screenDrafts = new DraftStore();
+        long token = DraftSessionStore.generation();
+        StubComposer composer = new StubComposer();
+        composer.text = "turn retention back on";
+
+        token = DraftSessionStore.saveForScreen(screenDrafts, AppPage.WORLD_CHAT, null,
+                composer, false, token);
+        assertTrue(token >= 0L, "the screen's own reset supplies a fresh token");
+        token = DraftSessionStore.saveForScreen(screenDrafts, AppPage.WORLD_CHAT, null,
+                composer, true, token);
+        assertTrue(token >= 0L);
+
+        StubComposer reopenedPanel = new StubComposer();
+        DraftSessionStore.current().loadWorldDraft(reopenedPanel);
+        assertEquals("turn retention back on", reopenedPanel.text,
+                "reenabling the switch resumes cross-screen retention");
+    }
 }

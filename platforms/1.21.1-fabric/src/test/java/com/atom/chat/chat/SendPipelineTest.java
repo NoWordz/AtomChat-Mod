@@ -123,4 +123,21 @@ class SendPipelineTest {
         assertNotNull(fallback);
         assertFalse(fallback.isBlank(), "an unknown sender still gets a label");
     }
+
+    @Test
+    void successfulFinishRequestedCloseOnlyWhenHostEnablesIt() {
+        final boolean[] closed = {false};
+        SendPipeline.Host host = new SendPipeline.Host() {
+            @Override public MinecraftClient client() { return null; }
+            @Override public NavPage topNav() { return NavPage.of(com.atom.chat.nav.AppPage.WORLD_CHAT); }
+            @Override public ReplySlotStore replySlots() { return new ReplySlotStore(); }
+            @Override public void clearComposer() { }
+            @Override public void focusComposer() { }
+            @Override public void stickToBottom() { }
+            @Override public boolean closeAfterSend() { return true; }
+            @Override public void requestClose() { closed[0] = true; }
+        };
+        new SendPipeline(host).finishSuccessfulSend();
+        assertTrue(closed[0], "the production close callback follows the send cleanup chain");
+    }
 }

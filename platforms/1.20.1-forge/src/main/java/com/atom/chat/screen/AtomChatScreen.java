@@ -4,6 +4,7 @@ import com.atom.chat.AtomChat;
 import com.atom.chat.chat.BlockList;
 import com.atom.chat.chat.PublicEchoTracker;
 import com.atom.chat.chat.DraftStore;
+import com.atom.chat.chat.DraftSessionStore;
 import com.atom.chat.chat.ReplySlotStore;
 import com.atom.chat.chat.SendPipeline;
 import com.atom.chat.chat.WorldFeedFilter;
@@ -475,10 +476,6 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
             return AtomChatScreen.this.toVirtualY(guiY);
         }
 
-        @Override
-        public String clipboard() {
-            return client.keyboardHandler.getClipboard();
-        }
     });
 
     {
@@ -1014,7 +1011,9 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
      * of it (the EditBox itself belongs to D21) — see {@link DraftStore.ComposerTextPort}
      * for why a missing composer is passed through as null rather than "".
      */
-    private final DraftStore draftStore = new DraftStore();
+    private DraftStore draftStore;
+    /** Connection-session token captured with the shared draft store. */
+    private long draftGeneration;
     private final DraftStore.ComposerTextPort composerText = new DraftStore.ComposerTextPort() {
         @Override
         public String get() {
@@ -1078,6 +1077,16 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         @Override
         public void stickToBottom() {
             currentScroll().stickToBottom();
+        }
+
+        @Override
+        public boolean closeAfterSend() {
+            return AtomChatConfig.get().closeAfterSend;
+        }
+
+        @Override
+        public void requestClose() {
+            AtomChatScreen.this.requestClose();
         }
     });
 
@@ -1427,11 +1436,14 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
     public AtomChatScreen(String originalChatText, AtomChatOpenMode mode) {
         super(originalChatText);
         this.originalChatText = originalChatText;
-        draftStore.seedWorld(originalChatText);
         // Screen objects are constructed fresh on every open (init() re-runs on
         // resize), so this is the right hook for picking up hand-edited config
         // — chat/whisper templates take effect without a game restart.
         AtomChatConfig.reload();
+        this.draftGeneration = DraftSessionStore.generation();
+        this.draftStore = AtomChatConfig.get().retainDraftOnClose
+                ? DraftSessionStore.current() : new DraftStore();
+        draftStore.seedWorld(originalChatText);
         // The stack, its queries and the three cascades live in the controller
         // (D24a), loading included: one screen opening replays the saved stack
         // (the AtomChat key) or pushes the public feed (the vanilla chat key),
@@ -1764,7 +1776,12 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
 
     /** Persists the hidden EditBox draft to the page that is currently open. */
     private void saveCurrentDraft() {
-        draftStore.saveCurrentDraft(topPage(), activePrivateTarget(), composerText);
+        boolean retain = AtomChatConfig.get().retainDraftOnClose;
+        long savedGeneration = DraftSessionStore.saveForScreen(draftStore, topPage(),
+                activePrivateTarget(), composerText, retain, draftGeneration);
+        if (savedGeneration >= 0L) {
+            draftGeneration = savedGeneration;
+        }
     }
 
     private void savePrivateDraft(PlayerRef target, String text) {
@@ -3466,7 +3483,9 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
                     if (colorHit != null) {
                         settingsSectionPage.disarmAction();
                         // Arm the swatch bounce; the press visual holds until release.
-                        settingsSectionPage.setPressedSwatch(colorHit.plus() ? -1 : colorHit.swatchIndex());
+                        settingsSectionPage.setPressedSwatch(
+                                colorHit.plus() ? -1 : colorHit.rowIndex(),
+                                colorHit.plus() ? -1 : colorHit.swatchIndex());
                         if (colorHit.plus()) {
                             colorPicker.open(colorHit.color());
                             com.atom.chat.audio.FeedbackSoundController.play(com.atom.chat.audio.FeedbackCue.BUTTON);
@@ -3603,7 +3622,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
             settingsSectionPage.endSliderDrag();
             settingsSectionPage.setPressedRow(-1);
             settingsSectionPage.setPressedChip(-1);
-            settingsSectionPage.setPressedSwatch(-1);
+            settingsSectionPage.setPressedSwatch(-1, -1);
             bottomTabBar.setPressedTab(-1);
             if (button == 0 && listScroll().isDragging()) {
                 listScroll().endDrag();

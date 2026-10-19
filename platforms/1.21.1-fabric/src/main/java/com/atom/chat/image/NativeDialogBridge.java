@@ -94,6 +94,7 @@ public final class NativeDialogBridge {
 
         /** Puts {@code text} on the system clipboard; throws when the platform refuses. */
         void setClipboard(String text);
+
     }
 
     /** The production native surfaces, reading the window through the host's client handle. */
@@ -134,6 +135,7 @@ public final class NativeDialogBridge {
             public void setClipboard(String text) {
                 host.client().keyboard.setClipboard(text);
             }
+
         };
     }
 

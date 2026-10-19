@@ -71,6 +71,15 @@ public final class SendPipeline {
 
         /** D11: pins the list to the newest message after a send. */
         void stickToBottom();
+
+        /** Live setting: close through the panel's existing exit animation. */
+        default boolean closeAfterSend() {
+            return false;
+        }
+
+        /** Screen-owned requestClose(); called only after a successful send. */
+        default void requestClose() {
+        }
     }
 
     private final Host host;
@@ -143,13 +152,7 @@ public final class SendPipeline {
                     ownUuid, ownProfile, OwnIdentity.displayNameRich()));
         }
         com.atom.chat.audio.FeedbackSoundController.play(com.atom.chat.audio.FeedbackCue.SEND);
-        host.clearComposer();
-        host.replySlots().disarm();
-        // The armed reply is consumed with the send: drop its slot too, or
-        // navigating away and back would re-arm a reply that was already sent.
-        syncReplySlot();
-        host.focusComposer();
-        host.stickToBottom();
+        finishSuccessfulSend();
     }
 
     /**
@@ -183,12 +186,26 @@ public final class SendPipeline {
             PrivateEchoTracker.markOutgoing(target);
         }
         com.atom.chat.audio.FeedbackSoundController.play(com.atom.chat.audio.FeedbackCue.SEND);
+        finishSuccessfulSend();
+    }
+
+    /**
+     * The one successful-send tail. Rejected/blank paths return before this,
+     * so the close callback can never fire for a message the client refused.
+     * The close request is last: the composer, reply slot, focus and scroll
+     * state are settled before the exit animation begins.
+     */
+    void finishSuccessfulSend() {
         host.clearComposer();
         host.replySlots().disarm();
-        // Consumed with the send — see sendMessage's matching call.
+        // The armed reply is consumed with the send: drop its slot too, or
+        // navigating away and back would re-arm a reply that was already sent.
         syncReplySlot();
         host.focusComposer();
         host.stickToBottom();
+        if (host.closeAfterSend()) {
+            host.requestClose();
+        }
     }
 
     /**

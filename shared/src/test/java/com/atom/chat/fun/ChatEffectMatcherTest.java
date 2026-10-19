@@ -15,5 +15,15 @@ class ChatEffectMatcherTest {
   assertEquals(Optional.of(ChatEffectType.CAKE),m.match("「引用 @Bob: 我爱你」生日快乐！"));
   assertEquals(Optional.of(ChatEffectType.CAKE),m.match("hbd then I love u"));
  }
+ @Test void goodnightAcceptsNaturalPrefixesButKeepsWordBoundaries() {
+  var m = new ChatEffectMatcher();
+  for (String s : new String[]{"晚安！","祝你晚安","Good night","GOOD  NIGHT!","goodnight"}) {
+   assertEquals(Optional.of(ChatEffectType.STAR), m.match(s), s);
+  }
+  for (String s : new String[]{"晚安模式","good nightmare","/say good night",
+      "`good night`","https://example.com/晚安","「引用 @Bob: 晚安」"}) {
+   assertTrue(m.match(s).isEmpty(), s);
+  }
+ }
 }
 

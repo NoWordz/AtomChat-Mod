@@ -1,17 +1,22 @@
 package com.atom.chat.render;
 
+import com.atom.chat.config.AtomChatConfig;
 import com.atom.chat.platform.Platform;
 import com.atom.chat.ui.Animations;
 import com.atom.chat.ui.UiTokens;
 import io.github.humbleui.skija.Bitmap;
 import io.github.humbleui.skija.Canvas;
+import io.github.humbleui.skija.Data;
+import io.github.humbleui.skija.EncodedImageFormat;
 import io.github.humbleui.skija.Surface;
 import io.github.humbleui.types.Rect;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.nio.file.Path;
+import java.nio.file.Files;
 import java.util.Arrays;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
@@ -64,6 +69,11 @@ class DrawPrimitivesTest {
                 return false;
             }
         });
+    }
+
+    @AfterEach
+    void restoreRadius() {
+        AtomChatConfig.get().cornerRadius = 20F;
     }
 
     /** The three facts the primitives read off the screen. */
@@ -239,6 +249,46 @@ class DrawPrimitivesTest {
     }
 
     @Test
+    void sendCapsuleAndHoverOverlayFollowTheLiveCornerRadius() throws Exception {
+        AtomChatConfig.get().cornerRadius = 0F;
+        DrawPrimitives primitives = new DrawPrimitives(new Host());
+        try (Surface surface = Surface.makeRasterN32Premul(SURFACE_W, SURFACE_H)) {
+            Canvas canvas = surface.getCanvas();
+            int initialSaveCount = canvas.getSaveCount();
+            byte[] squareIdle = frame(canvas, surface, () ->
+                    primitives.drawSendButton(canvas, BX, BY, OFF_SCREEN, OFF_SCREEN));
+            assertTrue(alphaAt(surface, (int) BX + 1, (int) BY + 1) > 0,
+                    "at radius 0 the send capsule owns its corner pixel");
+            writePng(surface, "send-radius-0.png");
+
+            byte[] squareHover = frame(canvas, surface, () ->
+                    primitives.drawSendButton(canvas, BX, BY, insideSendX(), insideY()));
+            assertTrue(alphaAt(surface, (int) BX + 1, (int) BY + 1) > 0,
+                    "the hover overlay is square too, not only the base fill");
+            writePng(surface, "send-radius-0-hover.png");
+            assertFalse(Arrays.equals(squareIdle, squareHover));
+
+            primitives.pressButton(2);
+            primitives.setButtonHeld(2);
+            frame(canvas, surface, () ->
+                    primitives.drawSendButton(canvas, BX, BY, insideSendX(), insideY()));
+            assertTrue(alphaAt(surface, (int) BX + 1, (int) BY + 1) > 0,
+                    "the pressed wash also uses the live square radius");
+            writePng(surface, "send-radius-0-press.png");
+            primitives.setButtonHeld(-1);
+            assertEquals(initialSaveCount, canvas.getSaveCount(), "all save/restore calls stay balanced");
+
+            AtomChatConfig.get().cornerRadius = 20F;
+            frame(canvas, surface, () ->
+                    primitives.drawSendButton(canvas, BX, BY, OFF_SCREEN, OFF_SCREEN));
+            assertEquals(0, alphaAt(surface, (int) BX + 1, (int) BY + 1),
+                    "the default radius cuts the corner pixel away");
+            writePng(surface, "send-radius-default.png");
+            assertEquals(initialSaveCount, canvas.getSaveCount());
+        }
+    }
+
+    @Test
     void theHoverWashStepsTowardThePointer() {
         DrawPrimitives primitives = new DrawPrimitives(new Host());
         try (Surface surface = Surface.makeRasterN32Premul(SURFACE_W, SURFACE_H)) {
@@ -272,6 +322,30 @@ class DrawPrimitivesTest {
 
     private static float insideY() {
         return BY + UiTokens.ACTION_BUTTON_SIZE / 2.0F;
+    }
+
+    private static float insideSendX() {
+        return BX + UiTokens.BUTTON_W / 2.0F;
+    }
+
+    private static int alphaAt(Surface surface, int x, int y) {
+        try (Bitmap bitmap = new Bitmap()) {
+            bitmap.allocN32Pixels(SURFACE_W, SURFACE_H);
+            assertTrue(surface.readPixels(bitmap, 0, 0));
+            byte[] rgba = bitmap.readPixels();
+            int i = (y * SURFACE_W + x) * 4;
+            return rgba[i + 3] & 0xFF;
+        }
+    }
+
+    private static void writePng(Surface surface, String name) throws Exception {
+        Path dir = Path.of(System.getProperty("atomchat.repoRoot", "."),
+                ".work/2026-10-19-settings/evidence/png");
+        Files.createDirectories(dir);
+        try (io.github.humbleui.skija.Image image = surface.makeImageSnapshot();
+             Data data = image.encodeToData(EncodedImageFormat.PNG)) {
+            Files.write(dir.resolve(name), data.getBytes());
+        }
     }
 
     private static io.github.humbleui.skija.Path[] icons() {

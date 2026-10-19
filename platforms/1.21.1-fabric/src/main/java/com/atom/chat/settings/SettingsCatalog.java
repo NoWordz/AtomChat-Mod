@@ -57,6 +57,16 @@ public final class SettingsCatalog {
                             () -> AtomChatConfig.get().animationEnabled,
                             v -> AtomChatConfig.get().animationEnabled = v));
             case CHAT -> List.of(
+                    new SettingsItem("close_after_send",
+                            "atomchat.settings.chat.close_after_send",
+                            "atomchat.settings.chat.close_after_send.desc",
+                            () -> AtomChatConfig.get().closeAfterSend,
+                            v -> AtomChatConfig.get().closeAfterSend = v),
+                    new SettingsItem("retain_draft_on_close",
+                            "atomchat.settings.chat.retain_draft_on_close",
+                            "atomchat.settings.chat.retain_draft_on_close.desc",
+                            () -> AtomChatConfig.get().retainDraftOnClose,
+                            v -> AtomChatConfig.get().retainDraftOnClose = v),
                     new SettingsItem("entry",
                             "atomchat.settings.chat.entry",
                             "atomchat.settings.chat.entry.desc",

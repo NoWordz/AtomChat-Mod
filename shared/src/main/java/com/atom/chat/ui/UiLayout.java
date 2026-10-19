@@ -85,7 +85,11 @@ public final class UiLayout {
         float bottomOfContent = switch (mode) {
             case CHAT -> inputY;
             case ROOT -> this.tabBar.y();
-            case DETAIL -> panelY + panelH - UiTokens.PANEL_BOTTOM_PAD;
+            // Detail pages use the same outer profile as the left and right
+            // edges. Their scroll content then adds ROW_CLIP_INSET below the
+            // last card, so the visible breathing room is equal on three
+            // sides and the card can still grow under the hover spring.
+            case DETAIL -> panelY + panelH - UiTokens.LIST_PAD_X;
         };
         this.list = new Rect(listColumnX(panelX), listTop,
                 listColumnW(panelW),

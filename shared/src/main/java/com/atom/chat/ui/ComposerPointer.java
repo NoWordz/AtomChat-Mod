@@ -290,7 +290,7 @@ public final class ComposerPointer {
             float x1 = textX + SkiaFontRenderer.getStringWidth(font, line.substring(0, c1));
             float cy = centerY + (i - from) * lineH;
             SkiaDraw.drawRoundedRect(canvas, x0, cy - lineH / 2.0F, Math.max(1.0F, x1 - x0), lineH,
-                    UiTokens.s(2), 0xE02D6FD6);
+                    UiTokens.radius(2), 0xE02D6FD6);
         }
     }
 }

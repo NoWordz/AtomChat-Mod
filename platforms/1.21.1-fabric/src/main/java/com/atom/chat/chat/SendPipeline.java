@@ -35,7 +35,7 @@ import java.util.UUID;
  *
  * <p>Both mappings: this file is the official-name copy and
  * {@code platforms/1.21.1-fabric/…/SendPipeline.java} is its yarn twin — the
- * bodies differ only in Minecraft names (sendChat/sendCommand, getChat/
+ * bodies differ only in MinecraftClient names (sendChat/sendCommand, getChat/
  * getChatHud, StringUtil/StringHelper), never in what they do.
  */
 public final class SendPipeline {
@@ -71,6 +71,15 @@ public final class SendPipeline {
 
         /** D11: pins the list to the newest message after a send. */
         void stickToBottom();
+
+        /** Live setting: close through the panel's existing exit animation. */
+        default boolean closeAfterSend() {
+            return false;
+        }
+
+        /** Screen-owned requestClose(); called only after a successful send. */
+        default void requestClose() {
+        }
     }
 
     private final Host host;
@@ -143,13 +152,7 @@ public final class SendPipeline {
                     ownUuid, ownProfile, OwnIdentity.displayNameRich()));
         }
         com.atom.chat.audio.FeedbackSoundController.play(com.atom.chat.audio.FeedbackCue.SEND);
-        host.clearComposer();
-        host.replySlots().disarm();
-        // The armed reply is consumed with the send: drop its slot too, or
-        // navigating away and back would re-arm a reply that was already sent.
-        syncReplySlot();
-        host.focusComposer();
-        host.stickToBottom();
+        finishSuccessfulSend();
     }
 
     /**
@@ -183,12 +186,26 @@ public final class SendPipeline {
             PrivateEchoTracker.markOutgoing(target);
         }
         com.atom.chat.audio.FeedbackSoundController.play(com.atom.chat.audio.FeedbackCue.SEND);
+        finishSuccessfulSend();
+    }
+
+    /**
+     * The one successful-send tail. Rejected/blank paths return before this,
+     * so the close callback can never fire for a message the client refused.
+     * The close request is last: the composer, reply slot, focus and scroll
+     * state are settled before the exit animation begins.
+     */
+    void finishSuccessfulSend() {
         host.clearComposer();
         host.replySlots().disarm();
-        // Consumed with the send — see sendMessage's matching call.
+        // The armed reply is consumed with the send: drop its slot too, or
+        // navigating away and back would re-arm a reply that was already sent.
         syncReplySlot();
         host.focusComposer();
         host.stickToBottom();
+        if (host.closeAfterSend()) {
+            host.requestClose();
+        }
     }
 
     /**
@@ -250,7 +267,7 @@ public final class SendPipeline {
         return text.substring(0, maxChars) + "…";
     }
 
-    /** Minecraft language lookup for the copy this class owns. */
+    /** MinecraftClient language lookup for the copy this class owns. */
     private static String tr(String key) {
         return Text.translatable(key).getString();
     }

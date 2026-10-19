@@ -42,6 +42,17 @@ public final class UiTokens {
     }
 
     /**
+     * Corner radius for a square control handle (switch/slider knob), supplied
+     * in already-scaled layout units. At the shipped radius this equals half
+     * the side, so the handle stays the familiar circle; the square-corner
+     * setting reaches the handle too instead of leaving a round capsule inside
+     * an otherwise square control.
+     */
+    public static float handleRadius(float side) {
+        return Math.min(side / 2.0F, radius(side / (2.0F * SCALE)));
+    }
+
+    /**
      * Radius multiplier for a configured corner radius. The knob is in
      * 1080p-basis pixels (it scales with the UI density, not pinned to
      * physical pixels): {@code factor = cornerRadius / 20}, so the {@code 20}
@@ -449,7 +460,6 @@ public final class UiTokens {
     // inside the key band top and bottom instead of on a line of its own.
     public static final float BUTTON_W = s(56);
     public static final float BUTTON_H = s(30);
-    public static final float BUTTON_RADIUS = s(9);
     public static final float BUTTON_GAP = s(6);
     public static final float COMPOSER_KEY_GAP = s(4);
 
@@ -790,9 +800,11 @@ public final class UiTokens {
     // Slider row: title line on top, track below. The knob is deliberately a
     // touch larger than the track so it reads as a handle, not a filled bar.
     public static final float SETTINGS_SLIDER_ROW_H = s(64);
-    public static final float SETTINGS_SLIDER_TRACK_Y = s(40);
     public static final float SLIDER_TRACK_H = s(6);
     public static final float SLIDER_KNOB = s(18);
+    public static final float SETTINGS_SLIDER_TRACK_Y =
+            SETTINGS_SLIDER_ROW_H - SETTINGS_ROW_PAD
+                    - (SLIDER_TRACK_H + SLIDER_KNOB) / 2.0F;
 
     // Toggle switch. Geometry is iOS-proportioned: knob diameter is track
     // height minus the two insets, so the travel is exactly

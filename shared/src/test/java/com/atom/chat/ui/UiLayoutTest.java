@@ -356,12 +356,13 @@ class UiLayoutTest {
         // No tab bar means the list keeps the height the root layout would have
         // handed to it — that is the whole point of a dedicated mode.
         UiLayout root = UiLayout.ofRoot(l.rect().x(), l.rect().y(), l.rect().w(), l.rect().h());
-        assertEquals(root.tabBar.h(), l.list.h() - root.list.h(), EPS,
-                "detail list reclaims exactly the tab bar height");
+        assertEquals(root.tabBar.h() + UiTokens.PANEL_BOTTOM_PAD - UiTokens.LIST_PAD_X,
+                l.list.h() - root.list.h(), EPS,
+                "detail list reclaims the tab bar and uses the shared side margin");
 
-        // And it runs all the way to the panel bottom pad.
-        assertEquals(panel.bottom() - UiTokens.PANEL_BOTTOM_PAD, l.list.bottom(), EPS,
-                "detail list ends at the panel bottom pad");
+        // It uses the same outer margin as the left and right card edges.
+        assertEquals(panel.bottom() - UiTokens.LIST_PAD_X, l.list.bottom(), EPS,
+                "detail list ends at the shared outer side margin");
     }
 
     @Test

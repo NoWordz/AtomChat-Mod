@@ -43,9 +43,9 @@ public class AtomChatClient implements ClientModInitializer {
         WallpaperStore.init(
                 net.fabricmc.loader.api.FabricLoader.getInstance().getConfigDir()
                         .resolve("atomchat/wallpaper"));
-        com.atom.chat.theme.ThemePresetStore.init(
+        com.atom.chat.theme.AppearancePresetStore.init(
                 net.fabricmc.loader.api.FabricLoader.getInstance().getConfigDir()
-                        .resolve("atomchat/theme-presets"));
+                        .resolve("atomchat/appearance-presets"));
         BannerStore.init(
                 net.fabricmc.loader.api.FabricLoader.getInstance().getConfigDir()
                         .resolve("atomchat"));
@@ -80,6 +80,7 @@ public class AtomChatClient implements ClientModInitializer {
             // Adopt the world key first so a saved history can be loaded before
             // join-time system lines start arriving.
             com.atom.chat.history.ChatHistory.onJoin(client);
+        com.atom.chat.chat.DraftSessionStore.reset();
             com.atom.chat.page.ProfilePage.noteJoin();
             com.atom.chat.net.AvatarCompanionClient.onJoin();
             com.atom.chat.net.MediaCompanionClient.onJoin();
@@ -91,6 +92,7 @@ public class AtomChatClient implements ClientModInitializer {
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
             // Save before the stores are cleared, then drop the world key.
             com.atom.chat.history.ChatHistory.onDisconnect(client);
+        com.atom.chat.chat.DraftSessionStore.reset();
             PrivateChatStore.reset();
             PrivateEchoTracker.clear();
             com.atom.chat.chat.PublicEchoTracker.clear();

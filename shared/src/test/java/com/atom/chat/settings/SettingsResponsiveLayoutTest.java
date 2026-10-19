@@ -1,6 +1,7 @@
 package com.atom.chat.settings;
 
 import com.atom.chat.ui.UiLayout;
+import com.atom.chat.ui.UiTokens;
 import com.atom.chat.platform.Platform;
 import io.github.humbleui.skija.Surface;
 import org.junit.jupiter.api.BeforeAll;
@@ -42,5 +43,20 @@ class SettingsResponsiveLayoutTest {
                 }
             }
         }
+    }
+
+    @Test void scrollEndLeavesTheSameClearanceAsTheCardSides() {
+        SettingsSectionPage page = new SettingsSectionPage();
+        UiLayout layout = UiLayout.ofDetail(0, 0, 420, 180);
+        var rows = page.rows(SettingsSection.CHAT);
+        float content = page.measureContent(layout, SettingsSection.CHAT);
+        float scrollY = Math.max(0.0F, content - layout.list.h());
+        assertTrue(scrollY > 0.0F, "this fixture must actually overflow and scroll");
+        var last = page.rowRect(SettingsSection.CHAT, rows, rows.size() - 1, scrollY, layout);
+        assertEquals(UiTokens.ROW_CLIP_INSET, layout.list.bottom() - last.bottom(), 0.01F,
+                "the footer clearance must survive the hover spring instead of parking on the clip");
+        assertEquals(UiTokens.LIST_PAD_X + UiTokens.ROW_CLIP_INSET,
+                last.x() - layout.panelX, 0.01F,
+                "the bottom and side breathing rooms share the same 23-unit outer margin");
     }
 }

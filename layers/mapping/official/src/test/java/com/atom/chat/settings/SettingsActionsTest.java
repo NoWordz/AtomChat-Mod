@@ -5,11 +5,13 @@ import com.atom.chat.avatar.ImageCropper;
 import com.atom.chat.banner.BannerStore;
 import com.atom.chat.config.AtomChatConfig;
 import com.atom.chat.image.NativeDialogBridge;
+import com.atom.chat.platform.Platform;
 import com.atom.chat.ui.UiLayout;
 import com.atom.chat.ui.UiTokens;
 import com.atom.chat.wallpaper.WallpaperStore;
 import net.minecraft.client.Minecraft;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -46,6 +48,15 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * proves the routing without ever opening a dialog.</p>
  */
 class SettingsActionsTest {
+    @BeforeAll
+    static void installPlatform(@TempDir Path dir) {
+        Platform.install(new Platform.Provider() {
+            public Path configDir() { return dir; }
+            public Path gameDir() { return dir; }
+            public boolean isModLoaded(String id) { return false; }
+        });
+    }
+
     @TempDir
     Path tmp;
 

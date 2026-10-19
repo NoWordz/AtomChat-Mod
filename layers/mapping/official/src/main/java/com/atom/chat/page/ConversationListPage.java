@@ -627,7 +627,8 @@ public final class ConversationListPage {
             float bx = x + w - s(10) - badgeW;
             float by = y + ROW_H / 2.0F + s(12) - bh / 2.0F;
             int badgeColor = mentionBadge ? Color.makeARGB(255, 245, 158, 11) : Color.makeARGB(255, 244, 67, 54);
-            SkiaDraw.drawRoundedRect(canvas, bx, by, badgeW, bh, bh / 2.0F, badgeColor);
+            SkiaDraw.drawRoundedRect(canvas, bx, by, badgeW, bh,
+                    UiTokens.radius(bh / (2.0F * UiTokens.SCALE)), badgeColor);
             SkiaFontRenderer.drawTextCentered(canvas, badgeFont, badgeText,
                     bx + badgeW / 2.0F, by + bh / 2.0F, Color.makeARGB(255, 255, 255, 255));
         }

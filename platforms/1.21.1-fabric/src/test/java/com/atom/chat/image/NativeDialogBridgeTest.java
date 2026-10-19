@@ -105,6 +105,7 @@ class NativeDialogBridgeTest {
         assertEquals(List.of("clipboard:hello"), window.calls);
     }
 
+
     @Test
     void theIconifySuspensionIsAPair() {
         StubWindow window = new StubWindow();

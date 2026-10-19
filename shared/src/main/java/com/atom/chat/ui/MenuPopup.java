@@ -162,7 +162,7 @@ public final class MenuPopup {
         float a = Math.max(0.0F, Math.min(1.0F, hoverAlpha));
         float inset = rowInset(rowW);
         com.atom.chat.render.SkiaDraw.drawRoundedRect(canvas, rowX + inset, rowY + WASH_VERTICAL_INSET,
-                rowW - inset * 2.0F, rowH - WASH_VERTICAL_INSET * 2.0F, UiTokens.s(WASH_RADIUS),
+                rowW - inset * 2.0F, rowH - WASH_VERTICAL_INSET * 2.0F, UiTokens.radius(WASH_RADIUS),
                 io.github.humbleui.skija.Color.makeARGB(Math.round(WASH_ALPHA * a), 255, 255, 255));
     }
 }

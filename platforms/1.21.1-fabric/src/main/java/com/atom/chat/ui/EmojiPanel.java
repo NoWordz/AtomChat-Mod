@@ -331,7 +331,7 @@ public final class EmojiPanel {
             canvas.save();
             applyBounce(canvas, tabScale[tab].scale(),
                     pillX + pillW / 2.0F, py + s(6) + pillH / 2.0F);
-            SkiaDraw.drawRoundedRect(canvas, pillX, py + s(6), pillW, pillH, s(8),
+            SkiaDraw.drawRoundedRect(canvas, pillX, py + s(6), pillW, pillH, UiTokens.radius(8),
                     SKIN_PILL_FILL);
             canvas.restore();
             for (int t = 0; t < labels.length; t++) {
@@ -346,7 +346,7 @@ public final class EmojiPanel {
                         float hy = py + s(6);
                         float hw = tabW - s(8);
                         float hh = UiTokens.EMOJI_TAB_H - s(8);
-                        SkiaDraw.drawRoundedRect(canvas, hx, hy, hw, hh, s(8),
+                        SkiaDraw.drawRoundedRect(canvas, hx, hy, hw, hh, UiTokens.radius(8),
                                 Color.makeARGB((int) (45.0F * hov), 255, 255, 255));
                     }
                     float tx = tabStripX + t * tabW;
@@ -706,7 +706,8 @@ public final class EmojiPanel {
                 if (interactive) {
                     float hov = cellHover.getOrDefault(gridHoverKey(tab, i), 0.0F);
                     if (hov > 0.01F) {
-                        SkiaDraw.drawRoundedRect(canvas, ex + s(2), ey + s(2), cellW - s(4), itemH - s(4), s(6),
+                        SkiaDraw.drawRoundedRect(canvas, ex + s(2), ey + s(2), cellW - s(4), itemH - s(4),
+                                UiTokens.radius(6),
                                 Color.makeARGB((int) (60.0F * hov), 255, 255, 255));
                     }
                 }
@@ -879,7 +880,8 @@ public final class EmojiPanel {
     /** The shared hover highlight, faded with the same curve as every other cell. */
     private void drawHoverWash(Canvas canvas, float ex, float ey, float colW, float cell, float hover) {
         if (hover > 0.01F) {
-            SkiaDraw.drawRoundedRect(canvas, ex + s(2), ey + s(2), colW - s(4), cell - s(4), s(8),
+            SkiaDraw.drawRoundedRect(canvas, ex + s(2), ey + s(2), colW - s(4), cell - s(4),
+                    UiTokens.radius(8),
                     Color.makeARGB((int) (60.0F * hover), 255, 255, 255));
         }
     }
@@ -893,7 +895,8 @@ public final class EmojiPanel {
         // The wash and the x sit above the picture, so the button can never be
         // buried under the emote itself.
         float rs = UiTokens.EMOTE_REMOVE_SIZE;
-        SkiaDraw.drawRoundedRect(canvas, ex + colW - rs - s(2), ey + s(2), rs, rs, s(4),
+        SkiaDraw.drawRoundedRect(canvas, ex + colW - rs - s(2), ey + s(2), rs, rs,
+                UiTokens.radius(4),
                 Color.makeARGB((int) (200.0F * hover), 214, 48, 48));
         Font xFont = FontManager.font(UiTokens.FONT_QUOTE);
         SkiaFontRenderer.drawTextCentered(canvas, xFont, "×",
@@ -922,7 +925,8 @@ public final class EmojiPanel {
     private void drawAddSlot(Canvas canvas, float ex, float ey, float colW, float cell, float hover) {
         boolean disabled = emoteStore.isFull();
         if (hover > 0.01F && !disabled) {
-            SkiaDraw.drawRoundedRect(canvas, ex + s(2), ey + s(2), colW - s(4), cell - s(4), s(8),
+            SkiaDraw.drawRoundedRect(canvas, ex + s(2), ey + s(2), colW - s(4), cell - s(4),
+                    UiTokens.radius(8),
                     Color.makeARGB((int) (60.0F * hover), 255, 255, 255));
         }
         Font addFont = FontManager.font(UiTokens.FONT_EMOJI);

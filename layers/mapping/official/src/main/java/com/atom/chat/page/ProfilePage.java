@@ -578,12 +578,12 @@ public final class ProfilePage {
 
     /**
      * The identity card is content-sized — the {@link #idCardH} base plus the
-     * blocked row when blocked — so the page ends where the card ends and the
-     * tail below is quiet list background, by the owner's decision. Overflow
-     * scrolls, as before.
+     * blocked row when blocked), followed by the same hover clearance every
+     * horizontally inset card keeps. Overflow scrolls, as before.
      */
     public float measureContent(UiLayout layout) {
-        return contentAboveCard(infoRows().size()) + idCardH();
+        return contentAboveCard(infoRows().size()) + idCardH()
+                + UiTokens.ROW_CLIP_INSET;
     }
 
     // ------------------------------------------------------------------
@@ -969,7 +969,6 @@ public final class ProfilePage {
         lastVmx = vmx;
         lastVmy = vmy;
         lastDtMs = dt;
-
         canvas.save();
         try {
             SkiaDraw.clip(canvas, layout.list.x(), layout.list.y(), layout.list.w(), layout.list.h(), 0.0F);
@@ -1124,11 +1123,12 @@ public final class ProfilePage {
      */
     private void drawBannerBadge(Canvas canvas, UiLayout layout, float scrollY) {
         UiLayout.Rect chip = bannerBadgeRect(layout, scrollY);
+        float chipRadius = UiTokens.radius(chip.h() / (2.0F * UiTokens.SCALE));
         SkiaDraw.drawRoundedRect(canvas, chip.x(), chip.y(), chip.w(), chip.h(),
-                chip.h() / 2.0F, Color.makeARGB(215, 20, 22, 30));
+                chipRadius, Color.makeARGB(215, 20, 22, 30));
         if (bannerHover > 0.01F) {
             SkiaDraw.drawRoundedRect(canvas, chip.x(), chip.y(), chip.w(), chip.h(),
-                    chip.h() / 2.0F, Color.makeARGB((int) (60.0F * bannerHover), 255, 255, 255));
+                    chipRadius, Color.makeARGB((int) (60.0F * bannerHover), 255, 255, 255));
         }
         Font font = FontManager.font(UiTokens.PROFILE_TILE_LABEL_FONT);
         SkiaFontRenderer.drawText(canvas, font, bannerBadgeLabel(),
@@ -1193,16 +1193,17 @@ public final class ProfilePage {
         // player's avatar is editable.
         if (avatarEditable()) {
             UiLayout.Rect badge = badgeRect(layout, scrollY);
+            float badgeRadius = UiTokens.radius(badge.w() / (2.0F * UiTokens.SCALE));
             badgeScale.begin(canvas, badge.x() + badge.w() / 2.0F, badge.y() + badge.h() / 2.0F);
             try {
                 // Badge is a fixed dark glass chip over an arbitrary avatar
                 // bitmap: the fixed dark base plus white glyph/overlay is the
                 // polarity-independent scrim language, so it stays literal.
                 SkiaDraw.drawRoundedRect(canvas, badge.x(), badge.y(), badge.w(), badge.h(),
-                        badge.w() / 2.0F, Color.makeARGB(215, 20, 22, 30));
+                        badgeRadius, Color.makeARGB(215, 20, 22, 30));
                 if (badgeHover > 0.01F) {
                     SkiaDraw.drawRoundedRect(canvas, badge.x(), badge.y(), badge.w(), badge.h(),
-                            badge.w() / 2.0F, Color.makeARGB((int) (60.0F * badgeHover), 255, 255, 255));
+                            badgeRadius, Color.makeARGB((int) (60.0F * badgeHover), 255, 255, 255));
                 }
                 drawIconCentered(canvas, AppIcons.ICON_EDIT_PATH,
                         badge.x() + badge.w() / 2.0F, badge.y() + badge.h() / 2.0F,

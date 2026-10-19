@@ -634,10 +634,11 @@ public final class NotificationBanner {
      *  like the composer's send button (drawSendButton). */
     private void drawRoundButton(Canvas canvas, float x, float y, float size, float hover) {
         AtomChatConfig config = AtomChatConfig.get();
-        SkiaDraw.drawRoundedRect(canvas, x, y, size, size, size / 2.0F, config.accentColor);
+        float radius = UiTokens.radius(size / (2.0F * UiTokens.SCALE));
+        SkiaDraw.drawRoundedRect(canvas, x, y, size, size, radius, config.accentColor);
         float wash = hover * 55.0F;
         if (wash > 0.5F) {
-            SkiaDraw.drawRoundedRect(canvas, x, y, size, size, size / 2.0F,
+            SkiaDraw.drawRoundedRect(canvas, x, y, size, size, radius,
                     Color.makeARGB((int) wash, 255, 255, 255));
         }
         drawIconCentered(canvas, sendPath(), x + size / 2.0F, y + size / 2.0F, UiTokens.s(12),

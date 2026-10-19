@@ -1,5 +1,6 @@
 package com.atom.chat.ui;
 
+import com.atom.chat.config.AtomChatConfig;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -245,5 +246,25 @@ class UiTokensTest {
     void rowClipInsetStaysAtTheShippedEightPx() {
         assertEquals(8.0F, UiTokens.ROW_CLIP_INSET, 0.01F,
                 "ROW_CLIP_INSET is the shipped 8px (s(6.4) at the default scale)");
+    }
+
+    @Test
+    void squareCornerSettingReachesControlHandles() {
+        float previous = AtomChatConfig.get().cornerRadius;
+        try {
+            AtomChatConfig.get().cornerRadius = 20.0F;
+            assertEquals(UiTokens.SWITCH_KNOB / 2.0F,
+                    UiTokens.handleRadius(UiTokens.SWITCH_KNOB), 0.01F,
+                    "the shipped radius keeps switch and slider handles round");
+            AtomChatConfig.get().cornerRadius = 0.0F;
+            assertEquals(0.0F, UiTokens.handleRadius(UiTokens.SWITCH_KNOB), 0.0F);
+            assertEquals(0.0F, UiTokens.handleRadius(UiTokens.SLIDER_KNOB), 0.0F);
+            AtomChatConfig.get().cornerRadius = 8.0F;
+            float middle = UiTokens.handleRadius(UiTokens.SLIDER_KNOB);
+            assertTrue(middle > 0.0F && middle < UiTokens.SLIDER_KNOB / 2.0F,
+                    "middle radii follow the continuous knob instead of snapping");
+        } finally {
+            AtomChatConfig.get().cornerRadius = previous;
+        }
     }
 }

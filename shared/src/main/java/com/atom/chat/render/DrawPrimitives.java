@@ -274,10 +274,11 @@ public final class DrawPrimitives {
             canvas.scale(scale.scale(), scale.scale());
             canvas.translate(-(bx + UiTokens.BUTTON_W / 2.0F), -(by + UiTokens.BUTTON_H / 2.0F));
         }
-        SkiaDraw.drawRoundedRect(canvas, bx, by, UiTokens.BUTTON_W, UiTokens.BUTTON_H, UiTokens.BUTTON_RADIUS, accent());
+        float buttonRadius = UiTokens.radius(9);
+        SkiaDraw.drawRoundedRect(canvas, bx, by, UiTokens.BUTTON_W, UiTokens.BUTTON_H, buttonRadius, accent());
         float overlay = buttonHover[2] * 55.0F + (pressed ? 90.0F : 0.0F);
         if (overlay > 0.5F) {
-            SkiaDraw.drawRoundedRect(canvas, bx, by, UiTokens.BUTTON_W, UiTokens.BUTTON_H, UiTokens.BUTTON_RADIUS,
+            SkiaDraw.drawRoundedRect(canvas, bx, by, UiTokens.BUTTON_W, UiTokens.BUTTON_H, buttonRadius,
                     Color.makeARGB((int) Math.min(160, overlay), 255, 255, 255));
         }
         // Icon ink derives from the solid accent fill it sits on (same language

@@ -25,6 +25,16 @@ public class AtomChatConfig {
     public boolean animationEnabled = true;
     /** QQ-style horizontal slide + fade when a message first enters the viewport. */
     public boolean messageEntryAnimation = true;
+    /** Close the panel through its normal exit animation after a successful
+     *  public/private/command send. Blank, blocked or image-only composer
+     *  actions never reach the successful cleanup path, so they stay open.
+     *  Defaults off: sending repeatedly is the common case. */
+    public boolean closeAfterSend = false;
+    /** Retain unsent composer text per public feed/private conversation while
+     *  moving between chat screens in the current connection. Memory only:
+     *  JOIN/DISCONNECT clears it. Disabling stops cross-screen restoration;
+     *  the composer currently on screen keeps its text. */
+    public boolean retainDraftOnClose = true;
     /**
      * Page transition style for the nav push/pop. {@code SLIDE} keeps the
      * horizontal push, geometry-symmetric with every pop. {@code ZOOM} runs

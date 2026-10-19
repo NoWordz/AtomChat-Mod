@@ -665,7 +665,7 @@ public final class QuickPhrasePanel {
                 // survives its press scale), the vertical one stays s(4).
                 float inset = MenuPopup.rowInset(r.getWidth());
                 SkiaDraw.drawRoundedRect(canvas, r.getLeft() + inset, r.getTop() + s(4),
-                        r.getWidth() - inset * 2.0F, r.getHeight() - s(8), s(6),
+                        r.getWidth() - inset * 2.0F, r.getHeight() - s(8), UiTokens.radius(6),
                         Color.makeARGB((int) (55.0F * fade), 255, 255, 255));
             }
             String theirs = SkiaFontRenderer.truncate(font, rowTextAt(position), r.getWidth() - s(24));
@@ -680,19 +680,21 @@ public final class QuickPhrasePanel {
             // Same MenuPopup row-wash inset as the server rows above.
             float inset = MenuPopup.rowInset(r.getWidth());
             SkiaDraw.drawRoundedRect(canvas, r.getLeft() + inset, r.getTop() + s(4),
-                    r.getWidth() - inset * 2.0F, r.getHeight() - s(8), s(6),
+                    r.getWidth() - inset * 2.0F, r.getHeight() - s(8), UiTokens.radius(6),
                     Color.makeARGB((int) (55.0F * rowA), 255, 255, 255));
         }
         if (editing) {
             // The row being edited glows with the accent stroke; the composer
             // field below holds the live text.
             SkiaDraw.drawRoundedRect(canvas, r.getLeft() + s(4), r.getTop() + s(4),
-                    r.getWidth() - s(8), r.getHeight() - s(8), s(6), Color.makeARGB(20, 255, 255, 255));
+                    r.getWidth() - s(8), r.getHeight() - s(8), UiTokens.radius(6),
+                    Color.makeARGB(20, 255, 255, 255));
             try (Paint paint = new Paint().setColor(accentColor()).setAntiAlias(true)
                     .setMode(io.github.humbleui.skija.PaintMode.STROKE)
                     .setStrokeWidth(s(1.2F))) {
                 canvas.drawRRect(io.github.humbleui.types.RRect.makeXYWH(
-                        r.getLeft() + s(4), r.getTop() + s(4), r.getWidth() - s(8), r.getHeight() - s(8), s(6)), paint);
+                        r.getLeft() + s(4), r.getTop() + s(4), r.getWidth() - s(8), r.getHeight() - s(8),
+                        UiTokens.radius(6)), paint);
             }
         }
         String text = SkiaFontRenderer.truncate(font, phraseAt(index), r.getWidth() - s(96));
@@ -715,7 +717,7 @@ public final class QuickPhrasePanel {
                 float a = btnHover.getOrDefault(index * 2 + b, 0.0F);
                 if (a > 0.01F) {
                     SkiaDraw.drawRoundedRect(canvas, hit.getLeft() + s(3), hit.getTop() + s(3),
-                            hit.getWidth() - s(6), hit.getHeight() - s(6), s(6),
+                            hit.getWidth() - s(6), hit.getHeight() - s(6), UiTokens.radius(6),
                             Color.makeARGB((int) (55.0F * a), 255, 255, 255));
                 }
                 drawIconCentered(canvas, icons[b], bx, by, UiTokens.CONTEXT_ICON_SIZE, TEXT);
@@ -733,13 +735,13 @@ public final class QuickPhrasePanel {
         // Resting capsule so the row reads as a button, then the standard hover
         // wash; the composing state adds the accent ring on top.
         SkiaDraw.drawRoundedRect(canvas, r.getLeft() + s(4), r.getTop() + s(4),
-                r.getWidth() - s(8), r.getHeight() - s(8), s(6),
+                r.getWidth() - s(8), r.getHeight() - s(8), UiTokens.radius(6),
                 Color.makeARGB((int) (28.0F + 27.0F * addHover), 255, 255, 255));
         if (addHover > 0.01F) {
             // Same MenuPopup row-wash inset as the phrase rows above.
             float inset = MenuPopup.rowInset(r.getWidth());
             SkiaDraw.drawRoundedRect(canvas, r.getLeft() + inset, r.getTop() + s(4),
-                    r.getWidth() - inset * 2.0F, r.getHeight() - s(8), s(6),
+                    r.getWidth() - inset * 2.0F, r.getHeight() - s(8), UiTokens.radius(6),
                     Color.makeARGB((int) (55.0F * addHover), 255, 255, 255));
         }
         if (active) {
@@ -747,7 +749,8 @@ public final class QuickPhrasePanel {
                     .setMode(io.github.humbleui.skija.PaintMode.STROKE)
                     .setStrokeWidth(s(1.2F))) {
                 canvas.drawRRect(io.github.humbleui.types.RRect.makeXYWH(
-                        r.getLeft() + s(4), r.getTop() + s(4), r.getWidth() - s(8), r.getHeight() - s(8), s(6)), paint);
+                        r.getLeft() + s(4), r.getTop() + s(4), r.getWidth() - s(8), r.getHeight() - s(8),
+                        UiTokens.radius(6)), paint);
             }
         }
         String label = SkiaFontRenderer.truncate(font,

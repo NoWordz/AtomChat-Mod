@@ -355,7 +355,7 @@ public final class ImageCropper {
         canvas.save();
         try {
             SkiaDraw.drawRoundedRect(canvas, panel.x(), panel.y(), panelW, panelH,
-                    s(12), Color.makeARGB((int) (200.0F * anim), 8, 9, 14));
+                    UiTokens.radius(12), Color.makeARGB((int) (200.0F * anim), 8, 9, 14));
 
             Image image = decoded;
             if (image != null && !transformReady) {
@@ -367,7 +367,7 @@ public final class ImageCropper {
                 float left = offX - decodeW * scale / 2.0F;
                 float top = offY - decodeH * scale / 2.0F;
                 canvas.save();
-                SkiaDraw.clip(canvas, panel.x(), panel.y(), panelW, panelH, s(12));
+                SkiaDraw.clip(canvas, panel.x(), panel.y(), panelW, panelH, UiTokens.radius(12));
                 try (Paint paint = new Paint().setAntiAlias(true)) {
                     canvas.drawImageRect(image,
                             Rect.makeXYWH(0, 0, decodeW, decodeH),
@@ -445,15 +445,16 @@ public final class ImageCropper {
 
     private void drawRoundButton(Canvas canvas, float cx, float cy, Path icon, float hover, int alpha) {
         float r = s(24);
-        SkiaDraw.drawRoundedShadow(canvas, cx - r, cy - r, 2.0F * r, 2.0F * r, r, s(6),
+        float radius = UiTokens.radius(24);
+        SkiaDraw.drawRoundedShadow(canvas, cx - r, cy - r, 2.0F * r, 2.0F * r, radius, s(6),
                 // The button fades itself (no alpha layer above it),
                 // so the shadow rides the same fade instead of
                 // hard-cutting at the last frame.
                 UiTokens.withAlpha(UiTokens.CHROME_SHADOW, 100.0F * alpha / 255.0F));
-        SkiaDraw.drawRoundedRect(canvas, cx - r, cy - r, 2.0F * r, 2.0F * r, r,
+        SkiaDraw.drawRoundedRect(canvas, cx - r, cy - r, 2.0F * r, 2.0F * r, radius,
                 Color.makeARGB((int) (0.92F * alpha), 35, 39, 47));
         if (hover > 0.01F) {
-            SkiaDraw.drawRoundedRect(canvas, cx - r, cy - r, 2.0F * r, 2.0F * r, r,
+            SkiaDraw.drawRoundedRect(canvas, cx - r, cy - r, 2.0F * r, 2.0F * r, radius,
                     Color.makeARGB((int) (60.0F * hover), 255, 255, 255));
         }
         float size = r;

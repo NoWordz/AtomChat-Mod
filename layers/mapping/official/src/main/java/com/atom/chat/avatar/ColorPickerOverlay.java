@@ -388,17 +388,17 @@ public final class ColorPickerOverlay {
         canvas.save();
         try {
             SkiaDraw.drawRoundedRect(canvas, panel.x(), panel.y(), panel.w(), panel.h(),
-                    s(12), Color.makeARGB((int) (200.0F * anim), 8, 9, 14));
+                    UiTokens.radius(12), Color.makeARGB((int) (200.0F * anim), 8, 9, 14));
 
             float cx = cardX(panel);
             float cy = cardY(panel);
             float cw = cardW(panel);
             float ch = cardH();
-            SkiaDraw.drawRoundedShadow(canvas, cx, cy, cw, ch, s(14), s(8),
+            SkiaDraw.drawRoundedShadow(canvas, cx, cy, cw, ch, UiTokens.radius(14), s(8),
                     // No whole-card alpha layer here: every element
                     // scales its own alpha by the fade, the shadow too.
                     UiTokens.withAlpha(UiTokens.CHROME_SHADOW, 100.0F * anim));
-            SkiaDraw.drawRoundedRect(canvas, cx, cy, cw, ch, s(14),
+            SkiaDraw.drawRoundedRect(canvas, cx, cy, cw, ch, UiTokens.radius(14),
                     Color.makeARGB((int) (0.96F * alpha), 32, 36, 46));
 
             int live = ColorUtil.hsvToRgb(hue, sat, bri);
@@ -445,7 +445,8 @@ public final class ColorPickerOverlay {
             // SV square: base hue, white gradient left→right, black bottom→up.
             Rect sv = svRect(panel);
             canvas.save();
-            SkiaDraw.clip(canvas, sv.getLeft(), sv.getTop(), sv.getWidth(), sv.getHeight(), s(8));
+            SkiaDraw.clip(canvas, sv.getLeft(), sv.getTop(), sv.getWidth(), sv.getHeight(),
+                    UiTokens.radius(8));
             int base = ColorUtil.hsvToRgb(hue, 1.0F, 1.0F);
             try (Paint p = new Paint().setColor(base).setAntiAlias(true)) {
                 canvas.drawRect(sv, p);
@@ -480,7 +481,8 @@ public final class ColorPickerOverlay {
             // Hue bar: 7-stop rainbow gradient + cursor.
             Rect hueBar = hueRect(panel);
             canvas.save();
-            SkiaDraw.clip(canvas, hueBar.getLeft(), hueBar.getTop(), hueBar.getWidth(), hueBar.getHeight(), s(7));
+            SkiaDraw.clip(canvas, hueBar.getLeft(), hueBar.getTop(), hueBar.getWidth(), hueBar.getHeight(),
+                    UiTokens.radius(7));
             try (Paint p = new Paint().setAntiAlias(true);
                  var sh = Shader.makeLinearGradient(hueBar.getLeft(), 0, hueBar.getRight(), 0, rainbow())) {
                 p.setShader(sh);
@@ -505,12 +507,13 @@ public final class ColorPickerOverlay {
             float iw = inputW(panel);
             float icy = btnCy(panel);
             float ih = s(30);
-            SkiaDraw.drawRoundedRect(canvas, ix, icy - ih / 2.0F, iw, ih, ih / 2.0F,
+            float inputRadius = UiTokens.radius(ih / (2.0F * UiTokens.SCALE));
+            SkiaDraw.drawRoundedRect(canvas, ix, icy - ih / 2.0F, iw, ih, inputRadius,
                     Color.makeARGB((int) (0.5F * alpha), 255, 255, 255));
             if (inputFocused) {
                 try (Paint ring = new Paint().setColor((alpha << 24) | (accent & 0x00FFFFFF))
                         .setMode(PaintMode.STROKE).setStrokeWidth(s(1.5F)).setAntiAlias(true)) {
-                    canvas.drawRRect(RRect.makeXYWH(ix, icy - ih / 2.0F, iw, ih, ih / 2.0F), ring);
+                    canvas.drawRRect(RRect.makeXYWH(ix, icy - ih / 2.0F, iw, ih, inputRadius), ring);
                 }
             }
             Font inputFont = FontManager.font(UiTokens.FONT_BUTTON);
@@ -583,10 +586,11 @@ public final class ColorPickerOverlay {
     private void drawRoundButton(Canvas canvas, float cx, float cy, io.github.humbleui.skija.Path icon,
                                  float hover, int alpha) {
         float r = s(18);
-        SkiaDraw.drawRoundedRect(canvas, cx - r, cy - r, 2.0F * r, 2.0F * r, r,
+        float radius = UiTokens.radius(18);
+        SkiaDraw.drawRoundedRect(canvas, cx - r, cy - r, 2.0F * r, 2.0F * r, radius,
                 Color.makeARGB((int) (0.92F * alpha), 35, 39, 47));
         if (hover > 0.01F) {
-            SkiaDraw.drawRoundedRect(canvas, cx - r, cy - r, 2.0F * r, 2.0F * r, r,
+            SkiaDraw.drawRoundedRect(canvas, cx - r, cy - r, 2.0F * r, 2.0F * r, radius,
                     Color.makeARGB((int) (60.0F * hover), 255, 255, 255));
         }
         Rect b = icon.getBounds();

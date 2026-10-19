@@ -13,13 +13,15 @@ public final class ChatEffectRenderer {
         var type=session.type();
         var particles=ChatEffectParticles.frame(type,session.progress(nowMs),session.seed());
         var font=FontManager.font(UiTokens.CHAT_EFFECT_EMOJI_SIZE);
+        UiLayout.Rect area=type==ChatEffectType.STAR?layout.list:layout.rect();
         canvas.save();
         try {
-            SkiaDraw.clip(canvas,layout.panelX,layout.panelY,layout.panelW,layout.panelH,UiTokens.panelRadius());
+            SkiaDraw.clip(canvas,area.x(),area.y(),area.w(),area.h(),
+                    type==ChatEffectType.STAR?0.0f:UiTokens.panelRadius());
             for(var p:particles) {
                 canvas.save();
                 try {
-                    canvas.translate(layout.panelX+p.x()*layout.panelW,layout.panelY+p.y()*layout.panelH);
+                    canvas.translate(area.x()+p.x()*area.w(),area.y()+p.y()*area.h());
                     canvas.rotate(p.rotation());
                     canvas.scale(p.size()/UiTokens.CHAT_EFFECT_EMOJI_BASE_SIZE,p.size()/UiTokens.CHAT_EFFECT_EMOJI_BASE_SIZE);
                     SkiaFontRenderer.drawTextCentered(canvas,font,type.emoji(),0,0,((int)(p.alpha()*255)<<24)|0xFFFFFF);

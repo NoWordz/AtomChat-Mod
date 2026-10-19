@@ -44,7 +44,8 @@ public final class SettingsHomePage {
         float side = tileSide(layout);
         return UiTokens.ROOT_CONTENT_GAP
                 + rows * side
-                + (rows - 1) * UiTokens.SETTINGS_TILE_GAP;
+                + (rows - 1) * UiTokens.SETTINGS_TILE_GAP
+                + UiTokens.ROW_CLIP_INSET;
     }
 
     /** Tile width from the column grid; the tile is square, so this is also its height. */

@@ -265,7 +265,7 @@ public final class MessageListView {
         }
         float t = Math.min(1.0F, left / (float) HIGHLIGHT_MS);
         SkiaDraw.drawRoundedRect(canvas, x, y - UiTokens.s(2), w, h + UiTokens.s(4),
-                UiTokens.s(8), Color.makeARGB((int) (60.0F * t), 255, 255, 255));
+                UiTokens.radius(8), Color.makeARGB((int) (60.0F * t), 255, 255, 255));
     }
 
     private final com.atom.chat.ui.ReactionChips reactionChips = new com.atom.chat.ui.ReactionChips();
@@ -448,9 +448,10 @@ public final class MessageListView {
                 Animations.enabled(), w);
         loadEarlierScale.begin(canvas, bx + w / 2.0F, by + h / 2.0F);
         try {
-            SkiaDraw.drawRoundedRect(canvas, bx, by, w, h, h / 2.0F, secondaryCapsuleBg());
+            float pillRadius = UiTokens.radius(h / (2.0F * UiTokens.SCALE));
+            SkiaDraw.drawRoundedRect(canvas, bx, by, w, h, pillRadius, secondaryCapsuleBg());
             if (loadEarlierHover > 0.01F) {
-                SkiaDraw.drawRoundedRect(canvas, bx, by, w, h, h / 2.0F,
+                SkiaDraw.drawRoundedRect(canvas, bx, by, w, h, pillRadius,
                         UiTokens.cardHover(loadEarlierHover));
             }
             SkiaFontRenderer.drawTextCentered(canvas, font, label, bx + w / 2.0F, by + h / 2.0F,
@@ -1180,7 +1181,8 @@ public final class MessageListView {
                 : x + avatarEdgeInset() + UiTokens.AVATAR_SIZE + UiTokens.AVATAR_GAP;
         // Quote pill shares the secondary capsule family (configurable), so it
         // reads as the same family as system messages and time dividers.
-        SkiaDraw.drawRoundedRect(canvas, pillX, pillY, pillW, UiTokens.QUOTE_HEIGHT, s(6), secondaryCapsuleBg());
+        SkiaDraw.drawRoundedRect(canvas, pillX, pillY, pillW, UiTokens.QUOTE_HEIGHT,
+                UiTokens.radius(6), secondaryCapsuleBg());
         SkiaDraw.drawRoundedRect(canvas, pillX + UiTokens.QUOTE_PAD_X, pillY + s(3), barW, UiTokens.QUOTE_HEIGHT - s(6), barW / 2.0F, accent());
         float textStartX = pillX + UiTokens.QUOTE_PAD_X + barW + s(4);
         float quoteCenterY = pillY + UiTokens.QUOTE_HEIGHT / 2.0F;

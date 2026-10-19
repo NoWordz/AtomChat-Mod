@@ -61,7 +61,13 @@ public final class DraftStore {
      * chat screen was opened with.
      */
     public void seedWorld(String text) {
-        this.worldDraft = text;
+        // A fresh screen opened from a command/chat key carries explicit text;
+        // that is the user's input for this open and outranks a retained draft.
+        // An empty constructor argument means "nothing was typed", so the saved
+        // conversation draft is allowed to load after init().
+        if (text != null && !text.isEmpty()) {
+            this.worldDraft = text;
+        }
     }
 
     /**
@@ -93,7 +99,20 @@ public final class DraftStore {
      * @param activePrivateTarget the private partner on top of the stack, or null
      */
     public void saveCurrentDraft(AppPage topPage, PlayerRef activePrivateTarget, ComposerTextPort composer) {
+        saveCurrentDraft(topPage, activePrivateTarget, composer, true);
+    }
+
+    /**
+     * Persists a closing composer only while cross-screen retention is enabled.
+     * The live field is left untouched when disabled: turning the option off
+     * stops the cache from growing, it does not erase what is currently typed.
+     */
+    public void saveCurrentDraft(AppPage topPage, PlayerRef activePrivateTarget,
+                                 ComposerTextPort composer, boolean retainAcrossScreens) {
         if (composer == null) {
+            return;
+        }
+        if (!retainAcrossScreens) {
             return;
         }
         if (topPage == AppPage.WORLD_CHAT) {
@@ -130,5 +149,13 @@ public final class DraftStore {
             composer.set(worldDraft);
             composer.moveCursorToStart();
         }
+    }
+
+    /** Drops all cross-screen drafts. Used when retention is disabled and at a
+     *  JOIN/DISCONNECT boundary so one server's conversation text cannot leak
+     *  into another. */
+    public void clear() {
+        worldDraft = "";
+        privateDrafts.clear();
     }
 }

@@ -239,10 +239,11 @@ public final class ImagePreviewOverlay {
     /** The round close key: the same dark plate and white glyph as the modals'. */
     private void drawCloseKey(Canvas canvas, float cx, float cy, int alpha) {
         float r = s(CLOSE_RADIUS);
-        SkiaDraw.drawRoundedRect(canvas, cx - r, cy - r, 2.0F * r, 2.0F * r, r,
+        float closeRadius = UiTokens.radius(CLOSE_RADIUS);
+        SkiaDraw.drawRoundedRect(canvas, cx - r, cy - r, 2.0F * r, 2.0F * r, closeRadius,
                 Color.makeARGB((int) (0.92F * alpha), 35, 39, 47));
         if (closeHover > 0.01F) {
-            SkiaDraw.drawRoundedRect(canvas, cx - r, cy - r, 2.0F * r, 2.0F * r, r,
+            SkiaDraw.drawRoundedRect(canvas, cx - r, cy - r, 2.0F * r, 2.0F * r, closeRadius,
                     Color.makeARGB((int) (60.0F * closeHover), 255, 255, 255));
         }
         Path icon = AppIcons.ICON_CLOSE_PATH;

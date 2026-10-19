@@ -120,13 +120,14 @@ public final class ToggleSwitch {
         try {
             float p = Math.max(0.0F, Math.min(1.0F, anim.getValue()));
             SkiaDraw.drawRoundedRect(canvas, x, y, UiTokens.SWITCH_W, UiTokens.SWITCH_H,
-                    UiTokens.SWITCH_H / 2.0F, dim(SkiaDraw.lerpColor(trackOff(), accent, p), op));
+                    UiTokens.radius(UiTokens.SWITCH_H / (2.0F * UiTokens.SCALE)),
+                    dim(SkiaDraw.lerpColor(trackOff(), accent, p), op));
 
             float travel = UiTokens.SWITCH_W - UiTokens.SWITCH_KNOB - UiTokens.SWITCH_INSET * 2.0F;
             float knobX = x + UiTokens.SWITCH_INSET + travel * p;
             float knobY = y + (UiTokens.SWITCH_H - UiTokens.SWITCH_KNOB) / 2.0F;
             SkiaDraw.drawRoundedRect(canvas, knobX, knobY, UiTokens.SWITCH_KNOB, UiTokens.SWITCH_KNOB,
-                    UiTokens.SWITCH_KNOB / 2.0F, dim(KNOB, op));
+                    UiTokens.handleRadius(UiTokens.SWITCH_KNOB), dim(KNOB, op));
         } finally {
             canvas.restore();
         }
