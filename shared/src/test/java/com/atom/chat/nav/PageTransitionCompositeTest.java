@@ -675,6 +675,11 @@ class PageTransitionCompositeTest {
                 public float toVirtualY(double guiY) {
                     return (float) guiY;
                 }
+
+                @Override
+                public String clipboard() {
+                    return "";
+                }
             });
             composite = new PageTransitionComposite(host, director, composer, chrome, primitives,
                     menu, actions, host.profile, host.settings);

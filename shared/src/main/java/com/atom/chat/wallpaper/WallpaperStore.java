@@ -73,7 +73,13 @@ public final class WallpaperStore {
         return current != null;
     }
 
-    /** Copies {@code source} in as the wallpaper, replacing any previous one. */
+    /** Copies {@code source} in as the wallpaper, replacing any previous one.
+     *
+     * <p>Staged: the new file is copied to a temporary name and atomically
+     * moved over {@code wallpaper.<ext>} first; the old formats are deleted
+     * only after the move landed. A failed copy therefore leaves the previous
+     * image in place instead of the old {@code removeExisting() -> copy}
+     * order's blank window.</p> */
     public static boolean set(Path source) {
         if (dir == null || source == null || !Files.isRegularFile(source)) {
             return false;
@@ -85,13 +91,15 @@ public final class WallpaperStore {
         String ext = name.substring(name.lastIndexOf('.')).toLowerCase();
         try {
             Files.createDirectories(dir);
-            removeExisting();
             Path dest = dir.resolve(BASE_NAME + ext);
             if (source.toAbsolutePath().normalize().equals(dest.toAbsolutePath().normalize())) {
                 refresh();
                 return true;
             }
-            Files.copy(source, dest, StandardCopyOption.REPLACE_EXISTING);
+            Path tmp = dir.resolve(BASE_NAME + ".tmp");
+            Files.copy(source, tmp, StandardCopyOption.REPLACE_EXISTING);
+            moveIntoPlace(tmp, dest);
+            removeExistingExcept(dest);
             refresh();
             return true;
         } catch (IOException e) {
@@ -101,7 +109,7 @@ public final class WallpaperStore {
 
     /**
      * Stores raw PNG bytes (the cropper's output) as {@code wallpaper.png},
-     * replacing any previous wallpaper.
+     * replacing any previous wallpaper. Same staged order as {@link #set}.
      */
     public static boolean setPng(byte[] bytes) {
         if (dir == null || bytes == null || bytes.length == 0) {
@@ -109,12 +117,24 @@ public final class WallpaperStore {
         }
         try {
             Files.createDirectories(dir);
-            removeExisting();
-            Files.write(dir.resolve(BASE_NAME + ".png"), bytes);
+            Path dest = dir.resolve(BASE_NAME + ".png");
+            Path tmp = dir.resolve(BASE_NAME + ".tmp");
+            Files.write(tmp, bytes);
+            moveIntoPlace(tmp, dest);
+            removeExistingExcept(dest);
             refresh();
             return true;
         } catch (IOException e) {
             return false;
+        }
+    }
+
+    private static void moveIntoPlace(Path tmp, Path dest) throws IOException {
+        try {
+            Files.move(tmp, dest,
+                    StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
+        } catch (java.nio.file.AtomicMoveNotSupportedException e) {
+            Files.move(tmp, dest, StandardCopyOption.REPLACE_EXISTING);
         }
     }
 
@@ -129,6 +149,11 @@ public final class WallpaperStore {
     }
 
     private static boolean removeExisting() {
+        return removeExistingExcept(null);
+    }
+
+    /** Removes every {@code wallpaper.*} except {@code keep} (the just-moved file). */
+    private static boolean removeExistingExcept(Path keep) {
         boolean removed = false;
         if (!Files.isDirectory(dir)) {
             return false;
@@ -136,7 +161,9 @@ public final class WallpaperStore {
         try (Stream<Path> files = Files.list(dir)) {
             for (Path p : files.filter(Files::isRegularFile).toList()) {
                 String n = p.getFileName().toString().toLowerCase();
-                if (n.startsWith(BASE_NAME) && isSupportedName(n)) {
+                if (n.startsWith(BASE_NAME) && isSupportedName(n)
+                        && (keep == null || !p.toAbsolutePath().normalize()
+                        .equals(keep.toAbsolutePath().normalize()))) {
                     try {
                         Files.deleteIfExists(p);
                         removed = true;

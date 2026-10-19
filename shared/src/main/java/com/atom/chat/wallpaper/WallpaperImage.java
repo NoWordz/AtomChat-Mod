@@ -56,7 +56,8 @@ public final class WallpaperImage {
     }
 
     /** Drops the cached bitmap; the next frame re-decodes from disk. */
-    public static void release() {
+    public static synchronized void release() {
+        GENERATION.incrementAndGet();
         decodedFrom = null;
         failed = false;
         if (decoded != null) {
@@ -65,10 +66,11 @@ public final class WallpaperImage {
         }
     }
 
-    private static void startLoad(Path path) {
+    private static synchronized void startLoad(Path path) {
         if (path.equals(decodedFrom)) {
             return;
         }
+        release();
         // Claimed synchronously so the next frame cannot re-trigger the load
         // while the decode is still in flight. Decodes are rare (user action),
         // so one thread per change is fine; the generation counter makes the
@@ -85,11 +87,13 @@ public final class WallpaperImage {
             } catch (Throwable ignored) {
                 ok = false;
             }
-            if (generation == GENERATION.get()) {
-                decoded = result;
-                failed = !ok;
-            } else if (result != null) {
-                result.close();
+            synchronized (WallpaperImage.class) {
+                if (generation == GENERATION.get()) {
+                    decoded = result;
+                    failed = !ok;
+                } else if (result != null) {
+                    result.close();
+                }
             }
         }, "AtomChat-WallpaperDecode");
         worker.setDaemon(true);

@@ -43,6 +43,9 @@ public class AtomChatClient implements ClientModInitializer {
         WallpaperStore.init(
                 net.fabricmc.loader.api.FabricLoader.getInstance().getConfigDir()
                         .resolve("atomchat/wallpaper"));
+        com.atom.chat.theme.ThemePresetStore.init(
+                net.fabricmc.loader.api.FabricLoader.getInstance().getConfigDir()
+                        .resolve("atomchat/theme-presets"));
         BannerStore.init(
                 net.fabricmc.loader.api.FabricLoader.getInstance().getConfigDir()
                         .resolve("atomchat"));

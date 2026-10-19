@@ -67,6 +67,8 @@ public final class AtomChatClient {
         AtomChatConfig.get();
         CacheDirs.migrateFromOldConfigPaths();
         WallpaperStore.init(FMLPaths.CONFIGDIR.get().resolve("atomchat/wallpaper"));
+        com.atom.chat.theme.ThemePresetStore.init(
+                FMLPaths.CONFIGDIR.get().resolve("atomchat/theme-presets"));
         BannerStore.init(FMLPaths.CONFIGDIR.get().resolve("atomchat"));
         ImageLoader.get().init(CacheDirs.imageCacheDir());
         com.atom.chat.net.PackNetClient.install();

@@ -98,27 +98,51 @@ public final class ShellHeader {
             // the budget formula total.
             ACTION_SCALE.update(false, false, FRAME_DT_MS, Animations.enabled(), 1.0F);
         }
-        Font titleFont = FontManager.font(UiTokens.FONT_TITLE);
-        SkiaFontRenderer.drawTextCentered(canvas, titleFont, title,
-                header.x() + header.w() / 2.0F,
-                header.y() + header.h() / 2.0F, textPrimary);
-
         LocalTime now = LocalTime.now();
         String time = String.format("%02d:%02d", now.getHour(), now.getMinute());
         Font timeFont = FontManager.font(UiTokens.FONT_TIME);
-        SkiaFontRenderer.drawTextRight(canvas, timeFont, time,
-                header.right() - UiTokens.HEADER_PAD_X,
-                header.y() + header.h() / 2.0F, textPrimary);
+        Font titleFont = FontManager.font(UiTokens.FONT_TITLE);
+        float dotSpace = statusOnline == null ? 0.0F : UiTokens.HEADER_TEXT_GAP * 2.0F;
+        TextBounds bounds = textBounds(header, showBack ? backButton : null,
+                action == null ? null : action.rect(),
+                SkiaFontRenderer.getStringWidth(titleFont, title) + dotSpace,
+                SkiaFontRenderer.getStringWidth(timeFont, time));
+        String shown = SkiaFontRenderer.truncate(titleFont, title,
+                Math.max(0.0F, bounds.right() - bounds.left() - dotSpace));
+        float titleW = SkiaFontRenderer.getStringWidth(titleFont, shown);
+        float center = Math.max(bounds.left() + dotSpace + titleW / 2.0F,
+                Math.min(header.x() + header.w() / 2.0F, bounds.right() - titleW / 2.0F));
+        canvas.save();
+        canvas.clipRect(io.github.humbleui.types.Rect.makeXYWH(bounds.left(), header.y(),
+                Math.max(0.0F, bounds.right() - bounds.left()), header.h()));
+        SkiaFontRenderer.drawTextCentered(canvas, titleFont, shown,
+                center, header.y() + header.h() / 2.0F, textPrimary);
 
         if (statusOnline != null) {
-            Font dotTitleFont = FontManager.font(UiTokens.FONT_TITLE);
-            float titleW = SkiaFontRenderer.getStringWidth(dotTitleFont, title);
             float dotR = UiTokens.s(5);
-            float dotX = header.x() + header.w() / 2.0F - titleW / 2.0F - UiTokens.s(12) - dotR;
+            float dotX = center - titleW / 2.0F - UiTokens.HEADER_TEXT_GAP - dotR;
             float dotY = header.y() + header.h() / 2.0F;
             int dotColor = statusOnline ? Color.makeARGB(255, 82, 196, 110) : Color.makeARGB(255, 130, 140, 150);
             SkiaDraw.drawRoundedRect(canvas, dotX - dotR, dotY - dotR, dotR * 2, dotR * 2, dotR, dotColor);
         }
+        canvas.restore();
+        if (bounds.showTime()) SkiaFontRenderer.drawTextRight(canvas, timeFont, time,
+                header.right() - UiTokens.HEADER_PAD_X,
+                header.y() + header.h() / 2.0F, textPrimary);
+    }
+
+    record TextBounds(float left, float right, boolean showTime) {}
+
+    static TextBounds textBounds(UiLayout.Rect header, UiLayout.Rect back, UiLayout.Rect action,
+                                 float titleWidth, float timeWidth) {
+        float gap = UiTokens.HEADER_TEXT_GAP;
+        float left = header.x() + UiTokens.HEADER_PAD_X;
+        if (back != null) left = Math.max(left, back.right() + gap);
+        if (action != null) left = Math.max(left, action.right() + gap);
+        float right = Math.max(left, header.right() - UiTokens.HEADER_PAD_X);
+        float clockLeft = right - timeWidth - gap;
+        boolean showTime = clockLeft - left >= titleWidth;
+        return new TextBounds(left, showTime ? clockLeft : right, showTime);
     }
 
     /** Hover wash + centred icon, the shared header-button recipe. */

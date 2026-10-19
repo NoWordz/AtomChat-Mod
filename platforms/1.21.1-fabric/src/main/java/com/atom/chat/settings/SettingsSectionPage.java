@@ -12,6 +12,7 @@ import com.atom.chat.render.Easing;
 import com.atom.chat.render.SkiaDraw;
 import com.atom.chat.render.SkiaFontRenderer;
 import com.atom.chat.theme.ThemeService;
+import com.atom.chat.theme.ThemePresetStore;
 import com.atom.chat.ui.Animations;
 import com.atom.chat.ui.AppIcons;
 import com.atom.chat.ui.PressScale;
@@ -54,49 +55,55 @@ import java.util.Map;
  * so rendering, hit-testing and measurement can never disagree.</p>
  */
 public final class SettingsSectionPage {
-    public enum RowKind { HERO, AUTHORS, SWITCH, SLIDER, COLOR, INFO, BLOCKED, LABEL, ACTION, THEMES }
+    public enum RowKind { HERO, AUTHORS, SWITCH, SLIDER, COLOR, INFO, BLOCKED, LABEL, ACTION, THEMES, PRESET }
 
     public record Row(RowKind kind, SettingsItem item, SettingsSlider slider,
                       SettingsColor color, SettingsCatalog.InfoRow info, PlayerRef player,
-                      String labelKey, String actionId) {
+                      String labelKey, String actionId, String titleText, String subtitleText) {
         static Row ofSwitch(SettingsItem item) {
-            return new Row(RowKind.SWITCH, item, null, null, null, null, null, null);
+            return new Row(RowKind.SWITCH, item, null, null, null, null, null, null, null, null);
         }
 
         static Row ofSlider(SettingsSlider slider) {
-            return new Row(RowKind.SLIDER, null, slider, null, null, null, null, null);
+            return new Row(RowKind.SLIDER, null, slider, null, null, null, null, null, null, null);
         }
 
         static Row ofColor(SettingsColor color) {
-            return new Row(RowKind.COLOR, null, null, color, null, null, null, null);
+            return new Row(RowKind.COLOR, null, null, color, null, null, null, null, null, null);
         }
 
         static Row ofInfo(SettingsCatalog.InfoRow info) {
-            return new Row(RowKind.INFO, null, null, null, info, null, null, null);
+            return new Row(RowKind.INFO, null, null, null, info, null, null, null, null, null);
         }
 
         static Row ofBlocked(PlayerRef player) {
-            return new Row(RowKind.BLOCKED, null, null, null, null, player, null, null);
+            return new Row(RowKind.BLOCKED, null, null, null, null, player, null, null, null, null);
         }
 
         static Row ofLabel(String key) {
-            return new Row(RowKind.LABEL, null, null, null, null, null, key, null);
+            return new Row(RowKind.LABEL, null, null, null, null, null, key, null, null, null);
         }
 
         static Row ofAuthors() {
-            return new Row(RowKind.AUTHORS, null, null, null, null, null, null, null);
+            return new Row(RowKind.AUTHORS, null, null, null, null, null, null, null, null, null);
         }
 
         static Row ofHero() {
-            return new Row(RowKind.HERO, null, null, null, null, null, null, null);
+            return new Row(RowKind.HERO, null, null, null, null, null, null, null, null, null);
         }
 
         static Row ofAction(String actionId, SettingsItem item) {
-            return new Row(RowKind.ACTION, item, null, null, null, null, null, actionId);
+            return new Row(RowKind.ACTION, item, null, null, null, null, null, actionId, null, null);
         }
 
         static Row ofThemes() {
-            return new Row(RowKind.THEMES, null, null, null, null, null, null, null);
+            return new Row(RowKind.THEMES, null, null, null, null, null, null, null, null, null);
+        }
+
+        /** A saved-preset row: explicit text, never a translation key. */
+        static Row ofPreset(String title, String subtitle, String actionId) {
+            return new Row(RowKind.PRESET, null, null, null, null, null, null, actionId,
+                    title, subtitle);
         }
 
     }
@@ -159,6 +166,21 @@ public final class SettingsSectionPage {
     private static final String ACTION_HISTORY_CLEAR = "history_clear";
     private static final String ACTION_CACHE_CLEAR = "cache_clear";
     private static final String ACTION_TEST_SOUND = "test_sound";
+    public static final String ACTION_THEME_PRESET_SAVE = "theme_preset_save";
+    public static final String ACTION_THEME_PRESET_APPLY = "theme_preset_apply:";
+    public static final String ACTION_THEME_PRESET_OVERWRITE = "theme_preset_overwrite:";
+    public static final String ACTION_THEME_PRESET_RENAME = "theme_preset_rename:";
+    public static final String ACTION_THEME_PRESET_DELETE = "theme_preset_delete:";
+    public static final String ACTION_THEME_PRESET_TEXT_COMMIT = "theme_preset_text_commit";
+
+    /** Save the current look (and wallpaper, when one is set) as a named preset. */
+    private SettingsItem themePresetSaveItem() {
+        return new SettingsItem(ACTION_THEME_PRESET_SAVE,
+                "atomchat.settings.appearance.presets.save",
+                "atomchat.settings.appearance.presets.save.desc",
+                () -> true, v -> {
+        });
+    }
 
     /** "Custom wallpaper" card: picking an image copies it into the config dir. */
     private SettingsItem wallpaperPickItem() {
@@ -348,6 +370,7 @@ public final class SettingsSectionPage {
             return;
         }
         chipSwitchFromId = activeChipId(section);
+        cancelTextEdit();
         chipSwitchAtMs = System.currentTimeMillis();
         activeChip.put(section.id(), index);
     }
@@ -405,7 +428,9 @@ public final class SettingsSectionPage {
     private static boolean needsConfirm(String actionId) {
         return ACTION_WALLPAPER_CLEAR.equals(actionId)
                 || ACTION_HISTORY_CLEAR.equals(actionId)
-                || ACTION_CACHE_CLEAR.equals(actionId);
+                || ACTION_CACHE_CLEAR.equals(actionId)
+                || (actionId != null && actionId.startsWith(ACTION_THEME_PRESET_OVERWRITE))
+                || (actionId != null && actionId.startsWith(ACTION_THEME_PRESET_DELETE));
     }
 
     /**
@@ -495,6 +520,16 @@ public final class SettingsSectionPage {
     private String editBuffer = "";
     /** Last drawn geometry of the inline number row, for click-to-blur hit tests. */
     private UiLayout.Rect inlineNumberRowRect;
+
+    // ------------------------------------------------ preset name inline edit
+    private String textEditPurpose;
+    private String textEditTargetId;
+    private String textEditRowActionId;
+    private String textEditBuffer = "";
+    private UiLayout.Rect inlineEditRowRect;
+    private String committedTextPurpose = "";
+    private String committedTextTargetId = "";
+    private String committedTextValue = "";
     /** Section of the frame currently being rendered; drag release needs it. */
     private SettingsSection currentSectionForSettle;
     /** Release glide: from the continuous drag position to the snapped value. */
@@ -547,10 +582,109 @@ public final class SettingsSectionPage {
      * line instead of being ellipsized. The row grows only when the text does
      * not fit the width the right-hand control/verb/hint leaves available.
      */
+    /** One measured text block; the bottom control owns a separate band when crowded. */
+    private record CompactText(List<String> title, List<String> description,
+                               float titleH, float descriptionH, float controlH, float height) {}
+
+    private CompactText compactText(Row row, float width) {
+        Font titleFont = FontManager.font(UiTokens.SETTINGS_TILE_TITLE);
+        Font subFont = FontManager.font(UiTokens.SETTINGS_TILE_SUB);
+        float inner = Math.max(1.0F, width - UiTokens.SETTINGS_ROW_PAD * 2.0F);
+        String title;
+        String desc = "";
+        float reserved = 0.0F;
+        float controlH = 0.0F;
+        switch (row.kind()) {
+            case SWITCH -> {
+                title = tr(row.item().titleKey());
+                desc = descriptionText(row);
+                reserved = UiTokens.SWITCH_W + UiTokens.SETTINGS_COMPACT_GAP;
+                controlH = UiTokens.SWITCH_H;
+            }
+            case ACTION, PRESET -> {
+                ActionCopy copy = actionCopy(row);
+                title = copy.title(); desc = copy.subtitle();
+                if (copy.available()) {
+                    reserved = SkiaFontRenderer.getStringWidth(titleFont, copy.verb())
+                            + UiTokens.SETTINGS_COMPACT_GAP;
+                    controlH = SkiaFontRenderer.getHeight(titleFont);
+                }
+            }
+            case INFO -> {
+                title = tr(row.info().titleKey()); desc = row.info().value();
+                if (row.info().isLink()) {
+                    reserved = SkiaFontRenderer.getStringWidth(titleFont, tr("atomchat.settings.about.open"))
+                            + UiTokens.SETTINGS_COMPACT_GAP;
+                    controlH = SkiaFontRenderer.getHeight(titleFont);
+                }
+            }
+            case SLIDER -> {
+                title = tr(row.slider().titleKey());
+                reserved = SkiaFontRenderer.getStringWidth(subFont, row.slider().displayValue())
+                        + UiTokens.SETTINGS_COMPACT_GAP;
+                controlH = UiTokens.SETTINGS_VALUE_BAND;
+                if (isInlineNumberSlider(row.slider().id())) {
+                    desc = tr("atomchat.settings.chat.history.retention.desc");
+                    reserved = width * 0.45F;
+                    controlH = UiTokens.ACTION_BUTTON_SIZE;
+                }
+            }
+            case COLOR -> {
+                title = tr(row.color().titleKey());
+                reserved = SkiaFontRenderer.getStringWidth(subFont, "#FFFFFF")
+                        + UiTokens.SETTINGS_VALUE_BAND;
+                controlH = UiTokens.SETTINGS_VALUE_BAND;
+            }
+            default -> { return null; }
+        }
+        if (SkiaFontRenderer.getStringWidth(titleFont, title) <= inner - reserved) return null;
+        List<String> titles = SkiaFontRenderer.wrap(titleFont, title, inner);
+        List<String> descriptions = desc.isEmpty() ? List.of() : SkiaFontRenderer.wrap(subFont, desc, inner);
+        float titleH = SkiaFontRenderer.getHeight(titleFont);
+        float descriptionH = SkiaFontRenderer.getHeight(subFont);
+        float h = UiTokens.SETTINGS_ROW_PAD * 2.0F + titles.size() * titleH
+                + descriptions.size() * descriptionH + controlH + UiTokens.SETTINGS_COMPACT_GAP * 2.0F;
+        if (row.kind() == RowKind.SLIDER || row.kind() == RowKind.COLOR) h += UiTokens.SETTINGS_VALUE_BAND;
+        return new CompactText(titles, descriptions, titleH, descriptionH, controlH,
+                Math.max(rowHeight(row.kind()), h));
+    }
+
+    private static int swatchColumns(UiLayout.Rect rect) {
+        return Math.max(1, (int) ((rect.w() - UiTokens.SETTINGS_ROW_PAD * 2.0F)
+                / UiTokens.SETTINGS_SWATCH_STEP));
+    }
+
+    private void drawCompactText(Canvas canvas, UiLayout.Rect rect, CompactText flow, int descColor) {
+        float y = rect.y() + UiTokens.SETTINGS_ROW_PAD;
+        float x = rect.x() + UiTokens.SETTINGS_ROW_PAD;
+        Font title = FontManager.font(UiTokens.SETTINGS_TILE_TITLE);
+        Font desc = FontManager.font(UiTokens.SETTINGS_TILE_SUB);
+        for (String line : flow.title()) {
+            SkiaFontRenderer.drawText(canvas, title, line, x,
+                    SkiaFontRenderer.centerBaselineY(title, y + flow.titleH() / 2.0F), textPrimary());
+            y += flow.titleH();
+        }
+        y += UiTokens.SETTINGS_COMPACT_GAP;
+        for (String line : flow.description()) {
+            SkiaFontRenderer.drawText(canvas, desc, line, x,
+                    SkiaFontRenderer.centerBaselineY(desc, y + flow.descriptionH() / 2.0F), descColor);
+            y += flow.descriptionH();
+        }
+    }
+
     public float rowHeight(Row row, UiLayout layout) {
         RowKind kind = row.kind();
         float base = rowHeight(kind);
-        if (kind != RowKind.SWITCH && kind != RowKind.ACTION && kind != RowKind.INFO) {
+        CompactText compact = compactText(row, rowCardWidth(layout));
+        if (compact != null) base = compact.height();
+        if (kind == RowKind.COLOR) {
+            int columns = swatchColumns(new UiLayout.Rect(0, 0, rowCardWidth(layout), base));
+            int rows = (row.color().swatchCount() + columns) / columns;
+            return base + Math.max(0, rows - 1) * UiTokens.SETTINGS_SWATCH_STEP;
+        }
+        if (compact != null) return base;
+        if (kind != RowKind.SWITCH && kind != RowKind.ACTION && kind != RowKind.INFO
+                && kind != RowKind.PRESET) {
             return base;
         }
         Font subFont = FontManager.font(UiTokens.SETTINGS_TILE_SUB);
@@ -570,6 +704,14 @@ public final class SettingsSectionPage {
     }
 
     private ActionCopy actionCopy(Row row) {
+        if (row.kind() == RowKind.PRESET) {
+            String subtitle = isEditingText() && row.actionId().equals(textEditRowActionId)
+                    ? textEditBuffer + "▏" : row.subtitleText();
+            return new ActionCopy(row.titleText(), subtitle == null ? "" : subtitle,
+                    isEditingText() && row.actionId().equals(textEditRowActionId)
+                            ? tr("atomchat.settings.appearance.presets.cancel") : presetVerb(row.actionId()), true,
+                    needsConfirm(row.actionId()) && actionArmed(row.actionId()));
+        }
         SettingsItem item = row.item();
         boolean available = item.available();
         boolean redConfirm = needsConfirm(row.actionId()) && actionArmed(row.actionId());
@@ -581,6 +723,12 @@ public final class SettingsSectionPage {
         } else if (redConfirm) {
             subtitle = tr(item.subtitleKey());
             verb = tr("atomchat.settings.appearance.wallpaper.clear.confirm");
+        } else if (ACTION_THEME_PRESET_SAVE.equals(row.actionId())) {
+            subtitle = isEditingText() && row.actionId().equals(textEditRowActionId)
+                    ? textEditBuffer + "▏" : tr(item.subtitleKey());
+            verb = isEditingText() && row.actionId().equals(textEditRowActionId)
+                    ? tr("atomchat.settings.appearance.presets.cancel")
+                    : tr("atomchat.settings.appearance.presets.save.action");
         } else if (ACTION_WALLPAPER_PICK.equals(row.actionId())) {
             Path wallpaper = WallpaperStore.current();
             subtitle = wallpaper != null && wallpaper.getFileName() != null
@@ -621,6 +769,25 @@ public final class SettingsSectionPage {
         return new ActionCopy(tr(item.titleKey()), subtitle, verb, available, redConfirm);
     }
 
+    private static String presetVerb(String actionId) {
+        if (actionId == null) {
+            return "";
+        }
+        if (actionId.startsWith(ACTION_THEME_PRESET_APPLY)) {
+            return tr("atomchat.settings.appearance.presets.apply");
+        }
+        if (actionId.startsWith(ACTION_THEME_PRESET_OVERWRITE)) {
+            return tr("atomchat.settings.appearance.presets.overwrite");
+        }
+        if (actionId.startsWith(ACTION_THEME_PRESET_RENAME)) {
+            return tr("atomchat.settings.appearance.presets.rename");
+        }
+        if (actionId.startsWith(ACTION_THEME_PRESET_DELETE)) {
+            return tr("atomchat.settings.appearance.presets.delete");
+        }
+        return "";
+    }
+
     /** The descriptive line that may wrap (switch subtitle / action subtitle / info value). */
     private String descriptionText(Row row) {
         return switch (row.kind()) {
@@ -631,6 +798,7 @@ public final class SettingsSectionPage {
                 yield tr(key);
             }
             case ACTION -> actionCopy(row).subtitle();
+            case PRESET -> actionCopy(row).subtitle();
             case INFO -> row.info().value();
             default -> "";
         };
@@ -644,7 +812,7 @@ public final class SettingsSectionPage {
                 float switchX = rowW - padX - UiTokens.SWITCH_W;
                 yield Math.max(0.0F, switchX - padX - s(10));
             }
-            case ACTION -> {
+            case ACTION, PRESET -> {
                 ActionCopy copy = actionCopy(row);
                 float reserved = 0.0F;
                 if (copy.available()) {
@@ -781,6 +949,31 @@ public final class SettingsSectionPage {
             default -> {
                 // Theme strip first - one tap to a whole new look.
                 rows.add(Row.ofThemes());
+                rows.add(Row.ofAction(ACTION_THEME_PRESET_SAVE, themePresetSaveItem()));
+                List<ThemePresetStore.Preset> presets = ThemePresetStore.get().list();
+                if (!presets.isEmpty()) {
+                    rows.add(Row.ofLabel("atomchat.settings.appearance.presets.saved"));
+                    for (ThemePresetStore.Preset preset : presets) {
+                        String id = preset.id();
+                        String wallpaper = tr(preset.hasWallpaper()
+                                ? "atomchat.settings.appearance.presets.withWallpaper"
+                                : "atomchat.settings.appearance.presets.withoutWallpaper");
+                        rows.add(Row.ofPreset(preset.name(), wallpaper,
+                                ACTION_THEME_PRESET_APPLY + id));
+                        rows.add(Row.ofPreset(preset.name() + " · "
+                                        + tr("atomchat.settings.appearance.presets.overwrite"),
+                                tr("atomchat.settings.appearance.presets.overwrite.desc"),
+                                ACTION_THEME_PRESET_OVERWRITE + id));
+                        rows.add(Row.ofPreset(preset.name() + " · "
+                                        + tr("atomchat.settings.appearance.presets.rename"),
+                                tr("atomchat.settings.appearance.presets.rename.desc"),
+                                ACTION_THEME_PRESET_RENAME + id));
+                        rows.add(Row.ofPreset(preset.name() + " · "
+                                        + tr("atomchat.settings.appearance.presets.delete"),
+                                tr("atomchat.settings.appearance.presets.delete.desc"),
+                                ACTION_THEME_PRESET_DELETE + id));
+                    }
+                }
                 // Corner radius is an independent knob - no preset writes it -
                 // so its continuous slider lives in the theme chip, showing
                 // the current value; 0 gives square corners everywhere.
@@ -1012,7 +1205,7 @@ public final class SettingsSectionPage {
 
     private static UiLayout.Rect sliderTrackRect(UiLayout.Rect row) {
         return new UiLayout.Rect(row.x() + UiTokens.SETTINGS_ROW_PAD,
-                row.y() + UiTokens.SETTINGS_SLIDER_TRACK_Y,
+                row.bottom() - UiTokens.SETTINGS_SLIDER_ROW_H + UiTokens.SETTINGS_SLIDER_TRACK_Y,
                 row.w() - UiTokens.SETTINGS_ROW_PAD * 2.0F,
                 UiTokens.SLIDER_TRACK_H);
     }
@@ -1389,6 +1582,7 @@ public final class SettingsSectionPage {
             case INFO -> drawInfo(canvas, row, rect);
             case BLOCKED -> drawBlocked(canvas, row, rect, hover, buttonFont);
             case ACTION -> drawAction(canvas, row, rect, hover);
+            case PRESET -> drawAction(canvas, row, rect, hover);
             default -> {
             }
         }
@@ -1551,31 +1745,26 @@ public final class SettingsSectionPage {
      * {@link #colorHit}: same strip centre, same r+s(4) slop.
      */
     private int swatchAt(SettingsColor color, UiLayout.Rect rect, float vmx, float vmy) {
-        float r = UiTokens.s(9);
-        float cy = swatchCy(rect);
-        if (Math.abs(vmy - cy) > r + UiTokens.s(4) || vmy < rect.y() || vmy > rect.bottom()) {
-            return -1;
-        }
-        for (int i = 0; i < color.swatchCount(); i++) {
-            if (Math.abs(vmx - swatchX(rect, i)) <= r + UiTokens.s(4)) {
-                return i;
-            }
-        }
-        // The "+" cell right after the last swatch, mirroring colorHit's
-        // geometry so the hover bounce and the hit-test cannot drift apart.
-        if (Math.abs(vmx - swatchX(rect, color.swatchCount())) <= r + UiTokens.s(4)) {
-            return color.swatchCount();
+        if (!rect.contains(vmx, vmy)) return -1;
+        float radius = UiTokens.SETTINGS_SWATCH_RADIUS + UiTokens.SETTINGS_COMPACT_GAP;
+        for (int i = 0; i <= color.swatchCount(); i++) {
+            if (Math.abs(vmx - swatchX(rect, i)) <= radius
+                    && Math.abs(vmy - swatchCy(rect, i, color.swatchCount() + 1)) <= radius) return i;
         }
         return -1;
     }
 
     /** Swatch strip geometry: centre Y within the row and the X step. */
-    private static float swatchCy(UiLayout.Rect rect) {
-        return rect.y() + s(42);
+    private static float swatchCy(UiLayout.Rect rect, int index, int count) {
+        int columns = swatchColumns(rect);
+        int rows = (count + columns - 1) / columns;
+        return rect.bottom() - UiTokens.SETTINGS_SWATCH_BOTTOM
+                - (rows - 1 - index / columns) * UiTokens.SETTINGS_SWATCH_STEP;
     }
 
     private static float swatchX(UiLayout.Rect rect, int index) {
-        return rect.x() + UiTokens.SETTINGS_ROW_PAD + UiTokens.s(9) + index * UiTokens.s(26);
+        return rect.x() + UiTokens.SETTINGS_ROW_PAD + UiTokens.SETTINGS_SWATCH_RADIUS
+                + (index % swatchColumns(rect)) * UiTokens.SETTINGS_SWATCH_STEP;
     }
 
     // ---------------------------------------------------------------- themes
@@ -1862,28 +2051,36 @@ public final class SettingsSectionPage {
         Font titleFont = FontManager.font(UiTokens.SETTINGS_TILE_TITLE);
         Font valueFont = FontManager.font(UiTokens.SETTINGS_TILE_SUB);
 
+        CompactText compact = compactText(row, rect.w());
+        int gridRows = (color.swatchCount() + swatchColumns(rect)) / swatchColumns(rect);
+        float valueY = compact == null ? rect.y() + s(18)
+                : rect.bottom() - UiTokens.SETTINGS_SLIDER_ROW_H
+                    - Math.max(0, gridRows - 1) * UiTokens.SETTINGS_SWATCH_STEP + UiTokens.SETTINGS_VALUE_BAND;
+        if (compact != null) drawCompactText(canvas, rect, compact, sec(200));
+        else {
         SkiaFontRenderer.drawText(canvas, titleFont,
                 SkiaFontRenderer.truncate(titleFont, tr(color.titleKey()), rect.w() - UiTokens.SETTINGS_ROW_PAD * 2.0F),
                 rect.x() + UiTokens.SETTINGS_ROW_PAD,
                 SkiaFontRenderer.centerBaselineY(titleFont, rect.y() + s(18)),
                 textPrimary());
+        }
         String hex = String.format("#%06X", color.value() & 0xFFFFFF);
         float hexW = SkiaFontRenderer.getStringWidth(valueFont, hex);
         SkiaFontRenderer.drawTextRight(canvas, valueFont, hex,
-                rect.right() - UiTokens.SETTINGS_ROW_PAD, rect.y() + s(18),
+                rect.right() - UiTokens.SETTINGS_ROW_PAD, valueY,
                 textPrimary());
         // Live element preview: the current value as one small square, same
         // shape for every colour row.
         float prevW = s(11);
         float prevR = s(3);
         float prevRight = rect.right() - UiTokens.SETTINGS_ROW_PAD - hexW - s(8);
-        SkiaDraw.drawRoundedRect(canvas, prevRight - prevW, rect.y() + s(18) - prevW / 2.0F,
+        SkiaDraw.drawRoundedRect(canvas, prevRight - prevW, valueY - prevW / 2.0F,
                 prevW, prevW, prevR, color.value());
 
         float r = UiTokens.s(9);
-        float cy = swatchCy(rect);
         for (int i = 0; i < color.swatchCount(); i++) {
             float scx = swatchX(rect, i);
+            float cy = swatchCy(rect, i, color.swatchCount() + 1);
             int swatch = color.swatchColor(i);
             // One bounce spring per swatch (keyed row+index): the swatches sit
             // one step apart and this scale runs inside the row's own bounce,
@@ -1919,6 +2116,7 @@ public final class SettingsSectionPage {
         // click, so hover is the visible half of the gesture in practice.
         int plusIndex = color.swatchCount();
         float px = swatchX(rect, plusIndex);
+        float cy = swatchCy(rect, plusIndex, color.swatchCount() + 1);
         PressScale plus = swatchScale.computeIfAbsent(swatchKey(swatchRowIndex, plusIndex),
                 k -> PressScale.bounce());
         plus.update(plusIndex == hoveredSwatch, plusIndex == pressedSwatch, dtMs,
@@ -2137,11 +2335,24 @@ public final class SettingsSectionPage {
 
     /** Plain action card: title + description + a right-aligned verb. */
     private void drawAction(Canvas canvas, Row row, UiLayout.Rect rect, float hover) {
+        if (isEditingText() && row.actionId() != null
+                && row.actionId().equals(textEditRowActionId)) {
+            inlineEditRowRect = rect;
+        }
         ActionCopy copy = actionCopy(row);
         Font titleFont = FontManager.font(UiTokens.SETTINGS_TILE_TITLE);
         Font subFont = FontManager.font(UiTokens.SETTINGS_TILE_SUB);
         float textX = rect.x() + UiTokens.SETTINGS_ROW_PAD;
         float maxW = rect.w() - UiTokens.SETTINGS_ROW_PAD * 2.0F;
+        CompactText compact = compactText(row, rect.w());
+        if (compact != null) {
+            drawCompactText(canvas, rect, compact, copy.redConfirm() ? DANGER_RED : sec(200));
+            if (copy.available()) SkiaFontRenderer.drawTextRight(canvas, titleFont, copy.verb(),
+                    rect.right() - UiTokens.SETTINGS_ROW_PAD,
+                    rect.bottom() - UiTokens.SETTINGS_ROW_PAD - compact.controlH() / 2.0F,
+                    copy.redConfirm() ? DANGER_RED : textPrimary());
+            return;
+        }
 
         SkiaFontRenderer.drawText(canvas, titleFont,
                 SkiaFontRenderer.truncate(titleFont, copy.title(), maxW), textX,
@@ -2255,10 +2466,16 @@ public final class SettingsSectionPage {
         control.setInteraction(overSwitch, overSwitch && pressedRow == drawnRowIndex);
         control.update(dtMs, item.available() && item.value());
 
-        float switchY = rect.y() + (rect.h() - UiTokens.SWITCH_H) / 2.0F;
+        CompactText compact = compactText(row, rect.w());
+        float switchY = compact == null ? rect.y() + (rect.h() - UiTokens.SWITCH_H) / 2.0F
+                : rect.bottom() - UiTokens.SETTINGS_ROW_PAD - UiTokens.SWITCH_H;
         // The four-arg overload wires the disabled state: an unavailable
         // switch renders its whole capsule at the control's disabled opacity.
         control.render(canvas, switchX, switchY, accent, item.available());
+        if (compact != null) {
+            drawCompactText(canvas, rect, compact, sec(item.available() ? 200 : 130));
+            return;
+        }
 
         Font titleFont = FontManager.font(UiTokens.SETTINGS_TILE_TITLE);
         Font subFont = FontManager.font(UiTokens.SETTINGS_TILE_SUB);
@@ -2284,12 +2501,20 @@ public final class SettingsSectionPage {
             return;
         }
         boolean dragging = slider.id().equals(draggingSliderId);
+        CompactText compact = compactText(row, rect.w());
         Font titleFont = FontManager.font(UiTokens.SETTINGS_TILE_TITLE);
         Font valueFont = FontManager.font(UiTokens.SETTINGS_TILE_SUB);
         float textX = rect.x() + UiTokens.SETTINGS_ROW_PAD;
         float titleMaxW = Math.max(0.0F, rect.w() - UiTokens.SETTINGS_ROW_PAD * 2.0F
                 - SkiaFontRenderer.getStringWidth(valueFont, slider.displayValue()) - s(12));
 
+        if (compact != null) {
+            drawCompactText(canvas, rect, compact, sec(200));
+            SkiaFontRenderer.drawTextRight(canvas, valueFont, slider.displayValue(),
+                    rect.right() - UiTokens.SETTINGS_ROW_PAD,
+                    rect.bottom() - UiTokens.SETTINGS_SLIDER_ROW_H + UiTokens.SETTINGS_VALUE_BAND,
+                    dragging ? accent : textPrimary());
+        } else {
         SkiaFontRenderer.drawText(canvas, titleFont,
                 SkiaFontRenderer.truncate(titleFont, tr(slider.titleKey()), titleMaxW), textX,
                 SkiaFontRenderer.centerBaselineY(titleFont, rect.y() + s(18)),
@@ -2297,6 +2522,8 @@ public final class SettingsSectionPage {
         SkiaFontRenderer.drawTextRight(canvas, valueFont, slider.displayValue(),
                 rect.right() - UiTokens.SETTINGS_ROW_PAD, rect.y() + s(18),
                 dragging ? accent : textPrimary());
+
+        }
 
         UiLayout.Rect track = sliderTrackRect(rect);
         float t = knobPosition(slider, dragging);
@@ -2343,19 +2570,22 @@ public final class SettingsSectionPage {
         float fieldW = Math.min(s(170), rect.w() * 0.45F);
         float fieldX = rect.right() - padX - fieldW;
         float fieldH = s(36);
-        float fieldY = rect.y() + (rect.h() - fieldH) / 2.0F;
+        CompactText compact = compactText(row, rect.w());
+        float fieldY = compact == null ? rect.y() + (rect.h() - fieldH) / 2.0F
+                : rect.bottom() - UiTokens.SETTINGS_ROW_PAD - fieldH;
         float fieldCY = fieldY + fieldH / 2.0F;
         float descMaxW = Math.max(0.0F, fieldX - textX - s(12));
 
         // Title plus a one-line description on the left, matching switch/action
         // cards; the input field stays vertically centred on the right.
         Font titleFont = FontManager.font(UiTokens.SETTINGS_TILE_TITLE);
-        SkiaFontRenderer.drawText(canvas, titleFont,
+        if (compact != null) drawCompactText(canvas, rect, compact, sec(200));
+        else SkiaFontRenderer.drawText(canvas, titleFont,
                 SkiaFontRenderer.truncate(titleFont, tr(slider.titleKey()), descMaxW), textX,
                 SkiaFontRenderer.centerBaselineY(titleFont, rect.y() + s(20)),
                 textPrimary());
         Font subFont = FontManager.font(UiTokens.SETTINGS_TILE_SUB);
-        SkiaFontRenderer.drawText(canvas, subFont,
+        if (compact == null) SkiaFontRenderer.drawText(canvas, subFont,
                 SkiaFontRenderer.truncate(subFont,
                         tr("atomchat.settings.chat.history.retention.desc"), descMaxW), textX,
                 SkiaFontRenderer.centerBaselineY(subFont, rect.y() + s(37)),
@@ -2391,6 +2621,15 @@ public final class SettingsSectionPage {
     }
 
     private void drawInfo(Canvas canvas, Row row, UiLayout.Rect rect) {
+        CompactText compact = compactText(row, rect.w());
+        if (compact != null) {
+            drawCompactText(canvas, rect, compact, row.info().isLink() ? LINK_COLOR : sec(200));
+            if (row.info().isLink()) SkiaFontRenderer.drawTextRight(canvas,
+                    FontManager.font(UiTokens.SETTINGS_TILE_TITLE), tr("atomchat.settings.about.open"),
+                    rect.right() - UiTokens.SETTINGS_ROW_PAD,
+                    rect.bottom() - UiTokens.SETTINGS_ROW_PAD - compact.controlH() / 2.0F, LINK_COLOR);
+            return;
+        }
         Font titleFont = FontManager.font(UiTokens.SETTINGS_TILE_TITLE);
         Font valueFont = FontManager.font(UiTokens.SETTINGS_TILE_SUB);
         float textX = rect.x() + UiTokens.SETTINGS_ROW_PAD;
@@ -2625,6 +2864,7 @@ public final class SettingsSectionPage {
         if (slider == null) {
             return;
         }
+        cancelTextEdit();
         editingSlider = slider;
         editingSliderId = slider.id();
         editBuffer = String.valueOf(Math.round(slider.value()));
@@ -2665,6 +2905,96 @@ public final class SettingsSectionPage {
         editingSliderId = null;
         editingSlider = null;
         editBuffer = "";
+    }
+
+    // -------------------------------------------------------- preset text edit
+
+    /** Whether the inline preset-name editor is open (keyboard owns the row). */
+    public boolean isEditingText() {
+        return textEditPurpose != null;
+    }
+
+    /** Opens the inline name editor ("save" or "rename") with an initial value. */
+    public void beginThemePresetNameEdit(String purpose, String targetId, String initial) {
+        cancelNumberEdit();
+        textEditPurpose = purpose;
+        textEditTargetId = targetId;
+        textEditRowActionId = "rename".equals(purpose)
+                ? ACTION_THEME_PRESET_RENAME + targetId : ACTION_THEME_PRESET_SAVE;
+        textEditBuffer = initial == null ? "" : initial.trim();
+        inlineEditRowRect = null;
+    }
+
+    public void appendTextChar(char c) {
+        appendTextCodePoint(c);
+    }
+
+    public void appendTextCodePoint(int c) {
+        if (!isEditingText() || Character.isISOControl(c) || !Character.isValidCodePoint(c)) {
+            return;
+        }
+        if (textEditBuffer.codePointCount(0, textEditBuffer.length())
+                >= ThemePresetStore.MAX_NAME_CODE_POINTS) {
+            return;
+        }
+        textEditBuffer += new String(Character.toChars(c));
+    }
+
+    public void backspaceText() {
+        if (!isEditingText() || textEditBuffer.isEmpty()) {
+            return;
+        }
+        textEditBuffer = textEditBuffer.substring(0,
+                textEditBuffer.offsetByCodePoints(textEditBuffer.length(), -1));
+    }
+
+    /** Trims and hands the value to the action handler; empty names are dropped. */
+    public void commitTextEdit() {
+        if (!isEditingText()) {
+            return;
+        }
+        committedTextPurpose = textEditPurpose;
+        committedTextTargetId = textEditTargetId;
+        committedTextValue = textEditBuffer.trim();
+        cancelTextEdit();
+        if (actionHandler != null && !committedTextValue.isEmpty()) {
+            actionHandler.onAction(ACTION_THEME_PRESET_TEXT_COMMIT);
+        }
+    }
+
+    public void cancelTextEdit() {
+        textEditPurpose = null;
+        textEditTargetId = null;
+        textEditRowActionId = null;
+        textEditBuffer = "";
+        inlineEditRowRect = null;
+    }
+
+    public String committedTextPurpose() {
+        return committedTextPurpose;
+    }
+
+    public String committedTextTargetId() {
+        return committedTextTargetId;
+    }
+
+    public String committedTextValue() {
+        return committedTextValue;
+    }
+
+    /** Whether a virtual point lies inside the inline name row (focus stays). */
+    public boolean isInsideTextEditRow(float vx, float vy) {
+        return inlineEditRowRect != null && vx >= inlineEditRowRect.x()
+                && vx <= inlineEditRowRect.right()
+                && vy >= inlineEditRowRect.y() && vy <= inlineEditRowRect.bottom();
+    }
+
+    public boolean isTextEditCancelHit(float vx, float vy) {
+        if (!isInsideTextEditRow(vx, vy)) return false;
+        Font font = FontManager.font(UiTokens.SETTINGS_TILE_TITLE);
+        float width = SkiaFontRenderer.getStringWidth(font,
+                tr("atomchat.settings.appearance.presets.cancel"));
+        return vx >= inlineEditRowRect.right() - UiTokens.SETTINGS_ROW_PAD - width;
     }
 
     /** Whether a virtual point lies inside the inline number row (focus stays). */
@@ -2721,23 +3051,10 @@ public final class SettingsSectionPage {
             }
             SettingsColor color = row.color();
             UiLayout.Rect rect = rowRect(section, rows, rowIdx, scrollY, layout);
-            float r = UiTokens.s(9);
-            float cy = swatchCy(rect);
-            float dy = vmy - cy;
-            if (Math.abs(dy) > r + UiTokens.s(4) || vmy < rect.y() || vmy > rect.bottom()) {
-                continue;
-            }
-            for (int i = 0; i < color.swatchCount(); i++) {
-                float dx = vmx - swatchX(rect, i);
-                if (Math.abs(dx) <= r + UiTokens.s(4)) {
-                    return new ColorHit(color, i, color.swatchColor(i), false);
-                }
-            }
-            // The "+" cell right after the last swatch.
-            float dx = vmx - swatchX(rect, color.swatchCount());
-            if (Math.abs(dx) <= r + UiTokens.s(4)) {
-                return new ColorHit(color, -1, 0, true);
-            }
+            int index = swatchAt(color, rect, vmx, vmy);
+            if (index >= 0) return index == color.swatchCount()
+                    ? new ColorHit(color, -1, 0, true)
+                    : new ColorHit(color, index, color.swatchColor(index), false);
         }
         return null;
     }
@@ -2784,8 +3101,12 @@ public final class SettingsSectionPage {
                     collapsedColorGroups.add(group);
                 }
             }
-            case ACTION -> {
-                if (!hit.row().item().available() || actionHandler == null) {
+            case ACTION, PRESET -> {
+                if (hit.row().kind() == RowKind.ACTION
+                        && (hit.row().item() == null || !hit.row().item().available())) {
+                    return false;
+                }
+                if (actionHandler == null) {
                     return false;
                 }
                 String actionId = hit.row().actionId();
@@ -2851,5 +3172,6 @@ public final class SettingsSectionPage {
         draggingSliderId = null;
         hoveredIndex = -1;
         cancelNumberEdit();
+        cancelTextEdit();
     }
 }

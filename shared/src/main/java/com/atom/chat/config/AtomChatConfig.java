@@ -480,12 +480,31 @@ public class AtomChatConfig {
     }
 
     public static void save(AtomChatConfig config) {
+        saveChecked(config);
+    }
+
+    /** Reports persistence failure to actions that must roll back a live preview. */
+    public static boolean saveChecked(AtomChatConfig config) {
         Path path = com.atom.chat.platform.Platform.configDir().resolve("atomchat/atomchat-client.json");
+        Path staged = null;
         try {
             Files.createDirectories(path.getParent());
-            Files.writeString(path, GSON.toJson(config), StandardCharsets.UTF_8);
+            staged = Files.createTempFile(path.getParent(), "atomchat-config-", ".tmp");
+            Files.writeString(staged, GSON.toJson(config), StandardCharsets.UTF_8);
+            try {
+                Files.move(staged, path, java.nio.file.StandardCopyOption.ATOMIC_MOVE,
+                        java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            } catch (java.nio.file.AtomicMoveNotSupportedException e) {
+                Files.move(staged, path, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            }
+            return true;
         } catch (IOException e) {
             AtomChat.LOGGER.error(com.atom.chat.diagnostics.AtomChatLog.message("config", "Failed to save AtomChat config"), e);
+            return false;
+        } finally {
+            if (staged != null) {
+                try { Files.deleteIfExists(staged); } catch (IOException ignored) { }
+            }
         }
     }
 }

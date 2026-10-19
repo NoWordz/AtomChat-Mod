@@ -64,7 +64,16 @@ public final class UiLayout {
         // when the draft wraps to a second line the list gives up exactly the
         // height the bar gains. Content is therefore never painted underneath
         // the translucent composer — no images can ghost through it.
-        float inputH = UiTokens.INPUT_HEIGHT + this.inputExtraH;
+        float controlW = Math.max(0.0F, panelW - UiTokens.LIST_PAD_X * 2.0F
+                - UiTokens.EDGE_CONTROL_INSET - UiTokens.INPUT_ROW_PAD);
+        int keysPerRow = Math.max(1, Math.min(3, (int) ((controlW + UiTokens.COMPOSER_KEY_GAP)
+                / (UiTokens.ACTION_BUTTON_SIZE + UiTokens.COMPOSER_KEY_GAP))));
+        float keysW = UiTokens.ACTION_BUTTON_SIZE * 3.0F + UiTokens.COMPOSER_KEY_GAP * 2.0F;
+        boolean separateSend = keysPerRow < 3 || keysW + UiTokens.COMPOSER_KEY_GAP
+                + UiTokens.ACTION_BUTTON_SIZE > controlW;
+        int extraButtonRows = separateSend ? (3 + keysPerRow - 1) / keysPerRow : 0;
+        float buttonExtraH = extraButtonRows * (UiTokens.INPUT_ROW_H + UiTokens.COMPOSER_KEY_GAP);
+        float inputH = UiTokens.INPUT_HEIGHT + this.inputExtraH + buttonExtraH;
         float inputY = panelY + panelH - inputH - UiTokens.PANEL_BOTTOM_PAD;
 
         this.tabBar = mode == Mode.ROOT
@@ -120,16 +129,20 @@ public final class UiLayout {
             this.imageBtn = new Rect(rowLeft, keyTop,
                     UiTokens.ACTION_BUTTON_SIZE, UiTokens.ACTION_BUTTON_SIZE);
             this.emojiBtn = new Rect(
-                    rowLeft + UiTokens.ACTION_BUTTON_SIZE + UiTokens.COMPOSER_KEY_GAP,
-                    keyTop, UiTokens.ACTION_BUTTON_SIZE, UiTokens.ACTION_BUTTON_SIZE);
+                    rowLeft + (1 % keysPerRow) * (UiTokens.ACTION_BUTTON_SIZE + UiTokens.COMPOSER_KEY_GAP),
+                    keyTop + (1 / keysPerRow) * (UiTokens.INPUT_ROW_H + UiTokens.COMPOSER_KEY_GAP),
+                    UiTokens.ACTION_BUTTON_SIZE, UiTokens.ACTION_BUTTON_SIZE);
             this.phraseBtn = new Rect(
-                    rowLeft + (UiTokens.ACTION_BUTTON_SIZE + UiTokens.COMPOSER_KEY_GAP) * 2.0F,
-                    keyTop, UiTokens.ACTION_BUTTON_SIZE, UiTokens.ACTION_BUTTON_SIZE);
+                    rowLeft + (2 % keysPerRow) * (UiTokens.ACTION_BUTTON_SIZE + UiTokens.COMPOSER_KEY_GAP),
+                    keyTop + (2 / keysPerRow) * (UiTokens.INPUT_ROW_H + UiTokens.COMPOSER_KEY_GAP),
+                    UiTokens.ACTION_BUTTON_SIZE, UiTokens.ACTION_BUTTON_SIZE);
             // Send keeps the wider, shorter capsule and is centred on the same
             // axis; rowRight has already given up INPUT_ROW_PAD, so subtracting
             // only BUTTON_W leaves exactly that much on the right.
-            this.sendBtn = new Rect(rowRight - UiTokens.BUTTON_W, sendTop,
-                    UiTokens.BUTTON_W, UiTokens.BUTTON_H);
+            float sendW = separateSend ? Math.min(UiTokens.BUTTON_W, controlW)
+                    : Math.min(UiTokens.BUTTON_W, controlW - keysW - UiTokens.COMPOSER_KEY_GAP);
+            this.sendBtn = new Rect(rowRight - sendW, sendTop + buttonExtraH,
+                    Math.max(0.0F, sendW), UiTokens.BUTTON_H);
 
             // The first line's centre sits at the middle of the text band, built
             // from the band's own parts (key inset, row band, half the band) —
@@ -141,7 +154,7 @@ public final class UiLayout {
             // growth, which keeps the whole block on the screen pixels it has
             // always occupied.
             this.inputTextCenterY = inputBar.y + UiTokens.EDGE_CONTROL_INSET
-                    + UiTokens.INPUT_ROW_H + UiTokens.INPUT_TEXT_BAND / 2.0F;
+                    + UiTokens.INPUT_ROW_H + buttonExtraH + UiTokens.INPUT_TEXT_BAND / 2.0F;
         } else {
             this.replyBar = new Rect(0, 0, 0, 0);
             this.inputBar = new Rect(0, 0, 0, 0);

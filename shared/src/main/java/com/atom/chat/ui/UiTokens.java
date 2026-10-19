@@ -8,6 +8,15 @@ public final class UiTokens {
     /** Global multiplier — bump this to scale the whole UI. */
     public static final float SCALE = 1.25F;
 
+    /** Panel bezel width, shared by its stroke, background inset and blur capture. */
+    public static final float PANEL_BEZEL_WIDTH = s(2);
+    public static final float SETTINGS_COMPACT_GAP = s(4);
+    public static final float SETTINGS_SWATCH_STEP = s(26);
+    public static final float SETTINGS_SWATCH_RADIUS = s(9);
+    public static final float SETTINGS_SWATCH_BOTTOM = s(22);
+    public static final float SETTINGS_VALUE_BAND = s(24);
+    public static final float HEADER_TEXT_GAP = s(8);
+
     /** Reference size and scaled font size for decorative chat emoji. */
     public static final float CHAT_EFFECT_EMOJI_BASE_SIZE = 24F;
     public static final float CHAT_EFFECT_EMOJI_SIZE = s(CHAT_EFFECT_EMOJI_BASE_SIZE);

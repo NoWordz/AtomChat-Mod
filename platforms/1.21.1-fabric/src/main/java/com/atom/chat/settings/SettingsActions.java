@@ -8,6 +8,7 @@ import com.atom.chat.avatar.ImageCropper;
 import com.atom.chat.banner.BannerStore;
 import com.atom.chat.chat.TeleportCommands;
 import com.atom.chat.config.AtomChatConfig;
+import com.atom.chat.theme.ThemePresetStore;
 import com.atom.chat.image.ImageLoader;
 import com.atom.chat.image.NativeDialogBridge;
 import com.atom.chat.image.OwnPlayerAvatarSource;
@@ -177,9 +178,25 @@ public final class SettingsActions {
                 UiTokens.PROFILE_BANNER_H};
     }
 
-    /** Settings action cards: the wallpaper pair and the teleport mode cycle. */
+    /** Settings action cards: the wallpaper pair, the theme presets and the
+     *  teleport mode cycle. */
     public void handleSettingsAction(String actionId) {
-        if ("wallpaper_pick".equals(actionId)) {
+        if (SettingsSectionPage.ACTION_THEME_PRESET_SAVE.equals(actionId)) {
+            host.sectionPage().beginThemePresetNameEdit("save", null, "");
+        } else if (SettingsSectionPage.ACTION_THEME_PRESET_TEXT_COMMIT.equals(actionId)) {
+            commitThemePresetText();
+        } else if (actionId != null && actionId.startsWith(SettingsSectionPage.ACTION_THEME_PRESET_APPLY)) {
+            applyThemePreset(actionId.substring(SettingsSectionPage.ACTION_THEME_PRESET_APPLY.length()));
+        } else if (actionId != null && actionId.startsWith(SettingsSectionPage.ACTION_THEME_PRESET_OVERWRITE)) {
+            overwriteThemePreset(actionId.substring(
+                    SettingsSectionPage.ACTION_THEME_PRESET_OVERWRITE.length()));
+        } else if (actionId != null && actionId.startsWith(SettingsSectionPage.ACTION_THEME_PRESET_RENAME)) {
+            renameThemePreset(actionId.substring(
+                    SettingsSectionPage.ACTION_THEME_PRESET_RENAME.length()));
+        } else if (actionId != null && actionId.startsWith(SettingsSectionPage.ACTION_THEME_PRESET_DELETE)) {
+            deleteThemePreset(actionId.substring(
+                    SettingsSectionPage.ACTION_THEME_PRESET_DELETE.length()));
+        } else if ("wallpaper_pick".equals(actionId)) {
             pickWallpaperFile();
         } else if ("wallpaper_clear".equals(actionId)) {
             boolean removed = WallpaperStore.clear();
@@ -230,6 +247,53 @@ public final class SettingsActions {
             host.feedback(deleted < 0 ? "atomchat.feedback.cacheClearFailed" : "atomchat.feedback.cacheCleared",
                     deleted >= 0);
         }
+    }
+
+    private void commitThemePresetText() {
+        SettingsSectionPage page = host.sectionPage();
+        ThemePresetStore store = ThemePresetStore.get();
+        AtomChatConfig config = AtomChatConfig.get();
+        String value = page.committedTextValue();
+        boolean ok;
+        if ("rename".equals(page.committedTextPurpose())) {
+            ok = store.rename(page.committedTextTargetId(), value).ok();
+            host.feedback(ok ? "atomchat.feedback.presetRenamed" : "atomchat.feedback.presetFailed", ok);
+        } else {
+            ok = store.save(value, config, WallpaperStore.current()).ok();
+            host.feedback(ok ? "atomchat.feedback.presetSaved" : "atomchat.feedback.presetFailed", ok);
+        }
+    }
+
+    private void applyThemePreset(String id) {
+        boolean ok = ThemePresetStore.get().apply(id, AtomChatConfig.get()).ok();
+        if (ok) {
+            // The wallpaper store copies to the same fixed file name, so path
+            // equality alone cannot invalidate the cached bitmap.
+            WallpaperImage.release();
+        }
+        host.feedback(ok ? "atomchat.feedback.presetApplied" : "atomchat.feedback.presetFailed", ok);
+    }
+
+    private void overwriteThemePreset(String id) {
+        boolean ok = ThemePresetStore.get()
+                .overwrite(id, AtomChatConfig.get(), WallpaperStore.current()).ok();
+        host.feedback(ok ? "atomchat.feedback.presetUpdated" : "atomchat.feedback.presetFailed", ok);
+    }
+
+    private void renameThemePreset(String id) {
+        String current = "";
+        for (ThemePresetStore.Preset preset : ThemePresetStore.get().list()) {
+            if (preset.id().equals(id)) {
+                current = preset.name();
+                break;
+            }
+        }
+        host.sectionPage().beginThemePresetNameEdit("rename", id, current);
+    }
+
+    private void deleteThemePreset(String id) {
+        boolean ok = ThemePresetStore.get().delete(id).ok();
+        host.feedback(ok ? "atomchat.feedback.presetDeleted" : "atomchat.feedback.presetFailed", ok);
     }
 
     /** Picks a wallpaper image off-thread; the store mutation returns to render. */

@@ -72,6 +72,9 @@ public final class SettingsDetailPage {
 
         /** The shell's GUI-y → panel-y conversion. */
         float toVirtualY(double guiY);
+
+        /** System clipboard text, for the inline preset-name editor's paste. */
+        String clipboard();
     }
 
     private final Host host;
@@ -100,6 +103,7 @@ public final class SettingsDetailPage {
         if (!key.equals(chipScrollKey)) {
             if (!chipScrollKey.isEmpty()) {
                 chipScroll.put(chipScrollKey, host.scrollSync().detailScroll().getScrollY());
+                host.sectionPage().cancelTextEdit();
             }
             chipScrollKey = key;
             Float saved = chipScroll.get(key);
@@ -137,10 +141,22 @@ public final class SettingsDetailPage {
         return new NumberEditInput();
     }
 
-    /** Inline numeric editor for integer sliders (retention days). */
+    /** Inline numeric / preset-name editor for integer sliders and preset names. */
     private final class NumberEditInput implements InputHandler {
         @Override
         public boolean onClick(double mouseX, double mouseY, int button) {
+            if (host.sectionPage().isEditingText()) {
+                float mx = host.toVirtualX(mouseX);
+                float my = host.toVirtualY(mouseY);
+                if (host.sectionPage().isInsideTextEditRow(mx, my)) {
+                    if (host.sectionPage().isTextEditCancelHit(mx, my)) {
+                        host.sectionPage().cancelTextEdit();
+                    }
+                    return true;
+                }
+                host.sectionPage().cancelTextEdit();
+                return true;
+            }
             if (!host.sectionPage().isEditingNumber()) {
                 return false;
             }
@@ -157,6 +173,20 @@ public final class SettingsDetailPage {
 
         @Override
         public boolean onKey(int keyCode, int scanCode, int modifiers) {
+            if (host.sectionPage().isEditingText()) {
+                if (keyCode == 256) { // Esc: cancel
+                    host.sectionPage().cancelTextEdit();
+                } else if (keyCode == 257 || keyCode == 335) { // Enter
+                    host.sectionPage().commitTextEdit();
+                } else if (keyCode == 259) { // Backspace
+                    host.sectionPage().backspaceText();
+                } else if (keyCode == 86 && (modifiers & 2) != 0) { // Ctrl+V
+                    pasteClipboard();
+                } else if (keyCode == 86 && (modifiers & 8) != 0) { // Cmd+V
+                    pasteClipboard();
+                }
+                return true;
+            }
             if (!host.sectionPage().isEditingNumber()) {
                 return false;
             }
@@ -176,6 +206,13 @@ public final class SettingsDetailPage {
 
         @Override
         public boolean onChar(char chr, int modifiers) {
+            // Every printable key goes to the name editor while it is open;
+            // Minecraft also delivers a char callback for the same press, so
+            // swallowing here is what keeps the name out of chat.
+            if (host.sectionPage().isEditingText()) {
+                host.sectionPage().appendTextChar(chr);
+                return true;
+            }
             // Digits are appended from onKey. Minecraft also delivers a char
             // callback for the same press; appending here would double every
             // digit (1 became 11). Swallow the char so it never reaches chat.
@@ -184,7 +221,16 @@ public final class SettingsDetailPage {
 
         @Override
         public boolean onScroll(double mouseX, double mouseY, double horizontalAmount, double verticalAmount) {
-            return host.sectionPage().isEditingNumber();
+            return host.sectionPage().isEditingText()
+                    || host.sectionPage().isEditingNumber();
+        }
+
+        private void pasteClipboard() {
+            String text = host.clipboard();
+            if (text == null) {
+                return;
+            }
+            text.codePoints().forEach(host.sectionPage()::appendTextCodePoint);
         }
     }
 }

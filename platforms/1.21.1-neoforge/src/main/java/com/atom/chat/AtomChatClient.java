@@ -63,6 +63,8 @@ public class AtomChatClient {
         CacheDirs.migrateFromOldConfigPaths();
         WallpaperStore.init(
                 net.neoforged.fml.loading.FMLPaths.CONFIGDIR.get().resolve("atomchat/wallpaper"));
+        com.atom.chat.theme.ThemePresetStore.init(
+                net.neoforged.fml.loading.FMLPaths.CONFIGDIR.get().resolve("atomchat/theme-presets"));
         BannerStore.init(
                 net.neoforged.fml.loading.FMLPaths.CONFIGDIR.get().resolve("atomchat"));
         ImageLoader.get().init(CacheDirs.imageCacheDir());

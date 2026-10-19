@@ -484,6 +484,11 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         public float toVirtualY(double guiY) {
             return AtomChatScreen.this.toVirtualY(guiY);
         }
+
+        @Override
+        public String clipboard() {
+            return client.keyboard.getClipboard();
+        }
     });
 
     {
@@ -1850,7 +1855,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         if (blurWanted && PanelBlurRenderer.isAvailable()) {
             preUi = () -> {
                 try {
-                    float strokeWidth = s(3);
+                    float strokeWidth = UiTokens.PANEL_BEZEL_WIDTH;
                     // The capture rect must be the rect drawPhone paints: the
                     // inset panel rect carried through the same open transform
                     // (zoom around the panel centre, then the slide offset).
@@ -2216,7 +2221,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         // Phone bezel: background is inset by the full stroke width so nothing can
         // bleed outside; the white ring itself is drawn LAST (see end of method)
         // so every component sits beneath a clean edge.
-        float strokeWidth = s(3);
+        float strokeWidth = UiTokens.PANEL_BEZEL_WIDTH;
         // A custom wallpaper owns the panel background and beats the blur: one
         // shows the world through, the other covers it, so they never stack.
         Image wallpaper = WallpaperImage.current(WallpaperStore.current());
@@ -2562,7 +2567,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
             return;
         }
         UiLayout.Rect panel = layout.rect();
-        float strokeWidth = s(3);
+        float strokeWidth = UiTokens.PANEL_BEZEL_WIDTH;
         try (Paint border = new Paint().setMode(PaintMode.STROKE).setStrokeWidth(strokeWidth)
                 .setColor(AtomChatConfig.get().panelOutlineColor)) {
             canvas.drawRRect(RRect.makeXYWH(panel.x() + strokeWidth / 2.0F, panel.y() + strokeWidth / 2.0F,

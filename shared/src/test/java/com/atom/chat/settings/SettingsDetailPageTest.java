@@ -73,6 +73,7 @@ class SettingsDetailPageTest {
 
     /** The real objects the domain drives, plus the two facts the shell owns. */
     private static final class Harness {
+        String clipboardText = "";
         final SettingsSectionPage sectionPage = new SettingsSectionPage();
         final ColorPickerOverlay colorPicker = new ColorPickerOverlay(text -> {
         });
@@ -162,7 +163,56 @@ class SettingsDetailPageTest {
             public float toVirtualY(double guiY) {
                 return (float) guiY - PANEL_Y;
             }
+
+            @Override
+            public String clipboard() {
+                return clipboardText;
+            }
         });
+    }
+
+    @Test
+    void presetNamePasteKeepsUnicodeCodePointsAndDoesNotLeakKeys() {
+        Harness harness = new Harness();
+        harness.clipboardText = "𠮷😀夜晚";
+        harness.sectionPage.beginThemePresetNameEdit("save", null, "");
+        InputHandler input = harness.page.numberEditInput();
+        assertTrue(input.onKey(86, 0, 2));
+        assertTrue(input.onKey(257, 0, 0));
+        assertEquals("𠮷😀夜晚", harness.sectionPage.committedTextValue());
+        assertFalse(harness.sectionPage.isEditingText());
+    }
+
+    @Test
+    void presetNameEscapeCancelsAndCharacterInputIsConsumed() {
+        Harness harness = new Harness();
+        AtomicInteger commits = new AtomicInteger();
+        harness.sectionPage.setActionHandler(action -> commits.incrementAndGet());
+        harness.sectionPage.beginThemePresetNameEdit("save", null, "");
+        InputHandler input = harness.page.numberEditInput();
+        assertTrue(input.onChar('夜', 0));
+        assertTrue(input.onScroll(0, 0, 0, 1));
+        assertTrue(input.onKey(256, 0, 0));
+        assertFalse(harness.sectionPage.isEditingText());
+        assertEquals(0, commits.get());
+    }
+
+    @Test
+    void visiblePresetCancelCanBeClickedWithoutSaving() {
+        Harness harness = new Harness();
+        AtomicInteger commits = new AtomicInteger();
+        harness.sectionPage.setActionHandler(action -> commits.incrementAndGet());
+        harness.sectionPage.beginThemePresetNameEdit("save", null, "夜晚");
+        try (Surface surface = Surface.makeRasterN32Premul(420, 1000)) {
+            harness.sectionPage.render(surface.getCanvas(), UiLayout.ofDetail(10, 10, 400, 980),
+                    SettingsSection.APPEARANCE, -1, -1, 0, 0xFF4488CC);
+            int y = 0;
+            while (y < 1000 && !harness.sectionPage.isTextEditCancelHit(350, y)) y++;
+            assertTrue(y < 1000, "a rendered cancel target must be reachable");
+            assertTrue(harness.page.numberEditInput().onClick(350 + PANEL_X, y + PANEL_Y, 0));
+        }
+        assertFalse(harness.sectionPage.isEditingText());
+        assertEquals(0, commits.get());
     }
 
     private static int[] drawnBounds(Surface surface) {
