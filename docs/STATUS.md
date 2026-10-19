@@ -38,7 +38,7 @@
 - 独立强模型只读审查发现壁纸回滚、旧屏幕草稿回写、图片预算、追加顺序、合卡色点、资料页按钮圆角、删除键可发现性和英文词距等问题；负责人逐项修正并补测试。最终三端完整测试：NeoForge 1290、Fabric 1302、Forge 1290，均 0 失败 0 错误、各 2 项原有跳过；三端 Windows 与 Linux 六包重新构建通过，对应 native、0.3.0 版本、中英资源、新类/新方法校验通过，同加载器两 OS 的应用 class/assets 内容一致。
 - seams 123/71、verify_targets、孪生 68 对未归类 0、日志出口 262 违规 0、bare_scan 477/505、`git diff --check` 均通过；664 个构建输入聚合哈希 `fe6c1c4fdc96431f7af16ae7ed06a0d958105edd3941dbb11b446ae99a27dac1` 在最终三端构建前后保持不变。详见证 [本轮验证记录](verification/2026-10-19-settings-and-chat-input.md)。
 - 已备份并部署 Windows「Mechanomania-航空学」NeoForge（`b5d361eb…`）与 WSL Prism「1.21.1」Fabric（`882e018a…`）；部署哈希与候选包一致，两处 mods 目录各只有一个 AtomChat JAR。未启动游戏，实机观感与行为待用户验收。
-- 未启动游戏、未提交/推送/发布；已部署 Windows 日常 NeoForge 与 WSL Prism Fabric。GPU 实帧、输入焦点、关闭动画、真实网络发送和进退服边界仍待实机验收。
+- 实现已提交并推送（`37589c7`），已部署 Windows 日常 NeoForge 与 WSL Prism Fabric；未启动游戏、未发布正式版。GPU 实帧、输入焦点、关闭动画、真实网络发送和进退服边界仍待实机验收。
 
 ### 圆角尾巴与晚安星光（2026-10-19 后续）
 

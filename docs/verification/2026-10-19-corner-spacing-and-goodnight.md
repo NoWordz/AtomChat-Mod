@@ -1,6 +1,6 @@
 # 2026-10-19 圆角尾巴与晚安星光验证
 
-状态：**ready_for_review**。版本保持 0.3.0；未启动游戏。Windows 日常 NeoForge 与 WSL Prism Fabric 已更新，实机观感与交互仍待用户验收。
+状态：**delivered**。版本保持 0.3.0；实现随 `37589c7` 提交并推送。未启动游戏；Windows 日常 NeoForge 与 WSL Prism Fabric 已更新，实机观感与交互仍待用户验收。
 
 基线为 `main@f7b5377f1fd0b215569f9d1452a8fe0707c56b17`。
 
