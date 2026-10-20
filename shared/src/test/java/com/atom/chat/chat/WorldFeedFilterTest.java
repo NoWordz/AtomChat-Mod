@@ -8,18 +8,26 @@ import com.atom.chat.text.RichText;
 import com.atom.chat.ui.AppIcons;
 import com.atom.chat.ui.ShellHeader;
 import com.atom.chat.ui.UiLayout;
-import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
+import java.io.IOException;
+import java.lang.reflect.Field;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -35,7 +43,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  *
  * <p>Which messages each mode accepts is {@link MessageFilterTest}'s job (it
  * needs Minecraft types to build a system line); what is pinned here is that the
- * store applies the active mode to the feed, at the right time and without
+ * filter applies the active mode to the feed, at the right time and without
  * touching the caller's list. Messages come from {@link LocalEcho#build}, so
  * this file never names a Minecraft type.
  */
@@ -44,11 +52,22 @@ class WorldFeedFilterTest {
     private static final UiLayout.Rect BUTTON = new UiLayout.Rect(10.0F, 10.0F, 20.0F, 20.0F);
 
     @TempDir
-    static Path platformRoot;
+    Path platformRoot;
 
-    /** The colour assertions read the live config, which goes through Platform. */
-    @BeforeAll
-    static void installTemporaryPlatform() {
+    private Field platformProvider;
+    private Field configInstance;
+    private Object previousProvider;
+    private Object previousConfig;
+
+    /** Each test owns its config file and restores both process-wide singletons. */
+    @BeforeEach
+    void installTemporaryPlatform() throws ReflectiveOperationException {
+        platformProvider = Platform.class.getDeclaredField("provider");
+        platformProvider.setAccessible(true);
+        configInstance = AtomChatConfig.class.getDeclaredField("instance");
+        configInstance.setAccessible(true);
+        previousProvider = platformProvider.get(null);
+        previousConfig = configInstance.get(null);
         Platform.install(new Platform.Provider() {
             @Override
             public Path configDir() {
@@ -65,6 +84,30 @@ class WorldFeedFilterTest {
                 return false;
             }
         });
+        configInstance.set(null, null);
+        AtomChatConfig.reload();
+    }
+
+    @AfterEach
+    void restoreGlobalState() throws IllegalAccessException {
+        configInstance.set(null, previousConfig);
+        platformProvider.set(null, previousProvider);
+    }
+
+    private Path configFile() {
+        return platformRoot.resolve("config/atomchat/atomchat-client.json");
+    }
+
+    private void reloadWithMode(String jsonValue) throws IOException {
+        Files.writeString(configFile(), "{\"worldFeedFilter\":" + jsonValue
+                + ",\"panelWidth\":612,\"closeAfterSend\":true}");
+        AtomChatConfig.reload();
+    }
+
+    private void assertSavedMode(String expected) throws IOException {
+        var json = com.google.gson.JsonParser.parseString(Files.readString(configFile())).getAsJsonObject();
+        assertTrue(json.has("worldFeedFilter"), "cycling must persist the mode immediately");
+        assertEquals(expected, json.get("worldFeedFilter").getAsString());
     }
 
     private static NavPage world() {
@@ -159,15 +202,115 @@ class WorldFeedFilterTest {
     }
 
     @Test
-    void resetIsByConstructionNotByCall() {
+    void selectedModeSurvivesNewFilterInstances() {
         WorldFeedFilter used = new WorldFeedFilter();
         used.cycle();
         used.cycle();
         assertSame(AppIcons.ICON_TAB_PROFILE_PATH, action(used).icon(), "the used filter is filtering");
 
         WorldFeedFilter fresh = new WorldFeedFilter();
-        assertSame(AppIcons.ICON_FILTER_PATH, action(fresh).icon(),
-                "a new screen instance starts at ALL — that is how closing the panel resets the filter");
-        assertTrue(fresh.filterFeed(new ArrayList<>()).isEmpty());
+        assertSame(AppIcons.ICON_TAB_PROFILE_PATH, action(fresh).icon(),
+                "reopening the panel keeps the selected players mode");
+        ChatMessage player = line("still visible");
+        assertTrue(fresh.accepts(player));
+        assertEquals(List.of(player), fresh.filterFeed(List.of(player)));
+        fresh.cycle();
+        assertSame(AppIcons.ICON_FILTER_PATH, action(used).icon(),
+                "existing filters also see the current preference");
+    }
+
+    @Test
+    void everyCycleIsSavedBeforeConfigReload() throws IOException {
+        WorldFeedFilter filter = new WorldFeedFilter();
+        ChatMessage player = line("player");
+        List<ChatMessage> feed = List.of(player);
+        for (String mode : List.of("SYSTEM", "PLAYERS", "ALL")) {
+            filter.cycle();
+            assertSavedMode(mode);
+            AtomChatConfig previous = AtomChatConfig.get();
+            AtomChatConfig.reload();
+            assertNotSame(previous, AtomChatConfig.get(), "exercise a real disk reload");
+            WorldFeedFilter reopened = new WorldFeedFilter();
+            boolean visible = !mode.equals("SYSTEM");
+            assertEquals(visible, filter.accepts(player), "live instance after reload: " + mode);
+            assertEquals(visible, reopened.accepts(player), "new instance after reload: " + mode);
+            assertEquals(visible ? feed : List.of(), reopened.filterFeed(feed));
+            var expectedIcon = switch (mode) {
+                case "SYSTEM" -> AppIcons.ICON_ANNOUNCE_PATH;
+                case "PLAYERS" -> AppIcons.ICON_TAB_PROFILE_PATH;
+                default -> AppIcons.ICON_FILTER_PATH;
+            };
+            assertSame(expectedIcon, action(reopened).icon(), "header after reload: " + mode);
+            assertSame(action(filter).icon(), action(reopened).icon());
+        }
+    }
+
+    @Test
+    void leavingAndReturningToWorldPageKeepsSelection() {
+        WorldFeedFilter filter = new WorldFeedFilter();
+        filter.cycle();
+        assertNull(filter.headerActionFor(priv(), BUTTON, 0));
+        assertNull(filter.headerActionFor(NavPage.of(AppPage.CHAT_LIST), BUTTON, 0));
+        assertSame(AppIcons.ICON_ANNOUNCE_PATH, action(filter).icon());
+        assertFalse(filter.accepts(line("hidden after returning")));
+        assertTrue(filter.filterFeed(List.of(line("hidden"))).isEmpty());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"\"SYSTEM\"", "\" system \"", "\"SyStEm\""})
+    void reloadedModeUpdatesExistingFilterAndNormalizesEnumName(String value) throws IOException {
+        WorldFeedFilter filter = new WorldFeedFilter();
+        reloadWithMode(value);
+        assertSame(AppIcons.ICON_ANNOUNCE_PATH, action(filter).icon());
+        assertEquals(AtomChatConfig.get().accentColor, action(filter).color());
+        assertFalse(filter.accepts(line("player")));
+        assertTrue(filter.filterFeed(List.of(line("player"))).isEmpty());
+        assertSavedMode("SYSTEM");
+        filter.cycle();
+        assertSame(AppIcons.ICON_TAB_PROFILE_PATH, action(filter).icon());
+        assertSavedMode("PLAYERS");
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"null", "\"\"", "\" \"", "\"unknown\"", "{}", "[]", "[\"SYSTEM\"]", "42", "false"})
+    void invalidOrNullModeFallsBackWithoutDiscardingOtherSettings(String value) throws IOException {
+        reloadWithMode(value);
+        WorldFeedFilter filter = new WorldFeedFilter();
+        List<ChatMessage> feed = List.of(line("visible"));
+        assertSame(AppIcons.ICON_FILTER_PATH, action(filter).icon());
+        assertSame(feed, filter.filterFeed(feed));
+        assertTrue(filter.accepts(feed.get(0)));
+        assertEquals(612F, AtomChatConfig.get().panelWidth);
+        assertTrue(AtomChatConfig.get().closeAfterSend);
+        assertSavedMode("ALL");
+        filter.cycle();
+        assertSame(AppIcons.ICON_ANNOUNCE_PATH, action(filter).icon());
+        assertSavedMode("SYSTEM");
+    }
+
+    @Test
+    void olderConfigWithoutModeDefaultsToAllAndKeepsOtherSettings() throws IOException {
+        Files.writeString(configFile(), "{\"panelWidth\":612}");
+        AtomChatConfig.reload();
+        WorldFeedFilter filter = new WorldFeedFilter();
+        assertSame(AppIcons.ICON_FILTER_PATH, action(filter).icon());
+        assertEquals(612F, AtomChatConfig.get().panelWidth);
+        assertSavedMode("ALL");
+    }
+
+    @Test
+    void nullInMemoryModeIsSafeForRenderingFilteringAndCycling() throws IOException, IllegalAccessException {
+        AtomChatConfig config = new com.google.gson.Gson().fromJson(
+                "{\"worldFeedFilter\":null}", AtomChatConfig.class);
+        // Install the deserialized object without load() repairing it first.
+        configInstance.set(null, config);
+        WorldFeedFilter filter = new WorldFeedFilter();
+        List<ChatMessage> feed = List.of(line("visible"));
+        assertSame(AppIcons.ICON_FILTER_PATH, action(filter).icon());
+        assertSame(feed, filter.filterFeed(feed));
+        assertTrue(filter.accepts(feed.get(0)));
+        filter.cycle();
+        assertSame(AppIcons.ICON_ANNOUNCE_PATH, action(filter).icon());
+        assertSavedMode("SYSTEM");
     }
 }

@@ -1,5 +1,37 @@
 # Changelog
 
+## v0.3.2
+
+**新增**
+
+- 图片预览支持以鼠标位置为中心的滚轮缩放，放大后可按住左键拖动查看。
+- 公屏过滤模式自动保存，关闭重开面板、切换界面及重启游戏后保留选择。
+
+**更改**
+
+- 图片预览使用平滑淡入缩放与快速淡出，缩放和拖动时底部关闭按钮保持可用。
+
+**修复**
+
+- 修复取色器、图片预览和头像/壁纸裁剪弹层的画布从面板四角溢出。
+- 修复选中保存的外观预设后，默认主题卡片仍显示选中边框。
+
+----
+
+**Added**
+
+- Zoom image previews around the pointer with the mouse wheel and drag enlarged images with the left mouse button.
+- Remember the public chat filter across panel reopening, page changes and game restarts.
+
+**Changed**
+
+- Smooth image preview fade and scale transitions while keeping the close button accessible during zooming and panning.
+
+**Fixed**
+
+- Keep color picker, image preview and avatar/wallpaper crop overlays inside the panel's rounded frame.
+- Remove the default theme selection border when a saved appearance preset is selected.
+
 ## v0.3.1
 
 **新增**

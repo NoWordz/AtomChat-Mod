@@ -354,6 +354,7 @@ public final class ImageCropper {
 
         canvas.save();
         try {
+            com.atom.chat.ui.PanelBackground.clipInterior(canvas, panel);
             SkiaDraw.drawRoundedRect(canvas, panel.x(), panel.y(), panelW, panelH,
                     UiTokens.radius(12), Color.makeARGB((int) (200.0F * anim), 8, 9, 14));
 

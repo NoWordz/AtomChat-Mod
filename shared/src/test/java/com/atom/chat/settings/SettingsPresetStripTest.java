@@ -11,6 +11,7 @@ import io.github.humbleui.skija.Data;
 import io.github.humbleui.skija.EncodedImageFormat;
 import io.github.humbleui.skija.Surface;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -30,18 +31,81 @@ class SettingsPresetStripTest {
     private SettingsSectionPage page;
     private UiLayout layout;
     private final List<String> actions = new ArrayList<>();
+    private java.lang.reflect.Field provider, configInstance;
+    private Object previousProvider, previousConfig;
 
     @BeforeEach
-    void setUp() {
+    void setUp() throws Exception {
+        provider = Platform.class.getDeclaredField("provider");
+        configInstance = AtomChatConfig.class.getDeclaredField("instance");
+        provider.setAccessible(true);
+        configInstance.setAccessible(true);
+        previousProvider = provider.get(null);
+        previousConfig = configInstance.get(null);
         Platform.install(new Platform.Provider() {
             @Override public Path configDir() { return tmp.resolve("config"); }
             @Override public Path gameDir() { return tmp.resolve("game"); }
             @Override public boolean isModLoaded(String modId) { return false; }
         });
+        AtomChatConfig.reload();
         AppearancePresetStore.init(tmp.resolve("appearance-presets"));
         page = new SettingsSectionPage();
         page.setActionHandler(actions::add);
         layout = UiLayout.ofDetail(10, 10, 520, 900);
+    }
+
+    @AfterEach void restoreState() throws Exception {
+        provider.set(null, previousProvider);
+        configInstance.set(null, previousConfig);
+    }
+
+    @Test
+    void aSavedAppearanceExcludesTheDefaultThemeSelectionBorder() throws Exception {
+        AtomChatConfig.reload();
+        AtomChatConfig cfg = AtomChatConfig.get();
+        cfg.animationEnabled = false;
+        cfg.themeName = "";
+        try (Surface surface = Surface.makeRasterN32Premul(560, 940);
+             Bitmap bitmap = new Bitmap()) {
+            bitmap.allocN32Pixels(560, 940);
+            Canvas canvas = surface.getCanvas();
+            page.render(canvas, layout, SettingsSection.APPEARANCE, -1, -1, 0, cfg.accentColor);
+            UiLayout.Rect row = page.themesRowRect(layout, SettingsSection.APPEARANCE, 0);
+            assertNotNull(row);
+            byte[] selectedDefault = readPixels(surface, bitmap);
+            var saved = AppearancePresetStore.get().saveCurrent(cfg, null);
+            assertTrue(saved.ok(), saved.error());
+            assertTrue(AppearancePresetStore.get().apply(saved.preset().id(), cfg).ok());
+            canvas.clear(0);
+            page.render(canvas, layout, SettingsSection.APPEARANCE, -1, -1, 0, cfg.accentColor);
+            byte[] savedSelected = readPixels(surface, bitmap);
+            cfg.themeName = "custom"; // No matching built-in or saved snapshot: borderless reference.
+            canvas.clear(0);
+            page.render(canvas, layout, SettingsSection.APPEARANCE, -1, -1, 0, cfg.accentColor);
+            byte[] borderless = readPixels(surface, bitmap);
+            int x = Math.round(row.x() + UiTokens.SETTINGS_ROW_PAD);
+            int y = Math.round(row.y() + UiTokens.s(28));
+            int w = Math.round(UiTokens.THEME_CARD_W);
+            int h = Math.round(UiTokens.THEME_CARD_H);
+            assertTrue(differences(selectedDefault, borderless, x, y, w, h) > 20,
+                    "the fixture must observe the default card selection edge");
+            assertEquals(0, differences(savedSelected, borderless, x, y, w, h),
+                    "applying a matching saved appearance removes the default selection edge");
+        }
+    }
+
+    private static byte[] readPixels(Surface surface, Bitmap bitmap) {
+        assertTrue(surface.readPixels(bitmap, 0, 0));
+        return bitmap.readPixels();
+    }
+
+    private static int differences(byte[] a, byte[] b, int x, int y, int w, int h) {
+        int count = 0;
+        for (int py = y; py < y + h; py++) for (int px = x; px < x + w; px++) {
+            int i = (py * 560 + px) * 4;
+            for (int c = 0; c < 4; c++) if (a[i+c] != b[i+c]) { count++; break; }
+        }
+        return count;
     }
 
     @Test

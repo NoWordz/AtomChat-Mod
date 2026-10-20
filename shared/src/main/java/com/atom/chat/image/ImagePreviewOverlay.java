@@ -4,6 +4,7 @@ import com.atom.chat.render.SkiaDraw;
 import com.atom.chat.ui.Animations;
 import com.atom.chat.ui.AppIcons;
 import com.atom.chat.ui.PressScale;
+import com.atom.chat.ui.PanelBackground;
 import com.atom.chat.ui.UiLayout;
 import com.atom.chat.ui.UiMotion;
 import com.atom.chat.ui.UiTokens;
@@ -22,16 +23,13 @@ import io.github.humbleui.types.Rect;
  * Full-panel picture preview: the chat image at the largest size the panel
  * allows, over a dimmed backdrop, with a round close key centred under it.
  *
- * <p>It is a modal in the same sense as the cropper and the colour picker: while
- * open it owns every input event (the screen's {@code ModalInput} hands them
- * over and returns "consumed"), it fades in and out on
- * {@link UiMotion#POPUP_MS}, and its close key is the same round key those two
- * draw. Deliberately nothing else: no zoom, no panning, no saving in this
- * version.
+ * <p>It owns input until its exit ends. The wheel zooms around the pointer,
+ * left dragging pans an enlarged image, and the close strip stays outside the
+ * picture viewport. Entrance, exit and wheel motion share the UI's exponential
+ * decay; dragging follows the pointer directly.
  *
  * <p><b>The click rule is the whole interaction.</b> A click on the picture
- * itself does nothing — the preview is something you read, and a mis-click on a
- * photo should not dismiss it. A click anywhere else (the dim backdrop, and the
+ * itself starts a possible drag. A click anywhere else (the dim backdrop, and the
  * close key, which is just a marked part of that backdrop) closes it.
  *
  * <p><b>Where the bitmap comes from.</b> {@link #open(Image)} takes the bitmap
@@ -52,6 +50,8 @@ public final class ImagePreviewOverlay {
     private static final float CLOSE_RADIUS = 20.0F;
     /** Gap between the picture's box and the close key. */
     private static final float CLOSE_GAP = 14.0F;
+    private static final float MAX_ZOOM = 8.0F;
+    private static final float ZOOM_TAU_MS = 45.0F;
 
     private Image image;
     private int imageW;
@@ -61,6 +61,10 @@ public final class ImagePreviewOverlay {
     private boolean closing;
     private float anim;
     private long lastFrameMs = System.currentTimeMillis();
+    private float zoom = 1F, targetZoom = 1F;
+    private float panX, panY, targetPanX, targetPanY;
+    private boolean dragging;
+    private float dragX, dragY, dragPanX, dragPanY;
 
     private float closeHover;
     /** The close key breathes on hover; the click request itself is instant. */
@@ -81,6 +85,10 @@ public final class ImagePreviewOverlay {
         this.closing = false;
         this.anim = 0.0F;
         this.active = true;
+        zoom = targetZoom = 1F;
+        panX = panY = targetPanX = targetPanY = 0F;
+        dragging = false;
+        closeHover = 0F;
         this.lastFrameMs = System.currentTimeMillis();
     }
 
@@ -102,29 +110,90 @@ public final class ImagePreviewOverlay {
     public void close() {
         if (active && !closing) {
             closing = true;
+            dragging = false;
         }
     }
 
     /**
-     * A click while open. The picture itself is inert; anything else — the dim
-     * backdrop around it, and the close key, which is drawn as part of that
-     * backdrop — dismisses the preview.
+     * A left press starts a drag only on the visible picture. The close key
+     * wins before image hit testing, including while zoomed.
      */
     public void onClick(float vmx, float vmy, UiLayout.Rect panel) {
         if (!active || closing) {
             return;
         }
-        if (image != null && imageRect(panel, imageW, imageH).contains(vmx, vmy)) {
+        if (closeRect(panel).contains(vmx, vmy)) {
+            close();
+            return;
+        }
+        if (image != null && viewport(panel).contains(vmx, vmy) && viewRect(panel).contains(vmx, vmy)) {
+            targetZoom = zoom;
+            targetPanX = panX;
+            targetPanY = panY;
+            dragging = true;
+            dragX = vmx;
+            dragY = vmy;
+            dragPanX = panX;
+            dragPanY = panY;
             return;
         }
         close();
     }
 
+    public void onDrag(float vmx, float vmy, UiLayout.Rect panel) {
+        if (!active || closing || !dragging) return;
+        UiLayout.Rect base = imageRect(panel, imageW, imageH);
+        UiLayout.Rect box = viewport(panel);
+        panX = targetPanX = clampPan(dragPanX + vmx - dragX, base.w() * zoom, box.w());
+        panY = targetPanY = clampPan(dragPanY + vmy - dragY, base.h() * zoom, box.h());
+    }
+
+    public void endDrag() { dragging = false; }
+
+    public void onScroll(float vmx, float vmy, UiLayout.Rect panel, double amount) {
+        if (!active || closing || dragging || !Double.isFinite(amount)
+                || !Float.isFinite(vmx) || !Float.isFinite(vmy) || !viewport(panel).contains(vmx, vmy)) return;
+        float next = (float)Math.max(1.0, Math.min(MAX_ZOOM, targetZoom * Math.pow(1.2, amount)));
+        UiLayout.Rect base = imageRect(panel, imageW, imageH);
+        UiLayout.Rect box = viewport(panel);
+        float ratio = next / zoom;
+        // Accumulate wheel steps toward the target size, but anchor the pixel
+        // currently on screen. A prior glide may still be settling elsewhere.
+        // Equal interpolation of scale and translation then keeps this anchor
+        // throughout the next glide, until an edge must clamp.
+        targetPanX = clampPan((vmx - base.x() - base.w()/2F) * (1F-ratio) + panX*ratio,
+                base.w()*next, box.w());
+        targetPanY = clampPan((vmy - base.y() - base.h()/2F) * (1F-ratio) + panY*ratio,
+                base.h()*next, box.h());
+        targetZoom = next;
+    }
+
+    private static float clampPan(float value, float imageSize, float viewportSize) {
+        float limit = Math.max(0F, (imageSize - viewportSize) / 2F);
+        return Math.max(-limit, Math.min(limit, value));
+    }
+
+    private static UiLayout.Rect viewport(UiLayout.Rect panel) {
+        return new UiLayout.Rect(panel.x()+s(PAD), panel.y()+s(PAD),
+                Math.max(1F, panel.w()-s(PAD)*2F),
+                Math.max(1F, panel.h()-s(PAD)*2F-closeStrip()));
+    }
+
+    /** The same transformed rectangle used for drawing and hit testing. */
+    UiLayout.Rect viewRect(UiLayout.Rect panel) {
+        UiLayout.Rect base = imageRect(panel, imageW, imageH);
+        UiLayout.Rect box = viewport(panel);
+        float grow = Animations.enabled() ? ENTRANCE_SCALE + (1F-ENTRANCE_SCALE)*anim : 1F;
+        float w = base.w()*zoom*grow, h = base.h()*zoom*grow;
+        return new UiLayout.Rect(base.x()+base.w()/2F + clampPan(panX, base.w()*zoom, box.w())-w/2F,
+                base.y()+base.h()/2F + clampPan(panY, base.h()*zoom, box.h())-h/2F, w, h);
+    }
+
     // ------------------------------------------------------------- geometry
 
     /**
-     * The rect the picture is drawn into, which is also the rect a click on the
-     * picture is tested against: the source's own aspect, centred in the panel's
+     * Base fitted rect before the interactive view transform: the source's own
+     * aspect, centred in the panel's
      * content box (the panel inset by {@link #PAD} on every side, minus the
      * strip the close key owns at the bottom), and never enlarged past the
      * bitmap's own pixels — the same rule the message bubble follows, so a small
@@ -171,10 +240,18 @@ public final class ImagePreviewOverlay {
         long now = System.currentTimeMillis();
         float dt = Math.min(50.0F, Math.max(1.0F, now - lastFrameMs));
         lastFrameMs = now;
-        // Symmetric fade: the close request reverses the open curve, and the
+        UiLayout.Rect base = imageRect(panel, imageW, imageH);
+        UiLayout.Rect box = viewport(panel);
+        targetPanX = clampPan(targetPanX, base.w()*targetZoom, box.w());
+        targetPanY = clampPan(targetPanY, base.h()*targetZoom, box.h());
+        zoom = UiMotion.expApproach(zoom, targetZoom, dt, ZOOM_TAU_MS);
+        panX = clampPan(UiMotion.expApproach(panX, targetPanX, dt, ZOOM_TAU_MS), base.w()*zoom, box.w());
+        panY = clampPan(UiMotion.expApproach(panY, targetPanY, dt, ZOOM_TAU_MS), base.h()*zoom, box.h());
+        // A close request reverses the current progress with a faster exit; the
         // overlay stays active so it keeps swallowing input until the fade has
         // fully played (same lifecycle as the cropper and the colour picker).
-        anim = UiMotion.approach(anim, closing ? 0.0F : 1.0F, dt, Animations.ms(UiMotion.POPUP_MS));
+        anim = UiMotion.expApproach(anim, closing ? 0.0F : 1.0F, dt,
+                Animations.enabled() ? (closing ? UiMotion.PANEL_CLOSE_TAU_MS : UiMotion.PANEL_OPEN_TAU_MS) : 0F);
         if (closing && anim <= 0.02F) {
             active = false;
             closing = false;
@@ -190,6 +267,7 @@ public final class ImagePreviewOverlay {
 
         canvas.save();
         try {
+            PanelBackground.clipInterior(canvas, panel);
             // The dim backdrop: the panel-wide plate the other two modals use, so
             // a modal always reads as the same layer.
             SkiaDraw.drawRoundedRect(canvas, panel.x(), panel.y(), panel.w(), panel.h(),
@@ -197,21 +275,17 @@ public final class ImagePreviewOverlay {
 
             Image current = image;
             if (current != null) {
-                UiLayout.Rect rect = imageRect(panel, imageW, imageH);
-                float cx = rect.x() + rect.w() / 2.0F;
-                float cy = rect.y() + rect.h() / 2.0F;
-                // The entrance scales the picture up into place around its own
-                // centre. Draw-only, like every other scale in this UI: hit
-                // geometry stays the settled rect, so a click during the ~110ms
-                // entrance already behaves the way the settled frame looks.
-                float grow = ENTRANCE_SCALE + (1.0F - ENTRANCE_SCALE) * anim;
+                UiLayout.Rect rect = viewRect(panel);
                 canvas.save();
-                try {
-                    canvas.translate(cx, cy);
-                    canvas.scale(grow, grow);
-                    canvas.translate(-cx, -cy);
-                    SkiaDraw.drawRoundedImage(canvas, current, rect.x(), rect.y(),
-                            rect.w(), rect.h(), UiTokens.radius(8));
+                try (Paint opacity = anim < 1F ? new Paint().setAlphaf(anim) : null) {
+                    SkiaDraw.clip(canvas, box.x(), box.y(), box.w(), box.h(), 0F);
+                    if (opacity != null) canvas.saveLayer(Rect.makeXYWH(box.x(), box.y(), box.w(), box.h()), opacity);
+                    try {
+                        SkiaDraw.drawRoundedImage(canvas, current, rect.x(), rect.y(),
+                                rect.w(), rect.h(), UiTokens.radius(8));
+                    } finally {
+                        if (opacity != null) canvas.restore();
+                    }
                 } finally {
                     canvas.restore();
                 }

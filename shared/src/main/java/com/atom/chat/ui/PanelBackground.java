@@ -16,6 +16,16 @@ public final class PanelBackground {
     private PanelBackground() {
     }
 
+    /** Clip panel-local overlays to the same inner contour as the wallpaper.
+     * The caller owns the enclosing canvas save/restore. */
+    public static void clipInterior(io.github.humbleui.skija.Canvas canvas, UiLayout.Rect panel) {
+        float inset = UiTokens.PANEL_BEZEL_WIDTH;
+        com.atom.chat.render.SkiaDraw.clip(canvas,
+                panel.x() + inset, panel.y() + inset,
+                Math.max(0F, panel.w() - 2F * inset), Math.max(0F, panel.h() - 2F * inset),
+                Math.max(0F, UiTokens.panelRadius() - inset));
+    }
+
     /** Drops the colour's own alpha; the panel applies its configured opacity instead. */
     public static int opaque(int argb) {
         return 0xFF000000 | (argb & 0x00FFFFFF);

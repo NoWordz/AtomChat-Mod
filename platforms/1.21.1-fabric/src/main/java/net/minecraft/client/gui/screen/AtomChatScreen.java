@@ -3234,7 +3234,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
             // The picture preview: a click on the picture keeps it open, a click
             // on the dim backdrop or the close key dismisses it.
             if (imagePreview.isActive()) {
-                imagePreview.onClick(toVirtualX(mouseX), toVirtualY(mouseY), layout().rect());
+                if (button == 0) imagePreview.onClick(toVirtualX(mouseX), toVirtualY(mouseY), layout().rect());
                 if (!imagePreview.isActive()) com.atom.chat.audio.FeedbackSoundController.play(com.atom.chat.audio.FeedbackCue.BUTTON);
                 return true;
             }
@@ -3255,10 +3255,9 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
 
         @Override
         public boolean onDrag(double mouseX, double mouseY, int button, double dragX, double dragY) {
-            // The preview has nothing to drag (this version has no pan or zoom),
-            // but the drag is still its own: the list underneath must not start
-            // a text selection behind the modal.
+            // The preview owns the gesture; the list underneath stays still.
             if (imagePreview.isActive()) {
+                if (button == 0) imagePreview.onDrag(toVirtualX(mouseX), toVirtualY(mouseY), layout().rect());
                 return true;
             }
             // Pan the avatar-crop image while the modal cropper is open.
@@ -3276,6 +3275,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         @Override
         public boolean onRelease(double mouseX, double mouseY, int button) {
             if (imagePreview.isActive()) {
+                if (button == 0) imagePreview.endDrag();
                 return true;
             }
             if (imageCropper.isActive()) {
@@ -3291,9 +3291,9 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
 
         @Override
         public boolean onScroll(double mouseX, double mouseY, double horizontalAmount, double verticalAmount) {
-            // Consumed so the wheel never scrolls the list behind the preview
-            // (the preview itself has no zoom in this version).
+            // Wheel zoom belongs exclusively to the preview while it is open.
             if (imagePreview.isActive()) {
+                imagePreview.onScroll(toVirtualX(mouseX), toVirtualY(mouseY), layout().rect(), verticalAmount);
                 return true;
             }
             // Wheel zooms the crop image around the circle centre while active.

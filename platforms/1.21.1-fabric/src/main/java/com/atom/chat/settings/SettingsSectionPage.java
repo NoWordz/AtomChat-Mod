@@ -2068,7 +2068,8 @@ public final class SettingsSectionPage {
         try {
             SkiaDraw.clip(canvas, rect.x(), themeCardY(rect) - s(6), rect.w(),
                     UiTokens.THEME_CARD_H + s(30), UiTokens.radius(6));
-            boolean frostedActive = currentId.isEmpty() || ThemeService.FROSTED.equals(currentId);
+            boolean frostedActive = matchingCustom == null
+                    && (currentId.isEmpty() || ThemeService.FROSTED.equals(currentId));
             drawThemeCard(canvas, rect, 0, ThemeService.previewOf(ThemeService.FROSTED),
                     tr("atomchat.settings.theme.frosted"), frostedActive, false, AtomChatConfig.get().effectiveBubbleStyle(), dtMs);
             ThemeService.Preset[] presets = ThemeService.presets();

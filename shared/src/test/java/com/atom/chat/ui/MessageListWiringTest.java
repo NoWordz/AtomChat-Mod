@@ -7,7 +7,9 @@ import com.atom.chat.nav.AppPage;
 import com.atom.chat.nav.NavPage;
 import com.atom.chat.page.MessageListView;
 import com.atom.chat.platform.Platform;
-import org.junit.jupiter.api.BeforeAll;
+import com.atom.chat.config.AtomChatConfig;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -40,17 +42,26 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * these (D23) — the D22 probe list.</p>
  */
 class MessageListWiringTest {
-    @BeforeAll
-    static void installTemporaryPlatform(@TempDir Path root) {
+    private java.lang.reflect.Field provider, configInstance;
+    private Object previousProvider, previousConfig;
+
+    @BeforeEach
+    void installTemporaryPlatform() throws Exception {
+        provider = Platform.class.getDeclaredField("provider");
+        configInstance = AtomChatConfig.class.getDeclaredField("instance");
+        provider.setAccessible(true);
+        configInstance.setAccessible(true);
+        previousProvider = provider.get(null);
+        previousConfig = configInstance.get(null);
         Platform.install(new Platform.Provider() {
             @Override
             public Path configDir() {
-                return root.resolve("config");
+                return tmp.resolve("config");
             }
 
             @Override
             public Path gameDir() {
-                return root.resolve("game");
+                return tmp.resolve("game");
             }
 
             @Override
@@ -58,6 +69,12 @@ class MessageListWiringTest {
                 return false;
             }
         });
+        AtomChatConfig.reload();
+    }
+
+    @AfterEach void restoreState() throws Exception {
+        provider.set(null, previousProvider);
+        configInstance.set(null, previousConfig);
     }
 
     @TempDir

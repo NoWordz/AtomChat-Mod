@@ -1,12 +1,15 @@
 package com.atom.chat.image;
 
 import com.atom.chat.platform.Platform;
+import com.atom.chat.config.AtomChatConfig;
 import com.atom.chat.ui.UiLayout;
 import io.github.humbleui.skija.Bitmap;
 import io.github.humbleui.skija.Canvas;
 import io.github.humbleui.skija.Image;
 import io.github.humbleui.skija.Surface;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -33,6 +36,19 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * a window, a GPU or a client.
  */
 class ImagePreviewOverlayTest {
+    private java.lang.reflect.Field configInstance;
+    private Object previousConfig;
+
+    @BeforeEach void preserveConfig() throws Exception {
+        configInstance = AtomChatConfig.class.getDeclaredField("instance");
+        configInstance.setAccessible(true);
+        previousConfig = configInstance.get(null);
+        AtomChatConfig.reload();
+    }
+
+    @AfterEach void restoreConfig() throws Exception {
+        configInstance.set(null, previousConfig);
+    }
 
     private static final float PANEL_X = 10.0F;
     private static final float PANEL_Y = 10.0F;
@@ -199,6 +215,161 @@ class ImagePreviewOverlayTest {
     }
 
     // ------------------------------------------------------------- lifecycle
+
+    @Test
+    void thePictureItselfFadesInsteadOfAppearingOpaqueOnTheFirstFrame() throws Exception {
+        AtomChatConfig.reload();
+        AtomChatConfig.get().animationEnabled = true;
+        try (Surface source = Surface.makeRasterN32Premul(100, 100);
+             Surface target = Surface.makeRasterN32Premul(SURFACE_W, SURFACE_H)) {
+            source.getCanvas().clear(0xFFFF0000);
+            try (Image image = source.makeImageSnapshot(); Bitmap pixels = new Bitmap()) {
+                ImagePreviewOverlay overlay = new ImagePreviewOverlay();
+                overlay.open(image);
+                var progress = ImagePreviewOverlay.class.getDeclaredField("anim");
+                progress.setAccessible(true);
+                progress.setFloat(overlay, 0.25F);
+                setFrameTime(overlay, 1);
+                overlay.render(target.getCanvas(), panel(), -100, -100);
+                pixels.allocN32Pixels(SURFACE_W, SURFACE_H);
+                assertTrue(target.readPixels(pixels, 0, 0));
+                UiLayout.Rect rect = ImagePreviewOverlay.imageRect(panel(), 100, 100);
+                int x = (int)(rect.x() + rect.w()/2), y = (int)(rect.y() + rect.h()/2);
+                int alpha = pixels.readPixels()[(y * SURFACE_W + x) * 4 + 3] & 255;
+                assertTrue(alpha > 0 && alpha < 180, "entering image must be translucent, alpha=" + alpha);
+            }
+        }
+    }
+
+    private static void setFrameTime(ImagePreviewOverlay overlay, int elapsed) throws Exception {
+        var field = ImagePreviewOverlay.class.getDeclaredField("lastFrameMs");
+        field.setAccessible(true);
+        field.setLong(overlay, System.currentTimeMillis() - elapsed);
+    }
+
+    @Test
+    void wheelZoomKeepsThePointUnderThePointerAndClampsBothEnds() throws Exception {
+        AtomChatConfig.reload();
+        AtomChatConfig.get().animationEnabled = false;
+        try (Surface source = Surface.makeRasterN32Premul(1000, 2000);
+             Surface target = Surface.makeRasterN32Premul(SURFACE_W, SURFACE_H);
+             Image image = source.makeImageSnapshot()) {
+            ImagePreviewOverlay overlay = new ImagePreviewOverlay();
+            overlay.open(image);
+            pump(overlay, target);
+            UiLayout.Rect before = overlay.viewRect(panel());
+            float mx = before.x() + before.w() * 0.65F, my = before.y() + before.h() * 0.6F;
+            overlay.onScroll(mx, my, panel(), 2);
+            pump(overlay, target);
+            UiLayout.Rect zoomed = overlay.viewRect(panel());
+            assertTrue(zoomed.w() > before.w());
+            assertEquals(0.65F, (mx - zoomed.x()) / zoomed.w(), 0.002F);
+            assertEquals(0.6F, (my - zoomed.y()) / zoomed.h(), 0.002F);
+            overlay.onScroll(mx, my, panel(), 10000);
+            pump(overlay, target);
+            assertEquals(before.w() * 8, overlay.viewRect(panel()).w(), 0.01F);
+            overlay.onScroll(mx, my, panel(), -10000);
+            pump(overlay, target);
+            assertEquals(before, overlay.viewRect(panel()), "minimum zoom restores the fitted centred image");
+        }
+    }
+
+    @Test
+    void changingWheelAnchorBeforeThePreviousZoomSettlesUsesTheVisiblePixel() throws Exception {
+        AtomChatConfig.reload();
+        AtomChatConfig.get().animationEnabled = false;
+        try (Surface source = Surface.makeRasterN32Premul(1000, 2000);
+             Surface target = Surface.makeRasterN32Premul(SURFACE_W, SURFACE_H);
+             Image image = source.makeImageSnapshot()) {
+            ImagePreviewOverlay overlay = new ImagePreviewOverlay();
+            overlay.open(image);
+            pump(overlay, target);
+            UiLayout.Rect fitted = overlay.viewRect(panel());
+            float cx = fitted.x()+fitted.w()/2F, cy = fitted.y()+fitted.h()/2F;
+            overlay.onScroll(cx, cy, panel(), 6);
+            setFrameTime(overlay, 16);
+            overlay.render(target.getCanvas(), panel(), -100, -100);
+            UiLayout.Rect visible = overlay.viewRect(panel());
+            float mx = cx+40, my = cy+40;
+            float sourceX = (mx-visible.x())/visible.w();
+            float sourceY = (my-visible.y())/visible.h();
+            overlay.onScroll(mx, my, panel(), 1);
+            pump(overlay, target);
+            UiLayout.Rect result = overlay.viewRect(panel());
+            assertEquals(sourceX, (mx-result.x())/result.w(), 0.002F,
+                    "moving the wheel anchor during a glide must keep the currently visible source pixel");
+            assertEquals(sourceY, (my-result.y())/result.h(), 0.002F);
+        }
+    }
+
+    @Test
+    void aZoomedPictureDragsImmediatelyAndReleaseStopsIt() throws Exception {
+        AtomChatConfig.reload();
+        AtomChatConfig.get().animationEnabled = false;
+        try (Surface source = Surface.makeRasterN32Premul(1000, 2000);
+             Surface target = Surface.makeRasterN32Premul(SURFACE_W, SURFACE_H);
+             Image image = source.makeImageSnapshot()) {
+            ImagePreviewOverlay overlay = new ImagePreviewOverlay();
+            overlay.open(image);
+            pump(overlay, target);
+            UiLayout.Rect fitted = overlay.viewRect(panel());
+            float mx = fitted.x()+fitted.w()/2, my = fitted.y()+fitted.h()/2;
+            overlay.onScroll(mx, my, panel(), 5);
+            pump(overlay, target);
+            UiLayout.Rect zoomed = overlay.viewRect(panel());
+            overlay.onClick(mx, my, panel());
+            overlay.onDrag(mx+24, my+30, panel());
+            UiLayout.Rect dragged = overlay.viewRect(panel());
+            assertEquals(zoomed.x()+24, dragged.x(), 0.01F);
+            assertEquals(zoomed.y()+30, dragged.y(), 0.01F);
+            overlay.endDrag();
+            overlay.onDrag(mx+80, my+90, panel());
+            assertEquals(dragged, overlay.viewRect(panel()));
+            assertFalse(overlay.isClosing());
+            UiLayout.Rect close = ImagePreviewOverlay.closeRect(panel());
+            overlay.onClick(close.x()+close.w()/2, close.y()+close.h()/2, panel());
+            assertTrue(overlay.isClosing(), "zooming cannot cover the close control's hit area");
+        }
+    }
+
+    @Test
+    void zoomedPixelsStayOutOfTheCloseStripAndReopeningResetsTheView() throws Exception {
+        AtomChatConfig.reload();
+        AtomChatConfig.get().animationEnabled = false;
+        try (Surface source = Surface.makeRasterN32Premul(1000, 2000);
+             Surface target = Surface.makeRasterN32Premul(SURFACE_W, SURFACE_H)) {
+            source.getCanvas().clear(0xFFFF0000);
+            try (Image image = source.makeImageSnapshot(); Bitmap pixels = new Bitmap()) {
+                ImagePreviewOverlay overlay = new ImagePreviewOverlay();
+                overlay.open(image);
+                pump(overlay, target);
+                UiLayout.Rect fitted = overlay.viewRect(panel());
+                overlay.onScroll(210, 300, panel(), 10000);
+                pump(overlay, target);
+                pixels.allocN32Pixels(SURFACE_W, SURFACE_H);
+                assertTrue(target.readPixels(pixels, 0, 0));
+                UiLayout.Rect close = ImagePreviewOverlay.closeRect(panel());
+                int index = ((int)(close.y()+close.h()/2) * SURFACE_W + 80) * 4;
+                assertTrue((pixels.readPixels()[index+2] & 255) < 80, "red image must not paint the close strip");
+                overlay.open(image);
+                pump(overlay, target);
+                assertEquals(fitted, overlay.viewRect(panel()));
+                // Invalid/irrelevant wheel input must leave the viewport finite and unchanged.
+                overlay.onScroll(210, 300, panel(), Double.NaN);
+                overlay.onScroll(-500, -500, panel(), 3);
+                pump(overlay, target);
+                assertEquals(fitted, overlay.viewRect(panel()));
+            }
+        }
+    }
+
+    private static void pump(ImagePreviewOverlay overlay, Surface target) throws Exception {
+        for (int frame=0; frame<35; frame++) {
+            setFrameTime(overlay, 50);
+            target.getCanvas().clear(0);
+            overlay.render(target.getCanvas(), panel(), -100, -100);
+        }
+    }
 
     /**
      * The fade-out is symmetric to the fade-in and the overlay keeps swallowing

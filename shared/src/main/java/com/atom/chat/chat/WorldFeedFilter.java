@@ -17,18 +17,20 @@ import java.util.List;
  *
  * <p>View-only by construction. The store, the unread counts and the
  * conversation previews always see the unfiltered feed — filtering happens on
- * the way from {@link ChatStore} to the list, never inside the store. A fresh
- * screen instance starts at {@link MessageFilter#ALL}, so closing and reopening
- * the panel resets the filter by construction rather than by a reset call.
+ * the way from {@link ChatStore} to the list, never inside the store. The selected
+ * mode lives in {@link AtomChatConfig}, so reopening the screen, reloading the
+ * config and navigating between pages all retain the preference.
  *
  * <p>What stays with the screen: the button's rect and its hover wash. Both are
  * header chrome (they are laid out from the back button's slot and stepped once
  * per frame by the header draw), so they are passed in as facts — this class
- * owns the filter's state, its icons and its tint, nothing about where the
- * button sits.
+ * reads the current preference and owns its icons and tint, nothing about where
+ * the button sits.
  */
 public final class WorldFeedFilter {
-    private MessageFilter worldFilter = MessageFilter.ALL;
+    public boolean accepts(ChatMessage message) {
+        return AtomChatConfig.get().effectiveWorldFeedFilter().accepts(message);
+    }
 
     /**
      * Cycles the filter ALL → SYSTEM → PLAYERS → ALL.
@@ -37,10 +39,10 @@ public final class WorldFeedFilter {
      * span rows the new filter hides); that belongs to the list, so it stays
      * with the caller.
      */
-    public boolean accepts(ChatMessage message) { return worldFilter.accepts(message); }
-
     public void cycle() {
-        worldFilter = worldFilter.next();
+        AtomChatConfig config = AtomChatConfig.get();
+        config.worldFeedFilter = config.effectiveWorldFeedFilter().next();
+        AtomChatConfig.save(config);
     }
 
     /**
@@ -51,6 +53,7 @@ public final class WorldFeedFilter {
      * unfiltered case is the common one.
      */
     public List<ChatMessage> filterFeed(List<ChatMessage> all) {
+        MessageFilter worldFilter = AtomChatConfig.get().effectiveWorldFeedFilter();
         if (worldFilter == MessageFilter.ALL) {
             return all;
         }
@@ -81,12 +84,13 @@ public final class WorldFeedFilter {
         if (page == null || page.page() != AppPage.WORLD_CHAT) {
             return null;
         }
+        AtomChatConfig config = AtomChatConfig.get();
+        MessageFilter worldFilter = config.effectiveWorldFeedFilter();
         Path icon =
                 worldFilter == MessageFilter.SYSTEM ? AppIcons.ICON_ANNOUNCE_PATH
                         : worldFilter == MessageFilter.PLAYERS ? AppIcons.ICON_TAB_PROFILE_PATH
                         : AppIcons.ICON_FILTER_PATH;
-        int color = worldFilter.isFiltering() ? AtomChatConfig.get().accentColor
-                : AtomChatConfig.get().textPrimaryColor;
+        int color = worldFilter.isFiltering() ? config.accentColor : config.textPrimaryColor;
         return new ShellHeader.HeaderAction(button, hover, icon, color);
     }
 }

@@ -387,6 +387,7 @@ public final class ColorPickerOverlay {
 
         canvas.save();
         try {
+            com.atom.chat.ui.PanelBackground.clipInterior(canvas, panel);
             SkiaDraw.drawRoundedRect(canvas, panel.x(), panel.y(), panel.w(), panel.h(),
                     UiTokens.radius(12), Color.makeARGB((int) (200.0F * anim), 8, 9, 14));
 

@@ -1,5 +1,37 @@
 # Release Notes
 
+## v0.3.2
+
+**新增**
+
+- 图片预览支持鼠标位置滚轮缩放，放大后按住左键拖拽查看，缩回最小倍率时恢复居中。
+- 只看系统消息或玩家消息的选择自动记住，关闭重开、切换界面或重启游戏都保留。
+
+**更改**
+
+- 图片预览的淡入缩放更平滑，底部关闭按钮始终可用。
+
+**修复**
+
+- 修复取色器、图片预览与头像/壁纸裁剪弹层从面板四角溢出。
+- 修复选中保存的预设后默认主题仍出现选中边框。
+
+----
+
+**Added**
+
+- Zoom image previews around the pointer with the wheel, drag enlarged images with the left mouse button, and zoom back out to recenter.
+- Remember system-only or player-only chat filters across panel reopening, page changes and game restarts.
+
+**Changed**
+
+- Smooth image preview fade and scale transitions while keeping the close button accessible.
+
+**Fixed**
+
+- Stop color picker, image preview and avatar/wallpaper crop overlays from spilling beyond the panel corners.
+- Clear the default theme selection border when a saved preset is selected.
+
 ## v0.3.1
 
 **新增**

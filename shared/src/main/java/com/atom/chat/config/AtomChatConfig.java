@@ -1,6 +1,7 @@
 package com.atom.chat.config;
 
 import com.atom.chat.AtomChat;
+import com.atom.chat.chat.MessageFilter;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 
@@ -54,6 +55,14 @@ public class AtomChatConfig {
 
     /** Nav transition styles, read by {@link #pageNavStyle}. */
     public enum PageNavStyle { SLIDE, ZOOM }
+
+    /** Local view preference for the public feed; never changes stored messages or unread counts. */
+    public MessageFilter worldFeedFilter = MessageFilter.ALL;
+
+    public MessageFilter effectiveWorldFeedFilter() {
+        return worldFeedFilter == null ? MessageFilter.ALL : worldFeedFilter;
+    }
+
     /** Double-clicking another player's avatar performs the QQ-style poke shake. */
     public boolean avatarPokeEnabled = true;
     /** Local display preference; custom-avatar data is never changed by this choice. */
@@ -470,18 +479,35 @@ public class AtomChatConfig {
         return json;
     }
 
+    private static String sanitizeWorldFeedFilter(String json) {
+        com.google.gson.JsonObject obj = GSON.fromJson(json, com.google.gson.JsonObject.class);
+        if (obj != null && obj.has("worldFeedFilter")) {
+            try {
+                String raw = obj.get("worldFeedFilter").getAsJsonPrimitive().getAsString();
+                obj.addProperty("worldFeedFilter",
+                        MessageFilter.valueOf(raw.trim().toUpperCase(java.util.Locale.ROOT)).name());
+            } catch (RuntimeException ignored) {
+                obj.remove("worldFeedFilter");
+            }
+            return obj.toString();
+        }
+        return json;
+    }
+
     private static AtomChatConfig load() {
         Path path = com.atom.chat.platform.Platform.configDir().resolve("atomchat/atomchat-client.json");
         if (Files.exists(path)) {
             try {
                 String json = Files.readString(path, StandardCharsets.UTF_8);
-                AtomChatConfig config = GSON.fromJson(sanitizePageNavStyle(sanitizeAvatarStyle(sanitizeBubbleStyle(json))), AtomChatConfig.class);
+                AtomChatConfig config = GSON.fromJson(sanitizePageNavStyle(sanitizeAvatarStyle(
+                        sanitizeBubbleStyle(sanitizeWorldFeedFilter(json)))), AtomChatConfig.class);
                 if (config != null) {
                     if (config.blockedPlayers == null) {
                         config.blockedPlayers = new java.util.ArrayList<>();
                     }
                     config.avatarStyle = config.effectiveAvatarStyle();
                     config.bubbleStyle = config.effectiveBubbleStyle();
+                    config.worldFeedFilter = config.effectiveWorldFeedFilter();
                     config.migrateCornerStyle();
                     config.migratePixelRadius();
                     config.clampContentScale();
