@@ -466,6 +466,150 @@ class OffscreenRenderTest {
     }
 
     @Test
+    void renderResponsiveMessageWidths() throws Exception {
+        var cfg = com.atom.chat.config.AtomChatConfig.get();
+        var saved = com.atom.chat.theme.AppearancePresetStore.Snapshot.capture(cfg);
+        int clock = cfg.timestampIntervalMinutes;
+        List<ChatMessage> history = List.of(
+                new ChatMessage(Component.literal("窄面板也能留出更完整的正文宽度。"), false),
+                new ChatMessage(Component.literal("字号和内边距保持原样。"), true),
+                new ChatMessage(Component.literal("[[CICode,url=atomchat-test://layout-preview,w=600,h=200]]"), false));
+        try (var locale=PreviewLanguage.install("zh_cn");var surface=Surface.makeRasterN32Premul(1240,1620);
+             var picture=Surface.makeRasterN32Premul(600,200)) {
+            picture.getCanvas().clear(0xFF76BFC4);
+            SkiaDraw.drawRoundedRect(picture.getCanvas(),35,35,200,130,20,0xFF236A78);
+            SkiaDraw.drawRoundedRect(picture.getCanvas(),270,70,280,70,20,0xFFE4F2DA);
+            try(var image=picture.makeImageSnapshot()) {
+                var canvas=surface.getCanvas();canvas.clear(0xFF30343A);
+                cfg.timestampIntervalMinutes=0;
+                for(int row=0;row<2;row++) {
+                    com.atom.chat.theme.ThemeService.apply(cfg,row==0?"minimal":"raven");
+                    cfg.bubbleStyle=com.atom.chat.config.AtomChatConfig.BubbleStyle.CORNER;
+                    float x=10;
+                    for(int width:new int[]{280,360,540}) {
+                        canvas.save();
+                        try {
+                            canvas.translate(x,row*810F+38);
+                            SkiaFontRenderer.drawTextCentered(canvas,FontManager.font(UiTokens.FONT_NAME),
+                                    width+" · "+(row==0?"浅色":"深色"),width/2F,-18,0xFFFFFFFF);
+                            var layout=UiLayout.of(0,0,width,750);
+                            SkiaDraw.drawRoundedRect(canvas,0,0,width,750,UiTokens.panelRadius(),cfg.panelBgColor);
+                            SkiaDraw.clip(canvas,0,0,width,750,UiTokens.panelRadius());
+                            com.atom.chat.ui.ShellHeader.drawBackdrop(canvas,layout.header);
+                            var bar=layout.inputBar;
+                            DotTexture.drawEdge(canvas,bar,UiTokens.chromeRadius(),true,cfg.textSecondaryColor);
+                            var ctor=MessageListView.class.getDeclaredConstructor(MessageListView.Host.class,MessageListView.ImageLookup.class);
+                            ctor.setAccessible(true);
+                            var view=ctor.newInstance(new OffscreenHost(openedAfter(history)),(MessageListView.ImageLookup)(url,visible)->image);
+                            try {draw(view,layout,history,new ScrollController()).accept(canvas);}finally{view.dispose();}
+                            com.atom.chat.ui.ShellHeader.render(canvas,layout.header,"世界聊天",false,null,0F,cfg.textPrimaryColor);
+                            SkiaDraw.drawRoundedRect(canvas,bar.x(),bar.y(),bar.w(),bar.h(),UiTokens.chromeRadius(),UiTokens.cardFill());
+                            ChromeMaterial.drawDetails(canvas,bar,UiTokens.chromeRadius());
+                            SkiaFontRenderer.drawTextCentered(canvas,FontManager.font(UiTokens.FONT_NAME),"输入消息…",bar.x()+bar.w()/2,bar.y()+bar.h()/2,cfg.textSecondaryColor);
+                        } finally {canvas.restore();}
+                        x+=width+20;
+                    }
+                }
+            }
+            Path out=Path.of(System.getProperty("atomchat.projectDir")).resolve("build/preview/responsive-messages.png");
+            java.nio.file.Files.createDirectories(out.getParent());
+            try(var image=surface.makeImageSnapshot();var data=image.encodeToData()){java.nio.file.Files.write(out,data.getBytes());}
+        } finally{saved.applyTo(cfg);cfg.timestampIntervalMinutes=clock;}
+    }
+
+    @Test
+    void renderEmptyAndPopupDotSurfaces() throws Exception {
+        var cfg=com.atom.chat.config.AtomChatConfig.get();
+        var saved=com.atom.chat.theme.AppearancePresetStore.Snapshot.capture(cfg);
+        try(var locale=PreviewLanguage.install("zh_cn");var surface=Surface.makeRasterN32Premul(1580,870)) {
+            var c=surface.getCanvas();c.clear(0xFF30343A);
+            for(int col=0;col<3;col++) {
+                com.atom.chat.theme.ThemeService.apply(cfg,col==0?"minimal":"raven");
+                c.save();
+                try {
+                    c.translate(15+col*520,40);
+                    String label=col==0?"空会话":col==1?"表情浮层":"快捷短语浮层";
+                    SkiaFontRenderer.drawTextCentered(c,FontManager.font(UiTokens.FONT_NAME),label,250,-20,0xFFFFFFFF);
+                    var layout=UiLayout.of(0,0,500,800);
+                    SkiaDraw.drawRoundedRect(c,0,0,500,800,UiTokens.panelRadius(),cfg.panelBgColor);
+                    SkiaDraw.clip(c,0,0,500,800,UiTokens.panelRadius());
+                    com.atom.chat.ui.ShellHeader.drawBackdrop(c,layout.header);
+                    if(col==0) {
+                        var view=new MessageListView(new OffscreenHost(0));
+                        try{draw(view,layout,List.of(),new ScrollController()).accept(c);}finally{view.dispose();}
+                    }
+                    var bar=layout.inputBar;
+                    DotTexture.drawEdge(c,bar,UiTokens.chromeRadius(),true,cfg.textSecondaryColor);
+                    SkiaDraw.drawRoundedRect(c,bar.x(),bar.y(),bar.w(),bar.h(),UiTokens.chromeRadius(),UiTokens.cardFill());
+                    ChromeMaterial.drawDetails(c,bar,UiTokens.chromeRadius());
+                    com.atom.chat.ui.ShellHeader.render(c,layout.header,"世界聊天",false,null,0F,cfg.textPrimaryColor);
+                    SkiaFontRenderer.drawTextCentered(c,FontManager.font(UiTokens.FONT_NAME),"输入消息…",bar.x()+bar.w()/2,bar.y()+bar.h()/2,cfg.textSecondaryColor);
+                    if(col==1) {
+                        var popup=new EmojiPanel(new OffscreenEmojiHost());
+                        popup.toggle();popup.update(1000L);popup.render(c,layout,-1,-1,0L);
+                    } else if(col==2) {
+                        var popup=new QuickPhrasePanel(text->{},()->cfg.accentColor);
+                        popup.open();popup.update(1000L);popup.render(c,layout,-1,-1,0L);
+                    }
+                } finally{c.restore();}
+            }
+            Path out=Path.of(System.getProperty("atomchat.projectDir")).resolve("build/preview/secondary-dots.png");
+            java.nio.file.Files.createDirectories(out.getParent());
+            try(var image=surface.makeImageSnapshot();var data=image.encodeToData()){java.nio.file.Files.write(out,data.getBytes());}
+        } finally{saved.applyTo(cfg);}
+    }
+
+    /** Actual chat render, with the previous incoming fills retained only as a comparison fixture. */
+    @Test
+    void renderLightThemePaletteComparison() throws Exception {
+        var cfg = com.atom.chat.config.AtomChatConfig.get();
+        var saved = com.atom.chat.theme.AppearancePresetStore.Snapshot.capture(cfg);
+        String[] themes = {"minimal", "summer", "elegant", "vivid"};
+        String[] names = {"极简", "青柠", "典雅", "活力"};
+        int[] previous = {0xFFF1F2F6, 0xFFEFF5E3, 0xFFEFE8DC, 0xFFFBE3EB};
+        List<ChatMessage> history = List.of(
+                new ChatMessage(Component.literal("好呀，一会儿见！"), true),
+                new ChatMessage(Component.literal("对方的多行消息\n有色底更清楚"), false));
+        try (Surface surface = Surface.makeRasterN32Premul(1520, 1260)) {
+            Canvas canvas = surface.getCanvas();
+            canvas.clear(0xFF30343A);
+            for (int row = 0; row < 2; row++) for (int col = 0; col < 4; col++) {
+                com.atom.chat.theme.ThemeService.apply(cfg, themes[col]);
+                if (row == 0) cfg.otherBubbleColor = previous[col];
+                cfg.bubbleStyle = com.atom.chat.config.AtomChatConfig.BubbleStyle.CORNER;
+                canvas.save();
+                try {
+                    canvas.translate(col * 380F, row * 630F);
+                    String label = names[col] + (row == 0 ? " · 调整前" : " · 调整后");
+                    SkiaFontRenderer.drawTextCentered(canvas, FontManager.font(UiTokens.FONT_NAME),
+                            label, 190, 24, 0xFFFFFFFF);
+                    SkiaDraw.drawRoundedRect(canvas, 10, 42, 360, 575, UiTokens.panelRadius(), cfg.panelBgColor);
+                    SkiaDraw.clip(canvas, 10, 42, 360, 575, UiTokens.panelRadius());
+                    UiLayout layout = UiLayout.of(10, 42, 360, 575);
+                    com.atom.chat.ui.ShellHeader.drawBackdrop(canvas, layout.header);
+                    com.atom.chat.ui.ShellHeader.render(canvas, layout.header, "世界聊天", false, null, 0F, cfg.textPrimaryColor);
+                    var bar = layout.inputBar;
+                    SkiaDraw.drawChromeShadow(canvas, bar.x(), bar.y(), bar.w(), bar.h(), UiTokens.chromeRadius());
+                    DotTexture.drawEdge(canvas, bar, UiTokens.chromeRadius(), true, cfg.textSecondaryColor);
+                    MessageListView view = new MessageListView(new OffscreenHost(openedAfter(history)));
+                    try { draw(view, layout, history, new ScrollController()).accept(canvas); }
+                    finally { view.dispose(); }
+                    SkiaDraw.drawRoundedRect(canvas, bar.x(), bar.y(), bar.w(), bar.h(), UiTokens.chromeRadius(), UiTokens.cardFill());
+                    ChromeMaterial.drawDetails(canvas, bar, UiTokens.chromeRadius());
+                    SkiaFontRenderer.drawTextCentered(canvas, FontManager.font(UiTokens.FONT_NAME), "输入消息…",
+                            bar.x() + bar.w()/2F, bar.y() + bar.h()/2F, cfg.textSecondaryColor);
+                } finally { canvas.restore(); }
+            }
+            Path output = Path.of(System.getProperty("atomchat.projectDir")).resolve("build/preview/light-theme-palettes.png");
+            java.nio.file.Files.createDirectories(output.getParent());
+            try (var image = surface.makeImageSnapshot(); var data = image.encodeToData()) {
+                java.nio.file.Files.write(output, data.getBytes());
+            }
+            assertTrue(java.nio.file.Files.size(output) > 1000);
+        } finally { saved.applyTo(cfg); }
+    }
+
+    @Test
     void renderBubbleComparisonAtTheExistingSmallPanelSize() throws Exception {
         var cfg = com.atom.chat.config.AtomChatConfig.get();
         var saved = com.atom.chat.theme.AppearancePresetStore.Snapshot.capture(cfg);

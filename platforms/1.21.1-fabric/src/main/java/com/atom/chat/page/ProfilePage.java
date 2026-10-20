@@ -1074,6 +1074,10 @@ public final class ProfilePage {
                 // Fallback: plain accent -> panelBg gradient, same melt.
                 SkiaDraw.drawVerticalGradient(canvas, banner.x(), banner.y(), banner.w(), banner.h(), 0.0F,
                         accentColor(), UiTokens.withAlpha(panelRgb(), 255));
+                com.atom.chat.render.DotTexture.drawHalo(canvas,
+                        new UiLayout.Rect(banner.x() + banner.w()*0.35F, banner.y() + banner.h()*0.06F,
+                                banner.w()*0.65F, banner.h()*0.72F),
+                        UiTokens.withAlpha(UiTokens.onAccent(accentColor()), UiTokens.DOT_SECONDARY_TINT_ALPHA));
             } else {
                 // Someone else: their skin render enlarged over the accent
                 // ground. The pipeline samples only the 8x8 face, so the

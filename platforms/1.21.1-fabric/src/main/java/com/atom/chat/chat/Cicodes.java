@@ -38,7 +38,12 @@ public final class Cicodes {
      * placeholder box, which is also what is drawn until the image downloads.
      */
     public static float[] imageBubbleSize(ImageMeta meta, float maxWidth) {
-        float maxW = Math.min(UiTokens.IMAGE_MAX_W, maxWidth - UiTokens.BUBBLE_RETRACT - UiTokens.s(30));
+        return imageBubbleSize(meta, maxWidth, 0F);
+    }
+
+    public static float[] imageBubbleSize(ImageMeta meta, float maxWidth, float oppositeReserve) {
+        float maxW = Math.max(1F, Math.min(UiTokens.IMAGE_MAX_W,
+                com.atom.chat.ui.MessageGeometry.maxBubbleWidth(maxWidth, oppositeReserve)));
         float maxH = UiTokens.IMAGE_MAX_H;
         if (meta == null || meta.width() <= 0 || meta.height() <= 0) {
             return new float[]{maxW, maxH};

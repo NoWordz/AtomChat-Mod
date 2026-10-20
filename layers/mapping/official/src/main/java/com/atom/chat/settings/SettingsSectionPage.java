@@ -1507,7 +1507,7 @@ public final class SettingsSectionPage {
                                   List<Row> rows, float scrollY) {
         UiLayout.Rect last = rowRect(section, rows, rows.size() - 1, scrollY, layout);
         float top = last.bottom() + s(10);
-        float height = Math.min(s(160), Math.max(s(90), layout.list.bottom() - top));
+        float height = Math.min(s(160), layout.list.bottom() - top);
         if (height <= 0.0F) {
             return;
         }
@@ -2623,19 +2623,7 @@ public final class SettingsSectionPage {
 
     /** Centred "nothing here" glyph + caption, shared by every empty list. */
     public static void drawEmptyState(Canvas canvas, UiLayout.Rect area, String textKey) {
-        Font font = FontManager.font(UiTokens.SETTINGS_TILE_SUB);
-        float icon = UiTokens.SETTINGS_EMPTY_ICON;
-        float textH = SkiaFontRenderer.textHeight(font);
-        float gap = s(12);
-        float groupH = icon + gap + textH;
-        float top = area.y() + Math.max(0.0F, (area.h() - groupH) / 2.0F);
-        float cx = area.x() + area.w() / 2.0F;
-        // Empty-state icon and caption read as secondary information: they
-        // follow the secondary text colour, dimmed to keep the muted look.
-        int muted = sec(150);
-        drawIconCentered(canvas, AppIcons.ICON_NO_PLAYERS_PATH, cx, top + icon / 2.0F, icon, muted);
-        SkiaFontRenderer.drawTextCentered(canvas, font, Component.translatable(textKey).getString(),
-                cx, top + icon + gap + textH / 2.0F, muted);
+        com.atom.chat.ui.EmptyState.draw(canvas, area, Component.translatable(textKey).getString());
     }
 
     private void drawSwitch(Canvas canvas, Row row, UiLayout.Rect rect, int accent, float dtMs) {

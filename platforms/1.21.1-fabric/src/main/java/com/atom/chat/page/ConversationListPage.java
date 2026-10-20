@@ -387,9 +387,12 @@ public final class ConversationListPage {
             hoverRowIndex = -1;
         }
         if (!hasPlayers) {
-            UiLayout.Rect area = new UiLayout.Rect(layout.list.x(), emptyTop,
-                    layout.list.w(), Math.max(s(120), layout.list.bottom() - emptyTop));
-            SettingsSectionPage.drawEmptyState(canvas, area, "atomchat.conversation.no_players");
+            float available = layout.list.bottom() - emptyTop;
+            if (available > 0.0F) {
+                UiLayout.Rect area = new UiLayout.Rect(layout.list.x(), emptyTop,
+                        layout.list.w(), Math.min(s(120), available));
+                SettingsSectionPage.drawEmptyState(canvas, area, "atomchat.conversation.no_players");
+            }
         }
     }
 

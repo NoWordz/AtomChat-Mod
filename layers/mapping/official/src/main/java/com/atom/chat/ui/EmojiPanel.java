@@ -302,6 +302,9 @@ public final class EmojiPanel {
             SkiaDraw.drawRoundedRect(canvas, px, py, pw, ph, UiTokens.radius(14), SKIN_PANEL_BG);
             SkiaDraw.drawRoundedShadow(canvas, px, py, pw, ph, UiTokens.radius(14), s(8), SKIN_PANEL_SHADOW);
 
+            com.atom.chat.render.DotTexture.drawConnector(canvas,
+                    new UiLayout.Rect(px, py, pw, ph), UiTokens.radius(14), layout.inputBar, layout.emojiBtn, AtomChatConfig.get().accentColor);
+
             // Tabs: the active pill slides between slots when the tab changes.
             tabIndicatorAnim.update(frameDt);
             tabContentAnim.update(frameDt);

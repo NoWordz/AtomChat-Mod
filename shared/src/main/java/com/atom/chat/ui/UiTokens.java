@@ -528,6 +528,11 @@ public final class UiTokens {
     public static final float DOT_FIELD_ALPHA = 32F;
     public static final float DOT_HERO_PAD = s(36);
     public static final float DOT_TRAIL_HEIGHT = s(24);
+    public static final float DOT_EMPTY_W = s(192);
+    public static final float DOT_EMPTY_H = s(108);
+    public static final float DOT_CONNECTOR_PAD = s(12);
+    public static final float DOT_SECONDARY_TINT_ALPHA = 170F;
+    public static final float EMPTY_STATE_GAP = s(12);
     public static final float CHROME_DETAIL_DEPTH = s(12);
     public static final float CHROME_HAIRLINE = s(0.75F);
     public static final float CHROME_INNER_SHADE = s(2);
@@ -542,7 +547,11 @@ public final class UiTokens {
     /** Same, for the centered system-message capsule. */
     public static final float SYSTEM_BUBBLE_PAD_Y = s(6);
     public static final float BUBBLE_MIN_W = s(24);
-    public static final float BUBBLE_RETRACT = s(106);
+    public static final float MESSAGE_AVATAR_RIM_INSET = s(1.5F);
+    public static final float MESSAGE_OPPOSITE_MAX_PAD = s(32);
+    public static final float MESSAGE_OPPOSITE_FRACTION = 0.08F;
+    public static final float MESSAGE_MAX_WIDTH_FRACTION = 0.78F;
+    public static final float DUPLICATE_BADGE_GAP = s(6);
     /**
      * Image messages are scaled to fit this box and the bubble then hugs the
      * result, so there is no stretching, cropping or letterboxing. Also the

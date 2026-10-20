@@ -10,6 +10,8 @@
 
 **更改**
 
+- 极简、青柠、典雅与活力主题的对方气泡改用雾蓝、柔橄榄绿、陶米棕与豆沙粉，增强浅色面板上的色块区分。
+- 更新后重新点选上述内置主题应用新配色，已保存的个人外观预设保留原配色。
 - 气泡样式沿用主题预设的缩略卡片与横向滚动，位置移至圆角设置上方。
 - 导航与设置 Tab 选中底色使用原强调色，悬停不再提亮或压暗色相，内层轮廓随圆角设置衔接。
 - 三种栏体增加轻微局部边缘高光和内阴影，保留现有字号、消息间距及布局尺寸。
@@ -26,6 +28,8 @@
 
 **Changed**
 
+- Give incoming bubbles distinct mist-blue, soft-olive, clay-sand and muted-rose fills in the Minimal, Lime, Elegant and Vivid light themes.
+- Reselect these built-in themes after updating to apply the new colors; saved personal appearance presets retain their original palettes.
 - Reuse theme preset thumbnails and horizontal scrolling for bubble styles, placed above corner-radius settings.
 - Use the exact accent for navigation and settings tab selections, retain its RGB during hover fades, and align inset outlines with the configured corners.
 - Add subtle local edge highlights and inner shading to the three bars while preserving font sizes, message spacing and layout dimensions.

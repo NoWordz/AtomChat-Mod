@@ -150,7 +150,7 @@ class ThemeServiceTest {
         ThemeService.apply(c, "vivid");
         assertEquals(0xFFE85A8A, c.accentColor);
         assertEquals(0xFFFDF0F4, c.panelBgColor);
-        assertEquals(0xFFFBE3EB, c.otherBubbleColor);
+        assertEquals(0xFFDEA6BE, c.otherBubbleColor);
         assertEquals(0xFF3D2C35, c.textPrimaryColor);
 
         c = new AtomChatConfig();

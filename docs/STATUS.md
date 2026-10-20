@@ -5,11 +5,16 @@
 ## 项目
 
 - 源码仓库：D:\AtomChat-Main，单仓多目标：Fabric 1.21.1、NeoForge 1.21.1、Forge 1.20.1。
-- 现役分支：main；origin：NoWordz/AtomChat-Mod；源码版本：0.3.1，已按用户指定部署至 Windows 1.21.1-CCB（Fabric），用户验收通过并授权本地提交，未推送或发布。
+- 现役分支：main；origin：NoWordz/AtomChat-Mod；源码版本：0.3.1；气泡与材质已验收提交 main@f502343，浅色配色续调已部署 CCB、尚未提交或验收；未推送或发布。
+
+## 0.3.1 浅色配色续调
+
+- 极简/青柠/典雅/活力的对方气泡改为雾蓝、柔橄榄绿、陶米棕、豆沙粉，沿用原文字色；只改共享内置预设，用户自定义及已保存预设不自动覆盖，需重新点选主题应用。
+- 三端各19项定向主题/实际绘制测试与六包构建核验通过，未重跑全量；本轮未提交，CCB观感待用户确认。当前证据见 [浅色配色验证](verification/2026-10-20-light-palettes.md)。
 
 ## 0.3.1 气泡样式与点阵材质（已验收）
 
-- 已部署：D:/Myworld/.minecraft/versions/1.21.1-CCB/mods/atomchat-Fabric-1.21.1-0.3.1.jar；SHA-256 180032a5075c8b31ffce3306db8253f089723b334505e46a689b562f4a42fb89。旧包备份 D:\AtomChat-Backups\2026-10-20-ccb-selector-accent-da71fd44\atomchat-Fabric-1.21.1-0.3.1.jar；其他实例未改动，未启动游戏。
+- 已部署：D:/Myworld/.minecraft/versions/1.21.1-CCB/mods/atomchat-Fabric-1.21.1-0.3.1.jar；SHA-256 3aa2ad9daec911de67aafd14e0b78c9f110b6295f8b2ba0234e42987481302e8。旧包备份 D:\AtomChat-Backups\2026-10-20-ccb-light-palettes-777d5944\atomchat-Fabric-1.21.1-0.3.1.jar；其他实例未改动，未启动游戏。
 
 - 外观 → 主题 → 气泡样式：经典圆角（默认）、大圆角、单角尖角，本地统一作用于所有玩家，尖角朝头像侧上方；文本、图片、下载中图片和禁用图片占位均已接线。
 - 优先借鉴本机 Tuui `CanvasExtensionKt` 的四角 `RRect` 和图片同形裁切方式，复用现有 Skija 管线；独立绘制 helper 负责轮廓，测量、命中、字号、昵称区高度和消息间距保持原值。

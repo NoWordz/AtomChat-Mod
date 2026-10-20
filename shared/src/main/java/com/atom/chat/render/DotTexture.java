@@ -60,6 +60,20 @@ public final class DotTexture {
         drawField(canvas, box, tint, true);
     }
 
+    /** A short bottom-edge trail towards the key that opened a floating panel. */
+    public static void drawConnector(Canvas canvas, UiLayout.Rect popup, float radius,
+                                     UiLayout.Rect composer, UiLayout.Rect key, int tint) {
+        float left = Math.max(popup.x(), key.x() - UiTokens.DOT_CONNECTOR_PAD);
+        float right = Math.min(popup.right(), key.right() + UiTokens.DOT_CONNECTOR_PAD);
+        float bottom = composer.y();
+        if (right <= left || bottom <= popup.bottom()) return;
+        canvas.save();
+        try {
+            canvas.clipRect(Rect.makeXYWH(left, popup.bottom(), right-left, bottom-popup.bottom()));
+            drawEdge(canvas, popup, radius, false, tint);
+        } finally { canvas.restore(); }
+    }
+
     private static void drawField(Canvas canvas, UiLayout.Rect box, int tint, boolean trail) {
         if (!visible(box, tint)) return;
         canvas.save();

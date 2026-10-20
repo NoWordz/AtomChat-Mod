@@ -109,29 +109,29 @@ public final class ThemeService {
         }
     }
 
-    /** 极简 — white settings-app look: opaque white cards, near-black body, blue accent, crisp small corners. */
+    /** 极简 — white settings surfaces, a mist-blue incoming bubble and blue accent. */
     public static final Preset MINIMAL = new Preset("minimal",
             0xFF3B82F6,
             0xFF3B82F6, 0xFFFFFFFF,
-            0xFFF1F2F6, 0xFF1A1D21,
+            0xFFB9CDE6, 0xFF1A1D21,
             0xFFF7F8FA, 0xFF1A1D21, 0xFF6B7280,
             0xFFFFFFFF, 0xFF6B7280,
             0xFFECEEF2, 0xFF6B7280,
             null, null, "small");
-    /** 青柠 (id "summer", shown as 夏日 before) — same white base dressed with a lime accent and pale green capsules. */
+    /** 青柠 (id "summer", shown as 夏日 before) — lime accent with soft olive incoming bubbles. */
     public static final Preset SUMMER = new Preset("summer",
             0xFF84CC16,
             0xFF84CC16, 0xFF1A2E05,
-            0xFFEFF5E3, 0xFF1F2937,
+            0xFFC3D38D, 0xFF1F2937,
             0xFFFAFCF3, 0xFF1F2937, 0xFF6B7280,
             0xFFFFFFFF, 0xFF6B7280,
             0xFFEBF2DC, 0xFF4D7C0F,
             null, null, "medium");
-    /** 典雅 — Claude beige: warm paper panel, sand cards, terracotta accent. */
+    /** 典雅 — warm paper, clay-sand incoming bubbles and a terracotta accent. */
     public static final Preset ELEGANT = new Preset("elegant",
             0xFFD97757,
             0xFFD97757, 0xFFFFFFFF,
-            0xFFEFE8DC, 0xFF3D3929,
+            0xFFD0B294, 0xFF3D3929,
             0xFFF5F0E8, 0xFF3D3929, 0xFF8A8377,
             0xFFE8DDD0, 0xFF8A8377,
             0xFFEAE1D3, 0xFF7A7264,
@@ -154,11 +154,11 @@ public final class ThemeService {
             0xFF141414, 0xFF9CA3AF,
             0xFF161616, 0xFFD4D4D4,
             null, null, "small");
-    /** 活力 — pale pink background, punchy pink accent, everything else stays soft white. */
+    /** 活力 — pale pink background, muted rose incoming bubbles and a punchy pink accent. */
     public static final Preset VIVID = new Preset("vivid",
             0xFFE85A8A,
             0xFFE85A8A, 0xFFFFFFFF,
-            0xFFFBE3EB, 0xFF3D2C35,
+            0xFFDEA6BE, 0xFF3D2C35,
             0xFFFDF0F4, 0xFF3D2C35, 0xFF9A7F8C,
             0xFFFFFFFF, 0xFF9A7F8C,
             0xFFF9DCE7, 0xFFB04A70,

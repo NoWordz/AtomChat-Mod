@@ -216,4 +216,31 @@ class ProfileAvatarInteractionTest {
         assertEquals(0,picks,"returning to self must not revive the previous menu");
         avatar(); menu(0); assertEquals(1,picks);
     }
+
+    @Test void renderTheDefaultBannerDotSurfaces() throws Exception {
+        var cfg=AtomChatConfig.get();
+        var saved=com.atom.chat.theme.AppearancePresetStore.Snapshot.capture(cfg);
+        boolean bannerEnabled=cfg.customBannerEnabled;
+        try(var locale=com.atom.chat.render.PreviewLanguage.install("zh_cn");var surface=Surface.makeRasterN32Premul(900,320)) {
+            cfg.customBannerEnabled=false;
+            var c=surface.getCanvas();c.clear(0xFF30343A);
+            var draw=ProfilePage.class.getDeclaredMethod("drawBanner",io.github.humbleui.skija.Canvas.class,UiLayout.class,float.class);
+            draw.setAccessible(true);
+            for(int i=0;i<2;i++) {
+                com.atom.chat.theme.ThemeService.apply(cfg,i==0?"minimal":"raven");
+                var banner=rect("bannerRect");
+                com.atom.chat.render.SkiaFontRenderer.drawTextCentered(c,
+                        com.atom.chat.font.FontManager.font(UiTokens.FONT_NAME),
+                        i==0?"浅色 · 默认头图":"深色 · 默认头图",225+i*450,27,0xFFFFFFFF);
+                c.save();
+                try {
+                    c.translate(i*450+20-banner.x(),60-banner.y());
+                    draw.invoke(page,c,layout,0F);
+                } finally{c.restore();}
+            }
+            var out=Path.of(System.getProperty("atomchat.projectDir",".")).resolve("build/preview/profile-banner-dots.png");
+            Files.createDirectories(out.getParent());
+            try(var image=surface.makeImageSnapshot();var data=image.encodeToData()){Files.write(out,data.getBytes());}
+        } finally{saved.applyTo(cfg);cfg.customBannerEnabled=bannerEnabled;}
+    }
 }

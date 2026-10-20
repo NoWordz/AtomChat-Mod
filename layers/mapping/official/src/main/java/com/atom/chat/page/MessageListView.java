@@ -306,6 +306,10 @@ public final class MessageListView {
         canvas.save();
         try {
             SkiaDraw.clip(canvas, x, y, width, height, 0.0F);
+            if (messages.isEmpty()) {
+                com.atom.chat.ui.EmptyState.draw(canvas, new com.atom.chat.ui.UiLayout.Rect(x, y, width, height),
+                        tr("atomchat.conversation.empty"));
+            }
             canvas.translate(0.0F, -scroll.getScrollY());
             long now = System.currentTimeMillis();
             pruneEntranceSettled(now);
@@ -370,7 +374,7 @@ public final class MessageListView {
                     int spanStart = clickableSpans.size();
                     MessageHit hit = drawMessage(canvas, msg, x, cursorY, width, hits.size(), grouped);
                     reactionChips.draw(canvas, msg, msg.isOwn() ? hit.bubbleX()+hit.bubbleWidth() : hit.bubbleX(), hit.bubbleBottom(),
-                            Math.max(UiTokens.REACTION_MIN_WIDTH, width - UiTokens.BUBBLE_RETRACT), scroll.getScrollY());
+                            Math.max(UiTokens.REACTION_MIN_WIDTH, bubbleMaxWidth(msg, width)), scroll.getScrollY());
                     // Clickable spans are recorded in content space (like hits
                     // before conversion); convert them to screen space so later
                     // hit-testing can compare them directly against the mouse.
@@ -1013,7 +1017,7 @@ public final class MessageListView {
             return drawSystemMessage(canvas, msg, x, y, maxWidth, index);
         }
         Font font = FontManager.font(UiTokens.FONT_BODY);
-        float bubbleMaxWidth = maxWidth - UiTokens.BUBBLE_RETRACT;
+        float bubbleMaxWidth = bubbleMaxWidth(msg, maxWidth);
         String raw = msg.getRawText();
         BubbleKind kind = kindOfCached(msg);
         if (kind == BubbleKind.IMAGE_PLACEHOLDER) {
@@ -1023,7 +1027,7 @@ public final class MessageListView {
             return drawImageMessage(canvas, msg, raw, Cicodes.extractImageUrl(raw),
                     x, y, maxWidth, index, grouped);
         }
-        float textMaxWidth = bubbleMaxWidth - UiTokens.BUBBLE_PAD * 2.0F;
+        float textMaxWidth = Math.max(1F, bubbleMaxWidth(msg, maxWidth) - UiTokens.BUBBLE_PAD * 2F);
         List<RichLine> richLines = wrappedLines(msg, font, textMaxWidth);
         // The bubble must hug the longest visible line. Using the single-line
         // width of the whole message collapsed multi-line messages (e.g. a hard
@@ -1036,7 +1040,7 @@ public final class MessageListView {
         }
         float bubbleWidth;
         if (maxLineWidth + UiTokens.BUBBLE_PAD * 2.0F <= bubbleMaxWidth) {
-            bubbleWidth = Math.max(UiTokens.BUBBLE_MIN_W, maxLineWidth + UiTokens.BUBBLE_PAD * 2.0F);
+            bubbleWidth = Math.min(bubbleMaxWidth, Math.max(UiTokens.BUBBLE_MIN_W, maxLineWidth + UiTokens.BUBBLE_PAD * 2.0F));
         } else {
             bubbleWidth = bubbleMaxWidth;
         }
@@ -1138,9 +1142,9 @@ public final class MessageListView {
      */
     private void drawQuotePill(Canvas canvas, ChatMessage msg, float x, float maxWidth, float pillY, boolean own) {
         Font quoteFont = FontManager.font(UiTokens.FONT_QUOTE);
-        float capW = maxWidth - UiTokens.AVATAR_SIZE - s(18);
+        float capW = bubbleMaxWidth(msg, maxWidth);
         float barW = s(3);
-        float textMaxW = capW - UiTokens.QUOTE_PAD_X * 2.0F - barW - s(4);
+        float textMaxW = Math.max(1F, capW - UiTokens.QUOTE_PAD_X * 2.0F - barW - s(4));
         String name = msg.getQuoteName().startsWith("@") ? msg.getQuoteName() : "@" + msg.getQuoteName();
         String quote = name + ": " + msg.getQuoteText();
         boolean imageQuote = msg.getQuoteText() != null
@@ -1319,6 +1323,16 @@ public final class MessageListView {
      * bubble's outer edge (own bubbles: left; other bubbles: right). It uses
      * the accent colour so the repeat count never reads as part of the name.
      */
+    private float duplicateReserve(ChatMessage msg) {
+        return msg.getDuplicateCount() > 1
+                ? SkiaFontRenderer.getStringWidth(FontManager.font(UiTokens.FONT_NAME), "x" + msg.getDuplicateCount())
+                    + UiTokens.DUPLICATE_BADGE_GAP : 0F;
+    }
+
+    private float bubbleMaxWidth(ChatMessage msg, float rowWidth) {
+        return com.atom.chat.ui.MessageGeometry.maxBubbleWidth(rowWidth, duplicateReserve(msg));
+    }
+
     private void drawDuplicateBadge(Canvas canvas, ChatMessage msg, float bubbleX, float bubbleWidth,
                                     float bubbleTop, float bubbleHeight) {
         if (msg.getDuplicateCount() <= 1) {
@@ -1327,7 +1341,7 @@ public final class MessageListView {
         Font font = FontManager.font(UiTokens.FONT_NAME);
         String label = "x" + msg.getDuplicateCount();
         float labelW = SkiaFontRenderer.getStringWidth(font, label);
-        float x = msg.isOwn() ? bubbleX - labelW - s(6) : bubbleX + bubbleWidth + s(6);
+        float x = msg.isOwn() ? bubbleX - labelW - UiTokens.DUPLICATE_BADGE_GAP : bubbleX + bubbleWidth + UiTokens.DUPLICATE_BADGE_GAP;
         if (x < s(4)) {
             x = s(4);
         }
@@ -1345,7 +1359,7 @@ public final class MessageListView {
         float quoteH = hasQuote ? UiTokens.QUOTE_HEIGHT + UiTokens.QUOTE_GAP : 0.0F;
         float band = grouped ? 0.0F : UiTokens.NAME_BAND;
         float bubbleTop = y + band + quoteH;
-        float[] size = Cicodes.imageBubbleSize(Cicodes.parseImageMeta(raw), maxWidth);
+        float[] size = Cicodes.imageBubbleSize(Cicodes.parseImageMeta(raw), maxWidth, duplicateReserve(msg));
         float imageW = size[0];
         float imageH = size[1];
         float bubbleX = msg.isOwn() ? x + maxWidth - imageW - nameOffset : x + nameOffset;
@@ -1411,7 +1425,7 @@ public final class MessageListView {
         Font font = FontManager.font(UiTokens.FONT_QUOTE);
         String placeholder = tr("atomchat.hud.image");
         float textW = SkiaFontRenderer.getStringWidth(font, placeholder);
-        float pillW = Math.min(maxWidth - UiTokens.BUBBLE_RETRACT, textW + UiTokens.BUBBLE_PAD * 2.0F);
+        float pillW = Math.min(bubbleMaxWidth(msg, maxWidth), textW + UiTokens.BUBBLE_PAD * 2.0F);
         float lineHeight = SkiaFontRenderer.getHeight(font);
         float pillH = lineHeight + UiTokens.SYSTEM_BUBBLE_PAD_Y;
         // Bubble offset from the list edge; includes the avatar's edge inset so
@@ -1470,7 +1484,7 @@ public final class MessageListView {
      */
     private float messageHeight(ChatMessage msg, float maxWidth, boolean grouped) {
         return messageBodyHeight(msg, maxWidth, grouped)
-                + reactionChips.extraHeight(msg, Math.max(UiTokens.REACTION_MIN_WIDTH, maxWidth - UiTokens.BUBBLE_RETRACT));
+                + reactionChips.extraHeight(msg, Math.max(UiTokens.REACTION_MIN_WIDTH, bubbleMaxWidth(msg, maxWidth)));
     }
 
     private float messageBodyHeight(ChatMessage msg, float maxWidth, boolean grouped) {
@@ -1490,11 +1504,11 @@ public final class MessageListView {
         }
         if (kind == BubbleKind.IMAGE) {
             return band + quoteH
-                    + Cicodes.imageBubbleSize(Cicodes.parseImageMeta(msg.getRawText()), maxWidth)[1];
+                    + Cicodes.imageBubbleSize(Cicodes.parseImageMeta(msg.getRawText()), maxWidth, duplicateReserve(msg))[1];
         }
         Font font = FontManager.font(UiTokens.FONT_BODY);
         float lineHeight = SkiaFontRenderer.getHeight(font);
-        float wrapW = Math.max(s(20), maxWidth - UiTokens.BUBBLE_RETRACT - UiTokens.BUBBLE_PAD * 2.0F);
+        float wrapW = Math.max(1F, bubbleMaxWidth(msg, maxWidth) - UiTokens.BUBBLE_PAD * 2F);
         int lines = wrappedLines(msg, font, wrapW).size();
         return band + quoteH + UiTokens.BUBBLE_PAD_Y + Math.max(lineHeight, lines * lineHeight);
     }
@@ -1509,7 +1523,7 @@ public final class MessageListView {
             return out;
         }
         Font font = FontManager.font(msg.isSystem() ? UiTokens.FONT_QUOTE : UiTokens.FONT_BODY);
-        float textMax = Math.max(s(20), hit.bubbleWidth() - UiTokens.BUBBLE_PAD * 2.0F);
+        float textMax = Math.max(1F, hit.bubbleWidth() - UiTokens.BUBBLE_PAD * 2.0F);
         // The hit bubble never wraps tighter than the draw-path width (a short
         // bubble is at least one full line wide), so the cached draw wrap and
         // this query produce identical line splits.
@@ -1695,9 +1709,7 @@ public final class MessageListView {
      * this same inset so their positions stay aligned with the avatar.
      */
     private static float avatarEdgeInset() {
-        float hatOutset = PlayerAvatar.isE33Chat()
-                ? UiTokens.AVATAR_SIZE * UiTokens.E33CHAT_HAT_OUTSET_RATIO : 0.0F;
-        return Math.max(s(1.5F), hatOutset);
+        return com.atom.chat.ui.MessageGeometry.avatarInset();
     }
 
     /** Minecraft language lookup for all AtomChat UI copy. */

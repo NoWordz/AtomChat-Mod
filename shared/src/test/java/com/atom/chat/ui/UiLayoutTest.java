@@ -236,10 +236,6 @@ class UiLayoutTest {
 
     @Test
     void messageTokensStayConsistent() {
-        // The avatar column on both sides must fit inside the bubble's reserved
-        // retract, or bubbles would overlap the avatars.
-        assertTrue(UiTokens.BUBBLE_RETRACT > 2.0F * (UiTokens.AVATAR_SIZE + UiTokens.AVATAR_GAP),
-                "bubble retract covers both avatar columns");
         assertTrue(UiTokens.BUBBLE_PAD_Y > 0.0F, "bubble padding is positive");
         assertTrue(UiTokens.SYSTEM_BUBBLE_PAD_Y > 0.0F, "system bubble padding is positive");
         // The name band doubles as the name/bubble gap, so it must clear the name text.

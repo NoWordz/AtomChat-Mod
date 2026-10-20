@@ -594,6 +594,9 @@ public final class QuickPhrasePanel {
             SkiaDraw.drawRoundedRect(canvas, px, py, pw, ph, UiTokens.radius(14), UiTokens.SKIN_PANEL);
             SkiaDraw.drawRoundedShadow(canvas, px, py, pw, ph, UiTokens.radius(14), s(8), UiTokens.CHROME_SHADOW);
 
+            com.atom.chat.render.DotTexture.drawConnector(canvas,
+                    new UiLayout.Rect(px, py, pw, ph), UiTokens.radius(14), layout.inputBar, layout.phraseBtn, accent.getAsInt());
+
             Font font = FontManager.font(UiTokens.FONT_BUTTON);
             List<String> list = phrases();
 
