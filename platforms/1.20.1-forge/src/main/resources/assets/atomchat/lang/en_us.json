@@ -336,5 +336,11 @@
   "atomchat.settings.chat.close_after_send": "Close chat after sending",
   "atomchat.settings.chat.close_after_send.desc": "After a public, private or command message is actually sent, close through the existing animation. Blank or rejected input stays open.",
   "atomchat.settings.chat.retain_draft_on_close": "Keep unsent drafts",
-  "atomchat.settings.chat.retain_draft_on_close.desc": "Within the current connection, restore unsent public and private drafts separately. A successful send clears the draft; leaving the server clears all."
+  "atomchat.settings.chat.retain_draft_on_close.desc": "Within the current connection, restore unsent public and private drafts separately. A successful send clears the draft; leaving the server clears all.",
+  "atomchat.settings.group.appearance.bubbles": "Bubble style",
+  "atomchat.settings.appearance.bubble_style": "Bubble shape",
+  "atomchat.settings.appearance.bubble_style.desc": "Choose the shape of all player bubbles on this device",
+  "atomchat.settings.appearance.bubble_style.classic": "Classic",
+  "atomchat.settings.appearance.bubble_style.round": "Round",
+  "atomchat.settings.appearance.bubble_style.corner": "Sharp corner"
 }

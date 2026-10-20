@@ -220,6 +220,24 @@ class SettingsActionsTest {
     }
 
     @Test
+    void bubbleStyleDirectSelectionsPersist() throws Exception {
+        AtomChatConfig cfg = AtomChatConfig.get();
+        AtomChatConfig.BubbleStyle original = cfg.bubbleStyle;
+        SettingsActions actions = new SettingsActions(new StubHost(tmp.resolve("avatar")));
+        try {
+            cfg.bubbleStyle = AtomChatConfig.BubbleStyle.CLASSIC;
+            for (AtomChatConfig.BubbleStyle expected : new AtomChatConfig.BubbleStyle[]{
+                    AtomChatConfig.BubbleStyle.ROUND, AtomChatConfig.BubbleStyle.CORNER, AtomChatConfig.BubbleStyle.CLASSIC}) {
+                actions.handleSettingsAction("bubble_style:" + expected.name());
+                AtomChatConfig.reload();
+                assertEquals(expected, AtomChatConfig.get().effectiveBubbleStyle());
+            }
+        } finally {
+            AtomChatConfig.get().bubbleStyle = original;
+        }
+    }
+
+    @Test
     void thePageNavStyleCardTogglesAndComesBack() throws Exception {
         AtomChatConfig cfg = AtomChatConfig.get();
         AtomChatConfig.PageNavStyle original = cfg.pageNavStyle;

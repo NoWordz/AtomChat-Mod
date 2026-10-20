@@ -55,7 +55,7 @@ import java.util.Map;
  * so rendering, hit-testing and measurement can never disagree.</p>
  */
 public final class SettingsSectionPage {
-    public enum RowKind { HERO, AUTHORS, SWITCH, SLIDER, COLOR, INFO, BLOCKED, LABEL, ACTION, THEMES }
+    public enum RowKind { HERO, AUTHORS, SWITCH, SLIDER, COLOR, INFO, BLOCKED, LABEL, ACTION, THEMES, BUBBLES }
 
     public record Row(RowKind kind, SettingsItem item, SettingsSlider slider,
                       SettingsColor color, SettingsCatalog.InfoRow info, PlayerRef player,
@@ -94,6 +94,10 @@ public final class SettingsSectionPage {
 
         static Row ofAction(String actionId, SettingsItem item) {
             return new Row(RowKind.ACTION, item, null, null, null, null, null, actionId, null, null);
+        }
+
+        static Row ofBubbles() {
+            return new Row(RowKind.BUBBLES, null, null, null, null, null, null, null, null, null);
         }
 
         static Row ofThemes() {
@@ -157,6 +161,7 @@ public final class SettingsSectionPage {
     private static final String ACTION_TELEPORT_MODE = "teleport_mode";
     private static final String ACTION_PAGE_NAV_STYLE = "page_nav_style";
     private static final String ACTION_AVATAR_STYLE = "avatar_style";
+    public static final String ACTION_BUBBLE_STYLE = "bubble_style:";
     private static final String ACTION_HISTORY_CLEAR = "history_clear";
     private static final String ACTION_CACHE_CLEAR = "cache_clear";
     private static final String ACTION_TEST_SOUND = "test_sound";
@@ -211,6 +216,13 @@ public final class SettingsSectionPage {
                 "atomchat.settings.chat.avatar_style.desc",
                 () -> true, v -> {
         });
+    }
+
+    private SettingsItem bubbleStyleItem() {
+        return new SettingsItem("bubble_style",
+                "atomchat.settings.appearance.bubble_style",
+                "atomchat.settings.appearance.bubble_style.desc",
+                () -> true, v -> { });
     }
 
     private SettingsItem pageNavStyleItem() {
@@ -433,23 +445,29 @@ public final class SettingsSectionPage {
 
     // Horizontal theme-card strip: the wheel glides toward a target, a press
     // drag follows the pointer 1:1, and a press that never travels selects.
-    private float themeStripScroll;
-    private float themeStripTarget;
-    private float themeStripAnimFrom;
-    private long themeStripAnimStart;
-    private boolean themeStripAnimActive;
-    private float themeStripDragStartX;
-    private float themeStripDragStartY;
-    private float themeStripPressX;
-    private float themeStripPressY;
-    private float themeStripDragStartScroll;
-    private boolean themeStripPressed;
-    private boolean themeStripDragged;
-    private int pressedThemeCard = -1;
-    /** Custom card whose hover-revealed remove key is under the pointer. */
+    private static final class CardStrip {
+        final RowKind kind;
+        float scroll, target, animFrom, dragStartX, dragStartY, pressX, pressY, dragStartScroll;
+        long animStart;
+        boolean animActive, pressed, dragged;
+        int pressedCard = -1;
+        UiLayout.Rect rect;
+        final Map<Integer, PressScale> scales = new HashMap<>();
+        CardStrip(RowKind kind) { this.kind = kind; }
+        void reset() {
+            scroll = target = 0F;
+            animActive = pressed = dragged = false;
+            pressedCard = -1;
+            rect = null;
+            scales.clear();
+        }
+    }
+    private final CardStrip themeStrip = new CardStrip(RowKind.THEMES);
+    private final CardStrip bubbleStrip = new CardStrip(RowKind.BUBBLES);
+    private final CardStrip[] previewStrips = {themeStrip, bubbleStrip};
+    private CardStrip pointerStrip = themeStrip;
     private final Map<Integer, Float> themeDeleteHover = new HashMap<>();
     private boolean revealLatestPresetPending;
-    private final Map<Integer, PressScale> themeCardScale = new HashMap<>();
 
     private final Map<String, ToggleSwitch> switches = new HashMap<>();
     private final Map<Integer, Float> rowHover = new HashMap<>();
@@ -528,6 +546,7 @@ public final class SettingsSectionPage {
             case LABEL -> UiTokens.SETTINGS_LABEL_H;
             case SLIDER, COLOR -> UiTokens.SETTINGS_SLIDER_ROW_H;
             case THEMES -> UiTokens.SETTINGS_THEME_ROW_H;
+            case BUBBLES -> UiTokens.SETTINGS_THEME_ROW_H;
             case HERO -> UiTokens.SETTINGS_HERO_H;
             case AUTHORS -> UiTokens.SETTINGS_AUTHOR_ROW_H;
             default -> UiTokens.SETTINGS_ROW_H;
@@ -905,6 +924,8 @@ public final class SettingsSectionPage {
                 // Theme strip first - one tap to a whole new look.
                 addGroup(rows, "atomchat.settings.group.appearance.presets",
                         () -> rows.add(Row.ofThemes()));
+                addGroup(rows, "atomchat.settings.group.appearance.bubbles",
+                        () -> rows.add(Row.ofBubbles()));
                 addGroup(rows, "atomchat.settings.group.appearance.corners",
                         () -> addSliders(rows, SettingsSection.APPEARANCE, "corner_radius"));
                 addGroup(rows, "atomchat.settings.group.appearance.message_colors", () -> {
@@ -1375,7 +1396,7 @@ public final class SettingsSectionPage {
 
     /** The section chip row, sharing the bottom tab bar's cell geometry: equal
      *  cells from {@code layout.chipBar}, the accent capsule for the selection
-     *  (sliding on the tab clock), an accent-tinted hover wash on the
+     *  (sliding on the tab clock), an accent hover wash on the
      *  unselected cells, and a bounce on
      *  the whole chip cell. Like {@code BottomTabBar}, the per-cell spring
      *  wraps the entire cell (wash plus label) while the shared capsule rides
@@ -1405,7 +1426,7 @@ public final class SettingsSectionPage {
         }
         try {
             SkiaDraw.drawRoundedRect(canvas, capsuleX, first.y(), first.w(), first.h(),
-                    UiTokens.radius(8), UiTokens.accentFill());
+                    UiTokens.insetRadius(UiTokens.chromeRadius(), inset, first.w(), first.h()), UiTokens.accentFill());
         } finally {
             if (activeScale != null) {
                 canvas.restore();
@@ -1434,7 +1455,7 @@ public final class SettingsSectionPage {
                 Float hov = chipHover.get(i);
                 if (!selected && hov != null && hov > 0.01F) {
                     SkiaDraw.drawRoundedRect(canvas, cell.x(), cell.y(), cell.w(), cell.h(),
-                            UiTokens.radius(8), UiTokens.cardHover(hov));
+                            UiTokens.insetRadius(UiTokens.chromeRadius(), inset, cell.w(), cell.h()), UiTokens.cardHover(hov));
                 }
                 SkiaFontRenderer.drawTextCentered(canvas, labelFont,
                         SkiaFontRenderer.truncate(labelFont, tr(chips.get(i).labelKey()),
@@ -1520,6 +1541,7 @@ public final class SettingsSectionPage {
             case SLIDER -> drawSlider(canvas, row, rect, accent);
             case COLOR -> drawColor(canvas, row, rect, dtMs);
             case THEMES -> drawThemes(canvas, rect, dtMs);
+            case BUBBLES -> drawBubblePreviews(canvas, rect, dtMs);
             case INFO -> drawInfo(canvas, row, rect);
             case BLOCKED -> drawBlocked(canvas, row, rect, hover, buttonFont);
             case ACTION -> drawAction(canvas, row, rect, hover);
@@ -1718,10 +1740,14 @@ public final class SettingsSectionPage {
     // ---------------------------------------------------------------- themes
 
     /** Content width of the card strip (both edge pads included). */
-    private float themeStripContentWidth() {
-        int count = themeCardCount();
+    private float stripContentWidth(CardStrip strip) {
+        int count = stripCardCount(strip);
         return UiTokens.SETTINGS_ROW_PAD + count * UiTokens.THEME_CARD_W
                 + (count - 1) * UiTokens.THEME_CARD_GAP + UiTokens.SETTINGS_ROW_PAD;
+    }
+
+    private int stripCardCount(CardStrip strip) {
+        return strip.kind == RowKind.BUBBLES ? AtomChatConfig.BubbleStyle.values().length : themeCardCount();
     }
 
     private int builtInThemeCount() {
@@ -1732,8 +1758,8 @@ public final class SettingsSectionPage {
         return builtInThemeCount() + AppearancePresetStore.get().list().size() + 1;
     }
 
-    private float themeStripMaxScroll(UiLayout.Rect rect) {
-        return Math.max(0.0F, themeStripContentWidth() - rect.w());
+    private float stripMaxScroll(CardStrip strip, UiLayout.Rect rect) {
+        return Math.max(0.0F, stripContentWidth(strip) - rect.w());
     }
 
     private static float clampScroll(float value, float max) {
@@ -1752,12 +1778,14 @@ public final class SettingsSectionPage {
     }
 
     /** Card index under the pointer, or -1. Mirrors the renderer geometry. */
-    private int themeCardAt(UiLayout.Rect rect, float vmx, float vmy, float scroll) {
+    private int stripCardAt(CardStrip strip, UiLayout.Rect rect, float vmx, float vmy) {
+        if (!rect.contains(vmx, vmy)) return -1;
+        float scroll = strip.scroll;
         float top = themeCardY(rect);
         if (vmy < top || vmy > top + UiTokens.THEME_CARD_H + s(18)) {
             return -1;
         }
-        for (int i = 0; i < themeCardCount(); i++) {
+        for (int i = 0; i < stripCardCount(strip); i++) {
             float x = themeCardX(rect, i, scroll);
             if (vmx >= x && vmx <= x + UiTokens.THEME_CARD_W) {
                 return i;
@@ -1768,7 +1796,7 @@ public final class SettingsSectionPage {
 
     /** Custom card's remove key under the pointer, or -1. */
     private int themeDeleteAt(UiLayout.Rect rect, float vmx, float vmy, float scroll) {
-        int card = themeCardAt(rect, vmx, vmy, scroll);
+        int card = stripCardAt(themeStrip, rect, vmx, vmy);
         int customStart = builtInThemeCount();
         int customEnd = customStart + AppearancePresetStore.get().list().size();
         if (card < customStart || card >= customEnd) {
@@ -1783,37 +1811,45 @@ public final class SettingsSectionPage {
 
     /** The themes row rect, for the screen's pointer routing (wheel/drag/click). */
     public UiLayout.Rect themesRowRect(UiLayout layout, SettingsSection section, float scrollY) {
+        return stripRowRect(pointerStrip, layout, section, scrollY);
+    }
+
+    private UiLayout.Rect stripRowRect(CardStrip strip, UiLayout layout, SettingsSection section, float scrollY) {
         List<Row> rows = rows(section);
         for (int i = 0; i < rows.size(); i++) {
-            if (rows.get(i).kind() == RowKind.THEMES) {
+            if (rows.get(i).kind() == strip.kind && rowExpansion(rows, i) >= GROUP_FOLD_MIN_DRAWN) {
                 return rowRect(section, rows, i, scrollY, layout);
             }
         }
         return null;
     }
 
-    /** Whether the pointer is over the theme strip - the wheel's owner test. */
+    /** Both preview strips use the same wheel and drag routing. */
     public boolean themesUnderPointer(float vmx, float vmy, UiLayout layout,
                                       SettingsSection section, float scrollY) {
-        UiLayout.Rect rect = themesRowRect(layout, section, scrollY);
-        return rect != null && rect.contains(vmx, vmy);
+        if (pointerStrip.pressed) return true;
+        if (!layout.list.contains(vmx, vmy)) return false;
+        for (CardStrip strip : previewStrips) {
+            UiLayout.Rect rect = stripRowRect(strip, layout, section, scrollY);
+            if (rect != null && rect.contains(vmx, vmy)) {
+                pointerStrip = strip;
+                strip.rect = rect;
+                return true;
+            }
+        }
+        return false;
     }
 
-    /** Press routing for the strip: arms a possible card select or drag. */
     public boolean themesPress(float vmx, float vmy, UiLayout layout,
                                SettingsSection section, float scrollY) {
-        UiLayout.Rect rect = themesRowRect(layout, section, scrollY);
-        if (rect == null || !rect.contains(vmx, vmy)) {
-            return false;
-        }
-        themeStripPressed = true;
-        themeStripDragged = false;
-        themeStripPressX = vmx;
-        themeStripPressY = vmy;
-        themeStripDragStartX = vmx;
-        themeStripDragStartY = vmy;
-        themeStripDragStartScroll = themeStripScroll;
-        pressedThemeCard = themeCardAt(rect, vmx, vmy, themeStripScroll);
+        if (!themesUnderPointer(vmx, vmy, layout, section, scrollY)) return false;
+        CardStrip strip = pointerStrip;
+        strip.pressed = true;
+        strip.dragged = false;
+        strip.pressX = strip.dragStartX = vmx;
+        strip.pressY = strip.dragStartY = vmy;
+        strip.dragStartScroll = strip.scroll;
+        strip.pressedCard = stripCardAt(strip, strip.rect, vmx, vmy);
         return true;
     }
 
@@ -1825,53 +1861,59 @@ public final class SettingsSectionPage {
      * can never select a theme.
      */
     public void dragThemeStrip(float vmx, float vmy, UiLayout.Rect rect) {
-        if (!themeStripPressed || rect == null) {
+        if (!pointerStrip.pressed || rect == null) {
             return;
         }
-        float dx = vmx - themeStripDragStartX;
-        float dy = vmy - themeStripDragStartY;
-        if (!themeStripDragged) {
+        float dx = vmx - pointerStrip.dragStartX;
+        float dy = vmy - pointerStrip.dragStartY;
+        if (!pointerStrip.dragged) {
             float dist = (float) Math.sqrt(dx * dx + dy * dy);
             if (dist > UiTokens.s(8)) {
                 if (Math.abs(dy) > Math.abs(dx)) {
                     // Vertical intent: hand the gesture back to the list.
-                    themeStripPressed = false;
-                    pressedThemeCard = -1;
+                    pointerStrip.pressed = false;
+                    pointerStrip.pressedCard = -1;
                     return;
                 }
                 // Past the slop this is a horizontal scroll, not a tap:
                 // the armed card dies.
-                themeStripDragged = true;
-                pressedThemeCard = -1;
+                pointerStrip.dragged = true;
+                pointerStrip.pressedCard = -1;
             }
         }
-        if (themeStripDragged) {
-            themeStripScroll = themeStripTarget = clampScroll(
-                    themeStripDragStartScroll - dx, themeStripMaxScroll(rect));
-            themeStripAnimActive = false;
+        if (pointerStrip.dragged) {
+            pointerStrip.scroll = pointerStrip.target = clampScroll(
+                    pointerStrip.dragStartScroll - dx, stripMaxScroll(pointerStrip, rect));
+            pointerStrip.animActive = false;
         }
     }
 
     public boolean isDraggingThemeStrip() {
-        return themeStripPressed;
+        return pointerStrip.pressed;
     }
 
     /** Release: a press that never turned into a drag selects the card. */
     public void endThemeStrip() {
-        int card = pressedThemeCard;
-        boolean select = themeStripPressed && !themeStripDragged && card >= 0;
-        UiLayout.Rect rect = lastThemeStripRect;
-        int deleteCard = select && rect != null
-                ? themeDeleteAt(rect, themeStripPressX, themeStripPressY, themeStripScroll) : -1;
-        themeStripPressed = false;
-        pressedThemeCard = -1;
+        int card = pointerStrip.pressedCard;
+        boolean select = pointerStrip.pressed && !pointerStrip.dragged && card >= 0;
+        UiLayout.Rect rect = pointerStrip.rect;
+        int deleteCard = pointerStrip.kind == RowKind.THEMES && select && rect != null
+                ? themeDeleteAt(rect, pointerStrip.pressX, pointerStrip.pressY, pointerStrip.scroll) : -1;
+        pointerStrip.pressed = false;
+        pointerStrip.pressedCard = -1;
+        if (select && pointerStrip.kind == RowKind.BUBBLES) {
+            if (actionHandler != null && card < AtomChatConfig.BubbleStyle.values().length) {
+                actionHandler.onAction(ACTION_BUBBLE_STYLE + AtomChatConfig.BubbleStyle.values()[card].name());
+            }
+            return;
+        }
         if (deleteCard >= 0) {
             int customIndex = deleteCard - builtInThemeCount();
             List<AppearancePresetStore.Preset> presets = AppearancePresetStore.get().list();
             if (customIndex >= 0 && customIndex < presets.size() && actionHandler != null) {
                 actionHandler.onAction(ACTION_THEME_PRESET_DELETE + presets.get(customIndex).id());
-                themeStripTarget = themeStripScroll = clampScroll(themeStripScroll,
-                        themeStripMaxScroll(lastThemeStripRect));
+                pointerStrip.target = pointerStrip.scroll = clampScroll(pointerStrip.scroll,
+                        stripMaxScroll(pointerStrip, pointerStrip.rect));
             }
         } else if (select && card >= 0) {
             int builtins = builtInThemeCount();
@@ -1890,14 +1932,13 @@ public final class SettingsSectionPage {
         }
     }
 
-    private UiLayout.Rect lastThemeStripRect;
 
     /** Called after a successful save: the new card and its trailing + are in view. */
     public void revealLatestPreset(UiLayout layout, SettingsSection section, float scrollY) {
-        UiLayout.Rect rect = themesRowRect(layout, section, scrollY);
+        UiLayout.Rect rect = stripRowRect(themeStrip, layout, section, scrollY);
         if (rect != null) {
-            themeStripTarget = themeStripScroll = themeStripMaxScroll(rect);
-            themeStripAnimActive = false;
+            themeStrip.target = themeStrip.scroll = stripMaxScroll(themeStrip, rect);
+            themeStrip.animActive = false;
         }
     }
 
@@ -1907,33 +1948,33 @@ public final class SettingsSectionPage {
 
     /** Wheel over the strip: glide horizontally, one step per notch. */
     public void wheelThemeStrip(float amount, UiLayout.Rect rect) {
-        if (rect == null) {
+        if (pointerStrip.pressed || rect == null) {
             return;
         }
-        themeStripTarget = clampScroll(themeStripTarget - amount * UiTokens.s(60),
-                themeStripMaxScroll(rect));
-        themeStripAnimFrom = themeStripScroll;
-        themeStripAnimStart = System.currentTimeMillis();
-        themeStripAnimActive = Math.abs(themeStripTarget - themeStripScroll) > 0.5F;
+        pointerStrip.target = clampScroll(pointerStrip.target - amount * UiTokens.s(60),
+                stripMaxScroll(pointerStrip, rect));
+        pointerStrip.animFrom = pointerStrip.scroll;
+        pointerStrip.animStart = System.currentTimeMillis();
+        pointerStrip.animActive = Math.abs(pointerStrip.target - pointerStrip.scroll) > 0.5F;
     }
 
     /** Glides the offset toward its target; a drag owns the offset directly. */
-    private void advanceThemeStrip(UiLayout.Rect rect) {
-        float max = themeStripMaxScroll(rect);
-        themeStripTarget = clampScroll(themeStripTarget, max);
-        if (themeStripPressed) {
+    private void advanceStrip(CardStrip strip, UiLayout.Rect rect) {
+        float max = stripMaxScroll(strip, rect);
+        strip.target = clampScroll(strip.target, max);
+        if (strip.pressed) {
             return;
         }
-        if (themeStripAnimActive) {
-            float t = Math.min(1.0F, (System.currentTimeMillis() - themeStripAnimStart) / 180.0F);
-            themeStripScroll = clampScroll(themeStripAnimFrom
-                    + (themeStripTarget - themeStripAnimFrom) * Easing.easeOutCubic(t), max);
+        if (strip.animActive) {
+            float t = Math.min(1.0F, (System.currentTimeMillis() - strip.animStart) / 180.0F);
+            strip.scroll = clampScroll(strip.animFrom
+                    + (strip.target - strip.animFrom) * Easing.easeOutCubic(t), max);
             if (t >= 1.0F) {
-                themeStripScroll = themeStripTarget;
-                themeStripAnimActive = false;
+                strip.scroll = strip.target;
+                strip.animActive = false;
             }
         } else {
-            themeStripScroll = themeStripTarget;
+            strip.scroll = strip.target;
         }
     }
 
@@ -1944,12 +1985,45 @@ public final class SettingsSectionPage {
      * panel in its theme's own colours; the selected card wears an accent
      * hairline and the whole strip scrolls by wheel or drag.
      */
+    private void drawBubblePreviews(Canvas canvas, UiLayout.Rect row, float dtMs) {
+        advanceStrip(bubbleStrip, row);
+        bubbleStrip.rect = row;
+        AtomChatConfig cfg = AtomChatConfig.get();
+        var preview = previewOf(AppearancePresetStore.Snapshot.capture(cfg));
+        Font title = FontManager.font(UiTokens.SETTINGS_TILE_TITLE);
+        Font value = FontManager.font(UiTokens.SETTINGS_TILE_SUB);
+        SkiaFontRenderer.drawText(canvas, title, tr("atomchat.settings.appearance.bubble_style"),
+                row.x() + UiTokens.SETTINGS_ROW_PAD,
+                SkiaFontRenderer.centerBaselineY(title, row.y() + s(18)), textPrimary());
+        String current = bubbleStyleName(cfg.effectiveBubbleStyle());
+        float captionWidth = SkiaFontRenderer.getStringWidth(title, tr("atomchat.settings.appearance.bubble_style"))
+                + SkiaFontRenderer.getStringWidth(value, current) + UiTokens.SETTINGS_COMPACT_GAP;
+        if (captionWidth <= row.w() - UiTokens.SETTINGS_ROW_PAD * 2F) {
+            SkiaFontRenderer.drawTextRight(canvas, value, current,
+                    row.right() - UiTokens.SETTINGS_ROW_PAD, row.y() + s(18), sec(255));
+        }
+        canvas.save();
+        try {
+            SkiaDraw.clip(canvas, row.x(), themeCardY(row) - s(6), row.w(),
+                    UiTokens.THEME_CARD_H + s(30), UiTokens.radius(6));
+            var styles = AtomChatConfig.BubbleStyle.values();
+            for (int i = 0; i < styles.length; i++) {
+                drawPreviewCard(canvas, bubbleStrip, row, i, preview, bubbleStyleName(styles[i]),
+                        styles[i] == cfg.effectiveBubbleStyle(), false, styles[i], dtMs);
+            }
+        } finally { canvas.restore(); }
+    }
+
+    private static String bubbleStyleName(AtomChatConfig.BubbleStyle style) {
+        return tr("atomchat.settings.appearance.bubble_style." + style.name().toLowerCase(java.util.Locale.ROOT));
+    }
+
     private void drawThemes(Canvas canvas, UiLayout.Rect rect, float dtMs) {
-        advanceThemeStrip(rect);
-        lastThemeStripRect = rect;
+        advanceStrip(themeStrip, rect);
+        themeStrip.rect = rect;
         if (revealLatestPresetPending) {
-            themeStripTarget = themeStripScroll = themeStripMaxScroll(rect);
-            themeStripAnimActive = false;
+            themeStrip.target = themeStrip.scroll = stripMaxScroll(themeStrip, rect);
+            themeStrip.animActive = false;
             revealLatestPresetPending = false;
         }
         Font titleFont = FontManager.font(UiTokens.SETTINGS_TILE_TITLE);
@@ -1996,23 +2070,35 @@ public final class SettingsSectionPage {
                     UiTokens.THEME_CARD_H + s(30), UiTokens.radius(6));
             boolean frostedActive = currentId.isEmpty() || ThemeService.FROSTED.equals(currentId);
             drawThemeCard(canvas, rect, 0, ThemeService.previewOf(ThemeService.FROSTED),
-                    tr("atomchat.settings.theme.frosted"), frostedActive, false, dtMs);
+                    tr("atomchat.settings.theme.frosted"), frostedActive, false, AtomChatConfig.get().effectiveBubbleStyle(), dtMs);
             ThemeService.Preset[] presets = ThemeService.presets();
             for (int i = 0; i < presets.length; i++) {
                 drawThemeCard(canvas, rect, i + 1, ThemeService.previewOf(presets[i].id()),
                         tr("atomchat.settings.theme." + presets[i].id()),
-                        matchingCustom == null && presets[i].id().equals(currentId), false, dtMs);
+                        matchingCustom == null && presets[i].id().equals(currentId), false, AtomChatConfig.get().effectiveBubbleStyle(), dtMs);
             }
             for (int i = 0; i < custom.size(); i++) {
                 AppearancePresetStore.Preset preset = custom.get(i);
                 drawThemeCard(canvas, rect, builtInThemeCount() + i,
                         previewOf(preset.snapshot()), presetName(preset), preset == matchingCustom,
-                        true, dtMs);
+                        true, AtomChatConfig.BubbleStyle.valueOf(preset.snapshot().bubbleStyle()), dtMs);
             }
             drawAddThemeCard(canvas, rect, themeCardCount() - 1, dtMs);
         } finally {
             canvas.restore();
         }
+    }
+
+    private static void drawThemeBubble(Canvas canvas, float x, float y, float w, float h,
+                                        AtomChatConfig.BubbleStyle style, boolean own, int color) {
+        canvas.save();
+        try {
+            canvas.translate(x, y);
+            float scale = h / UiTokens.BUBBLE_PREVIEW_BUBBLE_H;
+            canvas.scale(scale, scale);
+            com.atom.chat.render.ChatBubble.draw(canvas, 0F, 0F, w / scale,
+                    UiTokens.BUBBLE_PREVIEW_BUBBLE_H, style, own, color);
+        } finally { canvas.restore(); }
     }
 
     private static String presetName(AppearancePresetStore.Preset preset) {
@@ -2032,8 +2118,14 @@ public final class SettingsSectionPage {
      */
     private void drawThemeCard(Canvas canvas, UiLayout.Rect rect, int index,
                                ThemeService.Preview preview, String name,
-                               boolean selected, boolean deletable, float dtMs) {
-        float x = themeCardX(rect, index, themeStripScroll);
+                               boolean selected, boolean deletable, AtomChatConfig.BubbleStyle bubbleStyle, float dtMs) {
+        drawPreviewCard(canvas, themeStrip, rect, index, preview, name, selected, deletable, bubbleStyle, dtMs);
+    }
+
+    private void drawPreviewCard(Canvas canvas, CardStrip strip, UiLayout.Rect rect, int index,
+                                 ThemeService.Preview preview, String name,
+                                 boolean selected, boolean deletable, AtomChatConfig.BubbleStyle bubbleStyle, float dtMs) {
+        float x = themeCardX(rect, index, strip.scroll);
         float y = themeCardY(rect);
         float w = UiTokens.THEME_CARD_W;
         float h = UiTokens.THEME_CARD_H;
@@ -2042,9 +2134,9 @@ public final class SettingsSectionPage {
         // The cards are separated by THEME_CARD_GAP and packed against the
         // strip's own clip; the width budget keeps the gap and the rounded
         // edges visible. The scaled shape is the card itself (w).
-        PressScale press = themeCardScale.computeIfAbsent(index, k -> PressScale.bounce());
-        press.update(themeCardAt(rect, pointerX, pointerY, themeStripScroll) == index,
-                themeStripPressed && pressedThemeCard == index, dtMs, Animations.enabled(), w);
+        PressScale press = strip.scales.computeIfAbsent(index, k -> PressScale.bounce());
+        press.update(stripCardAt(strip, rect, pointerX, pointerY) == index,
+                strip.pressed && strip.pressedCard == index, dtMs, Animations.enabled(), w);
         press.begin(canvas, x + w / 2.0F, y + h / 2.0F);
         try {
             SkiaDraw.drawRoundedShadow(canvas, x, y, w, h, radius, s(6), UiTokens.CARD_SHADOW);
@@ -2060,10 +2152,8 @@ public final class SettingsSectionPage {
                     dotR * 2.0F, dotR * 2.0F, dotR, preview.accent());
             // The other player's bubble on the left, the player's own on the right.
             float bubbleH = s(16);
-            SkiaDraw.drawRoundedRect(canvas, x + s(7), y + s(27), w - s(30), bubbleH,
-                    bubbleH / 2.0F, preview.otherBubble());
-            SkiaDraw.drawRoundedRect(canvas, x + s(23), y + s(50), w - s(30), bubbleH,
-                    bubbleH / 2.0F, preview.ownBubble());
+            drawThemeBubble(canvas, x + s(7), y + s(27), w - s(30), bubbleH, bubbleStyle, false, preview.otherBubble());
+            drawThemeBubble(canvas, x + s(23), y + s(50), w - s(30), bubbleH, bubbleStyle, true, preview.ownBubble());
             // A faint composer strip balances the lower half of the card.
             // Mirrors the real composer's surface construction (cardFill():
             // card colour at the card-tint alpha over the panel) but derives
@@ -2080,7 +2170,7 @@ public final class SettingsSectionPage {
                 SkiaDraw.drawEdgeHighlight(canvas, x, y, w, h, radius, s(1.5F), preview.accent());
             }
             if (deletable) {
-                int hoveredCard = themeCardAt(rect, pointerX, pointerY, themeStripScroll);
+                int hoveredCard = stripCardAt(strip, rect, pointerX, pointerY);
                 boolean hover = hoveredCard == index;
                 float fade = UiMotion.approach(themeDeleteHover.getOrDefault(index, 0.0F),
                         hover ? 1.0F : 0.0F, dtMs, UiMotion.HOVER_MS);
@@ -2106,13 +2196,13 @@ public final class SettingsSectionPage {
     }
 
     private void drawAddThemeCard(Canvas canvas, UiLayout.Rect rect, int index, float dtMs) {
-        float x = themeCardX(rect, index, themeStripScroll);
+        float x = themeCardX(rect, index, themeStrip.scroll);
         float y = themeCardY(rect);
         float w = UiTokens.THEME_CARD_W;
         float h = UiTokens.THEME_CARD_H;
-        PressScale press = themeCardScale.computeIfAbsent(index, k -> PressScale.bounce());
-        press.update(themeCardAt(rect, pointerX, pointerY, themeStripScroll) == index,
-                themeStripPressed && pressedThemeCard == index, dtMs, Animations.enabled(), w);
+        PressScale press = themeStrip.scales.computeIfAbsent(index, k -> PressScale.bounce());
+        press.update(stripCardAt(themeStrip, rect, pointerX, pointerY) == index,
+                themeStrip.pressed && themeStrip.pressedCard == index, dtMs, Animations.enabled(), w);
         press.begin(canvas, x + w / 2.0F, y + h / 2.0F);
         try {
             SkiaDraw.drawRoundedRect(canvas, x, y, w, h, UiTokens.radius(10),
@@ -2249,6 +2339,13 @@ public final class SettingsSectionPage {
         float iconSize = Math.min(UiTokens.SETTINGS_HERO_ICON_SIZE, available);
         float top = heroBrandTop(rect);
         float iconX = rect.x() + (rect.w() - iconSize) / 2.0F;
+        float haloPad = UiTokens.DOT_HERO_PAD;
+        float haloX = Math.max(rect.x(), iconX - haloPad);
+        float haloRight = Math.min(rect.right(), iconX + iconSize + haloPad);
+        com.atom.chat.render.DotTexture.drawHalo(canvas,
+                new UiLayout.Rect(haloX, Math.max(rect.y(), top - haloPad), haloRight - haloX,
+                        Math.min(rect.bottom(), top + iconSize + haloPad) - Math.max(rect.y(), top - haloPad)),
+                AtomChatConfig.get().textSecondaryColor);
         Image icon = heroAppIcon();
         if (icon != null) {
             SkiaDraw.drawRoundedShadow(canvas, iconX, top, iconSize, iconSize,
@@ -2474,6 +2571,12 @@ public final class SettingsSectionPage {
         float rightX = rect.right() - padX;
         float cy = rect.y() + rect.h() / 2.0F;
 
+        if (group != null) {
+            float trailW = Math.max(0F, rightX - textX - UiTokens.SETTINGS_FOLD_CHEVRON_SIZE - UiTokens.SETTINGS_ROW_PAD);
+            com.atom.chat.render.DotTexture.drawTrail(canvas,
+                    new UiLayout.Rect(textX, cy - UiTokens.DOT_TRAIL_HEIGHT / 2F, trailW, UiTokens.DOT_TRAIL_HEIGHT),
+                    AtomChatConfig.get().textSecondaryColor);
+        }
         SkiaFontRenderer.drawText(canvas, font,
                 SkiaFontRenderer.truncate(font, text,
                         Math.max(0.0F, rightX - textX - UiTokens.SETTINGS_FOLD_CHEVRON_SIZE - s(16))),
@@ -2830,6 +2933,21 @@ public final class SettingsSectionPage {
             if (kind == RowKind.AUTHORS) {
                 continue;
             }
+            if (kind == RowKind.BUBBLES) {
+                if (layout.list.contains(vmx, vmy)) {
+                    int cardIndex = stripCardAt(bubbleStrip, rect, vmx, vmy);
+                    if (cardIndex >= 0) {
+                        Row action = Row.ofAction(ACTION_BUBBLE_STYLE
+                                + AtomChatConfig.BubbleStyle.values()[cardIndex].name(), bubbleStyleItem());
+                        float x = themeCardX(rect, cardIndex, bubbleStrip.scroll);
+                        float y = themeCardY(rect);
+                        return new RowHit(action, i, Math.max(x, rect.x()), y,
+                                Math.min(x + UiTokens.THEME_CARD_W, rect.right()) - Math.max(x, rect.x()),
+                                Math.min(y + UiTokens.THEME_CARD_H + s(18), rect.bottom()) - y, x);
+                    }
+                }
+                continue;
+            }
             RowHit hit = new RowHit(rows.get(i), i, rect.x(), rect.y(), rect.w(), rect.h(),
 
                     actionX(rows.get(i), rect, buttonFont));
@@ -3150,13 +3268,10 @@ public final class SettingsSectionPage {
         pressedRow = -1;
         pressedSwatch = -1;
         pressedSwatchRow = -1;
-        pressedThemeCard = -1;
-        themeStripPressed = false;
-        themeStripDragged = false;
-        themeStripScroll = 0.0F;
-        themeStripTarget = 0.0F;
+        themeStrip.reset();
+        bubbleStrip.reset();
+        pointerStrip = themeStrip;
         themeDeleteHover.clear();
-        themeStripAnimActive = false;
         draggingSliderId = null;
         hoveredIndex = -1;
         cancelNumberEdit();

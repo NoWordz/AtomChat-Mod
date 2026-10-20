@@ -55,7 +55,8 @@ public final class AppearancePresetStore {
                            float panelOpacity, float panelWidth, float panelHeight,
                            float uiScale, float contentScale, float cardTint,
                            float cornerRadius, boolean blurEnabled, boolean panelOutline,
-                           boolean animationEnabled, String pageNavStyle, String themeName) {
+                           boolean animationEnabled, String pageNavStyle, String themeName,
+                           String bubbleStyle) {
         public static Snapshot capture(AtomChatConfig config) {
             return new Snapshot(config.accentColor, config.ownBubbleColor, config.bubbleTextColor,
                     config.otherBubbleColor, config.otherBubbleTextColor,
@@ -65,7 +66,8 @@ public final class AppearancePresetStore {
                     config.panelOpacity, config.panelWidth, config.panelHeight,
                     config.uiScale, config.contentScale, config.cardTint, config.cornerRadius,
                     config.blurEnabled, config.panelOutline, config.animationEnabled,
-                    config.pageNavStyle.name(), config.themeName == null ? "" : config.themeName);
+                    config.pageNavStyle.name(), config.themeName == null ? "" : config.themeName,
+                    config.effectiveBubbleStyle().name());
         }
 
         public void applyTo(AtomChatConfig config) {
@@ -93,6 +95,7 @@ public final class AppearancePresetStore {
             config.animationEnabled = animationEnabled;
             config.pageNavStyle = AtomChatConfig.PageNavStyle.valueOf(pageNavStyle);
             config.themeName = themeName == null ? "" : themeName;
+            config.bubbleStyle = AtomChatConfig.BubbleStyle.valueOf(bubbleStyle);
         }
     }
 
@@ -338,7 +341,8 @@ public final class AppearancePresetStore {
                     number(a, "uiScale"), number(a, "contentScale"), number(a, "cardTint"),
                     number(a, "cornerRadius"), bool(a, "blurEnabled"), bool(a, "panelOutline"),
                     bool(a, "animationEnabled"), string(a, "pageNavStyle"),
-                    string(a, "themeName"));
+                    string(a, "themeName"),
+                    a.has("bubbleStyle") ? string(a, "bubbleStyle") : "CLASSIC");
             if (!validSnapshot(snapshot)) {
                 return null;
             }
@@ -370,6 +374,7 @@ public final class AppearancePresetStore {
         }
         try {
             AtomChatConfig.PageNavStyle.valueOf(s.pageNavStyle());
+            AtomChatConfig.BubbleStyle.valueOf(s.bubbleStyle());
         } catch (RuntimeException e) {
             return false;
         }
@@ -489,6 +494,7 @@ public final class AppearancePresetStore {
         a.addProperty("animationEnabled", s.animationEnabled());
         a.addProperty("pageNavStyle", s.pageNavStyle());
         a.addProperty("themeName", s.themeName());
+        a.addProperty("bubbleStyle", s.bubbleStyle());
         root.add("appearance", a);
         return root.toString();
     }

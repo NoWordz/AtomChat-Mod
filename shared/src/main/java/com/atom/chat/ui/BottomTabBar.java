@@ -96,15 +96,16 @@ public final class BottomTabBar {
         SkiaDraw.drawChromeShadow(canvas, bar.x(), bar.y(), bar.w(), bar.h(), UiTokens.chromeRadius());
         SkiaDraw.drawRoundedRect(canvas, bar.x(), bar.y(), bar.w(), bar.h(),
                 UiTokens.chromeRadius(), UiTokens.cardFill());
+        com.atom.chat.render.ChromeMaterial.drawDetails(canvas, bar, UiTokens.chromeRadius());
 
         float cellWidth = bar.w() / 3.0F;
         // The selected/hover capsule is inset from the bar by TAB_EDGE_PAD on
         // all four sides; its height is bar height minus the two vertical edge
         // pads. With no label, the icon sits on the pill's vertical centre.
         float inset = UiTokens.TAB_EDGE_PAD;
-        float radius = UiTokens.radius(8);
         float capsuleH = bar.h() - inset * 2.0F;
         float capsuleW = cellWidth - inset * 2.0F;
+        float radius = UiTokens.insetRadius(UiTokens.chromeRadius(), inset, capsuleW, capsuleH);
 
         // The indicator IS the selected cell index, animated: it carries the
         // fractional slide between cells, so the pill is placed from it directly

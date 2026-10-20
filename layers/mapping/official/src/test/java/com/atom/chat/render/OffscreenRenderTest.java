@@ -425,6 +425,96 @@ class OffscreenRenderTest {
         }
     }
 
+
+    @Test
+    void bubbleStylesKeepTheActualListGeometryAndScroll() {
+        com.atom.chat.config.AtomChatConfig cfg = com.atom.chat.config.AtomChatConfig.get();
+        var oldStyle = cfg.bubbleStyle;
+        try (Panel panel = new Panel()) {
+            UiLayout layout = UiLayout.of(PANEL_X, PANEL_Y, PANEL_W, PANEL_H);
+            List<ChatMessage> history = conversation();
+            List<MessageListView.MessageHit> baseline = null;
+            float maxScroll = -1;
+            byte[] classic = null;
+            for (var style : com.atom.chat.config.AtomChatConfig.BubbleStyle.values()) {
+                cfg.bubbleStyle = style;
+                {
+                    MessageListView view = new MessageListView(new OffscreenHost(openedAfter(history)));
+                    ScrollController scroll = new ScrollController();
+                    try {
+                        panel.paintedFrame("bubble variants", draw(view, layout, history, scroll));
+                        if (baseline == null) {
+                            baseline = List.copyOf(view.hits());
+                            maxScroll = scroll.getMaxScroll();
+                        } else {
+                            assertEquals(baseline, view.hits(), "style must not move message hit boxes");
+                            assertEquals(maxScroll, scroll.getMaxScroll(), 0F);
+                        }
+                        try (Bitmap bitmap = new Bitmap()) {
+                            bitmap.allocN32Pixels(SURFACE_W, SURFACE_H);
+                            assertTrue(panel.surface.readPixels(bitmap, 0, 0));
+                            byte[] pixels = bitmap.readPixels();
+                            if (classic == null) classic = pixels;
+                            else assertFalse(java.util.Arrays.equals(classic, pixels), "style must reach the actual drawing path");
+                        }
+                    } finally { view.dispose(); }
+                }
+            }
+        } finally {
+            cfg.bubbleStyle = oldStyle;
+        }
+    }
+
+    @Test
+    void renderBubbleComparisonAtTheExistingSmallPanelSize() throws Exception {
+        var cfg = com.atom.chat.config.AtomChatConfig.get();
+        var saved = com.atom.chat.theme.AppearancePresetStore.Snapshot.capture(cfg);
+        List<ChatMessage> history = List.of(
+                new ChatMessage(Component.literal("你好呀"), false),
+                new ChatMessage(Component.literal("晚上一起玩？"), true),
+                new ChatMessage(Component.literal("长消息会自动换行，三种气泡占用相同空间。"), false),
+                new ChatMessage(Component.literal("第一行\n第二行"), true));
+        try {
+            for (boolean dark : new boolean[]{true, false}) {
+                com.atom.chat.theme.ThemeService.apply(cfg, dark ? "raven" : "minimal");
+                if (dark) { cfg.panelBgColor = 0xFF0A0A0A; cfg.cardColor = 0xFF1B1B1B; cfg.cardTint = 1F; }
+                try (Surface surface = Surface.makeRasterN32Premul(1260, 860)) {
+                    Canvas canvas = surface.getCanvas();
+                    canvas.clear(dark ? 0xFF26282D : 0xFFE5E7EB);
+                    String[] labels = {"经典", "大圆角", "单角尖角"};
+                    for (int column = 0; column < 3; column++) {
+                        cfg.bubbleStyle = com.atom.chat.config.AtomChatConfig.BubbleStyle.values()[column];
+                        canvas.save();
+                        try {
+                            canvas.translate(column * 420F, 30F);
+                            SkiaDraw.drawRoundedRect(canvas, 10, 10, 400, 780, UiTokens.panelRadius(), cfg.panelBgColor);
+                            SkiaDraw.clip(canvas, 10, 10, 400, 780, UiTokens.panelRadius());
+                            UiLayout layout = UiLayout.of(10, 10, 400, 780);
+                            com.atom.chat.ui.ShellHeader.drawBackdrop(canvas, layout.header);
+                            com.atom.chat.ui.ShellHeader.render(canvas, layout.header, labels[column], false, null, 0F, cfg.textPrimaryColor);
+                            UiLayout.Rect bar = layout.inputBar;
+                            SkiaDraw.drawChromeShadow(canvas, bar.x(), bar.y(), bar.w(), bar.h(), UiTokens.chromeRadius());
+                            DotTexture.drawEdge(canvas, bar, UiTokens.chromeRadius(), true, cfg.textSecondaryColor);
+                            MessageListView view = new MessageListView(new OffscreenHost(openedAfter(history)));
+                            try { draw(view, layout, history, new ScrollController()).accept(canvas); }
+                            finally { view.dispose(); }
+                            SkiaDraw.drawRoundedRect(canvas, bar.x(), bar.y(), bar.w(), bar.h(), UiTokens.chromeRadius(), UiTokens.cardFill());
+                            ChromeMaterial.drawDetails(canvas, bar, UiTokens.chromeRadius());
+                            SkiaFontRenderer.drawTextCentered(canvas, FontManager.font(UiTokens.FONT_NAME), "输入消息…",
+                                    bar.x() + bar.w() / 2F, bar.y() + bar.h() / 2F, cfg.textSecondaryColor);
+                        } finally { canvas.restore(); }
+                    }
+                    Path output = Path.of(System.getProperty("atomchat.projectDir")).resolve("build/preview/bubble-material-" + (dark ? "dark" : "light") + ".png");
+                    java.nio.file.Files.createDirectories(output.getParent());
+                    try (var image = surface.makeImageSnapshot(); var data = image.encodeToData()) {
+                        java.nio.file.Files.write(output, data.getBytes());
+                    }
+                    assertTrue(java.nio.file.Files.size(output) > 1000);
+                }
+            }
+        } finally { saved.applyTo(cfg); }
+    }
+
     @Test
     void messageListDrawsAndBalancesTheCanvas() {
         try (Panel panel = new Panel()) {

@@ -62,41 +62,16 @@ class UiTokensTest {
                 "the old 28 default overshoots and clamps to the maximum");
     }
 
-    // --- cardHover: accent-dyed, polarity-adaptive, constant-alpha wash ---
+    // Hover retains accent RGB on both light and dark surfaces.
 
-    @Test
-    void hoverDeepensTheAccentOnALightSurface() {
-        // Summer's lime accent over a pale card: every channel drops (the
-        // wash visibly darkens, lime heading towards olive), and green stays
-        // clearly the dominant channel — the hue the user picked survives
-        // the deepening instead of collapsing into neutral grey.
-        int accent = 0xFF84CC16;
-        int c = UiTokens.cardHover(accent, LIGHT_BASE, 1.0F);
-        int r = (c >>> 16) & 0xFF, g = (c >>> 8) & 0xFF, b = c & 0xFF;
-        assertTrue(r < ((accent >>> 16) & 0xFF)
-                && g < ((accent >>> 8) & 0xFF)
-                && b < (accent & 0xFF),
-                "a light surface deepens every accent channel");
-        assertTrue(g - Math.max(r, b) >= 20,
-                "the hue survives: green stays clearly dominant (olive, not grey)");
-        assertEquals(55, c >>> 24, "alpha is the constant 55 at full weight");
-    }
-
-    @Test
-    void hoverLiftsTheAccentOnADarkSurface() {
-        // Raven's gold accent over the shipped dark panel: every channel
-        // rises (the wash visibly brightens) and the gold ordering
-        // red > green > blue survives the lift.
-        int accent = 0xFFE3B341;
-        int c = UiTokens.cardHover(accent, DARK_BASE, 1.0F);
-        int r = (c >>> 16) & 0xFF, g = (c >>> 8) & 0xFF, b = c & 0xFF;
-        assertTrue(r > ((accent >>> 16) & 0xFF)
-                && g > ((accent >>> 8) & 0xFF)
-                && b > (accent & 0xFF),
-                "a dark surface lifts every accent channel");
-        assertTrue(r > g && g > b,
-                "the hue survives: gold stays red > green > blue");
-        assertEquals(55, c >>> 24, "alpha is the constant 55 at full weight");
+    @Test void hoverUsesExactAccentRgbOnLightAndDarkSurfaces() {
+        for (int base : new int[]{LIGHT_BASE, DARK_BASE}) {
+            for (int accent : new int[]{0xFF84CC16, 0xFFE3B341}) {
+                int c = UiTokens.cardHover(accent, base, 1F);
+                assertEquals(accent & 0xFFFFFF, c & 0xFFFFFF);
+                assertEquals(55, c >>> 24);
+            }
+        }
     }
 
     @Test

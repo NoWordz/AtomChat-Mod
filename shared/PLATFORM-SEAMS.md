@@ -13,7 +13,7 @@
 分组是编译期事实：甲组少一个类型，那个目标当场编不过。判据用简单名的词边界匹配
 （覆盖 import 全限定名与同包简单名两种写法），偏保守 —— 注释里的提及也算，宁可多列。
 
-当前：甲组 **123** 个，乙组 **71** 个。
+当前：甲组 **124** 个，乙组 **71** 个。
 
 ## 甲：共用代码引用了的（接缝）
 
@@ -75,6 +75,7 @@
 | `com.atom.chat.notification.NotificationBanner` | 1.21.1-fabric |
 | `com.atom.chat.notification.NotificationBannerRichTextTest` | 1.21.1-fabric |
 | `com.atom.chat.page.ConversationListPage` | 1.21.1-fabric |
+| `com.atom.chat.page.MessageBubbleStyleTest` | 1.21.1-fabric |
 | `com.atom.chat.page.MessageImageHitTest` | 1.21.1-fabric |
 | `com.atom.chat.page.MessageListView` | 1.21.1-fabric |
 | `com.atom.chat.page.ProfilePage` | 1.21.1-fabric |

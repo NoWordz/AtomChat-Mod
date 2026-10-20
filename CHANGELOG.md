@@ -1,5 +1,37 @@
 # Changelog
 
+## v0.3.1
+
+**新增**
+
+- 外观设置提供经典圆角、大圆角和单角尖角三款气泡预览，点击即可选择，本机所有玩家统一使用所选形状。
+- 顶栏、聊天输入栏和导航底栏增加随主题配色的渐隐点阵与淡柔光，点阵沿栏体圆角连续衔接。
+- 关于页 Logo 背后增加放射点阵，可折叠标题文字后增加静态向右渐隐的点阵拖尾。
+
+**更改**
+
+- 气泡样式沿用主题预设的缩略卡片与横向滚动，位置移至圆角设置上方。
+- 导航与设置 Tab 选中底色使用原强调色，悬停不再提亮或压暗色相，内层轮廓随圆角设置衔接。
+- 三种栏体增加轻微局部边缘高光和内阴影，保留现有字号、消息间距及布局尺寸。
+- 个人外观预设保存气泡形状，旧预设仍可应用；点阵固定开启，不再提供开关。
+- 玩家文本和图片使用统一气泡轮廓，尖角朝向头像。
+
+----
+
+**Added**
+
+- Choose Classic, Round or Sharp Corner bubbles from visual previews in Appearance; the selected shape applies to all players locally.
+- Add theme-tinted fading dots and a soft glow along the header, composer and navigation bar, following their rounded outlines without a gap.
+- Add a radial dot field behind the About logo and static dot trails fading rightward behind collapsible headings.
+
+**Changed**
+
+- Reuse theme preset thumbnails and horizontal scrolling for bubble styles, placed above corner-radius settings.
+- Use the exact accent for navigation and settings tab selections, retain its RGB during hover fades, and align inset outlines with the configured corners.
+- Add subtle local edge highlights and inner shading to the three bars while preserving font sizes, message spacing and layout dimensions.
+- Save bubble shape in personal appearance presets and keep older presets compatible; dot decorations are always enabled, with no toggle.
+- Use matching outlines for player text and image bubbles, with sharp corners facing their avatars.
+
 ## v0.3.0
 
 > 本段合并 0.3.0 官方轮与部署后修补轮（R31–R35）；对外首次发布于新仓库 NoWordz/AtomChat-Mod，版本 0.3.0-Preview（预览版），许可换回 MIT。 当前 main 增量尚未另建 Release，安装包版本保持 0.3.0-Preview。

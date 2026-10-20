@@ -336,5 +336,11 @@
   "atomchat.settings.chat.close_after_send": "发送后关闭聊天框",
   "atomchat.settings.chat.close_after_send.desc": "公聊、私聊和命令实际发送成功后，沿用聊天框关闭动画；空白或未发出的内容不关闭。",
   "atomchat.settings.chat.retain_draft_on_close": "保留未发送草稿",
-  "atomchat.settings.chat.retain_draft_on_close.desc": "当前进服会话内，公聊和每个私聊分别恢复未发送文本；成功发送后清空，退服清除。"
+  "atomchat.settings.chat.retain_draft_on_close.desc": "当前进服会话内，公聊和每个私聊分别恢复未发送文本；成功发送后清空，退服清除。",
+  "atomchat.settings.group.appearance.bubbles": "气泡样式",
+  "atomchat.settings.appearance.bubble_style": "气泡形状",
+  "atomchat.settings.appearance.bubble_style.desc": "统一设置本机看到的玩家气泡形状",
+  "atomchat.settings.appearance.bubble_style.classic": "经典圆角",
+  "atomchat.settings.appearance.bubble_style.round": "大圆角",
+  "atomchat.settings.appearance.bubble_style.corner": "单角尖角"
 }

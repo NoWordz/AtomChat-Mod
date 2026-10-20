@@ -107,59 +107,26 @@ public final class UiTokens {
                 (rgb >> 16) & 0xFF, (rgb >> 8) & 0xFF, rgb & 0xFF);
     }
 
-    /**
-     * Hover wash on a surface; {@code weight} 0..1. The wash is always dyed
-     * by the theme's accent — the hue comes from the accent, never from a
-     * neutral — while the surface's polarity decides only the direction of
-     * the shift: over a light card the accent is deepened (lime towards
-     * olive, so the wash visibly darkens), over a dark card it is lifted
-     * (gold towards pale gold, so the wash visibly brightens). The alpha is
-     * constant across themes at 55×weight: identical feedback strength on
-     * light and dark surfaces is an explicit user requirement from the
-     * v0.2.16 field reports, not a tuning accident.
-     *
-     * <p>The previous language — keep the accent when it contrasts with the
-     * surface, otherwise flip to plain black/white — was rejected in real
-     * use: on light themes the flip fired almost always, and hover read as a
-     * neutral grey-black smudge that had lost the theme colour entirely.
-     * Deepening or lifting the accent instead keeps every hover on-theme by
-     * construction, because the polarity only chooses the direction, and the
-     * accent carries the hue through both branches.</p>
-     */
+    /** Hover uses the configured accent RGB; only its fade opacity changes. */
     public static int cardHover(float weight) {
         return cardHover(com.atom.chat.config.AtomChatConfig.get().accentColor,
                 cardCutout(), weight);
     }
 
-    /**
-     * Accent-dyed, polarity-adaptive hover wash against explicit colours —
-     * the unit-test seam (the {@link com.atom.chat.theme.ThemeService#panelIsLight(com.atom.chat.config.AtomChatConfig)
-     * panelIsLight(config)} pattern): {@code accent} is the configured accent
-     * ARGB, {@code base} the opaque surface the wash lands on. Light base
-     * deepens the accent 55% towards black, dark base lifts it 45% towards
-     * white; either way the result ships at a constant alpha of 55×weight.
-     */
+    /** Explicit palette overload; base no longer changes the accent hue. */
     public static int cardHover(int accent, int base, float weight) {
         float w = Math.max(0.0F, Math.min(1.0F, weight));
-        int rgb = com.atom.chat.theme.ThemeService.colorIsLight(base)
-                ? mixRgb(accent, 0x000000, 0.55F)
-                : mixRgb(accent, 0xFFFFFF, 0.45F);
-        return withAlpha(rgb, 55.0F * w);
+        return withAlpha(accent, 55.0F * w);
     }
 
-    /**
-     * Selected pill: the accent held back to a translucent wash rather than
-     * painted solid. Solid accent reads as a filled block stamped on the surface;
-     * at this alpha the surface picks up the theme colour instead, which is the
-     * same relationship the hover wash has with it, just far stronger - so the
-     * selected cell is unmistakably ahead of a hovered one without becoming a
-     * slab. This is the value the pill shipped with before it was briefly made
-     * opaque.
-     */
+    /** Selected surfaces match the configured accent swatch exactly. */
     public static int accentFill() {
-        int rgb = com.atom.chat.config.AtomChatConfig.get().accentColor & 0xFFFFFF;
-        return io.github.humbleui.skija.Color.makeARGB(162,
-                (rgb >> 16) & 0xFF, (rgb >> 8) & 0xFF, rgb & 0xFF);
+        return com.atom.chat.config.AtomChatConfig.get().accentColor | 0xFF000000;
+    }
+
+    /** Parallel inner contour of an inset control, in layout units. */
+    public static float insetRadius(float outerRadius, float inset, float width, float height) {
+        return Math.max(0F, Math.min(outerRadius - inset, Math.min(width, height) / 2F));
     }
 
     /**
@@ -549,6 +516,25 @@ public final class UiTokens {
     public static final float LIST_GAP = s(10);
     public static final float LIST_PAD_X = s(12);
     public static final float BUBBLE_RADIUS = s(12);
+    public static final float BUBBLE_ROUND_RADIUS = s(22);
+    public static final float MESSAGE_DOT_GAP = s(4);
+    public static final float MESSAGE_DOT_INSET = s(2.5F);
+    public static final float MESSAGE_DOT_DEPTH = s(32);
+    public static final float MESSAGE_DOT_EDGE_FADE = s(12);
+    public static final float DOT_GLOW_BLUR = s(4);
+    public static final float DOT_GLOW_STROKE = s(2);
+    public static final float DOT_GLOW_ALPHA = 18F;
+    public static final float DOT_FIELD_GLOW_ALPHA = 8F;
+    public static final float DOT_FIELD_ALPHA = 32F;
+    public static final float DOT_HERO_PAD = s(36);
+    public static final float DOT_TRAIL_HEIGHT = s(24);
+    public static final float CHROME_DETAIL_DEPTH = s(12);
+    public static final float CHROME_HAIRLINE = s(0.75F);
+    public static final float CHROME_INNER_SHADE = s(2);
+    public static final float BUBBLE_PREVIEW_BUBBLE_H = s(34);
+    public static final float[] MESSAGE_DOT_RADII = {
+            s(0.25F), s(0.3F), s(0.4F), s(0.45F), s(0.54F),
+            s(0.63F), s(0.72F), s(0.81F), s(0.9F)};
     /** Horizontal bubble padding (both sides). Shared by drawing and messageHeight(). */
     public static final float BUBBLE_PAD = s(12);
     /** Vertical bubble padding. Shared by drawing and messageHeight() — never inline it. */

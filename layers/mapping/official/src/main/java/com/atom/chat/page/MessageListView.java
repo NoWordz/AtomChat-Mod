@@ -1074,7 +1074,8 @@ public final class MessageListView {
         if (hasQuote) {
             drawQuotePill(canvas, msg, x, maxWidth, y + band, msg.isOwn());
         }
-        SkiaDraw.drawRoundedRect(canvas, bubbleX, bubbleTop, bubbleWidth, bubbleHeight, UiTokens.BUBBLE_RADIUS, msg.isOwn() ? ownBubble() : otherBubble());
+        com.atom.chat.render.ChatBubble.draw(canvas, bubbleX, bubbleTop, bubbleWidth, bubbleHeight,
+                AtomChatConfig.get().effectiveBubbleStyle(), msg.isOwn(), msg.isOwn() ? ownBubble() : otherBubble());
         drawMessageSelection(canvas, msg, richLines, bubbleX + UiTokens.BUBBLE_PAD, bubbleTop + bubbleHeight / 2.0F, lineHeight, font);
         // No backing shadow on bubble text (TextSurface.BUBBLE): the soft shadow
         // is reserved for the capsule family and the name band. A bubble fill and
@@ -1374,11 +1375,13 @@ public final class MessageListView {
             // the bubble already has the image's proportions and the bitmap is
             // simply fitted to it. Stretching only happened because the box used
             // to be a fixed 275x175 with the height clamped rather than scaled.
-            SkiaDraw.drawRoundedImage(canvas, image, bubbleX, bubbleTop, imageW, imageH, UiTokens.BUBBLE_RADIUS);
+            com.atom.chat.render.ChatBubble.drawImage(canvas, image, bubbleX, bubbleTop, imageW, imageH,
+                    AtomChatConfig.get().effectiveBubbleStyle(), msg.isOwn());
         } else {
             // Placeholder only while the download is in flight: once an image
             // is loaded it must not keep a plate behind its transparent pixels.
-            SkiaDraw.drawRoundedRect(canvas, bubbleX, bubbleTop, imageW, imageH, UiTokens.BUBBLE_RADIUS, otherBubble());
+            com.atom.chat.render.ChatBubble.draw(canvas, bubbleX, bubbleTop, imageW, imageH,
+                    AtomChatConfig.get().effectiveBubbleStyle(), msg.isOwn(), otherBubble());
             Font loadingFont = FontManager.font(UiTokens.FONT_QUOTE);
             SkiaFontRenderer.drawTextCentered(canvas, loadingFont, tr("atomchat.image.loading"),
                     bubbleX + imageW / 2.0F, bubbleTop + imageH / 2.0F, textSecondary());
@@ -1431,8 +1434,8 @@ public final class MessageListView {
         if (hasQuote) {
             drawQuotePill(canvas, msg, x, maxWidth, y + band, msg.isOwn());
         }
-        SkiaDraw.drawRoundedRect(canvas, pillX, pillTop, pillW, pillH, UiTokens.radius(10),
-                secondaryCapsuleBg());
+        com.atom.chat.render.ChatBubble.draw(canvas, pillX, pillTop, pillW, pillH,
+                AtomChatConfig.get().effectiveBubbleStyle(), msg.isOwn(), secondaryCapsuleBg());
         SkiaFontRenderer.drawTextCentered(canvas, font, placeholder,
                 pillX + pillW / 2.0F, pillTop + pillH / 2.0F,
                 placeholderGreen(secondaryCapsuleBg()), TextSurface.CAPSULE.shadowed(), secondaryCapsuleBg());

@@ -27,6 +27,35 @@ class AppearancePresetStoreTest {
 
     private AppearancePresetStore store;
 
+    @Test
+    void bubbleAppearanceSurvivesDiskReloadAndApply() {
+        AtomChatConfig source = appearance();
+        source.bubbleStyle = AtomChatConfig.BubbleStyle.CORNER;
+        String id = store.saveCurrent(source, null).preset().id();
+        AtomChatConfig target = new AtomChatConfig();
+        assertTrue(new AppearancePresetStore(tmp.resolve("appearance-presets")).apply(id, target).ok());
+        assertEquals(AtomChatConfig.BubbleStyle.CORNER, target.effectiveBubbleStyle());
+        try {
+            String saved = Files.readString(tmp.resolve("appearance-presets").resolve(id).resolve("preset.json"));
+            assertFalse(saved.contains("messageEdgeDotsEnabled"), "decorations are no longer a preset preference");
+        } catch (IOException error) { throw new AssertionError(error); }
+    }
+
+    @Test
+    void oldPresetDefaultsBubbleAppearanceAndKeepsItsOtherValues() throws IOException {
+        String id = store.saveCurrent(appearance(), null).preset().id();
+        Path manifest = tmp.resolve("appearance-presets").resolve(id).resolve("preset.json");
+        com.google.gson.JsonObject root = com.google.gson.JsonParser.parseString(Files.readString(manifest)).getAsJsonObject();
+        root.getAsJsonObject("appearance").remove("bubbleStyle");
+        root.getAsJsonObject("appearance").addProperty("messageEdgeDotsEnabled", false);
+        Files.writeString(manifest, root.toString());
+        AtomChatConfig target = new AtomChatConfig();
+        target.bubbleStyle = AtomChatConfig.BubbleStyle.ROUND;
+        assertTrue(store.apply(id, target).ok());
+        assertEquals(AtomChatConfig.BubbleStyle.CLASSIC, target.effectiveBubbleStyle());
+        assertEquals(0xFF010203, target.accentColor);
+    }
+
     @BeforeEach
     void setUp() {
         Platform.install(new Platform.Provider() {

@@ -63,6 +63,13 @@ public class AtomChatConfig {
     public AvatarStyle effectiveAvatarStyle() {
         return avatarStyle == null ? AvatarStyle.ATOMCHAT : avatarStyle;
     }
+
+    public enum BubbleStyle { CLASSIC, ROUND, CORNER }
+    public BubbleStyle bubbleStyle = BubbleStyle.CLASSIC;
+
+    public BubbleStyle effectiveBubbleStyle() {
+        return bubbleStyle == null ? BubbleStyle.CLASSIC : bubbleStyle;
+    }
     /**
      * When true, public messages from blocked players are dropped at capture
      * time. When false they are shown normally — the conversation card stays
@@ -449,17 +456,32 @@ public class AtomChatConfig {
         return json;
     }
 
+    private static String sanitizeBubbleStyle(String json) {
+        com.google.gson.JsonObject obj = GSON.fromJson(json, com.google.gson.JsonObject.class);
+        if (obj != null && obj.has("bubbleStyle")) {
+            try {
+                String raw = obj.get("bubbleStyle").getAsString();
+                obj.addProperty("bubbleStyle", BubbleStyle.valueOf(raw.trim().toUpperCase(java.util.Locale.ROOT)).name());
+            } catch (RuntimeException ignored) {
+                obj.remove("bubbleStyle");
+            }
+            return obj.toString();
+        }
+        return json;
+    }
+
     private static AtomChatConfig load() {
         Path path = com.atom.chat.platform.Platform.configDir().resolve("atomchat/atomchat-client.json");
         if (Files.exists(path)) {
             try {
                 String json = Files.readString(path, StandardCharsets.UTF_8);
-                AtomChatConfig config = GSON.fromJson(sanitizePageNavStyle(sanitizeAvatarStyle(json)), AtomChatConfig.class);
+                AtomChatConfig config = GSON.fromJson(sanitizePageNavStyle(sanitizeAvatarStyle(sanitizeBubbleStyle(json))), AtomChatConfig.class);
                 if (config != null) {
                     if (config.blockedPlayers == null) {
                         config.blockedPlayers = new java.util.ArrayList<>();
                     }
                     config.avatarStyle = config.effectiveAvatarStyle();
+                    config.bubbleStyle = config.effectiveBubbleStyle();
                     config.migrateCornerStyle();
                     config.migratePixelRadius();
                     config.clampContentScale();

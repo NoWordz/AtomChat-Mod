@@ -1,5 +1,7 @@
 package com.atom.chat.page;
 
+import com.atom.chat.config.AtomChatConfig;
+
 import com.atom.chat.chat.BlockList;
 import com.atom.chat.chat.ChatMessage;
 import com.atom.chat.chat.ChatStore;
@@ -400,6 +402,10 @@ public final class ConversationListPage {
         float textX = x + padX;
         float rightX = x + w - padX;
         float cy = y + h / 2.0F;
+        com.atom.chat.render.DotTexture.drawTrail(canvas,
+                new UiLayout.Rect(textX, cy - UiTokens.DOT_TRAIL_HEIGHT / 2F,
+                        Math.max(0F, rightX - textX - UiTokens.SETTINGS_LABEL_H), UiTokens.DOT_TRAIL_HEIGHT),
+                AtomChatConfig.get().textSecondaryColor);
         SkiaFontRenderer.drawText(canvas, font,
                 SkiaFontRenderer.truncate(font, text,
                         Math.max(0.0F, rightX - textX - UiTokens.SETTINGS_LABEL_H)),

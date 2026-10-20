@@ -79,6 +79,7 @@ public final class ShellHeader {
                 UiTokens.headerRadius());
         SkiaDraw.drawRoundedRect(canvas, header.x(), header.y(), header.w(), header.h(),
                 UiTokens.headerRadius(), UiTokens.cardFill());
+        com.atom.chat.render.ChromeMaterial.drawDetails(canvas, header, UiTokens.headerRadius());
 
         if (showBack && backButton != null) {
             boolean pressed = backPressedNow;
@@ -132,6 +133,12 @@ public final class ShellHeader {
     }
 
     record TextBounds(float left, float right, boolean showTime) {}
+
+    /** Page content must be drawn after this pass, even when the header itself is an overlay. */
+    public static void drawBackdrop(Canvas canvas, UiLayout.Rect header) {
+        com.atom.chat.render.DotTexture.drawEdge(canvas, header, UiTokens.headerRadius(), false,
+                com.atom.chat.config.AtomChatConfig.get().textSecondaryColor);
+    }
 
     static TextBounds textBounds(UiLayout.Rect header, UiLayout.Rect back, UiLayout.Rect action,
                                  float titleWidth, float timeWidth) {

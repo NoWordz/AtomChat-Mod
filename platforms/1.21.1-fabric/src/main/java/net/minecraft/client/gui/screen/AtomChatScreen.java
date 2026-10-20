@@ -2289,6 +2289,8 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
             }
         }
 
+        ShellHeader.drawBackdrop(canvas, layout.header);
+
         // One unified shell header is drawn before page content on every page.
         // Root pages add their body and the bottom tab bar; pushed pages run
         // through the navigation machinery below.
@@ -2399,6 +2401,10 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         HistoryWindow window = historyWindowForNav(page, messages.size());
         messageListView.setVisibleStart(window.visibleStart());
         messageListView.setLoadEarlierHovered(toVirtualX(mouseX), toVirtualY(mouseY));
+        SkiaDraw.drawChromeShadow(canvas, layout.inputBar.x(), layout.inputBar.y(), layout.inputBar.w(),
+                layout.inputBar.h(), UiTokens.chromeRadius());
+        com.atom.chat.render.DotTexture.drawEdge(canvas, layout.inputBar, UiTokens.chromeRadius(), true,
+                AtomChatConfig.get().textSecondaryColor);
         messageListView.draw(canvas, layout.list.x(), layout.list.y(), layout.list.w(), layout.list.h(),
                 messages, view.scroll());
         CanvasLeakWatch.probe("messageListView.draw", probeBefore, canvas);
@@ -2424,8 +2430,8 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         // card never has message content underneath it.
         UiLayout.Rect bar = layout.inputBar;
         boolean readOnly = view.readOnly();
-        SkiaDraw.drawChromeShadow(canvas, bar.x(), bar.y(), bar.w(), bar.h(), UiTokens.chromeRadius());
         SkiaDraw.drawRoundedRect(canvas, bar.x(), bar.y(), bar.w(), bar.h(), UiTokens.chromeRadius(), UiTokens.cardFill());
+        com.atom.chat.render.ChromeMaterial.drawDetails(canvas, bar, UiTokens.chromeRadius());
         if (quickPhrasePanel.isEditing()) {
             // The composer is borrowed as the phrase editor: ring it with the
             // accent so the mode is unmistakable.
@@ -2657,6 +2663,8 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         rootMouseY = vmy;
         scrollSync.rootScroll().setContent(measureRootContent(root, rootPage), root.list.h());
         scrollSync.rootScroll().updateAnimation(System.currentTimeMillis());
+        com.atom.chat.render.DotTexture.drawEdge(canvas, root.tabBar, UiTokens.chromeRadius(), true,
+                AtomChatConfig.get().textSecondaryColor);
         drawRootPage(canvas, root, rootPage);
         drawScrollbar(canvas, root, vmx, vmy, scrollSync.rootScroll());
         drawBottomTabBar(canvas, root, rootPage);
