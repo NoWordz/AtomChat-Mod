@@ -1,12 +1,20 @@
-// Each Gradle invocation builds one OS variant. Keep Windows paths unchanged.
-// A separate Linux build directory isolates task outputs and incremental state.
+// Each invocation builds one OS/architecture variant; cross-builds still test
+// with the native for the JVM running Gradle, not the target artifact's native.
 def platform = providers.gradleProperty('atomchat.nativePlatform').getOrElse('windows-x64')
-if (!(platform in ['windows-x64', 'linux-x64'])) {
-    throw new GradleException("atomchat.nativePlatform must be windows-x64 or linux-x64, got ${platform}")
+if (!(platform in ['windows-x64', 'windows-arm64', 'linux-x64'])) {
+    throw new GradleException("atomchat.nativePlatform must be windows-x64, windows-arm64 or linux-x64, got ${platform}")
 }
 ext.atomchatNativePlatform = platform
 ext.atomchatNativeArtifact = "skija-${platform}".toString()
-ext.atomchatNativeSuffix = platform == 'linux-x64' ? '-linux-x64' : ''
-if (platform == 'linux-x64') {
-    layout.buildDirectory.set(file('build/linux-x64'))
+ext.atomchatNativeSuffix = "-${platform}".toString()
+if (platform != 'windows-x64') {
+    layout.buildDirectory.set(file("build/${platform}"))
 }
+def hostOs = System.getProperty('os.name').toLowerCase(Locale.ROOT)
+def hostArch = System.getProperty('os.arch').toLowerCase(Locale.ROOT)
+def os = hostOs.startsWith('windows') ? 'windows' : hostOs.contains('mac') ? 'macos' : 'linux'
+def arch = hostArch in ['amd64', 'x86_64'] ? 'x64' : hostArch in ['aarch64', 'arm64'] ? 'arm64' : null
+if (arch == null) {
+    throw new GradleException("Unsupported test JVM architecture: ${hostArch}")
+}
+ext.atomchatTestNativeArtifact = "skija-${os}-${arch}".toString()

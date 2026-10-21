@@ -5,9 +5,11 @@ import io.github.humbleui.skija.Data;
 import io.github.humbleui.skija.Font;
 import io.github.humbleui.skija.FontVariation;
 import io.github.humbleui.skija.FontStyle;
+import io.github.humbleui.skija.FontMgr;
 import io.github.humbleui.skija.Typeface;
 
 import java.io.InputStream;
+import java.io.IOException;
 import java.util.Locale;
 
 /**
@@ -38,7 +40,7 @@ public final class FontManager {
         // Bundled font first.
         try (InputStream in = FontManager.class.getResourceAsStream(BUNDLED_FONT)) {
             if (in != null) {
-                defaultTypeface = mediumWeight(Typeface.makeFromData(Data.makeFromBytes(in.readAllBytes())));
+                defaultTypeface = mediumWeight(decodeTypeface(in.readAllBytes()));
                 usingFallbackTypeface = false;
                 AtomChat.LOGGER.info(com.atom.chat.diagnostics.AtomChatLog.message("resource", "Loaded bundled font {}"), BUNDLED_FONT);
                 return defaultTypeface;
@@ -54,7 +56,7 @@ public final class FontManager {
         String[] candidates = {"Microsoft YaHei", "PingFang SC", "Noto Sans CJK SC", "Noto Sans SC",
                 "WenQuanYi Micro Hei", "WenQuanYi Zen Hei", "Arial", "DejaVu Sans"};
         for (String name : candidates) {
-            Typeface tf = Typeface.makeFromName(name, FontStyle.NORMAL);
+            Typeface tf = FontMgr.getDefault().matchFamilyStyle(name, FontStyle.NORMAL);
             if (tf != null && !tf.getFamilyName().toLowerCase(Locale.ROOT).contains("arial") || tf != null && tf.getFamilyName().toLowerCase(Locale.ROOT).contains("yahei")) {
                 defaultTypeface = tf;
                 AtomChat.LOGGER.info(com.atom.chat.diagnostics.AtomChatLog.message("resource", "Using system font {}"), tf.getFamilyName());
@@ -66,8 +68,19 @@ public final class FontManager {
                 return defaultTypeface;
             }
         }
-        defaultTypeface = Typeface.makeDefault();
+        defaultTypeface = FontMgr.getDefault().matchFamilyStyle(null, FontStyle.NORMAL);
         return defaultTypeface;
+    }
+
+    /** Skija 0.143 returns null for rejected data; preserve the caller's fallback path. */
+    static Typeface decodeTypeface(byte[] bytes) throws IOException {
+        try (Data data = Data.makeFromBytes(bytes)) {
+            Typeface face = FontMgr.getDefault().makeFromData(data);
+            if (face == null) {
+                throw new IOException("Skija could not decode the bundled font");
+            }
+            return face;
+        }
     }
 
     /** Variable fonts are cloned at Medium (wght 500) so text is not too thin. */
@@ -128,7 +141,7 @@ public final class FontManager {
         boldLookupDone = true;
         try (InputStream in = FontManager.class.getResourceAsStream(BUNDLED_BOLD_FONT)) {
             if (in != null) {
-                boldTypeface = Typeface.makeFromData(Data.makeFromBytes(in.readAllBytes()));
+                boldTypeface = decodeTypeface(in.readAllBytes());
                 AtomChat.LOGGER.info(com.atom.chat.diagnostics.AtomChatLog.message("resource", "Loaded bundled bold font {}"), BUNDLED_BOLD_FONT);
             }
         } catch (Exception e) {

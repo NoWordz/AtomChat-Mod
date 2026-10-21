@@ -8,8 +8,8 @@ its own copyright and license. This file collects the required notices.
 
 | Component | License | Purpose |
 |---|---|---|
-| Skija (Java bindings for Skia) | Apache License 2.0 | UI rendering bindings |
-| HumbleUI types | Apache License 2.0 | Geometry types shared with Skija |
+| Skija 0.143.18 (Java bindings for Skia) | Apache License 2.0 | UI rendering bindings and one matching Windows x64 / Windows ARM64 / Linux x64 native per artifact |
+| HumbleUI types 0.2.0 | Apache License 2.0 | Geometry types shared with Skija |
 | FlatLaf | Apache License 2.0 | Modern Swing look and feel for the image picker |
 | Skia (native graphics engine) | BSD 3-Clause | Native rendering engine bundled through Skija platform artifacts |
 

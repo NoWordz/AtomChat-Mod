@@ -49,7 +49,7 @@ cd platforms/1.21.1-neoforge
 - the Forge target additionally produces a `-slim` jar (no bundled dependencies, development only) — **release the one without `-slim`**;
 - the version number lives in exactly one place, the repository root `gradle.properties`; no platform defines it (a platform that cannot read it fails outright rather than falling back to a default).
 
-The tests are **JUnit 5** and cover **pure logic only** (no game boot needed): animation timing and easing, layout maths, message parsing and classification, emote storage, file-name sanitising, AWT state decisions, server emote migration, @mention highlighting, and the wire format itself. Currently **505 tests per target** (the same suite runs once for each). The Windows variant retains the test-scoped Linux native for CI; the Linux variant bundles it. Build Linux with `./gradlew build -Patomchat.nativePlatform=linux-x64 --no-daemon`; outputs are isolated in `build/linux-x64/libs/`. Store versions are separate OS alternatives; Linux labels append `-linux-x64`. Install only one.
+The tests are **JUnit 5** and cover logic and native CPU rasterization without starting Minecraft. Tests use the native matching the host JVM, including when cross-building another variant. Run `./gradlew test build --no-daemon` for Windows x64; use `./gradlew build -x test -Patomchat.nativePlatform=windows-arm64 --no-daemon` or `-Patomchat.nativePlatform=linux-x64` for the other packages after the shared tests pass. Outputs are `build/libs/`, `build/windows-arm64/libs/` and `build/linux-x64/libs/`. Release filenames end in `-windows-x64`, `-windows-arm64` or `-linux-x64`; store labels use the same suffix. Install only one variant. Skija Java/native versions are pinned together at 0.143.18; HumbleUI types is 0.2.0. Packaging Windows ARM64 on x64 does not verify ARM64 runtime behavior.
 
 ## The layering rules
 
@@ -100,7 +100,7 @@ Three classes need package-private access inside vanilla's own packages, so thei
 | Workflow | Trigger | What it does |
 |---|---|---|
 | `build.yml` | push to `main` / pull requests (ignoring `**.md` and `docs/**`) | reads the matrix → each target installs its JDK and runs `./gradlew build` (tests included) |
-| `release.yml` | a `v*` tag | **`vX.Y.Z`:** build all three loader targets for Windows x64 and Linux x64 → check the repository version matches the tag → create a Release with six JARs → publish to the stores; **`vX.Y.Z-rc1`:** a prerelease only, **nothing goes to the stores** |
+| `release.yml` | a `v*` tag | **`vX.Y.Z`:** build all three loader targets for Windows x64, Windows ARM64 and Linux x64 → check the repository version matches the tag → create a Release with nine JARs → publish to the stores; **`vX.Y.Z-rc1`:** a prerelease only, **nothing goes to the stores** |
 
 Release checklist:
 

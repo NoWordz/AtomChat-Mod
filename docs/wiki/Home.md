@@ -17,7 +17,7 @@
 ## 三条先知道
 
 1. **纯客户端模组** —— 服务端不装也能用（图片走第三方图床）；服务端也装一份，才会解锁**服务端媒体托管**与**自定义头像同步**。
-2. **Windows x64 / Linux x64 分包** —— 按系统选择一个 JAR；Linux 文件名带 `linux-x64`，需要系统 EGL/GL 库。Linux 游戏内运行待实机验收；macOS / ARM64 暂未打包。
+2. **Windows x64 / Windows ARM64 / Linux x64 分包** —— 按系统和 Minecraft JVM 架构选择一个 JAR；文件名统一以系统与架构结尾。Linux 需要 EGL/GL 库。Skija 0.143.18 的 Windows x64 Fabric 渲染已获用户验收；Windows ARM64 与新版 Linux GPU 仍待实机验证。macOS、Linux ARM64 与 Android 暂未打包。
 3. **界面全部由 Skija 矢量绘制**，不依赖原版聊天纹理；图片消息沿用 E33Chat 的 `[[CICode]]` 协议，可与 E33Chat / ChatImage 系模组互通。
 
 ## 快捷键

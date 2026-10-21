@@ -20,6 +20,7 @@
 import argparse
 import io
 import json
+import struct
 import sys
 import zipfile
 from pathlib import Path
@@ -29,9 +30,19 @@ NESTED_PREFIXES = ("META-INF/jars/", "META-INF/jarjar/")
 SHADED = "com/atom/chat/shaded/flatlaf/"
 PLAIN = b"com/formdev/flatlaf"
 MODULE_NAME = "Automatic-Module-Name: com.atom.chat.shaded.flatlaf"
-PLATFORMS = ("windows-x64", "linux-x64")
+PLATFORMS = ("windows-x64", "windows-arm64", "linux-x64")
 
 failures = []
+
+
+def properties(text):
+    return dict(line.split('=', 1) for line in text.splitlines()
+                if '=' in line and not line.startswith(('#', '!')))
+
+
+def jar_version(jar, artifact):
+    name = f'META-INF/maven/io.github.humbleui/{artifact}/pom.properties'
+    return properties(jar.read(name).decode('utf-8')).get('version') if name in jar.namelist() else None
 
 
 def check(name, ok, detail=""):
@@ -41,7 +52,7 @@ def check(name, ok, detail=""):
 
 
 def find_jar(project, platform):
-    build = "build/linux-x64" if platform == "linux-x64" else "build"
+    build = "build" if platform == "windows-x64" else "build/" + platform
     libs = ROOT / project / build / "libs"
     jars = [p for p in sorted(libs.glob("*.jar"))
             if "sources" not in p.name and "-slim" not in p.name]
@@ -61,7 +72,7 @@ def verify(project, platform="windows-x64"):
           f"{jar_path.name} ({jar_path.stat().st_size} bytes)")
 
     check(f"{project}: 文件名与平台一致",
-          ("-linux-x64" in jar_path.stem) == (platform == "linux-x64"), jar_path.name)
+          jar_path.stem.endswith("-" + platform), jar_path.name)
 
     with zipfile.ZipFile(jar_path) as jar:
         names = jar.namelist()
@@ -71,7 +82,7 @@ def verify(project, platform="windows-x64"):
               ", ".join(flatlaf_nested) or f"内嵌的有: {nested}")
 
         jarjar = any(n.startswith("META-INF/jarjar/") for n in nested)
-        registered_nested = set(nested)
+        registered_nested = set()
         if jarjar:
             metadata_path = "META-INF/jarjar/metadata.json"
             try:
@@ -86,6 +97,14 @@ def verify(project, platform="windows-x64"):
             except (KeyError, json.JSONDecodeError, TypeError, ValueError):
                 registered_nested = set()
                 check(f"{project}: JarJar metadata is valid", False, metadata_path)
+        else:
+            try:
+                metadata = json.loads(jar.read('fabric.mod.json'))
+                registered_nested = {item['file'] for item in metadata.get('jars', [])
+                                     if isinstance(item, dict) and isinstance(item.get('file'), str)}
+                check(f"{project}: Fabric nested-jar metadata is valid", True)
+            except (KeyError, json.JSONDecodeError, TypeError, AttributeError):
+                check(f"{project}: Fabric nested-jar metadata is valid", False)
 
         for want in ("skija-shared", "skija-" + platform):
             matches = [n for n in nested if want in n]
@@ -108,10 +127,46 @@ def verify(project, platform="windows-x64"):
         check(f"{project}: 指定平台原生包唯一且已登记", native_ok,
               f"嵌套: {', '.join(native_jars)}; 已登记: {', '.join(sorted(registered_nested))}")
         if len(native_jars) == 1 and native_jars[0] in registered_nested:
+            shared_jars = [n for n in registered_nested if Path(n).name.startswith('skija-shared-')]
+            shared_version = Path(shared_jars[0]).stem.removeprefix('skija-shared-') if len(shared_jars) == 1 else None
+            native_version = Path(native_jars[0]).stem.removeprefix('skija-' + platform + '-')
+            check(f"{project}: Skija 版本一致", shared_version == native_version,
+                  f"shared={shared_version}, native={native_version}")
+            expected_version = properties((ROOT / 'gradle.properties').read_text(encoding='utf-8'))['skija_version']
+            shared_metadata_version = None
+            if len(shared_jars) == 1 and shared_jars[0] in names:
+                with zipfile.ZipFile(io.BytesIO(jar.read(shared_jars[0]))) as shared_jar:
+                    shared_metadata_version = jar_version(shared_jar, 'skija-shared')
             with zipfile.ZipFile(io.BytesIO(jar.read(native_jars[0]))) as native_jar:
-                extension = ".dll" if platform == "windows-x64" else ".so"
+                resource = 'io/github/humbleui/skija/' + platform.replace('-', '/') + '/'
+                version_resource = resource + 'skija.version'
+                embedded_version = (native_jar.read(version_resource).decode('utf-8').strip()
+                                    if version_resource in native_jar.namelist() else None)
+                check(f"{project}: Skija 版本符合配置",
+                      all(v == expected_version for v in (shared_version, native_version,
+                          shared_metadata_version, jar_version(native_jar, 'skija-' + platform), embedded_version)),
+                      f"expected={expected_version}, shared={shared_metadata_version}, native={embedded_version}")
+                extension = ".dll" if platform.startswith("windows-") else ".so"
+                library_path = resource + ('skija.dll' if platform.startswith('windows-') else 'libskija.so')
                 check(f"{project}: 原生包含 {extension} 库",
-                      any(n.endswith(extension) for n in native_jar.namelist()))
+                      library_path in native_jar.namelist())
+                if platform == 'linux-x64' and library_path in native_jar.namelist():
+                    content = native_jar.read(library_path)
+                    elf_ok = (len(content) >= 20 and content[:6] == b'\x7fELF\x02\x01'
+                              and struct.unpack_from('<H', content, 18)[0] == 62)
+                    check(f"{project}: ELF 架构", elf_ok, library_path)
+                if platform.startswith('windows-'):
+                    dlls = [n for n in native_jar.namelist() if n.endswith('.dll')]
+                    for dll in dlls:
+                        content = native_jar.read(dll)
+                        machine = None
+                        if len(content) >= 64 and content[:2] == b'MZ':
+                            offset = struct.unpack_from('<I', content, 0x3c)[0]
+                            if offset + 6 <= len(content) and content[offset:offset + 4] == b'PE\0\0':
+                                machine = struct.unpack_from('<H', content, offset + 4)[0]
+                        expected = 0xAA64 if platform == 'windows-arm64' else 0x8664
+                        check(f"{project}: PE 架构", machine == expected,
+                              f"{dll}: {machine}, expected={expected}")
 
         # 我们自己的类不许再提公共包 —— 重定位就是为了不再引用它。
         own = [n for n in names if n.endswith(".class") and not n.startswith(NESTED_PREFIXES)]

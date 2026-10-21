@@ -17,7 +17,7 @@
 ## Three things worth knowing first
 
 1. **Client-side mod** — it works without anything on the server (images then go through a third-party image host). Install it on the server too and you unlock **server-hosted media** and **custom avatar sync**.
-2. **Separate Windows x64 / Linux x64 JARs** — install one matching your OS. Linux filenames contain `linux-x64` and need EGL/GL system libraries. Linux in-game operation is awaiting verification; macOS / ARM64 natives are not bundled.
+2. **Separate Windows x64 / Windows ARM64 / Linux x64 JARs** — install one matching your OS and Minecraft JVM architecture. Filenames end with the OS and architecture. Linux requires EGL/GL libraries. Windows x64 Fabric rendering with Skija 0.143.18 passed user validation; Windows ARM64 and upgraded Linux GPU rendering still need in-game checks. macOS, Linux ARM64 and Android natives are not bundled.
 3. **The whole interface is drawn as vectors by Skija**, with no vanilla chat textures involved. Image messages use the E33Chat `[[CICode]]` protocol, so they interoperate with E33Chat and the ChatImage family.
 
 ## Key bindings

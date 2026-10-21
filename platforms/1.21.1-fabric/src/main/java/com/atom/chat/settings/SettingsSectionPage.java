@@ -2609,17 +2609,19 @@ public final class SettingsSectionPage {
      *  frees the native path before drawPath runs (crashed). */
     public static void drawChevron(Canvas canvas, float cx, float cy, float size,
                                     float expansion, int color) {
-        try (io.github.humbleui.skija.Path path = new io.github.humbleui.skija.Path();
+        try (io.github.humbleui.skija.PathBuilder builder = new io.github.humbleui.skija.PathBuilder();
              Paint paint = new Paint()) {
-            path.moveTo(cx - size / 2.0F, cy - size);
-            path.lineTo(cx - size / 2.0F, cy + size);
-            path.lineTo(cx + size / 2.0F, cy);
+            builder.moveTo(cx - size / 2.0F, cy - size);
+            builder.lineTo(cx - size / 2.0F, cy + size);
+            builder.lineTo(cx + size / 2.0F, cy);
             paint.setColor(color);
             canvas.save();
             canvas.translate(cx, cy);
             canvas.rotate(90.0F * expansion);
             canvas.translate(-cx, -cy);
-            canvas.drawPath(path, paint);
+            try (io.github.humbleui.skija.Path path = builder.detach()) {
+                canvas.drawPath(path, paint);
+            }
             canvas.restore();
         }
     }

@@ -32,7 +32,7 @@ A client-side mod that replaces the vanilla chat screen with a vector-drawn phon
 | NeoForge 1.21.1 | NeoForge 21.1+ |
 | Forge 1.20.1 | Forge 47+ |
 
-Java 21 for the 1.21.1 targets, Java 17 for Forge 1.20.1. **Windows x64 and Linux x64 have separate JARs.** Choose exactly one for your OS; Linux files contain `linux-x64` in the name. Each JAR bundles only its matching Skija native. Linux needs EGL/OpenGL libraries (Ubuntu/Debian: `sudo apt install libegl1 libgl1`). All three targets work client-side; install the same jar on the server for media hosting and profile synchronization.
+Java 21 for the 1.21.1 targets, Java 17 for Forge 1.20.1. **Windows x64, Windows ARM64 and Linux x64 have separate JARs.** Choose exactly one matching your OS and Minecraft JVM architecture. Filenames follow `atomchat-<loader>-<mc>-<mod>-<os>-<arch>.jar`. Each JAR bundles Skija 0.143.18 with only its matching native. Windows ARM64 packaging is experimental pending testing on an ARM64 Windows machine. Linux needs EGL/OpenGL libraries (Ubuntu/Debian: `sudo apt install libegl1 libgl1`). Install the same variant on the server for media hosting and profile synchronization.
 
 ## Configuration
 
@@ -42,7 +42,7 @@ Server policy lives in config/atomchat/atomchat-server.json, including hostingEn
 
 ## Known limitations
 
-- Linux x64 packaging is available; Linux/WSLg game startup and UI interactions still need in-game verification. macOS and ARM64 natives are not bundled.
+- Windows x64 rendering with Skija 0.143.18 passed user validation on Fabric 1.21.1. Windows ARM64 remains untested in-game, and Linux x64 GPU validation still needs renewal after the upgrade; earlier Linux/WSLg validation used Skija 0.116.8. macOS, Linux ARM64 and Android natives are not bundled.
 - Without the server mod, images fall back to a third-party host (roughly 3-hour expiry); files above `maxFileKb` are not uploaded.
 - Player identity parsing is best-effort — exotic nickname-plugin formats degrade to grey system messages.
 - The dedicated-server hosting path has only been tested against singleplayer and LAN hosts.

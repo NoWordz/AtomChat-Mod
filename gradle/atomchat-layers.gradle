@@ -26,7 +26,7 @@ if (!propsFile.isFile()) {
 def repoProps = new Properties()
 propsFile.withInputStream { repoProps.load(it) }
 
-['mod_id', 'mod_name', 'mod_license', 'mod_group_id', 'mod_authors', 'mod_description', 'mod_version'].each { k ->
+['mod_id', 'mod_name', 'mod_license', 'mod_group_id', 'mod_authors', 'mod_description', 'mod_version', 'skija_version'].each { k ->
     if (!repoProps.containsKey(k)) {
         throw new GradleException("仓库根的 gradle.properties 缺 ${k} —— 各平台不提供默认值，读不到就失败")
     }

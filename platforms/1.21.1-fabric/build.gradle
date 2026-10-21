@@ -13,9 +13,6 @@ apply from: '../../gradle/atomchat-layers.gradle'
 version = project.mod_version
 group = project.maven_group
 archivesBaseName = project.archives_base_name
-if (project.atomchatNativePlatform == 'linux-x64') {
-    archivesBaseName += project.atomchatNativeSuffix
-}
 
 repositories {
     mavenCentral()
@@ -29,9 +26,9 @@ dependencies {
     modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
     modCompileOnly "com.terraformersmc:modmenu:11.0.3"
 
-    // Skija (HumbleUI Skia bindings) — same line as the Tuui mod used.
+    // Keep Java bindings and the selected native at the same exact version.
     include(implementation("io.github.humbleui:skija-shared:${project.skija_version}"))
-    include(implementation("io.github.humbleui:types:0.1.1"))
+    include(implementation("io.github.humbleui:types:0.2.0"))
     // Bundle only the selected operating system native; never both.
     include(implementation("io.github.humbleui:${project.atomchatNativeArtifact}:${project.skija_version}"))
 
@@ -44,8 +41,12 @@ dependencies {
 
     testImplementation platform('org.junit:junit-bom:5.11.4')
     testImplementation 'org.junit.jupiter:junit-jupiter'
-    // Linux hosts can test either variant. Test dependencies are not bundled.
-    testImplementation "io.github.humbleui:skija-linux-x64:${project.skija_version}"
+    // Cross-build tests use the host JVM's native; test dependencies are not bundled.
+    testImplementation "io.github.humbleui:${project.atomchatTestNativeArtifact}:${project.skija_version}"
+}
+
+tasks.named('remapJar') {
+    archiveFileName = "${project.archives_base_name}-${project.mod_version}${project.atomchatNativeSuffix}.jar"
 }
 
 processResources {

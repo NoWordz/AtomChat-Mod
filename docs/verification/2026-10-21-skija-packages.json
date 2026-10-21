@@ -1,0 +1,98 @@
+{
+  "tests": {
+    "1.21.1-neoforge": {
+      "tests": 1377,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 2
+    },
+    "1.21.1-fabric": {
+      "tests": 1389,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 2
+    },
+    "1.20.1-forge": {
+      "tests": 1377,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 2
+    }
+  },
+  "artifacts": [
+    {
+      "target": "1.21.1-neoforge",
+      "platform": "windows-x64",
+      "file": "atomchat-NeoForge-1.21.1-0.3.2-windows-x64.jar",
+      "sha256": "0a0a4ea60f192cb06ac8f6072d06cd39142bd7f8e73f97ad9356ff6900304d50",
+      "size": 19079956,
+      "equal_class_assets": 594
+    },
+    {
+      "target": "1.21.1-neoforge",
+      "platform": "windows-arm64",
+      "file": "atomchat-NeoForge-1.21.1-0.3.2-windows-arm64.jar",
+      "sha256": "07cc65866fa328611adecac61b9bdf9f4ce1d7ea5ed1450ce3726bb54897d97c",
+      "size": 18456247,
+      "equal_class_assets": 594
+    },
+    {
+      "target": "1.21.1-neoforge",
+      "platform": "linux-x64",
+      "file": "atomchat-NeoForge-1.21.1-0.3.2-linux-x64.jar",
+      "sha256": "ccd6f0b4fee011faa8bec492523011b2630bdc87c3d72c81b89285569d3075ef",
+      "size": 20207144,
+      "equal_class_assets": 594
+    },
+    {
+      "target": "1.21.1-fabric",
+      "platform": "windows-x64",
+      "file": "atomchat-Fabric-1.21.1-0.3.2-windows-x64.jar",
+      "sha256": "5bcd0e33cc13dd06e4ebd3c97114ff5b3a5e374d12aa39634b7f7a4d0c238974",
+      "size": 19086675,
+      "equal_class_assets": 578
+    },
+    {
+      "target": "1.21.1-fabric",
+      "platform": "windows-arm64",
+      "file": "atomchat-Fabric-1.21.1-0.3.2-windows-arm64.jar",
+      "sha256": "1725d630204a25a4edaad414af199aca84b2284c1375d8532d631f4cd032c757",
+      "size": 18462960,
+      "equal_class_assets": 578
+    },
+    {
+      "target": "1.21.1-fabric",
+      "platform": "linux-x64",
+      "file": "atomchat-Fabric-1.21.1-0.3.2-linux-x64.jar",
+      "sha256": "1e30f24c5fcb686a2079b9832af5c67153c23e0074b7d209d20369a4dbdc44e6",
+      "size": 20214735,
+      "equal_class_assets": 578
+    },
+    {
+      "target": "1.20.1-forge",
+      "platform": "windows-x64",
+      "file": "atomchat-Forge-1.20.1-0.3.2-windows-x64.jar",
+      "sha256": "9939d07ef18997bbef60c73618f906bf0afc8fc811402fc3428d2ef2a95ff8b6",
+      "size": 19066328,
+      "equal_class_assets": 582
+    },
+    {
+      "target": "1.20.1-forge",
+      "platform": "windows-arm64",
+      "file": "atomchat-Forge-1.20.1-0.3.2-windows-arm64.jar",
+      "sha256": "25ac844e3ee106f6c64aa3d2b72494151a79c72620101b629e42097aedfdf35d",
+      "size": 18442617,
+      "equal_class_assets": 582
+    },
+    {
+      "target": "1.20.1-forge",
+      "platform": "linux-x64",
+      "file": "atomchat-Forge-1.20.1-0.3.2-linux-x64.jar",
+      "sha256": "256b994acb491fe83aa287ee49d0cbd4ea3c8db7a55b6b51e69fed2eff02a3d0",
+      "size": 20193516,
+      "equal_class_assets": 582
+    }
+  ],
+  "build_inputs_unchanged": 679,
+  "chat_assets": true
+}

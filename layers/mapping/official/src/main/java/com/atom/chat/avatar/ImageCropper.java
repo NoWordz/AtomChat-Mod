@@ -379,7 +379,7 @@ public final class ImageCropper {
                 }
 
                 // Darken everything outside the frame (even-odd panel + frame).
-                try (Path mask = new Path()) {
+                try (io.github.humbleui.skija.PathBuilder mask = new io.github.humbleui.skija.PathBuilder()) {
                     mask.addRect(Rect.makeXYWH(panel.x(), panel.y(), panelW, panelH));
                     if (circle) {
                         mask.addOval(Rect.makeXYWH(cx - rx, cy - ry, 2.0F * rx, 2.0F * ry));
@@ -387,8 +387,9 @@ public final class ImageCropper {
                         mask.addRRect(RRect.makeXYWH(cx - rx, cy - ry, 2.0F * rx, 2.0F * ry, s(12)));
                     }
                     mask.setFillMode(PathFillMode.EVEN_ODD);
-                    try (Paint paint = new Paint().setColor(Color.makeARGB((int) (150.0F * anim), 0, 0, 0))) {
-                        canvas.drawPath(mask, paint);
+                    try (Path maskPath = mask.detach();
+                         Paint paint = new Paint().setColor(Color.makeARGB((int) (150.0F * anim), 0, 0, 0))) {
+                        canvas.drawPath(maskPath, paint);
                     }
                 }
             }

@@ -35,7 +35,8 @@ Before 0.2.8, opening the panel on Forge 1.20.1 could turn the whole screen blac
 ## Known unsupported
 
 - **Linux x64:** use the `linux-x64` JAR and remove the Windows JAR. Ubuntu/Debian needs `libegl1 libgl1`; inspect the native-loading reason in the log if the panel stays disabled.
-- **macOS / ARM64:** matching native libraries are not bundled, so the panel cannot start.
+- **Windows ARM64:** use the `windows-arm64` package with ARM64 Java; packaging is experimental until tested on real hardware.
+- **macOS / Linux ARM64 / Android:** matching native libraries are not bundled, so the panel cannot start.
 - **Quark:** the emote menu does not appear when Quark is installed; compatibility work is in progress.
 - **Other MC versions / loaders:** currently Fabric and NeoForge 1.21.1, plus Forge 1.20.1.
 
@@ -97,7 +98,7 @@ AtomChat environment summary (debug) — paste this whole block into a bug repor
   artifact ...\mods\atomchat-Forge-1.20.1-0.2.11.jar | ... | loader reports 0.2.11
   runtime  Java 17.0.9 (Eclipse Adoptium) | Windows 11 10.0 | amd64
   laf      com.atom.chat.shaded.flatlaf.FlatLightLaf <- ...\mods\atomchat-....jar | ...
-  skija    0.116.8 windows/x64 <- ...\skija-windows-x64-0.116.8.jar | natives loaded in 132 ms
+  skija    0.143.18 windows/x64 <- ...\skija-windows-x64-0.143.18.jar | natives loaded in 132 ms
   gpu      NVIDIA GeForce RTX 3060 | 4.6.0 NVIDIA 552.22 | NVIDIA Corporation
   switches blur=on (opacity 0.93) | wallpaper=none | imageMessages=on | animations=on | panel=440x780 @1.0x
 ```

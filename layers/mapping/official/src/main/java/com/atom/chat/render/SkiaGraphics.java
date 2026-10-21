@@ -10,7 +10,7 @@ import io.github.humbleui.skija.DirectContext;
 import io.github.humbleui.skija.Image;
 import io.github.humbleui.skija.PixelGeometry;
 import io.github.humbleui.skija.Surface;
-import io.github.humbleui.skija.SurfaceColorFormat;
+import io.github.humbleui.skija.ColorType;
 import io.github.humbleui.skija.SurfaceOrigin;
 import io.github.humbleui.skija.SurfaceProps;
 import net.minecraft.client.Minecraft;
@@ -77,7 +77,7 @@ public class SkiaGraphics {
                 context,
                 renderTarget,
                 SurfaceOrigin.BOTTOM_LEFT,
-                SurfaceColorFormat.RGBA_8888,
+                ColorType.RGBA_8888,
                 ColorSpace.getDisplayP3(),
                 new SurfaceProps(PixelGeometry.RGB_H)
         );
@@ -155,7 +155,7 @@ public class SkiaGraphics {
             canvas.restoreToCount(saveBase);
         }
 
-        surface.flush();
+        context.flush(surface);
         GlStateUtil.restore();
         RenderSystem.disableBlend();
         // 到报告点就打一份分布（六十帧一次，约十秒）。这个类自己不打日志：格式留在 FrameProfile

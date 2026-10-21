@@ -212,7 +212,7 @@ class SkiaDrawBenchmark {
             }
             byte[] bytes = in.readAllBytes();
             long startedAt = System.nanoTime();
-            io.github.humbleui.skija.Typeface face = io.github.humbleui.skija.Typeface.makeFromData(
+            io.github.humbleui.skija.Typeface face = io.github.humbleui.skija.FontMgr.getDefault().makeFromData(
                     io.github.humbleui.skija.Data.makeFromBytes(bytes));
             long millis = (System.nanoTime() - startedAt) / 1_000_000L;
             if (face != null) {
