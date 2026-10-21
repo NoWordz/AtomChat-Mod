@@ -58,7 +58,9 @@ class ModalPanelClipTest {
                 public void onConfirm(String id, byte[] png) {}
                 public void onCancel(String id) {}
             });
-            for (float radius : new float[]{20F, 0F, 40F}) {
+            for (boolean docked : new boolean[]{false, true}) {
+              cfg.halfScreenMode = docked;
+              for (float radius : new float[]{20F, 0F, 40F}) {
                 cfg.cornerRadius = radius;
                 preview.open(image);
                 picker.open(new SettingsColor("test", "test", "ui", new int[0], () -> 0xFF778899, v -> {}));
@@ -76,15 +78,16 @@ class ModalPanelClipTest {
                     byte[] data = pixels.readPixels();
                     // Outside the inner frame, including all four corners.
                     for (int x : new int[]{10, 409}) for (int y : new int[]{10, 400, 789}) {
-                        assertEquals(0, alpha(data, x, y), "frame bleed modal=" + modal + " radius=" + radius);
+                        if (docked) assertTrue(alpha(data, x, y) > 0, "missing docked backdrop modal=" + modal);
+                        else assertEquals(0, alpha(data, x, y), "frame bleed modal=" + modal + " radius=" + radius);
                     }
-                    if (radius > 0) {
+                    if (!docked && radius > 0) {
                         for (int x : new int[]{14, 405}) for (int y : new int[]{14, 785}) {
                             assertEquals(0, alpha(data, x, y), "corner bleed modal=" + modal + " radius=" + radius);
                         }
                     }
                     assertTrue(alpha(data, 210, 80) > 0, "modal must actually paint");
-                    if (radius == 20F) {
+                    if (!docked && radius == 20F) {
                         Path out = Path.of(System.getProperty("atomchat.repoRoot", "."),
                                 ".work/0.3.2-preview/modal-" + modal + ".png");
                         java.nio.file.Files.createDirectories(out.getParent());
@@ -93,6 +96,7 @@ class ModalPanelClipTest {
                             java.nio.file.Files.write(out, encoded.getBytes());
                         }
                     }
+            }
             }
         }
     }

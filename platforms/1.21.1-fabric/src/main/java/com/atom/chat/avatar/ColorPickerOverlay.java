@@ -389,7 +389,7 @@ public final class ColorPickerOverlay {
         try {
             com.atom.chat.ui.PanelBackground.clipInterior(canvas, panel);
             SkiaDraw.drawRoundedRect(canvas, panel.x(), panel.y(), panel.w(), panel.h(),
-                    UiTokens.radius(12), Color.makeARGB((int) (200.0F * anim), 8, 9, 14));
+                    UiTokens.modalBackdropRadius(), Color.makeARGB((int) (200.0F * anim), 8, 9, 14));
 
             float cx = cardX(panel);
             float cy = cardY(panel);

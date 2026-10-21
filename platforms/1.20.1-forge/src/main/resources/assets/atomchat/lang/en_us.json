@@ -145,6 +145,8 @@
   "atomchat.settings.group.chat.history": "History",
   "atomchat.settings.appearance.opacity": "Background opacity",
   "atomchat.settings.appearance.width": "Panel width",
+  "atomchat.settings.appearance.half_screen": "Half-screen mode",
+  "atomchat.settings.appearance.half_screen.desc": "Dock the panel to the screen edge. Phone and half-screen modes remember their own widths and restore them when switching back.",
   "atomchat.settings.appearance.scale": "Interface scale",
   "atomchat.settings.appearance.contentscale": "Content scale",
   "atomchat.settings.chat": "Chat & notifications",

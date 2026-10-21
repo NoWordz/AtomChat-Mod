@@ -93,10 +93,10 @@ public final class BottomTabBar {
         if (bar == null || bar.w() <= 0.0F || bar.h() <= 0.0F) {
             return;
         }
-        SkiaDraw.drawChromeShadow(canvas, bar.x(), bar.y(), bar.w(), bar.h(), UiTokens.chromeRadius());
+        SkiaDraw.drawChromeShadow(canvas, bar.x(), bar.y(), bar.w(), bar.h(), UiTokens.shellChromeRadius());
         SkiaDraw.drawRoundedRect(canvas, bar.x(), bar.y(), bar.w(), bar.h(),
-                UiTokens.chromeRadius(), UiTokens.cardFill());
-        com.atom.chat.render.ChromeMaterial.drawDetails(canvas, bar, UiTokens.chromeRadius());
+                UiTokens.shellChromeRadius(), UiTokens.cardFill());
+        com.atom.chat.render.ChromeMaterial.drawDetails(canvas, bar, UiTokens.shellChromeRadius());
 
         float cellWidth = bar.w() / 3.0F;
         // The selected/hover capsule is inset from the bar by TAB_EDGE_PAD on
@@ -105,7 +105,7 @@ public final class BottomTabBar {
         float inset = UiTokens.TAB_EDGE_PAD;
         float capsuleH = bar.h() - inset * 2.0F;
         float capsuleW = cellWidth - inset * 2.0F;
-        float radius = UiTokens.insetRadius(UiTokens.chromeRadius(), inset, capsuleW, capsuleH);
+        float radius = UiTokens.insetRadius(UiTokens.shellChromeRadius(), inset, capsuleW, capsuleH);
 
         // The indicator IS the selected cell index, animated: it carries the
         // fractional slide between cells, so the pill is placed from it directly

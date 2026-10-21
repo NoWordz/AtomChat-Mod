@@ -47,7 +47,7 @@ public final class UiLayout {
     /** Vertical center of the input text's FIRST visible line. */
     public final float inputTextCenterY;
 
-    private UiLayout(float panelX, float panelY, float panelW, float panelH, float inputExtraH, float replyH, Mode mode) {
+    private UiLayout(float panelX, float panelY, float panelW, float panelH, float inputExtraH, float replyH, Mode mode, boolean docked) {
         this.panelX = panelX;
         this.panelY = panelY;
         this.panelW = panelW;
@@ -57,14 +57,16 @@ public final class UiLayout {
 
         // Header is an inset card (same style as the input bar); its edge gap
         // mirrors PANEL_BOTTOM_PAD so top and bottom breathing space match.
-        this.header = new Rect(panelX + UiTokens.LIST_PAD_X, panelY + UiTokens.PANEL_BOTTOM_PAD,
-                panelW - UiTokens.LIST_PAD_X * 2.0F, UiTokens.HEADER_HEIGHT);
+        float chromePad = docked ? 0F : UiTokens.LIST_PAD_X;
+        float bottomPad = docked ? 0F : UiTokens.PANEL_BOTTOM_PAD;
+        this.header = new Rect(panelX + chromePad, panelY + bottomPad,
+                panelW - chromePad * 2.0F, UiTokens.HEADER_HEIGHT);
         float listTop = this.header.bottom() + UiTokens.PANEL_TOP_GAP;
         // The message list's visible area ends at the CURRENT input bar top, so
         // when the draft wraps to a second line the list gives up exactly the
         // height the bar gains. Content is therefore never painted underneath
         // the translucent composer — no images can ghost through it.
-        float controlW = Math.max(0.0F, panelW - UiTokens.LIST_PAD_X * 2.0F
+        float controlW = Math.max(0.0F, panelW - chromePad * 2.0F
                 - UiTokens.EDGE_CONTROL_INSET - UiTokens.INPUT_ROW_PAD);
         int keysPerRow = Math.max(1, Math.min(3, (int) ((controlW + UiTokens.COMPOSER_KEY_GAP)
                 / (UiTokens.ACTION_BUTTON_SIZE + UiTokens.COMPOSER_KEY_GAP))));
@@ -74,12 +76,12 @@ public final class UiLayout {
         int extraButtonRows = separateSend ? (3 + keysPerRow - 1) / keysPerRow : 0;
         float buttonExtraH = extraButtonRows * (UiTokens.INPUT_ROW_H + UiTokens.COMPOSER_KEY_GAP);
         float inputH = UiTokens.INPUT_HEIGHT + this.inputExtraH + buttonExtraH;
-        float inputY = panelY + panelH - inputH - UiTokens.PANEL_BOTTOM_PAD;
+        float inputY = panelY + panelH - inputH - bottomPad;
 
         this.tabBar = mode == Mode.ROOT
-                ? new Rect(panelX + UiTokens.LIST_PAD_X,
-                panelY + panelH - UiTokens.TAB_BAR_H - UiTokens.PANEL_BOTTOM_PAD,
-                panelW - UiTokens.LIST_PAD_X * 2.0F,
+                ? new Rect(panelX + chromePad,
+                panelY + panelH - UiTokens.TAB_BAR_H - bottomPad,
+                panelW - chromePad * 2.0F,
                 UiTokens.TAB_BAR_H)
                 : new Rect(0, 0, 0, 0);
         float bottomOfContent = switch (mode) {
@@ -106,11 +108,11 @@ public final class UiLayout {
         if (mode == Mode.CHAT) {
             float replyY = inputY - this.replyH;
             this.replyBar = this.replyH > 0.0F
-                    ? new Rect(panelX + UiTokens.LIST_PAD_X, replyY,
-                    panelW - UiTokens.LIST_PAD_X * 2.0F, this.replyH)
-                    : new Rect(panelX + UiTokens.LIST_PAD_X, replyY, 0.0F, 0.0F);
-            this.inputBar = new Rect(panelX + UiTokens.LIST_PAD_X, inputY,
-                    panelW - UiTokens.LIST_PAD_X * 2.0F, inputH);
+                    ? new Rect(panelX + chromePad, replyY,
+                    panelW - chromePad * 2.0F, this.replyH)
+                    : new Rect(panelX + chromePad, replyY, 0.0F, 0.0F);
+            this.inputBar = new Rect(panelX + chromePad, inputY,
+                    panelW - chromePad * 2.0F, inputH);
 
             // Two families, two spacing systems, one row. The three square keys
             // belong to the header action family and take that family's edge
@@ -226,7 +228,7 @@ public final class UiLayout {
     }
 
     public static UiLayout of(float panelX, float panelY, float panelW, float panelH) {
-        return new UiLayout(panelX, panelY, panelW, panelH, 0.0F, 0.0F, Mode.CHAT);
+        return of(panelX, panelY, panelW, panelH, 0F, 0F);
     }
 
     public static UiLayout of(float panelX, float panelY, float panelW, float panelH, float inputExtraH) {
@@ -234,11 +236,19 @@ public final class UiLayout {
     }
 
     public static UiLayout of(float panelX, float panelY, float panelW, float panelH, float inputExtraH, float replyH) {
-        return new UiLayout(panelX, panelY, panelW, panelH, inputExtraH, replyH, Mode.CHAT);
+        return of(panelX, panelY, panelW, panelH, inputExtraH, replyH, false);
+    }
+
+    public static UiLayout of(float panelX, float panelY, float panelW, float panelH, float inputExtraH, float replyH, boolean docked) {
+        return new UiLayout(panelX, panelY, panelW, panelH, inputExtraH, replyH, Mode.CHAT, docked);
     }
 
     public static UiLayout ofRoot(float panelX, float panelY, float panelW, float panelH) {
-        return new UiLayout(panelX, panelY, panelW, panelH, 0.0F, 0.0F, Mode.ROOT);
+        return ofRoot(panelX, panelY, panelW, panelH, false);
+    }
+
+    public static UiLayout ofRoot(float panelX, float panelY, float panelW, float panelH, boolean docked) {
+        return new UiLayout(panelX, panelY, panelW, panelH, 0.0F, 0.0F, Mode.ROOT, docked);
     }
 
     /**
@@ -246,7 +256,11 @@ public final class UiLayout {
      * the root layout would have handed to the tab bar.
      */
     public static UiLayout ofDetail(float panelX, float panelY, float panelW, float panelH) {
-        return new UiLayout(panelX, panelY, panelW, panelH, 0.0F, 0.0F, Mode.DETAIL);
+        return ofDetail(panelX, panelY, panelW, panelH, false);
+    }
+
+    public static UiLayout ofDetail(float panelX, float panelY, float panelW, float panelH, boolean docked) {
+        return new UiLayout(panelX, panelY, panelW, panelH, 0.0F, 0.0F, Mode.DETAIL, docked);
     }
 
     public Rect rect() {

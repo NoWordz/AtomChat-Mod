@@ -19,7 +19,7 @@ public final class PanelBackground {
     /** Clip panel-local overlays to the same inner contour as the wallpaper.
      * The caller owns the enclosing canvas save/restore. */
     public static void clipInterior(io.github.humbleui.skija.Canvas canvas, UiLayout.Rect panel) {
-        float inset = UiTokens.PANEL_BEZEL_WIDTH;
+        float inset = UiTokens.panelInset();
         com.atom.chat.render.SkiaDraw.clip(canvas,
                 panel.x() + inset, panel.y() + inset,
                 Math.max(0F, panel.w() - 2F * inset), Math.max(0F, panel.h() - 2F * inset),

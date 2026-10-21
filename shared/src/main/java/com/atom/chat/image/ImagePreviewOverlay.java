@@ -271,7 +271,7 @@ public final class ImagePreviewOverlay {
             // The dim backdrop: the panel-wide plate the other two modals use, so
             // a modal always reads as the same layer.
             SkiaDraw.drawRoundedRect(canvas, panel.x(), panel.y(), panel.w(), panel.h(),
-                    UiTokens.radius(12), Color.makeARGB((int) (200.0F * anim), 8, 9, 14));
+                    UiTokens.modalBackdropRadius(), Color.makeARGB((int) (200.0F * anim), 8, 9, 14));
 
             Image current = image;
             if (current != null) {

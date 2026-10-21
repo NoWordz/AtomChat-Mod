@@ -14,6 +14,9 @@ public class AtomChatConfig {
     public static final AtomChatConfig DEFAULT = new AtomChatConfig();
 
     public float panelWidth = 480.0F;
+    /** Local layout preferences, independent of appearance presets. */
+    public boolean halfScreenMode = false;
+    public float halfScreenWidth = 600.0F;
     public float panelHeight = 860.0F;
     /** Rounded panel background blur (raw GL + core shader, outside Skia). */
     public boolean blurEnabled = true;
@@ -382,6 +385,21 @@ public class AtomChatConfig {
 
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
     private static AtomChatConfig instance;
+
+    /** Each layout retains its own width; malformed values use that layout's default. */
+    public float activePanelWidth() {
+        float width = halfScreenMode ? halfScreenWidth : panelWidth;
+        return Float.isFinite(width) && width > 0.0F
+                ? width : (halfScreenMode ? 600.0F : 480.0F);
+    }
+
+    public void setActivePanelWidth(float width) {
+        if (halfScreenMode) {
+            halfScreenWidth = width;
+        } else {
+            panelWidth = width;
+        }
+    }
 
     public static AtomChatConfig get() {
         if (instance == null) {

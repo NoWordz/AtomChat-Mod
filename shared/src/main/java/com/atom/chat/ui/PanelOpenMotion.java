@@ -151,6 +151,7 @@ public final class PanelOpenMotion {
     public static PanelRect paintedPanelRect(float progress, AtomChatConfig.PageNavStyle style,
                                             float panelX, float panelY, float panelW, float panelH,
                                             float strokeWidth) {
+        if (AtomChatConfig.get().halfScreenMode) strokeWidth = 0F;
         float scale = openScale(progress, style);
         float slide = openSlidePx(progress, style);
         float insetW = panelW - strokeWidth * 2.0F;
@@ -162,7 +163,7 @@ public final class PanelOpenMotion {
                 cy - insetH * scale / 2.0F,
                 insetW * scale,
                 insetH * scale,
-                (UiTokens.panelRadius() - strokeWidth) * scale);
+                Math.max(0F, UiTokens.panelRadius() - strokeWidth) * scale);
     }
 
     /**

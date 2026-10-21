@@ -84,7 +84,7 @@ public final class AppearancePresetStore {
             config.secondaryCapsuleBg = secondaryCapsuleBg;
             config.secondaryCapsuleText = secondaryCapsuleText;
             config.panelOpacity = panelOpacity;
-            config.panelWidth = panelWidth;
+            if (!config.halfScreenMode) config.panelWidth = panelWidth;
             config.panelHeight = panelHeight;
             config.uiScale = uiScale;
             config.contentScale = contentScale;

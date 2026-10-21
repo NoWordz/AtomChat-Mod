@@ -145,6 +145,8 @@
   "atomchat.settings.group.chat.history": "聊天记录",
   "atomchat.settings.appearance.opacity": "背景不透明度",
   "atomchat.settings.appearance.width": "面板宽度",
+  "atomchat.settings.appearance.half_screen": "半屏模式",
+  "atomchat.settings.appearance.half_screen.desc": "面板贴边显示；手机模式与半屏模式分别记忆宽度，切回时恢复。",
   "atomchat.settings.appearance.scale": "界面缩放",
   "atomchat.settings.appearance.contentscale": "内容缩放",
   "atomchat.settings.chat": "聊天与通知",

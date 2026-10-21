@@ -4,6 +4,8 @@
 
 **新增**
 
+- 新增左、上、下贴边的半屏模式，两种模式使用同一宽度滑条并分别记忆。
+- 左键点击面板外即可关闭界面，伸出面板的命令补全框仍可正常选择。
 - 图片预览支持鼠标位置滚轮缩放，放大后按住左键拖拽查看，缩回最小倍率时恢复居中。
 - 只看系统消息或玩家消息的选择自动记住，关闭重开、切换界面或重启游戏都保留。
 
@@ -20,6 +22,8 @@
 
 **Added**
 
+- Add an edge-attached panel mode; the existing width slider remembers each layout separately.
+- Close the interface by left-clicking outside the panel without interrupting extended command suggestions.
 - Zoom image previews around the pointer with the wheel, drag enlarged images with the left mouse button, and zoom back out to recenter.
 - Remember system-only or player-only chat filters across panel reopening, page changes and game restarts.
 

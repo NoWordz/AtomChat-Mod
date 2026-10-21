@@ -610,6 +610,51 @@ class OffscreenRenderTest {
     }
 
     @Test
+    void renderPhoneAndDockedChatAt1080p() throws Exception {
+        var cfg = com.atom.chat.config.AtomChatConfig.get();
+        boolean previous = cfg.halfScreenMode;
+        List<ChatMessage> messages = conversation();
+        try {
+            for (boolean docked : new boolean[]{false, true}) {
+                cfg.halfScreenMode = docked;
+                UiLayout layout = UiLayout.of(docked ? 0 : 30, docked ? 0 : 16,
+                        docked ? 750 : 600, docked ? 1080 : 1048, 0, 0, docked);
+                try (Surface surface = Surface.makeRasterN32Premul(1920, 1080)) {
+                    Canvas canvas = surface.getCanvas();
+                    canvas.clear(0xFF737B84);
+                    int stack = canvas.getSaveCount();
+                    float inset = UiTokens.panelInset();
+                    SkiaDraw.drawRoundedRect(canvas, layout.panelX + inset, layout.panelY + inset,
+                            layout.panelW - inset * 2, layout.panelH - inset * 2,
+                            Math.max(0, UiTokens.panelRadius() - inset), cfg.panelBgColor);
+                    canvas.save();
+                    com.atom.chat.ui.PanelBackground.clipInterior(canvas, layout.rect());
+                    com.atom.chat.ui.ShellHeader.drawBackdrop(canvas, layout.header);
+                    com.atom.chat.ui.ShellHeader.render(canvas, layout.header, "世界聊天", false, null, 0, cfg.textPrimaryColor);
+                    MessageListView view = new MessageListView(new OffscreenHost(openedAfter(messages)));
+                    try { draw(view, layout, messages, new ScrollController()).accept(canvas); }
+                    finally { view.dispose(); }
+                    var bar = layout.inputBar;
+                    SkiaDraw.drawRoundedRect(canvas, bar.x(), bar.y(), bar.w(), bar.h(),
+                            UiTokens.shellChromeRadius(), UiTokens.cardFill());
+                    ChromeMaterial.drawDetails(canvas, bar, UiTokens.shellChromeRadius());
+                    SkiaFontRenderer.drawTextCentered(canvas, FontManager.font(UiTokens.FONT_NAME), "输入聊天内容…",
+                            bar.x() + bar.w()/2, bar.y() + bar.h()/2, cfg.textSecondaryColor);
+                    canvas.restore();
+                    assertEquals(stack, canvas.getSaveCount());
+                    Path output = Path.of(System.getProperty("atomchat.repoRoot", "."),
+                            ".work/half-screen-preview", docked ? "docked.png" : "phone.png");
+                    java.nio.file.Files.createDirectories(output.getParent());
+                    try (var image = surface.makeImageSnapshot(); var data = image.encodeToData()) {
+                        java.nio.file.Files.write(output, data.getBytes());
+                    }
+                    assertTrue(java.nio.file.Files.size(output) > 1000);
+                }
+            }
+        } finally { cfg.halfScreenMode = previous; }
+    }
+
+    @Test
     void renderBubbleComparisonAtTheExistingSmallPanelSize() throws Exception {
         var cfg = com.atom.chat.config.AtomChatConfig.get();
         var saved = com.atom.chat.theme.AppearancePresetStore.Snapshot.capture(cfg);

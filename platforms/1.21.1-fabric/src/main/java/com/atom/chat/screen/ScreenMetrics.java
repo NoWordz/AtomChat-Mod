@@ -102,12 +102,12 @@ public final class ScreenMetrics {
 
     /** A root tab page: tab bar, no composer. */
     public static UiLayout rootLayout(Window window) {
-        return UiLayout.ofRoot(panelX(), panelY(window), panelWidth(window), panelHeight(window));
+        return UiLayout.ofRoot(panelX(), panelY(window), panelWidth(window), panelHeight(window), AtomChatConfig.get().halfScreenMode);
     }
 
     /** A pushed settings sub-page: no composer, no tab bar, tallest possible list. */
     public static UiLayout detailLayout(Window window) {
-        return UiLayout.ofDetail(panelX(), panelY(window), panelWidth(window), panelHeight(window));
+        return UiLayout.ofDetail(panelX(), panelY(window), panelWidth(window), panelHeight(window), AtomChatConfig.get().halfScreenMode);
     }
 
     /** Layout of whatever list the top page is showing (D24 supplies the page). */
@@ -122,10 +122,11 @@ public final class ScreenMetrics {
     // window measurements, and nothing else needs them.
 
     static float panelWidth(int width, int height) {
-        return Math.min(UiTokens.s(AtomChatConfig.get().panelWidth) / contentScaleValue(), vw(width, height) - 32.0F);
+        return Math.min(UiTokens.s(AtomChatConfig.get().activePanelWidth()) / contentScaleValue(), vw(width, height) - 32.0F);
     }
 
     static float panelHeight(int height) {
+        if (AtomChatConfig.get().halfScreenMode) return vh(height);
         return Math.min(UiTokens.s(AtomChatConfig.get().panelHeight) / contentScaleValue(), vh(height) - 32.0F);
     }
 
@@ -147,10 +148,12 @@ public final class ScreenMetrics {
     }
 
     static float panelXValue() {
+        if (AtomChatConfig.get().halfScreenMode) return 0F;
         return UiTokens.PANEL_ANCHOR_X / contentScaleValue();
     }
 
     static float panelY(int height) {
+        if (AtomChatConfig.get().halfScreenMode) return 0F;
         return (vh(height) - panelHeight(height)) / 2.0F;
     }
 

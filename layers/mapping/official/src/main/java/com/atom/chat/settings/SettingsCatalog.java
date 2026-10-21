@@ -40,6 +40,11 @@ public final class SettingsCatalog {
     private static List<SettingsItem> buildItems(SettingsSection section) {
         return switch (section) {
             case APPEARANCE -> List.of(
+                    new SettingsItem("half_screen",
+                            "atomchat.settings.appearance.half_screen",
+                            "atomchat.settings.appearance.half_screen.desc",
+                            () -> AtomChatConfig.get().halfScreenMode,
+                            v -> AtomChatConfig.get().halfScreenMode = v),
                     new SettingsItem("blur",
                             "atomchat.settings.appearance.blur",
                             "atomchat.settings.appearance.blur.desc",
@@ -172,8 +177,8 @@ public final class SettingsCatalog {
                     new SettingsSlider("width",
                             "atomchat.settings.appearance.width",
                             400.0F, 600.0F, 10.0F,
-                            () -> AtomChatConfig.get().panelWidth,
-                            v -> AtomChatConfig.get().panelWidth = v,
+                            () -> AtomChatConfig.get().activePanelWidth(),
+                            v -> AtomChatConfig.get().setActivePanelWidth(v),
                             v -> String.valueOf(Math.round(v))),
                     new SettingsSlider("scale",
                             "atomchat.settings.appearance.scale",

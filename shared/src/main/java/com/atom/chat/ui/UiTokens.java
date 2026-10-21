@@ -88,6 +88,11 @@ public final class UiTokens {
         return radius(18);
     }
 
+    /** Edge-attached bars have a straight outer silhouette. */
+    public static float shellChromeRadius() {
+        return com.atom.chat.config.AtomChatConfig.get().halfScreenMode ? 0F : chromeRadius();
+    }
+
     /**
      * Card/chrome surface fill: the configured card colour with its alpha
      * driven by the card-tint slider (60 at 0% → 255 at 100%). The default
@@ -335,7 +340,15 @@ public final class UiTokens {
 
     // Panel
     public static float panelRadius() {
-        return radius(28);
+        return com.atom.chat.config.AtomChatConfig.get().halfScreenMode ? 0F : radius(28);
+    }
+
+    public static float panelInset() {
+        return com.atom.chat.config.AtomChatConfig.get().halfScreenMode ? 0F : PANEL_BEZEL_WIDTH;
+    }
+
+    public static float modalBackdropRadius() {
+        return com.atom.chat.config.AtomChatConfig.get().halfScreenMode ? 0F : radius(12);
     }
 
     /**
@@ -388,7 +401,7 @@ public final class UiTokens {
     // Header
     public static final float HEADER_HEIGHT = s(44);
     public static float headerRadius() {
-        return radius(16);
+        return com.atom.chat.config.AtomChatConfig.get().halfScreenMode ? 0F : radius(16);
     }
     public static final float HEADER_PAD_X = s(20);
     /**

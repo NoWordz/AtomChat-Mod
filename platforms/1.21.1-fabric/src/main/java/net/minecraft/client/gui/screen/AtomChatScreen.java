@@ -523,9 +523,22 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
                     (partner == null ? topPage() == AppPage.WORLD_CHAT && this.worldFeed.accepts(message)
                             : topPage() == AppPage.PRIVATE_CHAT && partner.equals(activePrivateTarget())));
     private final String originalChatText;
+
+    private InputHandler outsidePanelInput() {
+        return new com.atom.chat.ui.input.OutsidePanelInput(new com.atom.chat.ui.input.OutsidePanelInput.Host() {
+            public UiLayout.Rect panelRect() { return layout().rect(); }
+            public float toVirtualX(double x) { return AtomChatScreen.this.toVirtualX(x); }
+            public float toVirtualY(double y) { return AtomChatScreen.this.toVirtualY(y); }
+            public void requestClose() { AtomChatScreen.this.requestClose(); }
+            public boolean clickFloatingUi(double x, double y, int button) {
+                return isWorldChatPage() && !imagePreview.isActive() && !imageCropper.isActive()
+                        && !colorPicker.isActive() && suggestorWiring.mouseClicked((int) x, (int) y, button);
+            }
+        });
+    }
     /**
      * Ordered input routing (D23a). Priority (first registered wins): closing
-     * guard, modals (cropper/colour picker), pushed-subpage Esc, screen Esc,
+     * guard, outside-panel close, modals (cropper/colour picker), pushed-subpage Esc, screen Esc,
      * root pages, world chat. New interactive features register a handler
      * instead of inserting branches into the former if-else chains.
      *
@@ -544,6 +557,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         }
     })
             .add(new ClosingStateInput())
+            .add(outsidePanelInput())
             .add(new ModalInput())
             .add(settingsDetailPage.numberEditInput())
             .add(new BannerInput())
@@ -1872,7 +1886,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         if (blurWanted && PanelBlurRenderer.isAvailable()) {
             preUi = () -> {
                 try {
-                    float strokeWidth = UiTokens.PANEL_BEZEL_WIDTH;
+                    float strokeWidth = UiTokens.panelInset();
                     // The capture rect must be the rect drawPhone paints: the
                     // inset panel rect carried through the same open transform
                     // (zoom around the panel centre, then the slide offset).
@@ -2238,7 +2252,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         // Phone bezel: background is inset by the full stroke width so nothing can
         // bleed outside; the white ring itself is drawn LAST (see end of method)
         // so every component sits beneath a clean edge.
-        float strokeWidth = UiTokens.PANEL_BEZEL_WIDTH;
+        float strokeWidth = UiTokens.panelInset();
         // A custom wallpaper owns the panel background and beats the blur: one
         // shows the world through, the other covers it, so they never stack.
         Image wallpaper = WallpaperImage.current(WallpaperStore.current());
@@ -2246,7 +2260,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         float innerY = panel.y() + strokeWidth;
         float innerW = panel.w() - strokeWidth * 2.0F;
         float innerH = panel.h() - strokeWidth * 2.0F;
-        float innerRadius = UiTokens.panelRadius() - strokeWidth;
+        float innerRadius = Math.max(0F, UiTokens.panelRadius() - strokeWidth);
 
         if (wallpaper != null) {
             // Solid base first, then the image on top at the configured
@@ -2402,8 +2416,8 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         messageListView.setVisibleStart(window.visibleStart());
         messageListView.setLoadEarlierHovered(toVirtualX(mouseX), toVirtualY(mouseY));
         SkiaDraw.drawChromeShadow(canvas, layout.inputBar.x(), layout.inputBar.y(), layout.inputBar.w(),
-                layout.inputBar.h(), UiTokens.chromeRadius());
-        com.atom.chat.render.DotTexture.drawEdge(canvas, layout.inputBar, UiTokens.chromeRadius(), true,
+                layout.inputBar.h(), UiTokens.shellChromeRadius());
+        com.atom.chat.render.DotTexture.drawEdge(canvas, layout.inputBar, UiTokens.shellChromeRadius(), true,
                 AtomChatConfig.get().textSecondaryColor);
         messageListView.draw(canvas, layout.list.x(), layout.list.y(), layout.list.w(), layout.list.h(),
                 messages, view.scroll());
@@ -2430,15 +2444,15 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         // card never has message content underneath it.
         UiLayout.Rect bar = layout.inputBar;
         boolean readOnly = view.readOnly();
-        SkiaDraw.drawRoundedRect(canvas, bar.x(), bar.y(), bar.w(), bar.h(), UiTokens.chromeRadius(), UiTokens.cardFill());
-        com.atom.chat.render.ChromeMaterial.drawDetails(canvas, bar, UiTokens.chromeRadius());
+        SkiaDraw.drawRoundedRect(canvas, bar.x(), bar.y(), bar.w(), bar.h(), UiTokens.shellChromeRadius(), UiTokens.cardFill());
+        com.atom.chat.render.ChromeMaterial.drawDetails(canvas, bar, UiTokens.shellChromeRadius());
         if (quickPhrasePanel.isEditing()) {
             // The composer is borrowed as the phrase editor: ring it with the
             // accent so the mode is unmistakable.
             try (Paint border = new Paint().setMode(PaintMode.STROKE).setAntiAlias(true)
                     .setColor(accent()).setStrokeWidth(s(1.5F))) {
                 canvas.drawRRect(io.github.humbleui.types.RRect.makeXYWH(
-                        bar.x(), bar.y(), bar.w(), bar.h(), UiTokens.chromeRadius()), border);
+                        bar.x(), bar.y(), bar.w(), bar.h(), UiTokens.shellChromeRadius()), border);
             }
         }
         if (!readOnly) {
@@ -2586,11 +2600,11 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
      * respected, even when its contrast against the panel is low.
      */
     private void drawBezel(Canvas canvas, UiLayout layout) {
-        if (!AtomChatConfig.get().panelOutline) {
+        if (AtomChatConfig.get().halfScreenMode || !AtomChatConfig.get().panelOutline) {
             return;
         }
         UiLayout.Rect panel = layout.rect();
-        float strokeWidth = UiTokens.PANEL_BEZEL_WIDTH;
+        float strokeWidth = UiTokens.panelInset();
         try (Paint border = new Paint().setMode(PaintMode.STROKE).setStrokeWidth(strokeWidth)
                 .setColor(AtomChatConfig.get().panelOutlineColor)) {
             canvas.drawRRect(RRect.makeXYWH(panel.x() + strokeWidth / 2.0F, panel.y() + strokeWidth / 2.0F,
@@ -2663,7 +2677,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         rootMouseY = vmy;
         scrollSync.rootScroll().setContent(measureRootContent(root, rootPage), root.list.h());
         scrollSync.rootScroll().updateAnimation(System.currentTimeMillis());
-        com.atom.chat.render.DotTexture.drawEdge(canvas, root.tabBar, UiTokens.chromeRadius(), true,
+        com.atom.chat.render.DotTexture.drawEdge(canvas, root.tabBar, UiTokens.shellChromeRadius(), true,
                 AtomChatConfig.get().textSecondaryColor);
         drawRootPage(canvas, root, rootPage);
         drawScrollbar(canvas, root, vmx, vmy, scrollSync.rootScroll());
@@ -3160,7 +3174,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
      */
     private UiLayout layout() {
         float replyH = replyBarVisible() ? s(34) : 0.0F;
-        return UiLayout.of(panelX(), panelY(), panelWidth(), panelHeight(), composer.extraH(), replyH);
+        return UiLayout.of(panelX(), panelY(), panelWidth(), panelHeight(), composer.extraH(), replyH, AtomChatConfig.get().halfScreenMode);
     }
 
     // ---------------------------------------------------------------- input box

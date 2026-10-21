@@ -913,9 +913,11 @@ public final class SettingsSectionPage {
                 });
             }
             case "adjust" -> {
-                addGroup(rows, "atomchat.settings.group.appearance.layout", () ->
-                        addSliders(rows, SettingsSection.APPEARANCE,
-                                "width", "scale", "contentscale"));
+                addGroup(rows, "atomchat.settings.group.appearance.layout", () -> {
+                    addSwitches(rows, SettingsSection.APPEARANCE, "half_screen");
+                    addSliders(rows, SettingsSection.APPEARANCE,
+                            "width", "scale", "contentscale");
+                });
                 addGroup(rows, "atomchat.settings.group.appearance.transparency", () ->
                         addSliders(rows, SettingsSection.APPEARANCE,
                                 "opacity", "cardtint"));

@@ -4,6 +4,8 @@
 
 **新增**
 
+- 新增左、上、下贴边的半屏模式，现有宽度设置分别记忆手机与半屏宽度。
+- 左键点击面板外的世界画面可关闭界面，伸出面板的命令补全框仍可正常点击。
 - 图片预览支持以鼠标位置为中心的滚轮缩放，放大后可按住左键拖动查看。
 - 公屏过滤模式自动保存，关闭重开面板、切换界面及重启游戏后保留选择。
 
@@ -20,6 +22,8 @@
 
 **Added**
 
+- Add an edge-attached panel mode with separate width memory for phone and docked layouts.
+- Close the interface by left-clicking the world outside the panel while keeping extended command suggestions clickable.
 - Zoom image previews around the pointer with the mouse wheel and drag enlarged images with the left mouse button.
 - Remember the public chat filter across panel reopening, page changes and game restarts.
 
