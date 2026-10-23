@@ -40,16 +40,13 @@ public class AtomChatClient implements ClientModInitializer {
         AtomChat.LOGGER.info(com.atom.chat.diagnostics.AtomChatLog.message("startup", "AWT toolkit: {}"), AwtDisplay.claim());
         AtomChatConfig.get();
         CacheDirs.migrateFromOldConfigPaths();
-        WallpaperStore.init(
-                net.fabricmc.loader.api.FabricLoader.getInstance().getConfigDir()
-                        .resolve("atomchat/wallpaper"));
-        com.atom.chat.theme.AppearancePresetStore.init(
-                net.fabricmc.loader.api.FabricLoader.getInstance().getConfigDir()
-                        .resolve("atomchat/appearance-presets"));
-        BannerStore.init(
-                net.fabricmc.loader.api.FabricLoader.getInstance().getConfigDir()
-                        .resolve("atomchat"));
+        CacheDirs.initializePersonalDirectories();
+        WallpaperStore.init(CacheDirs.wallpaperDir());
+        com.atom.chat.theme.AppearancePresetStore.init(CacheDirs.presetsDir());
+        BannerStore.init(CacheDirs.bannerDir());
         ImageLoader.get().init(CacheDirs.imageCacheDir());
+        net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback.EVENT.register(
+                (gui, ticks) -> com.atom.chat.notification.NotificationHudOverlay.render(gui));
         com.atom.chat.net.AvatarCompanionClient.init();
         com.atom.chat.net.PokeCompanionClient.init();
         com.atom.chat.net.ReactionCompanionClient.init();
@@ -60,9 +57,7 @@ public class AtomChatClient implements ClientModInitializer {
         com.atom.chat.net.ProfileCompanionClient.init();
         com.atom.chat.net.PackNetClient.install();
         com.atom.chat.net.ConfigScreenClient.init();
-        com.atom.chat.history.ChatHistory.init(
-                net.fabricmc.loader.api.FabricLoader.getInstance().getConfigDir()
-                        .resolve("atomchat/history"));
+        com.atom.chat.history.ChatHistory.init(CacheDirs.historyDir());
         ResourceManagerHelper.get(ResourceType.CLIENT_RESOURCES).registerReloadListener(new SimpleSynchronousResourceReloadListener() {
             @Override
             public Identifier getFabricId() {
@@ -81,6 +76,7 @@ public class AtomChatClient implements ClientModInitializer {
             // join-time system lines start arriving.
             com.atom.chat.history.ChatHistory.onJoin(client);
         com.atom.chat.chat.DraftSessionStore.reset();
+        NotificationBanner.INSTANCE.reset();
             com.atom.chat.page.ProfilePage.noteJoin();
             com.atom.chat.net.AvatarCompanionClient.onJoin();
             com.atom.chat.net.MediaCompanionClient.onJoin();
@@ -93,6 +89,7 @@ public class AtomChatClient implements ClientModInitializer {
             // Save before the stores are cleared, then drop the world key.
             com.atom.chat.history.ChatHistory.onDisconnect(client);
         com.atom.chat.chat.DraftSessionStore.reset();
+        NotificationBanner.INSTANCE.reset();
             PrivateChatStore.reset();
             PrivateEchoTracker.clear();
             com.atom.chat.chat.PublicEchoTracker.clear();

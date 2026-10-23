@@ -7,8 +7,8 @@ import java.nio.file.StandardCopyOption;
 import java.util.stream.Stream;
 
 /**
- * The custom profile banner: at most one image, living directly in
- * {@code <config>/atomchat/} as {@code banner.png} (or {@code banner.jpg} /
+ * The custom profile banner: at most one image, living in
+ * {@code <gameDir>/atomchat/client/banner/} as {@code banner.png} (or {@code banner.jpg} /
  * {@code .jpeg} / {@code .webp} when the picked source carries that
  * extension). Setting a new one copies it in (the source is kept) and drops
  * any previous {@code banner.*}; clearing deletes the file, which falls the
@@ -52,15 +52,17 @@ public final class BannerStore {
     /** Re-scans the banner dir for a {@code banner.*} file. */
     public static void refresh() {
         current = null;
-        if (dir == null || !Files.isDirectory(dir)) {
+        if (!com.atom.chat.util.DataMigration.allowPersonalPath(dir) || !Files.isDirectory(dir)) {
             return;
         }
         try (Stream<Path> files = Files.list(dir)) {
             files.filter(Files::isRegularFile)
+                    .filter(com.atom.chat.util.DataMigration::allowPersonalPath)
                     .filter(p -> {
                         String n = p.getFileName().toString().toLowerCase();
                         return n.startsWith(BASE_NAME) && isSupportedName(n);
                     })
+                    .sorted()
                     .findFirst()
                     .ifPresent(p -> current = p);
         } catch (IOException e) {
@@ -88,10 +90,13 @@ public final class BannerStore {
             return false;
         }
         try {
+            if (!com.atom.chat.util.DataMigration.allowPersonalPath(dir)) return false;
             Files.createDirectories(dir);
             Path tmp = dir.resolve(BASE_NAME + ".png.tmp");
+            if (!com.atom.chat.util.DataMigration.allowPersonalPath(tmp)) return false;
             Files.write(tmp, bytes);
             Path png = dir.resolve(BASE_NAME + ".png");
+            if (!com.atom.chat.util.DataMigration.allowPersonalPath(png)) return false;
             Files.move(tmp, png,
                     StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
             removeExisting(png);
@@ -129,11 +134,12 @@ public final class BannerStore {
      */
     private static boolean removeExisting(Path keep) {
         boolean removed = false;
-        if (!Files.isDirectory(dir)) {
+        if (!com.atom.chat.util.DataMigration.allowPersonalPath(dir) || !Files.isDirectory(dir)) {
             return false;
         }
         try (Stream<Path> files = Files.list(dir)) {
-            for (Path p : files.filter(Files::isRegularFile).toList()) {
+            for (Path p : files.filter(Files::isRegularFile)
+                    .filter(com.atom.chat.util.DataMigration::allowPersonalPath).toList()) {
                 if (p.equals(keep)) {
                     continue;
                 }

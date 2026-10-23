@@ -19,7 +19,7 @@ import java.util.function.Supplier;
 
 /**
  * Server side of the media companion (0.2.7): hosts chat images / GIFs in
- * {@code <gameDir>/atomchat-data/media/} and streams them back over the game
+ * {@code <gameDir>/atomchat/server/media/} and streams them back over the game
  * connection. No HTTP port, no public exposure - bytes only ever reach a
  * connected player.
  *

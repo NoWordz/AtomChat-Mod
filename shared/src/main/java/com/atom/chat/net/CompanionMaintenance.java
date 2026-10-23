@@ -14,7 +14,7 @@ import java.util.UUID;
 
 /**
  * Retention and lifecycle housekeeping for the two server-hosted stores,
- * {@code atomchat-data/media/} and {@code atomchat-data/avatars/}.
+ * {@code atomchat/server/media/} and {@code atomchat/server/avatars/}.
  *
  * <p>Both stores are pruned the same way: every file older than
  * {@code retentionDays} goes first, then the oldest files are deleted until the

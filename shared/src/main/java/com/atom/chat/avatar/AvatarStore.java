@@ -8,7 +8,7 @@ import java.util.stream.Stream;
 
 /**
  * The local custom avatar: at most one image, living in
- * {@code <config>/atomchat/avatar/}. Setting a new one copies it in (the
+ * {@code <gameDir>/atomchat/client/avatar/}. Setting a new one copies it in (the
  * source is kept) and drops any previous {@code avatar.*}; clearing removes
  * it, which falls the profile back to the real skin.
  *
@@ -49,15 +49,17 @@ public final class AvatarStore {
     /** Re-scans the avatar dir for an {@code avatar.*} file. */
     public final void refresh() {
         current = null;
-        if (dir == null || !Files.isDirectory(dir)) {
+        if (!com.atom.chat.util.DataMigration.allowPersonalPath(dir) || !Files.isDirectory(dir)) {
             return;
         }
         try (Stream<Path> files = Files.list(dir)) {
             files.filter(Files::isRegularFile)
+                    .filter(com.atom.chat.util.DataMigration::allowPersonalPath)
                     .filter(p -> {
                         String n = p.getFileName().toString().toLowerCase();
                         return n.startsWith(BASE_NAME) && isSupportedName(n);
                     })
+                    .sorted()
                     .findFirst()
                     .ifPresent(p -> current = p);
         } catch (IOException e) {
@@ -85,13 +87,15 @@ public final class AvatarStore {
         }
         String ext = name.substring(name.lastIndexOf('.')).toLowerCase();
         try {
+            if (!com.atom.chat.util.DataMigration.allowPersonalPath(dir)) return false;
             Files.createDirectories(dir);
-            removeExisting();
             Path dest = dir.resolve(BASE_NAME + ext);
+            if (!com.atom.chat.util.DataMigration.allowPersonalPath(dest)) return false;
             if (source.toAbsolutePath().normalize().equals(dest.toAbsolutePath().normalize())) {
                 refresh();
                 return true;
             }
+            removeExisting();
             Files.copy(source, dest, StandardCopyOption.REPLACE_EXISTING);
             refresh();
             return true;
@@ -109,7 +113,9 @@ public final class AvatarStore {
             return false;
         }
         try {
+            if (!com.atom.chat.util.DataMigration.allowPersonalPath(dir)) return false;
             Files.createDirectories(dir);
+            if (!com.atom.chat.util.DataMigration.allowPersonalPath(dir.resolve(BASE_NAME + ".png"))) return false;
             removeExisting();
             Files.write(dir.resolve(BASE_NAME + ".png"), bytes);
             refresh();
@@ -128,11 +134,12 @@ public final class AvatarStore {
 
     private boolean removeExisting() {
         boolean removed = false;
-        if (!Files.isDirectory(dir)) {
+        if (!com.atom.chat.util.DataMigration.allowPersonalPath(dir) || !Files.isDirectory(dir)) {
             return false;
         }
         try (Stream<Path> files = Files.list(dir)) {
-            for (Path p : files.filter(Files::isRegularFile).toList()) {
+            for (Path p : files.filter(Files::isRegularFile)
+                    .filter(com.atom.chat.util.DataMigration::allowPersonalPath).toList()) {
                 String n = p.getFileName().toString().toLowerCase();
                 if (n.startsWith(BASE_NAME) && isSupportedName(n)) {
                     try {

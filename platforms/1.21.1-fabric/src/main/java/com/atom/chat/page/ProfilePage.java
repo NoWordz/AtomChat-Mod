@@ -75,7 +75,7 @@ public final class ProfilePage {
         /**
          * Opens the system image picker for the profile banner card (local
          * player only); the shell copies the pick into
-         * {@code <config>/atomchat/banner.*} and the page hot-loads it.
+         * {@code <gameDir>/atomchat/banner.*} and the page hot-loads it.
          */
         void openBannerPicker();
 
@@ -898,7 +898,7 @@ public final class ProfilePage {
         }
         if (subjectIsSelf() && bannerRect(layout, scrollY).contains(vmx, vmy)) {
             // The banner card is the custom-banner entry (the chip names it):
-            // the pick lands in <config>/atomchat/banner.* and hot-loads. The
+            // the pick lands in <gameDir>/atomchat/banner.* and hot-loads. The
             // avatar's top half overlaps this card; the guard above consumes
             // those points, including the hat outset and former edit badge.
             handler.openBannerPicker();

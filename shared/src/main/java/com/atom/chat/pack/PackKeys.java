@@ -5,7 +5,7 @@ import java.util.Locale;
 
 /**
  * Directory naming for downloaded packs: one folder per world/server under
- * {@code atomchat-data/packs/}.
+ * {@code atomchat/cache/packs/}.
  *
  * <p>The folder name is the hash of the address the client dialled (or the
  * single-player level name), never anything that came off the wire, so it can

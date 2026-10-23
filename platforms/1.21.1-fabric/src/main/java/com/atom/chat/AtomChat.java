@@ -17,6 +17,7 @@ public class AtomChat implements ModInitializer {
         // 第一件事：把平台门面装上（共享层要问加载器的事情都走它）。
         // 必须在任何配置/路径访问之前 —— 没装就抛错，不给默认值。
         com.atom.chat.platform.Platform.install(new com.atom.chat.platform.FabricPlatform());
+        com.atom.chat.util.CacheDirs.migrateFromOldConfigPaths();
         // Config seam for anti-spam: wire the pure logic to the real config
         // only in a real launch (unit tests keep the safe no-merge default).
         com.atom.chat.chat.MessageMerge.antiSpamEnabledSupplier =
@@ -52,7 +53,7 @@ public class AtomChat implements ModInitializer {
         com.atom.chat.net.ConfigPayloads.register();
         com.atom.chat.net.ConfigScreenServer.register();
         // Retention and lifecycle housekeeping for the two hosted stores
-        // (atomchat-data/media and /avatars). The start and tick hooks only run
+        // (atomchat/media and /avatars). The start and tick hooks only run
         // for a server - a dedicated one, or the integrated one of a
         // single-player world - so a plain client connected to someone else's
         // server never sweeps its own game directory.

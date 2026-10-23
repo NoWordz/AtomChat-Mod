@@ -24,6 +24,7 @@ public class AtomChat {
         // 第一件事：把平台门面装上（共享层要问加载器的事情都走它）。
         // 必须在任何配置/路径访问之前 —— 没装就抛错，不给默认值。
         com.atom.chat.platform.Platform.install(new com.atom.chat.platform.ForgePlatform());
+        com.atom.chat.util.CacheDirs.migrateFromOldConfigPaths();
         // The pack seams go up in the same breath: the shared sender and the
         // server facts it asks for. Both sides of the network seam live here and
         // in AtomChatClient; a missing install throws at the first packet.
@@ -55,7 +56,7 @@ public class AtomChat {
         }));
 
         // Retention and lifecycle housekeeping for the two hosted stores
-        // (atomchat-data/media and /avatars). These sit on the game bus: the
+        // (atomchat/media and /avatars). These sit on the game bus: the
         // tick fires for a dedicated server and for the integrated server of a
         // single-player world alike, while a client connected to someone else's
         // server never sees either event.

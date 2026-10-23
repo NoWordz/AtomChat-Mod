@@ -15,7 +15,13 @@ public final class UiTokens {
     public static final float SETTINGS_SWATCH_RADIUS = s(9);
     public static final float SETTINGS_SWATCH_BOTTOM = s(22);
     public static final float SETTINGS_VALUE_BAND = s(24);
+    public static final float SETTINGS_STEPPER_ARROW = s(28);
+    public static final float SETTINGS_STEPPER_GAP = s(4);
+    public static final float SETTINGS_STEPPER_VALUE_MAX = s(160);
+    public static final float SETTINGS_STEPPER_CHEVRON = s(5);
     public static final float HEADER_TEXT_GAP = s(8);
+    public static final float INLINE_ITEM_GAP = s(2);
+    public static final float NOTIFICATION_STACK_GAP = s(6);
 
     /** Reference size and scaled font size for decorative chat emoji. */
     public static final float CHAT_EFFECT_EMOJI_BASE_SIZE = 24F;
@@ -441,6 +447,8 @@ public final class UiTokens {
     public static final float BUTTON_W = s(56);
     public static final float BUTTON_H = s(30);
     public static final float BUTTON_GAP = s(6);
+    /** Maximum width of the HUD layout editor's floating control tray. */
+    public static final float HUD_EDITOR_TOOLBAR_W = s(640);
     public static final float COMPOSER_KEY_GAP = s(4);
 
     // Input bar. INPUT_HEIGHT is the one-line baseline; the bar grows upward by

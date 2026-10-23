@@ -1,4 +1,5 @@
 accessWidener v2 named
+accessible field net/minecraft/client/gui/screen/Screen drawables Ljava/util/List;
 accessible field net/minecraft/client/gui/screen/ChatScreen chatField Lnet/minecraft/client/gui/widget/TextFieldWidget;
 accessible field net/minecraft/client/gui/screen/ChatScreen chatInputSuggestor Lnet/minecraft/client/gui/screen/ChatInputSuggestor;
 accessible field net/minecraft/client/gui/widget/TextFieldWidget selectionStart I

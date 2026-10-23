@@ -51,7 +51,7 @@ import java.util.function.LongSupplier;
  *       images; evicted entries rely on Skija's managed finalisation rather
  *       than an eager {@code close()} so a bitmap drawn in the current frame
  *       can never be pulled from under the renderer.</li>
- *   <li><b>Disk cache</b> — processed cache files under {@code <gameDir>/atomchat-data/image-cache/}
+ *   <li><b>Disk cache</b> — processed cache files under {@code <gameDir>/atomchat/cache/images/}
  *       (SHA-256 of the URL), so re-entering a world does not re-download.
  *       Files are re-encoded as WebP/PNG at the {@value #MAX_DIM}px display
  *       size instead of storing the original download, so the disk layer is
@@ -148,7 +148,7 @@ public final class ImageLoader {
     /** Enables the disk layer and trims any over-limit leftovers; called once
      *  by the client entrypoint. */
     public void init(Path diskDir) {
-        this.diskDir = diskDir;
+        this.diskDir = com.atom.chat.util.DataMigration.allowPersonalPath(diskDir) ? diskDir : null;
         trimDiskCache();
     }
 
@@ -293,7 +293,7 @@ public final class ImageLoader {
 
     private void load(String url, Path disk) {
         try {
-            boolean fromDisk = disk != null && Files.exists(disk);
+            boolean fromDisk = disk != null && com.atom.chat.util.DataMigration.allowPersonalPath(disk) && Files.exists(disk);
             byte[] bytes;
             if(fromDisk) { try(java.io.InputStream input=Files.newInputStream(disk)) { bytes=readSource(input); } }
             else bytes=fetcher.fetch(url);
@@ -397,8 +397,11 @@ public final class ImageLoader {
         }
         Path tmp = null;
         try {
+            com.atom.chat.util.DataMigration.noLinks(disk);
+            Path stage = disk.resolveSibling(disk.getFileName() + ".tmp");
+            com.atom.chat.util.DataMigration.noLinks(stage);
             Files.createDirectories(disk.getParent());
-            tmp = disk.resolveSibling(disk.getFileName() + ".tmp");
+            tmp = stage;
             Files.write(tmp, bytes);
             Files.move(tmp, disk, StandardCopyOption.REPLACE_EXISTING);
         } catch (Exception e) {
@@ -436,6 +439,7 @@ public final class ImageLoader {
             return;
         }
         try {
+            com.atom.chat.util.DataMigration.noLinks(disk);
             Files.setLastModifiedTime(disk, FileTime.fromMillis(now));
         } catch (IOException ignored) {
             // Nothing to do: the entry keeps its previous stamp.
@@ -450,7 +454,7 @@ public final class ImageLoader {
      */
     public void trimDiskCache() {
         Path dir = diskDir;
-        if (dir == null || !Files.isDirectory(dir)) {
+        if (!com.atom.chat.util.DataMigration.allowPersonalPath(dir) || !Files.isDirectory(dir)) {
             return;
         }
         long cutoff = System.currentTimeMillis() - MAX_DISK_AGE_MS;
@@ -458,7 +462,8 @@ public final class ImageLoader {
             List<Path> files = new ArrayList<>();
             long total = 0L;
             for (Path p : (Iterable<Path>) stream::iterator) {
-                if (!p.getFileName().toString().endsWith(".bin")) {
+                if (!com.atom.chat.util.DataMigration.allowPersonalPath(p)
+                        || !p.getFileName().toString().endsWith(".bin")) {
                     continue;
                 }
                 long modified = modifiedOrZero(p);
@@ -496,7 +501,7 @@ public final class ImageLoader {
     /** Total bytes currently stored in the disk cache (0 when not initialised). */
     public long diskCacheBytes() {
         Path dir = diskDir;
-        if (dir == null || !Files.isDirectory(dir)) {
+        if (!com.atom.chat.util.DataMigration.allowPersonalPath(dir) || !Files.isDirectory(dir)) {
             return 0L;
         }
         long total = 0L;
@@ -522,13 +527,14 @@ public final class ImageLoader {
      */
     public int clearDiskCache() {
         Path dir = diskDir;
-        if (dir == null || !Files.isDirectory(dir)) {
-            return 0;
-        }
+        if (dir == null) return 0;
+        if (!com.atom.chat.util.DataMigration.allowPersonalPath(dir)) return -1;
+        if (!Files.isDirectory(dir)) return 0;
         int deleted = 0;
         try (var stream = Files.list(dir)) {
             for (Path p : (Iterable<Path>) stream::iterator) {
-                if (!p.getFileName().toString().endsWith(".bin")) {
+                if (!com.atom.chat.util.DataMigration.allowPersonalPath(p)
+                        || !p.getFileName().toString().endsWith(".bin")) {
                     continue;
                 }
                 try {
@@ -581,10 +587,9 @@ public final class ImageLoader {
 
     private Path diskFile(String url) {
         Path dir = diskDir;
-        if (dir == null) {
-            return null;
-        }
-        return dir.resolve(sha256Hex(url) + ".bin");
+        if (!com.atom.chat.util.DataMigration.allowPersonalPath(dir)) return null;
+        Path candidate = dir.resolve(sha256Hex(url) + ".bin");
+        return com.atom.chat.util.DataMigration.allowPersonalPath(candidate) ? candidate : null;
     }
 
     /** Fits the image inside {@link #MAX_DIM} without ever upscaling it. */

@@ -24,7 +24,6 @@ import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.eventbus.api.IEventBus;
 import net.minecraftforge.fml.event.lifecycle.FMLClientSetupEvent;
-import net.minecraftforge.fml.loading.FMLPaths;
 import org.lwjgl.glfw.GLFW;
 
 /**
@@ -52,6 +51,7 @@ public final class AtomChatClient {
         modEventBus.addListener(AtomChatClient::onClientSetup);
         modEventBus.addListener(AtomChatClient::registerKeyMappings);
         modEventBus.addListener(AtomChatClient::registerReloadListener);
+        modEventBus.addListener(AtomChatClient::registerNotificationOverlay);
         // Sound events must go through RegisterEvent: constructing the mod can
         // happen after the registries are already frozen (see
         // NotificationController#registerSound).
@@ -66,10 +66,10 @@ public final class AtomChatClient {
     private static void onClientSetup(FMLClientSetupEvent event) {
         AtomChatConfig.get();
         CacheDirs.migrateFromOldConfigPaths();
-        WallpaperStore.init(FMLPaths.CONFIGDIR.get().resolve("atomchat/wallpaper"));
-        com.atom.chat.theme.AppearancePresetStore.init(
-                FMLPaths.CONFIGDIR.get().resolve("atomchat/appearance-presets"));
-        BannerStore.init(FMLPaths.CONFIGDIR.get().resolve("atomchat"));
+        CacheDirs.initializePersonalDirectories();
+        WallpaperStore.init(CacheDirs.wallpaperDir());
+        com.atom.chat.theme.AppearancePresetStore.init(CacheDirs.presetsDir());
+        BannerStore.init(CacheDirs.bannerDir());
         ImageLoader.get().init(CacheDirs.imageCacheDir());
         com.atom.chat.net.PackNetClient.install();
         com.atom.chat.net.AvatarCompanionClient.init();
@@ -77,8 +77,13 @@ public final class AtomChatClient {
         com.atom.chat.net.ReactionCompanionClient.init();
         com.atom.chat.net.MediaCompanionClient.init();
         com.atom.chat.net.ProfileCompanionClient.init();
-        com.atom.chat.history.ChatHistory.init(FMLPaths.CONFIGDIR.get().resolve("atomchat/history"));
+        com.atom.chat.history.ChatHistory.init(CacheDirs.historyDir());
         AtomChat.LOGGER.info(com.atom.chat.diagnostics.AtomChatLog.message("startup", "AtomChat client initialized"));
+    }
+
+    private static void registerNotificationOverlay(net.minecraftforge.client.event.RegisterGuiOverlaysEvent event) {
+        event.registerAboveAll("notifications", (gui, graphics, partialTick, width, height) ->
+                com.atom.chat.notification.NotificationHudOverlay.render(graphics));
     }
 
     private static void registerKeyMappings(RegisterKeyMappingsEvent event) {
@@ -95,6 +100,7 @@ public final class AtomChatClient {
         // join-time system lines start arriving.
         com.atom.chat.history.ChatHistory.onJoin(client);
         com.atom.chat.chat.DraftSessionStore.reset();
+        NotificationBanner.INSTANCE.reset();
         com.atom.chat.page.ProfilePage.noteJoin();
         com.atom.chat.net.AvatarCompanionClient.onJoin();
         com.atom.chat.net.MediaCompanionClient.onJoin();
@@ -109,6 +115,7 @@ public final class AtomChatClient {
         // Save before the stores are cleared, then drop the world key.
         com.atom.chat.history.ChatHistory.onDisconnect(client);
         com.atom.chat.chat.DraftSessionStore.reset();
+        NotificationBanner.INSTANCE.reset();
         PrivateChatStore.reset();
         PrivateEchoTracker.clear();
         com.atom.chat.chat.PublicEchoTracker.clear();

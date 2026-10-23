@@ -16,7 +16,7 @@ This is the most common question, and the rule is a single line: **if the server
 
 | Route | When it is used | What happens |
 |---|---|---|
-| **Server-hosted** | The server runs AtomChat and `hostingEnabled=true` | The image is stored in the server's `atomchat-data/media/` (the file name is its content hash, so the same image is stored once), the message carries an `atomchat-media:<id>` short link, and other players fetch it from the server on demand — over the game connection only, **no HTTP port is opened** |
+| **Server-hosted** | The server runs AtomChat and `hostingEnabled=true` | The image is stored in the server's `atomchat/server/media/` (the file name is its content hash, so the same image is stored once), the message carries an `atomchat-media:<id>` short link, and other players fetch it from the server on demand — over the game connection only, **no HTTP port is opened** |
 | **Third-party host** | The server does not run AtomChat / `hostingEnabled` is off / the file is over `maxFileKb` (2 MB by default) / the upload failed | The image goes to [uguu.se](https://uguu.se) and the message carries an ordinary https link — **which expires after roughly three hours** |
 
 Falling back is designed behaviour, not a failure: without server hosting you can still send images, they just expire.
@@ -45,9 +45,9 @@ Hosted media is kept for **7 days** by default (`retentionDays`; `0` means forev
 
 | Contents | Path |
 |---|---|
-| Downloaded / uploaded image cache | `<game dir>/atomchat-data/image-cache/` |
-| Server-offered emotes, other players' avatars, … | `<game dir>/atomchat-data/packs/`, `atomchat-data/avatars/` |
-| Server-side hosted media | `<server game dir>/atomchat-data/media/`, `avatars/` |
+| Downloaded / uploaded image cache | `<game dir>/atomchat/cache/images/` |
+| Server-offered emotes, other players' avatars, … | `<game dir>/atomchat/cache/packs/`, `atomchat/server/avatars/` |
+| Server-side hosted media | `<server game dir>/atomchat/server/media/`, `avatars/` |
 
 The client cache has three automatic gates: **at most 500 files, at most 100 MB, and anything unused for 7 days is deleted** (reading a file refreshes its timestamp). To clear it now: `Settings → About → Clear image cache` — it clears only the image cache and leaves emotes, wallpaper and avatars alone.
 

@@ -4,7 +4,7 @@ import com.atom.chat.avatar.AvatarStore;
 import com.atom.chat.banner.BannerStore;
 import com.atom.chat.config.AtomChatConfig;
 import com.atom.chat.image.ImageLoader;
-import com.atom.chat.platform.Platform;
+
 import io.github.humbleui.skija.Image;
 import java.nio.file.Path;
 import java.util.UUID;
@@ -21,7 +21,7 @@ public final class ProfileSync {
     public static void install(ProfileTransport adapter) {
         transport = adapter;
         publication = new ProfilePublication(adapter);
-        BannerStore.init(Platform.configDir().resolve("atomchat"));
+        BannerStore.init(com.atom.chat.util.CacheDirs.bannerDir());
     }
     public static void clearConnection() {
         CACHE.clear();
@@ -96,13 +96,13 @@ public final class ProfileSync {
     public static boolean remoteOnlyImage(ProfileField field) {
         if (!hasOwnImage(field)) return false;
         return field == ProfileField.AVATAR
-                ? new AvatarStore(Platform.configDir().resolve("atomchat/avatar")).current() == null
+                ? new AvatarStore(com.atom.chat.util.CacheDirs.avatarDir()).current() == null
                 : !BannerStore.isSet();
     }
     public static void synchronizeImages() {
         if (publication == null) return;
         AtomChatConfig cfg = AtomChatConfig.get();
-        Path avatar = new AvatarStore(Platform.configDir().resolve("atomchat/avatar")).current();
+        Path avatar = new AvatarStore(com.atom.chat.util.CacheDirs.avatarDir()).current();
         if (cfg.profileAvatarCleared) publication.text(ProfileField.AVATAR, "");
         else if (avatar != null) imageEdited(ProfileField.AVATAR, avatar);
         if (cfg.profileBannerCleared) publication.text(ProfileField.BANNER, "");

@@ -145,6 +145,7 @@ public class ChatHudMixin {
         TeleportCommands.checkFailure(raw);
 
         SenderMeta meta = MessageCapture.consume();
+        if (meta == null) meta = ChatPipeline.structuredPlayerLine(message);
         if (AtomChatConfig.get().debug) {
             // Whether the channel-level capture landed at all: a missing meta is
             // why an own line falls through to the text heuristics (2026-09-11).
@@ -208,12 +209,8 @@ public class ChatHudMixin {
                 addSystemMessage(message);
                 return;
             }
-            // Deliberately no own-echo suppression here. This branch has no
-            // channel-level identity, so parsing the line as "looks like me" is
-            // not proof it is our own echo — mods (Xaero path analysis, server
-            // waypoints, etc.) can emit own-name-shaped system lines. Suppressing
-            // them makes real messages vanish from the panel; showing a possible
-            // duplicate is the safer failure per e33chat's "宁可不杀" rule.
+            // A mod can send as the local player without creating our local bubble.
+            // Suppress only a matching pending send, never identity alone.
             String displayName = parsed.senderName() != null ? parsed.senderName() : parsed.profileName();
             if (AtomChatConfig.get().hideBlockedMessages
                     && displayName != null && BlockList.isBlocked(displayName)) {
@@ -228,19 +225,14 @@ public class ChatHudMixin {
                     : atomchat$ensureSenderColor(
                             displayName != null ? RichText.literal(displayName) : RichText.empty(),
                             parsed.profileName());
-            // Own echo on this identity-less path (NCR-style relays). Two
-            // independent signals, either one is enough:
-            //  - the wire name is one of our own renderings (team prefix/suffix
-            //    included), or
-            //  - the text is exactly a message we just sent and no other player is
-            //    named in the line (e33chat's EchoTracker contract: content first,
-            //    never a time-only guess).
+            // Identity controls bubble alignment; a matching pending local send
+            // is the independent proof that an incoming line is a duplicate.
             boolean ownIdentity = atomchat$isOwnIdentity(parsed, client);
             boolean ownEchoText = false;
-            if (!ownIdentity && !atomchat$otherPlayerNamed(raw, client)) {
+            if (ownIdentity || !atomchat$otherPlayerNamed(raw, client)) {
                 ownEchoText = PublicEchoTracker.consumeIfEcho(body, raw);
             }
-            if (ownIdentity || ownEchoText) {
+            if (ownEchoText) {
                 // The local bubble already exists; only keep the server-decorated
                 // label as the self-name cache source (e33chat parity).
                 if (AtomChatConfig.get().debug) {
@@ -254,7 +246,7 @@ public class ChatHudMixin {
                 RichText richContent = quote != null
                         ? ChatPipeline.quoteBodyRich(sliced.get().content(), body)
                         : sliced.get().content().linkifyUrls();
-                atomchat$addPublic(new ChatMessage(message, false, parsed.system(),
+                atomchat$addPublic(new ChatMessage(message, ownIdentity, parsed.system(),
                         quote != null ? quote.quoteName() : null,
                         quote != null ? quote.quoteText() : null,
                         parsed.senderUuid(), displayName, parsed.profileName(), body,
@@ -263,7 +255,7 @@ public class ChatHudMixin {
                 RichText richContent = quote != null
                         ? ChatPipeline.quoteBodyRich(RichText.of(message), body)
                         : RichText.literal(body).linkifyUrls();
-                atomchat$addPublic(new ChatMessage(message, false, parsed.system(),
+                atomchat$addPublic(new ChatMessage(message, ownIdentity, parsed.system(),
                         quote != null ? quote.quoteName() : null,
                         quote != null ? quote.quoteText() : null,
                         parsed.senderUuid(), displayName, parsed.profileName(), body,
@@ -276,11 +268,11 @@ public class ChatHudMixin {
         String content = ChatPipeline.extractContent(raw, meta);
         boolean own = isOwn(meta, raw, client);
         boolean ownEchoText = false;
-        if (!own && !atomchat$otherPlayerNamed(raw, client)) {
+        if (own || !atomchat$otherPlayerNamed(raw, client)) {
             // Identity-less relay of our own line: the decorated wire name is not
             // proof, the text we just sent is (e33chat parity).
             ownEchoText = PublicEchoTracker.consumeIfEcho(content, raw);
-            own = ownEchoText;
+            own |= ownEchoText;
         }
         if (AtomChatConfig.get().debug) {
             // Why a line was routed to the own-echo branch vs the public feed:
@@ -289,7 +281,7 @@ public class ChatHudMixin {
             AtomChat.LOGGER.info(com.atom.chat.diagnostics.AtomChatLog.message("route", "[route] own={} textEcho={} uuid={} sender={} profile={} text={}"),
                     own, ownEchoText, meta.senderUuid(), meta.senderName(), meta.profileName(), raw);
         }
-        if (own) {
+        if (ownEchoText) {
             // Own message echo: already added locally by AtomChatScreen. The
             // server-decorated component is the best self-name source — cache
             // it so the local echo bubbles can show "[Title]Name" too. NCR-style
@@ -344,7 +336,7 @@ public class ChatHudMixin {
             contentRich = ChatPipeline.quoteBodyRich(contentRich, body);
         }
         senderRich = atomchat$ensureSenderColor(senderRich, meta.profileName());
-        atomchat$addPublic(new ChatMessage(message, false, meta.system(),
+        atomchat$addPublic(new ChatMessage(message, own, meta.system(),
                 quote != null ? quote.quoteName() : null,
                 quote != null ? quote.quoteText() : null,
                 meta.senderUuid(), displayName, meta.profileName(), body,
@@ -359,7 +351,7 @@ public class ChatHudMixin {
     @Unique
     private static void atomchat$addPublic(ChatMessage message, String body, boolean system) {
         boolean merged = ChatStore.get().add(message);
-        if (system || merged) {
+        if (system || merged || message.isOwn()) {
             return;
         }
         Minecraft client = Minecraft.getInstance();

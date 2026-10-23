@@ -1,0 +1,47 @@
+[
+  {
+    "file": "D:\\AtomChat-Main\\.work\\0.3.3-final\\dist\\atomchat-Forge-1.20.1-0.4.0-preview-windows-x64.jar",
+    "bytes": 19139461,
+    "sha256": "33c8c35aacaa8d7d559cb9430e28e00adf8d81f3856b58db6e9678fa605884e4"
+  },
+  {
+    "file": "D:\\AtomChat-Main\\.work\\0.3.3-final\\dist\\atomchat-Forge-1.20.1-0.4.0-preview-windows-arm64.jar",
+    "bytes": 18515751,
+    "sha256": "5da68bde654108133319bcb484a508cd2e9ae137f4943d5b507f017fde1268f9"
+  },
+  {
+    "file": "D:\\AtomChat-Main\\.work\\0.3.3-final\\dist\\atomchat-Forge-1.20.1-0.4.0-preview-linux-x64.jar",
+    "bytes": 20266651,
+    "sha256": "b78e065039615e69bc9e971fa577d746d5482bcf501d9745a3dc35330b693d60"
+  },
+  {
+    "file": "D:\\AtomChat-Main\\.work\\0.3.3-final\\dist\\atomchat-NeoForge-1.21.1-0.4.0-preview-windows-x64.jar",
+    "bytes": 19152525,
+    "sha256": "f4e60a740a4f4ef77958ef7819806d19c8b5ab5330addf632cc5631304f47ee9"
+  },
+  {
+    "file": "D:\\AtomChat-Main\\.work\\0.3.3-final\\dist\\atomchat-NeoForge-1.21.1-0.4.0-preview-windows-arm64.jar",
+    "bytes": 18528816,
+    "sha256": "9e844b82d1c060a172ff901f7e17c1d168226f7896d0dcb63ebb87bed8eefca6"
+  },
+  {
+    "file": "D:\\AtomChat-Main\\.work\\0.3.3-final\\dist\\atomchat-NeoForge-1.21.1-0.4.0-preview-linux-x64.jar",
+    "bytes": 20279713,
+    "sha256": "c6131cd5c69704a66125702168235e3dbf5ce881e0bed7a50853cdca5dd30b36"
+  },
+  {
+    "file": "D:\\AtomChat-Main\\.work\\0.3.3-final\\dist\\atomchat-Fabric-1.21.1-0.4.0-preview-windows-x64.jar",
+    "bytes": 19159813,
+    "sha256": "68c2b2232631f6379d13c9e1a41ee42d57e972cbc73ed83ad4c9be582f090926"
+  },
+  {
+    "file": "D:\\AtomChat-Main\\.work\\0.3.3-final\\dist\\atomchat-Fabric-1.21.1-0.4.0-preview-windows-arm64.jar",
+    "bytes": 18536098,
+    "sha256": "429a93e41e189dc11a60303d714be59b4b35485824e572cf50ee18735dbd486d"
+  },
+  {
+    "file": "D:\\AtomChat-Main\\.work\\0.3.3-final\\dist\\atomchat-Fabric-1.21.1-0.4.0-preview-linux-x64.jar",
+    "bytes": 20287000,
+    "sha256": "6314eef4184f51e7dfcb2bbbad37e3d57bd514633a8ffa0fab7f4f925d047fe4"
+  }
+]

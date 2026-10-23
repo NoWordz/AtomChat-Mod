@@ -13,13 +13,14 @@
 分组是编译期事实：甲组少一个类型，那个目标当场编不过。判据用简单名的词边界匹配
 （覆盖 import 全限定名与同包简单名两种写法），偏保守 —— 注释里的提及也算，宁可多列。
 
-当前：甲组 **125** 个，乙组 **71** 个。
+当前：甲组 **139** 个，乙组 **70** 个。
 
 ## 甲：共用代码引用了的（接缝）
 
 | 类型 | 出现的目标 |
 |---|---|
 | `com.atom.chat.AtomChat` | 1.20.1-forge, 1.21.1-fabric, 1.21.1-neoforge |
+| `com.atom.chat.AtomChatClient` | 1.20.1-forge, 1.21.1-fabric, 1.21.1-neoforge |
 | `com.atom.chat.avatar.ColorPickerOverlay` | 1.21.1-fabric |
 | `com.atom.chat.avatar.ImageCropper` | 1.21.1-fabric |
 | `com.atom.chat.chat.ChatClassifier` | 1.21.1-fabric |
@@ -42,6 +43,7 @@
 | `com.atom.chat.chat.SendPipelineTest` | 1.21.1-fabric |
 | `com.atom.chat.chat.SenderMeta` | 1.21.1-fabric |
 | `com.atom.chat.chat.SenderMetaTest` | 1.21.1-fabric |
+| `com.atom.chat.chat.StructuredPlayerMessageTest` | 1.21.1-fabric |
 | `com.atom.chat.chat.TeleportCommands` | 1.21.1-fabric |
 | `com.atom.chat.chat.TellClickDetector` | 1.21.1-fabric |
 | `com.atom.chat.config.ServerConfigScreen` | 1.20.1-forge, 1.21.1-fabric, 1.21.1-neoforge |
@@ -74,6 +76,9 @@
 | `com.atom.chat.net.PokeCompanionServer` | 1.20.1-forge, 1.21.1-fabric, 1.21.1-neoforge |
 | `com.atom.chat.notification.NotificationBanner` | 1.21.1-fabric |
 | `com.atom.chat.notification.NotificationBannerRichTextTest` | 1.21.1-fabric |
+| `com.atom.chat.notification.NotificationHudEditorScreen` | 1.21.1-fabric |
+| `com.atom.chat.notification.NotificationHudOverlay` | 1.21.1-fabric |
+| `com.atom.chat.notification.NotificationHudVisibility` | 1.20.1-forge, 1.21.1-fabric, 1.21.1-neoforge |
 | `com.atom.chat.page.ConversationListPage` | 1.21.1-fabric |
 | `com.atom.chat.page.MessageBubbleStyleTest` | 1.21.1-fabric |
 | `com.atom.chat.page.MessageImageHitTest` | 1.21.1-fabric |
@@ -83,6 +88,8 @@
 | `com.atom.chat.platform.NeoForgePlatform` | 1.21.1-neoforge |
 | `com.atom.chat.render.ClickableSpan` | 1.21.1-fabric |
 | `com.atom.chat.render.GoldenFrameTest` | 1.21.1-fabric |
+| `com.atom.chat.render.ItemIconModelView` | 1.20.1-forge, 1.21.1-fabric, 1.21.1-neoforge |
+| `com.atom.chat.render.ItemIconRenderer` | 1.21.1-fabric |
 | `com.atom.chat.render.OffscreenRenderTest` | 1.21.1-fabric |
 | `com.atom.chat.render.PanelBlurRenderer` | 1.20.1-forge, 1.21.1-fabric, 1.21.1-neoforge |
 | `com.atom.chat.render.RichTextRenderer` | 1.21.1-fabric |
@@ -96,6 +103,7 @@
 | `com.atom.chat.settings.SettingsSectionPage` | 1.21.1-fabric |
 | `com.atom.chat.text.ChatTextRewriter` | 1.21.1-fabric |
 | `com.atom.chat.text.ChatTextRewriterTest` | 1.21.1-fabric |
+| `com.atom.chat.text.InlineItemLayoutTest` | 1.21.1-fabric |
 | `com.atom.chat.text.RichText` | 1.21.1-fabric |
 | `com.atom.chat.text.RichTextLayoutTest` | 1.21.1-fabric |
 | `com.atom.chat.text.RichTextTest` | 1.21.1-fabric |
@@ -114,7 +122,6 @@
 
 | 目标 | 类型 |
 |---|---|
-| 1.20.1-forge | `com.atom.chat.AtomChatClient` |
 | 1.20.1-forge | `com.atom.chat.audio.FeedbackSoundController` |
 | 1.20.1-forge | `com.atom.chat.mixin.AtomChatMixinPlugin` |
 | 1.20.1-forge | `com.atom.chat.net.AvatarPayloads` |
@@ -137,7 +144,7 @@
 | 1.20.1-forge | `com.atom.chat.platform.ForgePlatform` |
 | 1.20.1-forge | `com.atom.chat.net.AvatarCompanionServerTest` |
 | 1.20.1-forge | `com.atom.chat.screen.AtomChatScreenMessageLookupTest` |
-| 1.21.1-fabric | `com.atom.chat.AtomChatClient` |
+| 1.20.1-forge | `com.atom.chat.testing.ForgeEventBusAgent` |
 | 1.21.1-fabric | `com.atom.chat.audio.FeedbackSoundController` |
 | 1.21.1-fabric | `com.atom.chat.mixin.AtomChatMixinPlugin` |
 | 1.21.1-fabric | `com.atom.chat.net.AvatarPayloads` |
@@ -160,10 +167,10 @@
 | 1.21.1-fabric | `com.atom.chat.platform.FabricPlatform` |
 | 1.21.1-fabric | `com.atom.chat.net.AvatarCompanionServerTest` |
 | 1.21.1-fabric | `com.atom.chat.page.MessageListViewSelectionCopyTest` |
+| 1.21.1-fabric | `com.atom.chat.testing.FabricPackageAccessAgent` |
 | 1.21.1-fabric | `com.atom.chat.text.RichTextSectionCodeTest` |
 | 1.21.1-fabric | `com.atom.chat.ui.QuickPhrasePanelHitZoneTest` |
 | 1.21.1-fabric | `net.minecraft.client.gui.screen.AtomChatScreenMessageLookupTest` |
-| 1.21.1-neoforge | `com.atom.chat.AtomChatClient` |
 | 1.21.1-neoforge | `com.atom.chat.audio.FeedbackSoundController` |
 | 1.21.1-neoforge | `com.atom.chat.mixin.AtomChatMixinPlugin` |
 | 1.21.1-neoforge | `com.atom.chat.net.AvatarPayloads` |

@@ -37,6 +37,23 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 class InputWiringSourceTest {
 
+    @Test
+    void rawPressAndReleaseAreObservedBeforeTheAnimationGate() throws IOException {
+        for (String screen : SCREENS) {
+            String src = source(screen);
+            int click = src.indexOf("public boolean mouseClicked(");
+            int clickGate = src.indexOf("gate.click(", click);
+            int press = src.indexOf("foreignPointer.press(button,", click);
+            assertTrue(press > click && press < clickGate,
+                    screen + ": animation must not hide a raw press from Quark's mask");
+            int release = src.indexOf("public boolean mouseReleased(");
+            int releaseGate = src.indexOf("gate.release(", release);
+            int observed = src.indexOf("foreignPointer.release(button)", release);
+            assertTrue(observed > release && observed < releaseGate,
+                    screen + ": animation must not hide the release that clears the mask");
+        }
+    }
+
     /** The three screen sources, repo-root relative, in a fixed order. */
     private static final List<String> SCREENS = List.of(
             "platforms/1.20.1-forge/src/main/java/com/atom/chat/screen/AtomChatScreen.java",
@@ -52,6 +69,7 @@ class InputWiringSourceTest {
      */
     private static final String FROZEN_CHAIN_FLAT =
             ".add(newClosingStateInput())"
+                    + ".add(foreignChatUiInput())"
                     + ".add(outsidePanelInput())"
                     + ".add(newModalInput())"
                     + ".add(settingsDetailPage.numberEditInput())"
@@ -62,7 +80,7 @@ class InputWiringSourceTest {
 
     /** The prose contract that carries the priority list, quoted from the source. */
     private static final String FROZEN_PRIORITY_PROSE =
-            "Priority (first registered wins): closing guard, outside-panel close, modals (cropper/colour "
+            "Priority (first registered wins): closing guard, foreign chat UI, outside-panel close, modals (cropper/colour "
                     + "picker), pushed-subpage Esc, screen Esc, root pages, world chat.";
 
     private static final String FROZEN_NO_BRANCHES_PROSE =
@@ -151,7 +169,7 @@ class InputWiringSourceTest {
      * event and the overrides fall through to vanilla. Hence both halves: no
      * {@code InputRouter} anywhere in the screen (the gate owns it, so the
      * screen needs neither the type nor the import), and the gate statement
-     * itself carrying all eight registrations.
+     * itself carrying all nine registrations.
      */
     @Test
     void theScreenHasExactlyOneHandlerChainAndItIsTheGatesOwn() throws IOException {
@@ -162,8 +180,8 @@ class InputWiringSourceTest {
                             + " the gate owns the chain. A second chain leaves the gate's router"
                             + " empty, and every event falls through to super.");
             String gate = gateStatement(src);
-            assertEquals(8, occurrences(gate, ".add("),
-                    screen + ": the gate declaration must register exactly the eight handlers.\n"
+            assertEquals(9, occurrences(gate, ".add("),
+                    screen + ": the gate declaration must register exactly the nine handlers.\n"
                             + gate);
             assertTrue(flatten(gate).endsWith(".add(newWorldChatInput());"),
                     screen + ": the gate chain must end on WorldChatInput, the lowest-priority"
@@ -172,7 +190,7 @@ class InputWiringSourceTest {
     }
 
     /**
-     * The eight registrations keep their frozen relative order. Registration
+     * The nine registrations keep their frozen relative order. Registration
      * order <em>is</em> the priority contract: a swap silently changes which
      * handler sees an event first, which is how the modal/root/world handlers
      * stay out of each other's way.

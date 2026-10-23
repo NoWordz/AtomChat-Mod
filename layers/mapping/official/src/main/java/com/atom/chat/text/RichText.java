@@ -6,6 +6,8 @@ import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.network.chat.Style;
 import net.minecraft.network.chat.Component;
 
+import net.minecraft.network.chat.HoverEvent;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.regex.Matcher;
@@ -19,7 +21,12 @@ import java.util.regex.Pattern;
  * sliced piece whose selected content has no runs of its own.
  */
 public final class RichText {
-    public record RichRun(String text, Style style) {}
+    public record RichRun(String text, Style style) {
+        public boolean hasItemHover() {
+            return style.getHoverEvent() != null
+                    && style.getHoverEvent().getAction() == HoverEvent.Action.SHOW_ITEM;
+        }
+    }
 
     private static final Pattern URL_PATTERN = Pattern.compile("(?i)\\bhttps?://[^\\s<>\"']+");
 

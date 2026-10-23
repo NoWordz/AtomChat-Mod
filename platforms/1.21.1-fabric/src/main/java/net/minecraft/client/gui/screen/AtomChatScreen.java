@@ -47,7 +47,6 @@ import com.atom.chat.page.PageHost;
 import com.atom.chat.page.ProfilePage;
 import com.atom.chat.font.FontManager;
 import com.atom.chat.mixin.MouseHandlerAccessor;
-import com.atom.chat.render.BlurMotionGate;
 import com.atom.chat.render.ClickableSpan;
 import com.atom.chat.screen.ScreenMetrics;
 import com.atom.chat.render.DrawPrimitives;
@@ -111,7 +110,6 @@ import net.minecraft.text.Style;
 import net.minecraft.text.Text;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.math.MathHelper;
-import net.fabricmc.loader.api.FabricLoader;
 
 
 import java.awt.datatransfer.DataFlavor;
@@ -140,7 +138,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
     private final ConversationListPage conversationListPage = new ConversationListPage(this);
     /** Local custom avatar for the profile page and own bubbles. */
     private final AvatarStore avatarStore = new AvatarStore(
-            FabricLoader.getInstance().getConfigDir().resolve("atomchat/avatar"));
+             com.atom.chat.util.CacheDirs.avatarDir());
     /** QQ-style crop overlay for avatar and wallpaper picks. */
     private final ImageCropper imageCropper = new ImageCropper(SettingsActions.cropperCallback(avatarStore, client));
     /** Modal HSV colour picker opened from the settings colour rows. */
@@ -411,6 +409,11 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         }
 
         @Override
+        public void openNotificationHudEditor() {
+            client.setScreen(new com.atom.chat.notification.NotificationHudEditorScreen(AtomChatScreen.this));
+        }
+
+        @Override
         public NativeDialogBridge dialogs() {
             return dialogBridge;
         }
@@ -524,6 +527,96 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
                             : topPage() == AppPage.PRIVATE_CHAT && partner.equals(activePrivateTarget())));
     private final String originalChatText;
 
+    private boolean foreignPointerHeld;
+    private int foreignPointerButton = -1;
+    private final com.atom.chat.compat.ForeignChatPointer foreignPointer =
+            new com.atom.chat.compat.ForeignChatPointer();
+
+    private boolean canUseForeignChatUi() {
+        return canRenderForeignChatUi() && !PanelOpenMotion.animating(panelProgress, closing)
+                && !director.pageNavActive() && !director.rootTransitionActive();
+    }
+
+    private boolean canRenderForeignChatUi() {
+        return !closing && isWorldChatPage()
+                && !imagePreview.isActive() && !imageCropper.isActive() && !colorPicker.isActive()
+                && !contextMenu.hasMessageMenu() && !contextMenu.hasPlayerCardMenu()
+                && !emojiPanel.isOpen() && !quickPhrasePanel.isOpen();
+    }
+
+    private boolean foreignChatUiHovered(double x, double y) {
+        if (!canUseForeignChatUi()) return false;
+        if (suggestorWiring.hovered(x, y)) return true;
+        if (com.atom.chat.compat.QuarkEmotesCompat.hovered(this.drawables, x, y)) return true;
+        for (var child : children()) {
+            if (child != chatField && child.isMouseOver(x, y)) return true;
+        }
+        return false;
+    }
+
+    private void cancelTransitionPointer(int button) {
+        if (button == foreignPointerButton) {
+            foreignPointerHeld = false;
+            foreignPointerButton = -1;
+        }
+        if (button != 0) return;
+        settingsSectionPage.cancelPointer();
+        bottomTabBar.setPressedTab(-1);
+        primitives.setButtonHeld(-1);
+        messageListView.setLoadEarlierPressed(false);
+        scrollSync.releaseJumpLatest();
+        messageWiring.takePending();
+        messageWiring.clearMoved();
+        if (messageListView.isSelecting()) messageListView.endSelection();
+        composerPointer.setDragging(false);
+        scrollSync.worldScroll().endDrag();
+        scrollSync.detailScroll().endDrag();
+        scrollSync.rootScroll().endDrag();
+    }
+
+    private InputHandler foreignChatUiInput() {
+        return new InputHandler() {
+            @Override public boolean onClick(double x, double y, int button) {
+                boolean available = canUseForeignChatUi();
+                boolean covered = available && suggestorWiring.hovered(x, y);
+                if (!available) return false;
+                if (covered) return suggestorWiring.mouseClicked((int) x, (int) y, button);
+                for (var child : children()) {
+                    if (child != chatField && child.isMouseOver(x, y) && child.mouseClicked(x, y, button)) {
+                        setFocused(child);
+                        foreignPointerHeld = true;
+                        foreignPointerButton = button;
+                        return true;
+                    }
+                }
+                // Quark's NotButton polls the raw button state in render(), so
+                // keep this screen alive until its original renderable sees it.
+                if (com.atom.chat.compat.QuarkEmotesCompat.hovered(drawables, x, y)) {
+                    foreignPointerHeld = true;
+                    foreignPointerButton = button;
+                    return true;
+                }
+                return false;
+            }
+            @Override public boolean onDrag(double x, double y, int button, double dx, double dy) {
+                if (!foreignPointerHeld || button != foreignPointerButton) return false;
+                for (var child : children()) {
+                    if (child != chatField) child.mouseDragged(x, y, button, dx, dy);
+                }
+                return true;
+            }
+            @Override public boolean onRelease(double x, double y, int button) {
+                if (!foreignPointerHeld || button != foreignPointerButton) return false;
+                foreignPointerHeld = false;
+                foreignPointerButton = -1;
+                for (var child : children()) {
+                    if (child != chatField) child.mouseReleased(x, y, button);
+                }
+                return true;
+            }
+        };
+    }
+
     private InputHandler outsidePanelInput() {
         return new com.atom.chat.ui.input.OutsidePanelInput(new com.atom.chat.ui.input.OutsidePanelInput.Host() {
             public UiLayout.Rect panelRect() { return layout().rect(); }
@@ -538,7 +631,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
     }
     /**
      * Ordered input routing (D23a). Priority (first registered wins): closing
-     * guard, outside-panel close, modals (cropper/colour picker), pushed-subpage Esc, screen Esc,
+     * guard, foreign chat UI, outside-panel close, modals (cropper/colour picker), pushed-subpage Esc, screen Esc,
      * root pages, world chat. New interactive features register a handler
      * instead of inserting branches into the former if-else chains.
      *
@@ -551,12 +644,18 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
      * second chain would leave the gate's own one empty.</p>
      */
     private final InputGate gate = new InputGate(new InputGate.Host() {
+        @Override public void cancelPointer(int button) {
+            cancelTransitionPointer(button);
+        }
         @Override
         public boolean panelAnimating() {
-            return PanelOpenMotion.animating(panelProgress, closing);
+            return PanelOpenMotion.animating(panelProgress, closing)
+                    || director.pageNavActive() || director.rootTransitionActive()
+                    || settingsSectionPage.chipTransitionActive();
         }
     })
             .add(new ClosingStateInput())
+            .add(foreignChatUiInput())
             .add(outsidePanelInput())
             .add(new ModalInput())
             .add(settingsDetailPage.numberEditInput())
@@ -1293,8 +1392,6 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
     private float panelProgress = 0.0F;
     /** Wall-clock timestamp of the previous frame — the progress clock consumes real dt. */
     private long lastFrameNanos = System.nanoTime();
-    /** Composer height seen by the previous blur-gate frame, for change detection. */
-    private float lastBlurInputExtraH;
     private boolean blurDrawnThisFrame;
 
     // Per-frame animation state (smooth hover/popup transitions)
@@ -1859,17 +1956,6 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
             this.client.setScreen(null);
             return;
         }
-        // Feed the blur cadence gate: camera or panel-chrome motion keeps the
-        // every-2-frames blur refresh; a still scene drops to the slow fallback
-        // (see BlurMotionGate). The pre-pass below asks the gate per frame.
-        boolean chromeAnimating = PanelOpenMotion.chromeAnimating(panelSettled,
-                composer.extraH(), lastBlurInputExtraH);
-        BlurMotionGate.noteFrame(System.currentTimeMillis(),
-                client.player != null ? client.player.getYaw() : 0.0F,
-                client.player != null ? client.player.getPitch() : 0.0F,
-                chromeAnimating);
-        lastBlurInputExtraH = composer.extraH();
-
         // The blur pre-pass is raw GL and must run before Skia paints the panel.
         // Load the shader first so drawPanel knows whether it may use the
         // translucent tint or must keep the solid fallback. The actual draw
@@ -1914,8 +2000,21 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
 
         // No super.render: ChatScreen/Screen would draw the vanilla input box and
         // widget chrome; our UI is fully Skia-drawn, the suggestor renders explicitly.
-        graphics.draw(preUi, uiDensity(),
-                (canvas, worldSnapshot) -> drawPhone(canvas, worldSnapshot, mouseX, mouseY, delta));
+        Runnable blurPreUi = preUi;
+        graphics.draw(() -> {
+            if (blurPreUi != null) blurPreUi.run();
+            com.atom.chat.render.ItemIconRenderer.prepare(context, graphics);
+        }, uiDensity(), (canvas, worldSnapshot) -> drawPhone(canvas, worldSnapshot, mouseX, mouseY, delta));
+        // Keep third-party chat additions in their original GUI coordinates.
+        // The inherited input field remains only an IME carrier, never painted.
+        if (canRenderForeignChatUi()) {
+            boolean maskPointer = !canUseForeignChatUi() || foreignPointer.hoverMasked(suggestorWiring.hovered(mouseX, mouseY));
+            int foreignMouseX = maskPointer ? Integer.MIN_VALUE : mouseX;
+            int foreignMouseY = maskPointer ? Integer.MIN_VALUE : mouseY;
+            for (var renderable : this.drawables) {
+                if (renderable != chatField) renderable.render(context, foreignMouseX, foreignMouseY, delta);
+            }
+        }
         // The hidden EditBox stays positioned so the IME floating window anchors
         // correctly; its text/cursor are drawn by Skia above. The suggestion popup
         // still renders through the vanilla pipeline on top. Root pages do not
@@ -1936,7 +2035,8 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         ClickableSpan hoveredSpan = messageWiring.hoverSpan(isWorldChatPage(),
                 toVirtualX(mouseX), toVirtualY(mouseY));
         Style hovered = hoveredSpan != null ? hoveredSpan.style() : null;
-        if (hovered != null && hovered.getHoverEvent() != null) {
+        if (hovered != null && hovered.getHoverEvent() != null && !foreignChatUiHovered(mouseX, mouseY)
+                && !imagePreview.isActive() && !imageCropper.isActive() && !colorPicker.isActive()) {
             context.drawHoverEvent(this.textRenderer, hovered, mouseX, mouseY);
         }
     }
@@ -2050,7 +2150,13 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
 
     @Override
     protected void init() {
+        String previousText = chatField != null ? chatField.getText() : null;
         super.init();
+        String restoredText = previousText != null ? previousText
+                : draftStore.draftForNav(topNav(), false, null);
+        foreignPointer.cancelForReinit();
+        foreignPointerHeld = false;
+        foreignPointerButton = -1;
         chatEffects.install();
         if (!feedbackOpened) {
             feedbackOpened = true;
@@ -2064,6 +2170,8 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         // into the vanilla field so that listener keeps driving it, and switches
         // the "may this popup be left" flag the way vanilla's own wiring does.
         this.chatInputSuggestor = suggestorWiring.install(this.client, this, this.client.textRenderer);
+        chatField.setText(restoredText);
+        dismissSuggestor();
         this.chatInputSuggestor.setCanLeave(false);
         // init() also runs on every resize, hence the guard inside.
         installDropCallback();
@@ -2218,6 +2326,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         if (profilePage.isSignatureEditing()) {
             profilePage.endSignatureEdit(false);
         }
+        endPhraseEdit(false);
         saveCurrentDraft();
         if (topPage() == AppPage.PRIVATE_CHAT) {
             PrivateChatStore.clearActive();
@@ -2245,6 +2354,10 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         syncScrollMotion();
         String reactionFailure = com.atom.chat.reaction.ReactionClient.takeError();
         if (reactionFailure != null) feedback("atomchat.reaction." + reactionFailure, false);
+        if (!PanelOpenMotion.animating(panelProgress, closing)
+                && com.atom.chat.util.DataMigration.takeWarning()) {
+            feedback("atomchat.data.migration_warning", false);
+        }
         emojiPanel.update(frameDt);
         quickPhrasePanel.update(frameDt);
         UiLayout layout = layout();
@@ -2965,6 +3078,9 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
                     (int) mouseX, (int) mouseY,
                     (int) toVirtualX(mouseX), (int) toVirtualY(mouseY), button);
         }
+        // Quark reads raw mouse state while painting; observe even presses the
+        // animation gate will consume, and retain the mask until raw release.
+        foreignPointer.press(button, canUseForeignChatUi(), suggestorWiring.hovered(mouseX, mouseY));
         com.atom.chat.audio.FeedbackSoundController.beginAction();
         try {
             Boolean direct = gate.click(mouseX, mouseY, button);
@@ -2986,6 +3102,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
 
     @Override
     public boolean mouseReleased(double mouseX, double mouseY, int button) {
+        foreignPointer.release(button);
         Boolean direct = gate.release(mouseX, mouseY, button);
         if (direct != null) {
             return direct;

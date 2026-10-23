@@ -45,7 +45,6 @@ public final class PanelBlurRenderer {
     private static int texW;
     private static int texH;
     private static int lastBlurTex = -1;
-    private static boolean nextFullRefresh = true;
     private static boolean recreated = true;
     /** Set once by {@link #disable(String)}; see there for why it never resets. */
     private static volatile boolean disabled;
@@ -336,10 +335,7 @@ public final class PanelBlurRenderer {
         // whether a due slot actually runs. A still scene (camera + panel chrome)
         // drops to the <=500ms fallback cadence; any motion restores the
         // every-2-frames refresh. A denied slot simply reuses lastBlurTex.
-        long nowMs = System.currentTimeMillis();
-        boolean slotDue = nextFullRefresh || recreated;
-        boolean full = BlurMotionGate.allowFullRefresh(nowMs, slotDue, recreated);
-        nextFullRefresh = !full;
+        boolean full = true;
         if (full) {
             blit(mainFbo, x, glY0, x + w, glY1, inputFbo, 0, 0, w, h);
 

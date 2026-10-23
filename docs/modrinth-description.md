@@ -134,19 +134,19 @@ Expand for the client and server configuration paths and data locations.
 | Path | Contents |
 | --- | --- |
 | `config/atomchat/atomchat-client.json` | Client settings; created on first launch. |
-| `config/atomchat/avatar/avatar.*` | Custom profile avatar (`png`, `jpg`, `jpeg` or `webp`). |
-| `config/atomchat/banner.*` | Custom profile banner (`png`, `jpg`, `jpeg` or `webp`); stored directly in `config/atomchat/`. |
-| `config/atomchat/debug/` | Avatar sampling images written in debug mode. |
-| `config/atomchat/emotes/` | Your own stickers (`png`, `jpg`, `jpeg` or `gif`); unlimited by default, with an optional `emoteMax` cap. |
-| `config/atomchat/history/` | Optional JSONL chat history, saved per server or world; off by default. |
-| `config/atomchat/wallpaper/wallpaper.*` | Custom panel wallpaper (`png`, `jpg`, `jpeg` or `webp`). |
+| `atomchat/client/avatar/avatar.*` | Custom profile avatar (`png`, `jpg`, `jpeg` or `webp`). |
+| `atomchat/client/banner/banner.*` | Custom profile banner (`png`, `jpg`, `jpeg` or `webp`); stored directly in `config/atomchat/`. |
+| `atomchat/cache/debug/` | Avatar sampling images written in debug mode. |
+| `atomchat/client/emotes/` | Your own stickers (`png`, `jpg`, `jpeg` or `gif`); unlimited by default, with an optional `emoteMax` cap. |
+| `atomchat/client/history/` | Optional JSONL chat history, saved per server or world; off by default. |
+| `atomchat/client/wallpaper/wallpaper.*` | Custom panel wallpaper (`png`, `jpg`, `jpeg` or `webp`). |
 
 
 <h3>📦 Client Runtime Data</h3>
 
 | Path | Contents |
 | --- | --- |
-| `atomchat-data/image-cache/` | Chat image cache, capped at 500 files / 100 MB; files unused for 7 days are removed. View or clear it under Settings → About. |
+| `atomchat/cache/images/` | Chat image cache, capped at 500 files / 100 MB; files unused for 7 days are removed. View or clear it under Settings → About. |
 | `atomchat-data/packs/<server-key>/` | Sticker packs downloaded from servers. |
 | `atomchat-data/avatars/` | Player avatars received from servers. |
 
@@ -156,7 +156,7 @@ Expand for the client and server configuration paths and data locations.
 | Path (relative to the server game directory) | Contents |
 | --- | --- |
 | `config/atomchat/atomchat-server.json` | Server hosting, capacity and server-pack settings. |
-| `config/atomchat/server-emotes/` | Sticker source offered to players; separate from a player's own `emotes/` folder. |
+| `atomchat/server/emotes/` | Sticker source offered to players; separate from a player's own `emotes/` folder. |
 | `atomchat-data/media/` | Chat images and GIFs hosted by the server. |
 | `atomchat-data/avatars/` | Player avatars uploaded to the server. |
 | `<world save>/atomchat/profiles/documents/` | Synced profile records, one per player UUID. |
@@ -185,7 +185,7 @@ The server creates `config/atomchat/atomchat-server.json` on first launch. Edit 
 
 - `packEnabled` is on by default.
 - The server can offer up to 32 sticker files / 8 MB and up to 20 quick phrases of 200 characters each.
-- Put server stickers in `config/atomchat/server-emotes/`. The server icon and MOTD can provide the server identity shown in the client.
+- Put server stickers in `atomchat/server/emotes/`. The server icon and MOTD can provide the server identity shown in the client.
 
 </div>
 

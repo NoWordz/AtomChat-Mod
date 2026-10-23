@@ -19,6 +19,18 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * these tests exist so a future "let's make it symmetric" edit goes red.
  */
 class InputGateTest {
+    @Test void aReleaseDuringTransitionCancelsHeldStateWithoutCommittingActions() {
+        int[] cancelled = {0}, committed = {0};
+        InputGate gate = new InputGate(new InputGate.Host() {
+            public boolean panelAnimating() { return true; }
+            public void cancelPointer(int button) { cancelled[0]++; }
+        }).add(new InputHandler() {
+            public boolean onRelease(double x, double y, int button) { committed[0]++; return true; }
+        });
+        assertEquals(Boolean.TRUE, gate.release(0, 0, 0));
+        assertEquals(1, cancelled[0]);
+        assertEquals(0, committed[0]);
+    }
 
     /** Records every question the gate asks and every handler it consults, in order. */
     private final List<String> seen = new ArrayList<>();

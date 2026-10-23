@@ -53,7 +53,7 @@ Ranges are re-validated by the server when it saves (the emote pack cap, for ins
 
 | What | Where | Notes |
 |---|---|---|
-| Emote pack | the server's `config/atomchat/server-emotes/` | `png` / `jpg` / `jpeg` / `gif`; **deliberately separate** from a player's own `emotes/` so single-player and LAN hosts never push the owner's collection to guests; on a dedicated server the first pack build copies over (copy only, never delete) whatever the old `emotes/` folder held |
+| Emote pack | the server's `atomchat/server/emotes/` | `png` / `jpg` / `jpeg` / `gif`; **deliberately separate** from a player's own `emotes/` so single-player and LAN hosts never push the owner's collection to guests; on a dedicated server the first pack build copies over (copy only, never delete) whatever the old `emotes/` folder held |
 | Quick phrases | `phrases` in the config | ≤20 entries, each ≤200 characters |
 | Server icon | `server-icon.png` in the server root | Read automatically |
 | Server name | `packName`, or the first MOTD line when empty | Cleaned up before it is shown |
@@ -65,9 +65,9 @@ Transfer details: the client first works out which files it already has (per-fil
 | Path (under the server's game directory) | Contents |
 |---|---|
 | `config/atomchat/atomchat-server.json` | The server config |
-| `config/atomchat/server-emotes/` | The emote source handed to clients |
-| `atomchat-data/media/` | Hosted chat media; **the file name is its content hash**, so duplicates collapse |
-| `atomchat-data/avatars/` | Uploaded player avatars |
+| `atomchat/server/emotes/` | The emote source handed to clients |
+| `atomchat/server/media/` | Hosted chat media; **the file name is its content hash**, so duplicates collapse |
+| `atomchat/server/avatars/` | Uploaded player avatars |
 
 Cleaning runs **at server start, every five minutes, and after every upload**, trimming the oldest entries to `retentionDays` and the size caps; a player disconnecting drops their unfinished upload buffers. To reclaim space right away, deleting files under `media/` or `avatars/` is safe — clients re-upload on demand.
 

@@ -32,13 +32,15 @@ package com.atom.chat.ui.input;
  */
 public final class InputGate {
     /**
-     * What the gate needs from the screen: whether the open/close progress is
+     * What the gate needs from the screen: whether the panel or page transition is
      * still in flight. Kept behind a name that describes the state rather than
      * the screen's own private spelling.
      */
     public interface Host {
-        /** True while the open/close animation has not settled yet. */
+        /** True while the panel or page animation has not settled yet. */
         boolean panelAnimating();
+        /** Cancels held pointer state without committing a click or card choice. */
+        default void cancelPointer(int button) { }
     }
 
     private final Host host;
@@ -84,6 +86,7 @@ public final class InputGate {
     /** {@code TRUE} while animating, else the first consumer's answer, else {@code null}. */
     public Boolean release(double mouseX, double mouseY, int button) {
         if (host.panelAnimating()) {
+            host.cancelPointer(button);
             return Boolean.TRUE;
         }
         return route(router.release(mouseX, mouseY, button));

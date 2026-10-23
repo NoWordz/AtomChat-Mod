@@ -10,6 +10,17 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ChatClassifierTest {
     @Test
+    void wrappedTeamNotificationsRemainSystemWhileRealTeamChatRemainsPlayer() {
+        Text notice = Text.literal("<Alice @Friends> ")
+                .append(Text.translatable("ftbteams.message.joined", "Bob"));
+        assertEquals(Route.SYSTEM, ChatClassifier.classifyByKey(notice));
+        assertEquals(Route.SYSTEM, ChatClassifier.classifyByKey(Text.literal("")
+                .append(Text.translatable("multiplayer.player.joined", "Alice"))));
+        assertEquals(Route.PLAYER, ChatClassifier.classifyByKey(Text.translatable("chat.type.text",
+                "Alice", Text.translatable("ftbteams.message.joined", "Bob"))));
+        assertEquals(Route.UNKNOWN, ChatClassifier.classifyByKey(Text.literal("<Alice @Friends> hello")));
+    }
+    @Test
     void classifiesVanillaPlayerAndSystemKeys() {
         assertEquals(Route.PLAYER, ChatClassifier.classifyByKey(Text.translatable("chat.type.text", "Alice", "hi")));
         assertEquals(Route.PLAYER, ChatClassifier.classifyByKey(Text.translatable("chat.type.team.text", "Alice", "hi")));

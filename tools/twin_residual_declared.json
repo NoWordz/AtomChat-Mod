@@ -20,15 +20,6 @@
     "2026-10-12：MessageHandlerMixin 的HEAD/实际投递真漂移已修复；只保留独立复审确认并按精确指纹锁定的加载器注入结构差异。"
   ],
   "declared": {
-    "src/main/java/com/atom/chat/image/AvatarRenderer.java": [
-      {
-        "fingerprint": "50d0480d4596",
-        "kind": "loader-seam",
-        "reason": "主会话 2026-10-09 批复：结构性合法（loader 接缝）：官方侧走 Platform.configDir() provider，fabric 侧直接用 FabricLoader.getInstance().getConfigDir()（Fabric 自己的加载器 API，无对应官方名）",
-        "sample_a": "            Path dir = com.atom.chat.platform.Platform.configDir().resolve(\"atomchat/debug\");",
-        "sample_b": "            Path dir = FabricLoader.getInstance().getConfigDir().resolve(\"atomchat/debug\");"
-      }
-    ],
     "src/main/java/com/atom/chat/net/ConfigScreenClient.java": [
       {
         "fingerprint": "9f54a827a07e",
@@ -245,6 +236,43 @@
         "reason": "主会话终验批准 2026-10-09（D8 工单「既定裁定」）：dismissSuggestor 的平台差异是平台接缝，只记注释不统一。official 侧（Forge/NeoForge）用 hide() 并自建 EditBox responder 驱动 suggestor（setAllowSuggestions(!text.equals(originalChatText)) + updateCommandInfo()）；fabric 侧用 setWindowActive(false)（yarn 名 = setAllowSuggestions，同时清 allow 标志）且不装 responder —— 它把 suggestor 写进 ChatScreen 自己的字段，由 vanilla 的 chat-field listener 继续驱动并在每次击键时重新武装该标志。因此 install 的签名在 official 侧多一个 originalChatText（responder 的比较基线），fabric 侧没有 responder 也就不需要它。两者各自正确，不许统一。",
         "sample_a": "            chatInputSuggestor.hide();",
         "sample_b": "            chatInputSuggestor.setWindowActive(false);"
+      }
+    ],
+    "src/main/java/com/atom/chat/notification/NotificationHudEditorScreen.java": [
+      {
+        "fingerprint": "8c1b5f3a0ef2",
+        "kind": "code",
+        "reason": "2026-10-23 HUD editor native screen bridge: only official/Yarn Screen, DrawContext, Text and input method names differ; the shared editor owns all behavior.",
+        "sample_a": "    private float vx(double x) { return ScreenMetrics.toVirtualX(minecraft.getWindow(),x); }",
+        "sample_b": "    private float vx(double x) { return ScreenMetrics.toVirtualX(client.getWindow(),x); }"
+      },
+      {
+        "fingerprint": "674bd13e7e71",
+        "kind": "code",
+        "reason": "2026-10-23 HUD editor native screen bridge: only official/Yarn Screen, DrawContext, Text and input method names differ; the shared editor owns all behavior.",
+        "sample_a": "        graphics.draw(null,ScreenMetrics.uiDensity(minecraft.getWindow()),",
+        "sample_b": "        graphics.draw(null,ScreenMetrics.uiDensity(client.getWindow()),"
+      },
+      {
+        "fingerprint": "7200f1f7e6f5",
+        "kind": "code",
+        "reason": "2026-10-23 HUD editor native screen bridge: only official/Yarn Screen, DrawContext, Text and input method names differ; the shared editor owns all behavior.",
+        "sample_a": "        if(action==NotificationHudEditor.Action.SAVE) { editor.save(); onClose(); }",
+        "sample_b": "        if(action==NotificationHudEditor.Action.SAVE) { editor.save(); close(); }"
+      },
+      {
+        "fingerprint": "a66dc75faa03",
+        "kind": "code",
+        "reason": "2026-10-23 HUD editor native screen bridge: only official/Yarn Screen, DrawContext, Text and input method names differ; the shared editor owns all behavior.",
+        "sample_a": "        if(key==GLFW.GLFW_KEY_ESCAPE) onClose();",
+        "sample_b": "        if(key==GLFW.GLFW_KEY_ESCAPE) close();"
+      },
+      {
+        "fingerprint": "e665b7583a3d",
+        "kind": "code",
+        "reason": "2026-10-23 HUD editor native screen bridge: only official/Yarn Screen, DrawContext, Text and input method names differ; the shared editor owns all behavior.",
+        "sample_a": "    @Override public void onClose() { minecraft.setScreen(parent); }",
+        "sample_b": "    @Override public void close() { client.setScreen(parent); }"
       }
     ]
   }

@@ -19,6 +19,25 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class AppearancePresetStoreTest {
+    @Test void linkedWallpaperBackupIsRejectedBeforeTouchingTheCurrentWallpaper() throws Exception {
+        String id = store.saveCurrent(new AtomChatConfig(),null).preset().id();
+        assertTrue(WallpaperStore.set(wallpaper("keep.png")));
+        Path active = WallpaperStore.current();
+        Path target = Files.createDirectories(tmp.resolve("config/private-backups"));
+        Path link = tmp.resolve("appearance-presets/.wallpaper-backup");
+        try { Files.createSymbolicLink(link,target); }
+        catch (java.nio.file.FileSystemException | UnsupportedOperationException e) {
+            org.junit.jupiter.api.Assumptions.assumeTrue(System.getProperty("os.name").startsWith("Windows"));
+            Process process = new ProcessBuilder("cmd.exe","/d","/c","mklink","/J",link.toString(),target.toString())
+                    .redirectErrorStream(true).start();
+            assertTrue(process.waitFor(10,java.util.concurrent.TimeUnit.SECONDS));
+            assertEquals(0,process.exitValue());
+        }
+        assertFalse(store.apply(id,new AtomChatConfig()).ok());
+        assertEquals(active,WallpaperStore.current());
+        assertTrue(Files.isRegularFile(active));
+        try (var files = Files.list(target)) { assertEquals(0,files.count()); }
+    }
     private static final byte[] PNG = Base64.getDecoder().decode(
             "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAFgwJ/lK3Q6wAAAABJRU5ErkJggg==");
 

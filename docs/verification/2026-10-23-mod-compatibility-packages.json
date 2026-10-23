@@ -1,0 +1,47 @@
+[
+  {
+    "file": "D:\\AtomChat-Main\\.work\\0.3.3-feedback\\dist\\atomchat-Fabric-1.21.1-0.3.3-linux-x64.jar",
+    "bytes": 20253357,
+    "sha256": "a8b03d3326950317cb0ae663ad6840fdeacfbaeaa3c789e8bebab5b2a517fbd4"
+  },
+  {
+    "file": "D:\\AtomChat-Main\\.work\\0.3.3-feedback\\dist\\atomchat-Fabric-1.21.1-0.3.3-windows-arm64.jar",
+    "bytes": 18501582,
+    "sha256": "e89fe34c666cd66f52219b3717d0b10bfc401e343a27652b57613aa934ccc1dc"
+  },
+  {
+    "file": "D:\\AtomChat-Main\\.work\\0.3.3-feedback\\dist\\atomchat-Fabric-1.21.1-0.3.3-windows-x64.jar",
+    "bytes": 19125297,
+    "sha256": "cf8df080938cf14f535e4bcda10a6491d8fc64145d942c9224e411e1dccc38e8"
+  },
+  {
+    "file": "D:\\AtomChat-Main\\.work\\0.3.3-feedback\\dist\\atomchat-Forge-1.20.1-0.3.3-linux-x64.jar",
+    "bytes": 20231848,
+    "sha256": "3b48dde2b4d6675cfa2f06a1b1c8610a74677031751e0f740f2d016dbb55c4a8"
+  },
+  {
+    "file": "D:\\AtomChat-Main\\.work\\0.3.3-feedback\\dist\\atomchat-Forge-1.20.1-0.3.3-windows-arm64.jar",
+    "bytes": 18480949,
+    "sha256": "7357247b5d362ee1a81eca1264ca5cd22f1d4a7c06458cf937684dcff8aa1a99"
+  },
+  {
+    "file": "D:\\AtomChat-Main\\.work\\0.3.3-feedback\\dist\\atomchat-Forge-1.20.1-0.3.3-windows-x64.jar",
+    "bytes": 19104659,
+    "sha256": "a3acee0b1a0d8f49166210b0675a95fd25188db0a35e482e3ecf43fbbc11555e"
+  },
+  {
+    "file": "D:\\AtomChat-Main\\.work\\0.3.3-feedback\\dist\\atomchat-NeoForge-1.21.1-0.3.3-linux-x64.jar",
+    "bytes": 20245469,
+    "sha256": "54a118e5612090b2a1f3087642f87a93f00e534a895f02e6be51422e9c9784ff"
+  },
+  {
+    "file": "D:\\AtomChat-Main\\.work\\0.3.3-feedback\\dist\\atomchat-NeoForge-1.21.1-0.3.3-windows-arm64.jar",
+    "bytes": 18494572,
+    "sha256": "fc87dbd76c90c2e786ed4f4e6525070ef2937b5b9eeaaf34c0f4499f440a9cac"
+  },
+  {
+    "file": "D:\\AtomChat-Main\\.work\\0.3.3-feedback\\dist\\atomchat-NeoForge-1.21.1-0.3.3-windows-x64.jar",
+    "bytes": 19118281,
+    "sha256": "3f9413b8aa739d18fa7efa1e8fe1d023919c8e66d19e61130e9207e94e38e5f3"
+  }
+]

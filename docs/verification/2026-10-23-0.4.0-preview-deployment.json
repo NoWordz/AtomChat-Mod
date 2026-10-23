@@ -1,0 +1,40 @@
+{
+  "version": "0.4.0-preview",
+  "deployments": [
+    {
+      "loader": "Forge",
+      "installed": "D:\\Myworld\\.minecraft\\versions\\1.20.1-main\\mods\\atomchat-Forge-1.20.1-0.4.0-preview-windows-x64.jar",
+      "sha256": "33c8c35aacaa8d7d559cb9430e28e00adf8d81f3856b58db6e9678fa605884e4",
+      "backup": "D:\\AtomChat-Backups\\2026-10-23-0.4.0-preview\\154518-141024\\Forge\\atomchat-Forge-1.20.1-0.4.0-preview-windows-x64.jar",
+      "backupSha256": "0633c1cb26ff5d7d820f09bb769462accc0aaa7e6d40da7df4b09cca046f1be9",
+      "otherFilesUnchanged": 193,
+      "atomchatModCount": 1,
+      "gameStarted": false,
+      "playerDataModifiedByDeployment": false
+    },
+    {
+      "loader": "Fabric",
+      "installed": "D:\\Myworld\\.minecraft\\versions\\1.21.1-CCB\\mods\\atomchat-Fabric-1.21.1-0.4.0-preview-windows-x64.jar",
+      "sha256": "68c2b2232631f6379d13c9e1a41ee42d57e972cbc73ed83ad4c9be582f090926",
+      "backup": "D:\\AtomChat-Backups\\2026-10-23-0.4.0-preview\\154518-141024\\Fabric\\atomchat-Fabric-1.21.1-0.4.0-preview-windows-x64.jar",
+      "backupSha256": "7306345938ac78d00496729d3aa98fd000d70b98b9c766ab9e7936e2aca776df",
+      "otherFilesUnchanged": 432,
+      "atomchatModCount": 1,
+      "gameStarted": false,
+      "playerDataModifiedByDeployment": false
+    },
+    {
+      "loader": "NeoForge",
+      "installed": "D:\\Myworld\\.minecraft\\versions\\Mechanomania-航空学\\mods\\atomchat-NeoForge-1.21.1-0.4.0-preview-windows-x64.jar",
+      "sha256": "f4e60a740a4f4ef77958ef7819806d19c8b5ab5330addf632cc5631304f47ee9",
+      "backup": "D:\\AtomChat-Backups\\2026-10-23-0.4.0-preview\\154518-141024\\NeoForge\\atomchat-NeoForge-1.21.1-0.4.0-preview-windows-x64.jar",
+      "backupSha256": "2fd97210e3b11a5422c9e17e7413cff4fa74f37c8b781899ffec1fc4994aba19",
+      "otherFilesUnchanged": 215,
+      "atomchatModCount": 1,
+      "gameStarted": false,
+      "playerDataModifiedByDeployment": false
+    }
+  ],
+  "backupRoot": "D:\\AtomChat-Backups\\2026-10-23-0.4.0-preview\\154518-141024",
+  "time": "2026-10-23T15:45:20.457943+08:00"
+}

@@ -27,9 +27,20 @@ public final class RichTextLayout {
      *                {@link RichText} after the last kept visible character on
      *                this line
      */
-    public record RichLine(List<RichText.RichRun> runs, int textStart, int textEnd) {
+    /** Visual pieces retain source indices; item padding never changes copied text. */
+    public record Part(String text, RichText.RichRun source, int textStart, int textEnd, float itemWidth) {
+        public boolean isItem() { return itemWidth > 0; }
+        public float width(TextMeasurer measurer) { return isItem() ? itemWidth : measurer.measure(text); }
+    }
+
+    public record RichLine(List<RichText.RichRun> runs, int textStart, int textEnd, List<Part> parts) {
+        public RichLine(List<RichText.RichRun> runs, int textStart, int textEnd) {
+            this(runs, textStart, textEnd, textParts(runs, textStart));
+        }
+
         public RichLine {
             runs = List.copyOf(runs);
+            parts = List.copyOf(parts);
         }
 
         public String getPlainText() {
@@ -42,6 +53,118 @@ public final class RichTextLayout {
     }
 
     private RichTextLayout() {
+    }
+
+    private static List<Part> textParts(List<RichText.RichRun> runs, int start) {
+        List<Part> parts = new ArrayList<>();
+        for (var run : runs) {
+            parts.add(new Part(run.text(), run, start, start + run.text().length(), 0));
+            start += run.text().length();
+        }
+        return parts;
+    }
+
+    /** Item slots and the first label code point wrap together whenever they fit. */
+    public static List<RichLine> wrapWithItems(RichText text, TextMeasurer measurer,
+                                               float maxWidth, float itemWidth) {
+        if (itemWidth <= 0 || text.runs().stream().noneMatch(RichText.RichRun::hasItemHover)) {
+            return wrap(text, measurer, maxWidth);
+        }
+        List<Part> atoms = new ArrayList<>();
+        RichText.RichRun previous = null;
+        int offset = 0;
+        for (var run : text.runs()) {
+            boolean startsItem = run.hasItemHover() && (previous == null || !previous.hasItemHover()
+                    || !run.style().getHoverEvent().equals(previous.style().getHoverEvent()));
+            int padding = startsItem && run.text().startsWith("   ") ? 3 : 0;
+            if (startsItem) atoms.add(new Part("", run, offset, offset + padding, itemWidth));
+            for (int i = padding; i < run.text().length();) {
+                int end = i + Character.charCount(run.text().codePointAt(i));
+                atoms.add(new Part(run.text().substring(i, end), run, offset + i, offset + end, 0));
+                i = end;
+            }
+            offset += run.text().length();
+            previous = run;
+        }
+        List<RichLine> lines = new ArrayList<>();
+        List<Part> line = new ArrayList<>();
+        float width = 0;
+        for (int i = 0; i < atoms.size(); i++) {
+            Part part = atoms.get(i);
+            if (part.text().equals("\n")) {
+                emitItemLine(lines, line, text.runs());
+                line.clear();
+                width = 0;
+                continue;
+            }
+            float advance = part.width(measurer);
+            float needed = advance;
+            if (part.isItem() && i + 1 < atoms.size() && !atoms.get(i + 1).text().equals("\n")) {
+                needed += atoms.get(i + 1).width(measurer);
+            }
+            boolean firstLabelAfterSlot = line.size() == 1 && line.get(0).isItem() && !part.isItem()
+                    && line.get(0).textEnd() == part.textStart();
+            if (!line.isEmpty() && !firstLabelAfterSlot && width + needed > maxWidth) {
+                emitItemLine(lines, line, text.runs());
+                line.clear();
+                width = 0;
+            }
+            if (line.isEmpty() && !lines.isEmpty() && part.text().equals(" ")) continue;
+            line.add(part);
+            width += advance;
+        }
+        // Ordinary trailing spaces on the final line retain the existing contract.
+        emitItemLine(lines, line, text.runs(), false);
+        return lines;
+    }
+
+    private static void emitItemLine(List<RichLine> lines, List<Part> parts, List<RichText.RichRun> source) {
+        emitItemLine(lines, parts, source, true);
+    }
+
+    private static void emitItemLine(List<RichLine> lines, List<Part> parts,
+                                     List<RichText.RichRun> source, boolean trim) {
+        int count = parts.size();
+        while (trim && count > 0 && parts.get(count - 1).text().equals(" ")) count--;
+        if (count == 0) return;
+        List<Part> merged = new ArrayList<>();
+        for (Part part : parts.subList(0, count)) {
+            if (!merged.isEmpty() && !part.isItem()) {
+                Part last = merged.get(merged.size() - 1);
+                if (!last.isItem() && last.source().style().equals(part.source().style())
+                        && last.textEnd() == part.textStart()) {
+                    merged.set(merged.size() - 1, new Part(last.text() + part.text(), last.source(),
+                            last.textStart(), part.textEnd(), 0));
+                    continue;
+                }
+            }
+            merged.add(part);
+        }
+        int start = merged.get(0).textStart();
+        int end = merged.get(merged.size() - 1).textEnd();
+        lines.add(new RichLine(sliceRuns(source, start, end), start, end, merged));
+    }
+
+    public static float width(RichLine line, TextMeasurer measurer) {
+        float width = 0;
+        for (Part part : line.parts()) width += part.width(measurer);
+        return width;
+    }
+
+    /** X advance to an original UTF-16 boundary, including any preceding item slot. */
+    public static float advanceTo(RichLine line, TextMeasurer measurer, int absoluteIndex) {
+        float width = 0;
+        for (Part part : line.parts()) {
+            if (absoluteIndex <= part.textStart()) break;
+            if (part.isItem()) {
+                width += part.itemWidth();
+            } else {
+                int chars = Math.min(part.text().length(), absoluteIndex - part.textStart());
+                width += measurer.measure(part.text().substring(0, chars));
+                if (absoluteIndex < part.textEnd()) break;
+            }
+        }
+        return width;
     }
 
     public static List<RichLine> wrap(RichText text, TextMeasurer measurer, float maxWidth) {
@@ -136,22 +259,32 @@ public final class RichTextLayout {
      * @return the absolute UTF-16 index into the original {@link RichText}
      */
     public static int charAt(RichLine line, TextMeasurer measurer, float localX) {
-        String plain = line.getPlainText();
-        if (localX <= 0f || plain.isEmpty()) {
-            return line.textStart();
-        }
+        return hit(line, measurer, localX, false);
+    }
 
-        float x = 0f;
-        int index = 0;
-        while (index < plain.length()) {
-            int codePoint = plain.codePointAt(index);
-            int codePointEnd = index + Character.charCount(codePoint);
-            float width = measurer.measure(plain.substring(index, codePointEnd));
-            if (localX < x + width) {
-                return line.textStart() + index;
+    /** Nearest caret boundary, sharing exactly the visual advances used by paint. */
+    public static int caretAt(RichLine line, TextMeasurer measurer, float localX) {
+        return hit(line, measurer, localX, true);
+    }
+
+    private static int hit(RichLine line, TextMeasurer measurer, float localX, boolean caret) {
+        if (localX <= 0) return line.textStart();
+        float x = 0;
+        for (Part part : line.parts()) {
+            if (part.isItem()) {
+                if (localX < x + part.itemWidth()) {
+                    return caret && localX >= x + part.itemWidth() / 2 ? part.textEnd() : part.textStart();
+                }
+                x += part.itemWidth();
+                continue;
             }
-            x += width;
-            index = codePointEnd;
+            for (int i = 0; i < part.text().length();) {
+                int end = i + Character.charCount(part.text().codePointAt(i));
+                float width = measurer.measure(part.text().substring(i, end));
+                if (localX < x + width * (caret ? 0.5f : 1)) return part.textStart() + i;
+                x += width;
+                i = end;
+            }
         }
         return line.textEnd();
     }

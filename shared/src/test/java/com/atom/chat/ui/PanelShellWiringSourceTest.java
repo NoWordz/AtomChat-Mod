@@ -66,14 +66,14 @@ class PanelShellWiringSourceTest {
         REQUIRED.put("PanelOpenMotion.stepProgress(panelProgress, closing, frameDtMs,", 1);
         REQUIRED.put("PanelOpenMotion.settled(panelProgress, closing)", 1);
         REQUIRED.put("PanelOpenMotion.closeDue(panelProgress, closing)", 1);
-        REQUIRED.put("PanelOpenMotion.chromeAnimating(panelSettled,", 1);
         REQUIRED.put("PanelOpenMotion.blurCapture(", 1);
         REQUIRED.put("PanelOpenMotion.openScale(progress, AtomChatConfig.get().pageNavStyle)", 1);
         REQUIRED.put("PanelOpenMotion.openSlidePx(progress, AtomChatConfig.get().pageNavStyle)", 1);
         // The fade is asked for twice: the pure-overdraw judgement and the layer's paint.
         REQUIRED.put("PanelOpenMotion.fade(progress)", 2);
         REQUIRED.put("PanelOpenMotion.fadeLayer(progress,", 1);
-        REQUIRED.put("PanelOpenMotion.animating(panelProgress, closing)", 1);
+        // Input gate, foreign-widget input, and the deferred migration warning.
+        REQUIRED.put("PanelOpenMotion.animating(panelProgress, closing)", 3);
         REQUIRED.put("CanvasLeakWatch.probe(\"drawPanel+banners\"", 2);
         REQUIRED.put("CanvasLeakWatch.probe(\"messageListView.draw\"", 1);
         REQUIRED.put("CanvasLeakWatch::probe,", 1);
@@ -170,7 +170,7 @@ class PanelShellWiringSourceTest {
         for (String screen : SCREENS) {
             String src = source(screen);
             assertEquals(3, occurrences(src, "CanvasLeakWatch.probe("),
-                    screen + ": the two layered draws plus the message list must report through"
+                    screen + ": the panel draws, banner passes and message list must report through"
                             + " the one probe");
             assertTrue(src.contains("CanvasLeakWatch::probe,"),
                     screen + ": the banner service must be handed the same probe, not a second one");

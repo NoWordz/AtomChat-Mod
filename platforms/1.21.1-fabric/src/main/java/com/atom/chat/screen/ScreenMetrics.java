@@ -122,7 +122,11 @@ public final class ScreenMetrics {
     // window measurements, and nothing else needs them.
 
     static float panelWidth(int width, int height) {
-        return Math.min(UiTokens.s(AtomChatConfig.get().activePanelWidth()) / contentScaleValue(), vw(width, height) - 32.0F);
+        return panelWidthForViewport(vw(width, height));
+    }
+
+    public static float panelWidthForViewport(float viewportWidth) {
+        return Math.min(UiTokens.s(AtomChatConfig.get().activePanelWidth()) / contentScaleValue(), viewportWidth - 32.0F);
     }
 
     static float panelHeight(int height) {

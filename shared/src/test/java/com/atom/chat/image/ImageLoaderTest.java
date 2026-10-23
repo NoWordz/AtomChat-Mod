@@ -19,6 +19,28 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ImageLoaderTest {
+    @Test void linkedCacheCannotReadWriteTrimOrClearFilesInsideConfig() throws Exception {
+        Path target = Files.createDirectories(tempDir.resolve("config/images"));
+        Path original = target.resolve("existing.bin"); Files.writeString(original,"private cache");
+        Files.setLastModifiedTime(original, FileTime.fromMillis(1));
+        Path link = tempDir.resolve("image-cache");
+        try { Files.createSymbolicLink(link,target); }
+        catch (java.nio.file.FileSystemException | UnsupportedOperationException e) {
+            org.junit.jupiter.api.Assumptions.assumeTrue(System.getProperty("os.name").startsWith("Windows"));
+            Process process = new ProcessBuilder("cmd.exe","/d","/c","mklink","/J",link.toString(),target.toString())
+                    .redirectErrorStream(true).start();
+            assertTrue(process.waitFor(10,java.util.concurrent.TimeUnit.SECONDS));
+            assertEquals(0,process.exitValue());
+        }
+        try {
+            ImageLoader loader = ImageLoader.forTest(url -> png(2,2),System::currentTimeMillis,Runnable::run);
+            loader.init(link);
+            assertNotNull(loader.get("http://test/new",true),"unsafe disk paths still allow memory-only images");
+            loader.trimDiskCache(); loader.clearDiskCache();
+            assertEquals("private cache",Files.readString(original));
+            try (var files = Files.list(target)) { assertEquals(1,files.count()); }
+        } finally { Files.deleteIfExists(link); }
+    }
     @TempDir
     Path tempDir;
 

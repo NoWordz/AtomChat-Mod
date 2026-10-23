@@ -6,68 +6,79 @@ import com.atom.chat.platform.Platform;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
-import java.util.Comparator;
+import java.util.List;
+import java.util.Locale;
 import java.util.stream.Stream;
 
 /**
- * Runtime data/cache location for AtomChat.
- *
- * <p>User-editable settings and user-selected content stay under
- * {@code config/atomchat/} (atomchat-client.json, emotes, wallpaper, local
- * avatar, history). Auto-downloaded / auto-uploaded runtime data — chat image
- * cache and companion avatar uploads — belong beside the config dir but not
- * inside it, so the config folder does not silently grow into a media dump.
- *
- * <p>Layout:
- * <ul>
- *   <li>{@code <gameDir>/atomchat-data/image-cache/} — processed chat-image
- *       cache (safe to delete, capped by {@code ImageLoader})</li>
- *   <li>{@code <gameDir>/atomchat-data/avatars/} — companion server avatar
- *       uploads (one PNG per player, trimmed by the server config)</li>
- *   <li>{@code <gameDir>/atomchat-data/media/} — companion server hosted chat
- *       media (content-addressed, trimmed by the server config)</li>
- *   <li>{@code <gameDir>/atomchat-data/packs/<key>/} — emote packs downloaded
- *       from a server (re-verified on every join, safe to delete)</li>
- *   <li>{@code config/atomchat/emotes/} — the emotes the player added with the
- *       panel's {@code +} (their own stickers, never distributed)</li>
- *   <li>{@code config/atomchat/server-emotes/} — the emotes a server hands to
- *       clients (admin content). Deliberately a different folder: sharing one
- *       path between the two roles meant a single game dir - single player, or
- *       a LAN host - pushed the player's own stickers to every guest</li>
- * </ul>
- *
- * <p>Old v0.2.3 locations under {@code config/atomchat/} are migrated once on
- * first start. A directory that has been superseded by the new location is
- * marked with {@code .moved-to-atomchat-data.txt}; startup removes those old
- * trees automatically so a stale multi-GB cache cannot keep occupying disk.
+ * AtomChat's data root beside {@code config}. Its four public groups are deliberately small:
+ * {@code client} for player-authored data, {@code cache} for disposable downloads and diagnostics,
+ * {@code server} for host-side content, and {@code backups} for verified migration copies.
  */
 public final class CacheDirs {
+    private record Roots(Path game, Path config) { }
+    private enum LegacyLayout { FLAT_PREVIEW, OLD_RUNTIME, CONFIG }
+
+    private static final java.util.Set<Roots> ATTEMPTED = new java.util.HashSet<>();
+    private static final List<String> CLIENT_DIRS = List.of(
+            "avatar", "banner", "wallpaper", "emotes", "presets", "history");
+
     private CacheDirs() {
     }
 
     public static Path dataRoot() {
-        return Platform.gameDir().resolve("atomchat-data");
+        return Platform.gameDir().resolve("atomchat");
+    }
+
+    public static Path clientRoot() {
+        return dataRoot().resolve("client");
+    }
+
+    public static Path cacheRoot() {
+        return dataRoot().resolve("cache");
+    }
+
+    public static Path serverRoot() {
+        return dataRoot().resolve("server");
+    }
+
+    public static Path clientDataPath() {
+        return clientRoot().resolve("client-data.json");
+    }
+
+    public static Path avatarDir() {
+        return clientRoot().resolve("avatar");
+    }
+
+    public static Path bannerDir() {
+        return clientRoot().resolve("banner");
+    }
+
+    public static Path wallpaperDir() {
+        return clientRoot().resolve("wallpaper");
+    }
+
+    /** The player's own emotes, added through the panel. Never distributed. */
+    public static Path emotesDir() {
+        return clientRoot().resolve("emotes");
+    }
+
+    public static Path presetsDir() {
+        return clientRoot().resolve("presets");
+    }
+
+    public static Path historyDir() {
+        return clientRoot().resolve("history");
     }
 
     /** Processed chat-image cache files decoded from downloaded chat links. */
     public static Path imageCacheDir() {
-        return dataRoot().resolve("image-cache");
-    }
-
-    /** Companion server's uploaded custom-avatar PNGs. */
-    public static Path avatarDataDir() {
-        return dataRoot().resolve("avatars");
-    }
-
-    /** Game directory root; {@code server-icon.png} lives here. */
-    public static Path gameDir() {
-        return Platform.gameDir();
+        return cacheRoot().resolve("images");
     }
 
     /** Root of the downloaded server packs, one folder per {@code PackKeys} key. */
     public static Path packsRoot() {
-        return dataRoot().resolve("packs");
+        return cacheRoot().resolve("packs");
     }
 
     /** One server's downloaded pack. */
@@ -75,145 +86,166 @@ public final class CacheDirs {
         return packsRoot().resolve(key);
     }
 
-    /** The player's own emotes, added through the panel. Never distributed. */
-    public static Path emotesDir() {
-        return Platform.configDir().resolve("atomchat/emotes");
+    /** Optional avatar diagnostics; safe to delete. */
+    public static Path debugDir() {
+        return cacheRoot().resolve("debug");
+    }
+
+    /** Companion server's uploaded custom-avatar PNGs. */
+    public static Path avatarDataDir() {
+        return serverRoot().resolve("avatars");
     }
 
     /**
-     * The emotes a server offers to clients - admin content, sitting next to
-     * {@code atomchat-server.json}. A server must never build its pack from
-     * {@link #emotesDir()}: that folder belongs to whoever is playing.
+     * The emotes a server offers to clients, which are admin content. A server must never build
+     * its pack from {@link #emotesDir()}: that folder belongs to whoever is playing.
      */
     public static Path serverEmotesDir() {
-        return Platform.configDir().resolve("atomchat/server-emotes");
+        return serverRoot().resolve("emotes");
     }
 
     /** Companion server's hosted chat media (images / animated GIFs). */
     public static Path mediaDataDir() {
-        return dataRoot().resolve("media");
+        return serverRoot().resolve("media");
     }
 
-    public static void migrateFromOldConfigPaths() {
-        Path config = Platform.configDir().resolve("atomchat");
-        migrateDir(config.resolve("image-cache"), imageCacheDir(), "image cache");
-        migrateDir(config.resolve("avatars"), avatarDataDir(), "companion avatar data");
-        cleanupMovedLegacyDirs(config);
-        retireLegacyFlatConfig(config);
+    public static Path migrationBackupDir() {
+        return dataRoot().resolve("backups/migration");
     }
 
-    /**
-     * The pre-0.2.4 client settings lived in one flat file,
-     * {@code config/atomchat.json}. Once the current layout is in place that
-     * file is dead weight, so it is renamed rather than deleted - a player who
-     * hand-edited it keeps the text.
-     */
-    private static void retireLegacyFlatConfig(Path configRoot) {
-        if (configRoot == null) {
-            return;
-        }
-        Path legacy = configRoot.resolve("atomchat.json");
-        Path current = configRoot.resolve("atomchat-client.json");
-        if (!Files.isRegularFile(legacy) || !Files.isRegularFile(current)) {
-            return;
-        }
-        Path retired = configRoot.resolve("atomchat.json.migrated-bak");
-        try {
-            Files.move(legacy, retired, StandardCopyOption.REPLACE_EXISTING);
-            AtomChat.LOGGER.info(com.atom.chat.diagnostics.AtomChatLog.message("resource", "Retired the pre-0.2.4 flat config {} -> {}"), legacy, retired);
-        } catch (IOException e) {
-            AtomChat.LOGGER.warn(com.atom.chat.diagnostics.AtomChatLog.message("resource", "Could not retire the legacy flat config {}"), legacy, e);
-        }
-    }
-
-    private static void migrateDir(Path oldDir, Path newDir, String label) {
-        if (oldDir == null || newDir == null || !Files.isDirectory(oldDir)) {
-            return;
-        }
-        try {
-            if (Files.isDirectory(newDir) && hasEntries(newDir)) {
-                // New location already has data: keep it authoritative, do not
-                // merge/overwrite. Just mark the old one as no longer read;
-                // cleanup below deletes it in the same pass.
-                markMoved(oldDir, newDir);
-                return;
-            }
-            Files.createDirectories(newDir.getParent());
-            if (Files.exists(newDir)) {
-                deleteEmptyTree(newDir);
-            }
-            Files.move(oldDir, newDir, StandardCopyOption.ATOMIC_MOVE);
-            AtomChat.LOGGER.info(com.atom.chat.diagnostics.AtomChatLog.message("resource", "Migrated AtomChat {} from {} to {}"), label, oldDir, newDir);
-        } catch (Exception e) {
-            // Never fail startup over a cache move; the old path simply stays.
-            AtomChat.LOGGER.warn(com.atom.chat.diagnostics.AtomChatLog.message("resource", "Failed to migrate AtomChat {} from {} to {}"),
-                    label, oldDir, newDir, e);
-        }
+    /** Game directory root; {@code server-icon.png} lives here. */
+    public static Path gameDir() {
+        return Platform.gameDir();
     }
 
     /**
-     * Deletes old v0.2.3 runtime-data directories that carry the migration
-     * marker. The marker proves the new {@code atomchat-data} location is
-     * authoritative, so these trees are pure dead weight.
+     * Shows the client-authored folders before their first file exists. The cache debug folder is
+     * optional but useful for support; server and backup folders are created only when used.
      */
-    private static void cleanupMovedLegacyDirs(Path config) {
-        cleanupMovedLegacyDir(config.resolve("image-cache"), "image cache");
-        cleanupMovedLegacyDir(config.resolve("avatars"), "companion avatar data");
+    public static void initializePersonalDirectories() {
+        for (String name : CLIENT_DIRS) {
+            initialize(clientRoot().resolve(name));
+        }
+        initialize(debugDir());
     }
 
-    private static void cleanupMovedLegacyDir(Path oldDir, String label) {
-        if (oldDir == null || !Files.isDirectory(oldDir)
-                || !Files.exists(oldDir.resolve(".moved-to-atomchat-data.txt"))) {
-            return;
-        }
+    private static void initialize(Path dir) {
+        if (!DataMigration.allowPersonalPath(dir)) return;
         try {
-            deleteTree(oldDir);
-            AtomChat.LOGGER.info(com.atom.chat.diagnostics.AtomChatLog.message("resource", "Removed migrated AtomChat {} at {}"), label, oldDir);
-        } catch (IOException e) {
-            AtomChat.LOGGER.warn(com.atom.chat.diagnostics.AtomChatLog.message("resource", "Failed to remove migrated AtomChat {} at {}"),
-                    label, oldDir, e);
+            Files.createDirectories(dir);
+        } catch (IOException | SecurityException e) {
+            DataMigration.noteWarning();
+            AtomChat.LOGGER.warn(com.atom.chat.diagnostics.AtomChatLog.message(
+                    "resource", "Could not initialize AtomChat personal folder {}"), dir, e);
         }
     }
 
-    private static void deleteTree(Path root) throws IOException {
-        if (!Files.exists(root)) {
-            return;
-        }
-        try (Stream<Path> walk = Files.walk(root)) {
-            for (Path p : (Iterable<Path>) walk.sorted(Comparator.reverseOrder())::iterator) {
-                Files.deleteIfExists(p);
+    public static synchronized void migrateFromOldConfigPaths() {
+        Roots paths = new Roots(Platform.gameDir().toAbsolutePath().normalize(),
+                Platform.configDir().toAbsolutePath().normalize());
+        // A failed move is retried next launch, never on every panel/config reload.
+        if (!ATTEMPTED.add(paths)) return;
+
+        // Current organized/previous-flat data wins first; older roots fill only missing slots.
+        migrateRoot(dataRoot(), LegacyLayout.FLAT_PREVIEW);
+
+        Path oldRuntime = Platform.gameDir().resolve("atomchat-data");
+        migrateRoot(oldRuntime, LegacyLayout.OLD_RUNTIME);
+        if (Files.isDirectory(oldRuntime, java.nio.file.LinkOption.NOFOLLOW_LINKS)
+                && DataMigration.allowPersonalPath(oldRuntime)) {
+            try {
+                Files.deleteIfExists(oldRuntime);
+            } catch (java.nio.file.DirectoryNotEmptyException e) {
+                DataMigration.noteWarning();
+                AtomChat.LOGGER.warn(com.atom.chat.diagnostics.AtomChatLog.message(
+                        "resource", "Legacy AtomChat runtime path {} still contains unrecognized data; preserved for inspection"),
+                        oldRuntime);
+            } catch (IOException | SecurityException e) {
+                DataMigration.noteWarning();
             }
+        } else if (Files.exists(oldRuntime, java.nio.file.LinkOption.NOFOLLOW_LINKS)) {
+            DataMigration.noteWarning();
+            AtomChat.LOGGER.warn(com.atom.chat.diagnostics.AtomChatLog.message(
+                    "resource", "Legacy AtomChat runtime path {} is not a safe directory; preserved for inspection"),
+                    oldRuntime);
         }
+
+        migrateRoot(Platform.configDir().resolve("atomchat"), LegacyLayout.CONFIG);
+        migrate(Platform.configDir().resolve("atomchat.json"),
+                migrationBackupDir().resolve("legacy-config/atomchat-flat.json"));
     }
 
-    private static boolean hasEntries(Path dir) throws IOException {
-        try (Stream<Path> stream = Files.list(dir)) {
-            return stream.findAny().isPresent();
-        }
-    }
-
-    private static void deleteEmptyTree(Path dir) throws IOException {
-        if (!Files.isDirectory(dir)) {
-            return;
-        }
-        try (Stream<Path> stream = Files.list(dir)) {
-            if (stream.findAny().isPresent()) {
-                return; // not empty, leave it alone
+    private static void migrateRoot(Path source, LegacyLayout layout) {
+        if (!Files.exists(source, java.nio.file.LinkOption.NOFOLLOW_LINKS)) return;
+        if (!DataMigration.allowPersonalPath(source)) return;
+        try (Stream<Path> files = Files.list(source)) {
+            for (Path file : files.sorted().toList()) {
+                Path target = targetFor(file, layout);
+                if (target != null) migrate(file, target);
+                else if (layout == LegacyLayout.FLAT_PREVIEW && !currentContainer(file.getFileName().toString())) {
+                    DataMigration.noteWarning();
+                    AtomChat.LOGGER.warn(com.atom.chat.diagnostics.AtomChatLog.message(
+                            "resource", "Unknown AtomChat top-level item {} was preserved; move it into client/, cache/ or server/ if needed"),
+                            file);
+                }
             }
+        } catch (IOException | SecurityException e) {
+            DataMigration.noteWarning();
+            AtomChat.LOGGER.warn(com.atom.chat.diagnostics.AtomChatLog.message(
+                    "resource", "Could not inspect legacy AtomChat data in {}; remaining originals are retained"),
+                    source, e);
         }
-        Files.deleteIfExists(dir);
     }
 
-    private static void markMoved(Path dir, Path destination) {
-        try {
-            Path marker = dir.resolve(".moved-to-atomchat-data.txt");
-            if (!Files.exists(marker)) {
-                Files.writeString(marker,
-                        "AtomChat moved this runtime data to:\n" + destination.toAbsolutePath()
-                                + "\n\nThe files here are no longer read and may be deleted.\n");
-            }
-        } catch (IOException e) {
-            AtomChat.LOGGER.warn(com.atom.chat.diagnostics.AtomChatLog.message("resource", "Failed to write migration marker in {}"), dir, e);
+    private static Path targetFor(Path source, LegacyLayout layout) {
+        String name = source.getFileName().toString();
+        boolean currentContainer = currentContainer(name);
+        if (currentContainer) return null;
+
+        Path target = switch (name) {
+            case "avatar" -> avatarDir();
+            case "banner" -> bannerDir();
+            case "wallpaper" -> wallpaperDir();
+            case "emotes" -> emotesDir();
+            case "appearance-presets", "presets" -> presetsDir();
+            case "history" -> historyDir();
+            case "client-data.json" -> clientDataPath();
+            case "debug" -> debugDir();
+            case "image-cache" -> imageCacheDir();
+            case "packs" -> packsRoot();
+            case "media" -> mediaDataDir();
+            case "avatars" -> avatarDataDir();
+            case "server-emotes" -> serverEmotesDir();
+            case "migration-backup" -> migrationBackupDir().resolve(switch (layout) {
+                case FLAT_PREVIEW -> "previous";
+                case OLD_RUNTIME -> "previous-atomchat-data";
+                case CONFIG -> "previous-config";
+            });
+            default -> null;
+        };
+
+        if (target == null && !Files.isDirectory(source, java.nio.file.LinkOption.NOFOLLOW_LINKS)
+                && name.toLowerCase(Locale.ROOT).startsWith("banner.")) {
+            target = bannerDir().resolve(name);
         }
+        if (target == null && layout == LegacyLayout.CONFIG && legacyConfig(name)) {
+            target = migrationBackupDir().resolve("legacy-config").resolve(name);
+        }
+        return target;
+    }
+
+    private static boolean currentContainer(String name) {
+        return name.equals("client") || name.equals("cache")
+                || name.equals("server") || name.equals("backups");
+    }
+
+    private static boolean legacyConfig(String name) {
+        return name.equals("atomchat.json") || name.startsWith("atomchat.json.")
+                || name.startsWith("atomchat-client.json.")
+                || (name.startsWith("atomchat-config-") && name.endsWith(".tmp"));
+    }
+
+    private static void migrate(Path source, Path target) {
+        DataMigration.migrate(source, target, migrationBackupDir(), dataRoot());
     }
 }

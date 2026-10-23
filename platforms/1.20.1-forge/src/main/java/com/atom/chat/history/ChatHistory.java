@@ -135,6 +135,7 @@ public final class ChatHistory {
                 return;
             }
             try {
+                com.atom.chat.util.DataMigration.noLinks(file);
                 Files.deleteIfExists(file);
             } catch (IOException e) {
                 AtomChat.LOGGER.warn(com.atom.chat.diagnostics.AtomChatLog.message("history", "Failed to delete chat history {}"), file, e);
@@ -176,6 +177,7 @@ public final class ChatHistory {
                 return;
             }
             try {
+                com.atom.chat.util.DataMigration.noLinks(file);
                 Files.createDirectories(file.getParent());
                 Files.write(file, finalLines, StandardCharsets.UTF_8);
             } catch (IOException e) {
@@ -240,7 +242,7 @@ public final class ChatHistory {
             return;
         }
         Path dir = HistoryStore.baseDir();
-        if (dir == null || !Files.isDirectory(dir)) {
+        if (!com.atom.chat.util.DataMigration.allowPersonalPath(dir) || !Files.isDirectory(dir)) {
             return;
         }
         long now = System.currentTimeMillis();
@@ -253,6 +255,7 @@ public final class ChatHistory {
                 }
                 try {
                     if (now - Files.getLastModifiedTime(f).toMillis() > limit) {
+                        com.atom.chat.util.DataMigration.noLinks(f);
                         Files.deleteIfExists(f);
                     }
                 } catch (IOException ignored) {

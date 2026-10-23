@@ -77,10 +77,10 @@ public class AtomChatConfig {
     }
 
     public enum BubbleStyle { CLASSIC, ROUND, CORNER }
-    public BubbleStyle bubbleStyle = BubbleStyle.CLASSIC;
+    public BubbleStyle bubbleStyle = BubbleStyle.CORNER;
 
     public BubbleStyle effectiveBubbleStyle() {
-        return bubbleStyle == null ? BubbleStyle.CLASSIC : bubbleStyle;
+        return bubbleStyle == null ? BubbleStyle.CORNER : bubbleStyle;
     }
     /**
      * When true, public messages from blocked players are dropped at capture
@@ -111,7 +111,7 @@ public class AtomChatConfig {
      * clamped to the slider span on load (see {@link #clampContentScale()}).
      */
     public float contentScale = 1.0F;
-    /** Dumps avatar sampling PNGs to {@code <config>/atomchat/debug/} for color debugging. */
+    /** Dumps avatar sampling PNGs to {@code <gameDir>/atomchat/cache/debug/} for color debugging. */
     public boolean debug = false;
     public int accentColor = 0xFF4A90E2;
     public int bubbleTextColor = 0xFFFFFFFF;
@@ -142,7 +142,7 @@ public class AtomChatConfig {
 
     /**
      * Master switch for the custom profile banner
-     * ({@code <config>/atomchat/banner.png}). When false the banner file, even
+     * ({@code <gameDir>/atomchat/banner.png}). When false the banner file, even
      * if present, is ignored and the profile falls back to the accent
      * gradient. The file itself is the everyday on/off — deleting it turns the
      * custom banner off the same way; this flag exists so the image can be
@@ -306,17 +306,23 @@ public class AtomChatConfig {
      * Merge consecutive identical messages from the same sender into one bubble
      * with a repeat counter (e33chat anti-spam). System lines never merge.
      */
-    public boolean antiSpamEnabled = true;
+    public boolean antiSpamEnabled = false;
     /**
      * Render consecutive messages from the same sender within five minutes as a
      * compact group: only the first keeps the avatar/name row, later bubbles get
      * a tighter gap (Discord/Telegram style).
      */
-    public boolean compactMessagesEnabled = false;
+    public boolean compactMessagesEnabled = true;
+    /** Same notification queue on HUD and in the panel; only the HUD anchor is configurable. */
+    public com.atom.chat.notification.NotificationHudLayout.Anchor notificationHudPosition =
+            com.atom.chat.notification.NotificationHudLayout.Anchor.TOP_CENTER;
+    public float notificationHudOffsetX = 0;
+    public float notificationHudOffsetY = 0;
+    /** Uniform HUD-only size multiplier; the panel keeps its own geometry. */
+    public float notificationHudScale = 1;
     /**
-     * Skia banner when someone @mentions or quotes you. Banners are drawn inside
-     * the AtomChat panel only, so with the panel closed this has no visual
-     * effect and the sound is the only in-game signal.
+     * Skia banner when someone @mentions or quotes you, shared between
+     * the game HUD and the open AtomChat panel with one expiry time.
      */
     public boolean mentionBannerEnabled = true;
     /** Sound when someone @mentions or quotes you. */
@@ -329,7 +335,7 @@ public class AtomChatConfig {
     public float notifyVolume = 1.0F;
     public boolean notificationSoundEnabled = true;
     public boolean feedbackSoundEnabled = true;
-    public float feedbackVolume = 0.5F;
+    public float feedbackVolume = 1.0F;
     public boolean feedbackButtonEnabled = true;
     public boolean feedbackSendEnabled = true;
     public boolean feedbackPanelEnabled = true;
@@ -370,7 +376,7 @@ public class AtomChatConfig {
     public int emoteMax = 0;
     /**
      * Whether chat history is kept per world on disk under
-     * {@code <config>/atomchat/history/} and restored when you rejoin that
+     * {@code <gameDir>/atomchat/client/history/} and restored when you rejoin that
      * world. Off by default: chat (including private conversations) is written
      * as plain JSONL, so this is an explicit opt-in rather than a surprise.
      */
@@ -513,6 +519,7 @@ public class AtomChatConfig {
     }
 
     private static AtomChatConfig load() {
+        com.atom.chat.util.CacheDirs.migrateFromOldConfigPaths();
         Path path = com.atom.chat.platform.Platform.configDir().resolve("atomchat/atomchat-client.json");
         if (Files.exists(path)) {
             try {
@@ -520,6 +527,7 @@ public class AtomChatConfig {
                 AtomChatConfig config = GSON.fromJson(sanitizePageNavStyle(sanitizeAvatarStyle(
                         sanitizeBubbleStyle(sanitizeWorldFeedFilter(json)))), AtomChatConfig.class);
                 if (config != null) {
+                    boolean personalLoaded = PersonalDataStore.load(config);
                     if (config.blockedPlayers == null) {
                         config.blockedPlayers = new java.util.ArrayList<>();
                     }
@@ -537,7 +545,7 @@ public class AtomChatConfig {
                     // switched on by editing the file, it simply would not be
                     // there. Existing values are preserved by the round trip.
                     seedGuiTip(config);
-                    save(config);
+                    if (personalLoaded) save(config);
                     return config;
                 }
             } catch (Exception e) {
@@ -550,8 +558,9 @@ public class AtomChatConfig {
         // "unset means legacy" default would make the next load() divide the
         // fresh 20 down to ~14.3.
         config.pixelRadiusMigrated = true;
+        boolean personalLoaded = PersonalDataStore.load(config);
         seedGuiTip(config);
-        save(config);
+        if (personalLoaded) save(config);
         return config;
     }
 
@@ -564,9 +573,10 @@ public class AtomChatConfig {
         Path path = com.atom.chat.platform.Platform.configDir().resolve("atomchat/atomchat-client.json");
         Path staged = null;
         try {
+            com.google.gson.JsonObject settings = PersonalDataStore.saveAndStrip(config, path);
             Files.createDirectories(path.getParent());
             staged = Files.createTempFile(path.getParent(), "atomchat-config-", ".tmp");
-            Files.writeString(staged, GSON.toJson(config), StandardCharsets.UTF_8);
+            Files.writeString(staged, GSON.toJson(settings), StandardCharsets.UTF_8);
             try {
                 Files.move(staged, path, java.nio.file.StandardCopyOption.ATOMIC_MOVE,
                         java.nio.file.StandardCopyOption.REPLACE_EXISTING);
@@ -574,8 +584,9 @@ public class AtomChatConfig {
                 Files.move(staged, path, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
             }
             return true;
-        } catch (IOException e) {
-            AtomChat.LOGGER.error(com.atom.chat.diagnostics.AtomChatLog.message("config", "Failed to save AtomChat config"), e);
+        } catch (IOException | RuntimeException e) {
+            com.atom.chat.util.DataMigration.noteWarning();
+            AtomChat.LOGGER.error(com.atom.chat.diagnostics.AtomChatLog.message("config", "Failed to save AtomChat config or personal data; original config retained"), e);
             return false;
         } finally {
             if (staged != null) {

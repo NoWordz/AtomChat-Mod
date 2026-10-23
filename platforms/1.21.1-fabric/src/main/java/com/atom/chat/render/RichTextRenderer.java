@@ -31,18 +31,37 @@ public final class RichTextRenderer {
      */
     public static List<RichLine> wrapFor(RichText text, Font font, float maxWidth) {
         TextMeasurer measurer = s -> SkiaFontRenderer.getStringWidth(font, s);
-        return RichTextLayout.wrap(text, measurer, maxWidth);
+        return RichTextLayout.wrapWithItems(text, measurer, maxWidth,
+                font.getSize() + com.atom.chat.ui.UiTokens.INLINE_ITEM_GAP);
     }
 
     /**
      * Returns the on-screen width of one already-wrapped rich line.
      */
     public static float width(Font font, RichLine line) {
-        float total = 0.0F;
-        for (RichText.RichRun run : line.runs()) {
-            total += SkiaFontRenderer.getStringWidth(font, run.text());
+        return RichTextLayout.width(line, s -> SkiaFontRenderer.getStringWidth(font, s));
+    }
+
+    /** Single-row truncation uses the same item slots and source indices as paint. */
+    public static RichText truncate(Font font, RichText text, float maxWidth) {
+        List<RichLine> lines = wrapFor(text, font, Float.MAX_VALUE);
+        if (lines.isEmpty() || width(font, lines.get(0)) <= maxWidth) return text;
+        if (maxWidth <= 0) return RichText.concat(text.slice(0, 1), RichText.literal("…"));
+        RichLine line = lines.get(0);
+        float ellipsis = SkiaFontRenderer.getStringWidth(font, "…");
+        TextMeasurer measurer = value -> SkiaFontRenderer.getStringWidth(font, value);
+        int end = 0;
+        outer: for (RichTextLayout.Part part : line.parts()) {
+            if (part.isItem()) continue;
+            for (int i = 0; i < part.text().length();) {
+                i += Character.charCount(part.text().codePointAt(i));
+                int next = part.textStart() + i;
+                if (RichTextLayout.advanceTo(line, measurer, next) + ellipsis > maxWidth) break outer;
+                end = next;
+            }
         }
-        return total;
+        return end <= 0 ? RichText.literal("…")
+                : RichText.concat(text.slice(0, end), RichText.literal("…"));
     }
 
     /**
@@ -123,15 +142,20 @@ public final class RichTextRenderer {
             float baseline = SkiaFontRenderer.centerBaselineY(font, lineCenterY);
             float lineTop = blockTop + i * lineHeight;
             float runX = x;
-            for (RichText.RichRun run : line.runs()) {
-                String text = run.text();
-                if (text.isEmpty()) {
+            for (RichTextLayout.Part part : line.parts()) {
+                RichText.RichRun run = part.source();
+                String text = part.text();
+                if (text.isEmpty() && !part.isItem()) {
                     continue;
                 }
                 int color = effectiveColor(run.style(), fallbackColor);
-                float runWidth = SkiaFontRenderer.getStringWidth(font, text);
-                SkiaFontRenderer.drawText(canvas, font, text, runX, baseline, color);
-                if (run.style().getClickEvent() != null || run.style().isUnderlined()) {
+                float runWidth = part.width(s -> SkiaFontRenderer.getStringWidth(font, s));
+                if (part.isItem()) {
+                    ItemIconRenderer.draw(canvas, run, runX, lineCenterY - font.getSize() / 2, font.getSize());
+                } else {
+                    SkiaFontRenderer.drawText(canvas, font, text, runX, baseline, color);
+                }
+                if (!part.isItem() && (run.style().getClickEvent() != null || run.style().isUnderlined())) {
                     drawUnderline(canvas, font, runX, baseline, runWidth, color);
                 }
                 if (addClickable && sink != null
@@ -161,10 +185,7 @@ public final class RichTextRenderer {
         // and last baseline vertically — padded like drawTextPass pads a run.
         float maxLineW = 0.0F;
         for (RichLine line : lines) {
-            float lineW = 0.0F;
-            for (RichText.RichRun run : line.runs()) {
-                lineW += SkiaFontRenderer.getStringWidth(font, run.text());
-            }
+            float lineW = width(font, line);
             maxLineW = Math.max(maxLineW, lineW);
         }
         float pad = 8.0F;
@@ -183,13 +204,11 @@ public final class RichTextRenderer {
                     RichLine line = lines.get(i);
                     float baseline = SkiaFontRenderer.centerBaselineY(font, blockTop + (i + 0.5F) * lineHeight);
                     float runX = x;
-                    for (RichText.RichRun run : line.runs()) {
-                        String text = run.text();
-                        if (text.isEmpty()) {
-                            continue;
+                    for (RichTextLayout.Part part : line.parts()) {
+                        if (!part.isItem() && !part.text().isEmpty()) {
+                            SkiaFontRenderer.drawText(canvas, font, part.text(), runX, baseline, 0xFF000000);
                         }
-                        SkiaFontRenderer.drawText(canvas, font, text, runX, baseline, 0xFF000000);
-                        runX += SkiaFontRenderer.getStringWidth(font, text);
+                        runX += part.width(s -> SkiaFontRenderer.getStringWidth(font, s));
                     }
                 }
             } finally {

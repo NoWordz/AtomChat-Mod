@@ -157,7 +157,7 @@ public final class AvatarRenderer {
 
     /**
      * Hunt instrumentation (config debug=true, once per launch): writes the raw
-     * GL read and the blended face as PNGs under {@code <config>/atomchat/debug/}
+     * GL read and the blended face as PNGs under {@code <gameDir>/atomchat/cache/debug/}
      * so the color pipeline can be verified against the real skin without
      * guessing byte orders.
      */
@@ -167,7 +167,7 @@ public final class AvatarRenderer {
         }
         dumped = true;
         try {
-            Path dir = com.atom.chat.platform.Platform.configDir().resolve("atomchat/debug");
+            Path dir = com.atom.chat.util.CacheDirs.debugDir();
             Files.createDirectories(dir);
             NativeImage rawImg = new NativeImage(SKIN_SIZE, SKIN_SIZE, false);
             for (int y = 0; y < SKIN_SIZE; y++) {

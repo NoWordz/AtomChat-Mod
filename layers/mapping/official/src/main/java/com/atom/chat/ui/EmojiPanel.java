@@ -137,7 +137,7 @@ public final class EmojiPanel {
     public EmojiPanel(Host host) {
         this.host = host;
         this.emoteStore = new EmoteStore(
-                com.atom.chat.platform.Platform.configDir().resolve("atomchat/emotes"),
+                 com.atom.chat.util.CacheDirs.emotesDir(),
                 // Read at scan time, so a hand-edited cap is picked up on the next scan
                 // instead of being frozen at construction.
                 () -> com.atom.chat.config.AtomChatConfig.get().emoteMax);

@@ -13,7 +13,7 @@ import java.util.function.IntSupplier;
 
 /**
  * Emotes in two sources: the player's own folder at
- * {@code <configDir>/atomchat/emotes/} (png/jpg/jpeg/gif; gif plays in the grid)
+ * {@code <gameDir>/atomchat/client/emotes/} (png/jpg/jpeg/gif; gif plays in the grid)
  * and, since 0.2.9, the emotes of a downloaded server pack.
  *
  * <p>The local half keeps the original rules — adding a file copies it in (the
@@ -108,7 +108,7 @@ public final class EmoteStore {
 
     private static List<File> scan(Path source, int cap) {
         List<File> files = new ArrayList<>();
-        if (source == null) {
+        if (!com.atom.chat.util.DataMigration.allowPersonalPath(source)) {
             return files;
         }
         File[] listed = source.toFile().listFiles();
@@ -116,7 +116,8 @@ public final class EmoteStore {
             return files;
         }
         for (File f : listed) {
-            if (f.isFile() && isSupportedName(f.getName())) {
+            if (f.isFile() && isSupportedName(f.getName())
+                    && com.atom.chat.util.DataMigration.allowPersonalPath(f.toPath())) {
                 files.add(f);
             }
         }
@@ -150,8 +151,10 @@ public final class EmoteStore {
             return false;
         }
         try {
+            if (!com.atom.chat.util.DataMigration.allowPersonalPath(dir)) return false;
             Files.createDirectories(dir);
             Path dest = dir.resolve(source.getName());
+            if (!com.atom.chat.util.DataMigration.allowPersonalPath(dest)) return false;
             // Re-picking a file that already lives in the emote dir is a no-op.
             if (source.toPath().toAbsolutePath().normalize()
                     .equals(dest.toAbsolutePath().normalize())) {
@@ -179,6 +182,7 @@ public final class EmoteStore {
             return false;
         }
         try {
+            if (!com.atom.chat.util.DataMigration.allowPersonalPath(emotePath)) return false;
             boolean deleted = emote.delete();
             if (deleted) {
                 refresh();

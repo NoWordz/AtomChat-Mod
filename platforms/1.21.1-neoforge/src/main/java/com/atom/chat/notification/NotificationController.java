@@ -14,8 +14,8 @@ import net.neoforged.neoforge.registries.RegisterEvent;
 
 /**
  * Turns capture-side events (mentions, quote replies, incoming whispers) into
- * notification side effects. The banner is Skia-rendered only while the
- * AtomChat panel is open; the sound always respects its own toggle and a 2s
+ * notification side effects. One shared banner queue is drawn on either the
+ * game HUD or the open AtomChat panel; the sound always respects its own toggle and a 2s
  * dedupe gate.
  */
 public final class NotificationController {
@@ -132,7 +132,7 @@ public final class NotificationController {
         if (soundOn) {
             playSound(type);
         }
-        // Queue globally, render panel-only: opening the panel inside the 4s
+        // Queue once for both hosts: opening the panel inside the 6s
         // window must reveal the banner, so enqueueing cannot depend on the
         // screen being open right now.
         boolean canQueue = NotificationBanner.enabled(type)

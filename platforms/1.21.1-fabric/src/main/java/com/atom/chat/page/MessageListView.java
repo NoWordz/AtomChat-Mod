@@ -18,6 +18,7 @@ import com.atom.chat.render.SkiaDraw;
 import com.atom.chat.render.SkiaFontRenderer;
 import com.atom.chat.render.TextSurface;
 import com.atom.chat.text.RichText;
+import com.atom.chat.text.RichTextLayout;
 import com.atom.chat.text.RichTextLayout.RichLine;
 import com.atom.chat.theme.ThemeService;
 import com.atom.chat.ui.Animations;
@@ -68,7 +69,7 @@ public final class MessageListView {
         long openStart();
     }
 
-    public record MessageTextLine(ChatMessage message, int line, String text, float x, float y, float height) {
+    public record MessageTextLine(ChatMessage message, int line, String text, float x, float y, float height, RichLine richLine) {
     }
 
     public record MessageHit(ChatMessage message, int index, float x, float y, float maxWidth, float bottom,
@@ -1243,27 +1244,7 @@ public final class MessageListView {
      * rule of the plain-text truncator this replaces.
      */
     private static RichText truncateRich(Font font, RichText text, float maxW) {
-        String plain = text.getString();
-        if (SkiaFontRenderer.getStringWidth(font, plain) <= maxW) {
-            return text;
-        }
-        if (maxW <= 0.0F) {
-            return RichText.concat(text.slice(0, 1), RichText.literal("…"));
-        }
-        float ellipsisW = SkiaFontRenderer.getStringWidth(font, "…");
-        int end = 0;
-        int i = 0;
-        while (i < plain.length()) {
-            int next = i + Character.charCount(plain.codePointAt(i));
-            if (SkiaFontRenderer.getStringWidth(font, plain.substring(0, next)) + ellipsisW > maxW) {
-                break;
-            }
-            i = next;
-            end = next;
-        }
-        return end <= 0
-                ? RichText.literal("…")
-                : RichText.concat(text.slice(0, end), RichText.literal("…"));
+        return RichTextRenderer.truncate(font, text, maxW);
     }
 
     /**
@@ -1541,33 +1522,15 @@ public final class MessageListView {
         float blockTop = centerY - lines.size() * lineH / 2.0F;
         float textX = hit.bubbleX() + UiTokens.BUBBLE_PAD;
         for (int i = 0; i < lines.size(); i++) {
-            out.add(new MessageTextLine(msg, i, lines.get(i), textX, blockTop + i * lineH, lineH));
+            out.add(new MessageTextLine(msg, i, lines.get(i), textX, blockTop + i * lineH, lineH, richLines.get(i)));
         }
         return out;
     }
 
     private int charAtLine(MessageTextLine line, float mx) {
-        String text = line.text();
-        if (text.isEmpty()) {
-            return 0;
-        }
         Font font = FontManager.font(line.message().isSystem() ? UiTokens.FONT_QUOTE : UiTokens.FONT_BODY);
-        float x = line.x();
-        // Step by code point: a char-by-char loop splits surrogate pairs, so a
-        // click near an emoji could return an index into the middle of it and
-        // later slice the copied text in half.
-        int i = 0;
-        while (i < text.length()) {
-            int cp = text.codePointAt(i);
-            int chars = Character.charCount(cp);
-            float w = SkiaFontRenderer.getStringWidth(font, text.substring(i, i + chars));
-            if (mx < x + w / 2.0F) {
-                return i;
-            }
-            x += w;
-            i += chars;
-        }
-        return text.length();
+        return RichTextLayout.caretAt(line.richLine(),
+                text -> SkiaFontRenderer.getStringWidth(font, text), mx - line.x()) - line.richLine().textStart();
     }
 
     /**
@@ -1622,8 +1585,11 @@ public final class MessageListView {
                 continue;
             }
             String line = lines.get(i);
-            float x0 = textX + SkiaFontRenderer.getStringWidth(font, line.substring(0, start));
-            float x1 = textX + SkiaFontRenderer.getStringWidth(font, line.substring(0, end));
+            RichLine richLine = richLines.get(i);
+            float x0 = textX + RichTextLayout.advanceTo(richLine,
+                    text -> SkiaFontRenderer.getStringWidth(font, text), richLine.textStart() + start);
+            float x1 = textX + RichTextLayout.advanceTo(richLine,
+                    text -> SkiaFontRenderer.getStringWidth(font, text), richLine.textStart() + end);
             float y = blockTop + i * lineHeight;
             SkiaDraw.drawRoundedRect(canvas, x0, y, Math.max(1.0F, x1 - x0), lineHeight, s(1), 0xE02D6FD6);
         }

@@ -32,7 +32,8 @@
     "it.unimi       — fastutil，由原版捆绑",
     "io.netty       — 网络栈，由原版捆绑；共享层用它的 DecoderException 表示「对端送来的东西坏了」",
     "org.objectweb  — ASM，mixin 运行时需要",
-    "org.spongepowered — mixin 注解（mixin 类要写它）"
+    "org.spongepowered — mixin 注解（mixin 类要写它）",
+    "org.joml — Minecraft 捆绑的矩阵与向量库；物品离屏渲染保存并恢复原版投影与光照，不额外打包"
   ],
   "_test_only": [
     "《只在测试源集里允许，不进产物》",

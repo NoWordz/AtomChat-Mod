@@ -160,6 +160,7 @@ public final class SettingsSectionPage {
     private static final String ACTION_WALLPAPER_CLEAR = "wallpaper_clear";
     private static final String ACTION_TELEPORT_MODE = "teleport_mode";
     private static final String ACTION_PAGE_NAV_STYLE = "page_nav_style";
+    private static final String ACTION_HUD_EDIT = "hud_edit";
     private static final String ACTION_AVATAR_STYLE = "avatar_style";
     public static final String ACTION_BUBBLE_STYLE = "bubble_style:";
     private static final String ACTION_HISTORY_CLEAR = "history_clear";
@@ -187,6 +188,11 @@ public final class SettingsSectionPage {
         });
     }
 
+    private SettingsItem hudEditItem() {
+        return new SettingsItem("hud_edit", "atomchat.settings.notify.layout",
+                "atomchat.settings.notify.layout.desc", () -> true, v -> { });
+    }
+
     /** "Test sound" card: fires the notification cue right away, no message needed. */
     private SettingsItem testSoundItem() {
         return new SettingsItem("test_sound",
@@ -196,7 +202,7 @@ public final class SettingsSectionPage {
         });
     }
 
-    /** Teleport command card: subtitle shows the current auto/tp/tpa mode. */
+    /** Teleport command selector: descriptive subtitle, current mode between arrows. */
     private SettingsItem teleportModeItem() {
         return new SettingsItem("teleport_mode",
                 "atomchat.settings.chat.teleport",
@@ -206,9 +212,7 @@ public final class SettingsSectionPage {
     }
 
     /**
-     * Page transition card: subtitle shows the current slide/zoom style;
-     * tapping cycles between the two and saves (the handler lives on the
-     * screen, like every other action card).
+     * Avatar style selector; arrow actions are dispatched by SettingsActions.
      */
     private SettingsItem avatarStyleItem() {
         return new SettingsItem("avatar_style",
@@ -368,6 +372,25 @@ public final class SettingsSectionPage {
         activeChip.put(section.id(), index);
     }
 
+    /** Cancels a captured press without applying a theme, preset or setting. */
+    public void cancelPointer() {
+        for (CardStrip strip : previewStrips) {
+            strip.pressed = false;
+            strip.dragged = false;
+            strip.pressedCard = -1;
+        }
+        endSliderDrag();
+        setPressedRow(-1);
+        setPressedChip(-1);
+        setPressedSwatch(-1, -1);
+    }
+
+    public boolean chipTransitionActive() { return chipTransitionActive(System.currentTimeMillis()); }
+
+    private boolean chipTransitionActive(long now) {
+        return chipSwitchFromId != null && Animations.enabled() && now - chipSwitchAtMs < CHIP_SWITCH_MS;
+    }
+
     /** Rows of one chip by id (the crossfade's outgoing layer). */
     private List<Row> rowsForChip(SettingsSection section, String chipId) {
         return switch (section) {
@@ -430,7 +453,7 @@ public final class SettingsSectionPage {
      * child rows when collapsed.
      */
     private static String foldableGroup(String labelKey) {
-        if (labelKey == null || "atomchat.settings.about.authors".equals(labelKey)) {
+        if (labelKey == null) {
             return null;
         }
         return "label:" + labelKey;
@@ -471,6 +494,7 @@ public final class SettingsSectionPage {
 
     private final Map<String, ToggleSwitch> switches = new HashMap<>();
     private final Map<Integer, Float> rowHover = new HashMap<>();
+    private final SettingsStepper.HoverState stepperHover = new SettingsStepper.HoverState();
     /** Per-row press bounce: compact(), so a row lifts 1.04 on hover and
      *  dips 0.95 while pressed. */
     private final Map<Integer, PressScale> rowPress = new HashMap<>();
@@ -581,9 +605,11 @@ public final class SettingsSectionPage {
                 ActionCopy copy = actionCopy(row);
                 title = copy.title(); desc = copy.subtitle();
                 if (copy.available()) {
-                    reserved = SkiaFontRenderer.getStringWidth(titleFont, copy.verb())
+                    float valueWidth = SkiaFontRenderer.getStringWidth(titleFont, copy.verb());
+                    boolean stepper = SettingsStepper.supports(row.actionId());
+                    reserved = (stepper ? SettingsStepper.preferredWidth(valueWidth) : valueWidth)
                             + UiTokens.SETTINGS_COMPACT_GAP;
-                    controlH = SkiaFontRenderer.getHeight(titleFont);
+                    controlH = stepper ? UiTokens.SETTINGS_STEPPER_ARROW : SkiaFontRenderer.getHeight(titleFont);
                 }
             }
             case INFO -> {
@@ -699,19 +725,22 @@ public final class SettingsSectionPage {
             verb = tr("atomchat.settings.action.choose");
         } else if (ACTION_TELEPORT_MODE.equals(row.actionId())) {
             String mode = AtomChatConfig.get().teleportCommandMode;
-            subtitle = tr("atomchat.settings.chat.teleport." + (mode == null ? "auto" : mode));
-            verb = tr("atomchat.settings.action.cycle");
+            subtitle = tr(item.subtitleKey());
+            verb = tr("atomchat.settings.chat.teleport." + (mode == null ? "auto" : mode));
         } else if (ACTION_AVATAR_STYLE.equals(row.actionId())) {
-            subtitle = tr(AtomChatConfig.get().effectiveAvatarStyle() == AtomChatConfig.AvatarStyle.E33CHAT
+            subtitle = tr(item.subtitleKey());
+            verb = tr(AtomChatConfig.get().effectiveAvatarStyle() == AtomChatConfig.AvatarStyle.E33CHAT
                     ? "atomchat.settings.chat.avatar_style.e33chat"
                     : "atomchat.settings.chat.avatar_style.atomchat");
-            verb = tr("atomchat.settings.action.cycle");
+        } else if (ACTION_HUD_EDIT.equals(row.actionId())) {
+            subtitle = tr(item.subtitleKey());
+            verb = tr("atomchat.settings.action.edit");
         } else if (ACTION_PAGE_NAV_STYLE.equals(row.actionId())) {
-            subtitle = tr(AtomChatConfig.get().pageNavStyle
+            subtitle = tr(item.subtitleKey());
+            verb = tr(AtomChatConfig.get().pageNavStyle
                     == AtomChatConfig.PageNavStyle.ZOOM
                     ? "atomchat.settings.appearance.page_nav_style.zoom"
                     : "atomchat.settings.appearance.page_nav_style.slide");
-            verb = tr("atomchat.settings.action.cycle");
         } else if (ACTION_HISTORY_CLEAR.equals(row.actionId())) {
             subtitle = tr(AtomChatConfig.get().chatHistoryEnabled
                     ? "atomchat.settings.chat.history.clear.desc.saved"
@@ -759,7 +788,9 @@ public final class SettingsSectionPage {
                 float reserved = 0.0F;
                 if (copy.available()) {
                     Font verbFont = FontManager.font(UiTokens.SETTINGS_TILE_TITLE);
-                    reserved = SkiaFontRenderer.getStringWidth(verbFont, copy.verb()) + s(12);
+                    float valueWidth = SkiaFontRenderer.getStringWidth(verbFont, copy.verb());
+                    reserved = (SettingsStepper.supports(row.actionId())
+                            ? SettingsStepper.preferredWidth(valueWidth) : valueWidth) + s(12);
                 }
                 yield Math.max(0.0F, rowW - padX * 2.0F - reserved);
             }
@@ -854,9 +885,10 @@ public final class SettingsSectionPage {
                         () -> rows.add(Row.ofAction(ACTION_HISTORY_CLEAR, historyClearItem())));
             }
             case "notify" -> {
-                addGroup(rows, "atomchat.settings.group.notify.banner", () ->
-                        addSwitches(rows, SettingsSection.CHAT,
-                                "mention_banner", "whisper_banner"));
+                addGroup(rows, "atomchat.settings.group.notify.banner", () -> {
+                    addSwitches(rows, SettingsSection.CHAT, "mention_banner", "whisper_banner");
+                    rows.add(Row.ofAction(ACTION_HUD_EDIT, hudEditItem()));
+                });
                 addGroup(rows, "atomchat.settings.sounds.notification", () -> {
                     addSwitches(rows, SettingsSection.CHAT,
                             "notification", "mention_sound", "whisper_sound");
@@ -960,8 +992,7 @@ public final class SettingsSectionPage {
     private List<Row> aboutRows() {
         List<Row> rows = new ArrayList<>();
         rows.add(Row.ofHero());
-        rows.add(Row.ofLabel("atomchat.settings.about.authors"));
-        rows.add(Row.ofAuthors());
+        addGroup(rows, "atomchat.settings.about.authors", () -> rows.add(Row.ofAuthors()));
         addGroup(rows, LABEL_MOD_INFO, () -> {
             for (SettingsCatalog.InfoRow info : SettingsCatalog.aboutCoreRows()) {
                 rows.add(Row.ofInfo(info));
@@ -1087,7 +1118,8 @@ public final class SettingsSectionPage {
      * consumer.
      */
     private static boolean isAboutCardChild(List<Row> rows, int index) {
-        return owningGroup(rows, index) != null;
+        // AUTHORS draws two independent cards; its fold group owns visibility only.
+        return rows.get(index).kind() != RowKind.AUTHORS && owningGroup(rows, index) != null;
     }
 
     private float rowAdvance(List<Row> rows, int index, UiLayout layout) {
@@ -1201,8 +1233,7 @@ public final class SettingsSectionPage {
         stepGroupExpansions(rows, dt);
         // Chip switch crossfade: the outgoing rows fade out while sliding up
         // and away, the incoming rows fade in while sliding up into place.
-        boolean chipFading = chipSwitchFromId != null && Animations.enabled()
-                && now - chipSwitchAtMs < CHIP_SWITCH_MS;
+        boolean chipFading = chipTransitionActive(now);
         float t = chipFading
                 ? Math.min(1.0F, (now - chipSwitchAtMs) / (float) CHIP_SWITCH_MS) : 1.0F;
         if (!chipFading) {
@@ -1210,6 +1241,7 @@ public final class SettingsSectionPage {
         }
 
         float barH = chipBarHeight(section);
+        updateStepperHover(section, rows, layout, vmx, vmy, scrollY, barH, dt);
         canvas.save();
         try {
             // The chip band owns the top of the list: rows clip below it, so a
@@ -2518,7 +2550,65 @@ public final class SettingsSectionPage {
         SkiaFontRenderer.drawLines(canvas, font, lines, x, centerY, lineH, color);
     }
 
-    /** Plain action card: title + description + a right-aligned verb. */
+    /** One geometry consumed by both selector rendering and pointer resolution. */
+    SettingsStepper.Geometry stepperGeometry(Row row, UiLayout.Rect rect) {
+        Font font = FontManager.font(UiTokens.SETTINGS_TILE_TITLE);
+        return SettingsStepper.layout(rect, SkiaFontRenderer.getStringWidth(font, actionCopy(row).verb()),
+                compactText(row, rect.w()) != null);
+    }
+
+    private void drawStepper(Canvas canvas, Row row, UiLayout.Rect rect, ActionCopy copy) {
+        var geometry = stepperGeometry(row, rect);
+        Font font = FontManager.font(UiTokens.SETTINGS_TILE_TITLE);
+        canvas.save();
+        try {
+            canvas.clipRect(Rect.makeXYWH(rect.x(), rect.y(), rect.w(), rect.h()));
+            for (int direction : new int[]{-1, 1}) {
+                UiLayout.Rect arrow = direction < 0 ? geometry.previous() : geometry.next();
+                float hover = stepperHover.weight(row.actionId(), direction);
+                if (hover > 0.0F) SkiaDraw.drawRoundedRect(canvas, arrow.x(), arrow.y(), arrow.w(), arrow.h(),
+                        UiTokens.settingsRowRadius(), UiTokens.cardHover(hover));
+                float size = Math.min(UiTokens.SETTINGS_STEPPER_CHEVRON, arrow.w() / 4);
+                drawChevron(canvas, arrow.x() + arrow.w() / 2, arrow.y() + arrow.h() / 2,
+                        size, direction < 0 ? 2 : 0, textPrimary());
+            }
+            UiLayout.Rect value = geometry.value();
+            SkiaFontRenderer.drawTextCentered(canvas, font,
+                    SkiaFontRenderer.truncate(font, copy.verb(), value.w()),
+                    value.x() + value.w() / 2, value.y() + value.h() / 2, textPrimary());
+        } finally { canvas.restore(); }
+    }
+
+    /**
+     * Resolves the one arrow under the pointer with the exact geometry used by
+     * painting and hit testing; every other action/direction falls back to 0.
+     */
+    private void updateStepperHover(SettingsSection section, List<Row> rows, UiLayout layout,
+                                    float vmx, float vmy, float scrollY, float barH, float dt) {
+        SettingsStepper.ArrowHover active = null;
+        if (layout.list.contains(vmx, vmy) && vmy >= layout.list.y() + barH) {
+            for (int i = 0; i < rows.size(); i++) {
+                Row row = rows.get(i);
+                if (row.kind() != RowKind.ACTION || !SettingsStepper.supports(row.actionId())
+                        || !row.item().available()) {
+                    continue;
+                }
+                UiLayout.Rect rect = rowRect(section, rows, i, scrollY, layout);
+                if (rect.bottom() < layout.list.y() || rect.y() > layout.list.bottom()
+                        || rowExpansion(rows, i) < GROUP_FOLD_MIN_DRAWN) {
+                    continue;
+                }
+                int direction = stepperGeometry(row, rect).directionAt(vmx, vmy);
+                if (direction != 0) {
+                    active = new SettingsStepper.ArrowHover(row.actionId(), direction);
+                    break;
+                }
+            }
+        }
+        stepperHover.advance(active, dt, Animations.enabled());
+    }
+
+    /** Plain action card: title + description + a right-aligned verb or selector. */
     private void drawAction(Canvas canvas, Row row, UiLayout.Rect rect, float hover) {
         ActionCopy copy = actionCopy(row);
         Font titleFont = FontManager.font(UiTokens.SETTINGS_TILE_TITLE);
@@ -2526,9 +2616,11 @@ public final class SettingsSectionPage {
         float textX = rect.x() + UiTokens.SETTINGS_ROW_PAD;
         float maxW = rect.w() - UiTokens.SETTINGS_ROW_PAD * 2.0F;
         CompactText compact = compactText(row, rect.w());
+        boolean stepper = SettingsStepper.supports(row.actionId());
         if (compact != null) {
             drawCompactText(canvas, rect, compact, copy.redConfirm() ? DANGER_RED : sec(200));
-            if (copy.available()) SkiaFontRenderer.drawTextRight(canvas, titleFont, copy.verb(),
+            if (copy.available() && stepper) drawStepper(canvas, row, rect, copy);
+            if (copy.available() && !stepper) SkiaFontRenderer.drawTextRight(canvas, titleFont, copy.verb(),
                     rect.right() - UiTokens.SETTINGS_ROW_PAD,
                     rect.bottom() - UiTokens.SETTINGS_ROW_PAD - compact.controlH() / 2.0F,
                     copy.redConfirm() ? DANGER_RED : textPrimary());
@@ -2545,7 +2637,8 @@ public final class SettingsSectionPage {
                         : sec(copy.available() ? 200 : 130));
         // Same treatment as the link cards' "Open": full-weight, centred —
         // the card's call to action, not a footnote.
-        if (copy.available()) {
+        if (copy.available() && stepper) drawStepper(canvas, row, rect, copy);
+        if (copy.available() && !stepper) {
             Font verbFont = FontManager.font(UiTokens.SETTINGS_TILE_TITLE);
             SkiaFontRenderer.drawTextRight(canvas, verbFont, copy.verb(),
                     rect.right() - UiTokens.SETTINGS_ROW_PAD,
@@ -2941,6 +3034,18 @@ public final class SettingsSectionPage {
                 }
                 continue;
             }
+            Row row = rows.get(i);
+            if (kind == RowKind.ACTION && SettingsStepper.supports(row.actionId())) {
+                if (!row.item().available()) continue;
+                var geometry = stepperGeometry(row, rect);
+                int direction = geometry.directionAt(vmx, vmy);
+                if (direction != 0 && layout.list.contains(vmx, vmy)) {
+                    UiLayout.Rect arrow = direction < 0 ? geometry.previous() : geometry.next();
+                    Row action = Row.ofAction(row.actionId() + (direction < 0 ? ":prev" : ""), row.item());
+                    return new RowHit(action, i, arrow.x(), arrow.y(), arrow.w(), arrow.h(), arrow.x());
+                }
+                continue;
+            }
             RowHit hit = new RowHit(rows.get(i), i, rect.x(), rect.y(), rect.w(), rect.h(),
 
                     actionX(rows.get(i), rect, buttonFont));
@@ -3255,6 +3360,7 @@ public final class SettingsSectionPage {
         chipSwitchFromId = null;
         lastInteractiveHover = -1;
         rowHover.clear();
+        stepperHover.clear();
         rowPress.clear();
         aboutCardPress.clear();
         swatchScale.clear();

@@ -8,7 +8,7 @@ import java.util.stream.Stream;
 
 /**
  * The custom panel wallpaper: at most one image, living in
- * {@code <config>/atomchat/wallpaper/}. Setting a new one copies it in (the
+ * {@code <gameDir>/atomchat/client/wallpaper/}. Setting a new one copies it in (the
  * source is kept) and drops any previous {@code wallpaper.*}; clearing removes
  * it, which falls the panel back to the blur/solid background.
  *
@@ -48,15 +48,17 @@ public final class WallpaperStore {
     /** Re-scans the wallpaper dir for a {@code wallpaper.*} file. */
     public static void refresh() {
         current = null;
-        if (dir == null || !Files.isDirectory(dir)) {
+        if (!com.atom.chat.util.DataMigration.allowPersonalPath(dir) || !Files.isDirectory(dir)) {
             return;
         }
         try (Stream<Path> files = Files.list(dir)) {
             files.filter(Files::isRegularFile)
+                    .filter(com.atom.chat.util.DataMigration::allowPersonalPath)
                     .filter(p -> {
                         String n = p.getFileName().toString().toLowerCase();
                         return n.startsWith(BASE_NAME) && isSupportedName(n);
                     })
+                    .sorted()
                     .findFirst()
                     .ifPresent(p -> current = p);
         } catch (IOException e) {
@@ -90,13 +92,16 @@ public final class WallpaperStore {
         }
         String ext = name.substring(name.lastIndexOf('.')).toLowerCase();
         try {
+            if (!com.atom.chat.util.DataMigration.allowPersonalPath(dir)) return false;
             Files.createDirectories(dir);
             Path dest = dir.resolve(BASE_NAME + ext);
+            if (!com.atom.chat.util.DataMigration.allowPersonalPath(dest)) return false;
             if (source.toAbsolutePath().normalize().equals(dest.toAbsolutePath().normalize())) {
                 refresh();
                 return true;
             }
             Path tmp = dir.resolve(BASE_NAME + ".tmp");
+            if (!com.atom.chat.util.DataMigration.allowPersonalPath(tmp)) return false;
             Files.copy(source, tmp, StandardCopyOption.REPLACE_EXISTING);
             moveIntoPlace(tmp, dest);
             removeExistingExcept(dest);
@@ -116,9 +121,11 @@ public final class WallpaperStore {
             return false;
         }
         try {
+            if (!com.atom.chat.util.DataMigration.allowPersonalPath(dir)) return false;
             Files.createDirectories(dir);
             Path dest = dir.resolve(BASE_NAME + ".png");
             Path tmp = dir.resolve(BASE_NAME + ".tmp");
+            if (!com.atom.chat.util.DataMigration.allowPersonalPath(tmp)) return false;
             Files.write(tmp, bytes);
             moveIntoPlace(tmp, dest);
             removeExistingExcept(dest);
@@ -155,11 +162,12 @@ public final class WallpaperStore {
     /** Removes every {@code wallpaper.*} except {@code keep} (the just-moved file). */
     private static boolean removeExistingExcept(Path keep) {
         boolean removed = false;
-        if (!Files.isDirectory(dir)) {
+        if (!com.atom.chat.util.DataMigration.allowPersonalPath(dir) || !Files.isDirectory(dir)) {
             return false;
         }
         try (Stream<Path> files = Files.list(dir)) {
-            for (Path p : files.filter(Files::isRegularFile).toList()) {
+            for (Path p : files.filter(Files::isRegularFile)
+                    .filter(com.atom.chat.util.DataMigration::allowPersonalPath).toList()) {
                 String n = p.getFileName().toString().toLowerCase();
                 if (n.startsWith(BASE_NAME) && isSupportedName(n)
                         && (keep == null || !p.toAbsolutePath().normalize()

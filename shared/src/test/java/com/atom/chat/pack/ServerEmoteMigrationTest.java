@@ -23,13 +23,22 @@ class ServerEmoteMigrationTest {
     Path root;
 
     private Path emotesDir() throws IOException {
-        Path dir = Files.createDirectories(root.resolve("config/atomchat/emotes"));
+        Path dir = Files.createDirectories(root.resolve("legacy-config/atomchat/server-emotes"));
         Files.write(dir.resolve("mine.png"), "player sticker".getBytes(StandardCharsets.UTF_8));
         return dir;
     }
 
     private Path serverEmotesDir() {
-        return root.resolve("config/atomchat/server-emotes");
+        return root.resolve("atomchat/server-emotes");
+    }
+
+    @Test void evenADedicatedServerNeverPromotesAPersonalEmoteDirectory() throws IOException {
+        for (String relative : List.of("atomchat/emotes", "config/atomchat/emotes")) {
+            Path personal = Files.createDirectories(root.resolve(relative));
+            Files.writeString(personal.resolve("private.png"), "private");
+            assertEquals(0, ServerEmoteMigration.migrate(personal, serverEmotesDir(), true));
+            assertTrue(!Files.exists(serverEmotesDir()));
+        }
     }
 
     private static List<String> listing(Path dir) throws IOException {

@@ -16,13 +16,11 @@
     "",
     "【为什么不列描述符】描述符也跟着映射变（`I` / `Lnet/...`），列进来只会多一处要维护的映射。"
   ],
-
   "files": {
     "yarn": "platforms/1.21.1-fabric/src/main/resources/atomchat.accesswidener",
     "official": "platforms/1.21.1-neoforge/src/main/resources/META-INF/accesstransformer.cfg",
     "srg": "platforms/1.20.1-forge/src/main/resources/META-INF/accesstransformer.cfg"
   },
-
   "members": [
     {
       "yarn": "net/minecraft/client/gui/widget/TextFieldWidget selectionStart",
@@ -48,6 +46,11 @@
       "yarn": "net/minecraft/client/gui/screen/ChatScreen chatInputSuggestor",
       "official": null,
       "why": "同上一行"
+    },
+    {
+      "yarn": "net/minecraft/client/gui/screen/Screen drawables",
+      "official": null,
+      "why": "恢复第三方聊天控件绘制；Forge/NeoForge 的 Screen.renderables 已由加载器开放，无需额外 AT，Fabric 的对应字段 drawables 为 private，需要 AW。"
     }
   ]
 }

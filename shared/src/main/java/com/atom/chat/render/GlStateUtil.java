@@ -95,6 +95,7 @@ public final class GlStateUtil {
         // SKIP_* values before Skia runs (only UNPACK_ALIGNMENT used to be
         // restored).
         private final int framebuffer;
+        private final int readFramebuffer;
         private final int[] viewport;
         private final int unpackRowLength;
         private final int unpackSkipPixels;
@@ -120,7 +121,7 @@ public final class GlStateUtil {
                       int activeTexture, int[] textureBindings2D, int[] samplerBindings, int program, int vaoBinding,
                       boolean colorMaskR, boolean colorMaskG, boolean colorMaskB, boolean colorMaskA,
                       int unpackAlignment, int pixelUnpackBufferBinding, boolean scissorTestEnabled, int[] scissorBox,
-                      int framebuffer, int[] viewport, int unpackRowLength, int unpackSkipPixels, int unpackSkipRows,
+                      int framebuffer, int readFramebuffer, int[] viewport, int unpackRowLength, int unpackSkipPixels, int unpackSkipRows,
                       int blendEquationRgb, int blendEquationAlpha, float[] blendColor, int frontFace,
                       Stencil stencil) {
             this.blendEnabled = blendEnabled;
@@ -147,6 +148,7 @@ public final class GlStateUtil {
             this.scissorTestEnabled = scissorTestEnabled;
             this.scissorBox = scissorBox;
             this.framebuffer = framebuffer;
+            this.readFramebuffer = readFramebuffer;
             this.viewport = viewport;
             this.unpackRowLength = unpackRowLength;
             this.unpackSkipPixels = unpackSkipPixels;
@@ -238,7 +240,8 @@ public final class GlStateUtil {
             }
             GL11C.glScissor(scissorBox[0], scissorBox[1], scissorBox[2], scissorBox[3]);
 
-            GlStateManager._glBindFramebuffer(GL30C.GL_FRAMEBUFFER, framebuffer);
+            GlStateManager._glBindFramebuffer(GL30C.GL_DRAW_FRAMEBUFFER, framebuffer);
+            GlStateManager._glBindFramebuffer(GL30C.GL_READ_FRAMEBUFFER, readFramebuffer);
             GlStateManager._viewport(viewport[0], viewport[1], viewport[2], viewport[3]);
 
             GL20C.glBlendEquationSeparate(blendEquationRgb, blendEquationAlpha);
@@ -299,7 +302,8 @@ public final class GlStateUtil {
                 int unpackSkipRows = GL11C.glGetInteger(GL11C.GL_UNPACK_SKIP_ROWS);
                 int pixelUnpackBufferBinding = GL11C.glGetInteger(GL21C.GL_PIXEL_UNPACK_BUFFER_BINDING);
                 boolean scissorTestEnabled = GL11C.glIsEnabled(GL11C.GL_SCISSOR_TEST);
-                int framebuffer = GL11C.glGetInteger(GL30C.GL_FRAMEBUFFER_BINDING);
+                int framebuffer = GL11C.glGetInteger(GL30C.GL_DRAW_FRAMEBUFFER_BINDING);
+                int readFramebuffer = GL11C.glGetInteger(GL30C.GL_READ_FRAMEBUFFER_BINDING);
                 int blendEquationRgb = GL11C.glGetInteger(GL20C.GL_BLEND_EQUATION_RGB);
                 int blendEquationAlpha = GL11C.glGetInteger(GL20C.GL_BLEND_EQUATION_ALPHA);
                 FloatBuffer blendColor = stack.mallocFloat(4);
@@ -313,7 +317,7 @@ public final class GlStateUtil {
                         colorMask.get(0) != 0, colorMask.get(1) != 0, colorMask.get(2) != 0, colorMask.get(3) != 0,
                         unpackAlignment, pixelUnpackBufferBinding, scissorTestEnabled,
                         new int[]{scissorBox.get(0), scissorBox.get(1), scissorBox.get(2), scissorBox.get(3)},
-                        framebuffer, new int[]{viewport.get(0), viewport.get(1), viewport.get(2), viewport.get(3)},
+                        framebuffer, readFramebuffer, new int[]{viewport.get(0), viewport.get(1), viewport.get(2), viewport.get(3)},
                         unpackRowLength, unpackSkipPixels, unpackSkipRows,
                         blendEquationRgb, blendEquationAlpha,
                         new float[]{blendColor.get(0), blendColor.get(1), blendColor.get(2), blendColor.get(3)},

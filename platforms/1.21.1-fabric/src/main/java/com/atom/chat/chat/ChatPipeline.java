@@ -23,6 +23,24 @@ public final class ChatPipeline {
     private ChatPipeline() {
     }
 
+    /** Direct HUD producers (including Quark) retain structured sender/body arguments. */
+    public static SenderMeta structuredPlayerLine(Text message) {
+        if (!(message.getContent() instanceof net.minecraft.text.TranslatableTextContent translated)) return null;
+        String key = translated.getKey();
+        int sender = key.equals("chat.type.text") ? 0
+                : key.equals("chat.type.team.text") || key.equals("chat.type.team.sent") ? 1 : -1;
+        Object[] args = translated.getArgs();
+        if (sender < 0 || args.length <= sender + 1) return null;
+        Text name = args[sender] instanceof Text c ? c : Text.literal(String.valueOf(args[sender]));
+        Text body = args[sender + 1] instanceof Text c ? c : Text.literal(String.valueOf(args[sender + 1]));
+        String display = name.getString().replaceAll("§.", "").trim();
+        if (display.isBlank()) return null;
+        var info = ChatClassifier.resolveOnlinePlayer(display);
+        String profile = info != null ? info.getProfile().getName() : display;
+        UUID uuid = info != null ? info.getProfile().getId() : SeenPlayers.findUuid(display);
+        return new SenderMeta(uuid, display, profile, body.getString(), false, name, body);
+    }
+
     /** All online names (profile + tab display + §-stripped variants), then
      *  players once seen in chat — the offline-player tail that lets relayed
      *  lines (bot bridges, delayed echoes) still parse as player chat. */

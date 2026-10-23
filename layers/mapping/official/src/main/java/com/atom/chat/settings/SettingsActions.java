@@ -98,6 +98,9 @@ public final class SettingsActions {
 
         /** D10: the list column's layout — the banner card's crop aspect. */
         UiLayout listLayout();
+
+        /** Opens the screen-owned visual HUD layout editor. */
+        default void openNotificationHudEditor() { }
     }
 
     private final Host host;
@@ -197,16 +200,12 @@ public final class SettingsActions {
                     removed);
         } else if ("test_sound".equals(actionId)) {
             com.atom.chat.notification.NotificationController.playTestSound();
-        } else if ("teleport_mode".equals(actionId)) {
+        } else if ("hud_edit".equals(actionId)) {
+            host.openNotificationHudEditor();
+        } else if ("teleport_mode".equals(actionId) || "teleport_mode:prev".equals(actionId)) {
             AtomChatConfig cfg = AtomChatConfig.get();
-            String current = cfg.teleportCommandMode == null ? "auto" : cfg.teleportCommandMode;
-            // auto -> tp -> tpa -> auto. The old cycle was tp -> tpa -> tp:
-            // once you left auto there was no way back — reported and fixed.
-            cfg.teleportCommandMode = switch (current) {
-                case "tp" -> "tpa";
-                case "tpa" -> "auto";
-                default -> "tp";
-            };
+            cfg.teleportCommandMode = SettingsStepper.teleport(cfg.teleportCommandMode,
+                    actionId.endsWith(":prev") ? -1 : 1);
             TeleportCommands.reset();
             AtomChatConfig.save(cfg);
         } else if (actionId != null && actionId.startsWith(SettingsSectionPage.ACTION_BUBBLE_STYLE)) {
@@ -219,18 +218,23 @@ public final class SettingsActions {
                     break;
                 }
             }
-        } else if ("avatar_style".equals(actionId)) {
+        } else if ("avatar_style".equals(actionId) || "avatar_style:prev".equals(actionId)) {
             AtomChatConfig cfg = AtomChatConfig.get();
             cfg.avatarStyle = cfg.effectiveAvatarStyle() == AtomChatConfig.AvatarStyle.E33CHAT
                     ? AtomChatConfig.AvatarStyle.ATOMCHAT : AtomChatConfig.AvatarStyle.E33CHAT;
             AtomChatConfig.save(cfg);
-        } else if ("page_nav_style".equals(actionId)) {
-            // Style pick: tap cycles SLIDE <-> ZOOM and saves, like the
-            // teleport-mode cycle above. Takes effect on the next nav.
+        } else if ("page_nav_style".equals(actionId) || "page_nav_style:prev".equals(actionId)) {
+            // The two-option cycle wraps in either direction. Takes effect on the next nav.
             AtomChatConfig cfg = AtomChatConfig.get();
             cfg.pageNavStyle = cfg.pageNavStyle == AtomChatConfig.PageNavStyle.ZOOM
                     ? AtomChatConfig.PageNavStyle.SLIDE
                     : AtomChatConfig.PageNavStyle.ZOOM;
+            AtomChatConfig.save(cfg);
+        } else if ("hud_position".equals(actionId)) {
+            AtomChatConfig cfg = AtomChatConfig.get();
+            var position = cfg.notificationHudPosition;
+            cfg.notificationHudPosition = (position == null
+                    ? com.atom.chat.notification.NotificationHudLayout.Anchor.TOP_CENTER : position).next();
             AtomChatConfig.save(cfg);
         } else if ("history_clear".equals(actionId)) {
             // Wipes the current session (and the world's saved file when

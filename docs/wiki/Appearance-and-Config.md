@@ -27,12 +27,12 @@ Every option **applies immediately and is written to disk at once — no game re
 `Appearance → Custom avatar` → pick an image → you land in the cropper:
 
 - **drag** to pan, **scroll** to zoom around the frame, **double-click** to reset;
-- the output is a 256-pixel square PNG in `.minecraft/config/atomchat/avatar/`;
+- the output is a 256-pixel square PNG in `.minecraft/atomchat/client/avatar/`;
 - players on the same server who run AtomChat **receive your avatar automatically** (changing it broadcasts a refresh immediately). If they do not run it, or the server turned hosting off, it degrades silently to the skin-based avatar.
 
 ### Custom wallpaper
 
-`Appearance → Custom wallpaper` → pick an image → the same cropper. The image is downsampled (long edge ≤ 1024 pixels) and stored in `.minecraft/config/atomchat/wallpaper/`; `png` / `jpg` / `jpeg` / `webp` are supported.
+`Appearance → Custom wallpaper` → pick an image → the same cropper. The image is downsampled (long edge ≤ 1024 pixels) and stored in `.minecraft/atomchat/client/wallpaper/`; `png` / `jpg` / `jpeg` / `webp` are supported.
 
 A wallpaper and background blur are **mutually exclusive**; with both configured the wallpaper wins, and panel opacity is used to darken it so the text stays readable.
 
@@ -44,7 +44,7 @@ A wallpaper and background blur are **mutually exclusive**; with both configured
 | Timestamp dividers | every 5 minutes | The first message always shows one; `0` turns them off |
 | Anti-spam merging | on | Consecutive identical messages collapse into one with a count |
 | Compact grouping | off | Within five minutes, a sender's consecutive messages keep only the first one's avatar and name |
-| Keep chat history | off | When on, stores per server / world in `.minecraft/config/atomchat/history/` (JSONL) and restores it on rejoining |
+| Keep chat history | off | When on, stores per server / world in `.minecraft/atomchat/client/history/` (JSONL) and restores it on rejoining |
 | History retention | 7 days | `0` means forever |
 | Notifications (@ / quotes / private chat) | on | Banners and sounds toggle separately, with an overall volume |
 | Teleport mode | `auto` | Cycles between `/tp`, `/tpa` and `auto`; `auto` probes the server's command tree |
@@ -59,25 +59,29 @@ A wallpaper and background blur are **mutually exclusive**; with both configured
 
 Version, licence, repository links, third-party components (Skija / Skia / FlatLaf), and two actions:
 
-- **Clear image cache** — clears only the image cache under `<game dir>/atomchat-data/`, leaving emotes, wallpaper and avatars alone;
-- **Debug mode** — writes the avatar colour sampling into `.minecraft/config/atomchat/debug/` as PNGs, for chasing avatar colour problems.
+- **Clear image cache** — clears only the image cache under `<game dir>/atomchat/`, leaving emotes, wallpaper and avatars alone;
+- **Debug mode** — writes the avatar colour sampling into `.minecraft/atomchat/cache/debug/` as PNGs, for chasing avatar colour problems.
 
 ## Config file and where data lands
 
-Anything you can change in game can also be edited in the file, which is what you want for bulk edits or pre-seeding a pack. The main config is **`.minecraft/config/atomchat/atomchat-client.json`** (generated on first launch).
+UI and behavior settings can also be edited in the config file. Personal phrases, signatures and blocklists belong in `atomchat/client/client-data.json`, which should not be included in a pack. The main config is **`.minecraft/config/atomchat/atomchat-client.json`** (generated on first launch).
 
 > Editing the file by hand needs a **game restart**, with one exception: `chatTemplates` / `whisperTemplates`, which are re-read every time the chat screen opens.
 
 | Path | Contents |
 |---|---|
 | `config/atomchat/atomchat-client.json` | The client's main config |
-| `config/atomchat/avatar/` | Custom avatars (256px PNG) |
-| `config/atomchat/emotes/` | Your own emotes (unlimited by default, `emoteMax` sets a cap) |
-| `config/atomchat/server-emotes/` | **Server only:** the distribution source handed to clients |
-| `config/atomchat/wallpaper/` | Custom wallpaper |
-| `config/atomchat/history/` | Chat history (off by default, one file per server / world) |
-| `config/atomchat/debug/` | Avatar sampling PNGs exported in debug mode |
-| `<game dir>/atomchat-data/` | Image cache, server-offered packs, other players' avatar data (500 files / 100 MB / 7 days unused) |
+| `atomchat/client/avatar/` | Custom avatars (created on first launch) (256px PNG) |
+| `atomchat/client/emotes/` | Your own emotes (created on first launch) (unlimited by default, `emoteMax` sets a cap) |
+| `atomchat/client/banner/` | Profile banner (`banner.png`, `.jpg`, `.jpeg` or `.webp`) |
+| `atomchat/server/emotes/` | **Server only:** the distribution source handed to clients |
+| `atomchat/server/media/` | Server-hosted chat media |
+| `atomchat/server/avatars/` | Uploaded profile avatars |
+| `atomchat/client/wallpaper/` | Custom wallpaper |
+| `atomchat/client/history/` | Chat history (off by default, one file per server / world) |
+| `atomchat/cache/debug/` | Avatar sampling PNGs exported in debug mode |
+| `atomchat/cache/images/`, `atomchat/cache/packs/` | Image cache and downloaded server packs (500 files / 100 MB / 7 days unused) |
+| `atomchat/backups/migration/` | Verified legacy copies and conflict versions; exclude with the rest of `atomchat/` |
 
 The server's own config and data live under the server's game directory; see the [Server Owner Guide](Server-Owner-Guide).
 
@@ -106,8 +110,8 @@ The server's own config and data live under the server's game directory; see the
 | `accentColor` | `0xFF4A90E2` | Accent (send button, quote bar, scrollbar, …) |
 | `imageMessagesEnabled` | `true` | Whether image messages are fetched and rendered |
 | `timestampIntervalMinutes` | `5` | Timestamp divider interval in minutes; `0` turns them off |
-| `antiSpamEnabled` | `true` | Merge consecutive identical messages with a count |
-| `compactMessagesEnabled` | `false` | Compact grouping within five minutes per sender |
+| `antiSpamEnabled` | `false` | Merge consecutive identical messages with a count |
+| `compactMessagesEnabled` | `true` | Compact grouping within five minutes per sender |
 | `mentionBannerEnabled` / `mentionSoundEnabled` | `true` | Banner / sound when you are mentioned or quoted |
 | `whisperBannerEnabled` / `whisperSoundEnabled` | `true` | Banner / sound on an incoming private message |
 | `notifyVolume` | `1.0` | Notification volume, 0–1 |
@@ -116,8 +120,18 @@ The server's own config and data live under the server's game directory; see the
 | `emoteMax` | `0` | Cap for your own sticker folder, `0` = unlimited; takes effect when the chat screen reopens |
 | `chatHistoryEnabled` / `historyRetentionDays` | `false` / `7` | Keep chat history / days to keep it (`0` = forever) |
 | `teleportCommandMode` | `"auto"` | Teleport command mode: `auto` / `tp` / `tpa` |
-| `quickPhrases` | `[]` | Quick phrases (up to 20, each ≤256 characters); a fresh config is seeded with `/atomchat gui` once, and deleting it sticks |
-| `guiTipSeeded` | `false` | Whether that seed has run (internal marker) |
-| `blockedPlayers` | `[]` | Blocked list (real player names) |
+| `quickPhrases` (personal data) | `[]` | Quick phrases (up to 20, each ≤256 characters); a fresh config is seeded with `/atomchat gui` once, and deleting it sticks |
+| `guiTipSeeded` (personal data) | `false` | Whether that seed has run (internal marker) |
+| `blockedPlayers` (personal data) | `[]` | Blocked list (real player names) |
 | `chatTemplates` / `whisperTemplates` | `[]` | Templates that recognise non-standard chat formats, with the placeholders `{name}` `{display_name}` `{prefix}` `{suffix}` `{sep}` `{content}`; reopen the chat screen after editing |
 | `debug` | `false` | Debug output and avatar sampling PNGs |
+
+The table entries marked personal data are stored in `atomchat/client/client-data.json`, together with `playerSignature` and profile-choice flags, rather than in the client config.
+
+## Personal-data migration (0.4.0)
+
+The game directory's `atomchat/` is separate from `config/atomchat/` and has four top-level groups. `client/` holds `client-data.json` (phrases, signature, blocklist and profile-choice flags), `avatar/`, `banner/`, `wallpaper/`, `emotes/`, `presets/` and `history/`; these folders are created on first launch. `cache/` holds `images/`, downloaded `packs/` and optional `debug/` captures. `server/` holds hosted `media/`, uploaded `avatars/` and the distributed `emotes/` source, all only when hosting is used. `backups/migration/` holds verified legacy copies and conflicts. Authoritative server profiles remain scoped to each world save.
+
+On startup, old personal content and `atomchat-data/` are migrated. The old config is backed up outside `config` before its personal fields are removed. Existing destination files win; different old bytes remain in `atomchat/backups/migration/`. An unreadable or blocked destination preserves the source and produces a log and in-panel warning. Check such warnings before exporting. Exclude `atomchat/` from pack exports; copying the entire game directory still copies personal data.
+
+HUD and panel banners use the same queue, card renderer and expiry. Opening or closing chat fades between hosts for 120 ms without restarting the six-second lifetime. Chat banner settings open a live layout editor with dragging, corner resizing and nine anchor snaps; HUD banners are display-only and hide in menus, F1 and F3. New configurations use compact messages, single-corner bubbles, anti-spam off and 100% interaction volume; existing choices are preserved. Composer drafts survive closing and reopening during the current connection.

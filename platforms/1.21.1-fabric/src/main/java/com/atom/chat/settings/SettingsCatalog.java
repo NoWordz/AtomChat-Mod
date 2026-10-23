@@ -229,6 +229,12 @@ public final class SettingsCatalog {
                                         ? Text.translatable("atomchat.settings.chat.history.retention.forever").getString()
                                         : Text.translatable("atomchat.settings.chat.history.retention.days", days).getString();
                             }),
+                    new SettingsSlider("hud_offset_x", "atomchat.settings.notify.offset_x",
+                            -500F, 500F, 1F, () -> AtomChatConfig.get().notificationHudOffsetX,
+                            v -> AtomChatConfig.get().notificationHudOffsetX = v, v -> Math.round(v) + " px"),
+                    new SettingsSlider("hud_offset_y", "atomchat.settings.notify.offset_y",
+                            -500F, 500F, 1F, () -> AtomChatConfig.get().notificationHudOffsetY,
+                            v -> AtomChatConfig.get().notificationHudOffsetY = v, v -> Math.round(v) + " px"),
                     new SettingsSlider("notify_volume",
                             "atomchat.settings.chat.notify_volume",
                             0.00F, 1.00F, 0.05F,

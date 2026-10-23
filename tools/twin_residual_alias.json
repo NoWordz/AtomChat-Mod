@@ -512,6 +512,73 @@
       "official": "message.filterMask().isEmpty()",
       "literal": true,
       "note": "已读Mojang FilterMask源码：isEmpty为PASS_THROUGH；Yarn同一状态方法为isPassThrough。限定native filterMask，不泛化其他isEmpty。"
+    },
+    {
+      "yarn": "drawables",
+      "official": "renderables",
+      "note": "Verified Screen private List<Drawable> (Yarn 1.21.1) maps to Screen.renderables; Fabric access widener exposes it for foreign chat additions."
+    },
+    {
+      "yarn": "ItemStackContent",
+      "official": "ItemStackInfo",
+      "note": "HoverEvent item payload names; verified mapped Minecraft 1.21.1 APIs."
+    },
+    {
+      "yarn": "VertexSorter.BY_Z",
+      "official": "VertexSorting.ORTHOGRAPHIC_Z",
+      "note": "Minecraft RenderSystem orthographic GUI vertex ordering.",
+      "literal": true
+    },
+    {
+      "yarn": "VertexSorter",
+      "official": "VertexSorting",
+      "note": "Minecraft rendering vertex sorter type in Yarn versus official mappings."
+    },
+    {
+      "yarn": "gui.draw()",
+      "official": "gui.flush()",
+      "note": "DrawContext.draw() flushes GUI buffers, corresponding to GuiGraphics.flush().",
+      "literal": true
+    },
+    {
+      "yarn": "minecraft.getBufferBuilders().getEntityVertexConsumers()",
+      "official": "minecraft.renderBuffers().bufferSource()",
+      "note": "Minecraft GUI buffer-source accessors; verified named runtime APIs and both target compilation.",
+      "literal": true
+    },
+    {
+      "yarn": "info.asStack()",
+      "official": "info.getItemStack()",
+      "note": "HoverEvent item payload stack accessor, verified with javap on named 1.21.1.",
+      "literal": true
+    },
+    {
+      "yarn": "gui.drawItem(",
+      "official": "gui.renderItem(",
+      "note": "DrawContext item renderer entry point corresponds to GuiGraphics.renderItem.",
+      "literal": true
+    },
+    {
+      "yarn": "ShaderProgram",
+      "official": "ShaderInstance",
+      "note": "Minecraft core shader object returned by RenderSystem.getShader()."
+    },
+    {
+      "yarn": "net.minecraft.SharedConstants.createGameVersion()",
+      "official": "net.minecraft.SharedConstants.tryDetectVersion()",
+      "note": "Same vanilla version initialization in mapped test bootstrap.",
+      "literal": true
+    },
+    {
+      "yarn": "net.minecraft.Bootstrap.initialize()",
+      "official": "net.minecraft.server.Bootstrap.bootStrap()",
+      "note": "Same idempotent vanilla registry bootstrap in Yarn and official mappings.",
+      "literal": true
+    },
+    {
+      "yarn": "atomchat$getArea",
+      "official": "atomchat$getRect",
+      "note": "Suggestion window rectangle accessor already used by AtomChatSuggestor; Yarn area maps to official rect."
     }
   ]
 }

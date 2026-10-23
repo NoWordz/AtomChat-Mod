@@ -131,7 +131,7 @@ public final class AppearancePresetStore {
     }
 
     public synchronized List<Preset> list() {
-        if (dir == null) {
+        if (!com.atom.chat.util.DataMigration.allowPersonalPath(dir)) {
             return List.of();
         }
         if (cache == null) {
@@ -142,7 +142,7 @@ public final class AppearancePresetStore {
 
     /** Captures the live appearance under the smallest free positive number. */
     public synchronized Result saveCurrent(AtomChatConfig config, Path wallpaperSource) {
-        if (dir == null) {
+        if (!com.atom.chat.util.DataMigration.allowPersonalPath(dir)) {
             return Result.failure("unavailable");
         }
         List<Preset> current = list();
@@ -179,7 +179,7 @@ public final class AppearancePresetStore {
     }
 
     public synchronized Result apply(String id, AtomChatConfig config) {
-        if (!validId(id) || dir == null) {
+        if (!validId(id) || dir == null || !com.atom.chat.util.DataMigration.allowPersonalPath(dir.resolve(id))) {
             return Result.failure("invalid_id");
         }
         Preset preset = read(dir.resolve(id), id);
@@ -200,6 +200,8 @@ public final class AppearancePresetStore {
         try {
             if (activeWallpaper != null) {
                 Path backupDir = dir.resolve(".wallpaper-backup");
+                com.atom.chat.util.DataMigration.noLinks(backupDir);
+                com.atom.chat.util.DataMigration.noLinks(activeWallpaper);
                 Files.createDirectories(backupDir);
                 backup = Files.createTempFile(backupDir, "wallpaper-",
                         extensionOf(activeWallpaper.toString()));
@@ -232,7 +234,7 @@ public final class AppearancePresetStore {
     }
 
     public synchronized Result delete(String id) {
-        if (!validId(id) || dir == null) {
+        if (!validId(id) || dir == null || !com.atom.chat.util.DataMigration.allowPersonalPath(dir.resolve(id))) {
             return Result.failure("invalid_id");
         }
         Preset existing = read(dir.resolve(id), id);
@@ -255,6 +257,8 @@ public final class AppearancePresetStore {
         Path target = dir.resolve(id);
         Path backup = dir.resolve(".backup-" + id + "-" + UUID.randomUUID());
         try {
+            com.atom.chat.util.DataMigration.noLinks(stage);
+            com.atom.chat.util.DataMigration.noLinks(target);
             Files.createDirectories(stage);
             Files.writeString(stage.resolve(MANIFEST),
                     toJson(id, order, number, snapshot, extension), StandardCharsets.UTF_8);
@@ -308,6 +312,7 @@ public final class AppearancePresetStore {
 
     private static Preset read(Path presetDir, String id) {
         Path manifest = presetDir.resolve(MANIFEST);
+        if (!com.atom.chat.util.DataMigration.allowPersonalPath(manifest)) return null;
         if (!Files.isRegularFile(manifest)) {
             return null;
         }

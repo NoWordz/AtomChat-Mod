@@ -8,6 +8,10 @@ import com.atom.chat.render.SkiaFontRenderer;
 import com.atom.chat.text.RichText;
 import com.atom.chat.ui.UiTokens;
 import io.github.humbleui.skija.Font;
+import net.minecraft.item.ItemStack;
+import net.minecraft.item.Items;
+import net.minecraft.text.HoverEvent;
+import com.atom.chat.render.RichTextRenderer;
 import net.minecraft.text.Style;
 import net.minecraft.text.Text;
 import org.junit.jupiter.api.BeforeAll;
@@ -58,6 +62,8 @@ class NotificationBannerRichTextTest {
     /** The config the draw path reads comes through {@link Platform}. */
     @BeforeAll
     static void installTemporaryPlatform() {
+        net.minecraft.SharedConstants.createGameVersion();
+        net.minecraft.Bootstrap.initialize();
         Platform.install(new Platform.Provider() {
             @Override
             public Path configDir() {
@@ -208,5 +214,16 @@ class NotificationBannerRichTextTest {
         assertTrue(title.runs().subList(1, title.runs().size()).stream().allMatch(run -> run.style().getColor() == null),
                 "no colour is invented for the sender of a colourless test command");
         NotificationBanner.INSTANCE.dismiss(active);
+    }
+
+    @Test
+    void itemIconWidthIsIncludedWhenTruncatingABanner() {
+        Font font = FontManager.font(16);
+        RichText item = RichText.of(Text.literal("abcdefgh").setStyle(Style.EMPTY.withHoverEvent(
+                new HoverEvent(HoverEvent.Action.SHOW_ITEM, new HoverEvent.ItemStackContent(new ItemStack(Items.DIAMOND))))));
+        float maxWidth = SkiaFontRenderer.getStringWidth(font, "abcd") + font.getSize();
+        RichText clipped = NotificationBanner.truncateRich(font, item, maxWidth);
+        float actual = RichTextRenderer.width(font, RichTextRenderer.wrapFor(clipped, font, Float.MAX_VALUE).get(0));
+        assertTrue(actual <= maxWidth + 0.01f, "the item slot must fit inside the banner too");
     }
 }

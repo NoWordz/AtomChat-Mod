@@ -220,17 +220,12 @@ public final class PackSyncServer {
         return pack;
     }
 
-    /**
-     * A server used to hand out {@code config/atomchat/emotes/}, the folder a
-     * client also keeps its own stickers in. Dedicated servers therefore carry
-     * their files over into the server's own folder once; anywhere else those
-     * files belong to the player and must stay private.
-     */
+    /** Only an explicit legacy server-emotes folder qualifies; never infer from personal stickers. */
     private static void carryOverLegacyServerEmotes() {
         if (!LEGACY_CHECKED.compareAndSet(false, true)) {
             return;
         }
-        ServerEmoteMigration.migrate(CacheDirs.emotesDir(), CacheDirs.serverEmotesDir(),
+        ServerEmoteMigration.migrate(com.atom.chat.platform.Platform.configDir().resolve("atomchat/server-emotes"), CacheDirs.serverEmotesDir(),
                 Host.dedicatedServer());
     }
 

@@ -74,6 +74,20 @@ tasks.withType(Test).configureEach {
     }
 }
 
+// Plain JUnit does not launch Knot. Apply its named-package access repair before
+// vanilla registry bootstrap; this agent is test-only and never enters mod JARs.
+def fabricTestAgent = tasks.register('fabricTestAgent', Jar) {
+    dependsOn tasks.named('testClasses')
+    from(sourceSets.test.output) { include 'com/atom/chat/testing/FabricPackageAccessAgent*.class' }
+    archiveFileName = 'fabric-package-access-agent.jar'
+    destinationDirectory = layout.buildDirectory.dir('test-agent')
+    manifest { attributes 'Premain-Class': 'com.atom.chat.testing.FabricPackageAccessAgent' }
+}
+tasks.named('test', Test) {
+    dependsOn fabricTestAgent
+    jvmArgs "-javaagent:${layout.buildDirectory.file('test-agent/fabric-package-access-agent.jar').get().asFile}"
+}
+
 loom {
     accessWidenerPath = file("src/main/resources/atomchat.accesswidener")
 }

@@ -69,6 +69,12 @@ public final class ChatClassifier {
                 return Route.SYSTEM;
             }
         }
+        // FTB wraps its notifications in a literal team/sender prefix. Inspect
+        // siblings only after known player/private keys have claimed the line:
+        // a player quoting a translated notice is still player chat.
+        for (Text sibling : message.getSiblings()) {
+            if (classifyByKey(sibling) == Route.SYSTEM) return Route.SYSTEM;
+        }
         return Route.UNKNOWN;
     }
 
@@ -116,7 +122,8 @@ public final class ChatClassifier {
     }
 
     private static boolean isSystemKey(String key) {
-        return key.startsWith("chat.type.advancement.")
+        return key.startsWith("ftbteams.message.")
+                || key.startsWith("chat.type.advancement.")
                 || key.startsWith("death.")
                 || key.startsWith("multiplayer.player.")
                 || key.startsWith("commands.")
@@ -131,7 +138,8 @@ public final class ChatClassifier {
      * names like "[Title]Steve".
      */
     public static PlayerListEntry resolveOnlinePlayer(String displayName) {
-        var player = MinecraftClient.getInstance().player;
+        var client = MinecraftClient.getInstance();
+        var player = client != null ? client.player : null;
         if (player == null || player.networkHandler == null || displayName == null || displayName.isEmpty()) {
             return null;
         }

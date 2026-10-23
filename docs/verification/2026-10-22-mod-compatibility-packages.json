@@ -1,0 +1,74 @@
+[
+  {
+    "target": "1.20.1-forge",
+    "platform": "windows-x64",
+    "file": "atomchat-Forge-1.20.1-0.3.3-windows-x64.jar",
+    "sha256": "6213407c68082b065ee65818fff09fcc06c779fd074ebdbd137608ee7852d258",
+    "bytes": 19093888,
+    "application_entries": 603
+  },
+  {
+    "target": "1.20.1-forge",
+    "platform": "windows-arm64",
+    "file": "atomchat-Forge-1.20.1-0.3.3-windows-arm64.jar",
+    "sha256": "fb01c1b04579f78df34077c6f6b0653449a66e0ca705ac5acccad58363b0d1f4",
+    "bytes": 18470178,
+    "application_entries": 603
+  },
+  {
+    "target": "1.20.1-forge",
+    "platform": "linux-x64",
+    "file": "atomchat-Forge-1.20.1-0.3.3-linux-x64.jar",
+    "sha256": "180a27deb3e05c812f168bfdde7e9face556e1fde88fa9fe79dd9b1364a95d0f",
+    "bytes": 20221077,
+    "application_entries": 603
+  },
+  {
+    "target": "1.21.1-neoforge",
+    "platform": "windows-x64",
+    "file": "atomchat-NeoForge-1.21.1-0.3.3-windows-x64.jar",
+    "sha256": "099a77a55d07eb10d4215e94e22018acc19bdfd68c014d41c3f0336768e62e7b",
+    "bytes": 19107489,
+    "application_entries": 615
+  },
+  {
+    "target": "1.21.1-neoforge",
+    "platform": "windows-arm64",
+    "file": "atomchat-NeoForge-1.21.1-0.3.3-windows-arm64.jar",
+    "sha256": "ebe0a587533d642948b78e187210cc34d8fe37b2d98423b54cc93853fb2c23cf",
+    "bytes": 18483780,
+    "application_entries": 615
+  },
+  {
+    "target": "1.21.1-neoforge",
+    "platform": "linux-x64",
+    "file": "atomchat-NeoForge-1.21.1-0.3.3-linux-x64.jar",
+    "sha256": "71cd3a4664860565d54ff22ad1b8de9aa0e85194ea7c313554eca18492479e09",
+    "bytes": 20234677,
+    "application_entries": 615
+  },
+  {
+    "target": "1.21.1-fabric",
+    "platform": "windows-x64",
+    "file": "atomchat-Fabric-1.21.1-0.3.3-windows-x64.jar",
+    "sha256": "e61946c13e6859761ac2725f490717aeec1fc600fd89075dfaa4f6718f1614aa",
+    "bytes": 19114456,
+    "application_entries": 600
+  },
+  {
+    "target": "1.21.1-fabric",
+    "platform": "windows-arm64",
+    "file": "atomchat-Fabric-1.21.1-0.3.3-windows-arm64.jar",
+    "sha256": "e6cd9408211fd0c50205220765dea6fe38d89f8a189e0699f6684a24491bf518",
+    "bytes": 18490741,
+    "application_entries": 600
+  },
+  {
+    "target": "1.21.1-fabric",
+    "platform": "linux-x64",
+    "file": "atomchat-Fabric-1.21.1-0.3.3-linux-x64.jar",
+    "sha256": "6a29ece94d5f5cf3c3a8e42a95aacd05ca6344aaf45e477b205cba9b640f6e43",
+    "bytes": 20242516,
+    "application_entries": 600
+  }
+]

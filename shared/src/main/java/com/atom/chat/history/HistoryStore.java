@@ -67,7 +67,7 @@ public final class HistoryStore {
         // that break file systems / path parsing. The short hash disambiguates
         // worlds whose sanitized names collide.
         String safe = worldKey.replaceAll("[\\\\/:*?\"<>|\\p{Cntrl}]", "_");
-        Path dir = baseDir != null ? baseDir : Path.of("atomchat", "history");
+        Path dir = baseDir != null ? baseDir : Path.of("atomchat", "client", "history");
         return dir.resolve(safe + "_" + sha256Short(worldKey) + ".jsonl");
     }
 

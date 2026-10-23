@@ -30,6 +30,7 @@ public class SkiaGraphics {
     private int lastFrameBufferId = -1;
     private int lastFramebufferWidth = -1;
     private int lastFramebufferHeight = -1;
+    private boolean surfaceDirty;
     /**
      * Reserved for the panel background blur. Currently always null — see
      * snapshotWorld() for why the blur is disabled.
@@ -50,7 +51,7 @@ public class SkiaGraphics {
                 && (lastFrameBufferId != current
                 || lastFramebufferWidth != width
                 || lastFramebufferHeight != height)) {
-            createSurface();
+            surfaceDirty = true;
         }
     }
 
@@ -82,6 +83,7 @@ public class SkiaGraphics {
                 new SurfaceProps(PixelGeometry.RGB_H)
         );
         lastFrameBufferId = fbo;
+        surfaceDirty = false;
         canvas = surface != null ? surface.getCanvas() : null;
     }
 
@@ -108,56 +110,57 @@ public class SkiaGraphics {
         // 关掉时 start() 返回 0，下面两个调用点什么都不做。
         long profileStart = FrameProfile.start();
         long allocatedBefore = profileStart == 0L ? -1L : FrameProfile.allocatedBytes();
-        if (context == null || surface == null || canvas == null) {
-            createSurface();
-        }
-        if (canvas == null) {
-            AtomChat.LOGGER.warn(com.atom.chat.diagnostics.AtomChatLog.message("render", "Skia canvas is null after createSurface, skipping frame"));
-            return;
-        }
-        if (density <= 0.0F) {
-            density = Math.max(1.0F, Minecraft.getInstance().getMainRenderTarget().height / 1080.0F);
-        }
-
         GlStateUtil.save();
-        glStorePixel();
-        if (preUi != null) {
-            preUi.run();
-        }
-        // Capture the world before Skia resets its resource tracking: resetAll()
-        // can drop the bookkeeping for our adopted texture-backed image.
-        Image snapshot = snapshotWorld();
-        context.resetAll();
-        RenderSystem.enableBlend();
-
-        // Guard rail: remember the stack baseline. A renderer that forgets a
-        // matching restore (typically saveLayer) used to leak a matrix per
-        // frame, and because the density scale is applied every frame the leak
-        // compounded into an exploding transform that flung the whole UI off
-        // screen — the 0.2.4 notification banner rollback. Rewinding to the
-        // baseline caps any future leak at a single frame.
-        int saveBase = canvas.getSaveCount();
-        canvas.save();
-        // Decouple from vanilla GUI scale: design density anchored at 1080p.
-        canvas.scale(density, density);
         try {
-            renderer.accept(canvas, snapshot);
-        } finally {
-            int leaked = canvas.getSaveCount() - (saveBase + 1);
-            if (leaked != 0 && com.atom.chat.config.AtomChatConfig.get().debug) {
-                leakLogCount++;
-                // Throttled: a per-frame leak used to spam the log line-by-line.
-                if (leakLogCount == 1 || leakLogCount % 200 == 0) {
-                    AtomChat.LOGGER.warn(com.atom.chat.diagnostics.AtomChatLog.message("render", "Skia canvas stack leak: {} unbalanced save/saveLayer (occurrence {})"),
-                            leaked, leakLogCount);
-                }
+            if (context == null || surface == null || canvas == null || surfaceDirty) {
+                createSurface();
             }
-            canvas.restoreToCount(saveBase);
-        }
+            if (canvas == null) {
+                AtomChat.LOGGER.warn(com.atom.chat.diagnostics.AtomChatLog.message("render", "Skia canvas is null after createSurface, skipping frame"));
+                return;
+            }
+            if (density <= 0.0F) {
+                density = Math.max(1.0F, Minecraft.getInstance().getMainRenderTarget().height / 1080.0F);
+            }
+            glStorePixel();
+            if (preUi != null) {
+                preUi.run();
+            }
+            // Capture the world before Skia resets its resource tracking: resetAll()
+            // can drop the bookkeeping for our adopted texture-backed image.
+            Image snapshot = snapshotWorld();
+            context.resetAll();
+            RenderSystem.enableBlend();
 
-        context.flush(surface);
-        GlStateUtil.restore();
-        RenderSystem.disableBlend();
+            // Guard rail: remember the stack baseline. A renderer that forgets a
+            // matching restore (typically saveLayer) used to leak a matrix per
+            // frame, and because the density scale is applied every frame the leak
+            // compounded into an exploding transform that flung the whole UI off
+            // screen — the 0.2.4 notification banner rollback. Rewinding to the
+            // baseline caps any future leak at a single frame.
+            int saveBase = canvas.getSaveCount();
+            canvas.save();
+            // Decouple from vanilla GUI scale: design density anchored at 1080p.
+            canvas.scale(density, density);
+            try {
+                renderer.accept(canvas, snapshot);
+            } finally {
+                int leaked = canvas.getSaveCount() - (saveBase + 1);
+                if (leaked != 0 && com.atom.chat.config.AtomChatConfig.get().debug) {
+                    leakLogCount++;
+                    // Throttled: a per-frame leak used to spam the log line-by-line.
+                    if (leakLogCount == 1 || leakLogCount % 200 == 0) {
+                        AtomChat.LOGGER.warn(com.atom.chat.diagnostics.AtomChatLog.message("render", "Skia canvas stack leak: {} unbalanced save/saveLayer (occurrence {})"),
+                                leaked, leakLogCount);
+                    }
+                }
+                canvas.restoreToCount(saveBase);
+            }
+
+            context.flush(surface);
+        } finally {
+            GlStateUtil.restore();
+        }
         // 到报告点就打一份分布（六十帧一次，约十秒）。这个类自己不打日志：格式留在 FrameProfile
         // 里，于是它的每一行都能在单测里拼出来 —— 一个要装全局渲染状态才能测的诊断类没人测。
         if (FrameProfile.frame(profileStart, allocatedBefore)) {
@@ -206,5 +209,13 @@ public class SkiaGraphics {
             throw new IllegalStateException("Surface not created");
         }
         return surface;
+    }
+
+    /** Screen-owned bridges release GPU resources when their screen is removed. */
+    public void close() {
+        if (surface != null) { surface.close(); surface = null; }
+        if (renderTarget != null) { renderTarget.close(); renderTarget = null; }
+        if (context != null) { context.close(); context = null; }
+        canvas = null;
     }
 }

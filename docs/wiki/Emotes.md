@@ -14,7 +14,7 @@ A click inserts. For a sticker it uploads first, inserts into the draft, and clo
 
 ## Your own emote folder
 
-- **Folder:** `.minecraft/config/atomchat/emotes/`
+- **Folder:** `.minecraft/atomchat/client/emotes/`
 - **Formats:** `png` / `jpg` / `jpeg` / `gif`
 - **Count:** unlimited by default; to set a cap, put a positive integer in `emoteMax` in `atomchat-client.json` — it takes effect when the chat screen reopens (past the cap the grid scrolls; since 0.2.9 it is no longer pinned to two rows)
 - **Order:** by file name — rename a file to move it
@@ -34,11 +34,11 @@ On joining, a server running AtomChat hands its emote pack to the client. Those 
 
 ## For server owners: handing emotes to everyone
 
-1. Put the emote files you want to offer in the **server's** `config/atomchat/server-emotes/`;
+1. Put the emote files you want to offer in the **server's** `atomchat/server/emotes/`;
 2. make sure `packEnabled=true` in the server config (it is the default);
 3. players sync them **on their next join** (no server restart needed).
 
-That folder is **deliberately** separate from a player's own `config/atomchat/emotes/` — otherwise the host of a single-player or LAN world would push their private collection to every guest. On a dedicated server, the first pack build **copies over** (copy only, never delete, so a rollback stays safe) whatever the old `emotes/` folder held; single-player and LAN hosts **do not** migrate and no longer offer anything by default.
+That folder is **deliberately** separate from a player's own `atomchat/client/emotes/` — otherwise the host of a single-player or LAN world would push their private collection to every guest. Personal `emotes/` folders are never promoted to a server pack, even on dedicated servers. Administrators deliberately place distributable files in `atomchat/server/emotes/`; the old explicit `atomchat/server/emotes/` source migrates there automatically.
 
 The relevant limits (all in `config/atomchat/atomchat-server.json`, also editable in game with `/atomchat gui`):
 

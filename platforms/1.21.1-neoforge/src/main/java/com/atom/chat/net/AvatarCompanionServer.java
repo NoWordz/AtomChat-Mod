@@ -18,7 +18,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Server side of the avatar companion. Stateless beyond the avatar files
- * themselves: uploads land in {@code <gameDir>/atomchat-data/avatars/<uuid>.png}
+ * themselves: uploads land in {@code <gameDir>/atomchat/server/avatars/<uuid>.png}
  * and requests are answered from disk. Registered through the payload event so
  * a dedicated server and the integrated server of a double-open client both run
  * it.

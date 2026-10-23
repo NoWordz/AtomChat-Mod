@@ -1,5 +1,7 @@
 package net.minecraft.client.gui.screen;
 
+import net.minecraft.client.gui.screen.atomchat.ChatInputSuggestorAccessor;
+import com.atom.chat.mixin.SuggestionWindowAccessor;
 import com.atom.chat.ui.UiLayout;
 import com.atom.chat.ui.UiTokens;
 import net.minecraft.client.MinecraftClient;
@@ -122,6 +124,16 @@ public final class SuggestorWiring {
      */
     public boolean mouseClicked(int mouseX, int mouseY, int button) {
         return chatInputSuggestor != null && chatInputSuggestor.mouseClicked(mouseX, mouseY, button);
+    }
+
+    /** Actual GUI-space popup bounds; paint and foreign-widget input share this layer order. */
+    public boolean hovered(double mouseX, double mouseY) {
+        if (chatInputSuggestor == null) return false;
+        Object window = ((ChatInputSuggestorAccessor) chatInputSuggestor).atomchat$getWindow();
+        if (window == null) return false;
+        var rect = ((SuggestionWindowAccessor) window).atomchat$getArea();
+        return mouseX >= rect.getX() && mouseX < rect.getX() + rect.getWidth()
+                && mouseY >= rect.getY() && mouseY < rect.getY() + rect.getHeight();
     }
 
     /** Suggestion popup scrolls first when open. */

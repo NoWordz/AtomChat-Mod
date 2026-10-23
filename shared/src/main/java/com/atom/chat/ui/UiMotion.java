@@ -22,6 +22,7 @@ package com.atom.chat.ui;
  * spring's velocity bookkeeping (see {@link #PANEL_OPEN_TAU_MS}).</p>
  */
 public final class UiMotion {
+    public static final long NOTIFICATION_HOST_FADE_MS = 120L;
     /**
      * New message entry. Deliberately the slowest transition in the UI: this is
      * a content reveal, not a response to input, and an opacity ramp under
