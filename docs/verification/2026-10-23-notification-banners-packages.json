@@ -1,0 +1,52 @@
+{
+  "version": "0.4.0-preview",
+  "packages": [
+    {
+      "target": "1.20.1-forge",
+      "path": "platforms/1.20.1-forge/build/libs/atomchat-Forge-1.20.1-0.4.0-preview-windows-x64.jar",
+      "sha256": "8765ebfc1eca4ed51950a938e41785c21a5713eb4941f32f6e9e7739405f02ab",
+      "bytes": 19141340,
+      "version": "0.4.0-preview",
+      "nativePlatform": "windows-x64",
+      "testCodeExcluded": true
+    },
+    {
+      "target": "1.21.1-fabric",
+      "path": "platforms/1.21.1-fabric/build/libs/atomchat-Fabric-1.21.1-0.4.0-preview-windows-x64.jar",
+      "sha256": "f1ebe0637cc44b943d93f42241ac61f4ec7588258729b6f8d966ae4d65a96542",
+      "bytes": 19161666,
+      "version": "0.4.0-preview",
+      "nativePlatform": "windows-x64",
+      "testCodeExcluded": true
+    },
+    {
+      "target": "1.21.1-neoforge",
+      "path": "platforms/1.21.1-neoforge/build/libs/atomchat-NeoForge-1.21.1-0.4.0-preview-windows-x64.jar",
+      "sha256": "119d47f385c4f3aee8c6c069ed9fdfda6e8cfaf4bb41638efdac60b71bda3d49",
+      "bytes": 19154403,
+      "version": "0.4.0-preview",
+      "nativePlatform": "windows-x64",
+      "testCodeExcluded": true
+    }
+  ],
+  "tests": {
+    "1.20.1-forge": {
+      "tests": 1476,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 2
+    },
+    "1.21.1-fabric": {
+      "tests": 1488,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 2
+    },
+    "1.21.1-neoforge": {
+      "tests": 1476,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 2
+    }
+  }
+}

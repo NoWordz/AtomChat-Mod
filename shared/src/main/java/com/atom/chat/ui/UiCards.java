@@ -2,11 +2,15 @@ package com.atom.chat.ui;
 
 import com.atom.chat.render.SkiaDraw;
 import io.github.humbleui.skija.Canvas;
+import io.github.humbleui.skija.FilterTileMode;
+import io.github.humbleui.skija.ImageFilter;
+import io.github.humbleui.skija.Paint;
+import io.github.humbleui.skija.SaveLayerRec;
+import io.github.humbleui.types.Rect;
 
 /**
- * The one card primitive for settings surfaces. Every content card — settings
- * rows, home tiles, category cards — goes through here, so the elevation
- * system cannot drift between pages:
+ * Shared card primitive for settings rows, home tiles, category cards and
+ * notifications, so their elevation cannot drift between pages:
  *
  * <ul>
  *   <li>a light drop shadow ({@link UiTokens#CARD_SHADOW}, the lower of the
@@ -31,6 +35,23 @@ public final class UiCards {
     private UiCards() {
     }
 
+    /** Filters only the current rounded backdrop; call before the card's alpha layer. */
+    public static void drawNotificationBackdrop(Canvas canvas, float x, float y, float w, float h,
+                                                float radius, float alpha) {
+        int save = canvas.save();
+        try (ImageFilter blur = ImageFilter.makeBlur(UiTokens.NOTIFICATION_BLUR,
+                UiTokens.NOTIFICATION_BLUR, FilterTileMode.CLAMP);
+             Paint paint = new Paint().setAlphaf(alpha)) {
+            SkiaDraw.clip(canvas, x, y, w, h, radius);
+            // The filter reads the current layer, including panel content during
+            // open/close. No borrowed GPU image survives a frame or context reset.
+            canvas.saveLayer(new SaveLayerRec(Rect.makeXYWH(x, y, w, h), paint, blur));
+            canvas.restore();
+        } finally {
+            canvas.restoreToCount(save);
+        }
+    }
+
     /** Draws the full card stack; {@code hoverWeight} 0..1. */
     public static void drawCard(Canvas canvas, float x, float y, float w, float h,
                                 float radius, float hoverWeight) {
@@ -39,9 +60,8 @@ public final class UiCards {
 
     /**
      * Draws the full card stack with an explicit shadow tier; {@code hoverWeight}
-     * 0..1. Content cards keep the default above. Surfaces that float above
-     * message content do not come through here at all — see
-     * {@link #drawFloatSurface}.
+     * 0..1. Notifications supply their card fill with a readability floor;
+     * action feedback retains its separate {@link #drawFloatSurface} material.
      */
     public static void drawCard(Canvas canvas, float x, float y, float w, float h,
                                 float radius, float hoverWeight, int shadowColor, float shadowBlur) {

@@ -4,7 +4,7 @@ import com.atom.chat.chat.ChatMessage;
 import com.atom.chat.config.AtomChatConfig;
 import com.atom.chat.font.FontManager;
 import com.atom.chat.image.PlayerAvatar;
-import com.atom.chat.render.Easing;
+import com.atom.chat.ui.PanelOpenMotion;
 import com.atom.chat.render.RichTextRenderer;
 import com.atom.chat.render.SkiaDraw;
 import com.atom.chat.render.SkiaFontRenderer;
@@ -39,15 +39,10 @@ import java.util.Map;
  * One timed notification queue, drawn on either the panel or a dedicated HUD surface.
  * Switching surface only fades the presentation; it never renews a notification.
  *
- * <p>Visuals follow the shell's own language: the shared float-surface family
- * ({@link com.atom.chat.ui.UiCards#drawFloatSurface}) — a card-tinted frosted fill
- * with ink derived from it, one accent-dyed hover wash and the two-tier chrome
- * shadow the header and tab bar ride — placed on the list's card column (the
- * content column inset by the same {@link com.atom.chat.ui.UiTokens#ROW_CLIP_INSET}
- * the conversation list's row cards use, through the one rule in
- * {@link UiLayout#cardColumnX}), plus an
- * iOS-style drop-in with a slight overshoot and a slide-out on expiry. A round send-style button on the right
- * jumps straight into a reply; the rest of the banner just navigates.
+ * <p>Notification cards share the card colour, opacity, radius and hover wash,
+ * with a half-opacity floor and a locally filtered backdrop. Entry and exit use
+ * global zoom/slide geometry; stack reflow always slides. The panel's outer
+ * transform carries its banners through open/close without replaying entry.
  */
 public final class NotificationBanner {
     public static final NotificationBanner INSTANCE = new NotificationBanner();
@@ -60,7 +55,6 @@ public final class NotificationBanner {
      * in the sender and the body.
      */
     private static final long VISIBLE_MS = 6000L;
-    private static final long APPEAR_MS = 220L;
     private static final long DISAPPEAR_MS = 150L;
     private static final int MAX_STACK = 3;
     private final NotificationHostFade hostFade = new NotificationHostFade();
@@ -68,8 +62,6 @@ public final class NotificationBanner {
 
     /** Round send-style action button on the right edge of every banner. */
     private static final float BUTTON_SIZE = UiTokens.s(26);
-    /** iOS-style drop-in travel distance. */
-    private static final float DROP_TRAVEL = UiTokens.s(14);
 
     /**
      * The type label's semantic colours, replicated from the HUD: quote is the
@@ -169,6 +161,10 @@ public final class NotificationBanner {
     /** Send-button bounce, identity-keyed for the same reason as the hovers. */
     private final Map<Active, PressScale> buttonScales = new IdentityHashMap<>();
     private long lastHoverMs;
+    /** Relative stack offsets survive a host change without travelling between hosts. */
+    private final Map<Active, Float> layoutYs = new IdentityHashMap<>();
+    private long lastLayoutMs = -1;
+    private float lastHudOriginY = Float.NaN;
 
     /**
      * One live banner. The two text parts are {@link RichText} rather than plain
@@ -205,6 +201,7 @@ public final class NotificationBanner {
             hoverAlphas.remove(dropped);
             buttonHovers.remove(dropped);
             buttonScales.remove(dropped);
+            layoutYs.remove(dropped);
         }
     }
 
@@ -247,11 +244,12 @@ public final class NotificationBanner {
         Iterator<Active> it = banners.iterator();
         while (it.hasNext()) {
             Active b = it.next();
-            if (now - b.born() >= VISIBLE_MS + DISAPPEAR_MS) {
+            if (now - b.born() >= VISIBLE_MS + (Animations.enabled() ? DISAPPEAR_MS : 0)) {
                 it.remove();
                 hoverAlphas.remove(b);
                 buttonHovers.remove(b);
                 buttonScales.remove(b);
+                layoutYs.remove(b);
             }
         }
     }
@@ -260,6 +258,7 @@ public final class NotificationBanner {
         banners.clear();
         hitRects.clear(); buttonRects.clear();
         hoverAlphas.clear(); buttonHovers.clear(); buttonScales.clear();
+        layoutYs.clear(); lastLayoutMs = -1; lastHudOriginY = Float.NaN;
         hostFade.reset();
     }
 
@@ -268,24 +267,16 @@ public final class NotificationBanner {
         return !banners.isEmpty();
     }
 
-    /** [0..1] alpha: easeOutQuad drop-in, linear slide-out. */
-    private float alphaFor(Active b, long now) {
-        float age = now - b.born();
-        if (age <= APPEAR_MS) {
-            return Easing.easeOutQuad(age / (float) APPEAR_MS);
-        }
-        float left = VISIBLE_MS + DISAPPEAR_MS - age;
-        return Math.max(0.0F, Math.min(1.0F, left / (float) DISAPPEAR_MS));
-    }
-
-    /** Drop-in with a slight overshoot, then slide back up while fading out. */
-    private float offsetFor(Active b, long now) {
-        float age = now - b.born();
-        if (age <= APPEAR_MS) {
-            return -(1.0F - Easing.easeOutBack(age / (float) APPEAR_MS)) * DROP_TRAVEL;
-        }
-        float gone = Math.max(0.0F, Math.min(1.0F, (age - VISIBLE_MS) / (float) DISAPPEAR_MS));
-        return -gone * gone * DROP_TRAVEL;
+    /** Same exponential timing and shape mapping as the global zoom/slide language. */
+    private float progressFor(Active b, long now) {
+        if (!Animations.enabled()) return now - b.born() < VISIBLE_MS ? 1 : 0;
+        long age = Math.max(0, now - b.born());
+        if (age >= VISIBLE_MS)
+            return (float) Math.exp(-(age - VISIBLE_MS) / UiMotion.PANEL_CLOSE_TAU_MS);
+        float tau = AtomChatConfig.get().pageNavStyle == AtomChatConfig.PageNavStyle.ZOOM
+                ? UiMotion.PAGE_NAV_TAU_MS : UiMotion.PAGE_SLIDE_TAU_MS;
+        float progress = 1 - (float) Math.exp(-age / tau);
+        return progress > .999F ? 1 : progress;
     }
 
     /**
@@ -295,6 +286,7 @@ public final class NotificationBanner {
      */
     public void renderInPanel(Canvas canvas, float panelX, float panelY, float panelW, float panelH,
                               float vmx, float vmy) {
+        lastHudOriginY = Float.NaN;
         renderStack(canvas, bannerX(panelX),
                 panelY + UiTokens.PANEL_BOTTOM_PAD + UiTokens.HEADER_HEIGHT + UiTokens.PANEL_TOP_GAP,
                 bannerWidth(panelW), panelY + panelH - UiTokens.s(4), vmx, vmy, true);
@@ -308,11 +300,22 @@ public final class NotificationBanner {
                 UiTokens.PANEL_TOP_GAP, cfg.notificationHudPosition,
                 UiTokens.s(cfg.notificationHudOffsetX), UiTokens.s(cfg.notificationHudOffsetY), cfg.notificationHudScale);
         var rect = placement.rect();
+        // A centre/bottom anchor moves the stack origin when its height changes.
+        // Rebase existing positions before retargeting, preserving screen pixels.
+        float originY = rect.y() / placement.scale();
+        if (Float.isFinite(lastHudOriginY)) {
+            float shift = lastHudOriginY - originY;
+            layoutYs.replaceAll((banner, oldY) -> oldY + shift);
+        }
+        lastHudOriginY = originY;
         canvas.save();
         try {
             canvas.translate(rect.x(), rect.y());
             canvas.scale(placement.scale(), placement.scale());
-            renderStack(canvas, 0, 0, rect.w() / placement.scale(), rect.h() / placement.scale(), -1, -1, false);
+            // The destination stack height is not a clip: displaced cards can
+            // still occupy their old slots while the shorter stack settles.
+            // The framebuffer itself clips the HUD to the visible viewport.
+            renderStack(canvas, 0, 0, rect.w() / placement.scale(), Float.POSITIVE_INFINITY, -1, -1, false);
         } finally { canvas.restore(); }
     }
 
@@ -340,28 +343,44 @@ public final class NotificationBanner {
                 now, Animations.enabled());
         float hoverDt = Math.min(50.0F, Math.max(1.0F, now - lastHoverMs));
         lastHoverMs = now;
+        float layoutDt = lastLayoutMs < 0 ? 0 : Math.max(0, now - lastLayoutMs);
+        lastLayoutMs = now;
         float bannerH = bannerHeight();
         float gap = UiTokens.NOTIFICATION_STACK_GAP;
+        var style = AtomChatConfig.get().pageNavStyle;
         for (int i = banners.size() - 1; i >= 0; i--) {
             Active b = banners.get(i);
-            float alpha = alphaFor(b, now) * hostAlpha;
-            if (alpha <= 0.01F) {
-                continue;
-            }
-            float drawY = y + offsetFor(b, now);
-            if (drawY + bannerH > bottom + 0.01F) {
-                continue;
-            }
+            float targetY = i * (bannerH + gap);
+            float relativeY = UiMotion.expApproach(layoutYs.getOrDefault(b, targetY), targetY,
+                    layoutDt, Animations.enabled() ? UiMotion.PAGE_SLIDE_TAU_MS : 0);
+            layoutYs.put(b, relativeY);
+            float progress = progressFor(b, now);
+            float alpha = progress * hostAlpha;
+            if (alpha <= 0.01F) continue;
+            float drawY = y + relativeY;
+            if (drawY + bannerH > bottom + 0.01F) continue;
+            float scale = PanelOpenMotion.openScale(progress, style);
+            float slide = PanelOpenMotion.openSlidePx(progress, style);
+            float cx = x + bannerW / 2, cy = drawY + bannerH / 2;
+            float paintedX = cx + slide - bannerW * scale / 2;
+            float paintedY = cy - bannerH * scale / 2;
             float hover = advanceHover(hoverAlphas, b, b == hovered, hoverDt);
             float buttonHover = advanceHover(buttonHovers, b, b == hoveredButton, hoverDt);
             PressScale sendScale = buttonScales.computeIfAbsent(b, k -> PressScale.bounce());
             sendScale.update(b == hoveredButton, false, hoverDt, Animations.enabled(), BUTTON_SIZE);
-            drawBanner(canvas, b, x, drawY, bannerW, bannerH, alpha, hover, buttonHover, sendScale, interactive);
-            if (interactive) hitRects.add(new Hit(b, Rect.makeXYWH(x, drawY, bannerW, bannerH)));
-            float btnX = x + bannerW - UiTokens.s(14) - BUTTON_SIZE;
-            float btnY = drawY + (bannerH - BUTTON_SIZE) / 2.0F;
-            if (interactive) buttonRects.add(new Hit(b, Rect.makeXYWH(btnX, btnY, BUTTON_SIZE, BUTTON_SIZE)));
-            y += bannerH + gap;
+            canvas.save();
+            try {
+                canvas.translate(cx + slide, cy);
+                canvas.scale(scale, scale);
+                canvas.translate(-cx, -cy);
+                drawBanner(canvas, b, x, drawY, bannerW, bannerH, alpha, hover, buttonHover, sendScale, interactive);
+            } finally { canvas.restore(); }
+            if (interactive) {
+                hitRects.add(new Hit(b, Rect.makeXYWH(paintedX, paintedY, bannerW * scale, bannerH * scale)));
+                float btnX = paintedX + (bannerW - UiTokens.s(14) - BUTTON_SIZE) * scale;
+                float btnY = paintedY + (bannerH - BUTTON_SIZE) * scale / 2;
+                buttonRects.add(new Hit(b, Rect.makeXYWH(btnX, btnY, BUTTON_SIZE * scale, BUTTON_SIZE * scale)));
+            }
         }
         pruneHovers(hoverAlphas);
         pruneHovers(buttonHovers);
@@ -370,10 +389,12 @@ public final class NotificationBanner {
 
     /** Which banner's send button is under this panel-space point, or {@code null}. */
     public Active buttonHit(float x, float y) {
+        Active front = hitTest(x, y);
         // Newest first: hitRects is filled oldest-first, but the newest banner
         // paints on top, so it must win when animated rects overlap.
         for (int i = buttonRects.size() - 1; i >= 0; i--) {
             Hit hit = buttonRects.get(i);
+            if (hit.banner != front) continue;
             Rect r = hit.rect;
             if (x >= r.getLeft() && x <= r.getRight() && y >= r.getTop() && y <= r.getBottom()) {
                 return hit.banner;
@@ -403,6 +424,7 @@ public final class NotificationBanner {
         hoverAlphas.remove(banner);
         buttonHovers.remove(banner);
         buttonScales.remove(banner);
+        layoutYs.remove(banner);
     }
 
     private float advanceHover(Map<Active, Float> alphas, Active b, boolean on, float hoverDtMs) {
@@ -523,6 +545,8 @@ public final class NotificationBanner {
     private void drawBanner(Canvas canvas, Active b, float x, float y, float w, float h,
                             float alpha, float hover, float buttonHover, PressScale sendScale, boolean interactive) {
         float radius = UiTokens.cardRadius();
+        int fill = UiTokens.notificationFill();
+        if ((fill >>> 24) < 255) UiCards.drawNotificationBackdrop(canvas, x, y, w, h, radius, alpha);
         // save() and saveLayer() push two entries; both must be popped. A missing
         // restore here leaked one matrix per frame and, combined with the
         // per-frame density scale, flung the whole panel off screen in 0.2.4.
@@ -534,15 +558,8 @@ public final class NotificationBanner {
             // old 10px pad clipped the shadow into a visible rectangle edge.
             canvas.saveLayer(shadowLayer(x, y, w, h), layer);
             try {
-                // One float-surface family, shared with the action toast: a
-                // frosted fill that follows the theme's card colour through the
-                // card-tint slider, and ink derived from that fill rather than
-                // from the panel's text colour. The old explicit
-                // 0xFF000000 | cardColor was opaque white for the default card
-                // colour, which painted a white card under panel-polarity text
-                // and made the sender name invisible on it.
-                int fill = UiTokens.floatSurfaceFill();
-                UiCards.drawFloatSurface(canvas, x, y, w, h, radius, hover, fill);
+                UiCards.drawCard(canvas, x, y, w, h, radius, hover,
+                        UiTokens.CARD_SHADOW, UiTokens.NOTIFICATION_BLUR, fill);
 
                 float padX = UiTokens.s(14);
                 // The header's own control size: this bar is header-height now,

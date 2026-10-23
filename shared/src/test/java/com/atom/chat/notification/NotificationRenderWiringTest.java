@@ -38,7 +38,7 @@ class NotificationRenderWiringTest {
         }
     }
 
-    @Test void panelBlurRefreshesEveryFrameAndBannerKeepsOnlyTheIconContrastFix() throws Exception {
+    @Test void panelBlurRefreshesEveryFrameAndBannersUseCardAndGlobalMotionPrimitives() throws Exception {
         Path root = root();
         for (String target : List.of("1.20.1-forge", "1.21.1-neoforge", "1.21.1-fabric")) {
             Path renderer = root.resolve("platforms/" + target + "/src/main/java/com/atom/chat/render/PanelBlurRenderer.java");
@@ -50,10 +50,13 @@ class NotificationRenderWiringTest {
                 "platforms/1.21.1-fabric/src/main/java/com/atom/chat/notification/NotificationBanner.java")) {
             String banner = Files.readString(root.resolve(path));
             assertFalse(banner.contains("NotificationBackdropBlur"), path);
-            assertFalse(banner.contains("UiTokens.cardFill("), path);
-            assertTrue(banner.contains("UiTokens.floatSurfaceFill()"), path);
+            assertTrue(banner.contains("UiTokens.notificationFill()"), path);
+            assertTrue(banner.contains("UiCards.drawCard("), path);
+            assertTrue(banner.contains("UiCards.drawNotificationBackdrop("), path);
             assertTrue(banner.contains("UiTokens.onAccent(config.accentColor)"), path);
-            assertFalse(banner.contains("AtomChatConfig.PageNavStyle.ZOOM"), path);
+            assertTrue(banner.contains("PanelOpenMotion.openScale(progress, style)"), path);
+            assertTrue(banner.contains("PanelOpenMotion.openSlidePx(progress, style)"), path);
+            assertFalse(banner.contains("easeOutBack"), path);
         }
     }
 }

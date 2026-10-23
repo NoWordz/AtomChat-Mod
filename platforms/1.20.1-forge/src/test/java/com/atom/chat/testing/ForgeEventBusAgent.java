@@ -31,5 +31,13 @@ public final class ForgeEventBusAgent {
                 return writer.toByteArray();
             }
         });
+        // The delegate reflectively loads each event's parent. JVM instrumentation
+        // skips recursive loads inside a transformer; load this root first so a
+        // child-first lookup cannot silently leave NetworkEvent untransformed.
+        try {
+            Class.forName("net.minecraftforge.network.NetworkEvent", false, ForgeEventBusAgent.class.getClassLoader());
+        } catch (ClassNotFoundException e) {
+            throw new IllegalStateException("Forge test event root is missing", e);
+        }
     }
 }

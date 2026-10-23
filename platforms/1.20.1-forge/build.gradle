@@ -234,6 +234,17 @@ tasks.named('test', Test) {
     jvmArgs "-javaagent:${layout.buildDirectory.file('test-agent/forge-eventbus-agent.jar').get().asFile}"
 }
 
+// A fresh JVM is necessary: the regular suite can load the parent event first
+// and accidentally hide recursive class-loading gaps in the test agent.
+def forgeEventAgentSmoke = tasks.register('forgeEventAgentSmoke', JavaExec) {
+    dependsOn forgeTestAgent
+    javaLauncher = javaToolchains.launcherFor { languageVersion = JavaLanguageVersion.of(17) }
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'com.atom.chat.testing.ForgeEventBusAgentProbe'
+    jvmArgs "-javaagent:${layout.buildDirectory.file('test-agent/forge-eventbus-agent.jar').get().asFile}"
+}
+tasks.named('check') { dependsOn forgeEventAgentSmoke }
+
 
 publishing {
     publications {
