@@ -54,3 +54,52 @@ Linux source job 的 Yoga 初始化/图形测试没有对应 native，会加载�
 主代理已对新增接线、生命周期和 CI 做与 Hubble 实施独立的限定审查；未把它扩大为所有库 API 的完整独立审计。已有 foundation/UiView/render 审查继续按各自范围使用。
 
 本轮另修正源码归档器，改用 Git 文件清单与 ignore 规则，防止把 ignored 日志/缓存/探针依赖打入源码 ZIP。清理只针对已确认的过程产物；最终配套目录、本地 Maven 输入、构建缓存和必要基线保留。
+
+## 本轮修复（2026-10-30 后半场）
+
+上面四项已在本会话处理；结论仍是**未最终验收、不可据此发版**。本轮没有启动客户端或专服，没有运行远端 Actions。
+
+### 1. 半屏切换后输入永久暂停（已修，红→绿）
+
+- 根因确认：`UiView.suspendInput` 有两个写入者，`AcModalAdapter.blocking` 不知道 section 自己调过 `suspendInput(true)`，`sync()` 算出的 `next` 与 `blocking` 相同便不再恢复。
+- 修法：暂停状态只由 `AcModalAdapter` 写。新增 `cancelGesture()`（抬旗→立即按 `!hostActive || dialog.isActive` 重算），`AtomLibAppearanceSection.cancel()` 改为走它；official 与 Fabric 孪生同步。
+- 永久回归：`AtomLibAppearanceSectionTest.halfScreenToggleLeavesTheWidthSliderInteractive`（两份）。用真实 section 点击半屏开关 → 断言模式已提交 → `cancel()` → 真实宽度 track 的 PRESS/RELEASE 持久化 1 次；再点确认行打开 AC 弹窗，断言弹窗期间滑条仍被拦（仍 1 次）；`dialog.reset()` 后同一手势恢复到 2 次。
+- 证据：修复前同一测试在第 55 行失败（模式已改、persist 为 0），日志 `build/atomlib-red-1.log`；修复后 Forge/Fabric 各 2 条用例通过。`AcModalAdapterTest` 3 条（弹窗拦截、焦点保留、离开页面不恢复）继续通过。
+
+### 2. 原生 context 逃逸租借回调（已修）
+
+- `SkiaGraphics.requireContext()` 删除，换成唯一入口 `withContext(Function)`，context 只在回调内有效。
+- `ItemIconRenderer.prepare` 拆成三段：Skija 租借（`resetGLAll` + `flushAndSubmit`，并只在 `WeakReference` 里记住 context 身份）→ `vanillaPass` 内 `drawOffscreen`（宿主 FBO/纹理、原版物品绘制、无任何 Skija 调用）→ 第二次租借内 `Prepared.importInto`（`Image.borrowTextureFrom`）。异常时未导入的纹理在 `finally` 释放。
+- 回归：Lib `hiddenGlTest` 新增两条——宿主 FBO 渲染 + 污染 PACK/UNPACK PBO、row length、skip rows、alignment 后，在租借内导入并读回像素，退出后逐项断言宿主状态原样；租借回调抛异常后借用过期、状态恢复、后续绘制正常。三端各 13 条（原 11）全绿。
+- 静态守护：`NativeBorrowContractTest`（AC shared）断言 facade 不再暴露 `requireContext`、导入调用夹在两次租借之间、无强引用静态 context。已做变异测试：把 `requireContext` 装回去后该测试变红，随后按字节备份还原（SHA-256 `DB6BC99B…3B2B40` 校验一致）。
+
+### 3. 共享 bridge 退出未释放（已接线，未实机验证）
+
+- `MinecraftRenderBridge.releaseIfOpen()`：只在实例已存在时 close，绝不 `get()` 新建；关闭异常记 WARNING 不打断退出。
+- Forge/NeoForge：`AtomLibMod` 用 `FMLEnvironment.dist.isClient()` 守卫，交给 client-only `AtomLibClient`，监听 `GameShuttingDownEvent`（`Minecraft#stop()`，渲染线程，窗口销毁前）。
+- Fabric：无对应 loader 事件，新增 client mixin `MinecraftClient#close()` HEAD；`atomlib.mixins.json` + `fabric.mod.json` 接线，`defaultRefmapName=atomlib.refmap.json`。实测生成的 refmap 为 `Lnet/minecraft/class_310;close()V`，三个 jar 都含 mixin json 与 refmap。
+- 未覆盖：真实客户端退出路径、专服启动、mixin 在 intermediary 运行时是否命中（只有 refmap 与编译证据）。
+
+### 4. Linux CI 与测试 native 冲突（已改配置，未运行远端）
+
+- `source`（ubuntu）只留纯 Java `core:test` 与三个 Python 校验脚本。
+- 新增 `source-native`（windows-latest）跑 `:runtime:test :ui:test :devtools:test`，字体取 `C:/Windows/Fonts/msyh.ttc`、缺失时回退 `arial.ttf`；与 `hidden-gl`、`package` 一样只在 Windows 上跑 native 相关任务。YAML 已用 PyYAML 解析确认四个 job 结构有效。
+
+### 本轮实际执行的验证
+
+- Lib 先重新构建、发布到 `build/test-maven` 并 `verifyArtifact` 通过（23:08，`run_packaging.py platforms`）；随后把 `versions/atomlib.json` 的三端 SHA-256 更新为新包，三端 `verifyAtomLibInput` 均通过。
+- AC 三端在**新 Lib 包**上重跑 `gradlew.bat test build -PatomlibMavenRepo=D:/AtomLib/build/test-maven`：Forge **1564**、Fabric **1576**、NeoForge **1564**，全部 BUILD SUCCESSFUL（较检查点各 +3：外观回归 1 + 借用契约 2）。三端日志都显示 `:compileJava` 与 `:test` 实际执行，不是 UP-TO-DATE。
+- Lib `:core:test :runtime:test :ui:test :devtools:test`：9 / 23 / 82 / 2 = **116**，0 失败/错误/跳过。
+- Lib 三端 `hiddenGlTest`：各 **13**，合计 39，0 失败/错误/跳过（新增 2×3）。
+- Lib 校验脚本自测：artifact 29、consumer 2、UI/example 3 全部 OK；`run_packaging.py consumers` 六个独立消费者（examples a/b × 三端）全部 PASS。
+
+### 本轮发现的一个验证陷阱
+
+AC Fabric 的 Loom `remapped_mods` 缓存按坐标而非内容哈希命中：Lib 用同一个 `0.1.0-local` 版本重新发布后，AC Fabric 仍在用 17:01 重映射的旧包（缓存里没有 mixin），`test` 也就被判成 UP-TO-DATE。清掉该缓存条目后重跑，`:compileJava`/`:test` 才真正重跑，重映射包也确认包含 `MinecraftClientShutdownMixin` 与 refmap。以后 Lib 换包必须清这个目录，否则 Fabric 侧一直是假绿。
+
+### 仍未覆盖 / 下一步
+
+- 未启动客户端：半屏切换的真实观感、物品图标在真实 tooltip 中的显示、退出时的实际释放顺序都需要实机确认。
+- Forge 重混淆开发客户端加载新 Lib（`cb612db` 之后新增的事件接线与 mixin 不进入 Forge 路径，但 Lib jar 已变）。
+- 远端 Actions 未运行；Fabric mixin 的运行时命中只有 refmap 证据。
+- 本地 Maven 输入已刷新，之前的候选 JAR 与配对归档需要重新导出，不能沿用旧包。

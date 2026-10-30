@@ -28,5 +28,15 @@ public final class AcModalAdapter {
             if(!blocking)view.refresh();
         }
     }
+    /**
+     * Aborts the live Lib gesture because the host is about to change the tree
+     * (mode switch, section reset, external config change). This adapter is the
+     * only writer of the view's suspension flag, so the pause raised here is
+     * immediately re-evaluated by {@link #sync()}: it survives only while the
+     * host is inactive or its dialog still covers the content.
+     */
+    public void cancelGesture() {
+        view.suspendInput(true);blocking=true;sync();
+    }
     public void setHostActive(boolean active) { hostActive=active;sync(); }
 }

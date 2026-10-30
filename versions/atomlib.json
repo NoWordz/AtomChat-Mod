@@ -10,8 +10,8 @@
     "1.21.1-neoforge": {"artifact": "atomlib-1.21.1-neoforge", "yoga": "3.3.3"}
   },
   "sha256": {
-    "1.20.1-forge": "b508d86014923a34ceaffe9003f5d7a1f5f361fde16d78c4166121ab5e92f074",
-    "1.21.1-fabric": "a05af72290134527dd1a360d7700d5a1c3867790f45cb5c7f9085769c1f617ce",
-    "1.21.1-neoforge": "d280f7679ee24ae7ea8714852c3f89257a24f7771e475da15b67598133dfae7e"
+    "1.20.1-forge": "24b699fe9e19d90d995f8115095060b13e71ad685bd56e794e155aba21a7a560",
+    "1.21.1-fabric": "cf2171dae9000dfb987426df4ab49f764ef9de9e33234c581b8850298286cc7f",
+    "1.21.1-neoforge": "cbe6076137d938f04ce530396ca188079d43f7c501d025f9f642be0e8209c7ca"
   }
 }

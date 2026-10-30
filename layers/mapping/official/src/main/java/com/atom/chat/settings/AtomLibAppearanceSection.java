@@ -117,7 +117,7 @@ public final class AtomLibAppearanceSection implements AutoCloseable {
         return view.wheel(x-slot.x(),y-slot.y(),pixels)!=pixels;
     }
     public void openModal(Runnable show){modal.open(show);}
-    public void cancel(){if(!closed){view.suspendInput(true);modal.sync();}}
+    public void cancel(){if(!closed)modal.cancelGesture();}
     public NodeId captureOwner(){return view.captureOwner();}
     public NodeId focused(){return view.focused();}
     public boolean isDraggingWidth(){return width.active();}

@@ -29,6 +29,7 @@ import org.lwjgl.opengl.GL30C;
 import org.lwjgl.opengl.GLCapabilities;
 
 import java.lang.reflect.Field;
+import java.lang.ref.WeakReference;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -45,7 +46,11 @@ public final class ItemIconRenderer {
     private static final int PIXELS = 64;
     private static final IconCache<HoverEvent.ItemStackInfo, Image> CACHE = new IconCache<>(128, Image::close);
     private static final ConcurrentLinkedQueue<RetiredTexture> RETIRED = new ConcurrentLinkedQueue<>();
-    private static DirectContext owner;
+    /**
+     * Identity only, never called through: the borrowed context must not be
+     * retained, so a collectable reference is enough to spot a new bridge.
+     */
+    private static WeakReference<DirectContext> owner;
     private static GLCapabilities ownerGl;
     private static boolean failed;
 
@@ -77,41 +82,51 @@ public final class ItemIconRenderer {
         }
         List<HoverEvent.ItemStackInfo> requests = CACHE.takeRequests();
         if (requests.isEmpty() && CACHE.isEmpty() && RETIRED.isEmpty()) return;
-        try (NativeState ignored = new NativeState()) {
+        List<Prepared> prepared = new ArrayList<>(requests.size());
+        try {
             gui.flush();
-            DirectContext context = bridge.requireContext();
-            if (owner != null && owner != context && ownerGl == gl && !owner.isClosed()) {
-                owner.resetGLAll();
-                owner.flushAndSubmit(false);
-            }
-            // Submit all prior Skia sampling before closing/evicting images.
-            // No readback, glFinish, or synchronous CPU/GPU wait.
-            context.resetGLAll();
-            context.flushAndSubmit(false);
-            if (owner != context || ownerGl != gl || requests.isEmpty()) CACHE.clear();
-            owner = context;
-            ownerGl = gl;
+            // Skija borrow: submit queued sampling before any cached image is
+            // closed, and re-identify the context without retaining its handle.
+            bridge.withContext(context -> {
+                context.resetGLAll();
+                context.flushAndSubmit(false);
+                DirectContext previous = owner == null ? null : owner.get();
+                if (previous != context || ownerGl != gl || requests.isEmpty()) CACHE.clear();
+                owner = new WeakReference<>(context);
+                ownerGl = gl;
+                return null;
+            });
             releaseRetired(gl);
             if (requests.isEmpty()) return;
-            var minecraft = Minecraft.getInstance();
-            // Independent pose/scissor bookkeeping; caller's GUI pose stays intact.
-            var items = new GuiGraphics(minecraft, minecraft.renderBuffers().bufferSource());
-            ItemIconModelView.pushIdentity();
-            try {
-                RenderSystem.setProjectionMatrix(new Matrix4f().setOrtho(0, 16, 16, 0, -1000, 1000),
-                        VertexSorting.ORTHOGRAPHIC_Z);
-                RenderSystem.resetTextureMatrix();
-                RenderSystem.setShaderColor(1, 1, 1, 1);
-                for (HoverEvent.ItemStackInfo info : requests) {
-                    var stack = info.getItemStack();
-                    if (stack != null && !stack.isEmpty()) CACHE.put(info, render(items, stack.copy(), context, gl));
+            // Vanilla phase: one offscreen texture per request. No Skija call here.
+            try (NativeState ignored = new NativeState()) {
+                var minecraft = Minecraft.getInstance();
+                // Independent pose/scissor bookkeeping; caller's GUI pose stays intact.
+                var items = new GuiGraphics(minecraft, minecraft.renderBuffers().bufferSource());
+                ItemIconModelView.pushIdentity();
+                try {
+                    RenderSystem.setProjectionMatrix(new Matrix4f().setOrtho(0, 16, 16, 0, -1000, 1000),
+                            VertexSorting.ORTHOGRAPHIC_Z);
+                    RenderSystem.resetTextureMatrix();
+                    RenderSystem.setShaderColor(1, 1, 1, 1);
+                    for (HoverEvent.ItemStackInfo info : requests) {
+                        var stack = info.getItemStack();
+                        if (stack != null && !stack.isEmpty()) prepared.add(drawOffscreen(items, info, stack.copy()));
+                    }
+                } finally {
+                    ItemIconModelView.pop();
                 }
-            } finally {
-                ItemIconModelView.pop();
             }
-            releaseRetired(gl);
+            // Skija borrow: import the finished textures under the same guard.
+            bridge.withContext(context -> {
+                for (Prepared icon : prepared) icon.importInto(context, gl);
+                return null;
+            });
         } catch (RuntimeException | LinkageError error) {
             disable(error);
+        } finally {
+            for (Prepared icon : prepared) if (!icon.imported) GlStateManager._deleteTexture(icon.texture);
+            releaseRetired(gl);
         }
     }
 
@@ -131,12 +146,12 @@ public final class ItemIconRenderer {
         }
     }
 
-    private static Image render(GuiGraphics gui, ItemStack stack,
-                                DirectContext context, GLCapabilities gl) {
+    /** Vanilla phase only: render one item into a fresh color texture, keep no Skija handle. */
+    private static Prepared drawOffscreen(GuiGraphics gui, HoverEvent.ItemStackInfo info, ItemStack stack) {
         int texture = GL11C.glGenTextures();
         int framebuffer = 0;
         int depth = 0;
-        boolean borrowed = false;
+        boolean complete = false;
         try {
             RenderSystem.activeTexture(GL13C.GL_TEXTURE0);
             GlStateManager._bindTexture(texture);
@@ -175,20 +190,36 @@ public final class ItemIconRenderer {
             // GUI lighting, fullbright and foil, then flushes the native buffers.
             gui.renderItem(stack, 0, 0);
             gui.flush();
-            try (BackendTexture backend = BackendTexture.makeGL(PIXELS, PIXELS, false,
-                    new GLTextureInfo(GL11C.GL_TEXTURE_2D, texture, GL11C.GL_RGBA8))) {
-                int ownedTexture = texture;
-                Image image = Image.borrowTextureFrom(context, backend, SurfaceOrigin.BOTTOM_LEFT,
-                        ColorType.RGBA_8888, ColorAlphaType.PREMUL, null,
-                        () -> RETIRED.add(new RetiredTexture(gl, ownedTexture)));
-                borrowed = true;
-                return image;
-            }
+            complete = true;
+            return new Prepared(info, texture);
         } finally {
             // Only the color texture crosses into Skia, never the FBO/depth buffer.
             if (framebuffer != 0) GL30C.glDeleteFramebuffers(framebuffer);
             if (depth != 0) GL30C.glDeleteRenderbuffers(depth);
-            if (!borrowed) GlStateManager._deleteTexture(texture);
+            if (!complete) GlStateManager._deleteTexture(texture);
+        }
+    }
+
+    /** One finished offscreen icon awaiting its Skija import. */
+    private static final class Prepared {
+        private final HoverEvent.ItemStackInfo info;
+        private final int texture;
+        private boolean imported;
+
+        private Prepared(HoverEvent.ItemStackInfo info, int texture) {
+            this.info = info;
+            this.texture = texture;
+        }
+
+        private void importInto(DirectContext context, GLCapabilities gl) {
+            int ownedTexture = texture;
+            try (BackendTexture backend = BackendTexture.makeGL(PIXELS, PIXELS, false,
+                    new GLTextureInfo(GL11C.GL_TEXTURE_2D, texture, GL11C.GL_RGBA8))) {
+                CACHE.put(info, Image.borrowTextureFrom(context, backend, SurfaceOrigin.BOTTOM_LEFT,
+                        ColorType.RGBA_8888, ColorAlphaType.PREMUL, null,
+                        () -> RETIRED.add(new RetiredTexture(gl, ownedTexture))));
+            }
+            imported = true;
         }
     }
 

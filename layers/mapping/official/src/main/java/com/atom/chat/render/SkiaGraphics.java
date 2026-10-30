@@ -77,9 +77,14 @@ public final class SkiaGraphics {
         }
     }
 
-    /** Raw resource lease for item preparation; valid only during the calling host phase. */
-    public DirectContext requireContext() {
-        return MinecraftRenderBridge.get().withContext(context -> context);
+    /**
+     * Runs one raw Skija preparation step inside the bridge's GL state and
+     * pixel-transfer guard. The context is borrowed for this callback only:
+     * never retain, close or reuse it after the callback returns.
+     */
+    public <T> T withContext(java.util.function.Function<DirectContext,T> action) {
+        RenderSystem.assertOnRenderThread();
+        return MinecraftRenderBridge.get().withContext(java.util.Objects.requireNonNull(action));
     }
 
     public BackendRenderTarget requireRenderTarget() {

@@ -31,4 +31,46 @@ class AtomLibAppearanceSectionTest extends AtomLibSettingsTestSupport {
             assertEquals(1,confirmed.get());
         }
     }
+
+    /**
+     * The half-screen toggle cancels its own gesture. That pause must not outlive
+     * the transition: afterwards the width slider keeps working, while a genuinely
+     * open AC dialog still owns input until its closing animation ends.
+     */
+    @Test void halfScreenToggleLeavesTheWidthSliderInteractive(){
+        var width=catalogWidth();
+        var mode=SettingsCatalog.items(SettingsSection.APPEARANCE).stream().filter(i->i.id().equals("half_screen")).findFirst().orElseThrow();
+        var saves=new AtomicInteger();var dialog=new ConfirmationDialog();
+        var item=new SettingsItem("reset","title","subtitle",()->true,v->{});
+        var section=new AtomLibAppearanceSection(host,width,mode,List.of(),item,()->true,
+                key->key,dialog,()->dialog.open("确认","说明","取消","确认",()->{}),
+                ()->{saves.incrementAndGet();width.persist();});
+        try(section){
+            float sx=20,sy=30;
+            section.setSlot(new UiLayout.Rect(sx,sy,480,600),new UiLayout.Rect(sx,sy,480,600));section.frame();
+            var toggle=section.frame().box(AtomLibAppearanceSection.HALF_SCREEN).border();
+            float tx=sx+toggle.x()+toggle.width()/2,ty=sy+toggle.y()+toggle.height()/2;
+            section.pointer(PointerEvent.Type.PRESS,tx,ty,0);
+            section.pointer(PointerEvent.Type.RELEASE,tx,ty,0);
+            assertTrue(mode.value(),"the toggle still commits the half-screen mode");
+            section.cancel();
+            clickTrack(section,sx,sy,0.25f);
+            assertEquals(1,saves.get(),"the width slider must keep receiving gestures after the mode change and reset");
+            var confirm=section.frame().box(AtomLibAppearanceSection.CONFIRM).border();
+            section.pointer(PointerEvent.Type.PRESS,sx+confirm.x()+2,sy+confirm.y()+2,0);
+            section.pointer(PointerEvent.Type.RELEASE,sx+confirm.x()+2,sy+confirm.y()+2,0);
+            assertTrue(dialog.isActive(),"the confirm row still opens the AC dialog");
+            clickTrack(section,sx,sy,0.75f);
+            assertEquals(1,saves.get(),"the open modal still owns input");
+            dialog.reset();section.frame();
+            clickTrack(section,sx,sy,0.5f);
+            assertEquals(2,saves.get(),"closing the dialog resumes the slider");
+        }
+    }
+    private static void clickTrack(AtomLibAppearanceSection section,float sx,float sy,float fraction){
+        var track=section.widthTrack();
+        float px=sx+track.x()+track.width()*fraction,py=sy+track.y();
+        section.pointer(PointerEvent.Type.PRESS,px,py,0);
+        section.pointer(PointerEvent.Type.RELEASE,px,py,0);
+    }
 }
