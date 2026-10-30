@@ -2869,20 +2869,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
     private AtomLibAppearanceSection atomLibAppearance() {
         if (atomLibAppearanceInstalled) return settingsSectionPage.atomLibAppearance();
         atomLibAppearanceInstalled = true;
-        var reset = new SettingsItem("reset_layout",
-                "atomchat.settings.appearance.reset_layout",
-                "atomchat.settings.appearance.reset_layout.desc",
-                () -> true, value -> {});
-        Runnable request = () -> settingsSectionPage.confirmation().open(
-                tr(reset.titleKey()), tr("atomchat.confirm.reset_layout"),
-                tr("atomchat.confirm.cancel"), tr("atomchat.notify.editor.reset"), () -> {
-                    var cfg = AtomChatConfig.get();
-                    cfg.panelWidth = 480.0F; cfg.halfScreenWidth = 480.0F;
-                    cfg.uiScale = 1.0F; cfg.contentScale = 1.0F;
-                    AtomChatConfig.save(cfg);
-                });
-        var section = AtomLibAppearanceSection.create(settingsSectionPage.confirmation(), reset,
-                () -> true, request);
+        var section = AtomLibAppearanceSection.create(settingsSectionPage.confirmation());
         settingsSectionPage.setAtomLibAppearance(section);
         return section;
     }

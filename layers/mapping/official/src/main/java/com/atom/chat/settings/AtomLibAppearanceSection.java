@@ -4,6 +4,7 @@ package com.atom.chat.settings;
 import com.atom.chat.config.AtomChatConfig;
 import com.atom.chat.ui.ConfirmationDialog;
 import com.atom.chat.ui.UiLayout;
+import com.atom.chat.ui.UiTokens;
 import com.atom.chat.ui.atomlib.*;
 import com.atom.lib.component.*;
 import com.atom.lib.geometry.Viewport;
@@ -21,12 +22,9 @@ import java.util.function.*;
 public final class AtomLibAppearanceSection implements AutoCloseable {
     public static final NodeId WIDTH=new NodeId("ac.appearance.width");
     public static final NodeId HALF_SCREEN=new NodeId("ac.appearance.half-screen");
-    public static final NodeId CONFIRM=new NodeId("ac.appearance.confirm");
     private final UiView view;
     private final Slider width;
     private final SettingsItem mode;
-    private final Button confirm;
-    private final BooleanSupplier canConfirm;
     private final AcModalAdapter modal;
     private UiLayout.Rect slot=new UiLayout.Rect(0,0,0,0),clip=slot;
     private AtomLibThemeAdapter services;
@@ -34,9 +32,8 @@ public final class AtomLibAppearanceSection implements AutoCloseable {
     private long frame;
 
     public AtomLibAppearanceSection(HostContext host,SettingsSlider widthSetting,SettingsItem mode,List<SettingsSlider> extras,
-            List<SettingsSlider> transparency,SettingsItem confirmationItem,BooleanSupplier canConfirm,
-            Function<String,String> tr,ConfirmationDialog dialog,Runnable requestConfirmation,Runnable persistWidth) {
-        this.mode=Objects.requireNonNull(mode);this.canConfirm=Objects.requireNonNull(canConfirm);lastMode=mode.value();
+            List<SettingsSlider> transparency,Function<String,String> tr,ConfirmationDialog dialog,Runnable persistWidth) {
+        this.mode=Objects.requireNonNull(mode);lastMode=mode.value();
         width=slider(widthSetting,new AtomLibSettingsBinding(widthSetting,AtomChatConfig::get,persistWidth));
         var half=new Toggle(HALF_SCREEN.value(),new ValueBinding<Boolean>() {
             public Boolean read(){return mode.value();}
@@ -47,33 +44,38 @@ public final class AtomLibAppearanceSection implements AutoCloseable {
         var children=new ArrayList<UiElement>();
         children.add(new Label("ac.appearance.heading",tr.apply("atomchat.settings.group.appearance.layout"),Label.Tone.TITLE));
         children.add(new Label("ac.appearance.description",tr.apply(mode.subtitleKey()),Label.Tone.SECONDARY));
-        children.add(new SettingRow("ac.appearance.mode-row",tr.apply(mode.titleKey()),"",half));
-        children.add(sliderRow(widthSetting,width,tr));
-        for(var extra:extras)children.add(sliderRow(extra,slider(extra,new AtomLibSettingsBinding(extra)),tr));
+        var layoutRows=new ArrayList<UiElement>();
+        layoutRows.add(new Row("ac.appearance.mode-row",tr.apply(mode.titleKey()),null,half,Row.Placement.INLINE,false,false));
+        layoutRows.add(sliderRow(widthSetting,width,tr,true));
+        for(var extra:extras)layoutRows.add(sliderRow(extra,slider(extra,new AtomLibSettingsBinding(extra)),tr,true));
+        children.add(new Section("ac.appearance.layout-group",Section.Kind.CARD_LIST,layoutRows));
         if(!transparency.isEmpty()){
             children.add(new Label("ac.appearance.transparency",tr.apply("atomchat.settings.group.appearance.transparency"),Label.Tone.TITLE));
-            for(var extra:transparency)children.add(sliderRow(extra,slider(extra,new AtomLibSettingsBinding(extra)),tr));
+            var transparencyRows=new ArrayList<UiElement>();
+            boolean first=true;
+            for(var extra:transparency){
+                transparencyRows.add(sliderRow(extra,slider(extra,new AtomLibSettingsBinding(extra)),tr,!first));
+                first=false;
+            }
+            children.add(new Section("ac.appearance.transparency-group",Section.Kind.CARD_LIST,transparencyRows));
         }
-        confirm=new Button(CONFIRM.value(),tr.apply(confirmationItem.titleKey()),()->{host.feedback().run();openModal(requestConfirmation);});
-        children.add(new SettingRow("ac.appearance.confirm-row",tr.apply(confirmationItem.titleKey()),tr.apply(confirmationItem.subtitleKey()),confirm));
         var scroll=new Section("ac.appearance.scroll",Section.Kind.SCROLL,children);
         view=new UiView(host,new Section("ac.appearance.root",Section.Kind.GROUP,List.of(scroll)),new Viewport(0,0,1));
         modal=new AcModalAdapter(view,dialog::isActive);
     }
-    public static AtomLibAppearanceSection create(ConfirmationDialog dialog,SettingsItem confirmationItem,BooleanSupplier canConfirm,Runnable requestConfirmation) {
+    public static AtomLibAppearanceSection create(ConfirmationDialog dialog) {
         var services=new AtomLibThemeAdapter(AtomLibThemeAdapter.bundledBody(),
             ()->com.atom.chat.audio.FeedbackSoundController.play(com.atom.chat.audio.FeedbackCue.BUTTON));
         try {
             var sliders=SettingsCatalog.sliders(SettingsSection.APPEARANCE);
             var width=sliders.stream().filter(s->s.id().equals("width")).findFirst().orElseThrow();
             var mode=SettingsCatalog.items(SettingsSection.APPEARANCE).stream().filter(s->s.id().equals("half_screen")).findFirst().orElseThrow();
-            var extras=layoutSliders(sliders);
-            var transparency=transparencySliders(sliders);
-            var result=new AtomLibAppearanceSection(services.host(),width,mode,extras,transparency,confirmationItem,canConfirm,
-                key->Component.translatable(key).getString(),dialog,requestConfirmation,width::persist);
+            var result=new AtomLibAppearanceSection(services.host(),width,mode,layoutSliders(sliders),transparencySliders(sliders),
+                KEY_TRANSLATOR,dialog,width::persist);
             result.services=services;return result;
         } catch(RuntimeException|Error failure){services.close();throw failure;}
     }
+    private static final Function<String,String> KEY_TRANSLATOR=key->Component.translatable(key).getString();
     /** Layout sliders the pilot owns; kept as a named set so a migration cannot drop one silently. */
     static List<SettingsSlider> layoutSliders(List<SettingsSlider> sliders) {
         return sliders.stream().filter(s->s.id().equals("scale")||s.id().equals("contentscale")).toList();
@@ -84,12 +86,13 @@ public final class AtomLibAppearanceSection implements AutoCloseable {
     }
     private static Slider slider(SettingsSlider setting,AtomLibSettingsBinding binding) {
         NodeId id=setting.id().equals("width")?WIDTH:new NodeId("ac.appearance."+setting.id());
-        return new Slider(id,new SliderSpec(setting.min(),setting.max(),setting.step()),binding,false);
+        return new Slider(id,new SliderSpec(setting.min(),setting.max(),setting.step()),binding,false)
+                .setMetrics(UiTokens.SLIDER_TRACK_H,UiTokens.SLIDER_KNOB);
     }
-    private static UiElement sliderRow(SettingsSlider setting,Slider control,Function<String,String> tr) {
-        var value=new Label("ac.appearance."+setting.id()+".value",setting::displayValue,Label.Tone.SECONDARY);
-        return new SettingRow("ac.appearance."+setting.id()+".row",tr.apply(setting.titleKey()),"",
-            new Section("ac.appearance."+setting.id()+".controls",Section.Kind.GROUP,List.of(value,control)));
+    /** Title left, value right, track below: the row language the old page used. */
+    private static UiElement sliderRow(SettingsSlider setting,Slider control,Function<String,String> tr,boolean divider) {
+        return new Row("ac.appearance."+setting.id()+".row",tr.apply(setting.titleKey()),setting::displayValue,control,
+                Row.Placement.BELOW,false,divider);
     }
     /** Only the outer slot and clip come from the old shell. No track math is performed here. */
     public void setSlot(UiLayout.Rect slot,UiLayout.Rect clip) {
@@ -140,7 +143,7 @@ public final class AtomLibAppearanceSection implements AutoCloseable {
     private void sync() {
         if(closed)return;
         if(mode.value()!=lastMode){cancel();lastMode=mode.value();}
-        confirm.setEnabled(canConfirm.getAsBoolean());modal.sync();
+        modal.sync();
     }
     @Override public void close(){
         if(closed)return;

@@ -1,26 +1,26 @@
 {
   "version": "1.0.0-beta",
-  "time": "2026-10-31T00:10:39+0800",
-  "backupRoot": "D:\\AtomChat-Backups\\2026-10-30-1.0.0-beta\\20261031-001039",
+  "time": "2026-10-31T00:33:34+0800",
+  "backupRoot": "D:\\AtomChat-Backups\\2026-10-30-1.0.0-beta\\20261031-003334",
   "deployments": [
     {
       "loader": "Forge",
       "instance": "1.20.1-main",
       "installed": "D:\\Myworld\\.minecraft\\versions\\1.20.1-main\\mods\\atomchat-Forge-1.20.1-1.0.0-beta.jar",
-      "sha256": "96be2bf8a5a0233185e6bc86e501af4ae6bc2dc41d088f725db2f9d4d391c5b2",
-      "bytes": 8362277,
+      "sha256": "9c1de336c51d8aefc68a5e004eeda2ca2fdb0feaf111d2c6888f91fabb5fda02",
+      "bytes": 8361442,
       "atomlib": "D:\\Myworld\\.minecraft\\versions\\1.20.1-main\\mods\\atomlib-1.20.1-forge-0.1.0-local.jar",
-      "atomlibSha256": "1de32d945fe9864dcca59e809be3eda005dcedb73ff181507fcde3241262850e",
-      "atomlibBytes": 21378835,
+      "atomlibSha256": "af90a800f043fd05ac3ccbaebdebf1d0107d76d758c05a6698b4e94f34dd8bc9",
+      "atomlibBytes": 21383508,
       "backups": [
         {
-          "backup": "D:\\AtomChat-Backups\\2026-10-30-1.0.0-beta\\20261031-001039\\Forge\\atomchat-Forge-1.20.1-1.0.0-beta.jar",
-          "backupSha256": "9da5013e453473be464e5f771d367d5015221f0113f6942c07bd89fa8cc84eb8",
+          "backup": "D:\\AtomChat-Backups\\2026-10-30-1.0.0-beta\\20261031-003334\\Forge\\atomchat-Forge-1.20.1-1.0.0-beta.jar",
+          "backupSha256": "96be2bf8a5a0233185e6bc86e501af4ae6bc2dc41d088f725db2f9d4d391c5b2",
           "replaced": "atomchat-Forge-1.20.1-1.0.0-beta.jar"
         },
         {
-          "backup": "D:\\AtomChat-Backups\\2026-10-30-1.0.0-beta\\20261031-001039\\Forge\\atomlib-1.20.1-forge-0.1.0-local.jar",
-          "backupSha256": "24b699fe9e19d90d995f8115095060b13e71ad685bd56e794e155aba21a7a560",
+          "backup": "D:\\AtomChat-Backups\\2026-10-30-1.0.0-beta\\20261031-003334\\Forge\\atomlib-1.20.1-forge-0.1.0-local.jar",
+          "backupSha256": "1de32d945fe9864dcca59e809be3eda005dcedb73ff181507fcde3241262850e",
           "replaced": "atomlib-1.20.1-forge-0.1.0-local.jar"
         }
       ],
@@ -33,19 +33,19 @@
       "loader": "Fabric",
       "instance": "1.21.1-CCB",
       "installed": "D:\\Myworld\\.minecraft\\versions\\1.21.1-CCB\\mods\\atomchat-Fabric-1.21.1-1.0.0-beta.jar",
-      "sha256": "689965268bb3cb93d7864682244a51171899045a14d26bcf7d00e5c0e1deb4f3",
-      "bytes": 8384143,
+      "sha256": "2c0bdb87c09af3dc73239afd972859878fefe4db0246a227c6b6458a2ac75dd2",
+      "bytes": 8383278,
       "atomlib": "D:\\Myworld\\.minecraft\\versions\\1.21.1-CCB\\mods\\atomlib-1.21.1-fabric-0.1.0-local.jar",
-      "atomlibSha256": "cf2171dae9000dfb987426df4ab49f764ef9de9e33234c581b8850298286cc7f",
-      "atomlibBytes": 21389977,
+      "atomlibSha256": "33329d92e15f19204699fef8f61fa4ff9aaa4fbe78749abb50a484bc7297e403",
+      "atomlibBytes": 21394758,
       "backups": [
         {
-          "backup": "D:\\AtomChat-Backups\\2026-10-30-1.0.0-beta\\20261031-001039\\Fabric\\atomchat-Fabric-1.21.1-1.0.0-beta.jar",
-          "backupSha256": "5c145354191794574ecc13a55b0e618a7ef343b992ca7183ed7fd985a1bb45fc",
+          "backup": "D:\\AtomChat-Backups\\2026-10-30-1.0.0-beta\\20261031-003334\\Fabric\\atomchat-Fabric-1.21.1-1.0.0-beta.jar",
+          "backupSha256": "689965268bb3cb93d7864682244a51171899045a14d26bcf7d00e5c0e1deb4f3",
           "replaced": "atomchat-Fabric-1.21.1-1.0.0-beta.jar"
         },
         {
-          "backup": "D:\\AtomChat-Backups\\2026-10-30-1.0.0-beta\\20261031-001039\\Fabric\\atomlib-1.21.1-fabric-0.1.0-local.jar",
+          "backup": "D:\\AtomChat-Backups\\2026-10-30-1.0.0-beta\\20261031-003334\\Fabric\\atomlib-1.21.1-fabric-0.1.0-local.jar",
           "backupSha256": "cf2171dae9000dfb987426df4ab49f764ef9de9e33234c581b8850298286cc7f",
           "replaced": "atomlib-1.21.1-fabric-0.1.0-local.jar"
         }
@@ -59,20 +59,20 @@
       "loader": "NeoForge",
       "instance": "Mechanomania-航空学",
       "installed": "D:\\Myworld\\.minecraft\\versions\\Mechanomania-航空学\\mods\\atomchat-NeoForge-1.21.1-1.0.0-beta.jar",
-      "sha256": "4d3a8c9ddb4e3d2f6612e240d98fb5be153cdba72aa0360bf58e754c64742bc2",
-      "bytes": 8375017,
+      "sha256": "3e9a831ced8929ade4391a1d0fda1eb003af237c29ae135badb8a0c70515a1e6",
+      "bytes": 8374203,
       "atomlib": "D:\\Myworld\\.minecraft\\versions\\Mechanomania-航空学\\mods\\atomlib-1.21.1-neoforge-0.1.0-local.jar",
-      "atomlibSha256": "8c6a724534da4d45354dc7b27eee611c9d4ebf5656cc43e44a0fbc69cdea7882",
-      "atomlibBytes": 21384955,
+      "atomlibSha256": "f5e3cdc19780faff09f2a9fe330724e5222600bd74c705d72df80db6b61f9f41",
+      "atomlibBytes": 21389644,
       "backups": [
         {
-          "backup": "D:\\AtomChat-Backups\\2026-10-30-1.0.0-beta\\20261031-001039\\NeoForge\\atomchat-NeoForge-1.21.1-1.0.0-beta.jar",
-          "backupSha256": "579369c4306b1e7a3f2e151d6870dd6fba86309b85340d2afe7522b1d2cc03ee",
+          "backup": "D:\\AtomChat-Backups\\2026-10-30-1.0.0-beta\\20261031-003334\\NeoForge\\atomchat-NeoForge-1.21.1-1.0.0-beta.jar",
+          "backupSha256": "4d3a8c9ddb4e3d2f6612e240d98fb5be153cdba72aa0360bf58e754c64742bc2",
           "replaced": "atomchat-NeoForge-1.21.1-1.0.0-beta.jar"
         },
         {
-          "backup": "D:\\AtomChat-Backups\\2026-10-30-1.0.0-beta\\20261031-001039\\NeoForge\\atomlib-1.21.1-neoforge-0.1.0-local.jar",
-          "backupSha256": "cbe6076137d938f04ce530396ca188079d43f7c501d025f9f642be0e8209c7ca",
+          "backup": "D:\\AtomChat-Backups\\2026-10-30-1.0.0-beta\\20261031-003334\\NeoForge\\atomlib-1.21.1-neoforge-0.1.0-local.jar",
+          "backupSha256": "8c6a724534da4d45354dc7b27eee611c9d4ebf5656cc43e44a0fbc69cdea7882",
           "replaced": "atomlib-1.21.1-neoforge-0.1.0-local.jar"
         }
       ],
@@ -82,10 +82,10 @@
       "gameStarted": false
     }
   ],
-  "sourceHead": "753d165d98106bf0741fd322248463c7851b8261",
-  "note": "Second 1.0.0-beta install: AtomLib loader ranges relaxed (forge [47,), neoforge [21.1,)) and the appearance pilot restored the opacity/card-tint sliders. Installed jars were backed up to a new timestamped folder first; no game was started by this deployment.",
+  "sourceHead": "056e76659b5a7e0e5d7dcbc1a31e0a71b9b1f2b5",
+  "note": "Third 1.0.0-beta install: the reset-layout row is gone, the appearance pilot renders compact merged-card rows (Lib Row + Section.CARD_LIST), and the loader gates accept forge [47,) / neoforge [21.1,). No game was started by this deployment.",
   "knownGaps": [
-    "The appearance/layout pilot still uses the generic SettingRow stack, so its visual language differs from the old AC page; tracked as an open design gap.",
-    "The \"reset layout\" row is new with the pilot and was not present before the extraction."
+    "Visual parity is structural, not pixel-identical: row heights and group headers still differ slightly from the pre-pilot page.",
+    "The 1.0.0-beta build is a test package, not a store release."
   ]
 }

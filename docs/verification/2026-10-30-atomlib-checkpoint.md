@@ -130,3 +130,14 @@ AC Fabric 的 Loom `remapped_mods` 缓存按坐标而非内容哈希命中：Lib
 4. **「重置布局」是试点新增**：`dd635d15` 才引入，旧页面没有。保留待用户决定。
 
 重装回执见 `2026-10-30-1.0.0-beta-deployment.json`（`backupRoot` 指向本次时间戳目录），仍然没有代启游戏。
+
+### 视觉对齐与重置按钮移除（2026-10-31 00:33 重装）
+
+用户定调：删掉「重置布局」，AC 自身美术保持不变，同时提炼的资产要普适。据此做了两件事：
+
+1. **移除重置布局**：section 不再接收 `confirmationItem`/`canConfirm`/`requestConfirmation`，`AtomChatScreen` 里构造 reset item 与确认框的那段删除；`confirmation()` 仍用于 `AcModalAdapter` 的可见性来源。
+2. **组件层补原语，而不是在 AC 里私拼**：新增 `ui/component/Row.java`（标题左、值右、控件在上/下方，`INLINE`/`BELOW` 两种排布，可选卡背景与分隔线）与 `Section.Kind.CARD_LIST`（一张卡里放多行、行间 0 间距）；`Slider.setMetrics(track,knob)` 让滑条粗细/手柄可配，默认值保持旧行为。AC 的调整区改成「每组一张卡 + 行分隔线」，滑条用 AC 的 `SLIDER_TRACK_H`/`SLIDER_KNOB`。
+3. 为了能对比而不是靠嘴描述，测试里加了离屏渲染：`renderPreviewForVisualReview` 用生产工厂（真实 palette/字体/TypeScale）画出调整区，`renderLegacyChipForComparison` 用旧渲染器画同尺寸图。产物在 `platforms/1.20.1-forge/build/appearance-preview.png` 与 `appearance-legacy.png`。
+4. 结构已对齐（合并卡、标题/值同行、轨道在下、行间发丝线、透明度单独一卡），**但不是像素级一致**：行高、分组标题样式仍有差异；预览使用测试环境的配置值，颜色以实机为准。
+
+本轮验证：Lib 116 项重跑通过；AC 三端全量 1567/1577/1567，失败 0；三端 `verify_jars.py --profile atomlib-consumer` 通过；Lib 三 jar 重新发布并更新锁哈希；三端已重装（Forge lib `af90a800`、Fabric `33329d92`、NeoForge `f5e3cdc1`）。
