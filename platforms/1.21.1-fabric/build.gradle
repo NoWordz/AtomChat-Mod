@@ -9,6 +9,7 @@ plugins {
 // 判定依据在 versions/*.json，本平台不做任何目标名硬编码。
 apply from: '../../gradle/atomchat-native-platform.gradle'
 apply from: '../../gradle/atomchat-layers.gradle'
+apply from: '../../gradle/atomchat-atomlib.gradle'
 
 version = project.mod_version
 group = project.maven_group
@@ -25,12 +26,6 @@ dependencies {
     modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
     modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
     modCompileOnly "com.terraformersmc:modmenu:11.0.3"
-
-    // Keep Java bindings and the selected native at the same exact version.
-    include(implementation("io.github.humbleui:skija-shared:${project.skija_version}"))
-    include(implementation("io.github.humbleui:types:0.2.0"))
-    // Bundle only the selected operating system native; never both.
-    include(implementation("io.github.humbleui:${project.atomchatNativeArtifact}:${project.skija_version}"))
 
     // FlatLaf gives the Swing image picker a modern flat look instead of the
     // dated default Metal one. Bundled as a RELOCATED copy (private package, see
@@ -51,7 +46,8 @@ tasks.named('remapJar') {
 
 processResources {
     inputs.property 'version', project.version
-    filesMatching('fabric.mod.json') { expand version: project.version }
+    inputs.property 'atomlibVersion', project.atomlibVersion
+    filesMatching('fabric.mod.json') { expand version: project.version, atomlib_version: project.atomlibVersion }
 }
 
 tasks.withType(JavaCompile).configureEach {

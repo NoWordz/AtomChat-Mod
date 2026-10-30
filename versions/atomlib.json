@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "group": "com.atom.lib",
+  "version": "0.1.0-local",
+  "compatibility_range": "[0.1.0-local]",
+  "client_platforms": ["windows-x64", "windows-arm64"],
+  "targets": {
+    "1.20.1-forge": {"artifact": "atomlib-1.20.1-forge", "yoga": "3.3.1"},
+    "1.21.1-fabric": {"artifact": "atomlib-1.21.1-fabric", "yoga": "3.3.3"},
+    "1.21.1-neoforge": {"artifact": "atomlib-1.21.1-neoforge", "yoga": "3.3.3"}
+  },
+  "sha256": {
+    "1.20.1-forge": "b508d86014923a34ceaffe9003f5d7a1f5f361fde16d78c4166121ab5e92f074",
+    "1.21.1-fabric": "a05af72290134527dd1a360d7700d5a1c3867790f45cb5c7f9085769c1f617ce",
+    "1.21.1-neoforge": "d280f7679ee24ae7ea8714852c3f89257a24f7771e475da15b67598133dfae7e"
+  }
+}

@@ -186,14 +186,101 @@ def verify(project, platform="windows-x64"):
                       MODULE_NAME in manifest)
 
 
+def verify_consumer(project):
+    """The consumer owns business/FlatLaf only; AtomLib owns the UI runtime."""
+    candidate = Path(project)
+    jars = ([candidate] if candidate.suffix == '.jar' and candidate.is_file() else
+            [p for p in sorted((ROOT / project / 'build/atomlib-consumer/libs').glob('*.jar'))
+             if 'sources' not in p.name and '-slim' not in p.name])
+    check(f'{project}: exactly one AtomLib consumer jar', len(jars) == 1, str(jars))
+    if len(jars) != 1:
+        return
+    path = jars[0]
+    check(f'{project}: architecture-independent name', not any(path.stem.endswith('-'+p) for p in PLATFORMS), path.name)
+    required = json.loads((ROOT / 'versions/atomlib.json').read_text(encoding='utf-8'))['version']
+    classes, all_names, flatlaf, bad = set(), set(), [], []
+
+    def scan(raw, location, depth=0):
+        if depth > 8:
+            bad.append(f'nested depth: {location}')
+            return
+        with zipfile.ZipFile(io.BytesIO(raw)) as archive:
+            names = archive.namelist()
+            if len(names) != len(set(names)):
+                bad.append(f'duplicate ZIP entries: {location}')
+            for info in archive.infolist():
+                name = info.filename
+                if info.is_dir():
+                    continue
+                data = archive.read(info)
+                all_names.add(name)
+                if name.startswith(('io/github/humbleui/skija/', 'io/github/humbleui/types/', 'org/lwjgl/', 'com/atom/lib/')):
+                    bad.append(f'UI runtime payload: {location}!{name}')
+                if name.endswith('.jar'):
+                    if Path(name).name.lower().startswith(('atomlib-', 'skija-', 'types-', 'lwjgl-')):
+                        bad.append(f'embedded UI dependency: {location}!{name}')
+                    scan(data, location+'!'+name, depth+1)
+                elif name.endswith('.class') and not name.endswith('module-info.class'):
+                    if name in classes:
+                        bad.append(f'duplicate class: {name}')
+                    classes.add(name)
+                    if depth == 0 and PLAIN in data:
+                        bad.append(f'unrelocated FlatLaf reference: {name}')
+                    if name == SHADED+'FlatLightLaf.class':
+                        manifest = archive.read('META-INF/MANIFEST.MF').decode('utf-8','replace')
+                        flatlaf.append(MODULE_NAME in manifest and not any(n.startswith('com/formdev/flatlaf/') for n in names))
+                elif name.lower().endswith(('.dll','.so','.dylib')):
+                    # FlatLaf's private picker natives are unrelated and retain
+                    # their existing ownership. No Skija/Yoga native may remain.
+                    if (not name.startswith(SHADED+'natives/') or 'skija' in name.lower() or 'yoga' in name.lower()):
+                        bad.append(f'foreign native: {location}!{name}')
+
+    try:
+        scan(path.read_bytes(), str(path))
+        check(f'{project}: no duplicated UI Java/native payload', not bad, '; '.join(bad[:12]))
+        check(f'{project}: private relocated FlatLaf retained', len(flatlaf) == 1 and all(flatlaf))
+        with zipfile.ZipFile(path) as archive:
+            names = archive.namelist()
+            nested = {n for n in names if n.startswith(NESTED_PREFIXES) and n.endswith('.jar')}
+            if 'fabric.mod.json' in names:
+                meta = json.loads(archive.read('fabric.mod.json'))
+                registered = {j['file'] for j in meta.get('jars', [])}
+                valid = (meta.get('environment') == '*' and
+                         meta.get('suggests', {}).get('atomlib') == '='+required and
+                         meta.get('custom', {}).get('atomlib:client-required') == required and
+                         'atomlib' not in meta.get('depends', {}) and
+                         'com/atom/chat/compat/AtomLibDependencyCheck.class' in names and
+                         b'AtomLibDependencyCheck' in archive.read('com/atom/chat/AtomChatClient.class'))
+            else:
+                import tomllib
+                metadata = json.loads(archive.read('META-INF/jarjar/metadata.json'))
+                registered = {j['path'] for j in metadata.get('jars', [])}
+                neo = 'META-INF/neoforge.mods.toml' in names
+                meta = tomllib.loads(archive.read('META-INF/neoforge.mods.toml' if neo else 'META-INF/mods.toml').decode('utf-8'))
+                deps = [d for d in meta.get('dependencies', {}).get('atomchat', []) if d.get('modId') == 'atomlib']
+                valid = (len(deps) == 1 and deps[0].get('side') == 'CLIENT' and
+                         deps[0].get('versionRange') == '['+required+']' and
+                         (deps[0].get('type') == 'required' if neo else deps[0].get('mandatory') is True))
+            check(f'{project}: all nested jars registered', registered == nested)
+            check(f'{project}: client-scoped AtomLib dependency', valid)
+            identity = properties(archive.read('atomchat-atomlib.properties').decode('utf-8'))
+            check(f'{project}: runtime requirement agrees with lock', identity.get('version') == required)
+    except (OSError, ValueError, KeyError, TypeError, zipfile.BadZipFile) as error:
+        check(f'{project}: valid consumer archive', False, str(error))
+
+
 def main(argv):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--platform', choices=PLATFORMS, default='windows-x64')
+    parser.add_argument('--profile', choices=['legacy', 'atomlib-consumer'], default='legacy')
     parser.add_argument('projects', nargs='+')
     args = parser.parse_args(argv[1:])
     failures.clear()
     for project in args.projects:
-        verify(project, args.platform)
+        if args.profile == 'atomlib-consumer':
+            verify_consumer(project)
+        else:
+            verify(project, args.platform)
     print()
     if failures:
         print(f"产物断言未通过：{len(failures)} 条")

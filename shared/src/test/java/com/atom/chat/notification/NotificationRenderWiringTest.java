@@ -26,15 +26,16 @@ class NotificationRenderWiringTest {
             assertEquals(2, s.split("NotificationBanner.INSTANCE.reset\\(\\)",-1).length - 1,v);
         }
     }
-    @Test void gpuBridgeCapturesBeforeSurfaceCreationAndRestoresEvenWhenPaintingFails() throws Exception {
+    @Test void gpuFacadeDelegatesSingleOwnershipAndKeepsHostAndSkijaPhasesSeparate() throws Exception {
         for (String path : List.of("layers/mapping/official/src/main/java/com/atom/chat/render/SkiaGraphics.java",
                 "platforms/1.21.1-fabric/src/main/java/com/atom/chat/render/SkiaGraphics.java")) {
             String s = Files.readString(root().resolve(path));
             s = s.substring(s.indexOf("public void draw(Runnable preUi, float density,"));
-            assertTrue(s.indexOf("GlStateUtil.save()") < s.indexOf("createSurface()"),path);
-            assertTrue(s.contains("finally {\n            GlStateUtil.restore();"),path);
-            assertFalse(s.contains("RenderSystem.disableBlend()"),"never overwrite the restored blend enable: "+path);
-            assertTrue(s.contains("canvas.restoreToCount(saveBase)"),path);
+            assertTrue(s.contains("bridge.vanillaPass(preUi)"),path);
+            assertTrue(s.indexOf("bridge.vanillaPass(preUi)") < s.indexOf("bridge.drawFrame"),path);
+            assertTrue(s.contains("canvas.restoreToCount(base)"),path);
+            assertFalse(s.contains("DirectContext.makeGL()"),"AC must not create a second Skija context: "+path);
+            assertFalse(s.contains("Surface.wrapBackendRenderTarget"),"AC must not own the framebuffer surface: "+path);
         }
     }
 

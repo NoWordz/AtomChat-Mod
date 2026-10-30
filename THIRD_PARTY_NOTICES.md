@@ -1,17 +1,18 @@
 # Third-Party Notices
 
 AtomChat distributes a Minecraft mod JAR that bundles third-party libraries.
-AtomChat's own code is Apache-2.0 licensed (see LICENSE); each bundled component keeps
+AtomChat's own code is MIT licensed (see LICENSE); each retained third-party component keeps
 its own copyright and license. This file collects the required notices.
 
 ## Bundled components
 
 | Component | License | Purpose |
 |---|---|---|
-| Skija 0.143.18 (Java bindings for Skia) | Apache License 2.0 | UI rendering bindings and one matching Windows x64 / Windows ARM64 / Linux x64 native per artifact |
-| HumbleUI types 0.2.0 | Apache License 2.0 | Geometry types shared with Skija |
+| AtomLib 0.1.0-local | Apache License 2.0 | Separate UI dependency; it owns Skija, Yoga and Windows x64/ARM64 natives |
+| Skija 0.143.18 (Java bindings for Skia) | Apache License 2.0 | Distributed by AtomLib, not embedded in the AtomChat consumer JAR |
+| HumbleUI types 0.2.0 | Apache License 2.0 | Distributed by AtomLib for geometry types |
 | FlatLaf | Apache License 2.0 | Modern Swing look and feel for the image picker |
-| Skia (native graphics engine) | BSD 3-Clause | Native rendering engine bundled through Skija platform artifacts |
+| LWJGL Yoga (3.3.1 Forge, 3.3.3 1.21.1) | BSD 3-Clause for LWJGL, MIT for Yoga | Layout backend distributed by AtomLib |
 
 ## Apache License 2.0 components
 

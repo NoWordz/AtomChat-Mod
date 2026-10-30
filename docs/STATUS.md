@@ -1,6 +1,15 @@
 # AtomChat 当前状态
 
-> 截至 2026-10-29。这里只维护当前快照，提交及推送事实以 Git 查询为准。
+> 截至 2026-10-30。这里只维护当前快照，提交及推送事实以 Git 查询为准。
+
+## 当前检查点：AtomLib 前置库接入，待修复后实机验收
+
+- `D:/AtomLib` 已形成独立三加载器库、Windows x64/ARM64 合包、Maven/Sources/Javadoc 产物和六个独立消费者工程；AtomChat 已改成每目标一个无 OS 后缀的 consumer JAR，并通过锁定 SHA-256 的本地 AtomLib 输入构建。
+- AC 渲染桥已收敛到 Lib 单一 Skija context；旧 `SkiaGraphics` 仅保留兼容门面。外观→调整→布局 chip 已由生产 `AtomLibAppearanceSection` 接管，宽度滑条、半宽开关、滚动、主题、焦点/捕获和 AC 确认窗有真实手势测试。裁剪数学改为调用 Lib `CropMath`，旧上下文与 crop 数学不再各存一份。
+- 本轮自动验证与最终 JAR 指纹见 `docs/verification/2026-10-30-atomlib-integration.md`。当前仍不做游戏/专服启动、ARM64/Linux 实机、IME 与光影组合验证；这些留给用户实机验收。
+- 主代理复核已实测发现：半屏切换后布局区输入暂停不恢复；另记录 context 借用逃逸、退出释放未接线及 Linux CI 使用 Windows 测试 native 三项问题。现有标准测试仍绿，不能据此判最终验收通过。
+- 续作入口：[2026-10-30 检查点](verification/2026-10-30-atomlib-checkpoint.md)，含定位、红测结果、四项处理顺序及真实验证范围。剩余产品修复按用户要求留给下个会话。
+- 版本保持 0.4.0；本轮授权两个仓库本地提交与临时清理，提交号以 Git 为准。没有推送、tag、远端 Maven、商店发布或真实部署。新增接线仅经过主代理限定独立复核，不声称全库独审完成。
 
 ## 当前交付：0.4.0 续开发已验收
 

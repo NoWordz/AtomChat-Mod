@@ -37,6 +37,8 @@ public class AtomChatClient {
             "key.atomchat.category");
 
     public AtomChatClient(ModContainer container, IEventBus modEventBus) {
+        com.atom.chat.compat.AtomLibDependencyCheck.require(net.neoforged.fml.ModList.get()
+                .getModContainerById("atomlib").map(mod -> mod.getModInfo().getVersion().toString()).orElse(null));
         // Idempotent second call: the client-only mixin plugin claimed AWT
         // before Minecraft's Main ran. This log line reports the outcome of
         // whichever call won, so it is the picker's field diagnostic.

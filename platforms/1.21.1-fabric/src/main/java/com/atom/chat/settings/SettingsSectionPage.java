@@ -24,6 +24,7 @@ import com.atom.chat.ui.UiLayout;
 import com.atom.chat.ui.UiMotion;
 import com.atom.chat.ui.UiCards;
 import com.atom.chat.ui.UiTokens;
+import com.atom.lib.input.PointerEvent;
 import static com.atom.chat.ui.UiTokens.s;
 import io.github.humbleui.skija.Canvas;
 import io.github.humbleui.skija.BlendMode;
@@ -387,6 +388,27 @@ public final class SettingsSectionPage {
 
     public boolean chipTransitionActive() { return chipTransitionActive(System.currentTimeMillis()); }
 
+    /** Installs the production Lib view for the layout-adjustment chip. */
+    public void setAtomLibAppearance(AtomLibAppearanceSection section) {
+        if (atomLibAppearance != null && atomLibAppearance != section) atomLibAppearance.close();
+        atomLibAppearance = section;
+    }
+    public boolean usesAtomLibAppearance(SettingsSection section) {
+        return atomLibAppearance != null && section == SettingsSection.APPEARANCE
+                && "adjust".equals(activeChipId(section));
+    }
+    public boolean atomLibPointer(SettingsSection section, PointerEvent.Type type,
+                                  float x, float y, int button) {
+        return usesAtomLibAppearance(section) && atomLibAppearance.pointer(type, x, y, button);
+    }
+    public boolean atomLibKey(SettingsSection section, int keyCode, int modifiers) {
+        return usesAtomLibAppearance(section) && atomLibAppearance.key(keyCode, modifiers);
+    }
+    public boolean atomLibWheel(SettingsSection section, float x, float y, float amount) {
+        return usesAtomLibAppearance(section) && atomLibAppearance.wheel(x, y, amount);
+    }
+    public AtomLibAppearanceSection atomLibAppearance() { return atomLibAppearance; }
+
     private boolean chipTransitionActive(long now) {
         return chipSwitchFromId != null && Animations.enabled() && now - chipSwitchAtMs < CHIP_SWITCH_MS;
     }
@@ -518,6 +540,8 @@ public final class SettingsSectionPage {
 
     /** Section of the frame currently being rendered; drag release needs it. */
     private SettingsSection currentSectionForSettle;
+    /** Optional production consumer for the appearance/layout adjustment chip. */
+    private AtomLibAppearanceSection atomLibAppearance;
     /** Release glide: from the continuous drag position to the snapped value. */
     private String settleId;
     private float settleFrom;
@@ -1129,6 +1153,7 @@ public final class SettingsSectionPage {
     }
 
     public float measureContent(UiLayout layout, SettingsSection section) {
+        if (usesAtomLibAppearance(section)) return layout.list.h();
         List<Row> rows = rows(section);
         if (rows.isEmpty()) {
             return UiTokens.ROOT_CONTENT_GAP + chipBarHeight(section);
@@ -1212,6 +1237,22 @@ public final class SettingsSectionPage {
         currentSectionForSettle = section;
         pointerX = vmx;
         pointerY = vmy;
+
+        if (usesAtomLibAppearance(section)) {
+            float barH = chipBarHeight(section);
+            float top = layout.list.y() + UiTokens.ROOT_CONTENT_GAP + barH;
+            UiLayout.Rect slot = new UiLayout.Rect(layout.list.x(), top, layout.list.w(),
+                    Math.max(0.0F, layout.list.h() - UiTokens.ROOT_CONTENT_GAP - barH));
+            atomLibAppearance.setSlot(slot, layout.list);
+            atomLibAppearance.setActive(true);
+            atomLibAppearance.paint(canvas, accent, dt);
+            if (barH > 0.0F) {
+                updateChipMotion(layout, section, dt);
+                drawChipBar(canvas, layout, section, accent, dt);
+            }
+            return;
+        }
+        if (atomLibAppearance != null) atomLibAppearance.setActive(false);
 
         List<Row> rows = rows(section);
         // Fold animation clock: advances every group's expansion toward the
@@ -3365,6 +3406,7 @@ public final class SettingsSectionPage {
         themeDeleteHover.clear();
         draggingSliderId = null;
         hoveredIndex = -1;
+        if (atomLibAppearance != null) atomLibAppearance.cancel();
         cancelNumberEdit();
     }
 }

@@ -34,6 +34,8 @@
     }
   ],
   "accessWidener": "atomchat.accesswidener",
+  "suggests": {"atomlib": "=${atomlib_version}"},
+  "custom": {"atomlib:client-required": "${atomlib_version}"},
   "depends": {
     "fabricloader": ">=0.16.0",
     "minecraft": "~1.21.1",

@@ -1,0 +1,20 @@
+{
+  "1.20.1-forge": {
+    "tests": 1551,
+    "skipped": 4,
+    "failures": 0,
+    "errors": 0
+  },
+  "1.21.1-fabric": {
+    "tests": 1563,
+    "skipped": 4,
+    "failures": 0,
+    "errors": 0
+  },
+  "1.21.1-neoforge": {
+    "tests": 1551,
+    "skipped": 4,
+    "failures": 0,
+    "errors": 0
+  }
+}

@@ -1,0 +1,81 @@
+{
+  "date": "2026-10-30",
+  "kind": "local checkpoint; final acceptance blocked",
+  "tests": {
+    "lib/_core": {
+      "tests": 9,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "lib/_devtools": {
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "lib/_runtime": {
+      "tests": 23,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "lib/_ui": {
+      "tests": 82,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "ac/1.20.1-forge": {
+      "tests": 1561,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 4
+    },
+    "ac/1.21.1-fabric": {
+      "tests": 1573,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 4
+    },
+    "ac/1.21.1-neoforge": {
+      "tests": 1561,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 4
+    },
+    "gl/1.20.1-forge": {
+      "tests": 11,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "gl/1.21.1-fabric": {
+      "tests": 11,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "gl/1.21.1-neoforge": {
+      "tests": 11,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    }
+  },
+  "red_probe": {
+    "name": "halfScreenToggleMustLeaveWidthSliderInteractive",
+    "tests": 1,
+    "failures": 1,
+    "expected_width_saves": 1,
+    "actual_width_saves": 0,
+    "temporary_source_removed": true
+  },
+  "rerun_scope": {
+    "lib": "--rerun-tasks, all four modules",
+    "ac": "test build, incremental; Forge standard suite rerun after temporary probe",
+    "hidden_gl": "existing XML inspected, not rerun",
+    "consumers": "existing six log receipts inspected, not rebuilt"
+  },
+  "consumer_logs_checked": 6
+}

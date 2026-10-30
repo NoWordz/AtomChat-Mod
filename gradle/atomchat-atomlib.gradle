@@ -1,0 +1,60 @@
+import groovy.json.JsonSlurper
+import java.security.MessageDigest
+
+def lock = new JsonSlurper().parse(new File(atomchatRepoRoot, 'versions/atomlib.json'))
+def target = projectDir.name
+def definition = lock.targets[target]
+if (definition == null) throw new GradleException("No AtomLib input for ${target}")
+ext.atomlibVersion = lock.version.toString()
+ext.atomlibVersionRange = lock.compatibility_range.toString()
+def coordinate = "${lock.group}:${definition.artifact}:${lock.version}".toString()
+def repositoryPath = providers.gradleProperty('atomlibMavenRepo').orElse(providers.environmentVariable('ATOMLIB_MAVEN_REPO'))
+if (!repositoryPath.isPresent()) {
+    throw new GradleException('AtomLib Maven input required: pass -PatomlibMavenRepo=<absolute test-maven directory>; CI uses the pinned input archive')
+}
+def repositoryDir = file(repositoryPath.get())
+if (!repositoryDir.isDirectory()) throw new GradleException("AtomLib Maven input does not exist: ${repositoryDir}")
+repositories {
+    exclusiveContent {
+        forRepository { maven { name='AtomLibInput'; url=repositoryDir.toURI() } }
+        // ForgeGradle serves a synthetic _mapped_ coordinate from its own
+        // repository; reserve only the original locked input for this repo.
+        filter { includeVersion(lock.group.toString(), definition.artifact.toString(), lock.version.toString()) }
+    }
+    exclusiveContent {
+        forRepository { maven { name='AtomLibUpstream'; url='https://repo.maven.apache.org/maven2/' } }
+        filter { includeGroup 'org.lwjgl'; includeGroup 'io.github.humbleui' }
+    }
+}
+dependencies {
+    if (target.endsWith('-fabric')) modImplementation coordinate
+    else implementation coordinate
+    testRuntimeOnly "org.lwjgl:lwjgl:${definition.yoga}:${atomchatTestLwjglClassifier}"
+    testRuntimeOnly "org.lwjgl:lwjgl-yoga:${definition.yoga}:${atomchatTestLwjglClassifier}"
+}
+def metadata = tasks.register('generateAtomLibRequirement') {
+    def output = layout.buildDirectory.file('generated/atomlib-requirement/atomchat-atomlib.properties')
+    inputs.property('version', atomlibVersion)
+    outputs.file(output)
+    doLast {
+        def file = output.get().asFile
+        file.parentFile.mkdirs()
+        file.setText("version=${lock.version}\n", 'UTF-8')
+    }
+}
+sourceSets.main.resources.srcDir(layout.buildDirectory.dir('generated/atomlib-requirement'))
+tasks.named('processResources') { dependsOn metadata }
+tasks.matching { it.name == 'sourcesJar' }.configureEach { dependsOn metadata }
+def original = configurations.detachedConfiguration(dependencies.create(coordinate))
+original.transitive = false
+def expected = lock.sha256[target]
+tasks.register('verifyAtomLibInput') {
+    inputs.files(original)
+    inputs.property('expectedSha256', expected ?: 'UNPINNED')
+    doLast {
+        if (!expected) throw new GradleException("Unpinned AtomLib input: ${target}; export the paired input before final build")
+        def digest = MessageDigest.getInstance('SHA-256').digest(original.singleFile.bytes).encodeHex().toString()
+        if (digest != expected) throw new GradleException("AtomLib input SHA-256 mismatch: ${target}; expected ${expected}, got ${digest}")
+    }
+}
+tasks.named('check') { dependsOn 'verifyAtomLibInput' }

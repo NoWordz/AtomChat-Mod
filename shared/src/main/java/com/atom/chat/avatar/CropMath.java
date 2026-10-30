@@ -16,12 +16,12 @@ public final class CropMath {
 
     /** Smallest allowed scale: the image exactly covers the frame. */
     public static float baseScale(float imgW, float imgH, float frameW, float frameH) {
-        return Math.max(frameW / Math.max(1.0F, imgW), frameH / Math.max(1.0F, imgH));
+        return com.atom.lib.geometry.CropMath.baseScale(imgW, imgH, frameW, frameH);
     }
 
     /** Zoom is clamped to [base, base * 4]. */
     public static float clampScale(float scale, float base) {
-        return Math.max(base, Math.min(base * 4.0F, scale));
+        return com.atom.lib.geometry.CropMath.clampScale(scale, base);
     }
 
     /**
@@ -33,21 +33,7 @@ public final class CropMath {
     public static float[] clampCover(float imgW, float imgH, float scale,
                                      float cx, float cy, float rx, float ry,
                                      float ox, float oy) {
-        float hw = imgW * scale / 2.0F;
-        float hh = imgH * scale / 2.0F;
-        return new float[]{clampAxis(ox, cx, rx, hw), clampAxis(oy, cy, ry, hh)};
-    }
-
-    private static float clampAxis(float o, float c, float r, float half) {
-        // Cover constraints: o - half <= c - r  and  o + half >= c + r.
-        float min = c + r - half;
-        float max = c - r + half;
-        if (min >= max) {
-            // Axis exactly at the base scale: the image half equals the frame
-            // half, so the centre is pinned.
-            return c;
-        }
-        return Math.max(min, Math.min(max, o));
+        return com.atom.lib.geometry.CropMath.clampCover(imgW, imgH, scale, cx, cy, rx, ry, ox, oy);
     }
 
     /**
@@ -57,17 +43,7 @@ public final class CropMath {
     public static float[] zoomAtCentre(float imgW, float imgH, float scale,
                                        float cx, float cy, float rx, float ry,
                                        float ox, float oy, float factor, float base) {
-        float newScale = clampScale(scale * factor, base);
-        if (newScale == scale) {
-            return new float[]{scale, ox, oy};
-        }
-        // The image point under the centre stays put across the zoom.
-        float ux = (cx - ox) / scale;
-        float uy = (cy - oy) / scale;
-        float nx = cx - ux * newScale;
-        float ny = cy - uy * newScale;
-        float[] clamped = clampCover(imgW, imgH, newScale, cx, cy, rx, ry, nx, ny);
-        return new float[]{newScale, clamped[0], clamped[1]};
+        return com.atom.lib.geometry.CropMath.zoomAtCentre(imgW, imgH, scale, cx, cy, rx, ry, ox, oy, factor, base);
     }
 
     /**
@@ -81,12 +57,6 @@ public final class CropMath {
     public static float[] visibleRect(float imgW, float imgH, float scale,
                                       float cx, float cy, float rx, float ry,
                                       float ox, float oy) {
-        float sw = 2.0F * rx / scale;
-        float sh = 2.0F * ry / scale;
-        float sx = (cx - rx - ox) / scale + imgW / 2.0F;
-        float sy = (cy - ry - oy) / scale + imgH / 2.0F;
-        sx = Math.max(0.0F, Math.min(imgW - sw, sx));
-        sy = Math.max(0.0F, Math.min(imgH - sh, sy));
-        return new float[]{sx, sy, sw, sh};
+        return com.atom.lib.geometry.CropMath.visibleRect(imgW, imgH, scale, cx, cy, rx, ry, ox, oy);
     }
 }

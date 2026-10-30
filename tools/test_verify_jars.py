@@ -191,5 +191,77 @@ class ArtifactVariantsTest(unittest.TestCase):
             self.assertEqual(1, self.run_verifier('windows-arm64', jar).returncode)
 
 
+def consumer_artifact(path, loader='Fabric', dependency=True, side='CLIENT', extra=None):
+    prefix = 'META-INF/jars/' if loader == 'Fabric' else 'META-INF/jarjar/'
+    flatlaf = archive({
+        'com/atom/chat/shaded/flatlaf/FlatLightLaf.class': b'relocated',
+        'com/atom/chat/shaded/flatlaf/natives/flatlaf-windows-x86_64.dll': pe(0x8664),
+        'META-INF/MANIFEST.MF': 'Automatic-Module-Name: com.atom.chat.shaded.flatlaf\n',
+    })
+    entries = {prefix+'flatlaf-private.jar': flatlaf,
+               'atomchat-atomlib.properties': b'version=0.1.0-local\n',
+               'com/atom/chat/compat/AtomLibDependencyCheck.class': b'client bootstrap',
+               'com/atom/chat/AtomChatClient.class': b'AtomLibDependencyCheck'}
+    if loader == 'Fabric':
+        meta = {'id':'atomchat', 'environment':'*', 'jars':[{'file':prefix+'flatlaf-private.jar'}]}
+        if dependency:
+            meta['suggests'] = {'atomlib':'=0.1.0-local'}
+            meta['custom'] = {'atomlib:client-required':'0.1.0-local'}
+        entries['fabric.mod.json'] = json.dumps(meta).encode()
+    else:
+        entries[prefix+'metadata.json'] = json.dumps({'jars':[{'path':prefix+'flatlaf-private.jar'}]}).encode()
+        kind = 'mandatory=true' if loader=='Forge' else 'type="required"'
+        text = '[[mods]]\nmodId="atomchat"\n'
+        if dependency:
+            text += f'[[dependencies.atomchat]]\nmodId="atomlib"\n{kind}\nversionRange="[0.1.0-local]"\nside="{side}"\n'
+        entries['META-INF/mods.toml' if loader=='Forge' else 'META-INF/neoforge.mods.toml'] = text.encode()
+    if extra:
+        entries.update(extra)
+    path.parent.mkdir(parents=True,exist_ok=True)
+    path.write_bytes(archive(entries))
+
+
+class AtomLibConsumerTest(unittest.TestCase):
+    def run_verifier(self,path):
+        return subprocess.run([sys.executable,str(VERIFIER),'--profile','atomlib-consumer',str(path)],text=True,capture_output=True)
+
+    def test_three_consumers_have_no_ui_runtime_and_keep_private_flatlaf(self):
+        with tempfile.TemporaryDirectory() as temp:
+            for loader in ['Forge','NeoForge','Fabric']:
+                jar=Path(temp)/f'atomchat-{loader}-0.4.0.jar';consumer_artifact(jar,loader)
+                result=self.run_verifier(jar)
+                self.assertEqual(0,result.returncode,result.stdout+result.stderr)
+
+    def test_hidden_runtime_payloads_and_embedded_atomlib_are_rejected(self):
+        with tempfile.TemporaryDirectory() as temp:
+            cases = [
+                {'META-INF/jars/skija-shared-0.143.18.jar':archive({'io/github/humbleui/skija/Canvas.class':b'Java'})},
+                {'META-INF/jars/innocent.jar':archive({'org/lwjgl/util/yoga/Yoga.class':b'Java'})},
+                {'io/github/humbleui/types/Rect.class':b'Java'},
+                {'com/atom/lib/view/UiView.class':b'Java'},
+                {'assets/misc/skija.dll':pe(0x8664)},
+                {'assets/misc/lwjgl_yoga.dll':pe(0x8664)},
+                {'META-INF/jars/atomlib-0.1.0-local.jar':archive({'resource.txt':b'not allowed'})},
+            ]
+            for extra in cases:
+                with self.subTest(payload=list(extra)):
+                    jar=Path(temp)/'atomchat-Fabric-0.4.0.jar';consumer_artifact(jar,extra=extra)
+                    self.assertEqual(1,self.run_verifier(jar).returncode)
+
+    def test_dependency_and_client_only_scope_are_required(self):
+        with tempfile.TemporaryDirectory() as temp:
+            for loader in ['Forge','NeoForge','Fabric']:
+                jar=Path(temp)/f'atomchat-{loader}-0.4.0.jar';consumer_artifact(jar,loader,dependency=False)
+                self.assertEqual(1,self.run_verifier(jar).returncode)
+            for loader in ['Forge','NeoForge']:
+                jar=Path(temp)/f'atomchat-{loader}-0.4.0.jar';consumer_artifact(jar,loader,side='BOTH')
+                self.assertEqual(1,self.run_verifier(jar).returncode)
+
+    def test_old_architecture_specific_names_do_not_pass_as_consumers(self):
+        with tempfile.TemporaryDirectory() as temp:
+            jar=Path(temp)/'atomchat-Fabric-0.4.0-windows-x64.jar';consumer_artifact(jar)
+            self.assertEqual(1,self.run_verifier(jar).returncode)
+
+
 if __name__ == '__main__':
     unittest.main()

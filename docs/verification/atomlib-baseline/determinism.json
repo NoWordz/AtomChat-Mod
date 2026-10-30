@@ -1,0 +1,122 @@
+[
+  {
+    "file": "determinism/pass1/color-picker.png",
+    "matches": "color-picker.png",
+    "sha256": "519d6c6a093e32f07e4583a5726637d858ba0b8c14d5cac037241499e7933fca"
+  },
+  {
+    "file": "determinism/pass1/conversation-list.png",
+    "matches": "conversation-list.png",
+    "sha256": "9d1bfc9b2319426d813645248f5871dee5e3ddf7c5ba9cbd730e6f5b63d9a976"
+  },
+  {
+    "file": "determinism/pass1/emoji-panel.png",
+    "matches": "emoji-panel.png",
+    "sha256": "79f4a89eeaf81609238a2edc3f5290e9585d8f1f2225c5f32fabca260a6cf3c1"
+  },
+  {
+    "file": "determinism/pass1/image-cropper.png",
+    "matches": "image-cropper.png",
+    "sha256": "79621346c6e0b9d1bb068b696a05d05c650fdf4189ca84f05f89deec7c118ce8"
+  },
+  {
+    "file": "determinism/pass1/message-list.png",
+    "matches": "message-list.png",
+    "sha256": "183f56019419eb47e0738a553d9e3cf0848664812d57e51e5a96b3314e2cd35c"
+  },
+  {
+    "file": "determinism/pass1/notification-banner.png",
+    "matches": "notification-banner.png",
+    "sha256": "63cedb1d82f95053e69d70cc8962626bb51ba923b2c619aaac11e4b21f7b80b3"
+  },
+  {
+    "file": "determinism/pass1/quick-phrase-panel.png",
+    "matches": "quick-phrase-panel.png",
+    "sha256": "54afb60fe740f49827027fe1d57d7b8919a6f74f580cff61b8b5d8da2dba59d6"
+  },
+  {
+    "file": "determinism/pass1/settings-home.png",
+    "matches": "settings-home.png",
+    "sha256": "989c5546bb6e8fd58ef63e473ff0a365e0f63fde10db7915924fad9aa06da1b2"
+  },
+  {
+    "file": "determinism/pass1/settings-section-about.png",
+    "matches": "settings-section-about.png",
+    "sha256": "90af00401c5321f0221145868230a8ade8ac16da0042ec57f36f8070c0904b2b"
+  },
+  {
+    "file": "determinism/pass1/settings-section-appearance.png",
+    "matches": "settings-section-appearance.png",
+    "sha256": "e7df952d45aecbc7bf279cae890a2cef53ca258361f77b3aa5694a1ab96c1109"
+  },
+  {
+    "file": "determinism/pass1/settings-section-chat.png",
+    "matches": "settings-section-chat.png",
+    "sha256": "7f77d09c125ee63fc0751a306fc88b1ed6953fe9faec0887331232657337de6e"
+  },
+  {
+    "file": "determinism/pass1/settings-section-privacy.png",
+    "matches": "settings-section-privacy.png",
+    "sha256": "70709a7b5e5a0c94f62e37a6a7456c52d1f2f6aa3c3d0ad8ab7d9803e37d268e"
+  },
+  {
+    "file": "determinism/pass2/color-picker.png",
+    "matches": "color-picker.png",
+    "sha256": "519d6c6a093e32f07e4583a5726637d858ba0b8c14d5cac037241499e7933fca"
+  },
+  {
+    "file": "determinism/pass2/conversation-list.png",
+    "matches": "conversation-list.png",
+    "sha256": "9d1bfc9b2319426d813645248f5871dee5e3ddf7c5ba9cbd730e6f5b63d9a976"
+  },
+  {
+    "file": "determinism/pass2/emoji-panel.png",
+    "matches": "emoji-panel.png",
+    "sha256": "79f4a89eeaf81609238a2edc3f5290e9585d8f1f2225c5f32fabca260a6cf3c1"
+  },
+  {
+    "file": "determinism/pass2/image-cropper.png",
+    "matches": "image-cropper.png",
+    "sha256": "79621346c6e0b9d1bb068b696a05d05c650fdf4189ca84f05f89deec7c118ce8"
+  },
+  {
+    "file": "determinism/pass2/message-list.png",
+    "matches": "message-list.png",
+    "sha256": "183f56019419eb47e0738a553d9e3cf0848664812d57e51e5a96b3314e2cd35c"
+  },
+  {
+    "file": "determinism/pass2/notification-banner.png",
+    "matches": "notification-banner.png",
+    "sha256": "63cedb1d82f95053e69d70cc8962626bb51ba923b2c619aaac11e4b21f7b80b3"
+  },
+  {
+    "file": "determinism/pass2/quick-phrase-panel.png",
+    "matches": "quick-phrase-panel.png",
+    "sha256": "54afb60fe740f49827027fe1d57d7b8919a6f74f580cff61b8b5d8da2dba59d6"
+  },
+  {
+    "file": "determinism/pass2/settings-home.png",
+    "matches": "settings-home.png",
+    "sha256": "989c5546bb6e8fd58ef63e473ff0a365e0f63fde10db7915924fad9aa06da1b2"
+  },
+  {
+    "file": "determinism/pass2/settings-section-about.png",
+    "matches": "settings-section-about.png",
+    "sha256": "90af00401c5321f0221145868230a8ade8ac16da0042ec57f36f8070c0904b2b"
+  },
+  {
+    "file": "determinism/pass2/settings-section-appearance.png",
+    "matches": "settings-section-appearance.png",
+    "sha256": "e7df952d45aecbc7bf279cae890a2cef53ca258361f77b3aa5694a1ab96c1109"
+  },
+  {
+    "file": "determinism/pass2/settings-section-chat.png",
+    "matches": "settings-section-chat.png",
+    "sha256": "7f77d09c125ee63fc0751a306fc88b1ed6953fe9faec0887331232657337de6e"
+  },
+  {
+    "file": "determinism/pass2/settings-section-privacy.png",
+    "matches": "settings-section-privacy.png",
+    "sha256": "70709a7b5e5a0c94f62e37a6a7456c52d1f2f6aa3c3d0ad8ab7d9803e37d268e"
+  }
+]

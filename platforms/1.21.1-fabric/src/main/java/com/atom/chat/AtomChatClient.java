@@ -34,6 +34,8 @@ public class AtomChatClient implements ClientModInitializer {
 
     @Override
     public void onInitializeClient() {
+        com.atom.chat.compat.AtomLibDependencyCheck.require(net.fabricmc.loader.api.FabricLoader.getInstance()
+                .getModContainer("atomlib").map(mod -> mod.getMetadata().getVersion().getFriendlyString()).orElse(null));
         // Idempotent second call: the client-only mixin plugin claimed AWT
         // before Minecraft's Main ran. This log line reports the outcome of
         // whichever call won, so it is the picker's field diagnostic.
