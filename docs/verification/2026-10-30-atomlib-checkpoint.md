@@ -103,3 +103,19 @@ AC Fabric 的 Loom `remapped_mods` 缓存按坐标而非内容哈希命中：Lib
 - Forge 重混淆开发客户端加载新 Lib（`cb612db` 之后新增的事件接线与 mixin 不进入 Forge 路径，但 Lib jar 已变）。
 - 远端 Actions 未运行；Fabric mixin 的运行时命中只有 refmap 证据。
 - 本地 Maven 输入已刷新，之前的候选 JAR 与配对归档需要重新导出，不能沿用旧包。
+
+## 1.0.0-beta 测试部署（2026-10-30 收尾）
+
+用户要求把本体版本号改为 `1.0.0-beta` 并部署到测试实例，用于本次实机验收。三个目标都以新版本重新构建（`build`），部署前对实际 JAR 运行 `tools/verify_jars.py --platform windows-x64 --profile atomlib-consumer`，全部通过。
+
+注意产物形态已变：拆库后 AC 每个目标只出一个无 OS 后缀的包，并且**必须同时安装同目标的 AtomLib**，以前的单 jar 安装方式不再适用。
+
+| 加载器 | 实例 | 安装 | 随装 Lib |
+|---|---|---|---|
+| Forge 1.20.1 | `1.20.1-main` | `atomchat-Forge-1.20.1-1.0.0-beta.jar` | `atomlib-1.20.1-forge-0.1.0-local.jar` |
+| Fabric 1.21.1 | `1.21.1-CCB` | `atomchat-Fabric-1.21.1-1.0.0-beta.jar` | `atomlib-1.21.1-fabric-0.1.0-local.jar` |
+| NeoForge 1.21.1 | `Mechanomania-航空学` | `atomchat-NeoForge-1.21.1-1.0.0-beta.jar` | `atomlib-1.21.1-neoforge-0.1.0-local.jar` |
+
+旧包已备份到 `D:/AtomChat-Backups/2026-10-30-1.0.0-beta/20261030-234714/<加载器>/` 并逐个校验 SHA-256；替换后回读哈希一致，每个 `mods` 目录恰好一个 `atomchat*.jar` 与一个 `atomlib*.jar`，其他模组数量未变。完整记录见 `2026-10-30-1.0.0-beta-deployment.json`。
+
+本次没有代启游戏；实机结论待用户反馈。验收重点：设置→外观→调整里的半屏开关与宽度滑条、物品图标显示、关屏与退出时无崩溃。

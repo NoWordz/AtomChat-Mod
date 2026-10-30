@@ -2,14 +2,15 @@
 
 > 截至 2026-10-30。这里只维护当前快照，提交及推送事实以 Git 查询为准。
 
-## 当前检查点：AtomLib 前置库接入，待修复后实机验收
+## 当前检查点：AtomLib 四项修复完成，1.0.0-beta 已部署待实机验收
 
 - `D:/AtomLib` 已形成独立三加载器库、Windows x64/ARM64 合包、Maven/Sources/Javadoc 产物和六个独立消费者工程；AtomChat 已改成每目标一个无 OS 后缀的 consumer JAR，并通过锁定 SHA-256 的本地 AtomLib 输入构建。
 - AC 渲染桥已收敛到 Lib 单一 Skija context；旧 `SkiaGraphics` 仅保留兼容门面。外观→调整→布局 chip 已由生产 `AtomLibAppearanceSection` 接管，宽度滑条、半宽开关、滚动、主题、焦点/捕获和 AC 确认窗有真实手势测试。裁剪数学改为调用 Lib `CropMath`，旧上下文与 crop 数学不再各存一份。
-- 本轮自动验证与最终 JAR 指纹见 `docs/verification/2026-10-30-atomlib-integration.md`。当前仍不做游戏/专服启动、ARM64/Linux 实机、IME 与光影组合验证；这些留给用户实机验收。
-- 主代理复核已实测发现：半屏切换后布局区输入暂停不恢复；另记录 context 借用逃逸、退出释放未接线及 Linux CI 使用 Windows 测试 native 三项问题。现有标准测试仍绿，不能据此判最终验收通过。
-- 续作入口：[2026-10-30 检查点](verification/2026-10-30-atomlib-checkpoint.md)，含定位、红测结果、四项处理顺序及真实验证范围。剩余产品修复按用户要求留给下个会话。
-- 版本保持 0.4.0；本轮授权两个仓库本地提交与临时清理，提交号以 Git 为准。没有推送、tag、远端 Maven、商店发布或真实部署。新增接线仅经过主代理限定独立复核，不声称全库独审完成。
+- 检查点记录的四个问题已修：半屏切换后的输入暂停（暂停状态改为单一所有权，并有红→绿回归）、原生 context 逃逸租借（物品图标拆成 vanilla 绘制与两次租借导入）、bridge 退出释放（Forge/NeoForge 事件、Fabric mixin，未实机验证）、Linux CI 测试 native 配置（native 相关测试改到 windows-latest）。详见[检查点](verification/2026-10-30-atomlib-checkpoint.md)后半场一节。
+- 本轮验证：Lib 116 项、三端隐藏 GL 各 13 项、AC 三端 1564/1576/1564（均为重播而非 UP-TO-DATE），Lib 三 jar 重新发布并更新锁哈希，六个独立消费者通过。
+- 版本已按用户要求改为 `1.0.0-beta`，三端（Forge `1.20.1-main`、Fabric `1.21.1-CCB`、NeoForge `Mechanomania-航空学`）已备份旧包并部署新 jar **及配套 AtomLib**，回执见 [1.0.0-beta 部署](verification/2026-10-30-1.0.0-beta-deployment.json)。未代启游戏。
+- 仍未覆盖：真实客户端/专服启动、ARM64 实机、IME、完整 bidi/CJK 断行、Iris/OptiFine、其他 GPU、性能与长会话、远端 Actions；T12 的 AC 旧实现退役尚未开始，不能据此宣称拆库迁移完成。
+- 本轮授权两个仓库本地提交，提交号以 Git 为准。没有推送、tag、远端 Maven、商店发布或公开预发布。
 
 ## 当前交付：0.4.0 续开发已验收
 
