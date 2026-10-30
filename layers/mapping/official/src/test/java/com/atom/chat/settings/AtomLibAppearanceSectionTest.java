@@ -15,7 +15,7 @@ class AtomLibAppearanceSectionTest extends AtomLibSettingsTestSupport {
         var width=catalogWidth();var mode=SettingsCatalog.items(SettingsSection.APPEARANCE).stream().filter(i->i.id().equals("half_screen")).findFirst().orElseThrow();
         var saves=new AtomicInteger();var confirmed=new AtomicInteger();var dialog=new ConfirmationDialog();
         var item=new SettingsItem("reset","title","subtitle",()->true,v->{});
-        var section=new AtomLibAppearanceSection(host,width,mode,List.of(),item,()->true,
+        var section=new AtomLibAppearanceSection(host,width,mode,List.of(),List.of(),item,()->true,
                 key->key,dialog,confirmed::incrementAndGet,()->{saves.incrementAndGet();width.persist();});
         try(section){
             section.setSlot(new UiLayout.Rect(20,30,480,600),new UiLayout.Rect(20,30,480,600));section.frame();
@@ -42,7 +42,7 @@ class AtomLibAppearanceSectionTest extends AtomLibSettingsTestSupport {
         var mode=SettingsCatalog.items(SettingsSection.APPEARANCE).stream().filter(i->i.id().equals("half_screen")).findFirst().orElseThrow();
         var saves=new AtomicInteger();var dialog=new ConfirmationDialog();
         var item=new SettingsItem("reset","title","subtitle",()->true,v->{});
-        var section=new AtomLibAppearanceSection(host,width,mode,List.of(),item,()->true,
+        var section=new AtomLibAppearanceSection(host,width,mode,List.of(),List.of(),item,()->true,
                 key->key,dialog,()->dialog.open("确认","说明","取消","确认",()->{}),
                 ()->{saves.incrementAndGet();width.persist();});
         try(section){
@@ -72,5 +72,25 @@ class AtomLibAppearanceSectionTest extends AtomLibSettingsTestSupport {
         float px=sx+track.x()+track.width()*fraction,py=sy+track.y();
         section.pointer(PointerEvent.Type.PRESS,px,py,0);
         section.pointer(PointerEvent.Type.RELEASE,px,py,0);
+    }
+    /** The pilot must replace the chip, not shrink its option set. */
+    @Test void migrationKeepsEveryLayoutAndTransparencyOption(){
+        var sliders=SettingsCatalog.sliders(SettingsSection.APPEARANCE);
+        assertEquals(List.of("scale","contentscale"),
+                AtomLibAppearanceSection.layoutSliders(sliders).stream().map(SettingsSlider::id).toList());
+        assertEquals(List.of("opacity","cardtint"),
+                AtomLibAppearanceSection.transparencySliders(sliders).stream().map(SettingsSlider::id).toList());
+        var width=catalogWidth();
+        var mode=SettingsCatalog.items(SettingsSection.APPEARANCE).stream().filter(i->i.id().equals("half_screen")).findFirst().orElseThrow();
+        var item=new SettingsItem("reset","title","subtitle",()->true,v->{});
+        var section=new AtomLibAppearanceSection(host,width,mode,
+                AtomLibAppearanceSection.layoutSliders(sliders),AtomLibAppearanceSection.transparencySliders(sliders),
+                item,()->true,key->key,new ConfirmationDialog(),()->{},()->{});
+        try(section){
+            section.setSlot(new UiLayout.Rect(20,30,480,900),new UiLayout.Rect(20,30,480,900));
+            var order=section.frame().paintOrder();
+            assertTrue(order.contains(new com.atom.lib.layout.NodeId("ac.appearance.opacity.row")),"opacity row");
+            assertTrue(order.contains(new com.atom.lib.layout.NodeId("ac.appearance.cardtint.row")),"card tint row");
+        }
     }
 }

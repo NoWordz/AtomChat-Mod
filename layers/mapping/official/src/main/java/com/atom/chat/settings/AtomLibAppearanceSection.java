@@ -34,8 +34,8 @@ public final class AtomLibAppearanceSection implements AutoCloseable {
     private long frame;
 
     public AtomLibAppearanceSection(HostContext host,SettingsSlider widthSetting,SettingsItem mode,List<SettingsSlider> extras,
-            SettingsItem confirmationItem,BooleanSupplier canConfirm,Function<String,String> tr,
-            ConfirmationDialog dialog,Runnable requestConfirmation,Runnable persistWidth) {
+            List<SettingsSlider> transparency,SettingsItem confirmationItem,BooleanSupplier canConfirm,
+            Function<String,String> tr,ConfirmationDialog dialog,Runnable requestConfirmation,Runnable persistWidth) {
         this.mode=Objects.requireNonNull(mode);this.canConfirm=Objects.requireNonNull(canConfirm);lastMode=mode.value();
         width=slider(widthSetting,new AtomLibSettingsBinding(widthSetting,AtomChatConfig::get,persistWidth));
         var half=new Toggle(HALF_SCREEN.value(),new ValueBinding<Boolean>() {
@@ -50,6 +50,10 @@ public final class AtomLibAppearanceSection implements AutoCloseable {
         children.add(new SettingRow("ac.appearance.mode-row",tr.apply(mode.titleKey()),"",half));
         children.add(sliderRow(widthSetting,width,tr));
         for(var extra:extras)children.add(sliderRow(extra,slider(extra,new AtomLibSettingsBinding(extra)),tr));
+        if(!transparency.isEmpty()){
+            children.add(new Label("ac.appearance.transparency",tr.apply("atomchat.settings.group.appearance.transparency"),Label.Tone.TITLE));
+            for(var extra:transparency)children.add(sliderRow(extra,slider(extra,new AtomLibSettingsBinding(extra)),tr));
+        }
         confirm=new Button(CONFIRM.value(),tr.apply(confirmationItem.titleKey()),()->{host.feedback().run();openModal(requestConfirmation);});
         children.add(new SettingRow("ac.appearance.confirm-row",tr.apply(confirmationItem.titleKey()),tr.apply(confirmationItem.subtitleKey()),confirm));
         var scroll=new Section("ac.appearance.scroll",Section.Kind.SCROLL,children);
@@ -63,11 +67,20 @@ public final class AtomLibAppearanceSection implements AutoCloseable {
             var sliders=SettingsCatalog.sliders(SettingsSection.APPEARANCE);
             var width=sliders.stream().filter(s->s.id().equals("width")).findFirst().orElseThrow();
             var mode=SettingsCatalog.items(SettingsSection.APPEARANCE).stream().filter(s->s.id().equals("half_screen")).findFirst().orElseThrow();
-            var extras=sliders.stream().filter(s->s.id().equals("scale")||s.id().equals("contentscale")).toList();
-            var result=new AtomLibAppearanceSection(services.host(),width,mode,extras,confirmationItem,canConfirm,
+            var extras=layoutSliders(sliders);
+            var transparency=transparencySliders(sliders);
+            var result=new AtomLibAppearanceSection(services.host(),width,mode,extras,transparency,confirmationItem,canConfirm,
                 key->Component.translatable(key).getString(),dialog,requestConfirmation,width::persist);
             result.services=services;return result;
         } catch(RuntimeException|Error failure){services.close();throw failure;}
+    }
+    /** Layout sliders the pilot owns; kept as a named set so a migration cannot drop one silently. */
+    static List<SettingsSlider> layoutSliders(List<SettingsSlider> sliders) {
+        return sliders.stream().filter(s->s.id().equals("scale")||s.id().equals("contentscale")).toList();
+    }
+    /** Transparency sliders of the same chip; the old page always showed both. */
+    static List<SettingsSlider> transparencySliders(List<SettingsSlider> sliders) {
+        return sliders.stream().filter(s->s.id().equals("opacity")||s.id().equals("cardtint")).toList();
     }
     private static Slider slider(SettingsSlider setting,AtomLibSettingsBinding binding) {
         NodeId id=setting.id().equals("width")?WIDTH:new NodeId("ac.appearance."+setting.id());
