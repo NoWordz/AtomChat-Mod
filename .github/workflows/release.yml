@@ -78,17 +78,9 @@ jobs:
         uses: gradle/actions/setup-gradle@v6
 
       - name: 获取并认证固定 AtomLib 输入
-        env:
-          ATOMLIB_MAVEN_INPUT_URL: ${{ secrets.ATOMLIB_MAVEN_INPUT_URL }}
-          ATOMLIB_MAVEN_INPUT_SHA256: ${{ secrets.ATOMLIB_MAVEN_INPUT_SHA256 }}
         run: |
           set -euo pipefail
-          if [ -z "${ATOMLIB_MAVEN_INPUT_URL:-}" ] || [ -z "${ATOMLIB_MAVEN_INPUT_SHA256:-}" ]; then
-            echo "::error::ATOMLIB_MAVEN_INPUT_URL and ATOMLIB_MAVEN_INPUT_SHA256 are required"
-            exit 1
-          fi
-          python3 tools/fetch_atomlib_input.py --url "$ATOMLIB_MAVEN_INPUT_URL" \
-            --sha256 "$ATOMLIB_MAVEN_INPUT_SHA256" --output "$RUNNER_TEMP/atomlib-input-path"
+          python3 tools/fetch_atomlib_input.py --output "$RUNNER_TEMP/atomlib-input-path"
 
       # 版本号只有一处（仓库根 gradle.properties），所以标签只需要跟这一处对齐 ——
       # 旧流程要在三个分支上各校验一次，那是"身份有三份"的直接后果。
@@ -253,14 +245,9 @@ jobs:
         uses: gradle/actions/setup-gradle@v6
 
       - name: 获取固定 AtomLib 输入
-        env:
-          ATOMLIB_MAVEN_INPUT_URL: ${{ secrets.ATOMLIB_MAVEN_INPUT_URL }}
-          ATOMLIB_MAVEN_INPUT_SHA256: ${{ secrets.ATOMLIB_MAVEN_INPUT_SHA256 }}
         run: |
           set -euo pipefail
-          test -n "${ATOMLIB_MAVEN_INPUT_URL:-}" && test -n "${ATOMLIB_MAVEN_INPUT_SHA256:-}"
-          python3 tools/fetch_atomlib_input.py --url "$ATOMLIB_MAVEN_INPUT_URL" \
-            --sha256 "$ATOMLIB_MAVEN_INPUT_SHA256" --output "$RUNNER_TEMP/atomlib-input-path"
+          python3 tools/fetch_atomlib_input.py --output "$RUNNER_TEMP/atomlib-input-path"
 
       # publishMods 由各平台自己的 build.gradle 定义（dependsOn modrinth / curseforge），
       # 两个商店各自带 onlyIf 闸：没 token 或项目 id 没填就 SKIPPED，不会红。

@@ -79,11 +79,12 @@ Server policy lives in config/atomchat/atomchat-server.json, including hostingEn
 
 ## Building from source
 
-Single-branch multi-target layout: `shared/` holds mapping-neutral logic, `layers/mapping/official/` the official-mappings layer, and `platforms/<target>/` one Gradle project per target. AtomChat no longer owns or embeds Skija/Yoga. Pass a pinned local AtomLib Maven input explicitly:
+Single-branch multi-target layout: `shared/` holds mapping-neutral logic, `layers/mapping/official/` the official-mappings layer, and `platforms/<target>/` one Gradle project per target. AtomChat no longer owns or embeds Skija/Yoga. Pass a pinned local AtomLib Maven input explicitly. If you have a local AtomLib build, point the property at it directly; otherwise fetch the pinned input from the public AtomLib release first (URL and SHA-256 come from `versions/atomlib.json`):
 
 ```bash
+python tools/fetch_atomlib_input.py --output build/atomlib-input-path
 cd platforms/1.21.1-fabric
-./gradlew build -PatomlibMavenRepo=/absolute/path/to/AtomLib/build/test-maven
+./gradlew build -PatomlibMavenRepo=build/atomlib-input/maven
 # JDK 21; Forge 1.20.1 uses JDK 17, NeoForge 1.21.1 uses JDK 21
 ```
 

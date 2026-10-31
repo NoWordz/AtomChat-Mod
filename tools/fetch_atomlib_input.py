@@ -14,22 +14,28 @@ def fail(message: str) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--url", required=True)
-    parser.add_argument("--sha256", required=True)
+    parser.add_argument("--url")
+    parser.add_argument("--sha256")
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
-    if not args.url.startswith("https://"):
-        fail("--url must use https://")
-    if len(args.sha256) != 64 or any(c not in "0123456789abcdefABCDEF" for c in args.sha256):
-        fail("--sha256 must be a 64-character hexadecimal digest")
 
     required = json.loads((ROOT / "versions/atomlib.json").read_text(encoding="utf-8"))
+    pinned = required.get("input_archive", {})
+    url = args.url or pinned.get("url")
+    sha256 = args.sha256 or pinned.get("sha256")
+    if not url or not sha256:
+        fail("no URL/SHA-256 given and versions/atomlib.json has no input_archive pin")
+    if not url.startswith("https://"):
+        fail("--url must use https://")
+    if len(sha256) != 64 or any(c not in "0123456789abcdefABCDEF" for c in sha256):
+        fail("--sha256 must be a 64-character hexadecimal digest")
+
     version = required["version"]
-    with urllib.request.urlopen(args.url, timeout=60) as response:
+    with urllib.request.urlopen(url, timeout=60) as response:
         payload = response.read()
     actual = hashlib.sha256(payload).hexdigest()
-    if actual.lower() != args.sha256.lower():
-        fail(f"SHA-256 mismatch: expected {args.sha256}, got {actual}")
+    if actual.lower() != sha256.lower():
+        fail(f"SHA-256 mismatch: expected {sha256}, got {actual}")
 
     output = args.output.resolve()
     target = output.parent / "maven"

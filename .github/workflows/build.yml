@@ -72,19 +72,9 @@ jobs:
           cache-read-only: ${{ github.event_name == 'pull_request' }}
 
       - name: 获取并认证固定 AtomLib 输入
-        env:
-          ATOMLIB_MAVEN_INPUT_URL: ${{ secrets.ATOMLIB_MAVEN_INPUT_URL }}
-          ATOMLIB_MAVEN_INPUT_SHA256: ${{ secrets.ATOMLIB_MAVEN_INPUT_SHA256 }}
         run: |
           set -euo pipefail
-          if [ -z "${ATOMLIB_MAVEN_INPUT_URL:-}" ] || [ -z "${ATOMLIB_MAVEN_INPUT_SHA256:-}" ]; then
-            echo "::error::ATOMLIB_MAVEN_INPUT_URL and ATOMLIB_MAVEN_INPUT_SHA256 are required; CI will not build against a floating or implicit AtomLib"
-            exit 1
-          fi
-          python3 tools/fetch_atomlib_input.py \
-            --url "$ATOMLIB_MAVEN_INPUT_URL" \
-            --sha256 "$ATOMLIB_MAVEN_INPUT_SHA256" \
-            --output "$RUNNER_TEMP/atomlib-input-path"
+          python3 tools/fetch_atomlib_input.py --output "$RUNNER_TEMP/atomlib-input-path"
 
       - name: 构建并测试
         working-directory: ${{ matrix.project }}
