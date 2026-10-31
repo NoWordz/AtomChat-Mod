@@ -144,22 +144,27 @@ class SettingsHomeReplicationTest {
                         fine = fineEngine.layout(tree,
                                 new Viewport(layout.list.w(), layout.list.h(), 16F));
                     }
-                    // Probe: changing pixelsPerUnit on a live engine. The locked
-                    // adapter was compiled against lwjgl-yoga 3.3.1, whose
-                    // YGNodeMarkDirtyAndPropogateToDescendants was renamed
-                    // ("Propagate") in 3.3.3 — the version the fabric target
-                    // bundles. Recorded as evidence, not asserted.
+                    // Probe: changing pixelsPerUnit on a live engine. The
+                    // locked adapter used to crash here on targets bundling
+                    // lwjgl-yoga 3.3.3 (the YGNodeMarkDirtyAndPropogate/
+                    // Propagate rename); fixed in AtomLib by generating the
+                    // binding spelling per target. Still recorded as a
+                    // measurement, not a JUnit gate, so older pinned inputs
+                    // fail the check in results.json without failing CI.
                     String densityChange;
+                    boolean densityOk;
                     try (YogaLayoutEngine probe = new YogaLayoutEngine()) {
                         probe.layout(tree, new Viewport(layout.list.w(), layout.list.h(), 1F));
                         try {
                             probe.layout(tree, new Viewport(layout.list.w(), layout.list.h(), 16F));
                             densityChange = "relayout at a new pixelsPerUnit: no error";
+                            densityOk = true;
                         } catch (Throwable t) {
                             densityChange = "relayout at a new pixelsPerUnit threw " + t;
+                            densityOk = false;
                         }
                     }
-                    checks.add(new Check("yoga.pixelDensityChangeOnLiveEngine", false, densityChange));
+                    checks.add(new Check("yoga.pixelDensityChangeOnLiveEngine", densityOk, densityChange));
 
                     for (int i = 0; i < sections.length; i++) {
                         var ac = SettingsHomePage.tileRect(layout, i, 0F);
