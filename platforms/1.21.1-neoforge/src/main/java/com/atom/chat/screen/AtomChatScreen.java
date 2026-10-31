@@ -61,9 +61,6 @@ import com.atom.chat.settings.SettingsDetailPage;
 import com.atom.chat.settings.SettingsHomePage;
 import com.atom.chat.settings.SettingsSection;
 import com.atom.chat.settings.SettingsSectionPage;
-import com.atom.chat.settings.AtomLibAppearanceSection;
-import com.atom.chat.settings.SettingsItem;
-import com.atom.lib.input.PointerEvent;
 import com.atom.chat.ui.Animations;
 import com.atom.chat.ui.BottomTabBar;
 import com.atom.chat.ui.CanvasLeakWatch;
@@ -370,7 +367,6 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
     });
     private final SettingsHomePage settingsHomePage = new SettingsHomePage();
     private final SettingsSectionPage settingsSectionPage = new SettingsSectionPage();
-    private boolean atomLibAppearanceInstalled;
 
     /**
      * The settings screen's actions (D15a): the seven action cards, the three
@@ -2398,7 +2394,6 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         composerTools.close();
         clickRipples.clear();
         settingsSectionPage.confirmation().reset();
-        if (settingsSectionPage.atomLibAppearance() != null) settingsSectionPage.atomLibAppearance().close();
         chatEffects.close();
         avatarWiring.poke().uninstall();
         // Hygiene on screen teardown: release the borrowed field so the parked
@@ -2861,17 +2856,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
      * affordance) is drawn fixed on top so it never slides with the list.
      */
     private void drawSettingsSection(Canvas canvas, int mouseX, int mouseY, SettingsSection section) {
-        atomLibAppearance();
         settingsDetailPage.drawSettingsSection(canvas, mouseX, mouseY, section);
-    }
-
-    /** Installs the Lib-backed layout controls once; AC retains its page shell and values. */
-    private AtomLibAppearanceSection atomLibAppearance() {
-        if (atomLibAppearanceInstalled) return settingsSectionPage.atomLibAppearance();
-        atomLibAppearanceInstalled = true;
-        var section = AtomLibAppearanceSection.create(settingsSectionPage.confirmation());
-        settingsSectionPage.setAtomLibAppearance(section);
-        return section;
     }
 
     /**
@@ -3701,9 +3686,6 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
                     popPage();
                     return true;
                 }
-                atomLibAppearance();
-                if (button == 0 && settingsSectionPage.atomLibPointer(topNav().section(),
-                        PointerEvent.Type.PRESS, mx, my, button)) return true;
                 if (button == 0) {
                     int chip = settingsSectionPage.chipAt(topNav().section(), mx, my, pageLayout);
                     if (chip >= 0) {
@@ -3850,9 +3832,6 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
             if (isWorldChatPage()) {
                 return false;
             }
-            if (topPage() == AppPage.SETTINGS_SECTION && settingsSectionPage.atomLibPointer(
-                    topNav().section(), PointerEvent.Type.MOVE,
-                    toVirtualX(mouseX), toVirtualY(mouseY), button)) return true;
             // Root pages have no world-chat selection state, but they do share the
             // scrollbar drag model; do not forward drags to the hidden composer.
             // An active slider drag owns the pointer until release; the value
@@ -3886,9 +3865,6 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
             if (isWorldChatPage()) {
                 return false;
             }
-            boolean atomLibReleased = topPage() == AppPage.SETTINGS_SECTION
-                    && settingsSectionPage.atomLibPointer(topNav().section(), PointerEvent.Type.RELEASE,
-                    toVirtualX(mouseX), toVirtualY(mouseY), button);
             settingsSectionPage.endThemeStrip();
             settingsSectionPage.endSliderDrag();
             settingsSectionPage.setPressedRow(-1);
@@ -3899,7 +3875,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
                 listScroll().endDrag();
                 return true;
             }
-            return atomLibReleased;
+            return false;
         }
 
         @Override
@@ -3913,8 +3889,6 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
             if (settingsSectionPage.isDraggingSlider()) {
                 return true;
             }
-            if (topPage() == AppPage.SETTINGS_SECTION && settingsSectionPage.atomLibWheel(
-                    topNav().section(), mx, my, (float) verticalAmount)) return true;
             // The theme strip consumes the wheel while the pointer is over
             // it: it scrolls horizontally, not the list underneath.
             if (topPage() == AppPage.SETTINGS_SECTION
@@ -3938,8 +3912,6 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
             if (isWorldChatPage()) {
                 return false;
             }
-            if (topPage() == AppPage.SETTINGS_SECTION && settingsSectionPage.atomLibKey(
-                    topNav().section(), keyCode, modifiers)) return true;
             // The profile signature editor borrows the composer field: while it
             // is active, key events fall through to the focused field (Esc and
             // Enter are handled earlier by ModalInput, so they never get here).

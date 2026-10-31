@@ -157,3 +157,16 @@ AC Fabric 的 Loom `remapped_mods` 缓存按坐标而非内容哈希命中：Lib
 **回归**：`YogaNativesTest` 两条——真实解出平台库且大小正常；路径只追加一次、`Configuration.LIBRARY_PATH.get()` 确实包含该目录。Lib 全量 116→118 项（ui 84）通过。**仍未在真实客户端验证**，下次启动即可确认。
 
 本轮同时把三端重新装了一遍（Lib `f16f71c1`/`4d4cf34f`/`b85ecb8a`，AC 三包随之重建），备份在 `D:\AtomChat-Backups\2026-10-30-1.0.0-beta\20261031-103318`。
+
+### 回退：AC 本体恢复 0.4.0 界面（2026-10-31 10:49）
+
+用户判定试点越界：AC 的外观页被换成了 Lib 组件的观感，不符合现有美术。按指示回退：
+
+- `SettingsSectionPage`（official + Fabric 两份）与三个平台 `AtomChatScreen` 回退到拆分前基线 `28fd6de0`，只涉及试点接线（各 +42 / +30 行），回退后设置页恢复 AC 自己的渲染。
+- 删除 AC 侧试点类与测试：`AtomLibAppearanceSection`（两份）、`AcModalAdapter`、`AtomLibSettingsBinding`、`AtomLibThemeAdapter`、`AcModalAdapterTest`、`PanelWidthGestureTest`、`AtomLibSettingsTestSupport`。
+- 版本回到 `0.4.0`。
+- 保留：`SkiaGraphics`/`ItemIconRenderer` 走 Lib 的 Skija 桥（拆分目的），`versions/atomlib.json` 与锁定哈希，`NativeBorrowContractTest`，以及 Lib 里的 Yoga native 加载修复。
+
+验证：AC 三端 `build` 全过（Forge 1555 项 + 4 skip、Fabric/NeoForge 同口径），`verify_jars.py --profile atomlib-consumer` 三端通过。三端已重装 0.4.0 + 配套 Lib，备份在 `D:\AtomChat-Backups\2026-10-30-1.0.0-beta\20261031-104925`。
+
+回退时踩到一个坑：`git checkout` 恢复的文件带 CRLF，`CompatibilityRegressionSourceTest` 的源码字符串断言只认 LF，本地立刻变红；按字节转回 LF 后恢复。CI 在 Linux 上检出为 LF，不受影响。
