@@ -170,3 +170,13 @@ AC Fabric 的 Loom `remapped_mods` 缓存按坐标而非内容哈希命中：Lib
 验证：AC 三端 `build` 全过（Forge 1555 项 + 4 skip、Fabric/NeoForge 同口径），`verify_jars.py --profile atomlib-consumer` 三端通过。三端已重装 0.4.0 + 配套 Lib，备份在 `D:\AtomChat-Backups\2026-10-30-1.0.0-beta\20261031-104925`。
 
 回退时踩到一个坑：`git checkout` 恢复的文件带 CRLF，`CompatibilityRegressionSourceTest` 的源码字符串断言只认 LF，本地立刻变红；按字节转回 LF 后恢复。CI 在 Linux 上检出为 LF，不受影响。
+
+## 2026-10-31 设计包提取（AC 归属未变）
+
+用户定的最终形态：AtomChat 自己的美术一行不改，把「长得像 AtomChat」的那套东西抽成 Lib 里的可选设计包，创作者想用就 import。
+
+- AC 侧：`UiTokens`、`SkiaDraw`、`UiCards`、`AppIcons` 移入 Lib 的 `com.atom.lib.design.atomchat`，AC 只改 import（136 个文件，绝大多数只动一行）。
+- 颜色/尺寸不再直读 `AtomChatConfig`：Lib 新增 `DesignHost`，AC 在 `AtomChatConfig` 静态块里注册实现，读的还是同一批字段；Lib 默认值与 AC 出厂值一致（圆角 20、强调色 `0xFF4A90E2`、卡片 23.5% 白、面板 `0xEE16191F`）。点击涟漪改为 `Design.rippleSink`，AC 注册 `ClickRipples::region`。
+- 打包缺陷：Lib 的 jar 从没带过 `pack.mcmeta`，Forge 因此不挂载它的资源，反馈音效一直是哑的；三端补上（1.20.1 用 pack_format 15，1.21.1 用 34）。这条 7 月 E33Chat 已经踩过一次并写进错题本，这次是重犯。
+- 验证：Lib 三端重新打包并更新 `versions/atomlib.json`；AC 三端 `build` 全过，三个 jar 走 `verify_jars.py --profile atomlib-consumer` 全过；已部署到三个实例，旧包备份 `D:\AtomChat-Backups\2026-10-31-design-package\`。用户实测外观页无变化，仅确认了观感，未做像素级比对。
+- 下一步：删除 Lib 里被设计包取代的通用组件层（component/overlay/shell/scroll/interaction/view/style）与 devtools 模块，examples 改成「设计包」与「自己画」两例。
