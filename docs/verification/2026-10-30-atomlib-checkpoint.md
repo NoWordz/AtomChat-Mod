@@ -141,3 +141,19 @@ AC Fabric 的 Loom `remapped_mods` 缓存按坐标而非内容哈希命中：Lib
 4. 结构已对齐（合并卡、标题/值同行、轨道在下、行间发丝线、透明度单独一卡），**但不是像素级一致**：行高、分组标题样式仍有差异；预览使用测试环境的配置值，颜色以实机为准。
 
 本轮验证：Lib 116 项重跑通过；AC 三端全量 1567/1577/1567，失败 0；三端 `verify_jars.py --profile atomlib-consumer` 通过；Lib 三 jar 重新发布并更新锁哈希；三端已重装（Forge lib `af90a800`、Fabric `33329d92`、NeoForge `f5e3cdc1`）。
+
+### Forge 实机崩溃：Yoga native 找不到（2026-10-31 10:33 重装）
+
+用户报告 `错误报告-2026-10-31_0.16.31.zip`：打开 设置→外观→调整 时崩，`UnsatisfiedLinkError: Failed to locate library: lwjgl_yoga.dll`，栈从 `AtomLibAppearanceSection.<init>` → `UiView` → `YogaLayoutEngine` → `Yoga.<clinit>`。
+
+**根因**：LWJGL 只从 `java.library.path` / `org.lwjgl.librarypath` 找 native，且这两个值在 `org.lwjgl.system.Configuration` 类初始化时就缓存了——那时任何 mod 都还没运行。mod jar 里嵌套的 `lwjgl-yoga-*-natives-windows.jar` 因此永远到不了它的查找路径。Gradle 测试之所以全绿，是因为 Gradle 会为 `natives-*` 依赖自动注入 `java.library.path`，真实游戏没有这一步。这也解释了为什么同样的包在 Fabric 上能开、在 Forge 上崩——不是加载器差异本身，而是各自把嵌套 jar 放在不同的可见范围。
+
+**修复**（`ui` 模块，三端共用）：新增 `YogaNatives`，在 `YogaLayoutEngine` 的静态块里、第一次触碰 `Yoga` 之前：
+
+1. 按 平台/架构 定位 `windows/x64/org/lwjgl/yoga/lwjgl_yoga.dll`，先从类路径资源读；读不到再打开自身 mod jar，扫 `META-INF/jarjar/*yoga*natives*.jar` 解出二进制（覆盖 FML 不暴露嵌套资源的加载器）。
+2. 写到 `%TEMP%/atomlib-natives/<sha256 前 16 位>/`，内容寻址、幂等。
+3. 用 `Configuration.LIBRARY_PATH.set(旧值 + 分隔符 + 目录)` 扩展 LWJGL 已经缓存的查找路径（`set` 会改写缓存，晚设置也生效）。
+
+**回归**：`YogaNativesTest` 两条——真实解出平台库且大小正常；路径只追加一次、`Configuration.LIBRARY_PATH.get()` 确实包含该目录。Lib 全量 116→118 项（ui 84）通过。**仍未在真实客户端验证**，下次启动即可确认。
+
+本轮同时把三端重新装了一遍（Lib `f16f71c1`/`4d4cf34f`/`b85ecb8a`，AC 三包随之重建），备份在 `D:\AtomChat-Backups\2026-10-30-1.0.0-beta\20261031-103318`。

@@ -22,8 +22,8 @@
     }
   },
   "sha256": {
-    "1.20.1-forge": "af90a800f043fd05ac3ccbaebdebf1d0107d76d758c05a6698b4e94f34dd8bc9",
-    "1.21.1-fabric": "33329d92e15f19204699fef8f61fa4ff9aaa4fbe78749abb50a484bc7297e403",
-    "1.21.1-neoforge": "f5e3cdc19780faff09f2a9fe330724e5222600bd74c705d72df80db6b61f9f41"
+    "1.20.1-forge": "f16f71c196ee66225e7faa0f5c9a3c337f137ab6e164a9f2c71ec9284cef2880",
+    "1.21.1-fabric": "4d4cf34fcfcc32246d16733a76c57f5c49798220477494accef91dca34d74017",
+    "1.21.1-neoforge": "b85ecb8ac4e30c658a10dada325bdac1f335802bc98466999286eaf1f0db3559"
   }
 }
