@@ -10,6 +10,8 @@ import unittest
 import zipfile
 
 VERIFIER = Path(__file__).with_name('verify_jars.py')
+ROOT = Path(__file__).resolve().parent.parent
+LOCK_VERSION = json.loads((ROOT / 'versions/atomlib.json').read_text(encoding='utf-8'))['version']
 
 
 def archive(entries):
@@ -199,21 +201,21 @@ def consumer_artifact(path, loader='Fabric', dependency=True, side='CLIENT', ext
         'META-INF/MANIFEST.MF': 'Automatic-Module-Name: com.atom.chat.shaded.flatlaf\n',
     })
     entries = {prefix+'flatlaf-private.jar': flatlaf,
-               'atomchat-atomlib.properties': b'version=0.1.0-local\n',
+               'atomchat-atomlib.properties': ('version=' + LOCK_VERSION + '\n').encode(),
                'com/atom/chat/compat/AtomLibDependencyCheck.class': b'client bootstrap',
                'com/atom/chat/AtomChatClient.class': b'AtomLibDependencyCheck'}
     if loader == 'Fabric':
         meta = {'id':'atomchat', 'environment':'*', 'jars':[{'file':prefix+'flatlaf-private.jar'}]}
         if dependency:
-            meta['suggests'] = {'atomlib':'=0.1.0-local'}
-            meta['custom'] = {'atomlib:client-required':'0.1.0-local'}
+            meta['suggests'] = {'atomlib': '=' + LOCK_VERSION}
+            meta['custom'] = {'atomlib:client-required': LOCK_VERSION}
         entries['fabric.mod.json'] = json.dumps(meta).encode()
     else:
         entries[prefix+'metadata.json'] = json.dumps({'jars':[{'path':prefix+'flatlaf-private.jar'}]}).encode()
         kind = 'mandatory=true' if loader=='Forge' else 'type="required"'
         text = '[[mods]]\nmodId="atomchat"\n'
         if dependency:
-            text += f'[[dependencies.atomchat]]\nmodId="atomlib"\n{kind}\nversionRange="[0.1.0-local]"\nside="{side}"\n'
+            text += f'[[dependencies.atomchat]]\nmodId="atomlib"\n{kind}\nversionRange="[{LOCK_VERSION}]"\nside="{side}"\n'
         entries['META-INF/mods.toml' if loader=='Forge' else 'META-INF/neoforge.mods.toml'] = text.encode()
     if extra:
         entries.update(extra)
