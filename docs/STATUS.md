@@ -1,16 +1,16 @@
 # AtomChat 当前状态
 
-> 截至 2026-10-30。这里只维护当前快照，提交及推送事实以 Git 查询为准。
+> 截至 2026-10-31。这里只维护当前快照，提交及推送事实以 Git 查询为准。
 
-## 当前检查点：AtomLib 四项修复完成，1.0.0-beta 已部署待实机验收
+## 当前检查点：0.4.0 保持原观感，AtomLib 拆出设计包（2026-10-31）
 
-- `D:/AtomLib` 已形成独立三加载器库、Windows x64/ARM64 合包、Maven/Sources/Javadoc 产物和六个独立消费者工程；AtomChat 已改成每目标一个无 OS 后缀的 consumer JAR，并通过锁定 SHA-256 的本地 AtomLib 输入构建。
-- AC 渲染桥已收敛到 Lib 单一 Skija context；旧 `SkiaGraphics` 仅保留兼容门面。外观→调整→布局 chip 已由生产 `AtomLibAppearanceSection` 接管，宽度滑条、半宽开关、滚动、主题、焦点/捕获和 AC 确认窗有真实手势测试。裁剪数学改为调用 Lib `CropMath`，旧上下文与 crop 数学不再各存一份。
-- 检查点记录的四个问题已修：半屏切换后的输入暂停（暂停状态改为单一所有权，并有红→绿回归）、原生 context 逃逸租借（物品图标拆成 vanilla 绘制与两次租借导入）、bridge 退出释放（Forge/NeoForge 事件、Fabric mixin，未实机验证）、Linux CI 测试 native 配置（native 相关测试改到 windows-latest）。详见[检查点](verification/2026-10-30-atomlib-checkpoint.md)后半场一节。
-- 本轮验证：Lib 116 项、三端隐藏 GL 各 13 项、AC 三端 1564/1576/1564（均为重播而非 UP-TO-DATE），Lib 三 jar 重新发布并更新锁哈希，六个独立消费者通过。
-- 版本已按用户要求改为 `1.0.0-beta`，三端（Forge `1.20.1-main`、Fabric `1.21.1-CCB`、NeoForge `Mechanomania-航空学`）已备份旧包并部署新 jar **及配套 AtomLib**，回执见 [1.0.0-beta 部署](verification/2026-10-30-1.0.0-beta-deployment.json)。未代启游戏。
-- 仍未覆盖：真实客户端/专服启动、ARM64 实机、IME、完整 bidi/CJK 断行、Iris/OptiFine、其他 GPU、性能与长会话、远端 Actions；T12 的 AC 旧实现退役尚未开始，不能据此宣称拆库迁移完成。
-- 本轮授权两个仓库本地提交，提交号以 Git 为准。没有推送、tag、远端 Maven、商店发布或公开预发布。
+- AC 停在 `0.4.0`，外观页回到拆分前基线；1.0.0-beta 那版把 UI 换成 Lib 通用组件的试点已整体回退，相关类与测试删除。
+- “长得像 AC”的部分已抽成 Lib 的可选设计包 `com.atom.lib.design.atomchat`（`UiTokens`、`SkiaDraw`、`UiCards`、`AppIcons`）。AC 只改 import，颜色/圆角/卡片透明度仍读 `AtomChatConfig`，通过 Lib 的 `DesignHost` 注入，取值与默认值和拆分前一致。
+- Lib 的通用组件、浮层、壳层、滚动、交互、视图宿主、样式与 devtools 已整体删除；`ui` 只剩 Yoga 布局与设计包。
+- Lib 版本改为 `0.1.0-beta`，补齐作者、Apache-2.0、description、logo 占位与仓库地址占位（`https://github.com/example/atomlib`，待替换）。
+- 打包缺陷已修：Lib 的 jar 以前缺 `pack.mcmeta`，Forge 不挂载它的资源，反馈音效一直是哑的。
+- CI：main 已全绿（run 41171032455）。修复了两处只在本机绿的问题——Linux 上 CJK 回退字体多折一行导致确认窗测试失败；`tools/test_verify_jars.py` 写死 `0.1.0-local`。AtomLib 输入改用 pre-release `atomlib-input-0.1.0-beta` 做固定包，secret 已配置。
+- 仍未覆盖：远端 CI 只跑过 Linux；ARM64 未实机；专服启动未验证；Lib 尚未有独立仓库与独立 CI，输入包暂时挂在 AtomChat 仓库的 release 上。
 
 ## 当前交付：0.4.0 续开发已验收
 
