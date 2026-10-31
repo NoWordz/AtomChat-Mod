@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
   "group": "com.atom.lib",
-  "version": "0.1.0-local",
-  "compatibility_range": "[0.1.0-local]",
+  "version": "0.1.0-beta",
+  "compatibility_range": "[0.1.0-beta]",
   "client_platforms": [
     "windows-x64",
     "windows-arm64"
@@ -22,8 +22,8 @@
     }
   },
   "sha256": {
-    "1.20.1-forge": "8c77a27a7c9394cd430faa6d0b62dbac0058136c7b842b2e8e0158092b95d95b",
-    "1.21.1-fabric": "983d31bff8f6908c4e9daea0e18a784326d298b6fc181484bda384fbd5666d0b",
-    "1.21.1-neoforge": "dd2ac068f3f41b454f9701aab0968accfe4ee40c02bb77e7f5bf240a946e0434"
+    "1.20.1-forge": "897948d2beb4e4176bf660d475cff1935aacb80db38855d6c44683a8bc83b4c1",
+    "1.21.1-fabric": "1377f985e7945dc0719865e60053aa3f6c62c23f99ef7d5b06b726dd9346b74f",
+    "1.21.1-neoforge": "6524e9eb6cbf6b7359f6142aec629628f1ab46a19ede8e54d0c046b125265b41"
   }
 }
