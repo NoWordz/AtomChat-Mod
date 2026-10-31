@@ -22,7 +22,7 @@
     }
   },
   "sha256": {
-    "1.20.1-forge": "f16f71c196ee66225e7faa0f5c9a3c337f137ab6e164a9f2c71ec9284cef2880",
+    "1.20.1-forge": "c8d7a1bb0eb254d4bf4a85cebb03b3bf65d5458a427bfe162840c96d5f70953e",
     "1.21.1-fabric": "4d4cf34fcfcc32246d16733a76c57f5c49798220477494accef91dca34d74017",
     "1.21.1-neoforge": "b85ecb8ac4e30c658a10dada325bdac1f335802bc98466999286eaf1f0db3559"
   }
