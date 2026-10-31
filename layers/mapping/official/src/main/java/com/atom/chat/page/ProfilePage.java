@@ -7,18 +7,18 @@ import com.atom.chat.chat.BlockList;
 import com.atom.chat.chat.PlayerRef;
 import com.atom.chat.font.FontManager;
 import com.atom.chat.image.PlayerAvatar;
-import com.atom.chat.render.SkiaDraw;
+import com.atom.lib.design.atomchat.SkiaDraw;
 import com.atom.chat.render.SkiaFontRenderer;
 import com.atom.chat.ui.Animations;
-import com.atom.chat.ui.AppIcons;
-import com.atom.chat.ui.UiCards;
+import com.atom.lib.design.atomchat.AppIcons;
+import com.atom.lib.design.atomchat.UiCards;
 import com.atom.chat.ui.MenuPopup;
 import com.atom.chat.ui.UiLayout;
 import com.atom.chat.ui.PressScale;
 import com.atom.chat.ui.UiMotion;
 import com.atom.chat.ui.UiSpring;
-import com.atom.chat.ui.UiTokens;
-import static com.atom.chat.ui.UiTokens.s;
+import com.atom.lib.design.atomchat.UiTokens;
+import static com.atom.lib.design.atomchat.UiTokens.s;
 import io.github.humbleui.skija.Canvas;
 import it.unimi.dsi.fastutil.objects.Object2IntMap;
 import net.minecraft.stats.Stat;
@@ -326,7 +326,7 @@ public final class ProfilePage {
             float cy = button.y() + button.h() / 2.0F;
             if (copied) {
                 // Check glyph centred, then the hint hugs it with a fixed 4px gap.
-                io.github.humbleui.skija.Path check = com.atom.chat.ui.AppIcons.ICON_CHECK_PATH;
+                io.github.humbleui.skija.Path check = com.atom.lib.design.atomchat.AppIcons.ICON_CHECK_PATH;
                 Rect b = check.getBounds();
                 float sc = s(12) / Math.max(b.getWidth(), b.getHeight());
                 try (Paint paint = new Paint().setAntiAlias(true)

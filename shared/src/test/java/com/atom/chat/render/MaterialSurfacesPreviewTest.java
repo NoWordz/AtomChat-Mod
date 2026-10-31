@@ -1,5 +1,7 @@
 package com.atom.chat.render;
 
+
+import com.atom.lib.design.atomchat.SkiaDraw;
 import com.atom.chat.config.AtomChatConfig;
 import com.atom.chat.font.FontManager;
 import com.atom.chat.platform.Platform;
@@ -10,7 +12,7 @@ import com.atom.chat.theme.ThemeService;
 import com.atom.chat.ui.BottomTabBar;
 import com.atom.chat.ui.ShellHeader;
 import com.atom.chat.ui.UiLayout;
-import com.atom.chat.ui.UiTokens;
+import com.atom.lib.design.atomchat.UiTokens;
 import io.github.humbleui.skija.Surface;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.BeforeEach;

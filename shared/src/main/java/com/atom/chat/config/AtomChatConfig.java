@@ -2,6 +2,9 @@ package com.atom.chat.config;
 
 import com.atom.chat.AtomChat;
 import com.atom.chat.chat.MessageFilter;
+import com.atom.chat.ui.ClickRipples;
+import com.atom.lib.design.atomchat.Design;
+import com.atom.lib.design.atomchat.DesignHost;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 
@@ -12,6 +15,51 @@ import java.nio.file.Path;
 
 public class AtomChatConfig {
     public static final AtomChatConfig DEFAULT = new AtomChatConfig();
+
+    /**
+     * Feeds this mod's live appearance settings to the shared AtomChat design
+     * package, so the extracted tokens keep painting exactly what they did
+     * before they moved out.
+     */
+    static {
+        Design.host(new DesignHost() {
+            @Override
+            public float cornerRadius() {
+                return AtomChatConfig.get().cornerRadius;
+            }
+
+            @Override
+            public boolean halfScreenMode() {
+                return AtomChatConfig.get().halfScreenMode;
+            }
+
+            @Override
+            public int accentColor() {
+                return AtomChatConfig.get().accentColor;
+            }
+
+            @Override
+            public int textSecondaryColor() {
+                return AtomChatConfig.get().textSecondaryColor;
+            }
+
+            @Override
+            public float cardTint() {
+                return AtomChatConfig.get().cardTint;
+            }
+
+            @Override
+            public int cardColor() {
+                return AtomChatConfig.get().cardColor;
+            }
+
+            @Override
+            public int panelBackgroundColor() {
+                return AtomChatConfig.get().panelBgColor;
+            }
+        });
+        Design.rippleSink(ClickRipples::region);
+    }
 
     public float panelWidth = 480.0F;
     /** Local layout preferences, independent of appearance presets. */
@@ -98,7 +146,7 @@ public class AtomChatConfig {
     /**
      * AtomChat-only UI scale multiplier on top of the vanilla GUI scale. It is
      * applied at the Skia canvas and in every coordinate conversion, never to
-     * {@link com.atom.chat.ui.UiTokens} — those constants are class-init
+     * {@link com.atom.lib.design.atomchat.UiTokens} — those constants are class-init
      * statics and could not change at runtime.
      */
     public float uiScale = 1.0F;
@@ -242,7 +290,7 @@ public class AtomChatConfig {
             pixelRadiusMigrated = true;
         }
         cornerRadius = Math.max(0.0F, Math.min(cornerRadius,
-                com.atom.chat.ui.UiTokens.s(20)));
+                com.atom.lib.design.atomchat.UiTokens.s(20)));
     }
     /**
      * Clamps {@link #contentScale} into the slider span [0.8, 1.5], the same

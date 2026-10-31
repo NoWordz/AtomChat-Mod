@@ -1,5 +1,9 @@
 package com.atom.chat.render;
 
+
+
+import com.atom.lib.design.atomchat.SkiaDraw;
+import com.atom.lib.design.atomchat.AppIcons;
 import com.atom.chat.chat.ChatMessage;
 import com.atom.chat.font.FontManager;
 import com.atom.chat.notification.NotificationBanner;
@@ -13,7 +17,7 @@ import com.atom.chat.ui.QuickPhrasePanel;
 import com.atom.chat.ui.ScrollController;
 import com.atom.chat.ui.UiLayout;
 import com.atom.chat.ui.UiMotion;
-import com.atom.chat.ui.UiTokens;
+import com.atom.lib.design.atomchat.UiTokens;
 import io.github.humbleui.skija.Bitmap;
 import io.github.humbleui.skija.Canvas;
 import io.github.humbleui.skija.Font;

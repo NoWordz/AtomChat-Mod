@@ -1,14 +1,14 @@
 package com.atom.chat.image;
 
-import com.atom.chat.render.SkiaDraw;
+import com.atom.lib.design.atomchat.SkiaDraw;
 import com.atom.chat.ui.Animations;
-import com.atom.chat.ui.AppIcons;
+import com.atom.lib.design.atomchat.AppIcons;
 import com.atom.chat.ui.PressScale;
 import com.atom.chat.ui.PanelBackground;
 import com.atom.chat.ui.UiLayout;
 import com.atom.chat.ui.UiMotion;
-import com.atom.chat.ui.UiTokens;
-import static com.atom.chat.ui.UiTokens.s;
+import com.atom.lib.design.atomchat.UiTokens;
+import static com.atom.lib.design.atomchat.UiTokens.s;
 import io.github.humbleui.skija.Canvas;
 import io.github.humbleui.skija.Color;
 import io.github.humbleui.skija.Image;

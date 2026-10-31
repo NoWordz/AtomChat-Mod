@@ -1,7 +1,7 @@
 package com.atom.chat.notification;
 
 import com.atom.chat.ui.UiLayout;
-import com.atom.chat.ui.UiTokens;
+import com.atom.lib.design.atomchat.UiTokens;
 
 /** The editor paints and hits the exact same handle and toolbar rectangles. */
 public record NotificationHudEditorLayout(UiLayout.Rect toolbar, UiLayout.Rect reset,

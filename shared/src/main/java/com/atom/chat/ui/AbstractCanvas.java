@@ -1,6 +1,6 @@
 package com.atom.chat.ui;
 
-import com.atom.chat.render.SkiaDraw;
+import com.atom.lib.design.atomchat.SkiaDraw;
 import io.github.humbleui.skija.Canvas;
 
 import java.util.ArrayList;

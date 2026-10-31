@@ -1,5 +1,7 @@
 package com.atom.chat.ui;
 
+
+import com.atom.lib.design.atomchat.UiTokens;
 /** Shared dialog geometry: cancel left, confirm right, including narrow panels. */
 public record ConfirmationLayout(UiLayout.Rect surface, UiLayout.Rect cancel, UiLayout.Rect confirm, float padding) {
     public float titleTextX() { return surface.x()+padding+UiTokens.COMPOSER_ICON_SIZE+UiTokens.SETTINGS_TILE_TEXT_GAP; }

@@ -32,7 +32,7 @@ public final class RichTextRenderer {
     public static List<RichLine> wrapFor(RichText text, Font font, float maxWidth) {
         TextMeasurer measurer = s -> SkiaFontRenderer.getStringWidth(font, s);
         return RichTextLayout.wrapWithItems(text, measurer, maxWidth,
-                font.getSize() + com.atom.chat.ui.UiTokens.INLINE_ITEM_GAP);
+                font.getSize() + com.atom.lib.design.atomchat.UiTokens.INLINE_ITEM_GAP);
     }
 
     /**

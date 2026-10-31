@@ -1,7 +1,7 @@
 package com.atom.chat.settings;
 
 import com.atom.chat.ui.UiLayout;
-import com.atom.chat.ui.UiTokens;
+import com.atom.lib.design.atomchat.UiTokens;
 import com.atom.chat.platform.Platform;
 import io.github.humbleui.skija.Surface;
 import org.junit.jupiter.api.BeforeAll;

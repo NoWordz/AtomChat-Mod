@@ -5,7 +5,7 @@ import com.atom.chat.nav.AppPage;
 import com.atom.chat.nav.NavPage;
 import com.atom.chat.platform.Platform;
 import com.atom.chat.text.RichText;
-import com.atom.chat.ui.AppIcons;
+import com.atom.lib.design.atomchat.AppIcons;
 import com.atom.chat.ui.ShellHeader;
 import com.atom.chat.ui.UiLayout;
 import org.junit.jupiter.api.AfterEach;

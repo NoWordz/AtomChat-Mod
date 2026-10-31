@@ -59,7 +59,7 @@ class ConfirmationMotionTest {
             for (int pass = 0; pass < 2; pass++) {
                 config.blurEnabled = pass == 1;
                 var canvas = surface.getCanvas(); canvas.clear(0xFFFFFFFF);
-                for (int y = 0; y < 820; y += 8) com.atom.chat.render.SkiaDraw.drawRoundedRect(canvas, 0, y, 460, 4, 0, 0xFF000000);
+                for (int y = 0; y < 820; y += 8) com.atom.lib.design.atomchat.SkiaDraw.drawRoundedRect(canvas, 0, y, 460, 4, 0, 0xFF000000);
                 var dialog = new ConfirmationDialog(); dialog.open("清空", "删除？", "取消", "确认", () -> {});
                 dialog.render(canvas, new UiLayout.Rect(10, 10, 430, 800), -1, -1, UiMotion.POPUP_MS / 2F);
                 frames[pass] = pixels(surface);

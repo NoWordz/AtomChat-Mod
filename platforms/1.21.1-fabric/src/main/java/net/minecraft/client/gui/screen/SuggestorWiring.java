@@ -3,7 +3,7 @@ package net.minecraft.client.gui.screen;
 import net.minecraft.client.gui.screen.atomchat.ChatInputSuggestorAccessor;
 import com.atom.chat.mixin.SuggestionWindowAccessor;
 import com.atom.chat.ui.UiLayout;
-import com.atom.chat.ui.UiTokens;
+import com.atom.lib.design.atomchat.UiTokens;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.font.TextRenderer;
 import net.minecraft.client.gui.DrawContext;

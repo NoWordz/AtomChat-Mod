@@ -30,7 +30,7 @@ public record FormattedLine(List<Run> runs) {
         for(var run:runs) {
             int color=run.color()==null ? fallback : (fallback&0xFF000000)|(run.color()&0xFFFFFF);
             if(surface!=null && run.color()!=null) color=(color&0xFF000000)
-                    | (com.atom.chat.avatar.ColorUtil.readableAccent(color,surface,com.atom.chat.ui.UiTokens.MIN_GLYPH_CONTRAST)&0xFFFFFF);
+                    | (com.atom.chat.avatar.ColorUtil.readableAccent(color,surface,com.atom.lib.design.atomchat.UiTokens.MIN_GLYPH_CONTRAST)&0xFFFFFF);
             float width=PlainText.width(font,run.text());PlainText.draw(canvas,font,run.text(),x,baseline,color);
             if(run.underline())RichTextRenderer.drawUnderline(canvas,font,x,baseline,width,color);
             x+=width;

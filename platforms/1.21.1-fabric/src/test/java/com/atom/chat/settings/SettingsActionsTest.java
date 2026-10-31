@@ -7,7 +7,7 @@ import com.atom.chat.config.AtomChatConfig;
 import com.atom.chat.image.NativeDialogBridge;
 import com.atom.chat.platform.Platform;
 import com.atom.chat.ui.UiLayout;
-import com.atom.chat.ui.UiTokens;
+import com.atom.lib.design.atomchat.UiTokens;
 import com.atom.chat.wallpaper.WallpaperStore;
 import net.minecraft.client.MinecraftClient;
 import org.junit.jupiter.api.AfterEach;

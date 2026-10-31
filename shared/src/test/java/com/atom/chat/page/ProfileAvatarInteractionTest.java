@@ -7,7 +7,7 @@ import com.atom.chat.image.AvatarRenderer;
 import com.atom.chat.image.SkinResolver;
 import com.atom.chat.platform.Platform;
 import com.atom.chat.ui.UiLayout;
-import com.atom.chat.ui.UiTokens;
+import com.atom.lib.design.atomchat.UiTokens;
 import io.github.humbleui.skija.Bitmap;
 import io.github.humbleui.skija.Image;
 import io.github.humbleui.skija.Surface;

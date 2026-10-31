@@ -1,5 +1,7 @@
 package com.atom.chat.ui;
 
+
+import com.atom.lib.design.atomchat.UiTokens;
 import com.atom.chat.config.AtomChatConfig;
 import com.atom.chat.emote.EmoteImageCache;
 import com.atom.chat.emote.EmoteStore;
@@ -8,9 +10,9 @@ import com.atom.chat.net.PackSyncClient;
 import com.atom.chat.pack.ServerPackStore;
 import com.atom.chat.render.Animator;
 import com.atom.chat.render.Easing;
-import com.atom.chat.render.SkiaDraw;
+import com.atom.lib.design.atomchat.SkiaDraw;
 import com.atom.chat.render.SkiaFontRenderer;
-import static com.atom.chat.ui.UiTokens.s;
+import static com.atom.lib.design.atomchat.UiTokens.s;
 import io.github.humbleui.skija.Canvas;
 import io.github.humbleui.skija.Color;
 import io.github.humbleui.skija.Font;

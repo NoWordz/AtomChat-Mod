@@ -2,7 +2,7 @@ package com.atom.chat.settings;
 
 import com.atom.chat.AtomChat;
 import com.atom.chat.config.AtomChatConfig;
-import com.atom.chat.ui.UiTokens;
+import com.atom.lib.design.atomchat.UiTokens;
 import com.atom.chat.wallpaper.WallpaperStore;
 import io.github.humbleui.skija.Color;
 import net.minecraft.network.chat.Component;

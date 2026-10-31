@@ -2,8 +2,8 @@ package com.atom.chat.probe;
 
 import com.atom.chat.config.AtomChatConfig;
 import com.atom.chat.ui.PanelOpenMotion;
-import com.atom.chat.ui.UiCards;
-import com.atom.chat.ui.UiTokens;
+import com.atom.lib.design.atomchat.UiCards;
+import com.atom.lib.design.atomchat.UiTokens;
 import io.github.humbleui.skija.*;
 import io.github.humbleui.types.Rect;
 import org.lwjgl.glfw.GLFW;

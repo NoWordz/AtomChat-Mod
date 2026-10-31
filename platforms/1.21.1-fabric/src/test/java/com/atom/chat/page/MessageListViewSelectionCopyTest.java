@@ -6,7 +6,7 @@ import com.atom.chat.platform.Platform;
 import com.atom.chat.render.SkiaFontRenderer;
 import com.atom.chat.ui.ScrollController;
 import com.atom.chat.ui.UiLayout;
-import com.atom.chat.ui.UiTokens;
+import com.atom.lib.design.atomchat.UiTokens;
 import io.github.humbleui.skija.Canvas;
 import io.github.humbleui.skija.Surface;
 import net.minecraft.text.Text;

@@ -47,7 +47,7 @@ class MessageResponsiveLayoutTest {
                     var scroll=new ScrollController();
                     view.draw(surface.getCanvas(),10,10,280,1600,List.of(msg),scroll);
                     var hit=view.hits().get(0);
-                    assertTrue(hit.bubbleWidth()>280-com.atom.chat.ui.UiTokens.s(106),"the drawn text bubble must exceed the old fixed-width limit: "+hit.bubbleWidth());
+                    assertTrue(hit.bubbleWidth()>280-com.atom.lib.design.atomchat.UiTokens.s(106),"the drawn text bubble must exceed the old fixed-width limit: "+hit.bubbleWidth());
                     assertTrue(hit.bubbleX()>=10 && hit.bubbleX()+hit.bubbleWidth()<=290,"both directions stay inside the row");
                     var lines=view.textLinesForHit(hit);
                     float last=lines.get(lines.size()-1).y()+lines.get(lines.size()-1).height();
@@ -98,7 +98,7 @@ class MessageResponsiveLayoutTest {
             try {
                 view.draw(surface.getCanvas(),10,10,150,2300,List.of(msg),new ScrollController());
                 var hit=view.hits().get(0);var lines=view.textLinesForHit(hit);
-                float drawnHeight=hit.bubbleBottom()-hit.bubbleY()-com.atom.chat.ui.UiTokens.BUBBLE_PAD_Y;
+                float drawnHeight=hit.bubbleBottom()-hit.bubbleY()-com.atom.lib.design.atomchat.UiTokens.BUBBLE_PAD_Y;
                 assertEquals(drawnHeight,lines.size()*lines.get(0).height(),.01F,"selection must retain the drawn line breaks even below 25px");
             } finally{view.dispose();}
         } finally{cfg.timestampIntervalMinutes=clock;}
@@ -115,10 +115,10 @@ class MessageResponsiveLayoutTest {
                 try {
                     view.draw(target.getCanvas(),10,10,280,900,List.of(msg),new ScrollController());
                     var hit=view.hits().get(0);
-                    var font=com.atom.chat.font.FontManager.font(com.atom.chat.ui.UiTokens.FONT_NAME);
+                    var font=com.atom.chat.font.FontManager.font(com.atom.lib.design.atomchat.UiTokens.FONT_NAME);
                     float label=com.atom.chat.render.SkiaFontRenderer.getStringWidth(font,"x1000");
-                    float edge=own?hit.bubbleX()-label-com.atom.chat.ui.UiTokens.s(6)
-                            :hit.bubbleX()+hit.bubbleWidth()+label+com.atom.chat.ui.UiTokens.s(6);
+                    float edge=own?hit.bubbleX()-label-com.atom.lib.design.atomchat.UiTokens.s(6)
+                            :hit.bubbleX()+hit.bubbleWidth()+label+com.atom.lib.design.atomchat.UiTokens.s(6);
                     assertTrue(own?edge>=10:edge<=290,"the complete duplicate counter must fit beside its bubble");
                 } finally{view.dispose();}
             }

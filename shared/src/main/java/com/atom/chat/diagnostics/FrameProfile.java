@@ -1,5 +1,7 @@
 package com.atom.chat.diagnostics;
 
+
+import com.atom.lib.design.atomchat.SkiaDraw;
 import com.atom.chat.AtomChat;
 
 import java.util.Arrays;

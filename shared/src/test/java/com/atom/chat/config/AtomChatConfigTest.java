@@ -125,7 +125,7 @@ class AtomChatConfigTest {
         AtomChatConfig high = new AtomChatConfig();
         high.cornerRadius = 40f;
         high.migratePixelRadius();
-        assertEquals(com.atom.chat.ui.UiTokens.s(20), high.cornerRadius, 0.0F,
+        assertEquals(com.atom.lib.design.atomchat.UiTokens.s(20), high.cornerRadius, 0.0F,
                 "values past the slider maximum clamp to s(20)");
 
         AtomChatConfig low = new AtomChatConfig();

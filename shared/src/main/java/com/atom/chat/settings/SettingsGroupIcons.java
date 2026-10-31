@@ -1,7 +1,7 @@
 package com.atom.chat.settings;
 
 import com.atom.chat.render.DrawPrimitives;
-import com.atom.chat.ui.AppIcons;
+import com.atom.lib.design.atomchat.AppIcons;
 import com.atom.chat.ui.SettingsGroupGlyphs;
 import io.github.humbleui.skija.Path;
 import java.util.Map;

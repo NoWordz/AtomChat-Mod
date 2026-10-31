@@ -1,7 +1,7 @@
 package com.atom.chat.tools;
 
 import com.atom.chat.ui.UiLayout;
-import com.atom.chat.ui.UiTokens;
+import com.atom.lib.design.atomchat.UiTokens;
 import com.atom.chat.ui.ComposerPopupLayout;
 
 /** The tools share the shell's dimensions; paint and input use these same rectangles. */

@@ -1,7 +1,7 @@
 package com.atom.chat.chat;
 
 import com.atom.chat.render.SkiaFontRenderer;
-import com.atom.chat.ui.UiTokens;
+import com.atom.lib.design.atomchat.UiTokens;
 import io.github.humbleui.skija.Font;
 import net.minecraft.text.Text;
 

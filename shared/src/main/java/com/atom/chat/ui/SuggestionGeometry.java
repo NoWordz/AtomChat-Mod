@@ -1,5 +1,7 @@
 package com.atom.chat.ui;
 
+
+import com.atom.lib.design.atomchat.UiTokens;
 /** Candidate rows are laid out once in panel units, then mapped to the vanilla rectangle for foreign UI masking. */
 public record SuggestionGeometry(UiLayout.Rect bounds, int rows, float rowHeight) {
     public static final float ROW_HEIGHT = UiTokens.SUGGESTION_ROW_HEIGHT;

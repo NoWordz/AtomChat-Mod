@@ -1,5 +1,7 @@
 package com.atom.chat.ui;
 
+
+import com.atom.lib.design.atomchat.UiTokens;
 /**
  * Panel background colour policy, kept pure so it can be unit tested.
  *
@@ -20,7 +22,7 @@ public final class PanelBackground {
      * The caller owns the enclosing canvas save/restore. */
     public static void clipInterior(io.github.humbleui.skija.Canvas canvas, UiLayout.Rect panel) {
         float inset = UiTokens.panelInset();
-        com.atom.chat.render.SkiaDraw.clip(canvas,
+        com.atom.lib.design.atomchat.SkiaDraw.clip(canvas,
                 panel.x() + inset, panel.y() + inset,
                 Math.max(0F, panel.w() - 2F * inset), Math.max(0F, panel.h() - 2F * inset),
                 Math.max(0F, UiTokens.panelRadius() - inset));

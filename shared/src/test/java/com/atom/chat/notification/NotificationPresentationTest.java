@@ -1,7 +1,7 @@
 package com.atom.chat.notification;
 
 import com.atom.chat.config.AtomChatConfig;
-import com.atom.chat.ui.UiTokens;
+import com.atom.lib.design.atomchat.UiTokens;
 import io.github.humbleui.skija.Bitmap;
 import io.github.humbleui.skija.Surface;
 import io.github.humbleui.skija.Paint;

@@ -1,6 +1,8 @@
 package com.atom.chat.ui;
 
-import com.atom.chat.render.SkiaDraw;
+
+import com.atom.lib.design.atomchat.UiTokens;
+import com.atom.lib.design.atomchat.SkiaDraw;
 import com.atom.chat.platform.Platform;
 import io.github.humbleui.skija.Bitmap;
 import io.github.humbleui.skija.Canvas;

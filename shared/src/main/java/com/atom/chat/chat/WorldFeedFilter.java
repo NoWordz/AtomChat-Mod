@@ -3,7 +3,7 @@ package com.atom.chat.chat;
 import com.atom.chat.config.AtomChatConfig;
 import com.atom.chat.nav.AppPage;
 import com.atom.chat.nav.NavPage;
-import com.atom.chat.ui.AppIcons;
+import com.atom.lib.design.atomchat.AppIcons;
 import com.atom.chat.ui.ShellHeader;
 import com.atom.chat.ui.UiLayout;
 import io.github.humbleui.skija.Path;

@@ -2,7 +2,7 @@ package com.atom.chat.nav;
 
 import com.atom.chat.chat.ChatMessage;
 import com.atom.chat.render.DrawPrimitives;
-import com.atom.chat.render.SkiaDraw;
+import com.atom.lib.design.atomchat.SkiaDraw;
 import com.atom.chat.settings.ProfilePageWiring;
 import com.atom.chat.settings.SettingsDetailPage;
 import com.atom.chat.ui.ComposerInput;
@@ -12,7 +12,7 @@ import com.atom.chat.ui.HeaderChrome;
 import com.atom.chat.ui.ScrollController;
 import com.atom.chat.ui.ShellHeader;
 import com.atom.chat.ui.UiLayout;
-import com.atom.chat.ui.UiTokens;
+import com.atom.lib.design.atomchat.UiTokens;
 import io.github.humbleui.skija.Canvas;
 import io.github.humbleui.skija.Paint;
 import io.github.humbleui.types.Rect;

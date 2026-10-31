@@ -3,7 +3,7 @@ package com.atom.chat.screen;
 import com.atom.chat.config.AtomChatConfig;
 import com.atom.chat.nav.AppPage;
 import com.atom.chat.ui.UiLayout;
-import com.atom.chat.ui.UiTokens;
+import com.atom.lib.design.atomchat.UiTokens;
 import net.minecraft.client.util.Window;
 
 /**

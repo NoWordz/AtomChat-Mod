@@ -1,7 +1,7 @@
 package com.atom.chat.settings;
 
 import com.atom.chat.platform.Platform;
-import com.atom.chat.ui.AppIcons;
+import com.atom.lib.design.atomchat.AppIcons;
 import io.github.humbleui.skija.Path;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -79,13 +79,13 @@ class SettingsGroupIconsTest {
                 for(var entry:headings.entrySet()) {
                     float x=index%3*360,y=index/3*100;index++;
                     var glyph=entry.getValue();
-                    com.atom.chat.render.DrawPrimitives.drawIconCentered(canvas,glyph,x+30,y+30,com.atom.chat.ui.UiTokens.COMPOSER_ICON_SIZE,color);
-                    var font=com.atom.chat.font.FontManager.font(com.atom.chat.ui.UiTokens.SETTINGS_TILE_TITLE);
+                    com.atom.chat.render.DrawPrimitives.drawIconCentered(canvas,glyph,x+30,y+30,com.atom.lib.design.atomchat.UiTokens.COMPOSER_ICON_SIZE,color);
+                    var font=com.atom.chat.font.FontManager.font(com.atom.lib.design.atomchat.UiTokens.SETTINGS_TILE_TITLE);
                     com.atom.chat.render.SkiaFontRenderer.drawText(canvas,font,lang.get(entry.getKey()).getAsString(),x+60,
                             com.atom.chat.render.SkiaFontRenderer.centerBaselineY(font,y+30),color);
-                    float[] sizes={16,com.atom.chat.ui.UiTokens.COMPOSER_ICON_SIZE,48};
+                    float[] sizes={16,com.atom.lib.design.atomchat.UiTokens.COMPOSER_ICON_SIZE,48};
                     for(int i=0;i<sizes.length;i++)com.atom.chat.render.DrawPrimitives.drawIconCentered(canvas,glyph,x+85+i*45,y+70,sizes[i],color);
-                    font=com.atom.chat.font.FontManager.font(com.atom.chat.ui.UiTokens.SETTINGS_TILE_SUB);
+                    font=com.atom.chat.font.FontManager.font(com.atom.lib.design.atomchat.UiTokens.SETTINGS_TILE_SUB);
                     com.atom.chat.render.SkiaFontRenderer.drawText(canvas,font,name(glyph),x+215,
                             com.atom.chat.render.SkiaFontRenderer.centerBaselineY(font,y+70),color);
                 }

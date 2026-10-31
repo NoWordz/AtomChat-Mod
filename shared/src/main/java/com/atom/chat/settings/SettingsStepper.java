@@ -2,7 +2,7 @@ package com.atom.chat.settings;
 
 import com.atom.chat.ui.UiLayout;
 import com.atom.chat.ui.UiMotion;
-import com.atom.chat.ui.UiTokens;
+import com.atom.lib.design.atomchat.UiTokens;
 
 import java.util.HashMap;
 import java.util.Map;

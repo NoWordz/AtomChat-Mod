@@ -1,9 +1,9 @@
 package com.atom.chat.fun;
 import com.atom.chat.font.FontManager;
-import com.atom.chat.render.SkiaDraw;
+import com.atom.lib.design.atomchat.SkiaDraw;
 import com.atom.chat.render.SkiaFontRenderer;
 import com.atom.chat.ui.UiLayout;
-import com.atom.chat.ui.UiTokens;
+import com.atom.lib.design.atomchat.UiTokens;
 import io.github.humbleui.skija.Canvas;
 /** Decorative overlay, clipped to the existing panel; never handles input. */
 public final class ChatEffectRenderer {

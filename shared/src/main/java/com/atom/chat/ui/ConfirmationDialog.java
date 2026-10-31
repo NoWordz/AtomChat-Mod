@@ -1,7 +1,11 @@
 package com.atom.chat.ui;
 
+
+
+import com.atom.lib.design.atomchat.AppIcons;
+import com.atom.lib.design.atomchat.UiTokens;
 import com.atom.chat.font.FontManager;
-import com.atom.chat.render.SkiaDraw;
+import com.atom.lib.design.atomchat.SkiaDraw;
 import com.atom.chat.render.SkiaFontRenderer;
 import io.github.humbleui.skija.Canvas;
 import java.util.List;

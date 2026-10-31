@@ -1,7 +1,7 @@
 package com.atom.chat.render;
 
 import com.atom.chat.config.AtomChatConfig.BubbleStyle;
-import com.atom.chat.ui.UiTokens;
+import com.atom.lib.design.atomchat.UiTokens;
 import io.github.humbleui.skija.Canvas;
 import io.github.humbleui.skija.ClipMode;
 import io.github.humbleui.skija.Image;

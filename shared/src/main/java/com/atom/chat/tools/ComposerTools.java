@@ -4,7 +4,7 @@ import com.atom.chat.chat.PlayerRef;
 import com.atom.chat.font.FontManager;
 import com.atom.chat.render.SkiaFontRenderer;
 import com.atom.chat.ui.UiLayout;
-import com.atom.chat.ui.UiTokens;
+import com.atom.lib.design.atomchat.UiTokens;
 import com.atom.chat.ui.input.InputHandler;
 import io.github.humbleui.skija.Canvas;
 import java.util.List;
@@ -49,7 +49,7 @@ public final class ComposerTools implements InputHandler {
             var hint = layout.searchStatus;
             canvas.save();
             try {
-                com.atom.chat.render.SkiaDraw.clip(canvas, hint.x(), hint.y(), hint.w(), hint.h(), 0);
+                com.atom.lib.design.atomchat.SkiaDraw.clip(canvas, hint.x(), hint.y(), hint.w(), hint.h(), 0);
                 SkiaFontRenderer.drawTextCentered(canvas, font, status, hint.x() + hint.w() / 2, hint.y() + hint.h() / 2,
                         com.atom.chat.config.AtomChatConfig.get().textSecondaryColor);
             } finally { canvas.restore(); }

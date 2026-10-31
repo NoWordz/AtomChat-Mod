@@ -14,7 +14,7 @@ import com.atom.chat.image.NativeDialogBridge;
 import com.atom.chat.image.OwnPlayerAvatarSource;
 import com.atom.chat.mixin.MouseHandlerAccessor;
 import com.atom.chat.ui.UiLayout;
-import com.atom.chat.ui.UiTokens;
+import com.atom.lib.design.atomchat.UiTokens;
 import com.atom.chat.util.FilePicker;
 import com.atom.chat.wallpaper.WallpaperImage;
 import com.atom.chat.wallpaper.WallpaperStore;
