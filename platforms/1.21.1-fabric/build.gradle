@@ -38,6 +38,10 @@ dependencies {
     testImplementation 'org.junit.jupiter:junit-jupiter'
     // Cross-build tests use the host JVM's native; test dependencies are not bundled.
     testImplementation "io.github.humbleui:${project.atomchatTestNativeArtifact}:${project.skija_version}"
+    // The AtomLib input jar nests its Yoga binding behind jarJar, which the test
+    // classpath never unpacks; layout tests need the classes directly. The
+    // natives classifier for the same version comes from atomchat-atomlib.gradle.
+    testRuntimeOnly 'org.lwjgl:lwjgl-yoga:3.3.3'
 }
 
 tasks.named('remapJar') {
