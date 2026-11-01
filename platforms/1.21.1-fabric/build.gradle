@@ -45,7 +45,7 @@ dependencies {
 }
 
 tasks.named('remapJar') {
-    archiveFileName = "${project.archives_base_name}-${project.mod_version}${project.atomchatNativeSuffix}.jar"
+    archiveFileName = "${project.archives_base_name}-v${project.mod_version}.jar"
 }
 
 processResources {

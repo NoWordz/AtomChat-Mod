@@ -114,7 +114,7 @@ dependencies {
 }
 
 tasks.named('jarJar') {
-    archiveFileName = "${project.mod_id}-Forge-${project.minecraft_version}-${project.mod_version}${project.atomchatNativeSuffix}.jar"
+    archiveFileName = "${project.mod_id}-Forge-${project.minecraft_version}-v${project.mod_version}.jar"
 }
 
 tasks.named('processResources', ProcessResources).configure {
