@@ -81,6 +81,30 @@ class SettingsHomeReplicationTest {
     /** One recorded comparison outcome; the report reads these, not a JUnit pass/fail. */
     private record Check(String name, boolean pass, String detail) {}
 
+    @Test void pixelSmokeDetectsOpaqueBlackAgainstWhite() {
+        try (Surface black = Surface.makeRasterN32Premul(CANVAS_W, CANVAS_H);
+             Surface white = Surface.makeRasterN32Premul(CANVAS_W, CANVAS_H)) {
+            black.getCanvas().clear(0xFF000000);
+            white.getCanvas().clear(0xFFFFFFFF);
+            var result = pixelSmoke(black, white, List.of());
+            assertEquals(526_400L, result.get("differingPixels"));
+            assertEquals(526_400L, result.get("differingOutsideTextBoxes"));
+            assertEquals(Map.of("whole", 1.0, "excludingText", 1.0), result.get("ratios"));
+        }
+    }
+
+    @Test void pixelSmokeToleratesAdjacentChannelsAcrossTheSignedByteBoundary() {
+        try (Surface lower = Surface.makeRasterN32Premul(CANVAS_W, CANVAS_H);
+             Surface upper = Surface.makeRasterN32Premul(CANVAS_W, CANVAS_H)) {
+            lower.getCanvas().clear(0xFF7F7F7F);
+            upper.getCanvas().clear(0xFF808080);
+            var result = pixelSmoke(lower, upper, List.of());
+            assertEquals(0L, result.get("differingPixels"));
+            assertEquals(0L, result.get("differingOutsideTextBoxes"));
+            assertEquals(Map.of("whole", 0.0, "excludingText", 0.0), result.get("ratios"));
+        }
+    }
+
     @Test void replicateSettingsHomeWithTheAtomLibStack() throws Exception {
         var configField = AtomChatConfig.class.getDeclaredField("instance");
         configField.setAccessible(true);
@@ -403,7 +427,8 @@ class SettingsHomeReplicationTest {
                     int index = (y * CANVAS_W + x) * 4;
                     int delta = 0;
                     for (int c = 0; c < 4; c++) {
-                        delta = Math.max(delta, Math.abs(acPixels[index + c] - libPixels[index + c]));
+                        delta = Math.max(delta, Math.abs(Byte.toUnsignedInt(acPixels[index + c])
+                                - Byte.toUnsignedInt(libPixels[index + c])));
                     }
                     boolean inText = false;
                     for (var box : textBoxes) {

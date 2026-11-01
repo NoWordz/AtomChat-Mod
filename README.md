@@ -83,8 +83,9 @@ Single-branch multi-target layout: `shared/` holds mapping-neutral logic, `layer
 
 ```bash
 python tools/fetch_atomlib_input.py --output build/atomlib-input-path
+ATOMLIB_MAVEN_REPO="$(cat build/atomlib-input-path)"
 cd platforms/1.21.1-fabric
-./gradlew build -PatomlibMavenRepo=build/atomlib-input/maven
+./gradlew build -PatomlibMavenRepo="$ATOMLIB_MAVEN_REPO"
 # JDK 21; Forge 1.20.1 uses JDK 17, NeoForge 1.21.1 uses JDK 21
 ```
 
