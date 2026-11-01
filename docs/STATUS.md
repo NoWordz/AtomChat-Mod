@@ -1,8 +1,18 @@
 # AtomChat 当前状态
 
-> 截至 2026-10-31。这里只维护当前快照，提交及推送事实以 Git 查询为准。
+> 截至 2026-11-01。这里只维护当前快照，提交及推送事实以 Git 查询为准。
 
-## 当前检查点：0.4.0 保持原观感，AtomLib 拆出设计包（2026-10-31）
+## 当前检查点：0.4.0 不变，AtomLib 独立仓库链路落地（2026-11-01）
+
+- AC 版本仍为 `0.4.0`，本轮零功能改动；变化全部在构建链与字体资源。
+- AtomLib 已拆到独立公开仓库 [NoWordz/AtomLib](https://github.com/NoWordz/AtomLib)，自有 CI 六 job 全绿（含 Xvfb 真实 GL 测试）；AC 的输入改为从 Lib release 固定包拉取，URL 与 zip sha256 落在 `versions/atomlib.json` 的 `input_archive`（单一事实源），`fetch_atomlib_input.py` 无参即取，build/release 三处 secret 硬门退役，旧 secret 已删除。
+- 当前钉 `v0.1.0-beta-beta3`（zip sha256 `51a95d0e…`，commit `5a523636`），AC CI 三平台绿（run 41218706477）。
+- 三平台 `bundled.otf/bundled-bold.otf` 已换成 Lib beta3 默认字体包（同源 Noto Sans SC 变量字体重新子集化，7671 码点；与旧文件共有 7549 码点零漂移，wght=500 instancing 亦零漂移）。`FontManager` 加载路径与 `makeClone(wght,500)` 未动；新增字形（Latin-1 补充区、颜文字区）只有增益。
+- 顺带修复的 Lib 侧真雷：Yoga 绑定按 3.3.1 编译但 fabric/neoforge 内嵌 3.3.3（resize 即 `NoSuchMethodError`），已按目标编译桥修复；文本 advance 取整漂移已由 subpixel 修复归零。
+- 新增 `SettingsHomeReplicationTest`（测量夹具，非 JUnit 门）：21 项检查 4 项失败，全部为已文档化的 1u 网格圆整差异，与 Lib 证据基线逐字节相同；证据见 Lib `docs/evidence/settings-home-replication/`。
+- 仍未覆盖：ARM64 实机；AC CI 只跑 Linux；专服启动未验证；Lib 的 Maven host 选型（D）与双消费者共存（E）未启动。
+
+## 上一检查点：0.4.0 保持原观感，AtomLib 拆出设计包（2026-10-31）
 
 - AC 停在 `0.4.0`，外观页回到拆分前基线；1.0.0-beta 那版把 UI 换成 Lib 通用组件的试点已整体回退，相关类与测试删除。
 - “长得像 AC”的部分已抽成 Lib 的可选设计包 `com.atom.lib.design.atomchat`（`UiTokens`、`SkiaDraw`、`UiCards`、`AppIcons`）。AC 只改 import，颜色/圆角/卡片透明度仍读 `AtomChatConfig`，通过 Lib 的 `DesignHost` 注入，取值与默认值和拆分前一致。
