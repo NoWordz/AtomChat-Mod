@@ -2,6 +2,62 @@
 
 > 截至 2026-11-01。这里只维护当前快照，提交及推送事实以 Git 查询为准。
 
+## Gnetum 兼容：HUD 横幅闪烁元凶定位 + uncached 路线（2026-11-01 晚，0.4.0 内，未提交）
+
+- 元凶（用户实测：禁用即不闪；CCB fabric 实例同代码不闪）= **Gnetum**（心自安然 mods 里的 gnetum-3.3.6.jar，NeoForge 1.21.1 专用）。源码（tag 3.3.6）+ vineflower 反编译实例 jar 双重核实机制：`GameRendererMixin.gnetum$wrapGuiRender` 劫持 `Gui.render`，`GuiMixin.gnetum$render` 取消原版 `GuiLayerManager.render`，把 HUD 层按 pass 分帧画进**它自己的帧缓冲**（默认 3 pass，一层一 pass，`FramebufferManager.blit()` 事后合成到主帧缓冲）。`registerAboveAll` 的 `atomchat:notifications` 排在 saving_indicator 之后 → `SuggestedPass` 归入 pass 3 → 每 cycle 只渲染 1 帧。
+- 闪烁机制（split-brain）：cached pass 里 Gnetum FBO 是绑定目标，但横幅两半去往不同目标——raw GL 磨砂底板画进**当前绑定**（Gnetum cache FBO，且从主帧缓冲采样时下层 HUD 不在里面），Skia 卡片被 AtomLib 桥（backend target 钉死 `getMainRenderTarget()`，`MinecraftRenderBridge.target()`）flush 进**主帧缓冲**——只在 pass 3 帧落地、下一帧被世界清屏抹掉，同时 Gnetum 又把不含卡片的 cache（含残底板）合成其上 → 横幅区按 pass 节奏交替。
+- 修复（方向 a，走 Gnetum 自己的 per-element 开关）：新增 `GnetumHudCompat`（official 层 + Fabric 孪生各一份，纯反射零编译依赖）：每帧把 `me.decce.gnetum.Gnetum.getCacheSetting("atomchat:notifications").enabled.value` 钉成 OFF——等价于 Gnetum 配置界面里给该元素选"关"。uncached 层被 Gnetum 逐帧画在 `FramebufferManager.unbind()` 之后的主帧缓冲上（cache 合成完、世界+HUD 齐备、`Gnetum.rendering=false` 无 blend 强改）——正是无 Gnetum 时的原始时序，raw GL pre-pass 与 Skia 全部落回主帧缓冲。每帧重钉防配置重载复活；反射失败 fail-open 回原行为。
+- 面板路径零改动；无 Gnetum 环境零改动（`Platform.isModLoaded` 早退）。Fabric 侧保持镜像但为 no-op 探针（Gnetum 3.3.6 无 Fabric 版；4.x fabric 若出现且内部结构变了也只会静默退回）。
+- 验证：`NotificationRenderWiringTest` 新增 `gnetumCompatPinsTheHudLayerToItsUncachedPathInBothTwins`（双孪生接线 + 禁编译期依赖 + 层 id 与注册一致）。三端全量 BUILD SUCCESSFUL：NeoForge 1563 tests 0 失败、Fabric 0 失败、Forge 0 失败（wiring xml 7 tests 0 failures）。
+- 部署：仅重建 neoforge jar（`04900d177303e739…`），心自安然 + Mechanomania-航空学 两实例替换并 sha256 一致；上一版（`82b72614377d95e3`）备份于 `D:/AtomChat-Backups/2026-11-01-banner-flicker-deploy/*-pregnetum-compat*.jar`。CCB / 1.20.1-main 未动。
+- 未做：游戏内复测（心自安然装回 Gnetum 看横幅不闪；Mechanomania 回归无 Gnetum 场景）。取舍备注：装 Gnetum 时本层被钉在 uncached（每帧全绘，无分帧缓存收益），这是正确性优先的有意选择；用户在 Gnetum 配置里手动改回"开"会被下一帧重新钉回"关"。
+
+## TrChat 服务器插件系统消息误判修复（2026-11-01 下午，0.4.0 内，未提交）
+
+- 用户转述（TrChat 在别人服，本机无日志）：插件系统消息被识别成玩家消息，且"一部分文本在玩家名位置、一部分在气泡里"。TrChat v2 仓库核实事实：玩家聊天经 TrChat 全部以系统聊天包下发（Paper `sendMessage`→SystemChat），扁平化形状 Global `[服务器名] 名字: 消息` / Normal `[世界名] 名字: 消息` / 私聊收方 `[名字 ➥ 你] 消息`——这就是系统消息启发式（`ChatPipeline.tryParsePlayerLine`→`MessagePresentation.parseGeneric`）存在的理由。
+- 病根：`parseGeneric` 的 displayLabel 取名字前**全部**文本，任何"散文+玩家名+分隔符"的插件句（如"[公会] 你邀请了 Steve: 点击接受"）都会把散文推进玩家名位置；旧守卫（名字前无 `>»|：`、whitespace-gap）挡不住。
+- 修复：`MessagePresentation.hasProseBeforeName` 散文守卫——名字前只允许装饰（括号组/§对/符号），括号外出现 CJK/假名/谚文/全角标点（0xFF01-0xFF60，排除全角（）0xFF08/09——那是装饰括号）或 ≥2 个英文词 → 整条保持系统消息；单 tag（"VIP"）仍是装饰，TrChat/原版形状全部保持可解析。包级 `MessageHandlerMixin.handleSystemMessage` 与 HUD 行级 `ChatHudMixin` 兜底共用此解析器，一处收紧两处生效。
+- 验证：`MessagePresentationTest` 新增 5 项（TrChat 形状保持 + 中英散文拒绝 + 单 tag/全角括号装饰）；三端全量随二轮横幅构建一并通过（1563/1563/1557，0 失败）。TrChat 修复随二轮部署进同批 jar。
+- 已知边界：`名字: 通知` 形状（"Steve: 你的订单已完成"）与真聊天在纯文本层不可区分，按设计仍进气泡；如反馈方给出确切原文可继续收守卫。
+
+## HUD 横幅三轮：背景换面板式 raw GL 预画（2026-11-01 傍晚，0.4.0 内，未提交）
+
+- 用户实测（心自安然，不开光影）：区域级 alpha 归一版把 HUD 横幅整块变纯黑矩形（黑块形状=归一 scissor 区域本身），面板内横幅正常；日志无 GL error。结论：**对主帧缓冲 alpha 的任何写入都会被显示链路（读者未定位，与光影无关）当成黑色**——Skia backdrop filter 路线在 HUD 彻底放弃，按用户方向改用面板式 raw GL。
+- 修复：HUD 横幅磨砂背景改为 pre-pass 调 `PanelBlurRenderer.render`（复用现成 kawase+圆角 mask shader，面板场景长期实机验证）：official/Fabric 两个 `NotificationHudOverlay` 在 `gui.flush()/draw()` 后、Skia pass 前用 `NotificationBanner.hudPlacement` 的同一矩形 + `hudBackdropAlpha()`（HUD host fade）画圆角磨砂底板；`drawBanner` 增加 `backdropPreDrawn` 参数跳过 Skia `drawNotificationBackdrop`（面板路径保留——那里 backdrop 是 Skia 本帧自画的合法 premul）。全程**不读、不写主帧缓冲 alpha**，光影免疫。
+- 降级路径：shader 不可用/触发熔断时 `isAvailable()=false` → 回落 Skia backdrop（无光影下本就正常）。
+- 删除：`HudBackdropAlpha` 类与 `BannerBackdropAlphaStabilityTest` 整体移除（区域版 jar 备份 `*-region-alpha-backup.jar`）。
+- 验证：`NotificationRenderWiringTest` 重写为双孪生接线断言（HUD overlay 必须走 PanelBlurRenderer pre-pass、矩形来自共享 hudPlacement、禁再出现 backdrop filter/归一；两份 banner 必须有跳过参数）。三端全量 BUILD SUCCESSFUL：Fabric 1563/0/4、NeoForge 1563/0/4、Forge 1557/0/4。
+- 部署：三平台重建，四实例 sha256 校验一致：心自安然+Mechanomania（neoforge `82b72614377d95e3`）、CCB（fabric `c0fbc473f72d3a75`）、1.20.1-main（forge `61e6208cc2138f5b`）。上一版备份 `*-region-alpha-backup.jar`。
+- 未做：游戏内复测（横幅不黑、不闪、磨砂观感）；黑块显示读者的根因未定位（已记录为"勿写主帧缓冲 alpha"约束）。
+
+## HUD 横幅修复二轮：全视口 alpha 归一改区域级（2026-11-01 下午，0.4.0 内，未提交）
+
+- 上轮全视口 alpha 归一（`normalizeToOpaque()` 无参版）实机（心自安然，Iris 1.8.14-beta.1 + DH 3.3.3）复测出新 bug：横幅从面板切到 HUD 后**整屏黑**、横幅退场即恢复。新旧 jar 字节级 diff 证明唯一代码差异就是该归一 → 元凶锁定为"向整个视口写 alpha=1"这一新增面。
+- Iris 反编译排除了若干假设：final pass 直接写 vanilla main FB（`FinalPassRenderer` 的 `colorHolder` 挂 `main.getColorTextureId()`），colortex0 是独立纹理、无别名，Iris/DH/原版链路均不把 main FB 当采样器读（`RenderTargets` 无 main 别名、无 TAA history 回读 main）→ 黑屏读者在被审计链之外（DH、其它 mod 或驱动/交换链行为），未能静态定位，但"区域级 alpha 写入安全"有旧包实证：修复前横幅 premul 绘制每帧都往横幅矩形写 alpha，从未黑屏。
+- 修复：`HudBackdropAlpha.normalizeToOpaque(int x,int y,int w,int h)` 改区域级——glScissor 到横幅栈矩形 + UiTokens.s(56) 余量（覆盖 blur 3σ 起始 18 逻辑px + SLIDE 动效 24 + 余量），矩形由 `NotificationBanner.hudPlacement`（本次从 `renderInHud` 提取的共享布局函数）给出，GL y 从底边换算；空矩形 no-op。official 层与 Fabric 孪生 `NotificationHudOverlay` 都在 Skia pass 前计算设备矩形调用；javadoc 记录区域约束是承载性的。
+- 期间测试探针踩坑：区域外探针断言读的是 RGBA 的 R 通道而非 alpha（白色条纹上 R=255），与"区域外被写坏"无关——产品代码自始稳定；已改读 offset+3 的 alpha 字节。
+- 验证：`BannerBackdropAlphaStabilityTest` 重写（区域级调用 + 区域外 alpha 保持原始值/交替值的正反断言）；`NotificationRenderWiringTest` 断言更新（区域来自共享 `hudPlacement`、clear 必须在 scissor 开启下执行、无参重载已删除、`NotificationHudLayout.scaled` 每 Banner 文件仅一处）。三端全量 BUILD SUCCESSFUL：NeoForge 1563/0/4、Fabric 1563/0/4、Forge 1557/0/4（forge 存量 flake 本轮未触发）。
+- 部署：三平台重建（neoforge `jar` / forge `jarJar` / fabric `remapJar`，注意 fabric 的 libs 产物只有 remapJar 才刷新）。四实例已替换并 sha256 校验一致：心自安然 + Mechanomania-航空学（neoforge `ba19df3d51ddc2f0`）、1.21.1-CCB（fabric `0eefdc81d7df1807`）、1.20.1-main（forge `800dc1193ffb262c`）。上一版（全视口 alpha）jar 备份于 `D:/AtomChat-Backups/2026-11-01-banner-flicker-deploy/*-fullviewport-alpha-backup.jar`，可用于实机 A/B 复现黑屏。
+- 未做：游戏内复测（横幅不黑屏且不闪）；全视口元凶的下游读者（谁在读 main FB alpha）未定位；未提交/推送/发布。
+
+## HUD 横幅光影闪烁修复（2026-11-01，0.4.0 内，未提交/未部署）
+
+- 用户实测（NeoForge 1.21.1 + Iris 1.8.12 + Bliss 2.1.2）：HUD 通知横幅开光影闪烁，面板不闪。
+- 根因：横幅的 frosted 背景（`UiCards.drawNotificationBackdrop`）是 Skia backdrop filter，回读主帧缓冲按 premul 解释；Bliss final pass 只写 RGB（`dimensions/final.fsh:118`），帧缓冲 alpha 逐帧逐材质未定义 → 模糊输出随垃圾 alpha 波动。面板背景走 `PanelBlurRenderer`（alpha 来自圆角 mask），面板内横幅读 Skia 本帧自画内容，均不受影响。
+- 修复：新增 `shared/.../render/HudBackdropAlpha.normalizeToOpaque()`（colorMask 仅开 A + clear 归一 alpha 为 1，RGB 不动，GL 状态全还原）；`NotificationHudOverlay.render` 在 `gui.flush()` 之后调用。vanilla 内容 premul 本来合法，无光影时无观感变化。
+- 验证：真 GL 探针（hidden GLFW 镜像 AtomLib 桥序列）证明同 RGB 不同 alpha 输出 181/236、alpha 逐帧翻转 face alpha 198↔255；回归 `BannerBackdropAlphaStabilityTest` 无修复失败（182 vs 236）、有修复通过；wiring 断言入 `NotificationRenderWiringTest`（同时钉 official 层与 Fabric 孪生两份 HUD 入口）。三端全量终跑：NeoForge 1557/0 失败/4 skip，Fabric 1563/0/4，Forge 1557/0/4。期间 Forge `PanelWidthGestureTest` 曾一次性 4 项失败，stash 后基线复跑同样失败（存量 flake，与本轮无关），终跑通过。
+- 独立 code review（限定只读）：发现 P0——Fabric 平台有自己的 Yarn 命名 `NotificationHudOverlay` 孪生、不挂 official 层，修复漏接；已补孪生调用 + 双孪生接线断言。P1——`HudBackdropAlpha` colorMask 未保存恢复（硬编码全 true）；已改为 `glGetBooleanv(GL_COLOR_WRITEMASK)` 查询后还原，javadoc 同步。P2 已修：glfwInit 改 assume、测试 config 反射 finally 还原、scissor-on 分支纳入覆盖、测试序列用 `resetGLAll` 对齐产品桥。
+- jar 命名改为 `atomchat-平台-mc版本-v模组版本`（如 `atomchat-NeoForge-1.21.1-v0.4.0.jar`），去掉系统后缀；三端产物名已验证。storeVersion 字符串未动。
+- 未做：游戏内复测（需用户开同一光影实机确认横幅不再闪）；未提交/推送/发布。
+
+## 本地审计修复与原方案核对（2026-11-01）
+
+- 修正 `SettingsHomeReplicationTest` 的像素差值：N32 通道先转无符号 8 位再相减；新增黑白全差异与 127/128 相邻灰阶回归，旧代码两项均失败，修复后连同复刻／步进控件共 7 项通过。
+- 修正 README 的源码构建路径：读取下载器输出的绝对 Maven 目录后再进入平台目录，不再手写错误相对路径；同一取值方式下 `help verifyAtomLibInput` 通过。
+- 使用现有 beta3 锁重跑复刻：21 项测量仍有 4 项已记录的 1u 圆整差异；非文字差异率仍为 0.7643%，全图差异像素由旧量具的 7851 修正为 7838。PNG 未变，修正数据另存 Lib `docs/evidence/settings-home-replication/unsigned-channel-fix/results.json`，历史数据保留。
+- [最初完整方案](superpowers/plans/2026-10-29-atomlib-extraction-and-yoga.md) 已标注历史范围：当前 Lib 是基础栈及可选设计包，通用组件／滚动／模态／焦点／壳不在当前交付内；静态离屏复刻不代表“只写结构、数据和动作即可制作完整 UI”的原始易用性目标已完成。
+- 此处是本地源码／验证检查点，AC 仍为 `0.4.0`，输入仍钉公开 beta3；Lib 同轮修复详情见其状态文档，未推送、发布或变更配套包。
+
 ## 当前检查点：0.4.0 不变，AtomLib 独立仓库链路落地（2026-11-01）
 
 - AC 版本仍为 `0.4.0`，本轮零功能改动；变化全部在构建链与字体资源。
