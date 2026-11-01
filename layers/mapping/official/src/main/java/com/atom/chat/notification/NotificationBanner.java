@@ -289,16 +289,11 @@ public final class NotificationBanner {
         lastHudOriginY = Float.NaN;
         renderStack(canvas, bannerX(panelX),
                 panelY + UiTokens.PANEL_BOTTOM_PAD + UiTokens.HEADER_HEIGHT + UiTokens.PANEL_TOP_GAP,
-                bannerWidth(panelW), panelY + panelH - UiTokens.s(4), vmx, vmy, true);
+                bannerWidth(panelW), panelY + panelH - UiTokens.s(4), vmx, vmy, true, false);
     }
 
     public void renderInHud(Canvas canvas, float width, float height) {
-        var cfg = AtomChatConfig.get();
-        float gap = UiTokens.NOTIFICATION_STACK_GAP;
-        var placement = NotificationHudLayout.scaled(width, height, hudBaseWidth(width),
-                banners.size() * bannerHeight() + Math.max(0, banners.size() - 1) * gap,
-                UiTokens.PANEL_TOP_GAP, cfg.notificationHudPosition,
-                UiTokens.s(cfg.notificationHudOffsetX), UiTokens.s(cfg.notificationHudOffsetY), cfg.notificationHudScale);
+        var placement = hudPlacement(width, height);
         var rect = placement.rect();
         // A centre/bottom anchor moves the stack origin when its height changes.
         // Rebase existing positions before retargeting, preserving screen pixels.
@@ -308,6 +303,8 @@ public final class NotificationBanner {
             layoutYs.replaceAll((banner, oldY) -> oldY + shift);
         }
         lastHudOriginY = originY;
+        boolean preDrawn = hudBackdropPreDrawn;
+        hudBackdropPreDrawn = false;
         canvas.save();
         try {
             canvas.translate(rect.x(), rect.y());
@@ -315,7 +312,7 @@ public final class NotificationBanner {
             // The destination stack height is not a clip: displaced cards can
             // still occupy their old slots while the shorter stack settles.
             // The framebuffer itself clips the HUD to the visible viewport.
-            renderStack(canvas, 0, 0, rect.w() / placement.scale(), Float.POSITIVE_INFINITY, -1, -1, false);
+            renderStack(canvas, 0, 0, rect.w() / placement.scale(), Float.POSITIVE_INFINITY, -1, -1, false, preDrawn);
         } finally { canvas.restore(); }
     }
 
@@ -324,15 +321,47 @@ public final class NotificationBanner {
                 bannerWidth(com.atom.chat.screen.ScreenMetrics.panelWidthForViewport(viewportWidth)));
     }
 
+    /** Set by the HUD overlay's pre-pass when the raw-GL frosted backdrop was
+     *  drawn for this frame; renderInHud consumes and clears it. */
+    private boolean hudBackdropPreDrawn;
+
+    /** Marks this frame's HUD backdrop as pre-drawn by the overlay's raw-GL pass. */
+    public static void hudBackdropPreDrawn() {
+        INSTANCE.hudBackdropPreDrawn = true;
+    }
+
+    /**
+     * Current HUD host-fade alpha, read by the overlay's pre-pass so the
+     * frosted backdrop follows the banner entrance and exit.
+     */
+    public static float hudBackdropAlpha() {
+        return INSTANCE.hostFade.alpha(NotificationHostFade.Host.HUD,
+                INSTANCE.clock.getAsLong(), Animations.enabled());
+    }
+
+    /**
+     * The HUD stack placement, shared with the HUD overlay's pre-pass frosted
+     * backdrop so both read the same rectangle. Reads the singleton's queue:
+     * the overlay blurs immediately before the same stack draws.
+     */
+    public static NotificationHudLayout.Placement hudPlacement(float width, float height) {
+        var cfg = AtomChatConfig.get();
+        float gap = UiTokens.NOTIFICATION_STACK_GAP;
+        return NotificationHudLayout.scaled(width, height, hudBaseWidth(width),
+                INSTANCE.banners.size() * bannerHeight() + Math.max(0, INSTANCE.banners.size() - 1) * gap,
+                UiTokens.PANEL_TOP_GAP, cfg.notificationHudPosition,
+                UiTokens.s(cfg.notificationHudOffsetX), UiTokens.s(cfg.notificationHudOffsetY), cfg.notificationHudScale);
+    }
+
     public void renderPreview(Canvas canvas, float width) {
         Active preview = new Active(Type.MENTION, RichText.literal("AtomChat"),
                 RichText.literal(tr("atomchat.notify.editor.preview")), 0, null);
-        drawBanner(canvas, preview, 0, 0, width, bannerHeight(), 1, 0, 0, null, false);
+        drawBanner(canvas, preview, 0, 0, width, bannerHeight(), 1, 0, 0, null, false, false);
     }
 
     /** The same state objects and birth times serve both hosts. */
     private void renderStack(Canvas canvas, float x, float y, float bannerW, float bottom,
-                             float vmx, float vmy, boolean interactive) {
+                             float vmx, float vmy, boolean interactive, boolean backdropPreDrawn) {
         Active hovered = interactive ? hitTest(vmx, vmy) : null;
         Active hoveredButton = interactive ? buttonHit(vmx, vmy) : null;
         hitRects.clear();
@@ -373,7 +402,7 @@ public final class NotificationBanner {
                 canvas.translate(cx + slide, cy);
                 canvas.scale(scale, scale);
                 canvas.translate(-cx, -cy);
-                drawBanner(canvas, b, x, drawY, bannerW, bannerH, alpha, hover, buttonHover, sendScale, interactive);
+                drawBanner(canvas, b, x, drawY, bannerW, bannerH, alpha, hover, buttonHover, sendScale, interactive, backdropPreDrawn);
             } finally { canvas.restore(); }
             if (interactive) {
                 hitRects.add(new Hit(b, Rect.makeXYWH(paintedX, paintedY, bannerW * scale, bannerH * scale)));
@@ -543,10 +572,16 @@ public final class NotificationBanner {
     }
 
     private void drawBanner(Canvas canvas, Active b, float x, float y, float w, float h,
-                            float alpha, float hover, float buttonHover, PressScale sendScale, boolean interactive) {
+                            float alpha, float hover, float buttonHover, PressScale sendScale, boolean interactive,
+                            boolean backdropPreDrawn) {
         float radius = UiTokens.cardRadius();
         int fill = UiTokens.notificationFill();
-        if ((fill >>> 24) < 255) UiCards.drawNotificationBackdrop(canvas, x, y, w, h, radius, alpha);
+        // The HUD pre-pass draws the frosted backdrop with raw GL (panel-blur
+        // style): a Skia backdrop filter here would read the framebuffer as
+        // premul, and shader packs leave undefined alpha there. The panel path
+        // keeps the Skia backdrop — its backdrop is Skia-drawn content with
+        // valid premul alpha.
+        if (!backdropPreDrawn && (fill >>> 24) < 255) UiCards.drawNotificationBackdrop(canvas, x, y, w, h, radius, alpha);
         // save() and saveLayer() push two entries; both must be popped. A missing
         // restore here leaked one matrix per frame and, combined with the
         // per-frame density scale, flung the whole panel off screen in 0.2.4.
