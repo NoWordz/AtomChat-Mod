@@ -65,6 +65,16 @@ public final class MessagePresentation {
                 || beforeName.indexOf('：') >= 0) {
             return Optional.empty();
         }
+        // Prose guard: real chat formats only decorate before the sender
+        // (bracket groups, styled tags, symbols). Prose out there — CJK text or
+        // two or more letter/digit words — means the line is a plugin sentence
+        // about the player ("你邀请了 Steve: 点击接受"), not a chat line;
+        // parsing it would push the prose into the sender label and split the
+        // message across the name and the bubble. TrChat's own shapes
+        // ("[生存] Steve: hi", "Steve: hi", "<Steve> hi") stay decorative.
+        if (hasProseBeforeName(text, idx)) {
+            return Optional.empty();
+        }
         if (isBroadcastLabelPrefix(text, idx)) {
             return Optional.empty();
         }
@@ -325,6 +335,58 @@ public final class MessagePresentation {
     private static final java.util.Set<String> BROADCAST_LABELS = java.util.Set.of(
             "系统", "公告", "服务器", "广播", "提示", "通知",
             "system", "server", "notice", "broadcast", "announcement", "alert");
+
+    /**
+     * Prose detector for the sender prefix zone. CJK text outside brackets is
+     * always prose (real chat prefixes are bracket groups like "[生存]"); two
+     * or more letter/digit words are English prose ("You invited Steve: ...").
+     * A single styled tag ("VIP") stays decoration, as do § pairs and symbols.
+     */
+    static boolean hasProseBeforeName(String text, int nameIdx) {
+        int tokens = 0;
+        boolean inWord = false;
+        int i = 0;
+        while (i < nameIdx) {
+            char ch = text.charAt(i);
+            if (ch == '§' && i + 1 < nameIdx) {
+                i += 2;
+                inWord = false;
+                continue;
+            }
+            char close = closeFor(ch);
+            if (close != '\0') {
+                int end = text.indexOf(close, i + 1);
+                if (end > i && end < nameIdx) {
+                    i = end + 1;
+                    inWord = false;
+                    continue;
+                }
+            }
+            if (isProseScript(ch)) {
+                return true;
+            }
+            if (Character.isLetterOrDigit(ch)) {
+                if (!inWord) {
+                    tokens++;
+                    inWord = true;
+                }
+            } else {
+                inWord = false;
+            }
+            i++;
+        }
+        return tokens >= 2;
+    }
+
+    private static boolean isProseScript(char ch) {
+        return (ch >= 0x3040 && ch <= 0x30FF)   // kana
+                || (ch >= 0x3400 && ch <= 0x4DBF)   // CJK extension A
+                || (ch >= 0x4E00 && ch <= 0x9FFF)   // CJK unified ideographs
+                || (ch >= 0xAC00 && ch <= 0xD7AF)   // hangul
+                || (ch >= 0xF900 && ch <= 0xFAFF)   // CJK compatibility
+                || (ch >= 0xFF01 && ch <= 0xFF60
+                    && ch != 0xFF08 && ch != 0xFF09);  // fullwidth （） are decoration brackets, not prose
+    }
 
     static boolean isBroadcastLabelPrefix(String cleanText, int nameIdx) {
         String zone = cleanText.substring(0, nameIdx).trim();

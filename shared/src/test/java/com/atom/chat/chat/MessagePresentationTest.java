@@ -201,4 +201,48 @@ class MessagePresentationTest {
         assertTrue(MessagePresentation.parseDecoratedPlayerLine(
                 "<sys>E33EPUS: hi", List.of("E33EPUS")).isEmpty());
     }
+
+    // ---- prose guard: plugin sentences about a player are not chat lines ----
+
+    @Test
+    void trChatChannelChatStillParses() {
+        // TrChat Global/Normal flatten to "[Server/World] Name: message".
+        Optional<MessagePresentation.PlayerLine> line =
+                MessagePresentation.parseDecoratedPlayerLine("[生存]Steve: 大家好", List.of("Steve"));
+        assertTrue(line.isPresent());
+        assertEquals("[生存]Steve", line.get().displayLabel());
+        assertEquals("大家好", line.get().content());
+    }
+
+    @Test
+    void proseBeforeNameIsRejected() {
+        // A plugin invitation sentence: the prose used to ride into the sender
+        // label and only the tail reached the bubble (TrChat server report).
+        assertTrue(MessagePresentation.parseDecoratedPlayerLine(
+                "[公会] 你邀请了 Steve: 点击接受", List.of("Steve")).isEmpty());
+        assertTrue(MessagePresentation.parseDecoratedPlayerLine(
+                "欢迎来到服务器, Steve: 点此传送", List.of("Steve")).isEmpty());
+    }
+
+    @Test
+    void englishProseBeforeNameIsRejected() {
+        assertTrue(MessagePresentation.parseDecoratedPlayerLine(
+                "You invited Steve: click to accept", List.of("Steve")).isEmpty());
+    }
+
+    @Test
+    void singleStyledTagBeforeNameStaysDecoration() {
+        Optional<MessagePresentation.PlayerLine> line =
+                MessagePresentation.parseDecoratedPlayerLine("§6§lVIP §eSteve: hi", List.of("Steve"));
+        assertTrue(line.isPresent());
+        assertEquals("hi", line.get().content());
+    }
+
+    @Test
+    void fullwidthParenDecorationStaysDecoration() {
+        Optional<MessagePresentation.PlayerLine> line =
+                MessagePresentation.parseDecoratedPlayerLine("（VIP）Steve: hi", List.of("Steve"));
+        assertTrue(line.isPresent());
+        assertEquals("hi", line.get().content());
+    }
 }
