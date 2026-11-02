@@ -110,13 +110,6 @@
         "reason": "主会话 2026-10-09 批复：美容级。注释位置不同、官方侧把 gridW 内联进表达式（等价），值相同",
         "sample_a": "            // Animated value only: forcing it to 1 while hovered is what",
         "sample_b": ""
-      },
-      {
-        "fingerprint": "924c0a7f5fe1",
-        "kind": "comment",
-        "reason": "主会话 2026-10-09 批复：美容级。注释位置不同、官方侧把 gridW 内联进表达式（等价），值相同",
-        "sample_a": "",
-        "sample_b": "                // Animated value only: forcing it to 1 while hovered is what"
       }
     ],
     "src/test/java/com/atom/chat/chat/MentionHighlighterTest.java": [

@@ -1,0 +1,58 @@
+{
+  "timestamp": "20261102-083902",
+  "instances": {
+    "forge": {
+      "mods_dir": "D:\\Myworld\\.minecraft\\versions\\1.20.1-main\\mods",
+      "old": {
+        "name": "atomchat-Forge-1.20.1-v0.4.0.jar",
+        "sha256": "a5e50513975e879151b941fbbcdb30cf53a6e14ef402d4ff0d162f70bc6ea2b6",
+        "bytes": 8454655
+      },
+      "new": {
+        "name": "atomchat-Forge-1.20.1-v0.4.0.jar",
+        "sha256": "3050240d81ef2a4507a5125c484c85fd3456fcf995e58059333d8a372f467e03",
+        "bytes": 8442635
+      },
+      "backup": {
+        "path": "D:\\AtomChat-Backups\\2026-11-02-dango-nav\\20261102-083902\\forge\\atomchat-Forge-1.20.1-v0.4.0.jar",
+        "sha256": "a5e50513975e879151b941fbbcdb30cf53a6e14ef402d4ff0d162f70bc6ea2b6"
+      }
+    },
+    "fabric": {
+      "mods_dir": "D:\\Myworld\\.minecraft\\versions\\1.21.1-CCB\\mods",
+      "old": {
+        "name": "atomchat-Fabric-1.21.1-v0.4.0.jar",
+        "sha256": "7549f3a45be9cd7f186e272947e62aa29e7af05ed17c1a92ca69bc8cf53b4b82",
+        "bytes": 8482750
+      },
+      "new": {
+        "name": "atomchat-Fabric-1.21.1-v0.4.0.jar",
+        "sha256": "8ee3a3ce10643213923665cd054a9a832a863a13f3454fb3bbf99a0d9144c58a",
+        "bytes": 8470589
+      },
+      "backup": {
+        "path": "D:\\AtomChat-Backups\\2026-11-02-dango-nav\\20261102-083902\\fabric\\atomchat-Fabric-1.21.1-v0.4.0.jar",
+        "sha256": "7549f3a45be9cd7f186e272947e62aa29e7af05ed17c1a92ca69bc8cf53b4b82"
+      }
+    },
+    "neoforge": {
+      "mods_dir": "D:\\Myworld\\.minecraft\\versions\\Mechanomania-航空学\\mods",
+      "old": {
+        "name": "atomchat-NeoForge-1.21.1-v0.4.0.jar",
+        "sha256": "cde9732f1eb8fd59600d205f7d1df408ff54d0823d6d24f1c890d36aeb063312",
+        "bytes": 8473908
+      },
+      "new": {
+        "name": "atomchat-NeoForge-1.21.1-v0.4.0.jar",
+        "sha256": "e922187279b33825c3b4f92ef9ea4b34422400dcd684761bccce0d1dfe1789a6",
+        "bytes": 8461867
+      },
+      "backup": {
+        "path": "D:\\AtomChat-Backups\\2026-11-02-dango-nav\\20261102-083902\\neoforge\\atomchat-NeoForge-1.21.1-v0.4.0.jar",
+        "sha256": "cde9732f1eb8fd59600d205f7d1df408ff54d0823d6d24f1c890d36aeb063312"
+      }
+    }
+  },
+  "backup_root": "D:\\AtomChat-Backups\\2026-11-02-dango-nav\\20261102-083902",
+  "failures": []
+}

@@ -1,0 +1,49 @@
+{
+  "timestamp": "20261102-134853",
+  "backup_root": "D:\\AtomChat-Backups\\2026-11-02-shadow-rim-axis\\20261102-134853",
+  "instances": {
+    "forge": {
+      "mods_dir": "D:\\Myworld\\.minecraft\\versions\\1.20.1-main\\mods",
+      "jar": "atomchat-Forge-1.20.1-v0.4.0.jar",
+      "backup": "D:\\AtomChat-Backups\\2026-11-02-shadow-rim-axis\\20261102-134853\\forge\\atomchat-Forge-1.20.1-v0.4.0.jar",
+      "old": {
+        "bytes": 8448423,
+        "sha256": "1f95a52abb66d3e249ef2b299413cc54805cc70546edb85c8239a8029240b77b"
+      },
+      "new": {
+        "bytes": 8451401,
+        "sha256": "9747498fe6d0a1258f4a377dc97355f0fd37892e05b46732b2e6ef037da22aa2"
+      },
+      "mods_dir_files": 164
+    },
+    "fabric": {
+      "mods_dir": "D:\\Myworld\\.minecraft\\versions\\1.21.1-CCB\\mods",
+      "jar": "atomchat-Fabric-1.21.1-v0.4.0.jar",
+      "backup": "D:\\AtomChat-Backups\\2026-11-02-shadow-rim-axis\\20261102-134853\\fabric\\atomchat-Fabric-1.21.1-v0.4.0.jar",
+      "old": {
+        "bytes": 8476523,
+        "sha256": "7b3716fc64d1e5847eff151cd492f4fd1e26b69a8daedffe442e5543da1d5afb"
+      },
+      "new": {
+        "bytes": 8479594,
+        "sha256": "57ee79663744bee5b6361bd4baf47910a001d8a70f65be531b52717d2b30a5e5"
+      },
+      "mods_dir_files": 74
+    },
+    "neoforge": {
+      "mods_dir": "D:\\Myworld\\.minecraft\\versions\\Mechanomania-航空学\\mods",
+      "jar": "atomchat-NeoForge-1.21.1-v0.4.0.jar",
+      "backup": "D:\\AtomChat-Backups\\2026-11-02-shadow-rim-axis\\20261102-134853\\neoforge\\atomchat-NeoForge-1.21.1-v0.4.0.jar",
+      "old": {
+        "bytes": 8467667,
+        "sha256": "9a005b72559003fe3ad77c5406528164a458a62112c62bd4d580a3d56dff9767"
+      },
+      "new": {
+        "bytes": 8470690,
+        "sha256": "3bcd1ac7fd32ee1e5667f87e794b939be05f3aa9eaf860198ac427910e7af5e6"
+      },
+      "mods_dir_files": 206
+    }
+  },
+  "failures": []
+}

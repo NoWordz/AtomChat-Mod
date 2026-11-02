@@ -1,0 +1,73 @@
+{
+  "timestamp": "20261102-115811",
+  "backup_root": "D:\\AtomChat-Backups\\2026-11-02-style-round\\20261102-115811",
+  "instances": {
+    "forge": {
+      "mods_dir": "D:\\Myworld\\.minecraft\\versions\\1.20.1-main\\mods",
+      "old": {
+        "name": "atomchat-Forge-1.20.1-v0.4.0.jar",
+        "bytes": 8445474,
+        "sha256": "7b7c8c7c483f6de9774ba2dc7f053b4890d893f7258d17494e991e11ac3a2a7d"
+      },
+      "new": {
+        "name": "atomchat-Forge-1.20.1-v0.4.0.jar",
+        "sha256": "1f95a52abb66d3e249ef2b299413cc54805cc70546edb85c8239a8029240b77b",
+        "bytes": 8448423
+      },
+      "backup": {
+        "path": "D:\\AtomChat-Backups\\2026-11-02-style-round\\20261102-115811\\forge\\atomchat-Forge-1.20.1-v0.4.0.jar",
+        "sha256": "7b7c8c7c483f6de9774ba2dc7f053b4890d893f7258d17494e991e11ac3a2a7d"
+      },
+      "mods_files_before": 164,
+      "mods_files_after": 164,
+      "changed_files": [
+        "atomchat-Forge-1.20.1-v0.4.0.jar"
+      ]
+    },
+    "fabric": {
+      "mods_dir": "D:\\Myworld\\.minecraft\\versions\\1.21.1-CCB\\mods",
+      "old": {
+        "name": "atomchat-Fabric-1.21.1-v0.4.0.jar",
+        "bytes": 8473475,
+        "sha256": "39afbb7d43d8fb8befeec15419cd391d03b8ef51ed0a9f3ee6c0c7efeec5aca7"
+      },
+      "new": {
+        "name": "atomchat-Fabric-1.21.1-v0.4.0.jar",
+        "sha256": "7b3716fc64d1e5847eff151cd492f4fd1e26b69a8daedffe442e5543da1d5afb",
+        "bytes": 8476523
+      },
+      "backup": {
+        "path": "D:\\AtomChat-Backups\\2026-11-02-style-round\\20261102-115811\\fabric\\atomchat-Fabric-1.21.1-v0.4.0.jar",
+        "sha256": "39afbb7d43d8fb8befeec15419cd391d03b8ef51ed0a9f3ee6c0c7efeec5aca7"
+      },
+      "mods_files_before": 74,
+      "mods_files_after": 74,
+      "changed_files": [
+        "atomchat-Fabric-1.21.1-v0.4.0.jar"
+      ]
+    },
+    "neoforge": {
+      "mods_dir": "D:\\Myworld\\.minecraft\\versions\\Mechanomania-航空学\\mods",
+      "old": {
+        "name": "atomchat-NeoForge-1.21.1-v0.4.0.jar",
+        "bytes": 8464732,
+        "sha256": "87a9dd6f6cc7b631c250a1ff3f95f6889505a672f986665deefa8a8a69e976ce"
+      },
+      "new": {
+        "name": "atomchat-NeoForge-1.21.1-v0.4.0.jar",
+        "sha256": "9a005b72559003fe3ad77c5406528164a458a62112c62bd4d580a3d56dff9767",
+        "bytes": 8467667
+      },
+      "backup": {
+        "path": "D:\\AtomChat-Backups\\2026-11-02-style-round\\20261102-115811\\neoforge\\atomchat-NeoForge-1.21.1-v0.4.0.jar",
+        "sha256": "87a9dd6f6cc7b631c250a1ff3f95f6889505a672f986665deefa8a8a69e976ce"
+      },
+      "mods_files_before": 206,
+      "mods_files_after": 206,
+      "changed_files": [
+        "atomchat-NeoForge-1.21.1-v0.4.0.jar"
+      ]
+    }
+  },
+  "failures": []
+}

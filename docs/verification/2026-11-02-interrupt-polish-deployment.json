@@ -1,0 +1,66 @@
+{
+  "version": "0.4.0",
+  "changeSet": "interrupt polish round (units E2+V): completed input interruptibility, panel open/close spring, device-pixel panel alignment, entrance stagger primitives and wiring — supersedes the 2026-11-01 round-2 deployment",
+  "time": "2026-11-02T00:08:10+0800",
+  "backupRoot": "D:\\AtomChat-Backups\\2026-11-02-interrupt-polish\\20261102-000810",
+  "previousRound": "D:\\AtomChat-Backups6-11-01-dango-adoption-round2",
+  "deployments": [
+    {
+      "loader": "Forge",
+      "instance": "1.20.1-main",
+      "installed": "D:\\Myworld\\.minecraft\\versions\\1.20.1-main\\mods\\atomchat-Forge-1.20.1-v0.4.0.jar",
+      "sha256": "a5e50513975e879151b941fbbcdb30cf53a6e14ef402d4ff0d162f70bc6ea2b6",
+      "bytes": 8454655,
+      "newJarSource": "D:\\AtomChat-Main\\platforms\\1.20.1-forge\\build\\atomlib-consumer\\libs\\atomchat-Forge-1.20.1-v0.4.0.jar",
+      "replaced": {
+        "name": "atomchat-Forge-1.20.1-v0.4.0.jar",
+        "oldSha256": "524e8a0d8fda15dff83be3b6232d0c413c0cbb241d93376aaea4af1b4ddbf661",
+        "backup": {
+          "path": "D:\\AtomChat-Backups\\2026-11-02-interrupt-polish\\20261102-000810\\Forge\\atomchat-Forge-1.20.1-v0.4.0.jar",
+          "sha256": "524e8a0d8fda15dff83be3b6232d0c413c0cbb241d93376aaea4af1b4ddbf661"
+        }
+      },
+      "modsDirFileCount": 165,
+      "otherFilesUnchanged": true,
+      "atomchatJarCountAfter": 1
+    },
+    {
+      "loader": "Fabric",
+      "instance": "1.21.1-CCB",
+      "installed": "D:\\Myworld\\.minecraft\\versions\\1.21.1-CCB\\mods\\atomchat-Fabric-1.21.1-v0.4.0.jar",
+      "sha256": "7549f3a45be9cd7f186e272947e62aa29e7af05ed17c1a92ca69bc8cf53b4b82",
+      "bytes": 8482750,
+      "newJarSource": "D:\\AtomChat-Main\\platforms\\1.21.1-fabric\\build\\atomlib-consumer\\libs\\atomchat-Fabric-1.21.1-v0.4.0.jar",
+      "replaced": {
+        "name": "atomchat-Fabric-1.21.1-v0.4.0.jar",
+        "oldSha256": "ba5064640658b86e1e1330b22b579bd6c904562680a27772e8a62c1c9d397c52",
+        "backup": {
+          "path": "D:\\AtomChat-Backups\\2026-11-02-interrupt-polish\\20261102-000810\\Fabric\\atomchat-Fabric-1.21.1-v0.4.0.jar",
+          "sha256": "ba5064640658b86e1e1330b22b579bd6c904562680a27772e8a62c1c9d397c52"
+        }
+      },
+      "modsDirFileCount": 76,
+      "otherFilesUnchanged": true,
+      "atomchatJarCountAfter": 1
+    },
+    {
+      "loader": "NeoForge",
+      "instance": "Mechanomania-航空学",
+      "installed": "D:\\Myworld\\.minecraft\\versions\\Mechanomania-航空学\\mods\\atomchat-NeoForge-1.21.1-v0.4.0.jar",
+      "sha256": "cde9732f1eb8fd59600d205f7d1df408ff54d0823d6d24f1c890d36aeb063312",
+      "bytes": 8473908,
+      "newJarSource": "D:\\AtomChat-Main\\platforms\\1.21.1-neoforge\\build\\atomlib-consumer\\libs\\atomchat-NeoForge-1.21.1-v0.4.0.jar",
+      "replaced": {
+        "name": "atomchat-NeoForge-1.21.1-v0.4.0.jar",
+        "oldSha256": "41b3857fa5d937318a1365b8d3c3fb23c12487b92e707185a915d1818cf4f3b4",
+        "backup": {
+          "path": "D:\\AtomChat-Backups\\2026-11-02-interrupt-polish\\20261102-000810\\NeoForge\\atomchat-NeoForge-1.21.1-v0.4.0.jar",
+          "sha256": "41b3857fa5d937318a1365b8d3c3fb23c12487b92e707185a915d1818cf4f3b4"
+        }
+      },
+      "modsDirFileCount": 207,
+      "otherFilesUnchanged": true,
+      "atomchatJarCountAfter": 1
+    }
+  ]
+}

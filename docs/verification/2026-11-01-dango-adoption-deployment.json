@@ -1,0 +1,90 @@
+{
+  "version": "0.4.0",
+  "changeSet": "dango adoption units A-D (SpringAnim.tick, glass maxLuma clamp, toggle knob spring) on top of the uncommitted 0.4.0 rounds",
+  "time": "2026-11-01T20:49:10+0800",
+  "backupRoot": "D:\\AtomChat-Backups\\2026-11-01-dango-adoption\\20261101-204910",
+  "deployments": [
+    {
+      "loader": "Forge",
+      "instance": "1.20.1-main",
+      "installed": "D:\\Myworld\\.minecraft\\versions\\1.20.1-main\\mods\\atomchat-Forge-1.20.1-v0.4.0.jar",
+      "sha256": "ed62fc2108c85d82a2b8f2fbdc16374819567accd3d8beec875b4891758886bd",
+      "bytes": 8449346,
+      "newJarSource": "D:\\AtomChat-Main\\platforms\\1.20.1-forge\\build\\atomlib-consumer\\libs\\atomchat-Forge-1.20.1-v0.4.0.jar",
+      "replaced": {
+        "name": "atomchat-Forge-1.20.1-v0.4.0.jar",
+        "oldSha256": "61e6208cc2138f5b0c175371a4fc133961171d1b4b8b582cf8a931aa11311299",
+        "backup": {
+          "path": "D:\\AtomChat-Backups\\2026-11-01-dango-adoption\\20261101-204910\\Forge\\atomchat-Forge-1.20.1-v0.4.0.jar",
+          "sha256": "61e6208cc2138f5b0c175371a4fc133961171d1b4b8b582cf8a931aa11311299"
+        }
+      },
+      "wrongLoaderJarsMovedOut": [
+        {
+          "name": "atomchat-Fabric-1.21.1-v0.4.0.jar",
+          "sha256": "c0fbc473f72d3a75db31c1d305615f1662d55c233daa6a77055bc47ab66af6b8",
+          "movedTo": "D:\\AtomChat-Backups\\2026-11-01-dango-adoption\\20261101-204910\\Forge\\removed-wrong-loader\\atomchat-Fabric-1.21.1-v0.4.0.jar"
+        },
+        {
+          "name": "atomchat-NeoForge-1.21.1-v0.4.0.jar",
+          "sha256": "82b72614377d95e351cc23d57c1a89d5c4567447b522685b9db10e59c45f7627",
+          "movedTo": "D:\\AtomChat-Backups\\2026-11-01-dango-adoption\\20261101-204910\\Forge\\removed-wrong-loader\\atomchat-NeoForge-1.21.1-v0.4.0.jar"
+        }
+      ],
+      "modsDirFileCount": 165,
+      "otherFilesUnchanged": true,
+      "atomchatJarCountAfter": 1
+    },
+    {
+      "loader": "Fabric",
+      "instance": "1.21.1-CCB",
+      "installed": "D:\\Myworld\\.minecraft\\versions\\1.21.1-CCB\\mods\\atomchat-Fabric-1.21.1-v0.4.0.jar",
+      "sha256": "5792c50222013b72bb0e85936705b06839e39f2a1dff17d575b81d2b9dcf9da0",
+      "bytes": 8477435,
+      "newJarSource": "D:\\AtomChat-Main\\platforms\\1.21.1-fabric\\build\\atomlib-consumer\\libs\\atomchat-Fabric-1.21.1-v0.4.0.jar",
+      "replaced": {
+        "name": "atomchat-Fabric-1.21.1-v0.4.0.jar",
+        "oldSha256": "c0fbc473f72d3a75db31c1d305615f1662d55c233daa6a77055bc47ab66af6b8",
+        "backup": {
+          "path": "D:\\AtomChat-Backups\\2026-11-01-dango-adoption\\20261101-204910\\Fabric\\atomchat-Fabric-1.21.1-v0.4.0.jar",
+          "sha256": "c0fbc473f72d3a75db31c1d305615f1662d55c233daa6a77055bc47ab66af6b8"
+        }
+      },
+      "wrongLoaderJarsMovedOut": [],
+      "modsDirFileCount": 76,
+      "otherFilesUnchanged": true,
+      "atomchatJarCountAfter": 1
+    },
+    {
+      "loader": "NeoForge",
+      "instance": "Mechanomania-航空学",
+      "installed": "D:\\Myworld\\.minecraft\\versions\\Mechanomania-航空学\\mods\\atomchat-NeoForge-1.21.1-v0.4.0.jar",
+      "sha256": "b31d29cf66ad3566b092cbc047ca98e9eda90ef614616843fa559746823946ef",
+      "bytes": 8468631,
+      "newJarSource": "D:\\AtomChat-Main\\platforms\\1.21.1-neoforge\\build\\atomlib-consumer\\libs\\atomchat-NeoForge-1.21.1-v0.4.0.jar",
+      "replaced": {
+        "name": "atomchat-NeoForge-1.21.1-v0.4.0.jar",
+        "oldSha256": "04900d177303e739bff1f1ae16038e2544eb715f6428ba558e25cff40f8f2e81",
+        "backup": {
+          "path": "D:\\AtomChat-Backups\\2026-11-01-dango-adoption\\20261101-204910\\NeoForge\\atomchat-NeoForge-1.21.1-v0.4.0.jar",
+          "sha256": "04900d177303e739bff1f1ae16038e2544eb715f6428ba558e25cff40f8f2e81"
+        }
+      },
+      "wrongLoaderJarsMovedOut": [
+        {
+          "name": "atomchat-Fabric-1.21.1-v0.4.0.jar",
+          "sha256": "c0fbc473f72d3a75db31c1d305615f1662d55c233daa6a77055bc47ab66af6b8",
+          "movedTo": "D:\\AtomChat-Backups\\2026-11-01-dango-adoption\\20261101-204910\\NeoForge\\removed-wrong-loader\\atomchat-Fabric-1.21.1-v0.4.0.jar"
+        },
+        {
+          "name": "atomchat-Forge-1.20.1-v0.4.0.jar",
+          "sha256": "61e6208cc2138f5b0c175371a4fc133961171d1b4b8b582cf8a931aa11311299",
+          "movedTo": "D:\\AtomChat-Backups\\2026-11-01-dango-adoption\\20261101-204910\\NeoForge\\removed-wrong-loader\\atomchat-Forge-1.20.1-v0.4.0.jar"
+        }
+      ],
+      "modsDirFileCount": 207,
+      "otherFilesUnchanged": true,
+      "atomchatJarCountAfter": 1
+    }
+  ]
+}
