@@ -103,7 +103,10 @@ class InputWiringSourceTest {
     }
 
     private static String source(String relative) throws IOException {
-        return Files.readString(repoRoot().resolve(relative), StandardCharsets.UTF_8);
+        // Normalised to LF: the repo stores LF blobs and checks out native
+        // endings, so a multi-line snippet guard must not depend on the checkout.
+        return Files.readString(repoRoot().resolve(relative), StandardCharsets.UTF_8)
+                                .replace("\r\n", "\n").replace('\r', '\n');
     }
 
     /**

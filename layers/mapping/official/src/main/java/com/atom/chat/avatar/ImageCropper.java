@@ -152,6 +152,22 @@ public final class ImageCropper {
         dragging = false;
     }
 
+    /**
+     * Screen teardown: close the decoded bitmap even if the closing animation
+     * never got to run (closing the screen mid-crop used to leave up to 4 MB
+     * of pixels to the finalizer).
+     */
+    public void release() {
+        active = false;
+        closing = false;
+        GENERATION.incrementAndGet();
+        Image image = decoded;
+        decoded = null;
+        if (image != null) {
+            image.close();
+        }
+    }
+
     private void finishClose() {
         active = false;
         closing = false;

@@ -33,10 +33,15 @@ public final class ChatBubble {
     public static void drawImage(Canvas canvas, Image image, float x, float y, float w, float h,
                                  BubbleStyle style, boolean own) {
         if (image == null || w <= 0F || h <= 0F) return;
+        // An inline picture is often a full-resolution photo shown in a ~300 px
+        // bubble. Handing the GPU a 2x2 bilinear tap over a 4-8x minification
+        // is what made pictures look soft; the pre-halved copy keeps the last
+        // step at 2x, where bilinear is exact.
+        Image source = ImageQuality.scaledForLogical(image, Math.max(w, h));
         canvas.save();
         try {
             canvas.clipRRect(outline(x, y, w, h, style, own), ClipMode.INTERSECT, true);
-            canvas.drawImageRect(image, Rect.makeWH(image.getWidth(), image.getHeight()),
+            canvas.drawImageRect(source, Rect.makeWH(source.getWidth(), source.getHeight()),
                     Rect.makeXYWH(x, y, w, h), SamplingMode.LINEAR, PAINT.setColor(0xFF000000), false);
         } finally {
             canvas.restore();

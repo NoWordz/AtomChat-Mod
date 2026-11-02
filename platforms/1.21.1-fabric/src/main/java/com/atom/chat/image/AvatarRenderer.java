@@ -39,10 +39,40 @@ public final class AvatarRenderer {
     private static final int FACE_V = 8;
     private static final int HAT_U = 40;
 
-    private static final Map<Identifier, Image> FACE_CACHE = new HashMap<>();
-    private static final Map<Identifier, Image> SKIN_FACE_CACHE = new HashMap<>();
-    private static final Map<Identifier, Image> HAT_CACHE = new HashMap<>();
+    /**
+     * Skin caches. Each entry is three 64x64 images (~48 KB together), and the
+     * key is a per-server texture id, so an unbounded map grows with every
+     * player ever seen in the session. Bounded LRU that closes what it evicts:
+     * the tail is the least recently drawn, never a row the current frame is
+     * about to paint.
+     */
+    private static final int MAX_SKINS = 256;
+    private static final Map<Identifier, Image> FACE_CACHE = skinCache();
+    private static final Map<Identifier, Image> SKIN_FACE_CACHE = skinCache();
+    private static final Map<Identifier, Image> HAT_CACHE = skinCache();
     private static final Set<Identifier> FAILED = new HashSet<>();
+
+    private static Map<Identifier, Image> skinCache() {
+        return new java.util.LinkedHashMap<>(64, 0.75F, true) {
+            @Override
+            protected boolean removeEldestEntry(Map.Entry<Identifier, Image> eldest) {
+                if (size() <= MAX_SKINS) return false;
+                eldest.getValue().close();
+                return true;
+            }
+        };
+    }
+
+    /** Drops every sampled skin. They are rebuilt from the live textures on demand. */
+    public static void release() {
+        for (Image image : FACE_CACHE.values()) image.close();
+        for (Image image : SKIN_FACE_CACHE.values()) image.close();
+        for (Image image : HAT_CACHE.values()) image.close();
+        FACE_CACHE.clear();
+        SKIN_FACE_CACHE.clear();
+        HAT_CACHE.clear();
+        FAILED.clear();
+    }
     private static boolean dumped;
 
     /** Returns the face image for this skin, or null while/unless sampling works. */

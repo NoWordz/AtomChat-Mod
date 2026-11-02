@@ -13,6 +13,19 @@ class CompatibilityRegressionSourceTest {
         while (p != null && !Files.isDirectory(p.resolve("platforms"))) p = p.getParent();
         return java.util.Objects.requireNonNull(p);
     }
+
+    /**
+     * Reads a source file with its line endings normalised to LF. The repo
+     * stores LF blobs and checks out native endings ({@code text=auto} plus
+     * {@code core.autocrlf}), so on Windows the working copy is CRLF — and a
+     * guard that matches a multi-line snippet with {@code \n} in it would pass
+     * on CI and fail on a developer's machine (or the reverse). Normalising
+     * makes the guard a statement about the code, not about the checkout.
+     */
+    private static String source(Path root, String relative) throws Exception {
+        return Files.readString(root.resolve(relative)).replace("\r\n", "\n").replace('\r', '\n');
+    }
+
     private static final List<String> SCREENS = List.of(
             "platforms/1.20.1-forge/src/main/java/com/atom/chat/screen/AtomChatScreen.java",
             "platforms/1.21.1-neoforge/src/main/java/com/atom/chat/screen/AtomChatScreen.java",
@@ -30,7 +43,7 @@ class CompatibilityRegressionSourceTest {
     }
     @Test void foreignPaintDoesNotWaitForPanelAnimation() throws Exception {
         for (String file : SCREENS) {
-            String src = Files.readString(root().resolve(file));
+            String src = source(root(), file);
             String paint = method(src, "canRenderForeignChatUi");
             assertFalse(paint.contains("PanelOpenMotion.animating"), file);
             assertTrue(src.contains("if (canRenderForeignChatUi())"), file);
@@ -47,7 +60,7 @@ class CompatibilityRegressionSourceTest {
      */
     @Test void navigationAnimationsNoLongerGateThePointer() throws Exception {
         for (String file : SCREENS) {
-            String src = Files.readString(root().resolve(file));
+            String src = source(root(), file);
             String gate = method(src, "panelAnimating");
             assertFalse(gate.contains("director.pageNavActive()"), file);
             assertFalse(gate.contains("director.rootTransitionActive()"), file);
@@ -58,8 +71,8 @@ class CompatibilityRegressionSourceTest {
     }
     @Test void ownPublicIdentityAloneNeverSuppressesAnExternalSend() throws Exception {
         for (String platform : List.of("1.20.1-forge", "1.21.1-neoforge", "1.21.1-fabric")) {
-            String src = Files.readString(root().resolve("platforms/" + platform
-                    + "/src/main/java/com/atom/chat/mixin/ChatHudMixin.java"));
+            String src = source(root(), "platforms/" + platform
+                    + "/src/main/java/com/atom/chat/mixin/ChatHudMixin.java");
             src = method(src.substring(src.indexOf("private void atomchat$captureAndStore")), "atomchat$captureAndStore");
             assertFalse(src.contains("if (ownIdentity || ownEchoText)"), platform);
             assertFalse(src.contains("if (own) {"), "own messages without a local echo must enter the feed: " + platform);
@@ -67,7 +80,7 @@ class CompatibilityRegressionSourceTest {
     }
     @Test void transitionReleaseClearsCapturesWithoutFiringChoicesOrLinks() throws Exception {
         for (String file : SCREENS) {
-            String src = Files.readString(root().resolve(file));
+            String src = source(root(), file);
             String cancel = method(src, "cancelTransitionPointer");
             assertTrue(src.contains("@Override public void cancelPointer(int button) {\n            cancelTransitionPointer(button);"), file);
             for (String cleanup : List.of("settingsSectionPage.cancelPointer()", "bottomTabBar.setPressedTab(-1)",

@@ -28,6 +28,18 @@ public final class ImageUploader {
     private static final String UGUU_ENDPOINT = "https://uguu.se/upload";
     private static final String BOUNDARY = "----AtomChat" + UUID.randomUUID();
 
+    /**
+     * One uploader for the process. It is created per screen otherwise, and
+     * each instance owns an HttpClient (a selector thread plus a connection
+     * pool) and its own executor; the screen is rebuilt on every open and every
+     * resize, so the old instances' threads were never released.
+     */
+    private static final ImageUploader SHARED = new ImageUploader();
+
+    public static ImageUploader shared() {
+        return SHARED;
+    }
+
     private final HttpClient client;
     private final ExecutorService executor = Executors.newSingleThreadExecutor(r -> {
         Thread t = new Thread(r, "AtomChat-Upload");

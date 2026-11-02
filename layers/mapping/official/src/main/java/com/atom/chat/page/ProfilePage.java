@@ -7,6 +7,7 @@ import com.atom.chat.chat.BlockList;
 import com.atom.chat.chat.PlayerRef;
 import com.atom.chat.font.FontManager;
 import com.atom.chat.image.PlayerAvatar;
+import com.atom.chat.render.SkiaImages;
 import com.atom.lib.design.atomchat.SkiaDraw;
 import com.atom.chat.nav.PageNavAxis;
 import com.atom.chat.render.SkiaFontRenderer;
@@ -1171,7 +1172,7 @@ public final class ProfilePage {
                     if (!PlayerAvatar.drawE33Chat(canvas, subjectUuid(), subjectName(),
                             faceX, banner.y(), side,
                             side * UiTokens.E33CHAT_PROFILE_HAT_OUTSET_RATIO)) {
-                        SkiaDraw.drawRoundedImage(canvas, face,
+                        SkiaImages.drawRoundedImage(canvas, face,
                                 faceX, banner.y(), side, side, 0.0F, SamplingMode.DEFAULT);
                     }
                 }
@@ -1241,7 +1242,7 @@ public final class ProfilePage {
             // flight), the real skin otherwise — PlayerAvatar owns that chain.
             Image face = PlayerAvatar.face(subjectUuid(), subjectName());
             if (face != null) {
-                SkiaDraw.drawRoundedImage(canvas, face, avatar.x(), avatar.y(), avatar.w(), avatar.h(),
+                SkiaImages.drawRoundedImage(canvas, face, avatar.x(), avatar.y(), avatar.w(), avatar.h(),
                         avatar.w() / 2.0F, SamplingMode.LINEAR);
             } else {
                 // Fixed neutral placeholder for an absent face (content colour,

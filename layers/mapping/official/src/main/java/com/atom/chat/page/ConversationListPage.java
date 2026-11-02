@@ -11,6 +11,7 @@ import com.atom.chat.chat.PlayerRef;
 import com.atom.chat.chat.PrivateChatStore;
 import com.atom.chat.font.FontManager;
 import com.atom.chat.image.PlayerAvatar;
+import com.atom.chat.render.SkiaImages;
 import com.atom.lib.design.atomchat.SkiaDraw;
 import com.atom.chat.render.SkiaFontRenderer;
 import com.atom.chat.render.CardShadowReach;
@@ -789,7 +790,7 @@ public final class ConversationListPage {
         }
         Image face = PlayerAvatar.face(player.uuid(), player.realName());
         if (face != null) {
-            SkiaDraw.drawRoundedImage(canvas, face, x, y, size, size, size / 2.0F, SamplingMode.LINEAR);
+            SkiaImages.drawRoundedImage(canvas, face, x, y, size, size, size / 2.0F, SamplingMode.LINEAR);
         } else {
             SkiaDraw.drawRoundedRect(canvas, x, y, size, size, size / 2.0F, Color.makeARGB(255, 120, 130, 145));
         }
@@ -856,6 +857,10 @@ public final class ConversationListPage {
                 && (text.contains("[[CICode,url=") || text.contains("[CICode,url="));
     }
 
+    /** HH:mm for today's rows; {@code ofPattern} is a formatter-tree build, not a lookup. */
+    private static final DateTimeFormatter CLOCK =
+            DateTimeFormatter.ofPattern("HH:mm");
+
     private static String formatMessageTime(ChatMessage msg) {
         if (msg == null) {
             return "";
@@ -864,7 +869,7 @@ public final class ConversationListPage {
         LocalDate date = dt.toLocalDate();
         LocalDate today = LocalDate.now();
         if (date.equals(today)) {
-            return dt.format(DateTimeFormatter.ofPattern("HH:mm"));
+            return CLOCK.format(dt);
         }
         if (date.equals(today.minusDays(1))) {
             return tr("atomchat.time.yesterday");

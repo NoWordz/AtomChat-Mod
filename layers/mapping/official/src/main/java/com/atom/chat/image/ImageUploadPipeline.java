@@ -122,7 +122,7 @@ public final class ImageUploadPipeline {
     private long transientHintSetAt;
 
     public ImageUploadPipeline(Host host, ActionToast.Translator translator) {
-        this(host, translator, new ImageUploader()::upload, task -> host.client().execute(task));
+        this(host, translator, ImageUploader.shared()::upload, task -> host.client().execute(task));
     }
 
     /**

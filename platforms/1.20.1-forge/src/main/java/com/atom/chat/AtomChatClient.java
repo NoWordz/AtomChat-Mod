@@ -93,7 +93,13 @@ public final class AtomChatClient {
     }
 
     private static void registerReloadListener(RegisterClientReloadListenersEvent event) {
-        event.registerReloadListener((ResourceManagerReloadListener) manager -> PanelBlurRenderer.resetShader());
+        event.registerReloadListener((ResourceManagerReloadListener) manager -> {
+            PanelBlurRenderer.resetShader();
+            // Decimated copies were built from the old resource-supplied
+            // bitmaps; drop them with the shader so nothing points at a
+            // generation that no longer exists.
+            com.atom.chat.render.ImageQuality.release();
+        });
     }
 
     private static void onPlayerJoin(ClientPlayerNetworkEvent.LoggingIn event) {

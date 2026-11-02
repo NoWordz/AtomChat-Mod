@@ -11,6 +11,7 @@ import com.atom.chat.net.PackSyncClient;
 import com.atom.chat.pack.ServerPackStore;
 import com.atom.chat.render.Animator;
 import com.atom.chat.render.Easing;
+import com.atom.chat.render.SkiaImages;
 import com.atom.lib.design.atomchat.SkiaDraw;
 import com.atom.chat.render.SkiaFontRenderer;
 import static com.atom.lib.design.atomchat.UiTokens.s;
@@ -176,6 +177,20 @@ public final class EmojiPanel {
 
     public void close() {
         open = false;
+    }
+
+    /**
+     * Screen teardown: release the natives this panel holds. Without this the
+     * installed-pack icon and every decoded emote reached the finalizer only,
+     * and the panel is rebuilt on each screen open.
+     */
+    public void dispose() {
+        open = false;
+        if (iconImage != null) {
+            iconImage.close();
+            iconImage = null;
+        }
+        emoteImageCache.clear();
     }
 
     /**
@@ -961,7 +976,7 @@ public final class EmojiPanel {
         float scale = Math.min(1.0F, Math.min(avail / img.getWidth(), avail / img.getHeight()));
         float dw = Math.max(1.0F, img.getWidth() * scale);
         float dh = Math.max(1.0F, img.getHeight() * scale);
-        SkiaDraw.drawRoundedImage(canvas, img,
+        SkiaImages.drawRoundedImage(canvas, img,
                 ex + (colW - dw) / 2.0F, ey + (cell - dh) / 2.0F, dw, dh, s(6));
     }
 
@@ -989,7 +1004,7 @@ public final class EmojiPanel {
         Image icon = serverIcon();
         if (icon != null) {
             float size = Math.min(cell * 0.5F, icon.getWidth());
-            SkiaDraw.drawRoundedImage(canvas, icon, contentX, ey + (cell - size) / 2.0F, size, size, s(4));
+            SkiaImages.drawRoundedImage(canvas, icon, contentX, ey + (cell - size) / 2.0F, size, size, s(4));
             textX = contentX + size + s(8);
         }
         String name = store.serverName().isEmpty()

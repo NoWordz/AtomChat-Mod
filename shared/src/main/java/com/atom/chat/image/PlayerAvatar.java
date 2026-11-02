@@ -1,6 +1,7 @@
 package com.atom.chat.image;
 
 import com.atom.chat.config.AtomChatConfig;
+import com.atom.chat.render.SkiaImages;
 import com.atom.lib.design.atomchat.SkiaDraw;
 import com.atom.lib.design.atomchat.UiTokens;
 import io.github.humbleui.skija.Canvas;
@@ -69,12 +70,12 @@ public final class PlayerAvatar {
                     Color.makeARGB(255, 120, 130, 145));
             return true;
         }
-        SkiaDraw.drawRoundedImage(canvas, base, x, y, size, size, 0.0F, SamplingMode.DEFAULT);
+        SkiaImages.drawRoundedImage(canvas, base, x, y, size, size, 0.0F, SamplingMode.DEFAULT);
         Image hat = AvatarRenderer.hat(SkinResolver.getSkin(uuid, name));
         if (hat != null) {
             float offset = hatOutset;
             float hatSize = size + 2.0F * offset;
-            SkiaDraw.drawRoundedImage(canvas, hat, x - offset, y - offset,
+            SkiaImages.drawRoundedImage(canvas, hat, x - offset, y - offset,
                     hatSize, hatSize, 0.0F, SamplingMode.DEFAULT);
         }
         return true;

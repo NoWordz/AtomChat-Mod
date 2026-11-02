@@ -29,15 +29,30 @@ public final class PrivateChatStore {
         final PlayerRef partner;
         final List<ChatMessage> messages = new ArrayList<>();
         int unread;
+        /** Immutable view of {@link #messages}; see {@link #messages(PlayerRef)}. */
+        List<ChatMessage> published;
 
         Conversation(PlayerRef partner) {
             this.partner = partner;
         }
+
+        void changed() {
+            published = null;
+            generation++;
+        }
     }
+
+    /**
+     * Mutation counter across every conversation. The message list keys its
+     * cached content height on this, so switching partners or receiving a
+     * message re-measures while a repaint of the same rows does not.
+     */
+    private static volatile long generation;
 
     public static synchronized void reset() {
         CONVERSATIONS.clear();
         activePartner = null;
+        generation++;
     }
 
     /** Clears only the active-page marker; messages remain for the session. */
@@ -68,11 +83,13 @@ public final class PrivateChatStore {
             ChatMessage last = c.messages.get(c.messages.size() - 1);
             if (MessageMerge.canMerge(last, message)) {
                 c.messages.set(c.messages.size() - 1, MessageMerge.merge(last, message));
+                c.changed();
                 com.atom.chat.history.ChatHistory.markDirty();
                 return true;
             }
         }
         c.messages.add(message);
+        c.changed();
         com.atom.chat.fun.ChatEffectEvents.publish(message, partner);
         com.atom.chat.history.ChatHistory.markDirty();
         if (c.messages.size() > MAX_MESSAGES_PER_CONVERSATION) {
@@ -97,11 +114,13 @@ public final class PrivateChatStore {
             ChatMessage last = c.messages.get(c.messages.size() - 1);
             if (MessageMerge.canMerge(last, message)) {
                 c.messages.set(c.messages.size() - 1, MessageMerge.merge(last, message));
+                c.changed();
                 com.atom.chat.history.ChatHistory.markDirty();
                 return true;
             }
         }
         c.messages.add(message);
+        c.changed();
         com.atom.chat.fun.ChatEffectEvents.publish(message, partner);
         com.atom.chat.history.ChatHistory.markDirty();
         if (c.messages.size() > MAX_MESSAGES_PER_CONVERSATION) {
@@ -120,9 +139,15 @@ public final class PrivateChatStore {
         }
         Conversation c = conversation(partner);
         c.messages.addAll(loaded);
+        c.changed();
         while (c.messages.size() > MAX_MESSAGES_PER_CONVERSATION) {
             c.messages.remove(0);
         }
+    }
+
+    /** Mutation counter across every conversation; see {@link Conversation#changed()}. */
+    public static long generation() {
+        return generation;
     }
 
     /** @return true when at least one private message exists with this partner. */
@@ -142,7 +167,12 @@ public final class PrivateChatStore {
         if (c == null || c.messages.isEmpty()) {
             return List.of();
         }
-        return Collections.unmodifiableList(new ArrayList<>(c.messages));
+        List<ChatMessage> published = c.published;
+        if (published == null) {
+            published = Collections.unmodifiableList(new ArrayList<>(c.messages));
+            c.published = published;
+        }
+        return published;
     }
 
     /** Latest private message with the partner, or null. */

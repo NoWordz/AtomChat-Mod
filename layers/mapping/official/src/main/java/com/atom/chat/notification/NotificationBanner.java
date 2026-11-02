@@ -6,6 +6,7 @@ import com.atom.chat.font.FontManager;
 import com.atom.chat.image.PlayerAvatar;
 import com.atom.chat.ui.PanelOpenMotion;
 import com.atom.chat.render.RichTextRenderer;
+import com.atom.chat.render.SkiaImages;
 import com.atom.lib.design.atomchat.SkiaDraw;
 import com.atom.chat.render.SkiaFontRenderer;
 import com.atom.chat.text.RichText;
@@ -610,7 +611,7 @@ public final class NotificationBanner {
                 if (!skinStyle) {
                     Image face = msg != null ? PlayerAvatar.face(msg.getSenderUuid(), msg.getProfileName()) : null;
                     if (face != null) {
-                        SkiaDraw.drawRoundedImage(canvas, face, avatarX, avatarY, avatarSize, avatarSize,
+                        SkiaImages.drawRoundedImage(canvas, face, avatarX, avatarY, avatarSize, avatarSize,
                                 avatarSize / 2.0F, SamplingMode.LINEAR);
                     } else {
                         SkiaDraw.drawRoundedRect(canvas, avatarX, avatarY, avatarSize, avatarSize,

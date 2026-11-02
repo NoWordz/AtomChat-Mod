@@ -27,7 +27,21 @@ public final class EmoteImageCache {
     /** Longest side kept for the grid; the cell is only {@code s(44)}. */
     public static final int MAX_DIM = 128;
 
-    private final Map<File, Image> cache = new HashMap<>();
+    /**
+     * Every entry owns a native image, so the cache is bounded and closes what
+     * it drops. Unbounded it held a whole sticker folder (500 x 128x128x4 is
+     * 32 MB) for the lifetime of the screen, and {@link #clear()} dropped the
+     * references without closing them.
+     */
+    private static final int MAX_ENTRIES = 256;
+    private final Map<File, Image> cache = new java.util.LinkedHashMap<>(64, 0.75F, true) {
+        @Override
+        protected boolean removeEldestEntry(Map.Entry<File, Image> eldest) {
+            if (size() <= MAX_ENTRIES) return false;
+            eldest.getValue().close();
+            return true;
+        }
+    };
     private final Set<File> failed = new HashSet<>();
 
     public Image image(File file) {
@@ -66,11 +80,13 @@ public final class EmoteImageCache {
         if (file == null) {
             return;
         }
-        cache.remove(file);
+        Image dropped = cache.remove(file);
+        if (dropped != null) dropped.close();
         failed.remove(file);
     }
 
     public void clear() {
+        for (Image image : cache.values()) image.close();
         cache.clear();
         failed.clear();
     }

@@ -56,10 +56,16 @@ class NavInterruptWiringSourceTest {
         return dir;
     }
 
+    /** Reads a source file with line endings normalised to LF; see the repo's {@code text=auto} policy. */
+    private static String source(Path root, String relative) throws java.io.IOException {
+        return Files.readString(root.resolve(relative), StandardCharsets.UTF_8)
+                                .replace("\r\n", "\n").replace('\r', '\n');
+    }
+
     @Test
     void panelAnimatingNoLongerCountsTheNavClocks() throws Exception {
         for (String screen : SCREENS) {
-            String s = Files.readString(root().resolve(screen), StandardCharsets.UTF_8);
+            String s = source(root(), screen);
             int gate = s.indexOf("public boolean panelAnimating()");
             assertTrue(gate >= 0, screen + ": panelAnimating host method missing");
             String body = s.substring(gate, s.indexOf('}', gate));
@@ -76,7 +82,7 @@ class NavInterruptWiringSourceTest {
     @Test
     void clickRipplesPlayDuringPageNav() throws Exception {
         for (String screen : SCREENS) {
-            String s = Files.readString(root().resolve(screen), StandardCharsets.UTF_8);
+            String s = source(root(), screen);
             int ripples = s.indexOf("clickRipples.click(");
             assertTrue(ripples >= 0, screen + ": ripple arm missing");
             // The condition guarding the ripple arm must not consult the page
@@ -94,7 +100,7 @@ class NavInterruptWiringSourceTest {
     @Test
     void rootTabsStaggerTheirOwnItemsAndKeepTheEnvelopeForPushedPages() throws Exception {
         for (String screen : SCREENS) {
-            String s = Files.readString(root().resolve(screen), StandardCharsets.UTF_8);
+            String s = source(root(), screen);
             // Root pages are lists, so they animate per item instead of riding
             // the whole-page envelope: a drifting page plus a
             // rising row was the reported "the cards jump up on arrival".
@@ -123,7 +129,7 @@ class NavInterruptWiringSourceTest {
     @Test
     void returningToARootPageGivesTheBottomBarItsOwnEntrance() throws Exception {
         for (String screen : SCREENS) {
-            String s = Files.readString(root().resolve(screen), StandardCharsets.UTF_8);
+            String s = source(root(), screen);
             assertTrue(s.contains("composite.arrivalFromPushedToRoot()"),
                     screen + ": the bar entrance must arm only on a pushed->root pop");
             assertTrue(s.contains("bottomTabBar.markEntered()"),
@@ -134,7 +140,7 @@ class NavInterruptWiringSourceTest {
     @Test
     void screenExposesNoPageNavStateAnyMore() throws Exception {
         for (String screen : SCREENS) {
-            String s = Files.readString(root().resolve(screen), StandardCharsets.UTF_8);
+            String s = source(root(), screen);
             // The controller lands every stack change synchronously now; there is
             // no in-flight state to expose, and a reintroduced one would silently
             // re-create the swallowed-input class of bug this file guards against.
@@ -153,7 +159,7 @@ class NavInterruptWiringSourceTest {
         // envelope and its rows stay settled under it. Arming both clocks is the
         // "the cards jump up" bug that got the previous wiring rejected.
         for (String screen : SCREENS) {
-            String s = Files.readString(root().resolve(screen), StandardCharsets.UTF_8);
+            String s = source(root(), screen);
             assertFalse(s.contains("conversationListPage.markSettled()"),
                     screen + ": the root list now staggers on arrival");
             assertFalse(s.contains("settingsSectionPage.markSettled()"),
@@ -166,14 +172,14 @@ class NavInterruptWiringSourceTest {
         for (String page : List.of(
                 "layers/mapping/official/src/main/java/com/atom/chat/page/ConversationListPage.java",
                 "platforms/1.21.1-fabric/src/main/java/com/atom/chat/page/ConversationListPage.java")) {
-            String s = Files.readString(root().resolve(page), StandardCharsets.UTF_8);
+            String s = source(root(), page);
             assertTrue(s.contains("UiStagger.itemRise(entrance, staggerIndex, now, axis)"), page
                     + ": the stagger index must be the visible slot");
         }
         for (String page : List.of(
                 "layers/mapping/official/src/main/java/com/atom/chat/settings/SettingsSectionPage.java",
                 "platforms/1.21.1-fabric/src/main/java/com/atom/chat/settings/SettingsSectionPage.java")) {
-            String s = Files.readString(root().resolve(page), StandardCharsets.UTF_8);
+            String s = source(root(), page);
             assertTrue(s.contains("UiStagger.itemRise(entrance, staggerIndex, now, axis)"), page);
             assertFalse(s.contains("chipSwitchFromId"),
                     page + ": the chip crossfade is gone — a switch replays the entrance");
@@ -181,7 +187,7 @@ class NavInterruptWiringSourceTest {
         for (String page : List.of(
                 "layers/mapping/official/src/main/java/com/atom/chat/ui/EmojiPanel.java",
                 "platforms/1.21.1-fabric/src/main/java/com/atom/chat/ui/EmojiPanel.java")) {
-            String s = Files.readString(root().resolve(page), StandardCharsets.UTF_8);
+            String s = source(root(), page);
             assertTrue(s.contains("entrance.markEntered();"), page + ": the grid arms on open");
             assertTrue(s.contains("UiStagger.itemRise(entrance, row, rowNow, UiStagger.Axis.VERTICAL)"), page);
             assertTrue(s.contains("UiStagger.itemAlpha(entrance, row, rowNow)"), page

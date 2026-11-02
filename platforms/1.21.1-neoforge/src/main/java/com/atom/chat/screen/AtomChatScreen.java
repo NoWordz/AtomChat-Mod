@@ -2359,6 +2359,10 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         // Give back the GPU texture the panel blur was sampling.
         graphics.releaseWorldSnapshot();
         messageListView.dispose();
+        // Natives the screen owns: the emote grid's decoded cells and pack
+        // icon, and the cropper's decoded bitmap if it was closed mid-crop.
+        emojiPanel.dispose();
+        imageCropper.release();
         super.removed();
     }
 
@@ -2427,8 +2431,13 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
                 float dy = innerY + (innerH - drawH) / 2.0F;
                 try (Paint paint = new Paint().setAlphaf(
                         Math.max(0.0F, Math.min(1.0F, AtomChatConfig.get().panelOpacity)))) {
-                    canvas.drawImageRect(wallpaper,
-                            io.github.humbleui.types.Rect.makeXYWH(0, 0, wallpaper.getWidth(), wallpaper.getHeight()),
+                    // A wallpaper is decoded at up to 1024 px and cover-fitted
+                    // into a ~600 px panel; the decimated copy keeps the GPU's
+                    // last resample step at 2x instead of 1.7x-2x of blur.
+                    io.github.humbleui.skija.Image fitted =
+                            com.atom.chat.render.ImageQuality.scaledForLogical(wallpaper, Math.max(drawW, drawH));
+                    canvas.drawImageRect(fitted,
+                            io.github.humbleui.types.Rect.makeXYWH(0, 0, fitted.getWidth(), fitted.getHeight()),
                             io.github.humbleui.types.Rect.makeXYWH(dx, dy, drawW, drawH),
                             SamplingMode.LINEAR, paint, false);
                 }

@@ -1,5 +1,6 @@
 package com.atom.chat.image;
 
+import com.atom.chat.render.SkiaImages;
 import com.atom.lib.design.atomchat.SkiaDraw;
 import com.atom.chat.ui.Animations;
 import com.atom.lib.design.atomchat.AppIcons;
@@ -281,7 +282,7 @@ public final class ImagePreviewOverlay {
                     SkiaDraw.clip(canvas, box.x(), box.y(), box.w(), box.h(), 0F);
                     if (opacity != null) canvas.saveLayer(Rect.makeXYWH(box.x(), box.y(), box.w(), box.h()), opacity);
                     try {
-                        SkiaDraw.drawRoundedImage(canvas, current, rect.x(), rect.y(),
+                        SkiaImages.drawRoundedImage(canvas, current, rect.x(), rect.y(),
                                 rect.w(), rect.h(), UiTokens.radius(8));
                     } finally {
                         if (opacity != null) canvas.restore();

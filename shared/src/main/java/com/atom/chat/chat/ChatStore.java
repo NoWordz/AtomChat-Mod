@@ -7,6 +7,19 @@ import java.util.List;
 public final class ChatStore {
     private static final ChatStore INSTANCE = new ChatStore();
     private final List<ChatMessage> messages = new ArrayList<>();
+    /**
+     * Immutable view of {@link #messages}, rebuilt on the first read after a
+     * mutation. The list view asks for a snapshot every frame (twice, for the
+     * conversation-list preview), and copying up to 500 references each time was
+     * pure churn; a published snapshot makes the steady state allocation-free.
+     */
+    private List<ChatMessage> published;
+    /**
+     * Bumped on every mutation. The message list keys its cached content height
+     * on this, so a new or folded message re-measures while a plain repaint of
+     * the same rows does not.
+     */
+    private static volatile long generation;
     private static volatile boolean publicActive;
     private static volatile int publicUnread;
     private static volatile int mentionUnread;
@@ -27,11 +40,13 @@ public final class ChatStore {
             ChatMessage last = messages.get(messages.size() - 1);
             if (MessageMerge.canMerge(last, message)) {
                 messages.set(messages.size() - 1, MessageMerge.merge(last, message));
+                changed();
                 com.atom.chat.history.ChatHistory.markDirty();
                 return true;
             }
         }
         messages.add(message);
+        changed();
         com.atom.chat.fun.ChatEffectEvents.publish(message);
         com.atom.chat.history.ChatHistory.markDirty();
         if (!message.isOwn() && !publicActive) {
@@ -55,6 +70,7 @@ public final class ChatStore {
         while (messages.size() > 500) {
             messages.remove(0);
         }
+        changed();
     }
 
     /** Whether any message is currently held (used by the clear-history action). */
@@ -72,7 +88,23 @@ public final class ChatStore {
     }
 
     public synchronized List<ChatMessage> snapshot() {
-        return Collections.unmodifiableList(new ArrayList<>(messages));
+        List<ChatMessage> current = published;
+        if (current == null) {
+            current = Collections.unmodifiableList(new ArrayList<>(messages));
+            published = current;
+        }
+        return current;
+    }
+
+    /** Mutation counter for readers that cache derived geometry. */
+    public static long generation() {
+        return generation;
+    }
+
+    /** Invalidates the published snapshot and bumps the generation. Caller holds the monitor. */
+    private void changed() {
+        published = null;
+        generation++;
     }
 
     /** Marks the public channel as the currently viewed page. */
@@ -101,6 +133,7 @@ public final class ChatStore {
     /** Clears all public history and unread when leaving a server/world. */
     public static synchronized void reset() {
         INSTANCE.messages.clear();
+        INSTANCE.changed();
         publicActive = false;
         publicUnread = 0;
         mentionUnread = 0;

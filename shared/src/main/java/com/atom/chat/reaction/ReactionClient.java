@@ -41,8 +41,15 @@ public final class ReactionClient {
     private static final LinkedHashMap<UUID,LinkedHashMap<String,Long>> arrivals=new LinkedHashMap<>();
     private static String lastError;
     private static long generation;
+    /**
+     * Bumped on every accepted snapshot. Readers that cache geometry derived
+     * from chip counts (the message list's content height) watch this instead
+     * of re-deriving the counts every frame.
+     */
+    private static volatile long revision;
 
     public static long generation() { return generation; }
+    public static long revision() { return revision; }
     public static String takeError() { String result=lastError; lastError=null; return result; }
 
     public static void reset() {
@@ -50,6 +57,9 @@ public final class ReactionClient {
         lastError=null;
         snapshots.clear();
         arrivals.clear();
+        KEYS.clear();
+        KEY_MISSES.clear();
+        revision++;
     }
 
     private static <K,V> void cap(LinkedHashMap<K,V> map) {
@@ -57,11 +67,39 @@ public final class ReactionClient {
     }
 
     /**
+     * Row id -> derived key. A message's id is allocated once and its text and
+     * author are immutable afterwards (merge copies share the id), so the
+     * SHA-256 only has to run on first sight. Without this the chip layer hashed
+     * every measured row twice per frame — three FPS-visible digests per row
+     * per frame on a full backlog. Bounded like the other session maps.
+     */
+    private static final LinkedHashMap<Long,UUID> KEYS=new LinkedHashMap<>();
+    /** Rows whose key is null (system line / no author), so they are not re-probed either. */
+    private static final LinkedHashMap<Long,Boolean> KEY_MISSES=new LinkedHashMap<>();
+    private static final int KEY_CACHE_MAX=8192;
+
+    /**
      * The identity every client computes for a row, or null when the row cannot
      * carry reactions (system line, or missing author/body).
      */
     public static UUID key(ChatMessage row) {
-        if(row==null || row.isSystem()) return null;
+        if(row==null) return null;
+        long id=row.getId();
+        UUID cached=KEYS.get(id);
+        if(cached!=null) return cached;
+        if(KEY_MISSES.containsKey(id)) return null;
+        UUID computed=computeKey(row);
+        if(computed==null) { KEY_MISSES.put(id,Boolean.TRUE); capMisses(); }
+        else { KEYS.put(id,computed); cap(KEYS); }
+        return computed;
+    }
+
+    private static void capMisses() {
+        while(KEY_MISSES.size()>KEY_CACHE_MAX) { var it=KEY_MISSES.keySet().iterator(); it.next(); it.remove(); }
+    }
+
+    private static UUID computeKey(ChatMessage row) {
+        if(row.isSystem()) return null;
         String author = row.getProfileName()!=null ? row.getProfileName() : row.getSenderName();
         String body = row.getContentText();
         if(author==null || author.isBlank() || body==null) return null;
@@ -118,6 +156,7 @@ public final class ReactionClient {
             if(old==null || s.revision()>old.revision()) {
                 snapshots.put(s.id(),s); cap(snapshots);
                 recordArrivals(s,System.currentTimeMillis());
+                revision++;
             }
         } else if(value instanceof ReactionWire.Rejection r) {
             lastError=r.reason();

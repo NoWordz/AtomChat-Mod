@@ -32,8 +32,22 @@ public final class SkiaFontRenderer {
             0xFF5555, 0xFF55FF, 0xFFFF55, 0xFFFFFF
     };
 
-    /** Per-codepoint+size cache of resolved fallback fonts (emoji / chars missing from the primary). */
-    private static final java.util.Map<String, Font> FALLBACK_FONT_CACHE = new java.util.HashMap<>();
+    /**
+     * Per-codepoint+size cache of resolved fallback fonts (emoji / chars missing
+     * from the primary). Bounded: every entry is a native Font holding a
+     * Typeface, and a chat backlog plus a server MOTD can present thousands of
+     * distinct exotic codepoints at a handful of sizes. The bound is high
+     * enough that the working set (one emoji or kana per size) always fits, and
+     * the eviction is the same LRU shape the width cache uses.
+     */
+    private static final int FALLBACK_CACHE_MAX = 2048;
+    private static final java.util.Map<String, Font> FALLBACK_FONT_CACHE =
+            new java.util.LinkedHashMap<>(256, 0.75F, true) {
+                @Override
+                protected boolean removeEldestEntry(java.util.Map.Entry<String, Font> eldest) {
+                    return size() > FALLBACK_CACHE_MAX;
+                }
+            };
 
     /**
      * Primary-font glyph hits per Font instance: a set bit means the primary

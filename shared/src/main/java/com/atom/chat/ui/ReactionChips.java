@@ -59,6 +59,8 @@ public final class ReactionChips {
      * between chips (so crossing A→B never re-fades), and only fades when the
      * pointer leaves the chips entirely.
      */
+    private final java.util.Map<Long, Integer> lastCellCount = new java.util.HashMap<>();
+    private long geometryEpoch;
     private ReactionWire.Entry hoverEntry;
     private float hoverX,hoverY,hoverAlpha;
     private long hoverLastMs;
@@ -86,6 +88,26 @@ public final class ReactionChips {
         long id = row.getId();
         RowFrame cached = frames.get(id);
         if (cached != null) return cached;
+        RowFrame computed = computeFrame(row, id);
+        // A row's chip count is what its height depends on. Bumping an epoch
+        // when it changes lets the list cache a content height and still
+        // re-measure on the frame a chip appears or its fade finishes.
+        Integer previous = lastCellCount.get(id);
+        int now = computed.cells().size();
+        if (previous == null || previous != now) {
+            lastCellCount.put(id, now);
+            geometryEpoch++;
+        }
+        frames.put(id, computed);
+        return computed;
+    }
+
+    /** Chip-count epoch: changes whenever any row's laid-out chip count changes. */
+    public long geometryEpoch() {
+        return geometryEpoch;
+    }
+
+    private RowFrame computeFrame(ChatMessage row, long id) {
         // No channel means no reactions can exist anywhere, so skip the row hash
         // entirely — this runs for every measured message, every frame.
         if (!ReactionClient.enabled()) { frames.put(id, RowFrame.EMPTY); return RowFrame.EMPTY; }
@@ -106,7 +128,6 @@ public final class ReactionChips {
             result = new RowFrame(
                     anim.sync(id, live, mine, arrivals, frameNow, Animations.messageEntry()), entries);
         }
-        frames.put(id, result);
         return result;
     }
 

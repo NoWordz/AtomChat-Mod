@@ -12,6 +12,7 @@ import com.atom.chat.image.PlayerAvatar;
 import com.atom.chat.render.Animator;
 import com.atom.chat.render.CardShadowReach;
 import com.atom.chat.render.Easing;
+import com.atom.chat.render.SkiaImages;
 import com.atom.lib.design.atomchat.SkiaDraw;
 import com.atom.chat.render.SkiaFontRenderer;
 import com.atom.chat.theme.ThemeService;
@@ -2453,7 +2454,7 @@ public final class SettingsSectionPage {
             SkiaDraw.drawRoundedShadow(canvas, iconX, top, iconSize, iconSize,
                     UiTokens.SETTINGS_HERO_ICON_RADIUS, UiTokens.SETTINGS_HERO_ICON_SHADOW,
                     UiTokens.CARD_SHADOW);
-            SkiaDraw.drawRoundedImage(canvas, icon, iconX, top, iconSize, iconSize,
+            SkiaImages.drawRoundedImage(canvas, icon, iconX, top, iconSize, iconSize,
                     UiTokens.SETTINGS_HERO_ICON_RADIUS, SamplingMode.LINEAR);
         }
         float markY = top + iconSize + UiTokens.SETTINGS_HERO_GAP;
@@ -2464,8 +2465,11 @@ public final class SettingsSectionPage {
                 try (ColorFilter tint = ColorFilter.makeBlend(UiTokens.SETTINGS_HERO_BRAND_COLOR,
                         BlendMode.SRC_IN);
                      Paint paint = new Paint().setAntiAlias(true).setColorFilter(tint)) {
-                    canvas.drawImageRect(mark,
-                            Rect.makeXYWH(0, 0, mark.getWidth(), mark.getHeight()),
+                    // The wordmark is a large PNG drawn into a small box.
+                    Image fitted = com.atom.chat.render.ImageQuality.scaledForLogical(
+                            mark, Math.max(box.w(), box.h()));
+                    canvas.drawImageRect(fitted,
+                            Rect.makeXYWH(0, 0, fitted.getWidth(), fitted.getHeight()),
                             Rect.makeXYWH(box.x(), box.y(), box.w(), box.h()),
                             SamplingMode.LINEAR, paint, false);
                 }
@@ -2548,7 +2552,7 @@ public final class SettingsSectionPage {
                 float scale = Math.min(avatarSize / image.getWidth(), avatarSize / image.getHeight());
                 float imageW = image.getWidth() * scale;
                 float imageH = image.getHeight() * scale;
-                SkiaDraw.drawRoundedImage(canvas, image, cx - imageW / 2.0F,
+                SkiaImages.drawRoundedImage(canvas, image, cx - imageW / 2.0F,
                         top + (avatarSize - imageH) / 2.0F,
                         imageW, imageH, 0.0F, SamplingMode.DEFAULT);
             }
@@ -3038,7 +3042,7 @@ public final class SettingsSectionPage {
             Image face = row.player() != null
                     ? PlayerAvatar.face(row.player().uuid(), row.player().realName()) : null;
             if (face != null) {
-                SkiaDraw.drawRoundedImage(canvas, face, rect.x() + UiTokens.SETTINGS_ROW_PAD, avatarY,
+                SkiaImages.drawRoundedImage(canvas, face, rect.x() + UiTokens.SETTINGS_ROW_PAD, avatarY,
                         avatar, avatar, avatar / 2.0F, SamplingMode.LINEAR);
             } else {
                 // Avatar stand-in: an opaque neutral, fixed on purpose — it is a

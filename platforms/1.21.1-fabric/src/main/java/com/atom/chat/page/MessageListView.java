@@ -14,6 +14,7 @@ import com.atom.chat.image.PlayerAvatar;
 import com.atom.chat.render.ClickableSpan;
 import com.atom.chat.render.Easing;
 import com.atom.chat.render.RichTextRenderer;
+import com.atom.chat.render.SkiaImages;
 import com.atom.lib.design.atomchat.SkiaDraw;
 import com.atom.chat.render.SkiaFontRenderer;
 import com.atom.chat.render.TextSurface;
@@ -190,6 +191,15 @@ public final class MessageListView {
     private static final long HIGHLIGHT_MS = 1200L;
 
     /**
+     * The clock pill's formatter. Resolved once — {@code ofPattern} builds a
+     * formatter tree and a {@code ZoneId} lookup, and the divider painted it
+     * fresh for every visible divider on every frame.
+     */
+    private static final java.time.format.DateTimeFormatter CLOCK =
+            java.time.format.DateTimeFormatter.ofPattern("HH:mm")
+                    .withZone(java.time.ZoneId.systemDefault());
+
+    /**
      * Sender whose every visible avatar is wobbling, keyed by UUID rather than
      * a row index: the same player may appear on several rows, and a row index
      * would drift onto another message if the list shifts within the wobble.
@@ -317,26 +327,43 @@ public final class MessageListView {
             float dtMs = Math.min(50.0F, Math.max(1.0F, now - lastFrameMs));
             lastFrameMs = now;
             lastDtMs = dtMs;
+            // Rows above the extended viewport are skipped by offset instead of
+            // measured: the measure walk already recorded where each row starts,
+            // and re-wrapping every folded row above the viewport was the second
+            // full-window walk per frame.
+            float scrollTop = scroll.getScrollY();
+            int first = from;
+            while (first < messages.size()
+                    && rowTop[first] + rowHeight[first] < scrollTop - 80.0F
+                    && (Float.isNaN(dividerTop[first])
+                        || dividerTop[first] + TIME_DIVIDER_H < scrollTop - 80.0F)) {
+                // Same bookkeeping the skip branch below performs for a row
+                // that scrolled out: drop its entrance stamp, keep it settled.
+                messageEnterStart.remove(messages.get(first));
+                first++;
+            }
             float cursorY = y;
-            for (int mi = from; mi < messages.size(); mi++) {
+            for (int mi = first; mi < messages.size(); mi++) {
                 ChatMessage msg = messages.get(mi);
                 boolean grouped = isCompactGrouped(messages, mi);
-                if (dividerBefore(messages, mi)) {
+                if (!Float.isNaN(dividerTop[mi])) {
                     // Clock pill between messages. Drawn only when its own
                     // message is in the extended viewport, so occluded
                     // dividers cost nothing.
-                    float divOffset = cursorY - y;
+                    float divOffset = dividerTop[mi];
                     if (divOffset <= scroll.getScrollY() + height + 80.0F
                             && divOffset + TIME_DIVIDER_H >= scroll.getScrollY() - 80.0F) {
-                        drawTimeDivider(canvas, msg.getTimestamp(), x, width, cursorY);
+                        drawTimeDivider(canvas, msg.getTimestamp(), x, width, y + divOffset);
                     }
-                    cursorY += TIME_DIVIDER_H + UiTokens.LIST_GAP;
                 }
-                float h = messageHeight(msg, width, grouped);
-                float offset = cursorY - y;
+                float h = rowHeight[mi];
+                float offset = rowTop[mi];
                 if (offset > scroll.getScrollY() + height + 80.0F) {
                     break;
                 }
+                // Absolute, not accumulated: rowTop is the measure walk's cursor,
+                // so the divider gap above this row is already inside it.
+                cursorY = y + offset;
                 if (offset + h >= scroll.getScrollY() - 80.0F) {
                     float t = entranceProgress(msg, now);
                     boolean layered = t < 1.0F;
@@ -399,11 +426,6 @@ public final class MessageListView {
                     // bounded by pruneEntranceSettled's time guard.
                     messageEnterStart.remove(msg);
                 }
-                boolean nextGrouped = isCompactGrouped(messages, mi + 1);
-                float gap = nextGrouped
-                        ? MessageGrouping.groupedGap(UiTokens.LIST_GAP, UiTokens.s(2))
-                        : UiTokens.LIST_GAP;
-                cursorY += h + gap;
             }
         } finally {
             canvas.restore();
@@ -469,7 +491,10 @@ public final class MessageListView {
     /** Cached wrap; see {@link #layoutCache}. */
     private List<RichLine> wrappedLines(ChatMessage msg, Font font, float wrapWidth) {
         int w = Math.max(0, Math.round(wrapWidth));
-        long key = msg.getId() * 100_000L + Math.min(w, 99_999);
+        // The size is part of the key: a wrap measured at FONT_BODY must not be
+        // served to a caller that draws at a different size. The id field is
+        // 20 bits wide in the high half, so both halves stay collision-free.
+        long key = ((msg.getId() & 0xFFFFFL) << 40) | ((Math.round(font.getSize()) & 0xFFFFL) << 20) | Math.min(w, 0xFFFFF);
         List<RichLine> cached = layoutCache.get(key);
         if (cached != null) {
             return cached;
@@ -867,7 +892,7 @@ public final class MessageListView {
         }
         Image face = PlayerAvatar.face(uuid, name);
         if (face != null) {
-            SkiaDraw.drawRoundedImage(canvas, face, avatarX, avatarY, UiTokens.AVATAR_SIZE, UiTokens.AVATAR_SIZE,
+            SkiaImages.drawRoundedImage(canvas, face, avatarX, avatarY, UiTokens.AVATAR_SIZE, UiTokens.AVATAR_SIZE,
                     UiTokens.AVATAR_SIZE / 2.0F, SamplingMode.LINEAR);
         } else {
             SkiaDraw.drawRoundedRect(canvas, avatarX, avatarY, UiTokens.AVATAR_SIZE, UiTokens.AVATAR_SIZE,
@@ -921,9 +946,7 @@ public final class MessageListView {
     /** The clock pill itself: same capsule family as system messages. */
     private void drawTimeDivider(Canvas canvas, long timestamp, float x, float width, float y) {
         Font font = FontManager.font(UiTokens.FONT_QUOTE);
-        String time = java.time.format.DateTimeFormatter.ofPattern("HH:mm")
-                .withZone(java.time.ZoneId.systemDefault())
-                .format(java.time.Instant.ofEpochMilli(timestamp));
+        String time = CLOCK.format(java.time.Instant.ofEpochMilli(timestamp));
         float textW = SkiaFontRenderer.getStringWidth(font, time);
         float pillW = textW + s(20);
         float pillH = TIME_DIVIDER_H - s(6);
@@ -1448,14 +1471,79 @@ public final class MessageListView {
                 null);
     }
 
+    /**
+     * Last measured content height and everything it depends on. The walk
+     * below measures every row from the fold window to the end of the list —
+     * up to 500 rows, each re-wrapping its text and re-deriving its reaction
+     * chips — and its answer only changes when the list, the wrap width, the
+     * fold point, a layout switch or a reaction changes. Snapshots are stable
+     * instances between mutations (see {@code ChatStore#snapshot}), so list
+     * identity plus size is an exact "nothing changed" test, with no O(n) work
+     * to check it.
+     */
+    private List<ChatMessage> heightList;
+    /** Content-space top and height of each row, filled by the measure walk. */
+    private float[] rowTop = new float[0];
+    private float[] rowHeight = new float[0];
+    /** Content-space top of each row's clock divider, NaN when it has none. */
+    private float[] dividerTop = new float[0];
+    private int heightSize = -1;
+    private int heightFrom = -1;
+    private float heightWidth = -1.0F;
+    private int heightConfig = -1;
+    private long heightReaction = -1L;
+    private float heightValue = -1.0F;
+
     private float measureContentHeight(List<ChatMessage> messages, float width, int from) {
+        int config = (AtomChatConfig.get().imageMessagesEnabled ? 1 : 0)
+                | (AtomChatConfig.get().compactMessagesEnabled ? 2 : 0)
+                | (AtomChatConfig.get().effectiveBubbleStyle().ordinal() << 2);
+        long reaction = com.atom.chat.reaction.ReactionClient.revision() + reactionChips.geometryEpoch() * 1_000_003L;
+        if (heightValue >= 0.0F && heightList == messages && heightSize == messages.size()
+                && heightFrom == from && heightWidth == width
+                && heightConfig == config && heightReaction == reaction) {
+            return heightValue;
+        }
+        float measured = measureContentHeightUncached(messages, width, from);
+        // The walk itself is what discovers a chip count that changed, so the
+        // key is sampled after it: sampling before would re-measure one extra
+        // frame every time a chip appeared.
+        heightList = messages;
+        heightSize = messages.size();
+        heightFrom = from;
+        heightWidth = width;
+        heightConfig = config;
+        heightReaction = com.atom.chat.reaction.ReactionClient.revision() + reactionChips.geometryEpoch() * 1_000_003L;
+        heightValue = measured;
+        return measured;
+    }
+
+    /**
+     * One pass over the fold window producing both the content height and the
+     * per-row offsets the draw loop walks. The offsets are the same cursor the
+     * height accumulates, recorded instead of thrown away: drawing used to
+     * re-derive every row's height above the viewport just to know where the
+     * visible rows start, which is another full window walk per frame.
+     */
+    private float measureContentHeightUncached(List<ChatMessage> messages, float width, int from) {
+        int size = messages.size();
+        if (rowTop.length != size) {
+            rowTop = new float[size];
+            rowHeight = new float[size];
+            dividerTop = new float[size];
+        }
+        java.util.Arrays.fill(dividerTop, from, size, Float.NaN);
         float contentHeight = 0;
-        for (int i = from; i < messages.size(); i++) {
+        for (int i = from; i < size; i++) {
             if (dividerBefore(messages, i)) {
+                dividerTop[i] = contentHeight;
                 contentHeight += TIME_DIVIDER_H + UiTokens.LIST_GAP;
             }
             boolean grouped = isCompactGrouped(messages, i);
-            contentHeight += messageHeight(messages.get(i), width, grouped);
+            rowTop[i] = contentHeight;
+            float h = messageHeight(messages.get(i), width, grouped);
+            rowHeight[i] = h;
+            contentHeight += h;
             boolean nextGrouped = isCompactGrouped(messages, i + 1);
             contentHeight += nextGrouped
                     ? MessageGrouping.groupedGap(UiTokens.LIST_GAP, UiTokens.s(2))
