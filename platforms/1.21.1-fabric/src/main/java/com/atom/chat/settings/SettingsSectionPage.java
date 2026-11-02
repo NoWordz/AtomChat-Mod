@@ -391,8 +391,8 @@ public final class SettingsSectionPage {
         }
         activeChip.put(section.id(), index);
         // The new row set draws in one frame, then rises in on the same
-        // per-row stagger a navigation arrival uses (Dango semantics: no
-        // crossfade, no second clock — the entrance IS the transition).
+        // per-row stagger a navigation arrival uses (no crossfade, no second
+        // clock — the entrance IS the transition).
         entrance.markEntered(System.currentTimeMillis());
     }
 
@@ -1424,7 +1424,7 @@ public final class SettingsSectionPage {
                 try {
                     // The page entrance and the fold share one layer: either can
                     // be at full weight and the row still fades once, and the
-                    // rise is a single translate (Dango's shifted()).
+                    // rise is a single translate.
                     float rowAlpha = UiStagger.itemAlpha(entrance, staggerIndex, now);
                     float rowRise = UiStagger.itemRise(entrance, staggerIndex, now, axis);
                     // The style channel rides the SAME item progress: SLIDE drifts

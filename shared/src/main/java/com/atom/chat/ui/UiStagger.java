@@ -3,9 +3,7 @@ package com.atom.chat.ui;
 import com.atom.chat.render.Easing;
 
 /**
- * Page-entrance stagger — the DangoMusic adoption, taken verbatim
- * ({@code Ui.kt:180-211}, {@code pageAt} + {@code pageProgress}/{@code itemAnim}):
- * <b>one</b> arrival stamp (Dango's {@code pageAt}) drives everything, and each
+ * Page-entrance stagger — <b>one</b> arrival stamp drives everything, and each
  * moving piece reads its own progress off that single clock:
  *
  * <pre>
@@ -46,7 +44,7 @@ import com.atom.chat.render.Easing;
  * <p>Bucket: shared single source, no Minecraft names. Pure arithmetic.</p>
  */
 public final class UiStagger {
-    /** The page/header envelope (Dango's 320ms page clock). */
+    /** The page/header envelope: the 320ms page clock. */
     public static final long PAGE_MS = 320L;
     /**
      * The fade's head start on the page clock, in ms (~8% of {@link #PAGE_MS}).
@@ -56,24 +54,24 @@ public final class UiStagger {
      */
     public static final long PAGE_ALPHA_DELAY_MS = 26L;
     /**
-     * The SLIDE page-nav variant's whole-page horizontal excursion. Dango's own
-     * 12px is a phone-width budget; on AtomChat's wide panel it read as "almost
-     * nothing" in the field, and since list pages stagger per item the pushed
-     * pages need a visibly different excursion from the ZOOM scale — 44px, on
-     * the same 320ms clock as the fade.
+     * The SLIDE page-nav variant's whole-page horizontal excursion. A
+     * phone-width budget of 12px read as "almost nothing" on AtomChat's wide
+     * panel, and since list pages stagger per item the pushed pages need a
+     * visibly different excursion from the ZOOM scale — 44px, on the same
+     * 320ms clock as the fade.
      */
     public static final float PAGE_SLIDE_PX = 44.0F;
     /**
      * The ZOOM page-nav variant's start scale: 0.92 -> 1 while fading in.
-     * Deeper than Dango's 0.96 because the per-item scale (0.97) now runs
+     * Deeper than the usual 0.96 because the per-item scale (0.97) now runs
      * underneath it and the two must not read as the same gesture.
      */
     public static final float ZOOM_START_SCALE = 0.92F;
-    /** The item rise duration (Dango's 380ms item clock). */
+    /** The item rise duration: the 380ms item clock. */
     public static final long ITEM_MS = 380L;
     /**
-     * The per-item stagger step — 25ms rather than Dango's 35ms, so a full
-     * list lands in 225 + 380 = 605ms instead of 870ms.
+     * The per-item stagger step — 25ms rather than 35ms, so a full list lands
+     * in 225 + 380 = 605ms instead of 870ms.
      */
     public static final long ITEM_STAGGER_MS = 25L;
     /**
@@ -82,7 +80,7 @@ public final class UiStagger {
      * so scrolling never re-plays the entrance for rows already on screen.
      */
     public static final int ITEM_STAGGER_CAP = 10;
-    /** The rise distance in logical px (Dango's 18px item rise). */
+    /** The rise distance in logical px. */
     public static final float ITEM_RISE_PX = 18.0F;
     /**
      * The SLIDE style's per-item horizontal drift: each row enters from the
@@ -135,8 +133,8 @@ public final class UiStagger {
     }
 
     /**
-     * One page's entrance stamp — Dango's {@code pageAt}. Armed by the
-     * navigation when the page becomes the one on screen; an interrupt re-arms
+     * One page's entrance stamp. Armed by the navigation when the page
+     * becomes the one on screen; an interrupt re-arms
      * it with the exact same numbers. Long-settled until marked, so unmarked
      * surfaces never animate.
      */
@@ -179,9 +177,8 @@ public final class UiStagger {
 
     /**
      * The item entrance progress 0..1 for item {@code index}: item {@code i}
-     * waits {@code min(i, 14) * 35ms}, then runs the 380ms rise (Dango's
-     * {@code itemAnim}). Unarmed or decorative-motion-off holders read 1
-     * (fully in place).
+     * waits {@code min(i, 9) * 25ms}, then runs the 380ms rise. Unarmed or
+     * decorative-motion-off holders read 1 (fully in place).
      */
     public static float itemProgress(Entrance entrance, int index, long nowMs) {
         return curve(entrance, rawItemDelayMs(index), ITEM_MS, nowMs, Easing::easeOutCubic);
@@ -202,11 +199,10 @@ public final class UiStagger {
 
     /**
      * The item's fade 0..1 — the same progress that drives {@link #itemRise},
-     * which is the point: Dango drives a piece's offset and its opacity from one
-     * value ({@code shifted(dx, dy, alpha)} reads {@code p} three times,
-     * {@code Ui.kt:182-199}). Fading a row with a second clock, or moving it
-     * while it is still fully opaque, is what read in the field as "the card
-     * jumps up on arrival".
+     * which is the point: one progress value drives a piece's offset and its
+     * opacity, so the two cannot disagree. Fading a row with a second clock, or
+     * moving it while it is still fully opaque, is what read in the field as
+     * "the card jumps up on arrival".
      */
     public static float itemAlpha(Entrance entrance, int index, long nowMs) {
         return itemProgress(entrance, index, nowMs);
@@ -276,8 +272,8 @@ public final class UiStagger {
     /**
      * The SLIDE variant's horizontal excursion in logical px at {@code nowMs}:
      * {@link #PAGE_SLIDE_PX} at progress 0, 0 at rest. The caller applies the
-     * sign (the overlay always enters from the right, Dango has no direction
-     * state and neither does this). 0 unless the entrance is armed.
+     * sign (the overlay always enters from the right; there is no direction
+     * state). 0 unless the entrance is armed.
      */
     public static float pageSlidePx(Entrance entrance, long nowMs) {
         return (1.0F - pageProgress(entrance, nowMs)) * PAGE_SLIDE_PX;

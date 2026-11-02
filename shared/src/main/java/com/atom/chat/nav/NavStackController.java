@@ -24,11 +24,11 @@ import java.util.List;
  * step is a call on {@link Host}, so a recording port pins the sequence, and
  * swapping any two steps turns a test red.</p>
  *
- * <p><b>The transition inversion (the Dango adoption rewrite).</b> This class
+ * <p><b>The transition inversion (the one-stamp rewrite).</b> This class
  * used to arm a page transition instead of finishing its own cascade: a push
  * called {@code beginPageNav} before the push and a pop left the detail page
  * on the stack, waiting for a finished slide-out to apply {@code popNow}. The
- * Dango semantics have no exit phase — the stack changes the instant the user
+ * one-stamp model has no exit phase — the stack changes the instant the user
  * acts, and the arriving page's entrance overlay (see
  * {@link PageTransitionComposite}) is the only perceivable transition — so
  * every transition port method is gone: {@code popPage} applies the pop
@@ -286,8 +286,8 @@ public final class NavStackController {
 
     /**
      * Pops the top page <b>immediately</b> through the full {@link #popNow}
-     * cascade. There is no pending state: the Dango semantics have no leaving
-     * page on stage, so the previous page is the top from this very frame and
+     * cascade. There is no pending state: the model has no leaving page on
+     * stage, so the previous page is the top from this very frame and
      * its entrance overlay announces the change.
      */
     public void popPage() {

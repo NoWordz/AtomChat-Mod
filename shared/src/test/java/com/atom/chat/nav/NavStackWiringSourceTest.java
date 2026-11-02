@@ -94,7 +94,7 @@ class NavStackWiringSourceTest {
      * every unit test above would still pass (the recorder is the port), and
      * the screen would do nothing.
      *
-     * <p>The transition inversion (the Dango rewrite) removed the eleven
+     * <p>The transition inversion (the one-stamp rewrite) removed the eleven
      * transition forwards from this surface: the controller lands every stack
      * change synchronously now, and the only animation left beside the arriving
      * page's entrance overlay is the tab bar's own capsule, reached through

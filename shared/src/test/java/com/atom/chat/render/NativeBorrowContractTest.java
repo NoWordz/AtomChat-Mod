@@ -45,12 +45,36 @@ class NativeBorrowContractTest {
         }
     }
 
+    /**
+     * The device-pixel snapper must be told the same density the canvas is
+     * scaled by. The scale lives in {@link com.atom.chat.render.SkiaGraphics};
+     * a screen dividing it by the GUI scale again (which this guard rejects)
+     * quantises every snapped edge to a 2-4 device pixel grid — the exact
+     * opposite of the crispness the snapping exists for.
+     */
+    @Test void theCanvasScaleIsTheOneTheSnapperIsTold() throws Exception {
+        for (String target : TARGETS) {
+            String s = read(target + "/src/main/java/com/atom/chat/render/SkiaGraphics.java");
+            assertTrue(s.contains("canvas.scale(scale, scale)"), target);
+            assertTrue(s.contains("UiPixelSnap.beginFrame(scale)"), target);
+            assertTrue(s.indexOf("UiPixelSnap.beginFrame(scale)") < s.indexOf("bridge.vanillaPass(preUi)"),
+                    "the density must be set before the pre-pass that snaps the capture rect: " + target);
+        }
+        for (String screen : List.of(
+                "platforms/1.20.1-forge/src/main/java/com/atom/chat/screen/AtomChatScreen.java",
+                "platforms/1.21.1-neoforge/src/main/java/com/atom/chat/screen/AtomChatScreen.java",
+                "platforms/1.21.1-fabric/src/main/java/net/minecraft/client/gui/screen/AtomChatScreen.java")) {
+            String s = read(screen);
+            assertFalse(s.contains("UiPixelSnap.beginFrame("),
+                    "only SkiaGraphics owns the frame density; a screen writing it again can disagree: " + screen);
+        }
+    }
+
     private static int count(String text, String needle) {
         int found = 0;
         for (int at = text.indexOf(needle); at >= 0; at = text.indexOf(needle, at + needle.length())) found++;
         return found;
     }
-
     private static String read(String relative) throws Exception {
         Path root = Path.of("").toAbsolutePath();
         while (root != null && !Files.isDirectory(root.resolve("platforms"))) root = root.getParent();

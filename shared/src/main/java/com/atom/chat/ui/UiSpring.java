@@ -116,11 +116,11 @@ public final class UiSpring {
     }
 
     /**
-     * Toggle-switch knob travel (the DangoMusic adoption): k=380 with damping
-     * constant d=24 — DangoMusic's {@code musicui/Spring.kt} as tuned by its
-     * iOS switch ({@code Ui.kt:147}). At k=380 that is zeta ~0.62, so the
-     * knob overshoots about 8% of its travel before landing — the same
-     * "small surface, physical mass" language as the bounce spring. The knob
+     * Toggle-switch knob travel (the spring rewrite): k=380 with damping
+     * constant d=24, the tune that gives a small switch its physical weight.
+     * At k=380 that is zeta ~0.62, so the knob overshoots about 8% of its
+     * travel before landing — the same "small surface, physical mass" language
+     * as the bounce spring. The knob
      * travels 0..1 (position within the track), so {@link SpringAnim}'s
      * default settle thresholds fit unchanged.
      *

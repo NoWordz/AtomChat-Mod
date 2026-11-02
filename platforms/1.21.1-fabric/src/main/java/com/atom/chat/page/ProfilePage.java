@@ -1039,8 +1039,8 @@ public final class ProfilePage {
                     layout.list.w() + driftClipPad, layout.list.h(), 0.0F);
             // Page-entrance stagger over the page's blocks in reading order:
             // banner, avatar row, stat tiles, info card, identity card. Each
-            // block fades and lifts from ONE progress value (Dango's shifted),
-            // so nothing is ever opaque while it is still shifted.
+            // block fades and lifts from ONE progress value, so nothing is
+            // ever opaque while it is still shifted.
             drawStaggered(canvas, layout, now, 0,
                     () -> drawBanner(canvas, layout, scrollY));
             drawStaggered(canvas, layout, now, 1, () -> {

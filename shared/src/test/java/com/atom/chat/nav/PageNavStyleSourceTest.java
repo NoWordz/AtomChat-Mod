@@ -14,7 +14,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Source-level guard for the page-nav animation style on all three platforms,
- * rewritten to the Dango semantics.
+ * written for the one-stamp semantics.
  *
  * <p><b>The failure mode this test exists to prevent.</b> Detail-to-detail used
  * to be pinned to SLIDE whatever the config said, and the root-tab content had a

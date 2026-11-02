@@ -15,15 +15,14 @@ import io.github.humbleui.types.Rect;
  * page's <b>entrance overlay</b>, and this class owns its one piece of state:
  * the arrival stamp.
  *
- * <p><b>The semantics this class implements (the Dango adoption, rewritten).
+ * <p><b>The semantics this class implements (the one-stamp rewrite).
  * The previous design was a two-page choreography: a leaving page animated out
  * while the arriving page animated in, with a director state machine per style,
  * a fast/interrupt clock, and a root-tab clock beside it. Users rejected every
  * consequence: "back during the animation returns with no transition", "the
  * global ZOOM style still slid the tab bar hard", "the global SLIDE entrance
  * jumped", "the back arrow lingered", "re-opening Appearance could not
- * interrupt". The reference implementation (DangoMusic {@code Ui.kt}
- * {@code pageAt}) has none of that machinery:</p>
+ * interrupt". The one-stamp model has none of that machinery:</p>
  *
  * <ul>
  *   <li><b>No exit phase.</b> The old page stops being drawn the instant the
@@ -39,8 +38,7 @@ import io.github.humbleui.types.Rect;
  *   <li><b>Interrupt = re-stamp.</b> A key change at any point re-arms the one
  *       stamp and replays the same entrance with the same numbers — no fast
  *       branch, no second clock. There is deliberately no direction state:
- *       like Dango, the entrance always has the same shape regardless of push
- *       or pop.</li>
+ *       the entrance always has the same shape regardless of push or pop.</li>
  *   <li><b>One motion per arrival.</b> A list page can run its own per-item
  *       stagger instead ({@link Host#arrivalStaggersSurfaces()}); the envelope
  *       is then skipped entirely, so a page never drifts while its rows
@@ -49,15 +47,14 @@ import io.github.humbleui.types.Rect;
  *
  * <p><b>What the screen still does.</b> The composite stamps and envelopes; the
  * page identity check is a plain {@link NavPage} equality, so a settings
- * section switch (same page kind, different {@code param}) re-stamps too —
- * deliberately opposite to Dango, whose settings tabs intentionally do NOT
- * reset {@code pageAt} ({@code MusicScreen.kt} keeps tag switches out of the
- * key to avoid a flash of re-fade). AtomChat's settings sections are pushed
- * pages, and the user asked for an interruptible, resetting entrance there.</p>
+ * section switch (same page kind, different {@code param}) re-stamps too.
+ * Tab-style content can keep its stamp across a section switch to avoid a
+ * flash of re-fade; AtomChat's settings sections are pushed pages, and the
+ * user asked for an interruptible, resetting entrance there.</p>
  *
  * <p>Settled by default: the stamp starts unarmed, so the first frame of a
- * fresh screen (which establishes the initial key) plays nothing — matching
- * Dango, where {@code pageAt = 0} reads as long-settled.</p>
+ * fresh screen (which establishes the initial key) plays nothing — an unarmed
+ * stamp reads as long-settled.</p>
  *
  * <p><b>Bucket.</b> Shared single source: no {@code net.minecraft} name appears
  * here — {@code Canvas}/{@code Paint}/{@code Rect} are Skija's, the rest is
@@ -143,7 +140,7 @@ public final class PageTransitionComposite {
         if (!top.equals(stamped)) {
             // An interrupt is nothing special any more: a key change at any
             // point re-stamps the one entrance, and the same 320ms/44px/0.92
-            // numbers replay from zero (Dango's semantics — no fast clock).
+            // numbers replay from zero (one clock, no fast branch).
             arrivalFromPushedToRoot = !stamped.page().isRoot() && top.page().isRoot();
             entrance.markEntered(nowMs);
             stamped = top;

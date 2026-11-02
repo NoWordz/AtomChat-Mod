@@ -107,23 +107,21 @@ class NotificationRenderWiringTest {
     }
 
     @Test
-    void gnetumCompatPinsTheHudLayerToItsUncachedPathInBothTwins() throws Exception {
+    void gnetumCompatPinsTheHudLayerToItsUncachedPath() throws Exception {
         // Gnetum re-routes HUD layers into its own multi-pass cache; inside a
         // cached pass the raw-GL frosted backdrop lands in Gnetum's cache
         // framebuffer while the Skia card goes to the main framebuffer (the
         // AtomLib bridge pins its backend target), so the banner flickers at
         // the pass cadence. Both overlay twins must pin the layer to Gnetum's
         // uncached path; the compat itself is pure reflection and must not
-        // reference Gnetum classes at compile time.
-        for (String path : List.of(
-                "layers/mapping/official/src/main/java/com/atom/chat/notification/GnetumHudCompat.java",
-                "platforms/1.21.1-fabric/src/main/java/com/atom/chat/notification/GnetumHudCompat.java")) {
-            String s = Files.readString(root().resolve(path));
-            assertTrue(s.contains("Class.forName(\"me.decce.gnetum.Gnetum\")"), path);
-            assertTrue(s.contains("Platform.isModLoaded(\"gnetum\")"), path);
-            assertTrue(s.contains("\"atomchat:notifications\""), path);
-            assertFalse(s.contains("import me.decce"), "no compile-time Gnetum dependency: " + path);
-        }
+        // reference Gnetum classes at compile time. It carries no Minecraft
+        // names, so it lives once in shared/ instead of as a twin pair.
+        String compat = "shared/src/main/java/com/atom/chat/notification/GnetumHudCompat.java";
+        String compatSource = Files.readString(root().resolve(compat));
+        assertTrue(compatSource.contains("Class.forName(\"me.decce.gnetum.Gnetum\")"), compat);
+        assertTrue(compatSource.contains("Platform.isModLoaded(\"gnetum\")"), compat);
+        assertTrue(compatSource.contains("\"atomchat:notifications\""), compat);
+        assertFalse(compatSource.contains("import me.decce"), "no compile-time Gnetum dependency: " + compat);
         for (String path : List.of(
                 "layers/mapping/official/src/main/java/com/atom/chat/notification/NotificationHudOverlay.java",
                 "platforms/1.21.1-fabric/src/main/java/com/atom/chat/notification/NotificationHudOverlay.java")) {

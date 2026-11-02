@@ -6,9 +6,9 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Guards for the self-clocking {@code tick} entry of the spring language
- * (the DangoMusic musicui adoption): the spring owns the wall clock, so a
- * caller only supplies the target each frame. Three properties are pinned:
+ * Guards for the self-clocking {@code tick} entry of the spring language: the
+ * spring owns the wall clock, so a caller only supplies the target each frame.
+ * Three properties are pinned:
  *
  * <ul>
  *   <li><b>First paint and stall reset</b> — the first tick ever, and any
@@ -27,13 +27,13 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  *
  * <p>Time is passed explicitly in nanos (the same testability shape
  * {@code PanelOpenMotion.frameDtMs} uses) so no test depends on real wall
- * clock. The Dango reference tune k=380, d=24 (slightly underdamped, the
- * iOS-switch feel) drives the retarget case.</p>
+ * clock. The reference tune k=380, d=24 (slightly underdamped, the iOS-switch
+ * feel) drives the retarget case.</p>
  */
 class SpringAnimTickTest {
 
-    /** The Dango reference tune: k=380 with damping constant d=24 (zeta ~0.62). */
-    private static SpringAnim dangoTuned() {
+    /** The reference tune: k=380 with damping constant d=24 (zeta ~0.62). */
+    private static SpringAnim referenceTuned() {
         float zeta = 24.0F / (2.0F * (float) Math.sqrt(380.0F));
         return new SpringAnim(380.0F, zeta);
     }
@@ -42,7 +42,7 @@ class SpringAnimTickTest {
 
     @Test
     void firstTickSnapsToTarget() {
-        SpringAnim s = dangoTuned();
+        SpringAnim s = referenceTuned();
         // Never ticked before: there is no "previous frame" to animate from,
         // so the value must be the target on the very first paint.
         assertEquals(1.0F, s.tick(1.0F, 1_000L, true), 0.0F, "first paint lands on the target");
@@ -52,7 +52,7 @@ class SpringAnimTickTest {
 
     @Test
     void stallResetLandsInsteadOfReplayingStaleMotion() {
-        SpringAnim s = dangoTuned();
+        SpringAnim s = referenceTuned();
         long t = 0;
         s.tick(0.0F, t, true); // anchor the clock at the resting position
         t += FRAME;
@@ -78,7 +78,7 @@ class SpringAnimTickTest {
 
     @Test
     void retargetMidFlightKeepsVelocityAndNeverJumps() {
-        SpringAnim s = dangoTuned();
+        SpringAnim s = referenceTuned();
         long t = 0;
         s.tick(0.0F, t, true);
         t += FRAME;
@@ -131,7 +131,7 @@ class SpringAnimTickTest {
 
     @Test
     void longFrameBelowStallStaysStableAndLands() {
-        SpringAnim s = dangoTuned();
+        SpringAnim s = referenceTuned();
         long t = 0;
         s.tick(0.0F, t, true);
         t += FRAME;
@@ -153,7 +153,7 @@ class SpringAnimTickTest {
 
     @Test
     void backwardsClockDoesNotMoveOrReset() {
-        SpringAnim s = dangoTuned();
+        SpringAnim s = referenceTuned();
         long t = 0;
         s.tick(0.0F, t, true);
         t += FRAME;
@@ -174,7 +174,7 @@ class SpringAnimTickTest {
 
     @Test
     void motionOffSnapsThroughTick() {
-        SpringAnim s = dangoTuned();
+        SpringAnim s = referenceTuned();
         long t = 0;
         s.tick(0.0F, t, true);
         t += FRAME;
@@ -185,9 +185,9 @@ class SpringAnimTickTest {
 
     @Test
     void tickSettleIsFrameRateIndependent() {
-        assertEquals(1.0F, driveToSettle(dangoTuned(), 16_000_000L), 0.0F, "60fps lands exactly");
-        assertEquals(1.0F, driveToSettle(dangoTuned(), 7_000_000L), 0.0F, "144fps lands exactly");
-        assertEquals(1.0F, driveToSettle(dangoTuned(), 33_000_000L), 0.0F, "30fps lands exactly");
+        assertEquals(1.0F, driveToSettle(referenceTuned(), 16_000_000L), 0.0F, "60fps lands exactly");
+        assertEquals(1.0F, driveToSettle(referenceTuned(), 7_000_000L), 0.0F, "144fps lands exactly");
+        assertEquals(1.0F, driveToSettle(referenceTuned(), 33_000_000L), 0.0F, "30fps lands exactly");
     }
 
     /** Ticks 0->1 at the given frame pacing and returns the value once settled. */

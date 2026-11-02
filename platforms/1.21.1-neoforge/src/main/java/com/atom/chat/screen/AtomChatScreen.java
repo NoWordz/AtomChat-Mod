@@ -690,7 +690,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         }
         @Override
         public boolean panelAnimating() {
-            // Only the panel open/close transform stays gated (the DangoMusic
+            // Only the panel open/close transform stays gated (the
             // interruptibility contract, completed in unit E2): a running
             // ZOOM/SLIDE page/tab switch is a draw-only overlay whose
             // transforms never move the hit-tested layout, so a click
@@ -1384,8 +1384,8 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
     }
     // Root tab bar (D24b-1). The bar is the screen's: it draws, hit-tests and
     // tweens its own capsule (the deleted root-tab clock of the old
-    // two-page choreography is gone — the capsule and the arriving page's entrance overlay are
-    // independent animations now, like Dango's pill and its pageAt stamp).
+    // two-page choreography is gone — the capsule and the arriving page's
+    // entrance overlay are independent animations now).
     private final BottomTabBar bottomTabBar = new BottomTabBar();
 
     /**
@@ -1489,8 +1489,8 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         public void clearWorldScroll() {
             scrollSync.worldScroll().reset();
             // The list's entrance stagger arms at frame time from the
-            // composite's arrival event (the Dango stamp), not here: a page
-            // re-enters on every arrival, not only on this hook.
+            // composite's arrival event, not here: a page re-enters on every
+            // arrival, not only on this hook.
         }
 
         @Override
@@ -1507,8 +1507,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         public void clearSettingsPageState() {
             resetSettingsUi();
             // The rows' entrance arms at frame time from the composite's
-            // arrival event — a section switch re-stamps it too (the
-            // deliberate inversion of Dango's non-resetting settings tabs).
+            // arrival event — a section switch re-stamps it too.
         }
 
         @Override
@@ -1656,8 +1655,8 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         }
     });
     /**
-     * The arrival composite (D24b-2a, rewritten to the Dango semantics): the
-     * stamp and the entrance overlay live there; the screen contributes the
+     * The arrival composite (D24b-2a, one-stamp semantics): the stamp and the
+     * entrance overlay live there; the screen contributes the
      * page identity and the arriving page's two draws — the same body dispatch
      * and header the settled frame had, now the only draws there are.
      */
@@ -1939,8 +1938,6 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         long nowNanos = System.nanoTime();
         float frameDtMs = PanelOpenMotion.frameDtMs(nowNanos, lastFrameNanos);
         lastFrameNanos = nowNanos;
-        com.atom.chat.render.UiPixelSnap.beginFrame(
-                uiDensity() / (float) this.client.getWindow().getGuiScale());
         // The open/close rides a spring (unit E2): quicker than the retired
         // tau-70 exponential with a restrained settle, same exact-landing
         // snap so the equality settle test and the 6% close cut keep working.
@@ -2469,7 +2466,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         // The arriving surface owns the entrance, and only ONE motion plays it.
         //
         // Root pages are lists (conversation cards, settings tiles, profile
-        // blocks), so they run Dango's per-item stagger and NOT the whole-page
+        // blocks), so they run the per-item stagger and NOT the whole-page
         // overlay: drawRootPageBody draws them straight, each item fading and
         // rising off its own slot. A tab switch re-arms the arriving page's
         // stagger; the bar itself stays put and only slides its capsule.
@@ -2560,8 +2557,8 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
      * Everything {@link #drawChatPageBody} needs that the single hidden EditBox
      * makes shared: the composer text, the read-only and typing hints, the reply
      * bar and the scroll controller all belong to one {@link NavPage}. One page
-     * draws per frame (the Dango semantics), and the view is resolved from its
-     * own entry so a page never reads another page's render state.
+     * draws per frame, and the view is resolved from its own entry so a page
+     * never reads another page's render state.
      */
     private ChatPageView chatPageViewFor(NavPage page) {
         if (page == null || (page.page() != AppPage.WORLD_CHAT && page.page() != AppPage.PRIVATE_CHAT)) {
@@ -2872,7 +2869,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
     }
 
     /**
-     * The root page body. Root pages are lists, so they run Dango's per-item
+     * The root page body. Root pages are lists, so they run the per-item
      * stagger (each card/tile/block fades and rises off its own slot inside the
      * page) and deliberately do NOT ride the whole-page envelope: page drift
      * plus row rise was the reported "the cards jump up on arrival". The clip

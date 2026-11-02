@@ -24,7 +24,7 @@ import java.util.Map;
  *       slot it came from.</li>
  * </ul>
  *
- * <p>Only one page draws per frame (the transition inversion — the Dango
+ * <p>Only one page draws per frame (the transition inversion — the one-stamp
  * rewrite), so {@link #replyBarVisible} takes the page being drawn: its armed
  * reply has to reserve the row, or a live bar would be painted into the
  * zero-height rect {@code UiLayout.of} leaves at the panel origin when
@@ -91,7 +91,7 @@ public final class ReplySlotStore {
     /**
      * True while a reply bar is on screen: the live field holds one, or the
      * given page still has one armed in its slot. With the transition inversion
-     * (the Dango rewrite) only one page ever draws per frame, so the two-sided
+     * (the one-stamp rewrite) only one page ever draws per frame, so the two-sided
      * transition form is gone — the caller passes the page being drawn.
      *
      * @param page the page whose slot counts (may be null)

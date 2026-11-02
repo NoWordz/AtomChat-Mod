@@ -8,7 +8,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Pins for the page-entrance stagger (the DangoMusic adoption, retuned in the
+ * Pins for the page-entrance stagger (retuned in the
  * field, retuned again after "没有曲线，显得生硬", then split onto one motion axis
  * per nav style): items land over 380ms on a 25ms step capped at 10 slots and
  * carry a style channel on that same progress; the whole-page envelope runs

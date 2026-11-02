@@ -16,7 +16,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Source-level guard for the arrival composite and its screen wiring (the
- * Dango-semantics rewrite of the old transition-frame compositor guard).
+ * one-stamp rewrite of the old transition-frame compositor guard).
  *
  * <p><b>What changed, and why the old guard is gone.</b> The composite used to
  * composite two page layers per frame over a director state machine — its guard

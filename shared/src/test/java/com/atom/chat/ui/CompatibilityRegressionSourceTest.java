@@ -38,8 +38,7 @@ class CompatibilityRegressionSourceTest {
         }
     }
     /**
-     * The interruptibility contract (the DangoMusic adoption, inverting the
-     * old pin): the page/tab clocks are draw-only overlays whose transforms
+     * The interruptibility contract (inverting the old pin): the page/tab clocks are draw-only overlays whose transforms
      * never move the hit-tested layout, so a running ZOOM/SLIDE switch must
      * NOT swallow pointer input — the bottom bar used to be unclickable until
      * the switch finished. The panel open/close transform and the settings

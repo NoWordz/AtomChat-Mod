@@ -35,7 +35,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  *
  * <p><b>The transition inversion this rewrite pins.</b> The old controller armed
  * a page transition instead of finishing its own cascade: a pop left the detail
- * page on the stack, waiting for a finished slide-out. The Dango semantics have
+ * page on the stack, waiting for a finished slide-out. The one-stamp model has
  * no exit phase — {@code popPage} lands through the full {@code popNow} cascade
  * immediately, with motion on or off — and the arriving page's entrance overlay
  * is the only perceivable transition (pinned in {@code PageArrivalCompositeTest}
@@ -368,7 +368,7 @@ class NavStackControllerTest {
                 List.of(NavPage.of(AppPage.CHAT_LIST), NavPage.of(AppPage.WORLD_CHAT)));
         animated.popPage();
         assertEquals(AppPage.CHAT_LIST, animated.topPage(),
-                "the Dango semantics have no exit phase: the pop lands this frame with motion on too");
+                "the one-stamp model has no exit phase: the pop lands this frame with motion on too");
         assertEquals(List.of(
                 "signatureEditLive@WORLD_CHAT",
                 "syncReplySlot@WORLD_CHAT",

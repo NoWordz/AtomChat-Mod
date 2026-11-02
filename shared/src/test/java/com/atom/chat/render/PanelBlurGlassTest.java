@@ -11,13 +11,13 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Wiring guards for the glass readability clamp on the panel blur's rounded
- * draw-back shader (the DangoMusic glass adoption, unit B).
+ * draw-back shader (unit B).
  *
  * <p>What is pinned and why:</p>
  * <ul>
  *   <li><b>The clamp lives in the fragment shader, RGB only</b> — a bright
  *       backdrop (snow, desert noon) blurred to near-white drowns white panel
- *       text. Dango's glass fixes this by scaling RGB down to a luma ceiling
+ *       text. The clamp fixes this by scaling RGB down to a luma ceiling
  *       ({@code col *= u_MaxLuma / luma}); alpha must stay untouched because
  *       the display path treats framebuffer alpha as color (any non-1 write
  *       reads back as a black block).</li>

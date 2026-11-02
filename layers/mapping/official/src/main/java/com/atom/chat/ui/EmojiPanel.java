@@ -827,8 +827,8 @@ public final class EmojiPanel {
         for (int row = 0; row < rows; row++) {
             // Entrance rise (unit V): the row lands 20ms after its neighbour,
             // draw-only — the cell hit tests keep unscaled coordinates. The
-            // row's fade is the same progress as its rise (Dango's shifted()),
-            // so a cell is never seen opaque in a shifted position.
+            // row's fade is the same progress as its rise, so a cell is never
+            // seen opaque in a shifted position.
             long rowNow = System.currentTimeMillis();
             float rowAlpha = UiStagger.itemAlpha(entrance, row, rowNow);
             // The emoji grid is not a page-navigation surface: it opens inside

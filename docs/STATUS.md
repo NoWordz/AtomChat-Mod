@@ -2,10 +2,10 @@
 
 > 截至 2026-11-02。这里只维护当前快照，提交及推送事实以 Git 查询为准。
 
-## 转场动画：采用 DangoMusic 架构 + 六轮打磨（2026-11-01 ~ 11-02，0.4.0 内，**已提交已推送**）
+## 转场动画：单时间戳架构 + 六轮打磨（2026-11-01 ~ 11-02，0.4.0 内，**已提交已推送**）
 
 - 版本仍是 `0.4.0`；本轮只动观感与动效，零功能改动。提交 `222c7483..59c966a7` 已推到 `origin/main`，三端 jar 各实例已替换。
-- **架构反转**：删掉 `PageTransitionDirector`（两页同时绘制 + 交叉淡入），改为 Dango 的单时间戳语义——每帧只画到达页，一个 `UiStagger.Entrance` 驱动整页包络与逐项入场。中断不再是特例，只是用同一组数字重新打戳。
+- **架构反转**：删掉 `PageTransitionDirector`（两页同时绘制 + 交叉淡入），改为单时间戳语义——每帧只画到达页，一个 `UiStagger.Entrance` 驱动整页包络与逐项入场。中断不再是特例，只是用同一组数字重新打戳。
   - `PageTransitionComposite` 拥有唯一的到达戳；根页是卡片列表，用 `Host.arrivalStaggersSurfaces()` 跳过整页包络，改跑自己的逐项错峰（一帧只有一个动效）。
   - 顶栏是 chrome，最后绘制且**不做变换**——这是"切页时上栏会动"的根因修复。
 - **样式区分**：`PageNavAxis` 是配置→运动轴的唯一解析点（SLIDE=水平、ZOOM=垂直）；五个站点与底栏都读它，不再各自 `if (ZOOM)`。条目级也吃样式分量：SLIDE 纯水平漂移 24px，ZOOM 上浮 18px + 0.97→1 缩放。
@@ -19,6 +19,15 @@
 - 验证：Fabric **1601** / Forge **1586** / NeoForge **1586**，0 失败，各 4 skip。孪生守卫未归类块 10（全部既存于 `SkiaGraphics` / `NotificationHudOverlay`）、陈旧台账 0；裸值棘轮收紧到 441/441。
 - 部署：三实例已换 `2026-11-02-shadow-rim-axis` 那版（Forge `9747498f…`、Fabric `57ee7966…`、NeoForge `3bcd1ac7…`），备份在 `D:/AtomChat-Backups/2026-11-02-shadow-rim-axis/20261102-134853/`。
 - **用户已实机验收通过**；仍未做：ARM64 与专服启动验证，未发版。
+
+## 合规清理 + CI 修复 + 设备像素网格修复（2026-11-02，0.4.0 内，本轮）
+
+- **CI 红在矩阵校验**（run 41397257133，23s 即挂）：`GnetumHudCompat` 在 `layers/mapping/official` 与 `platforms/1.21.1-fabric` 各存一份且逐字相同 —— 它纯反射、零 Minecraft 名，映射中立，本就该进 `shared/`。已移到 `shared/src/main/java/com/atom/chat/notification/GnetumHudCompat.java`，两份副本删除，`NotificationRenderWiringTest` 的守卫改为断言唯一共享副本；`tools/gen_seams.py` 重新生成 `shared/PLATFORM-SEAMS.md`。`python3 tools/verify_targets.py` 现在通过。
+- **Dango / DangoMusic 字样清理**（代码注释 + 本轮提交）：源码与测试里的 142 处引用全部改写成描述行为本身（"单时间戳语义"/"逐项错峰"/"玻璃亮度钳制"/"弹簧调参 k=380 d=24"），不再提参考实现的名字、文件名或行号；`UiStagger` 类注释里"taken verbatim"的断言已删除。`docs/STATUS.md` 的分类标题同步改词。
+- **设备像素网格修复**（本次唯一的渲染行为改动）：`SkiaGraphics` 用 `canvas.scale(density, density)` 把逻辑坐标映射到设备像素，但屏幕另用 `beginFrame(uiDensity / guiScale)` 告诉 `UiPixelSnap` 密度 —— 两者差一个 GUI 倍率，于是 `snapToDevice` 实际对齐到 **2–4 设备像素**的粗网格（1080p/scale2 → 每 2px，4K/scale4 → 每 4px），正是"图形分辨率不高"的直接来源。现在密度只由 `SkiaGraphics` 在 `canvas.scale` 旁写入（且在模糊 pre-pass 之前，保证截图矩形同网格），三个屏幕的重复写入删除；`NativeBorrowContractTest.theCanvasScaleIsTheOneTheSnapperIsTold` 锁死这条唯一所有权。
+- 验证：三端全量 test 绿 —— Fabric **1602** / Forge **1587** / NeoForge **1587**，0 失败，各 4 skip（较上轮 +1 为本轮新增守卫）。`verify_targets.py` 通过；裸值棘轮 441/441；孪生未归类块 10（与改前相同，全部既存于 `SkiaGraphics` / `NotificationHudOverlay`）。
+- 未做：三实例未换包（本轮改的是注释 + 一处密度赋值，需要实机看清晰度再决定是否部署）；三枚**已推送**的提交信息仍含 "Dango"（`3b47f632`、`59c966a7`、`c8f6912d`），改写要 force-push 覆盖已发布历史，未擅自执行 —— 要不要改由用户拍板。
+- **合规提示（需人判断）**：删注释只是不再自述来源，如果当时的"verbatim 采纳"确有其事，代码本身仍可能构成 GPL-3.0 衍生作品，注释清理不能替代许可处理。落地算法本身是通用弹簧/缓动数学（阻尼谐振子、easeOutQuad + 单时间戳 + 每项延迟），未见可直接指认的复制痕迹；如需彻底澄清建议独立复核 `UiStagger` / `SpringAnim` / `PageTransitionComposite` 三处的实现来源。
 
 ## Gnetum 兼容：HUD 横幅闪烁元凶定位 + uncached 路线（2026-11-01 晚，0.4.0 内，未提交）
 

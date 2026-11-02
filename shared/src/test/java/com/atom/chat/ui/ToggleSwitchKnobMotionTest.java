@@ -9,8 +9,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Motion guards for the toggle knob's spring (the DangoMusic adoption, unit
- * C: the {@code SpringAnim.tick} language replacing the fixed-duration tween).
+ * Motion guards for the toggle knob's spring (unit C: the
+ * {@code SpringAnim.tick} language replacing the fixed-duration tween).
  * Three properties are pinned, all through the package-private spring handle
  * with explicit nanos so the clock is a test input, not the wall:
  *
@@ -20,7 +20,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  *       beyond what the spring's physics allows). The old eased tween
  *       restarted its full-duration curve from the current position, which
  *       reads as a jerk on a fast double-click.</li>
- *   <li><b>Dango tune</b> — k=380, d=24 (the iOS-switch feel): the flip
+ *   <li><b>Reference tune</b> — k=380, d=24 (the iOS-switch feel): the flip
  *       overshoots slightly (about 8% of the travel) and lands exactly on
  *       the end. The old tween never overshot.</li>
  *   <li><b>Stall reset</b> — a gap over a quarter second (settings page
@@ -80,7 +80,7 @@ class ToggleSwitchKnobMotionTest {
     }
 
     @Test
-    void dangoTuneOvershootsSlightlyAndLandsExactly() {
+    void referenceTuneOvershootsSlightlyAndLandsExactly() {
         ToggleSwitch t = new ToggleSwitch();
         SpringAnim knob = t.knobSpringForTest();
         long now = 0;

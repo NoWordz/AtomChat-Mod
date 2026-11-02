@@ -29,9 +29,15 @@ public final class SkiaGraphics {
         long allocatedBefore = profileStart == 0L ? -1L : FrameProfile.allocatedBytes();
         MinecraftRenderBridge bridge = MinecraftRenderBridge.get();
         try {
-            if (preUi != null) bridge.vanillaPass(preUi);
             float scale = density > 0.0F ? density
                     : Math.max(1.0F, MinecraftClient.getInstance().getFramebuffer().textureHeight / 1080.0F);
+            // The snapper measures in the canvas's own units, and this class is
+            // the only writer of that transform: setting the frame density here
+            // keeps device-grid snapping tied to the scale actually applied. It
+            // runs before the pre-pass so a capture rect snapped in there reads
+            // the same density the panel is about to be painted at.
+            UiPixelSnap.beginFrame(scale);
+            if (preUi != null) bridge.vanillaPass(preUi);
             bridge.drawFrame((canvas, frame) -> {
                 borrowedSurface.set(frame.surface());
                 borrowedBackend.set(frame.backendRenderTarget());

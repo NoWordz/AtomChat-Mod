@@ -13,8 +13,8 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Source-level guard for the screen's arrival flow (the Dango-semantics rewrite
- * of the old transition wiring).
+ * Source-level guard for the screen's arrival flow (the one-stamp rewrite of
+ * the old transition wiring).
  *
  * <p><b>Why a source probe.</b> The screens need the Minecraft client to load,
  * so no offline test can run their frame flow; the golden frames render page

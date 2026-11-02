@@ -22,7 +22,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * The arrival composite's contract, rewritten to the Dango semantics.
+ * The arrival composite's contract, written for the one-stamp semantics.
  *
  * <p><b>What was inverted, and why (the old six-path suite is gone).</b> The
  * previous composite choreographed <em>two</em> pages per frame — a leaving
@@ -32,7 +32,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * clicks during the animation landed with no transition, the global ZOOM style
  * still slid the tab content hard, the SLIDE entrance jumped, a leaving page's
  * back arrow outlived its page, and a re-opened section could not interrupt.
- * The Dango reference has none of that: the old page simply stops drawing, the
+ * The one-stamp model has none of that: the old page simply stops drawing, the
  * arriving page draws whole and interactive from its first frame, and the only
  * transition is its entrance overlay. This suite pins exactly that:</p>
  *
@@ -49,11 +49,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  *       plays;</li>
  *   <li>no exit phase: only the arriving page's draws happen, once per
  *       frame;</li>
- *   <li>the settings section switch re-stamps — the deliberate inversion of
- *       Dango's non-resetting settings tabs (its {@code MusicScreen} keeps tag
- *       switches out of the page key to avoid a re-fade flash; AtomChat's
- *       sections are pushed pages and the user asked for an interruptible,
- *       resetting entrance there);</li>
+ *   <li>the settings section switch re-stamps — a tab-style surface can keep
+ *       its stamp across a switch to avoid a re-fade flash; AtomChat's sections
+ *       are pushed pages and the user asked for an interruptible, resetting
+ *       entrance there;</li>
  *   <li>canvas discipline: the envelope's save points balance, and a settled
  *       frame adds no canvas state at all.</li>
  * </ul>
@@ -222,7 +221,7 @@ class PageTransitionCompositeTest {
     /**
      * A red block composited at partial opacity: still red-dominant, but its
      * red channel scales with the fade. The full-opacity {@link #isRed} can't
-     * judge a mid-entrance frame — with Dango's 320ms clock the fade is only
+     * judge a mid-entrance frame — with the 320ms clock the fade is only
      * ~67% at 100ms, which is the correct behaviour, not a missing draw.
      */
     private static boolean isRedDominant(int[] rgb) {
@@ -265,9 +264,9 @@ class PageTransitionCompositeTest {
 
     /**
      * The settings section switch re-stamps: same page kind, different section —
-     * a NavPage equality, so the section id is part of the key. This is the
-     * deliberate inversion of Dango's settings tabs (see the class note), and it
-     * is what makes "exit appearance, tap appearance again" replay the entrance.
+     * a NavPage equality, so the section id is part of the key (see the class
+     * note), and it is what makes "exit appearance, tap appearance again" replay
+     * the entrance.
      */
     @Test
     void settingsSectionSwitchReStampsTheKey() {

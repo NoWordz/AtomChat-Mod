@@ -12,8 +12,8 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Source-level guard for the interruptibility contract (the DangoMusic
- * adoption): <b>a running page/tab transition never swallows input</b>.
+ * Source-level guard for the interruptibility contract: <b>a running page/tab
+ * transition never swallows input</b>.
  *
  * <p><b>Why a source probe.</b> The gate mechanism itself
  * ({@code InputGate}) is host-driven and unit-tested; the contract lives in
@@ -95,8 +95,8 @@ class NavInterruptWiringSourceTest {
     void rootTabsStaggerTheirOwnItemsAndKeepTheEnvelopeForPushedPages() throws Exception {
         for (String screen : SCREENS) {
             String s = Files.readString(root().resolve(screen), StandardCharsets.UTF_8);
-            // Root pages are lists, so they animate per item (Dango's itemAnim)
-            // instead of riding the whole-page envelope: a drifting page plus a
+            // Root pages are lists, so they animate per item instead of riding
+            // the whole-page envelope: a drifting page plus a
             // rising row was the reported "the cards jump up on arrival".
             int rootDraw = s.indexOf("private void drawRootPage(Canvas canvas");
             assertTrue(rootDraw >= 0, screen + ": drawRootPage missing");

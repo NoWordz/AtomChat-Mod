@@ -78,8 +78,8 @@ public class AtomChatConfig {
     /** Rounded panel background blur (raw GL + core shader, outside Skia). */
     public boolean blurEnabled = true;
     /**
-     * Glass readability clamp on the blurred panel (the DangoMusic glass
-     * adoption): the rounded draw-back shader scales the blurred RGB down
+     * Glass readability clamp on the blurred panel (the glass luma clamp):
+     * the rounded draw-back shader scales the blurred RGB down
      * whenever its luma exceeds a ceiling (0.35), so white panel text stays
      * readable over bright backdrops (snow, desert noon). Alpha is never
      * touched. Off = the exact previous rendering (the shader's no-op 1.0

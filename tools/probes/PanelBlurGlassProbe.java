@@ -15,7 +15,7 @@ import java.nio.file.Path;
 
 /**
  * Hidden-window raw-GL probe for the panel blur's glass readability clamp
- * (the DangoMusic glass adoption, unit B).
+ * (unit B).
  *
  * <p>Compiles the repo's actual {@code atomchat_panel_blur} fsh/vsh with
  * plain LWJGL (no Minecraft, no ShaderInstance): the core shader is

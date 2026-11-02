@@ -122,10 +122,10 @@ public final class SpringAnim {
     private boolean everTicked = false;
 
     /**
-     * Self-clocking entry (adopted from DangoMusic's musicui {@code Spring}):
-     * the spring measures the wall clock itself, so a caller only supplies the
-     * target each frame — no per-callsite clock bookkeeping like
-     * {@code PressScale}'s manual {@code update(dtMs, ...)} feed.
+     * Self-clocking entry: the spring measures the wall clock itself, so a
+     * caller only supplies the target each frame — no per-callsite clock
+     * bookkeeping like {@code PressScale}'s manual {@code update(dtMs, ...)}
+     * feed.
      *
      * <p>Three rules, in order:</p>
      * <ul>

@@ -27,7 +27,7 @@ import io.github.humbleui.skija.Color;
  *       visual state only; the hover/press spring keeps running.</li>
  * </ul>
  *
- * <p>The knob owns a {@link SpringAnim} (the DangoMusic spring language)
+ * <p>The knob owns a {@link SpringAnim} (the spring language)
  * rather than a plain eased value: a mid-flight reversal keeps the velocity —
  * clicking twice quickly reads as one continuous slide — and the k=380/d=24
  * tune lands with a small physical overshoot (see
@@ -46,7 +46,7 @@ public final class ToggleSwitch {
     static final float DISABLED_OPACITY = 0.4F;
 
     /**
-     * Knob position spring (the DangoMusic adoption): replaces the old
+     * Knob position spring (the spring rewrite): replaces the old
      * fixed-duration eased tween, which restarted its full-duration curve
      * from the current position on a mid-flight reversal — position
      * continuous, velocity not, so a fast double-click read as a jerk. The
@@ -107,7 +107,7 @@ public final class ToggleSwitch {
 
     /**
      * Advances the knob. The knob rides the self-clocking {@link SpringAnim#tick}
-     * (wall clock owned by the spring, the Dango {@code Spring.tick} shape): a
+     * (wall clock owned by the spring): a
      * settings page reopened after more than a quarter second lands directly
      * instead of replaying a stale animation. As before the knob animates
      * regardless of the decorative-motion master switch — a direct-manipulation

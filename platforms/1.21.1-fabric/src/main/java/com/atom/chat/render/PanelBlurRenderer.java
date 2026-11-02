@@ -34,8 +34,7 @@ public final class PanelBlurRenderer {
     private static final String KAWASE_SHADER_NAME = "atomchat_kawase_blur";
     private static final int KAWASE_PASSES = 5;
     /**
-     * Luma ceiling of the glass readability clamp (the DangoMusic glass
-     * adoption, GlassStyle.maxLuma's default tune): blurred backdrops brighter
+     * Luma ceiling of the glass readability clamp: blurred backdrops brighter
      * than this are scaled down so white panel text stays readable. Applied
      * RGB-only in the rounded fragment shader; {@link com.atom.chat.config.AtomChatConfig#glassMaxLuma}
      * gates it, off meaning the shader's no-op 1.0.

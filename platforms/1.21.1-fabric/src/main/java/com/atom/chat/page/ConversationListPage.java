@@ -59,8 +59,8 @@ import java.util.Map;
 public final class ConversationListPage {
 
     /**
-     * Page-entrance stagger (unit V, the DangoMusic adoption): rows rise 18px
-     * into place, 20ms apart, capped at 10 items. Pure decoration — hit tests
+     * Page-entrance stagger: rows rise 18px into place, 25ms apart, capped at
+     * 10 items. Pure decoration — hit tests
      * keep unscaled coordinates, the same rule every draw transform here
      * follows. Armed by the navigation hooks (clearWorldScroll and the
      * transient-UI reset); long-settled until then, so golden frames and
@@ -364,8 +364,8 @@ public final class ConversationListPage {
             float y = contentTop(layout, scrollY);
             // Stagger position = the row's slot inside the VISIBLE viewport, so
             // scrolling never re-plays an entrance for rows already on screen
-            // (Dango's per-page stagger, with the index taken from the sorted
-            // draw order rather than the absolute list index).
+            // (the index is taken from the sorted draw order rather than the
+            // absolute list index).
             int staggerIndex = 0;
             for (int i = 0; i < rows.size(); i++) {
                 Row row = rows.get(i);
@@ -419,9 +419,9 @@ public final class ConversationListPage {
                         boolean pulsing = pressedRow == i
                                 && now - pressedRowAtMs < ROW_PULSE_MS;
                         // Entrance rise (unit V): draw-only, never gates input.
-                        // The offset and the fade are the SAME progress value
-                        // (Dango's shifted()), so a row is never seen fully
-                        // opaque in a shifted position — that read as a jump.
+                        // The offset and the fade are the SAME progress value,
+                        // so a row is never seen fully opaque in a shifted
+                        // position — that read as a jump.
                         float rowAlpha = UiStagger.itemAlpha(entrance, staggerIndex, now);
                         float rowRise = UiStagger.itemRise(entrance, staggerIndex, now, axis);
                         // The style channel rides that SAME progress (never a
