@@ -119,11 +119,13 @@ class ImageQualityTest {
         // 4x worse in the probe, so this is a behavioural contract, not an
         // implementation detail.
         for (int source : new int[]{128, 256, 768}) {
-            for (int target : new int[]{24, 40, 48, 88}) {
+            for (int target : new int[]{16, 24, 40}) {
                 try (Image image = noise(source)) {
                     ImageQuality.release();
                     Image prepared = ImageQuality.scaledFor(image, target);
-                    if (source <= target * 2) {
+                    // Preparation only pays past 3x: at 2.1x the copy is almost
+                    // the size of the source, so the resize buys nothing.
+                    if (source <= target * 3) {
                         assertSame(image, prepared, source + "->" + target + " needs no copy");
                         continue;
                     }
@@ -135,9 +137,9 @@ class ImageQualityTest {
     }
 
     @Test
-    void anImageAlreadyWithinTwiceTheTargetIsReturnedUntouched() {
+    void anImageBelowThePreparationGateIsReturnedUntouched() {
         try (Image source = noise(64)) {
-            assertSame(source, ImageQuality.scaledFor(source, 40), "1.6x is within the 2x window");
+            assertSame(source, ImageQuality.scaledFor(source, 40), "1.6x is below the 3x gate");
             assertSame(source, ImageQuality.scaledFor(source, 64), "an exact fit needs nothing");
         }
     }

@@ -41,6 +41,14 @@ import java.util.List;
  * away, then one MITCHELL resize to land on 2x, and the GPU finishes the last
  * factor of two.</p>
  *
+ * <p><b>Only worth it well past 2x.</b> The gate is {@link #MIN_RATIO}, not 2:
+ * preparation is a one-off cost (a 256 px avatar takes ~0.3 ms; a 768 px chat
+ * photo ~10 ms) and going from a 2.16x minification to 2.0x buys nothing
+ * measurable. A chat photo drawn in a normal bubble sits at ~2.1x, so it is
+ * returned untouched and pays nothing; avatars (4.3x), small icons (3.5x) and
+ * stickers are the cases that actually improve. Measured with
+ * tools/probes/ImagePrepCostProbe.java.</p>
+ *
  * <p><b>Ownership.</b> A prepared bitmap is a raster snapshot this cache owns: it
  * stays valid after the caller closes its source, and it is closed when the entry
  * is evicted or {@link #release()} runs. Sources are held weakly, so this cache
@@ -49,6 +57,12 @@ import java.util.List;
  * <p>Render thread only, like the rest of the draw path.</p>
  */
 public final class ImageQuality {
+    /**
+     * Prepare only when the GPU would otherwise minify by more than this. Below
+     * it the prepared copy is nearly as large as the source, so the extra CPU
+     * resize and the extra texture buy nothing.
+     */
+    private static final float MIN_RATIO = 3.0F;
     /** Prepared copies held per source before the least recent one is dropped. */
     private static final int MAX_LEVELS_PER_SOURCE = 4;
     /** Total pixels the prepared copies may hold; ~16 MB at 4 bytes per pixel. */
@@ -95,8 +109,8 @@ public final class ImageQuality {
             return null;
         }
         int target = Math.max(1, Math.round(targetDevicePx));
-        if (image.getWidth() <= target * 2 || image.getHeight() <= 0
-                || image.getHeight() <= target * 2) {
+        if (image.getWidth() <= target * MIN_RATIO || image.getHeight() <= 0
+                || image.getHeight() <= target * MIN_RATIO) {
             return image;
         }
         Entry entry = entryFor(image);
