@@ -20,6 +20,22 @@
 - 部署：三实例已换 `2026-11-02-shadow-rim-axis` 那版（Forge `9747498f…`、Fabric `57ee7966…`、NeoForge `3bcd1ac7…`），备份在 `D:/AtomChat-Backups/2026-11-02-shadow-rim-axis/20261102-134853/`。
 - **用户已实机验收通过**；仍未做：ARM64 与专服启动验证，未发版。
 
+## 渲染锐度定因 + 性能/内存审计（2026-11-02，0.4.0 内，**已提交已推送已部署**）
+
+- 提交 `74033973..2a25c5a3` 已推 `origin/main`，三实例已换新包。详细证据：`verification/2026-11-02-render-quality-and-caching.md`（定因 + 改法）与 `verification/2026-11-02-render-quality-deployment.{md,json}`（部署）。
+- **"糊"的定因是三把离屏探针给出的，不是猜的**：
+  - **文字已在物理底线**。会话真实密度 1.4815、`FONT_BODY` 25px → 37 设备像素，10%→90% 过渡宽度 2.112px，而 4× 超采样理想值是 2.086px（差 1.2%）。开 hinting + 关亚像素定位只把它压到 2.085px（0.03px，不可见），却让字形误差从 2.10 翻到 4.86 —— **字体设置一项都不改**。
+  - **色彩空间/亚像素 AA 无收益**。legacy（无色彩空间）surface 与 sRGB 给出同一组像素；开亚像素 AA 反而更糊（2.095→2.281px）。
+  - **图片降采样是真凶**。缓存解码到 256–1024px，实际画在 40–90 设备像素，GPU 的 2×2 双线性只取 4/9–4/64 个纹素。128→40 的误差：直绘 23.96，缩到 2× 目标再交给 GPU **3.06**。机制是 **GPU 双线性在恰好 2 倍时精确**，其他比例只是近似 —— 所以换更"好"的采样模式没用，必须在 CPU 端先落到刚好 2×。
+- **锐度改动**：新增 `ImageQuality`（MITCHELL 反复对半到 >4× 之后，再一次精确落到 2×目标；派生副本弱引用键控源图、4M 像素上限、淘汰即 close）与 `SkiaImages`（唯一入口），**14 个绘制点全部迁移**；三加载器的资源重载都调 `release()`。守卫 `ImageQualityTest.everyImageDrawSiteGoesThroughTheDecimatingWrappers` 扫全树，新增裸调用点即失败。
+- **性能改动**（真机基线 panel p50=4.6ms / 95–190KB 每帧）：消息列表每帧把折叠窗口测两遍（测量一遍、绘制找首行一遍）→ 内容高度按「不可变快照实例+宽度+折叠点+布局位+表情版本」缓存，测量顺带记录每行偏移供绘制跳读；表情 chip 的 SHA-256 按 message id 缓存；时钟 formatter 静态化；换行 key 补上字号（原先换字号复用旧换行是正确性 bug）；`ChatStore`/`PrivateChatStore` 发布不可变快照不再每帧复制。**A/B 实测 500 条消息中段滚动：p50 2.191→1.313ms（-40%），每帧分配 200.7→33.1KB（-84%）**。
+- **内存改动**：回退字体缓存（2048 项）、表情图缓存（256 项，淘汰即 close）、皮肤三表（各 256 项，淘汰即 close）全部封顶；`ImageUploader` 改进程级单例（原先每次开屏/改窗口大小泄漏一个 HttpClient + 线程池）；屏幕 `removed()` 释放裁剪器位图与表情网格。
+- **顺带修三个既存测试缺陷**：`CompatibilityRegressionSourceTest`、`NavInterruptWiringSourceTest`、`InputWiringSourceTest` 直接拿 CRLF 工作副本匹配含 `\n` 的多行片段（`git stash` 验证过 HEAD 上同样失败），改为读后归一化行尾。
+- 验证：三端全量 test 绿 —— Fabric **1610** / NeoForge **1596** / Forge **1596**，0 失败，各 4 skip；`verify_targets.py` 通过；`test_verify_jars.py` 16 项 OK；三端 `verify_jars.py --profile atomlib-consumer` 全通过；三端 `clean build`（含 check）成功，构建戳 `git_commit=2a25c5a`、`git_dirty=false`。
+- 部署：Forge `d1fd473e…` / Fabric `abe683d88f4a…` / NeoForge `4d1d54ddefdc…`；旧包哈希与上一轮台账 `new_sha256` 逐一吻合（链完整性），备份根 `D:/AtomChat-Backups/2026-11-02-render-quality/20261102-172814/`，mods 可见文件数 164/76/206 不变、各一份包。
+- **未验证**：实机观感（三客户端须完全重启）；`ImageQuality` 长期内存曲线；ARM64 与专服。**未发版**，仍 `0.4.0`。
+- **仍未做的结构性优化**：静止面板依然整窗重绘（无 dirty-region），缓存整幅结果图是最大剩余收益但失效条件复杂（主题/缩放/滚动/悬停/动画），本轮未动。AtomLib 侧的 `UiTokens.hairline()/cardFill()` 每次重算亮度（3×`Math.pow`）与 `SkiaDraw.BLUR_FILTERS` 清空不 close，需在 AtomLib 仓库处理。
+
 ## 合规清理 + CI 修复 + 设备像素网格修复（2026-11-02，0.4.0 内，本轮）
 
 - **CI 红在矩阵校验**（run 41397257133，23s 即挂）：`GnetumHudCompat` 在 `layers/mapping/official` 与 `platforms/1.21.1-fabric` 各存一份且逐字相同 —— 它纯反射、零 Minecraft 名，映射中立，本就该进 `shared/`。已移到 `shared/src/main/java/com/atom/chat/notification/GnetumHudCompat.java`，两份副本删除，`NotificationRenderWiringTest` 的守卫改为断言唯一共享副本；`tools/gen_seams.py` 重新生成 `shared/PLATFORM-SEAMS.md`。`python3 tools/verify_targets.py` 现在通过。
