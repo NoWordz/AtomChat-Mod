@@ -1,0 +1,67 @@
+{
+  "timestamp": "20261102-153018",
+  "backup_root": "D:/AtomChat-Backups/2026-11-02-snap-device-grid/20261102-153018",
+  "changeSet": "device-pixel snap density fix + GnetumHudCompat moved to shared/ + upstream name scrub in comments",
+  "previousRound": "D:/AtomChat-Backups/2026-11-02-shadow-rim-axis/20261102-134853",
+  "notes": [
+    "mods_dir_files counts non-hidden entries, the same metric as earlier rounds; .connector/ (Sinytra Connector) is hidden and excluded, pre-existing and untouched.",
+    "The CCB fabric mods dir held 76 non-hidden entries, not the 74 recorded last round: mcef-libraries/ and mcef-cache/ appeared at 2026-11-02 13:51/13:52 from mod runtime, not from this deploy."
+  ],
+  "instances": {
+    "forge": {
+      "mods_dir": "D:\\Myworld\\.minecraft\\versions\\1.20.1-main\\mods",
+      "jar": "atomchat-Forge-1.20.1-v0.4.0.jar",
+      "backup": "D:\\AtomChat-Backups\\2026-11-02-snap-device-grid\\20261102-153018\\forge\\atomchat-Forge-1.20.1-v0.4.0.jar",
+      "old": {
+        "bytes": 8451401,
+        "sha256": "9747498fe6d0a1258f4a377dc97355f0fd37892e05b46732b2e6ef037da22aa2"
+      },
+      "new": {
+        "bytes": 8458279,
+        "sha256": "6dfb1a82c2a83fc381f0cc8b75527db8a8251004e4790195daf3ad108946502a"
+      },
+      "built": {
+        "bytes": 8458279,
+        "sha256": "6dfb1a82c2a83fc381f0cc8b75527db8a8251004e4790195daf3ad108946502a"
+      },
+      "mods_dir_files": 164
+    },
+    "fabric": {
+      "mods_dir": "D:\\Myworld\\.minecraft\\versions\\1.21.1-CCB\\mods",
+      "jar": "atomchat-Fabric-1.21.1-v0.4.0.jar",
+      "backup": "D:\\AtomChat-Backups\\2026-11-02-snap-device-grid\\20261102-153018\\fabric\\atomchat-Fabric-1.21.1-v0.4.0.jar",
+      "old": {
+        "bytes": 8479594,
+        "sha256": "57ee79663744bee5b6361bd4baf47910a001d8a70f65be531b52717d2b30a5e5"
+      },
+      "new": {
+        "bytes": 8479633,
+        "sha256": "89cbe654cd11cde110be1293f9bcfe3abb985836c3dd62f481d685231c8387de"
+      },
+      "built": {
+        "bytes": 8479633,
+        "sha256": "89cbe654cd11cde110be1293f9bcfe3abb985836c3dd62f481d685231c8387de"
+      },
+      "mods_dir_files": 76
+    },
+    "neoforge": {
+      "mods_dir": "D:\\Myworld\\.minecraft\\versions\\Mechanomania-航空学\\mods",
+      "jar": "atomchat-NeoForge-1.21.1-v0.4.0.jar",
+      "backup": "D:\\AtomChat-Backups\\2026-11-02-snap-device-grid\\20261102-153018\\neoforge\\atomchat-NeoForge-1.21.1-v0.4.0.jar",
+      "old": {
+        "bytes": 8470690,
+        "sha256": "3bcd1ac7fd32ee1e5667f87e794b939be05f3aa9eaf860198ac427910e7af5e6"
+      },
+      "new": {
+        "bytes": 8470731,
+        "sha256": "315df7a20b546747ac37f8c14fdafe8d240133c26be4416150d119573ca5b3b6"
+      },
+      "built": {
+        "bytes": 8470731,
+        "sha256": "315df7a20b546747ac37f8c14fdafe8d240133c26be4416150d119573ca5b3b6"
+      },
+      "mods_dir_files": 206
+    }
+  },
+  "failures": []
+}

@@ -26,7 +26,8 @@
 - **Dango / DangoMusic 字样清理**（代码注释 + 本轮提交）：源码与测试里的 142 处引用全部改写成描述行为本身（"单时间戳语义"/"逐项错峰"/"玻璃亮度钳制"/"弹簧调参 k=380 d=24"），不再提参考实现的名字、文件名或行号；`UiStagger` 类注释里"taken verbatim"的断言已删除。`docs/STATUS.md` 的分类标题同步改词。
 - **设备像素网格修复**（本次唯一的渲染行为改动）：`SkiaGraphics` 用 `canvas.scale(density, density)` 把逻辑坐标映射到设备像素，但屏幕另用 `beginFrame(uiDensity / guiScale)` 告诉 `UiPixelSnap` 密度 —— 两者差一个 GUI 倍率，于是 `snapToDevice` 实际对齐到 **2–4 设备像素**的粗网格（1080p/scale2 → 每 2px，4K/scale4 → 每 4px），正是"图形分辨率不高"的直接来源。现在密度只由 `SkiaGraphics` 在 `canvas.scale` 旁写入（且在模糊 pre-pass 之前，保证截图矩形同网格），三个屏幕的重复写入删除；`NativeBorrowContractTest.theCanvasScaleIsTheOneTheSnapperIsTold` 锁死这条唯一所有权。
 - 验证：三端全量 test 绿 —— Fabric **1602** / Forge **1587** / NeoForge **1587**，0 失败，各 4 skip（较上轮 +1 为本轮新增守卫）。`verify_targets.py` 通过；裸值棘轮 441/441；孪生未归类块 10（与改前相同，全部既存于 `SkiaGraphics` / `NotificationHudOverlay`）。
-- 未做：三实例未换包（本轮改的是注释 + 一处密度赋值，需要实机看清晰度再决定是否部署）；三枚**已推送**的提交信息仍含 "Dango"（`3b47f632`、`59c966a7`、`c8f6912d`），改写要 force-push 覆盖已发布历史，未擅自执行 —— 要不要改由用户拍板。
+- 部署：三实例已换 `d833327e` 构建（Forge `6dfb1a82…` 8458279 / Fabric `89cbe654…` 8479633 / NeoForge `315df7a2…` 8470731），构建戳 `git_commit=d833327`、`git_dirty=false`。备份根 `D:/AtomChat-Backups/2026-11-02-snap-device-grid/20261102-153018/`，读回哈希与源逐一吻合，mods 目录各 1 份包、文件数不变。记录：`verification/2026-11-02-snap-device-grid-deployment.{md,json}`。
+- 未验证：实机观感（边缘锐度是否真的变好）需要进游戏看；三个客户端都要重启才生效。三枚**已推送**的提交信息仍含 "Dango"（`3b47f632`、`59c966a7`、`c8f6912d`），改写要 force-push 覆盖已发布历史，未擅自执行 —— 要不要改由用户拍板。
 - **合规提示（需人判断）**：删注释只是不再自述来源，如果当时的"verbatim 采纳"确有其事，代码本身仍可能构成 GPL-3.0 衍生作品，注释清理不能替代许可处理。落地算法本身是通用弹簧/缓动数学（阻尼谐振子、easeOutQuad + 单时间戳 + 每项延迟），未见可直接指认的复制痕迹；如需彻底澄清建议独立复核 `UiStagger` / `SpringAnim` / `PageTransitionComposite` 三处的实现来源。
 
 ## Gnetum 兼容：HUD 横幅闪烁元凶定位 + uncached 路线（2026-11-01 晚，0.4.0 内，未提交）
