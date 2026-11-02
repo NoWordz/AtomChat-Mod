@@ -20,9 +20,10 @@
 - 部署：三实例已换 `2026-11-02-shadow-rim-axis` 那版（Forge `9747498f…`、Fabric `57ee7966…`、NeoForge `3bcd1ac7…`），备份在 `D:/AtomChat-Backups/2026-11-02-shadow-rim-axis/20261102-134853/`。
 - **用户已实机验收通过**；仍未做：ARM64 与专服启动验证，未发版。
 
-## 渲染锐度定因 + 性能/内存审计（2026-11-02，0.4.0 内，**已提交已推送已部署**）
+## 渲染锐度定因 + 性能/内存审计（2026-11-02，0.4.0 内，**已提交已推送；实例仍跑 `2a25c5a3`**）
 
-- 提交 `74033973..2a25c5a3` 已推 `origin/main`，三实例已换新包。详细证据：`verification/2026-11-02-render-quality-and-caching.md`（定因 + 改法）与 `verification/2026-11-02-render-quality-deployment.{md,json}`（部署）。
+- 提交 `74033973..b611a70e` 已推 `origin/main`，三实例已换 `2a25c5a3` 新包。详细证据：`verification/2026-11-02-render-quality-and-caching.md`（定因 + 改法）与 `verification/2026-11-02-render-quality-deployment.{md,json}`（部署）。给接手 agent 的坑位清单与优先级：[HANDOFF-render-sharpness-and-panel-perf.md](HANDOFF-render-sharpness-and-panel-perf.md)。
+- **部署口径**：`7f9aa424`（图片预处理门槛 2×→3×）、`97d57817`（边缘探针）、`b611a70e`（交接文档）只提交未部署，三实例仍是 2× 门槛那版。
 - **"糊"的定因是三把离屏探针给出的，不是猜的**：
   - **文字已在物理底线**。会话真实密度 1.4815、`FONT_BODY` 25px → 37 设备像素，10%→90% 过渡宽度 2.112px，而 4× 超采样理想值是 2.086px（差 1.2%）。开 hinting + 关亚像素定位只把它压到 2.085px（0.03px，不可见），却让字形误差从 2.10 翻到 4.86 —— **字体设置一项都不改**。
   - **色彩空间/亚像素 AA 无收益**。legacy（无色彩空间）surface 与 sRGB 给出同一组像素；开亚像素 AA 反而更糊（2.095→2.281px）。
