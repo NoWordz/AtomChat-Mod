@@ -3,6 +3,7 @@ package com.atom.chat.ui;
 
 import com.atom.lib.design.atomchat.UiTokens;
 import com.atom.chat.config.AtomChatConfig;
+import io.github.humbleui.skija.Canvas;
 
 /**
  * The panel shell's own arithmetic: the two frame clocks, the open/close
@@ -71,20 +72,7 @@ public final class PanelOpenMotion {
     // ------------------------------------------------------- open and close
 
     /**
-     * One step of the panel's open/close progress. Opening rides
-     * {@link UiMotion#PANEL_OPEN_TAU_MS}, closing the shorter
-     * {@link UiMotion#PANEL_CLOSE_TAU_MS}; with decorative motion off the tau is
-     * zero and the progress lands this frame, closing included.
-     */
-    public static float stepProgress(float progress, boolean closing, float dtMs, boolean animationsEnabled) {
-        float target = closing ? 0.0F : 1.0F;
-        float tau = !animationsEnabled ? 0.0F
-                : closing ? UiMotion.PANEL_CLOSE_TAU_MS : UiMotion.PANEL_OPEN_TAU_MS;
-        return UiMotion.expApproach(progress, target, dtMs, tau);
-    }
-
-    /**
-     * Whether the panel reached its target this frame. {@code expApproach} snaps
+     * Whether the panel reached its target this frame. The spring snaps
      * exactly to the target, so this is an equality test — and it is the settle
      * test the close cut-off and the blur cadence gate both read.
      */
@@ -205,6 +193,35 @@ public final class PanelOpenMotion {
                 top - slack,
                 scaledW + slack * 2.0F + Math.abs(slide),
                 scaledH + slack * 2.0F);
+    }
+
+    // ---------------------------------------------------- layer geometry
+
+    /**
+     * True when a fade/scale layer has nothing left to composite: fully opaque
+     * and back at scale 1. A full-panel saveLayer behind an identity transform
+     * is pure overdraw, so callers skip the layer entirely in that state
+     * (decorative motion off lands here from frame one). Moved here from the
+     * deleted two-page choreography: the helper is layer geometry, not
+     * transition choreography, and its remaining consumer is this same family.
+     */
+    public static boolean layerSkippable(float alpha, float scale) {
+        return alpha >= 0.999F && Math.abs(scale - 1.0F) < 0.001F;
+    }
+
+    /**
+     * Centers a layer scale around {@code rect}'s middle. Draw-only: hit-tests
+     * keep unscaled coordinates, like every other transform in this shell.
+     */
+    public static void applyLayerScale(Canvas canvas, UiLayout.Rect rect, float scale) {
+        if (scale == 1.0F) {
+            return;
+        }
+        float cx = rect.x() + rect.w() / 2.0F;
+        float cy = rect.y() + rect.h() / 2.0F;
+        canvas.translate(cx, cy);
+        canvas.scale(scale, scale);
+        canvas.translate(-cx, -cy);
     }
 
     // ---------------------------------------------------------- blur cadence

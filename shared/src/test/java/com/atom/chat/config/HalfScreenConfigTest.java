@@ -117,6 +117,87 @@ class HalfScreenConfigTest {
         assertEquals(600F, saved.get("halfScreenWidth").getAsFloat());
     }
 
+    /**
+     * Live files carried the phone width in {@code halfScreenWidth} even when
+     * half-screen was never customised, so switching modes drew the identical
+     * panel. A legacy file (no marker key) whose half width equals the phone
+     * width must therefore fall back to the documented 600 default.
+     */
+    @Test
+    void legacyFileWithHalfWidthEqualToPhoneWidthReadsSixHundred() throws Exception {
+        Files.createDirectories(configFile().getParent());
+        Files.writeString(configFile(),
+                "{\"panelWidth\": 480, \"halfScreenMode\": true,"
+                        + " \"halfScreenWidth\": 480, \"pixelRadiusMigrated\": true}");
+        AtomChatConfig.reload();
+        AtomChatConfig config = AtomChatConfig.get();
+        assertTrue(field("halfScreenMode").getBoolean(config));
+        assertFalse(field("halfScreenWidthCustomized").getBoolean(config),
+                "an unmarked equal width is the old defect, not a choice");
+        assertEquals(600F, activeWidth(config),
+                "half-screen must be the documented 600 until it is customised");
+    }
+
+    /**
+     * A genuine legacy customisation survives the migration: the stored half
+     * width differs from the phone width, so the marker is set and the value is
+     * kept.
+     */
+    @Test
+    void legacyFileWithADifferentHalfWidthKeepsIt() throws Exception {
+        Files.createDirectories(configFile().getParent());
+        Files.writeString(configFile(),
+                "{\"panelWidth\": 480, \"halfScreenMode\": true,"
+                        + " \"halfScreenWidth\": 560, \"pixelRadiusMigrated\": true}");
+        AtomChatConfig.reload();
+        AtomChatConfig config = AtomChatConfig.get();
+        assertTrue(field("halfScreenWidthCustomized").getBoolean(config));
+        assertEquals(560F, activeWidth(config));
+    }
+
+    /** A slider drag in half mode is the evidence that makes the width a choice. */
+    @Test
+    void writingTheWidthInHalfModeMarksItCustomised() throws Exception {
+        Files.createDirectories(configFile().getParent());
+        Files.writeString(configFile(),
+                "{\"panelWidth\": 480, \"halfScreenMode\": true,"
+                        + " \"halfScreenWidth\": 480, \"pixelRadiusMigrated\": true}");
+        AtomChatConfig.reload();
+        AtomChatConfig config = AtomChatConfig.get();
+        assertEquals(600F, activeWidth(config));
+        setWidth(config, 520F);
+        assertTrue(field("halfScreenWidthCustomized").getBoolean(config));
+        assertEquals(520F, activeWidth(config));
+        // Phone mode is untouched by the half-screen write.
+        mode(config, false);
+        assertEquals(480F, activeWidth(config));
+        mode(config, true);
+        assertEquals(520F, activeWidth(config));
+        assertTrue(AtomChatConfig.saveChecked(config));
+        AtomChatConfig.reload();
+        assertEquals(520F, activeWidth(AtomChatConfig.get()),
+                "the marker persists with the width");
+    }
+
+    /** Writing the phone width must not leak into the half-screen choice. */
+    @Test
+    void phoneWidthWritesLeaveTheHalfScreenWidthAlone() throws Exception {
+        Files.createDirectories(configFile().getParent());
+        Files.writeString(configFile(),
+                "{\"panelWidth\": 480, \"halfScreenMode\": false,"
+                        + " \"halfScreenWidth\": 480, \"pixelRadiusMigrated\": true}");
+        AtomChatConfig.reload();
+        AtomChatConfig config = AtomChatConfig.get();
+        assertEquals(480F, activeWidth(config));
+        setWidth(config, 430F);
+        assertFalse(field("halfScreenWidthCustomized").getBoolean(config),
+                "a phone-mode drag says nothing about the half-screen layout");
+        assertEquals(430F, activeWidth(config));
+        mode(config, true);
+        assertEquals(600F, activeWidth(config),
+                "half mode still answers its own default");
+    }
+
     @Test
     void missingConfigStartsInPhoneModeWithIndependentDefaultWidths() throws Exception {
         AtomChatConfig.reload();
@@ -134,6 +215,9 @@ class HalfScreenConfigTest {
                 Float.NEGATIVE_INFINITY, 0F, -1F}) {
             config.panelWidth = invalid;
             field("halfScreenWidth").setFloat(config, 560F);
+            // A hand-written half width counts as a choice (the marker is what
+            // "customised" means; the load migration sets it for real files).
+            field("halfScreenWidthCustomized").setBoolean(config, true);
             mode(config, false);
             assertEquals(480F, activeWidth(config));
             mode(config, true);
@@ -174,6 +258,7 @@ class HalfScreenConfigTest {
         target.panelWidth = 440F;
         mode(target, true);
         field("halfScreenWidth").setFloat(target, 550F);
+        field("halfScreenWidthCustomized").setBoolean(target, true);
         var reloaded = new AppearancePresetStore(tmp.resolve("presets"));
         assertTrue(reloaded.apply(saved.preset().id(), target).ok());
         assertEquals(0xFF123456, target.accentColor);

@@ -2,8 +2,6 @@ package com.atom.chat.ui;
 
 
 import com.atom.lib.design.atomchat.UiTokens;
-import com.atom.chat.render.Animator;
-import com.atom.chat.render.Easing;
 import com.atom.lib.design.atomchat.SkiaDraw;
 import com.atom.chat.theme.ThemeService;
 import io.github.humbleui.skija.Canvas;
@@ -29,9 +27,11 @@ import io.github.humbleui.skija.Color;
  *       visual state only; the hover/press spring keeps running.</li>
  * </ul>
  *
- * <p>The knob owns an {@link Animator} rather than a plain eased value so a
- * mid-flight reversal retargets from the current position instead of snapping
- * back to an end — clicking twice quickly reads as one continuous slide.</p>
+ * <p>The knob owns a {@link SpringAnim} (the DangoMusic spring language)
+ * rather than a plain eased value: a mid-flight reversal keeps the velocity —
+ * clicking twice quickly reads as one continuous slide — and the k=380/d=24
+ * tune lands with a small physical overshoot (see
+ * {@link UiSpring#newToggleKnobSpring()}).</p>
  *
  * <p>Geometry comes entirely from {@link UiTokens}: knob diameter is the track
  * height minus the two insets, so the travel is
@@ -45,7 +45,23 @@ public final class ToggleSwitch {
      */
     static final float DISABLED_OPACITY = 0.4F;
 
-    private final Animator anim = new Animator(Easing::easeOutCubic);
+    /**
+     * Knob position spring (the DangoMusic adoption): replaces the old
+     * fixed-duration eased tween, which restarted its full-duration curve
+     * from the current position on a mid-flight reversal — position
+     * continuous, velocity not, so a fast double-click read as a jerk. The
+     * spring keeps the velocity instead: a reversal continues the existing
+     * motion, and the k=380/d=24 tune adds the small overshoot that reads as
+     * mass (see {@link UiSpring#newToggleKnobSpring()}). Geometry, colours
+     * and rounding are untouched — only the curve between the same two ends
+     * changed. Package-private handle for contract tests.
+     */
+    private final SpringAnim knob = UiSpring.newToggleKnobSpring();
+
+    SpringAnim knobSpringForTest() {
+        return knob;
+    }
+
     /** Hover/press bounce; hit-testing stays unscaled upstream, this is draw-only. */
     private final PressScale scale = PressScale.bounce();
     private boolean hover;
@@ -56,7 +72,7 @@ public final class ToggleSwitch {
     private long pulseUntil;
 
     public ToggleSwitch() {
-        anim.setValue(0.0F);
+        knob.snapTo(0.0F);
     }
 
     /**
@@ -86,16 +102,19 @@ public final class ToggleSwitch {
 
     /** Jumps to the target with no animation (used when a page is first shown). */
     public void snapTo(boolean on) {
-        anim.setValue(on ? 1.0F : 0.0F);
+        knob.snapTo(on ? 1.0F : 0.0F);
     }
 
     /**
-     * Advances the knob. Safe to call every frame: {@code animateTo} is a no-op
-     * while the target is unchanged, so an idle switch costs one comparison.
+     * Advances the knob. The knob rides the self-clocking {@link SpringAnim#tick}
+     * (wall clock owned by the spring, the Dango {@code Spring.tick} shape): a
+     * settings page reopened after more than a quarter second lands directly
+     * instead of replaying a stale animation. As before the knob animates
+     * regardless of the decorative-motion master switch — a direct-manipulation
+     * control answers the click itself — so the gate passes true here.
      */
     public void update(float dtMs, boolean on) {
-        anim.animateTo(UiMotion.TOGGLE_MS, on ? 1.0F : 0.0F);
-        anim.update(dtMs);
+        knob.tick(on ? 1.0F : 0.0F, true);
         // The scaled shape is the whole track, so the budget derives from SWITCH_W.
         scale.update(hover, pressed || pulsing(), dtMs, Animations.enabled(), UiTokens.SWITCH_W);
     }
@@ -120,7 +139,7 @@ public final class ToggleSwitch {
         float op = enabled ? 1.0F : DISABLED_OPACITY;
         scale.begin(canvas, x + UiTokens.SWITCH_W / 2.0F, y + UiTokens.SWITCH_H / 2.0F);
         try {
-            float p = Math.max(0.0F, Math.min(1.0F, anim.getValue()));
+            float p = Math.max(0.0F, Math.min(1.0F, knob.value()));
             SkiaDraw.drawRoundedRect(canvas, x, y, UiTokens.SWITCH_W, UiTokens.SWITCH_H,
                     UiTokens.radius(UiTokens.SWITCH_H / (2.0F * UiTokens.SCALE)),
                     dim(SkiaDraw.lerpColor(trackOff(), accent, p), op));

@@ -65,9 +65,27 @@ public class AtomChatConfig {
     /** Local layout preferences, independent of appearance presets. */
     public boolean halfScreenMode = false;
     public float halfScreenWidth = 600.0F;
+    /**
+     * Whether {@link #halfScreenWidth} holds a width the player actually picked.
+     * Only then does half-screen mode read it; until then
+     * {@link #activePanelWidth()} answers the documented 600 default. Live files
+     * carried the phone width in this field even when half-screen was never
+     * customised, so switching modes drew the exact same 480px panel — the
+     * marker is what tells "chosen" apart from "left over from the phone mode".
+     */
+    public boolean halfScreenWidthCustomized = false;
     public float panelHeight = 860.0F;
     /** Rounded panel background blur (raw GL + core shader, outside Skia). */
     public boolean blurEnabled = true;
+    /**
+     * Glass readability clamp on the blurred panel (the DangoMusic glass
+     * adoption): the rounded draw-back shader scales the blurred RGB down
+     * whenever its luma exceeds a ceiling (0.35), so white panel text stays
+     * readable over bright backdrops (snow, desert noon). Alpha is never
+     * touched. Off = the exact previous rendering (the shader's no-op 1.0
+     * default), so the switch is a pure escape hatch, not a fallback path.
+     */
+    public boolean glassMaxLuma = true;
     /**
      * Master switch for decorative motion: message entrance, page/tab push,
      * the panel open slide, the avatar poke shake and scroll snapping.
@@ -302,6 +320,22 @@ public class AtomChatConfig {
         contentScale = Math.max(0.8F, Math.min(contentScale, 1.5F));
     }
     /**
+     * Migration for files written before {@link #halfScreenWidthCustomized}
+     * existed: they carry no key, Gson leaves the marker false, and a genuine
+     * custom half-screen width would silently drop back to 600. A stored
+     * half-screen width that differs from the phone width is such a choice; one
+     * equal to the phone width is the old defect (both modes drew the same
+     * panel) and stays uncustomised so the 600 default applies. Idempotent by
+     * the key test {@link #load()} takes from the raw JSON — value-based
+     * detection alone cannot tell a chosen 600 from the seeded default.
+     */
+    void migrateHalfScreenWidth(boolean keyPresent) {
+        if (keyPresent) {
+            return;
+        }
+        halfScreenWidthCustomized = Math.abs(halfScreenWidth - panelWidth) > 0.01F;
+    }
+    /**
      * Card/chrome surface tint, 0..1. At 0 the surfaces are the frosted
      * translucent white washes; at 1 they are opaque tints lifted from the
      * panel colour. In between they slide through a semi-transparent grey —
@@ -441,16 +475,31 @@ public class AtomChatConfig {
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
     private static AtomChatConfig instance;
 
-    /** Each layout retains its own width; malformed values use that layout's default. */
+    /**
+     * The width the panel actually opens at, per mode. Half-screen only honours
+     * {@link #halfScreenWidth} once the player customised it (see
+     * {@link #halfScreenWidthCustomized}); otherwise it is the 600 default the
+     * lang file documents, so switching modes always changes something.
+     * Malformed values use that mode's own default.
+     */
     public float activePanelWidth() {
-        float width = halfScreenMode ? halfScreenWidth : panelWidth;
-        return Float.isFinite(width) && width > 0.0F
-                ? width : (halfScreenMode ? 600.0F : 480.0F);
+        if (halfScreenMode) {
+            float width = halfScreenWidthCustomized ? halfScreenWidth : 600.0F;
+            return Float.isFinite(width) && width > 0.0F ? width : 600.0F;
+        }
+        float width = panelWidth;
+        return Float.isFinite(width) && width > 0.0F ? width : 480.0F;
     }
 
+    /**
+     * Writes the active mode's width. In half-screen mode this is a deliberate
+     * choice, so it also marks the half-screen width customised — a slider drag
+     * is exactly the evidence that separates it from the phone width.
+     */
     public void setActivePanelWidth(float width) {
         if (halfScreenMode) {
             halfScreenWidth = width;
+            halfScreenWidthCustomized = true;
         } else {
             panelWidth = width;
         }
@@ -496,6 +545,22 @@ public class AtomChatConfig {
      * overwrite the file, wiping every saved option with it. Normalizing the
      * value in the JSON tree first keeps a bad edit scoped to the one key.
      */
+    /**
+     * Whether the raw file already carries {@code key}. The "absent means
+     * legacy" migrations need this because Gson cannot tell an absent boolean
+     * from a stored {@code false} — and a stored false is a real answer.
+     */
+    private static boolean hasKey(String json, String key) {
+        try {
+            com.google.gson.JsonObject obj = GSON.fromJson(json, com.google.gson.JsonObject.class);
+            return obj != null && obj.has(key);
+        } catch (RuntimeException e) {
+            // Unparseable JSON is the caller's own failure path; treat it as
+            // "no key" so a legacy-shaped migration still runs.
+            return false;
+        }
+    }
+
     private static String sanitizePageNavStyle(String json) {
         try {
             com.google.gson.JsonObject obj = GSON.fromJson(json, com.google.gson.JsonObject.class);
@@ -573,6 +638,7 @@ public class AtomChatConfig {
         if (Files.exists(path)) {
             try {
                 String json = Files.readString(path, StandardCharsets.UTF_8);
+                boolean halfWidthKeyPresent = hasKey(json, "halfScreenWidthCustomized");
                 AtomChatConfig config = GSON.fromJson(sanitizePageNavStyle(sanitizeAvatarStyle(
                         sanitizeBubbleStyle(sanitizeWorldFeedFilter(json)))), AtomChatConfig.class);
                 if (config != null) {
@@ -586,6 +652,7 @@ public class AtomChatConfig {
                     config.migrateCornerStyle();
                     config.migratePixelRadius();
                     config.clampContentScale();
+                    config.migrateHalfScreenWidth(halfWidthKeyPresent);
                     config.notifyVolume = com.atom.chat.audio.FeedbackSoundPolicy.volume(true,true,config.notifyVolume);
                     config.feedbackVolume = com.atom.chat.audio.FeedbackSoundPolicy.volume(true,true,config.feedbackVolume);
                     // Write the merged instance straight back: options added in

@@ -101,6 +101,11 @@ class HalfScreenSettingsTest {
         var mode = assertDoesNotThrow(() -> AtomChatConfig.class.getField("halfScreenMode"));
         var halfWidth = assertDoesNotThrow(() -> AtomChatConfig.class.getField("halfScreenWidth"));
         halfWidth.setFloat(config, 580F);
+        // The marker is what makes a hand-written half width a choice; without
+        // it the mode answers its 600 default (the "nothing changes" defect).
+        var customized = assertDoesNotThrow(
+                () -> AtomChatConfig.class.getField("halfScreenWidthCustomized"));
+        customized.setBoolean(config, true);
         mode.setBoolean(config, true);
         assertEquals(580F, width.value());
         width.apply(530F);

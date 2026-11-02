@@ -44,6 +44,22 @@ public final class UiSpring {
     public static final float PANEL_DAMPING_RATIO = 1.0F;
 
     /**
+     * Panel open/close motion (unit E2, "smoother and quicker"): k=900 with
+     * zeta 0.8 lands in ~150ms with a restrained ~1.5% overshoot — quicker
+     * than the retired tau-70 exponential (~200ms visual stop, whose tail the
+     * 6% close cut had to mask) and the small overshoot reads as settle, not
+     * bounce. The panel is a large surface: overshoot stays under 2% by test
+     * pin, same ceiling the PANEL tokens observe.
+     */
+    public static final float PANEL_MOTION_STIFFNESS = 900.0F;
+    public static final float PANEL_MOTION_DAMPING_RATIO = 0.8F;
+
+    /** A fresh panel open/close motion spring at value 0 (closed). */
+    public static SpringAnim newPanelMotionSpring() {
+        return new SpringAnim(PANEL_MOTION_STIFFNESS, PANEL_MOTION_DAMPING_RATIO);
+    }
+
+    /**
      * Overshoot constant shared by message entrances and reaction chip pops.
      * The curve's peak overshoot is (4/27)*c1^3/(c1+1)^2; c1 1.6 gives
      * about 9%, making the bounce visible while both entrances settle at 1.
@@ -97,6 +113,29 @@ public final class UiSpring {
     /** A fresh hover/press scale spring at value 1 (no scale). */
     public static SpringAnim newBounceSpring() {
         return new SpringAnim(BOUNCE_STIFFNESS, BOUNCE_DAMPING_RATIO, 0.0015F, 0.2F);
+    }
+
+    /**
+     * Toggle-switch knob travel (the DangoMusic adoption): k=380 with damping
+     * constant d=24 — DangoMusic's {@code musicui/Spring.kt} as tuned by its
+     * iOS switch ({@code Ui.kt:147}). At k=380 that is zeta ~0.62, so the
+     * knob overshoots about 8% of its travel before landing — the same
+     * "small surface, physical mass" language as the bounce spring. The knob
+     * travels 0..1 (position within the track), so {@link SpringAnim}'s
+     * default settle thresholds fit unchanged.
+     *
+     * <p>Driven through {@link SpringAnim#tick}: a mid-flight reversal keeps
+     * the velocity (a fast double-click reads as one continuous slide), and a
+     * gap over a quarter second (settings page closed) lands directly instead
+     * of replaying a stale animation on reopen.</p>
+     */
+    public static final float TOGGLE_KNOB_STIFFNESS = 380.0F;
+    /** Damping constant 24 expressed as a ratio against k=380. */
+    public static final float TOGGLE_KNOB_DAMPING_RATIO = 24.0F / (2.0F * (float) Math.sqrt(380.0F));
+
+    /** A fresh toggle-knob spring at value 0 (off). */
+    public static SpringAnim newToggleKnobSpring() {
+        return new SpringAnim(TOGGLE_KNOB_STIFFNESS, TOGGLE_KNOB_DAMPING_RATIO);
     }
 
     /**

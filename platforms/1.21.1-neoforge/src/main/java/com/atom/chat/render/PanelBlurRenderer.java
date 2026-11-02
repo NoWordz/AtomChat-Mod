@@ -34,6 +34,14 @@ public final class PanelBlurRenderer {
     private static final String ROUNDED_SHADER_NAME = "atomchat_panel_blur";
     private static final String KAWASE_SHADER_NAME = "atomchat_kawase_blur";
     private static final int KAWASE_PASSES = 5;
+    /**
+     * Luma ceiling of the glass readability clamp (the DangoMusic glass
+     * adoption, GlassStyle.maxLuma's default tune): blurred backdrops brighter
+     * than this are scaled down so white panel text stays readable. Applied
+     * RGB-only in the rounded fragment shader; {@link com.atom.chat.config.AtomChatConfig#glassMaxLuma}
+     * gates it, off meaning the shader's no-op 1.0.
+     */
+    private static final float GLASS_MAX_LUMA = 0.35F;
 
     private static ShaderInstance roundedShader;
     private static ShaderInstance kawaseShader;
@@ -211,6 +219,7 @@ public final class PanelBlurRenderer {
         var uRect = sh.safeGetUniform("u_Rect");
         var uRadius = sh.safeGetUniform("u_Radius");
         var uFlipV = sh.safeGetUniform("u_FlipV");
+        var uMaxLuma = sh.safeGetUniform("u_MaxLuma");
 
         float poseScale = Math.abs(pose.m00());
         Vector4f center = pose.transform(new Vector4f(x + w / 2.0F, y + h / 2.0F, 0.0F, 1.0F));
@@ -218,6 +227,10 @@ public final class PanelBlurRenderer {
         uRadius.set(Math.min(radius, Math.min(w, h) / 2.0F) * poseScale);
         // GL textures are bottom-up; the shader flips V so GUI top-left is texture top.
         uFlipV.set(1.0F);
+        // Set every frame, never cached: the config gate must flip on the very
+        // next panel frame. 1.0 (off) is an exact no-op for the [0,1] blur
+        // texture, so this degrades to the previous rendering, never to black.
+        uMaxLuma.set(com.atom.chat.config.AtomChatConfig.get().glassMaxLuma ? GLASS_MAX_LUMA : 1.0F);
 
         // Hand the next consumer (Skia flush, then the world pass) the blend
         // bit this frame arrived with, on refresh frames and skipped frames

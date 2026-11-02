@@ -103,6 +103,82 @@ public final class SpringAnim {
     }
 
     /**
+     * Stall threshold of the self-clocking {@link #tick} entry: a gap longer
+     * than a quarter second since the previous tick means the surface was not
+     * on screen (screen closed, tab switched, debugger pause) — the motion
+     * left in flight is stale, so the next tick lands directly on the target
+     * instead of replaying a seconds-old animation at the hitch clamp's pace.
+     * Below it, the existing 50ms hitch clamp still owns the frame.
+     */
+    public static final long TICK_STALL_NANOS = 250_000_000L;
+
+    /**
+     * Nanos of the previous {@link #tick} call. A boolean flag, not a zero
+     * sentinel, marks "never ticked": a zero sentinel would collide with a
+     * caller (or a test) whose first timestamp genuinely is 0, turning every
+     * tick into a first paint.
+     */
+    private long lastTickNanos = 0L;
+    private boolean everTicked = false;
+
+    /**
+     * Self-clocking entry (adopted from DangoMusic's musicui {@code Spring}):
+     * the spring measures the wall clock itself, so a caller only supplies the
+     * target each frame — no per-callsite clock bookkeeping like
+     * {@code PressScale}'s manual {@code update(dtMs, ...)} feed.
+     *
+     * <p>Three rules, in order:</p>
+     * <ul>
+     *   <li>First tick ever: there is no previous frame to animate from, so
+     *       the value lands on the target immediately.</li>
+     *   <li>Gap over {@link #TICK_STALL_NANOS}: the in-flight motion is stale
+     *       — land on the target now (the stall reset). This is what keeps a
+     *       reopened surface from playing back an old animation.</li>
+     *   <li>Otherwise: advance by the real elapsed time through
+     *       {@link #update}, so an interrupting retarget keeps the velocity —
+     *       the spring continues from where the motion was, which is why a
+     *       target that changes every frame still reads as smooth.</li>
+     * </ul>
+     *
+     * <p>A backwards clock (paused frame, debugger) advances nothing and
+     * resets nothing — the motion resumes on the next forward tick. The
+     * {@code motionEnabled} gate rides {@link #update}: with decorative motion
+     * off every tick lands on the target this frame.</p>
+     *
+     * @param target     destination value for this frame
+     * @param nowNanos   wall clock now; pass explicitly (the
+     *                   {@code PanelOpenMotion.frameDtMs} testability shape)
+     *                   so the clock is a test input, not a hidden global
+     * @return the animated value after this frame's step
+     */
+    public float tick(float target, long nowNanos, boolean motionEnabled) {
+        if (this.target != target) {
+            setTarget(target);
+        }
+        if (!everTicked) {
+            everTicked = true;
+            snapTo(target);
+        } else {
+            long dtNanos = nowNanos - lastTickNanos;
+            if (dtNanos > TICK_STALL_NANOS) {
+                snapTo(target);
+            } else if (dtNanos > 0L) {
+                update(dtNanos / 1_000_000.0F, motionEnabled);
+            }
+        }
+        lastTickNanos = nowNanos;
+        return value;
+    }
+
+    /**
+     * {@link #tick(float, long, boolean)} against the real wall clock, for
+     * callsites that own no clock of their own.
+     */
+    public float tick(float target, boolean motionEnabled) {
+        return tick(target, System.nanoTime(), motionEnabled);
+    }
+
+    /**
      * Advances the simulation by {@code dtMs} of wall clock. With
      * {@code motionEnabled} false (the {@code AtomChatConfig.animationEnabled}
      * gate) the spring snaps straight to its target — decorative motion never

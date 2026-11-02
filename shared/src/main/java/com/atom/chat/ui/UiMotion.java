@@ -109,12 +109,6 @@ public final class UiMotion {
      * entrance uses.
      */
     public static final long REACTION_FRESH_MS = 400;
-    /**
-     * Toggle-switch knob travel. Sits between hover (90) and tab push (200):
-     * this is a direct-manipulation control, so it has to read as a slide
-     * rather than a jump while still landing before the finger lifts.
-     */
-    public static final long TOGGLE_MS = 140;
 
     private UiMotion() {
     }

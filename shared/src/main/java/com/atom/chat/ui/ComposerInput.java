@@ -4,6 +4,7 @@ package com.atom.chat.ui;
 import com.atom.lib.design.atomchat.UiTokens;
 import com.atom.chat.font.FontManager;
 import com.atom.chat.render.Animator;
+import com.atom.chat.render.Easing;
 import com.atom.chat.render.SkiaFontRenderer;
 
 import java.util.List;
@@ -107,8 +108,11 @@ public final class ComposerInput {
      * UiMotion.approach is unitless, so on a pixel-valued target it only covers a
      * fraction of the distance per frame and leaves a multi-hundred-ms tail.
      * Animator guarantees the bar reaches its target height within INPUT_GROW_MS.
+     * The easing is easeOutCubic rather than linear: the linear growth read as
+     * the chat page's stiffest animation (the bar moved at constant speed and
+     * stopped dead), and an eased one decelerates into its resting height.
      */
-    private final Animator inputHeightAnim = new Animator(t -> t);
+    private final Animator inputHeightAnim = new Animator(Easing::easeOutCubic);
     private int inputScrollLine;
     private String inputWrapText;
     private float inputWrapWidth = -1.0F;

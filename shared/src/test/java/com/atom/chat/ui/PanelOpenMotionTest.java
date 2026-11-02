@@ -109,24 +109,60 @@ class PanelOpenMotionTest {
 
     // ------------------------------------------------------- open and close
 
-    /** Opening rides the open tau, closing the shorter close tau. */
+    /**
+     * The panel open/close rides the spring clock (unit E2: "更丝滑更迅速" —
+     * smoother and quicker than the old tau-70 exponential, whose tail the
+     * close had to cut at 6%). The spring may overshoot slightly (that is the
+     * smoothness) but never visibly, and it must settle fast in both
+     * directions.
+     */
     @Test
-    void theProgressTauDependsOnTheDirection() {
-        float open = PanelOpenMotion.stepProgress(0.0F, false, 50.0F, true);
-        assertEquals(1.0F - (float) Math.exp(-50.0 / 70.0), open, 1.0e-6F,
-                "opening rides PANEL_OPEN_TAU_MS = 70");
+    void thePanelRidesASpringThatIsQuickWithARestrainedOvershoot() {
+        SpringAnim open = UiSpring.newPanelMotionSpring();
+        open.snapTo(0.0F);
+        open.setTarget(1.0F);
+        float peak = 0.0F;
+        long settleMs = -1;
+        long t = 0;
+        for (int i = 0; i < 60 && settleMs < 0; i++, t += 16L) {
+            open.update(16.0F, true);
+            peak = Math.max(peak, open.value());
+            if (open.isSettled()) settleMs = t + 16L;
+        }
+        assertTrue(peak <= 1.02F, "panel overshoot must stay restrained, got " + (peak - 1));
+        assertTrue(settleMs > 0 && settleMs <= 180,
+                "the open must land quicker than the old ~200ms exponential, took " + settleMs + "ms");
+        assertEquals(1.0F, open.value(), 0.0F, "opens exactly onto 1");
 
-        float closing = PanelOpenMotion.stepProgress(1.0F, true, 50.0F, true);
-        assertEquals((float) Math.exp(-50.0 / 40.0), closing, 1.0e-6F,
-                "closing rides the shorter PANEL_CLOSE_TAU_MS = 40");
+        SpringAnim close = UiSpring.newPanelMotionSpring();
+        close.snapTo(1.0F);
+        close.setTarget(0.0F);
+        settleMs = -1;
+        for (int i = 0; i < 60 && settleMs < 0; i++) {
+            close.update(16.0F, true);
+            if (close.isSettled()) settleMs = (long) i * 16 + 16;
+        }
+        assertTrue(settleMs > 0 && settleMs <= 180, "the close lands within the same budget");
+        assertEquals(0.0F, close.value(), 0.0F);
+        // The 6% close cut stays meaningful: the spring crosses it on the way
+        // down (and an overshoot below zero only makes it fire earlier).
+        assertTrue(PanelOpenMotion.closeDue(0.05F, true));
     }
 
     /** Decorative motion off lands the panel on the frame it was asked to. */
     @Test
     void motionOffSnapsThePanelInOneFrame() {
-        assertEquals(1.0F, PanelOpenMotion.stepProgress(0.0F, false, 16.0F, false), 0.0F);
-        assertEquals(0.0F, PanelOpenMotion.stepProgress(1.0F, true, 16.0F, false), 0.0F);
+        SpringAnim s = UiSpring.newPanelMotionSpring();
+        s.snapTo(0.0F);
+        s.setTarget(1.0F);
+        s.update(16.0F, false);
+        assertEquals(1.0F, s.value(), 0.0F);
+        s.snapTo(1.0F);
+        s.setTarget(0.0F);
+        s.update(16.0F, false);
+        assertEquals(0.0F, s.value(), 0.0F);
     }
+
 
     /** Settled is the exact landing; animating is its inverse (the input gate's question). */
     @Test

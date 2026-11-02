@@ -33,6 +33,14 @@ public final class PanelBlurRenderer {
     private static final String ROUNDED_SHADER_NAME = "atomchat_panel_blur";
     private static final String KAWASE_SHADER_NAME = "atomchat_kawase_blur";
     private static final int KAWASE_PASSES = 5;
+    /**
+     * Luma ceiling of the glass readability clamp (the DangoMusic glass
+     * adoption, GlassStyle.maxLuma's default tune): blurred backdrops brighter
+     * than this are scaled down so white panel text stays readable. Applied
+     * RGB-only in the rounded fragment shader; {@link com.atom.chat.config.AtomChatConfig#glassMaxLuma}
+     * gates it, off meaning the shader's no-op 1.0.
+     */
+    private static final float GLASS_MAX_LUMA = 0.35F;
 
     private static ShaderProgram roundedShader;
     private static boolean roundedLoadAttempted;
@@ -232,7 +240,8 @@ public final class PanelBlurRenderer {
         GlUniform uRect = sh.getUniform("u_Rect");
         GlUniform uRadius = sh.getUniform("u_Radius");
         GlUniform uFlipV = sh.getUniform("u_FlipV");
-        if (uRect == null || uRadius == null || uFlipV == null) {
+        GlUniform uMaxLuma = sh.getUniform("u_MaxLuma");
+        if (uRect == null || uRadius == null || uFlipV == null || uMaxLuma == null) {
             return false;
         }
 
@@ -245,6 +254,10 @@ public final class PanelBlurRenderer {
         uRadius.set(0, Math.min(radius, Math.min(w, h) / 2.0F) * poseScale);
         // GL textures are bottom-up; the shader flips V so GUI top-left is texture top.
         uFlipV.set(0, 1.0F);
+        // Set every frame, never cached: the config gate must flip on the very
+        // next panel frame. 1.0 (off) is an exact no-op for the [0,1] blur
+        // texture, so this degrades to the previous rendering, never to black.
+        uMaxLuma.set(0, com.atom.chat.config.AtomChatConfig.get().glassMaxLuma ? GLASS_MAX_LUMA : 1.0F);
 
         // Hand the next consumer (Skia flush, then the world pass) the blend
         // bit this frame arrived with, on refresh frames and skipped frames
