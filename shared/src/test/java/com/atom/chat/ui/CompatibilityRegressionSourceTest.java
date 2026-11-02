@@ -37,13 +37,24 @@ class CompatibilityRegressionSourceTest {
             assertTrue(src.contains("!canUseForeignChatUi() ||"), "paint during animation must mask raw clicks: " + file);
         }
     }
-    @Test void navigationAnimationsParticipateInThePointerGate() throws Exception {
+    /**
+     * The interruptibility contract (the DangoMusic adoption, inverting the
+     * old pin): the page/tab clocks are draw-only overlays whose transforms
+     * never move the hit-tested layout, so a running ZOOM/SLIDE switch must
+     * NOT swallow pointer input — the bottom bar used to be unclickable until
+     * the switch finished. The panel open/close transform and the settings
+     * chip transition stay in the gate: there the drawn geometry really does
+     * diverge from the hit-tested layout.
+     */
+    @Test void navigationAnimationsNoLongerGateThePointer() throws Exception {
         for (String file : SCREENS) {
             String src = Files.readString(root().resolve(file));
             String gate = method(src, "panelAnimating");
-            assertTrue(gate.contains("director.pageNavActive()"), file);
-            assertTrue(gate.contains("director.rootTransitionActive()"), file);
-            assertTrue(gate.contains("settingsSectionPage.chipTransitionActive()"), file);
+            assertFalse(gate.contains("director.pageNavActive()"), file);
+            assertFalse(gate.contains("director.rootTransitionActive()"), file);
+            assertTrue(gate.contains("PanelOpenMotion.animating(panelProgress, closing)"), file);
+            assertFalse(gate.contains("settingsSectionPage.chipTransitionActive()"),
+                    file + ": unit E2 — the chip crossfade is decorative, not a gate");
         }
     }
     @Test void ownPublicIdentityAloneNeverSuppressesAnExternalSend() throws Exception {

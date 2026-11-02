@@ -32,7 +32,6 @@ import com.atom.chat.nav.AtomChatState;
 import com.atom.chat.nav.NavPage;
 import com.atom.chat.nav.NavStackController;
 import com.atom.chat.nav.PageTransitionComposite;
-import com.atom.chat.nav.PageTransitionDirector;
 import com.atom.chat.notification.NotificationJumpService;
 import com.atom.chat.avatar.AvatarImage;
 import com.atom.chat.avatar.AvatarStore;
@@ -51,6 +50,7 @@ import com.atom.chat.render.ClickableSpan;
 import com.atom.chat.render.DrawPrimitives;
 import com.atom.chat.render.PanelBlurRenderer;
 import com.atom.chat.render.RichTextRenderer;
+import com.atom.chat.render.UiPixelSnap;
 import com.atom.lib.design.atomchat.SkiaDraw;
 import com.atom.chat.render.SkiaFontRenderer;
 import com.atom.chat.render.SkiaGraphics;
@@ -507,8 +507,6 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
     /** Root-page mouse coordinates in virtual UI space, for card hover rendering. */
     private float rootMouseX;
     private float rootMouseY;
-    /** When true, ShellHeader is skipped while moving page layers in a transition. */
-    private boolean suppressHeader;
 
     private final SkiaGraphics graphics = new SkiaGraphics();
     private boolean feedbackOpened;
@@ -538,8 +536,10 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
     });
 
     private boolean canUseForeignChatUi() {
-        return canRenderForeignChatUi() && !PanelOpenMotion.animating(panelProgress, closing)
-                && !director.pageNavActive() && !director.rootTransitionActive();
+        // The page entrance overlay is draw-only decoration: the arriving page
+        // is complete and interactive from its first frame, so the foreign-chat
+        // probes never wait for a nav clock (there is none left to wait for).
+        return canRenderForeignChatUi() && !PanelOpenMotion.animating(panelProgress, closing);
     }
 
     private boolean canRenderForeignChatUi() {
@@ -641,7 +641,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         public UiLayout layout() { return AtomChatScreen.this.layout(); }
         public float x(double x) { return toVirtualX(x); }
         public float y(double y) { return toVirtualY(y); }
-        public boolean chatVisible() { return isWorldChatPage() && !director.pageNavActive(); }
+        public boolean chatVisible() { return isWorldChatPage(); }
         public String tr(String key) { return AtomChatScreen.tr(key); }
         public String clipboard() { return client.keyboardHandler.getClipboard(); }
         public java.util.List<PlayerRef> onlinePlayers() {
@@ -690,9 +690,15 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         }
         @Override
         public boolean panelAnimating() {
-            return PanelOpenMotion.animating(panelProgress, closing)
-                    || director.pageNavActive() || director.rootTransitionActive()
-                    || settingsSectionPage.chipTransitionActive();
+            // Only the panel open/close transform stays gated (the DangoMusic
+            // interruptibility contract, completed in unit E2): a running
+            // ZOOM/SLIDE page/tab switch is a draw-only overlay whose
+            // transforms never move the hit-tested layout, so a click
+            // mid-flight re-arms or lands instead of being swallowed — and the
+            // settings chip crossfade is decorative too (a mid-fade chip click
+            // re-arms the crossfade from the drawn state). The open/close
+            // transform is the one real geometry/hit-test divergence.
+            return PanelOpenMotion.animating(panelProgress, closing);
         }
     })
             .add(new ClosingStateInput())
@@ -1376,37 +1382,11 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
                 : ContextMenuActions.MessageFacts.of(msg.getSenderUuid(), msg.getProfileName(),
                         msg.getSenderName(), msg.isOwn(), msg.isSystem());
     }
-    // Root tab transition (D24b-1). The bottom bar is the screen's: it draws,
-    // hit-tests and holds the shared animator the capsule rides. Both transition
-    // state machines and their clocks live in the director, which is handed that
-    // animator; every read point below goes through it.
+    // Root tab bar (D24b-1). The bar is the screen's: it draws, hit-tests and
+    // tweens its own capsule (the deleted root-tab clock of the old
+    // two-page choreography is gone — the capsule and the arriving page's entrance overlay are
+    // independent animations now, like Dango's pill and its pageAt stamp).
     private final BottomTabBar bottomTabBar = new BottomTabBar();
-    /**
-     * The two transition state machines (D24b-1): the page push/pop clock and the
-     * root-tab clock, the one {@code pageNavStyle()} resolution they share, and
-     * the nav-layer geometry. Built here, before the nav port below, because that
-     * port forwards its ten transition steps to it. Its own port is the three
-     * steps this screen owns: the draft save and reply capture a nav starts with,
-     * and the pop a finished pop transition applies.
-     */
-    private final PageTransitionDirector director = new PageTransitionDirector(
-            new PageTransitionDirector.Host() {
-                @Override
-                public void persistCurrentDraft() {
-                    saveCurrentDraft();
-                }
-
-                @Override
-                public void captureReplySlot() {
-                    syncReplySlot();
-                }
-
-                @Override
-                public void applyPendingPop() {
-                    popNow();
-                }
-            },
-            bottomTabBar.indicatorAnimator());
 
     /**
      * Public-feed view filter (all / system only / players only), cycled by the
@@ -1438,6 +1418,8 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
      * overshoots.
      */
     private float panelProgress = 0.0F;
+    /** The open/close spring; see UiSpring.newPanelMotionSpring for the tune. */
+    private final com.atom.chat.ui.SpringAnim panelMotion = com.atom.chat.ui.UiSpring.newPanelMotionSpring();
     /** Wall-clock timestamp of the previous frame — the progress clock consumes real dt. */
     private long lastFrameNanos = System.nanoTime();
     private boolean blurDrawnThisFrame;
@@ -1474,6 +1456,11 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         }
 
         @Override
+        public void syncReplySlot() {
+            AtomChatScreen.this.syncReplySlot();
+        }
+
+        @Override
         public void persistPrivateDraft(PlayerRef target, String text) {
             savePrivateDraft(target, text);
         }
@@ -1501,6 +1488,9 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         @Override
         public void clearWorldScroll() {
             scrollSync.worldScroll().reset();
+            // The list's entrance stagger arms at frame time from the
+            // composite's arrival event (the Dango stamp), not here: a page
+            // re-enters on every arrival, not only on this hook.
         }
 
         @Override
@@ -1516,6 +1506,9 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         @Override
         public void clearSettingsPageState() {
             resetSettingsUi();
+            // The rows' entrance arms at frame time from the composite's
+            // arrival event — a section switch re-stamps it too (the
+            // deliberate inversion of Dango's non-resetting settings tabs).
         }
 
         @Override
@@ -1539,53 +1532,10 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         }
 
         @Override
-        public void beginPageNav(NavPage from, NavPage to, boolean popPending) {
-            director.startPageNav(from, to, popPending);
-        }
-
-        @Override
-        public void abandonPageNav() {
-            director.abandonPageNav();
-        }
-
-        @Override
-        public void abandonRootTransition() {
-            director.clearRootTransition();
-        }
-
-        @Override
-        public boolean rootTransitionLive() {
-            return director.rootTransitionActive();
-        }
-
-        @Override
-        public boolean navStyleIsZoom() {
-            return director.navStyleIsZoom();
-        }
-
-        @Override
-        public void pinRootTabCapsule(AppPage from) {
-            director.pinTabCapsule(from);
-        }
-
-        @Override
-        public void markRootTabSpan(AppPage from, AppPage to) {
-            director.markTabSpan(from, to);
-        }
-
-        @Override
-        public void applyRootTabMotion(boolean zoom) {
-            director.applyTabMotion(zoom);
-        }
-
-        @Override
-        public void resetRootTabCapsule() {
-            director.resetTabCapsule();
-        }
-
-        @Override
         public void selectTabNow(AppPage root) {
-            bottomTabBar.setSelectedImmediate(director.rootIndex(root));
+            // The bar tweens its own capsule; motion off snaps inside
+            // setSelectedIndex.
+            bottomTabBar.setSelectedIndex(BottomTabBar.rootIndex(root));
         }
     };
     /**
@@ -1672,10 +1622,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
      * header a pushed page draws, and every title the bar can carry. The back
      * button's rect is read back from here by the shell's header renders, and the
      * hover spring is stepped here by both the settled frame and the pushed
-     * header — one value, the same positions as before. {@code suppressHeader} is
-     * deliberately NOT here: the shell reads it in two of its own gates (the
-     * settled header and the root header) and writes it in six transition spots,
-     * so it stays where both sides can see it.
+     * header — one value, the same positions as before.
      */
     private final HeaderChrome headerChrome = new HeaderChrome(new HeaderChrome.Host() {
         @Override
@@ -1709,61 +1656,58 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         }
     });
     /**
-     * The transition frame compositor (D24b-2a). Nine port steps, each a one-line
-     * forward to something this screen owns -- the page body (by ruling), the root
-     * orchestration (until 24b-2b), the bezel, the two layouts, D20's header
-     * action, D25's suppressHeader field and the E group's view.
+     * The arrival composite (D24b-2a, rewritten to the Dango semantics): the
+     * stamp and the entrance overlay live there; the screen contributes the
+     * page identity and the arriving page's two draws — the same body dispatch
+     * and header the settled frame had, now the only draws there are.
      */
     private final PageTransitionComposite composite = new PageTransitionComposite(
             new PageTransitionComposite.Host() {
                 @Override
-                public AppPage topPage() {
-                    return AtomChatScreen.this.topPage();
+                public NavPage topNav() {
+                    return navStack.topNav();
                 }
 
                 @Override
-                public void suppressHeader(boolean value) {
-                    suppressHeader = value;
+                public void drawArrivingBody(Canvas canvas, UiLayout layout, int mouseX, int mouseY) {
+                    switch (topPage()) {
+                        case SETTINGS_SECTION -> drawSettingsSection(canvas, mouseX, mouseY, topNav().section());
+                        case PROFILE_DETAIL -> drawProfileDetail(canvas, mouseX, mouseY);
+                        default -> drawChatPageBody(canvas, layout, mouseX, mouseY, chatPageViewFor(topNav()));
+                    }
                 }
 
                 @Override
-                public PageTransitionComposite.ChatPageView viewFor(NavPage page) {
-                    return chatPageViewFor(page);
+                public void drawArrivingHeader(Canvas canvas, UiLayout layout, int mouseX, int mouseY,
+                                               float vmx, float vmy) {
+                    switch (topPage()) {
+                        // The settings/profile pushed header draws through the
+                        // detail header rect; the chat pages' header carries the
+                        // back button, the online status and the feed filter.
+                        case SETTINGS_SECTION, PROFILE_DETAIL ->
+                                headerChrome.drawPushedHeader(canvas, vmx, vmy, topNav());
+                        default -> ShellHeader.render(canvas, layout.header,
+                                headerChrome.shellTitleFor(topNav()), true,
+                                headerChrome.backButton(), headerChrome.backButtonHover(),
+                                textPrimary(),
+                                topPage() == AppPage.PRIVATE_CHAT
+                                        ? contextActions.isOnlinePlayer(topNav().target()) : null,
+                                headerActionFor(topNav()));
+                    }
                 }
 
+                /**
+                 * The settings section and the profile detail are card lists:
+                 * they run the per-item stagger themselves, so the whole-page
+                 * envelope is skipped. The chat pages keep the envelope — their
+                 * message stack is not an item list to stagger.
+                 */
                 @Override
-                public void drawChatPageBody(Canvas canvas, UiLayout layout, int mouseX, int mouseY,
-                                             PageTransitionComposite.ChatPageView view) {
-                    AtomChatScreen.this.drawChatPageBody(canvas, layout, mouseX, mouseY, view);
+                public boolean arrivalStaggersSurfaces() {
+                    return topPage() == AppPage.SETTINGS_SECTION
+                            || topPage() == AppPage.PROFILE_DETAIL;
                 }
-
-                @Override
-                public void drawRootScreen(Canvas canvas, int mouseX, int mouseY, AppPage rootPage) {
-                    AtomChatScreen.this.drawRootScreen(canvas, mouseX, mouseY, rootPage);
-                }
-
-                @Override
-                public void drawBezel(Canvas canvas, UiLayout layout) {
-                    AtomChatScreen.this.drawBezel(canvas, layout);
-                }
-
-                @Override
-                public UiLayout rootLayout() {
-                    return AtomChatScreen.this.rootLayout();
-                }
-
-                @Override
-                public UiLayout detailLayout() {
-                    return AtomChatScreen.this.detailLayout();
-                }
-
-                @Override
-                public ShellHeader.HeaderAction headerActionFor(NavPage page) {
-                    return AtomChatScreen.this.headerActionFor(page);
-                }
-            },
-            director, composer, headerChrome, primitives, contextMenu, contextActions,
-            profileWiring, settingsDetailPage);
+            });
     private UiLayout.Rect filterButton() {
         UiLayout.Rect back = headerChrome.backButton();
         return new UiLayout.Rect(back.x() + back.w() + UiTokens.EDGE_CONTROL_INSET, back.y(), back.w(), back.h());
@@ -1920,7 +1864,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
      * {@code UiLayout.of} leaves at the panel origin when {@code replyH == 0}.
      */
     private boolean replyBarVisible() {
-        return replySlots.replyBarVisible(director.pageNavFrom(), director.pageNavTo());
+        return replySlots.replyBarVisible(topNav());
     }
 
     /** Fold window for a conversation, created on first view and kept across in-place growth. */
@@ -1995,8 +1939,14 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         long nowNanos = System.nanoTime();
         float frameDtMs = PanelOpenMotion.frameDtMs(nowNanos, lastFrameNanos);
         lastFrameNanos = nowNanos;
-        panelProgress = PanelOpenMotion.stepProgress(panelProgress, closing, frameDtMs,
-                Animations.enabled());
+        com.atom.chat.render.UiPixelSnap.beginFrame(
+                uiDensity() / (float) this.client.getWindow().getGuiScale());
+        // The open/close rides a spring (unit E2): quicker than the retired
+        // tau-70 exponential with a restrained settle, same exact-landing
+        // snap so the equality settle test and the 6% close cut keep working.
+        panelMotion.setTarget(closing ? 0.0F : 1.0F);
+        panelMotion.update(frameDtMs, Animations.enabled());
+        panelProgress = panelMotion.value();
         boolean panelSettled = PanelOpenMotion.settled(panelProgress, closing);
         // Closing is cut at 6% left: past that the panel is a subpixel sliver
         // and the exponential tail would only delay setScreen(null) (see
@@ -2311,7 +2261,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         // lingers in [0.999, 1) — past this point the fade is fully opaque and
         // scale/slide are exactly 1/0, so the full-panel layer is pure
         // overdraw and the panel draws directly (same call as the nav branch).
-        if (PageTransitionDirector.navLayerSkippable(PanelOpenMotion.fade(progress), scale)) {
+        if (PanelOpenMotion.layerSkippable(PanelOpenMotion.fade(progress), scale)) {
             int probeBefore = canvas.getSaveCount();
             clickRipples.begin(settingsSectionPage.confirmation().isActive() ? settingsSectionPage.confirmation()
                     : imageCropper.isActive() ? imageCropper : colorPicker.isActive() ? colorPicker
@@ -2506,69 +2456,88 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
 
         ShellHeader.drawBackdrop(canvas, layout.header);
 
-        // One unified shell header is drawn before page content on every page.
-        // Root pages add their body and the bottom tab bar; pushed pages run
-        // through the navigation machinery below.
-        // The pointer is mapped here rather than inside the composite: the
-        // settled path below needs the same two values anyway.
+        // One arrival stamp per frame: the composite notices a page-key change
+        // and re-arms its entrance (the only transition there is). The pointer
+        // is mapped here rather than inside the composite: the paths below need
+        // the same two values anyway.
         float vmx = toVirtualX(mouseX);
         float vmy = toVirtualY(mouseY);
-        if (composite.drawRootFrame(canvas, layout, mouseX, mouseY, vmx, vmy)) {
+        long arrivalMs = System.currentTimeMillis();
+        composite.beginFrame(arrivalMs);
+        boolean arrived = composite.consumeArrivalEvent();
+
+        // The arriving surface owns the entrance, and only ONE motion plays it.
+        //
+        // Root pages are lists (conversation cards, settings tiles, profile
+        // blocks), so they run Dango's per-item stagger and NOT the whole-page
+        // overlay: drawRootPageBody draws them straight, each item fading and
+        // rising off its own slot. A tab switch re-arms the arriving page's
+        // stagger; the bar itself stays put and only slides its capsule.
+        if (topPage().isRoot()) {
+            if (arrived) {
+                switch (topPage()) {
+                    case CHAT_LIST -> conversationListPage.markEntered();
+                    case SETTINGS -> settingsHomePage.markEntered();
+                    case PROFILE -> profilePage.markEntered();
+                    default -> {
+                    }
+                }
+                // The bar is not drawn at all on pushed pages, so popping back
+                // to a root page is the one arrival that gives it a transition
+                // of its own (fade in + lift).
+                if (composite.arrivalFromPushedToRoot()) {
+                    bottomTabBar.markEntered();
+                }
+            }
+            drawRootScreen(canvas, mouseX, mouseY, topPage());
+            contextMenu.draw(canvas, vmx, vmy);
+            drawBezel(canvas, layout);
             return;
         }
-        PageTransitionComposite.NavFrame navFrame = composite.begin(canvas, layout, mouseX, mouseY,
-                vmx, vmy, frameDt);
-        if (navFrame.finished()) {
-            return;
+        // Pushed pages are single surfaces without an item list of their own
+        // (a chat's message stack is virtualised and already animates its own
+        // entrance), so they keep the whole-page envelope — and their rows stay
+        // settled under it: one transition, one motion. The two pushed CARD
+        // LISTS (settings section, profile detail) are the exception: they
+        // stagger their own rows and draw without the envelope.
+        if (arrived) {
+            if (topPage() == AppPage.SETTINGS_SECTION) {
+                settingsSectionPage.markEntered();
+            } else if (topPage() == AppPage.PROFILE_DETAIL) {
+                profilePage.markEntered();
+            }
         }
-        // A settled settings sub-page: header + list, nothing else.
-        if (!navFrame.running() && topPage() == AppPage.SETTINGS_SECTION) {
-            drawSettingsSection(canvas, mouseX, mouseY, topNav().section());
-            headerChrome.drawPushedHeader(canvas, vmx, vmy, topNav());
-            drawBezel(canvas, detailLayout());
-            return;
+        // The chat header's back hover is stepped here; the settings/profile
+        // pushed header steps the same spring inside drawPushedHeader.
+        if (isWorldChatPage()) {
+            headerChrome.stepBackButtonHover(vmx, vmy);
         }
-        // A settled profile detail: same chrome, profile body.
-        if (!navFrame.running() && topPage() == AppPage.PROFILE_DETAIL) {
-            drawProfileDetail(canvas, mouseX, mouseY);
-            headerChrome.drawPushedHeader(canvas, vmx, vmy, topNav());
-            drawBezel(canvas, detailLayout());
-            return;
-        }
-        headerChrome.stepBackButtonHover(vmx, vmy);
         filterButtonHover = UiMotion.approach(filterButtonHover,
                 topPage() == AppPage.WORLD_CHAT && isFilterButtonHit(vmx, vmy) ? 1.0F : 0.0F,
                 frameDt, UiMotion.HOVER_MS);
-        if (!suppressHeader) {
-            ShellHeader.render(canvas, layout.header, headerChrome.shellTitleFor(topNav()), true,
-                    headerChrome.backButton(), headerChrome.backButtonHover(), textPrimary(),
-                    topPage() == AppPage.PRIVATE_CHAT
-                            ? contextActions.isOnlinePlayer(activePrivateTarget()) : null,
-                    headerActionFor(topNav()));
+
+        // The arriving page draws whole — body and header together, inside the
+        // entrance overlay. Grow the input bar before the list is measured, so
+        // the list loses exactly the height the bar gains.
+        if (isWorldChatPage()) {
+            layout = composer.updateLayout(layout);
         }
+        composite.drawArrivingFrame(canvas, layout, mouseX, mouseY, vmx, vmy, arrivalMs);
 
-        // Grow the input bar before the list is measured, so the list loses
-        // exactly the height the bar gains.
-        layout = composer.updateLayout(layout);
-
-        if (!navFrame.movingHidden()) {
-            drawChatPageBody(canvas, layout, mouseX, mouseY, chatPageViewFor(topNav()));
-
-            messageListView.drawReactionHover(canvas, toVirtualX(mouseX), toVirtualY(mouseY),
+        // The overlays live above the envelope, untransformed: they belong to
+        // the screen, not to the entering page.
+        if (isWorldChatPage()) {
+            messageListView.drawReactionHover(canvas, vmx, vmy,
                     com.atom.chat.ui.ReactionChips.tooltipSuppressed(
                             emojiPanel.isOpen(), quickPhrasePanel.isOpen(),
                             contextMenu.hasMessageMenu(), contextMenu.hasPlayerCardMenu(),
                             imagePreview.isActive()));
-            emojiPanel.render(canvas, layout, toVirtualX(mouseX), toVirtualY(mouseY), frameDt);
-            quickPhrasePanel.render(canvas, layout, toVirtualX(mouseX), toVirtualY(mouseY), frameDt);
-            contextMenu.draw(canvas, toVirtualX(mouseX), toVirtualY(mouseY));
-            // Last inside the panel: a modal over the page it was opened from.
-            imagePreview.render(canvas, layout.rect(), toVirtualX(mouseX), toVirtualY(mouseY));
+            emojiPanel.render(canvas, layout, vmx, vmy, frameDt);
+            quickPhrasePanel.render(canvas, layout, vmx, vmy, frameDt);
         }
-
-        if (navFrame.running()) {
-            composite.end(canvas, layout, navFrame);
-        }
+        contextMenu.draw(canvas, vmx, vmy);
+        // Last inside the panel: a modal over the page it was opened from.
+        imagePreview.render(canvas, layout.rect(), vmx, vmy);
 
         com.atom.chat.fun.ChatEffectRenderer.draw(canvas, layout, chatEffects.session(),
                 com.atom.chat.fun.ChatEffectPresentation.nowMs());
@@ -2577,21 +2546,29 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
     }
 
     /**
+     * Render state of a chat page (the E group's record, now screen-local since
+     * the composite no longer composites two pages): the draft, read-only hint,
+     * reply bar and scroll the page is drawn with, resolved per page against the
+     * one shared {@code EditBox}. {@code null} means the page has no composer.
+     */
+    private record ChatPageView(NavPage page, String draft, boolean readOnly, String readOnlyHint,
+                                boolean partnerTyping, ChatMessage reply, ScrollController scroll,
+                                boolean ownsField) {
+    }
+
+    /**
      * Everything {@link #drawChatPageBody} needs that the single hidden EditBox
      * makes shared: the composer text, the read-only and typing hints, the reply
-     * bar and the scroll controller all belong to one {@link NavPage}. A
-     * transition composites two pages in the same frame, so each side is
-     * resolved into its own immutable view instead of both re-reading the
-     * top-page helpers — which is exactly how the arriving page's draft used to
-     * be painted onto the leaving page.
+     * bar and the scroll controller all belong to one {@link NavPage}. One page
+     * draws per frame (the Dango semantics), and the view is resolved from its
+     * own entry so a page never reads another page's render state.
      */
-    /** Render state of a chat page, or null for a page that has no composer. */
-    private PageTransitionComposite.ChatPageView chatPageViewFor(NavPage page) {
+    private ChatPageView chatPageViewFor(NavPage page) {
         if (page == null || (page.page() != AppPage.WORLD_CHAT && page.page() != AppPage.PRIVATE_CHAT)) {
             return null;
         }
         boolean readOnly = isPrivateReadOnlyFor(page);
-        return new PageTransitionComposite.ChatPageView(page, draftForNav(page), readOnly,
+        return new ChatPageView(page, draftForNav(page), readOnly,
                 readOnly ? readOnlyHintForNav(page) : "",
                 partnerTypingFor(page), replyForNav(page), scrollForNav(page),
                 ownsInputField(page));
@@ -2599,14 +2576,13 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
 
     /**
      * The whole chat page body — messages, reply bar, composer, scrollbar,
-     * jump-to-latest — drawn for one page view. Self-contained so the full-width
-     * page push can slide it as one piece; the settled path calls it with the
-     * top page's view. The header and the emoji/context overlays stay with the
-     * caller: the header is a fixed status bar during pushes, and the overlays
-     * belong to the screen, not the sliding page.
+     * jump-to-latest — drawn for one page view, inside the arriving page's
+     * entrance overlay when one is playing. The header and the emoji/context
+     * overlays stay with the caller: the header belongs to the arriving page's
+     * envelope, and the overlays belong to the screen, not the page.
      */
     private void drawChatPageBody(Canvas canvas, UiLayout layout, int mouseX, int mouseY,
-                                  PageTransitionComposite.ChatPageView view) {
+                                  ChatPageView view) {
         if (view == null) {
             return;
         }
@@ -2879,11 +2855,8 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         float vmx = toVirtualX(mouseX);
         float vmy = toVirtualY(mouseY);
         bottomTabBar.update(frameDt, vmx, vmy, root.tabBar);
-        director.stepRootNav(frameDt);
-        if (!suppressHeader) {
-            ShellHeader.render(canvas, root.header, headerChrome.shellTitleFor(rootPage), false, null, 0.0F,
-                    textPrimary());
-        }
+        ShellHeader.render(canvas, root.header, headerChrome.shellTitleFor(rootPage), false, null, 0.0F,
+                textPrimary());
         rootMouseX = vmx;
         rootMouseY = vmy;
         scrollSync.rootScroll().setContent(measureRootContent(root, rootPage), root.list.h());
@@ -2898,68 +2871,16 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         colorPicker.render(canvas, root.rect(), vmx, vmy, accent());
     }
 
-    private void drawRootPage(Canvas canvas, UiLayout layout, AppPage rootPage) {
-        if (!director.rootTransitionActive()) {
-            drawRootPageBody(canvas, layout, rootPage, 0.0F);
-            return;
-        }
-        if (director.rootTabZoom()) {
-            drawRootPageZoom(canvas, layout, rootPage);
-            return;
-        }
-        // Full-width opaque push, same language as the emoji tab content
-        // transition: the outgoing page leaves in the direction of travel while
-        // the incoming page enters from that side. The progress is the same
-        // exponential clock that positions the capsule (stepRootNav), so pill
-        // and pages land together without the eased tween's notch.
-        float progress = director.rootTabProgress();
-        canvas.save();
-        try {
-            SkiaDraw.clip(canvas, layout.list.x(), layout.list.y(),
-                    layout.list.w(), layout.list.h(), 0.0F);
-            float travel = layout.list.w();
-            float sign = director.rootTabTo() > director.rootTabFrom() ? 1.0F : -1.0F;
-            drawRootPageBody(canvas, layout, director.rootPageForIndex(director.rootTabFrom()),
-                    -sign * travel * progress);
-            drawRootPageBody(canvas, layout, rootPage,
-                    sign * travel * (1.0F - progress));
-        } finally {
-            canvas.restore();
-        }
-    }
-
     /**
-     * Melodify serial zoom between root tabs, staged inside the list area:
-     * the leaving tab shrinks out (scale 1.0 -> 0.9 while fading), then the
-     * arriving tab settles (1.1 -> 1.0 while fading in) — one page composited
-     * at a time, never two half-transparent pages stacked. The clip is square
-     * on purpose: the list sits inside the panel's rounded corners, so the
-     * hard edges never show; a rounded clip here would bite into the first
-     * and last rows.
+     * The root page body. Root pages are lists, so they run Dango's per-item
+     * stagger (each card/tile/block fades and rises off its own slot inside the
+     * page) and deliberately do NOT ride the whole-page envelope: page drift
+     * plus row rise was the reported "the cards jump up on arrival". The clip
+     * is square on purpose: the list sits inside the panel's rounded corners,
+     * so the hard edges never show.
      */
-    private void drawRootPageZoom(Canvas canvas, UiLayout layout, AppPage rootPage) {
-        UiLayout.Rect list = layout.list;
-        boolean exiting = director.rootZoomExiting();
-        float alpha = exiting ? director.rootZoomExitAlpha() : director.rootZoomEnterAlpha();
-        float scale = exiting ? 0.9F + alpha * 0.1F : 1.1F - alpha * 0.1F;
-        AppPage page = exiting ? director.rootPageForIndex(director.rootTabFrom()) : rootPage;
-        if (alpha <= 0.001F || PageTransitionDirector.navLayerSkippable(alpha, scale)) {
-            return;
-        }
-        canvas.save();
-        try (Paint layer = new Paint().setAlphaf(alpha)) {
-            canvas.saveLayer(Rect.makeXYWH(list.x(), list.y(), list.w(), list.h()), layer);
-            SkiaDraw.clip(canvas, list.x(), list.y(), list.w(), list.h(), 0.0F);
-            PageTransitionDirector.applyNavScale(canvas, list, scale);
-            drawRootPageBody(canvas, layout, page, 0.0F);
-            // save() and saveLayer() pushed two entries; both must be popped.
-            // This restore pairs with the layer, the finally's with the plain
-            // save — one restore short leaked the outer save every frame (the
-            // 0.2.4 banner leak's shape, capped only by the frame-end guard).
-            canvas.restore();
-        } finally {
-            canvas.restore();
-        }
+    private void drawRootPage(Canvas canvas, UiLayout layout, AppPage rootPage) {
+        drawRootPageBody(canvas, layout, rootPage, 0.0F);
     }
 
     /** Renders any root page body at an optional horizontal offset inside the root layout. */
@@ -2984,7 +2905,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
     }
 
             private void drawBottomTabBar(Canvas canvas, UiLayout layout, AppPage rootPage) {
-        int selectedIndex = director.rootIndex(rootPage);
+        int selectedIndex = BottomTabBar.rootIndex(rootPage);
         bottomTabBar.render(canvas, layout.tabBar, selectedIndex, textPrimary(), accent());
     }
 
@@ -3181,7 +3102,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         com.atom.chat.audio.FeedbackSoundController.beginAction();
         try {
             if (button == 0 && !imageCropper.isActive() && !colorPicker.isActive() && !imagePreview.isActive()
-                    && !PanelOpenMotion.animating(panelProgress, closing) && !director.pageNavActive())
+                    && !PanelOpenMotion.animating(panelProgress, closing))
                 clickRipples.click(toVirtualX(mouseX), toVirtualY(mouseY));
             Boolean direct = gate.click(mouseX, mouseY, button);
             if (direct != null) return direct;
@@ -3341,12 +3262,22 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         return primitives.textSecondary();
     }
 
+    // Unit V: the panel rect's edges snap to the device grid. A fractional
+    // density leaves the settled panel on an arbitrary subpixel phase, and
+    // every edge of the shell (bezel, blur backdrop, capture rect) reads soft
+    // exactly there. Snapping the INPUT rect keeps the two derivations that
+    // share it — the painted shell and PanelOpenMotion.blurCapture — on one
+    // set of edges by construction, so the capture==painted contract cannot
+    // drift. Width/height are edge differences (snap(x+w) - snap(x)), not
+    // independent snaps, so the right/bottom edges stay glued to the panel.
     private float panelWidth() {
-        return ScreenMetrics.panelWidth(client.getWindow());
+        return UiPixelSnap.snapToDevice(ScreenMetrics.panelX() + ScreenMetrics.panelWidth(client.getWindow()))
+                - UiPixelSnap.snapToDevice(ScreenMetrics.panelX());
     }
 
     private float panelHeight() {
-        return ScreenMetrics.panelHeight(client.getWindow());
+        return UiPixelSnap.snapToDevice(ScreenMetrics.panelY(client.getWindow()) + ScreenMetrics.panelHeight(client.getWindow()))
+                - UiPixelSnap.snapToDevice(ScreenMetrics.panelY(client.getWindow()));
     }
 
     /** Content zoom (D10): see {@link ScreenMetrics#contentScale()} for the clamp and why it cancels on the frame. */
@@ -3369,11 +3300,11 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
 
     /** Panel anchor (D10): contentScale-invariant, see {@link ScreenMetrics#panelX()}. */
     private float panelX() {
-        return ScreenMetrics.panelX();
+        return UiPixelSnap.snapToDevice(ScreenMetrics.panelX());
     }
 
     private float panelY() {
-        return ScreenMetrics.panelY(client.getWindow());
+        return UiPixelSnap.snapToDevice(ScreenMetrics.panelY(client.getWindow()));
     }
 
     // The one progress->shape mapping of the open/close animation, and the
@@ -3963,9 +3894,9 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
                 return true;
             }
 
-            // Back to the conversation list before any composer/emoji/message hit.
-            // resetTransientWorldUi() runs inside popPage() after any slide-out
-            // animation so the world page still looks intact while it leaves.
+            // Back to the conversation list before any composer/emoji/message
+            // hit. popPage() applies the pop immediately (there is no exit
+            // phase); the arriving page's entrance overlay announces it.
             if (button == 0 && headerChrome.isBackButtonHit(mx, my)) {
                 ShellHeader.armBackPress();
                 popPage();

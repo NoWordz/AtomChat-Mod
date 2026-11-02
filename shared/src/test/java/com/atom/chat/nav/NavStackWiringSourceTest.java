@@ -94,11 +94,11 @@ class NavStackWiringSourceTest {
      * every unit test above would still pass (the recorder is the port), and
      * the screen would do nothing.
      *
-     * <p>Since block 24b-1 nine of the ten transition steps are forwarded one
-     * indirection deeper, to {@code PageTransitionDirector}. The fact is
-     * unchanged -- the port must still reach whatever owns the step -- and the
-     * director's own work is asserted at its new home in
-     * {@code PageTransitionWiringSourceTest}.
+     * <p>The transition inversion (the Dango rewrite) removed the eleven
+     * transition forwards from this surface: the controller lands every stack
+     * change synchronously now, and the only animation left beside the arriving
+     * page's entrance overlay is the tab bar's own capsule, reached through
+     * {@code selectTabNow}.
      */
     private static final Map<String, String> PORT_WORK = new LinkedHashMap<>();
 
@@ -106,6 +106,7 @@ class NavStackWiringSourceTest {
         PORT_WORK.put("signatureEditLive", "profilePage.isSignatureEditing()");
         PORT_WORK.put("abortSignatureEdit", "profilePage.endSignatureEdit(false)");
         PORT_WORK.put("persistCurrentDraft", "saveCurrentDraft()");
+        PORT_WORK.put("syncReplySlot", "syncReplySlot();");
         PORT_WORK.put("persistPrivateDraft", "savePrivateDraft(target, text)");
         PORT_WORK.put("adoptDraft", "loadDraft(target)");
         PORT_WORK.put("adoptWorldDraft", "loadWorldDraft()");
@@ -119,16 +120,7 @@ class NavStackWiringSourceTest {
         PORT_WORK.put("isPlayerOnline", "contextActions.isOnlinePlayer(target)");
         PORT_WORK.put("dropProfileSubject", "profilePage.resetSubject()");
         PORT_WORK.put("copy", "tr(key)");
-        PORT_WORK.put("beginPageNav", "startPageNav(from, to, popPending)");
-        PORT_WORK.put("abandonPageNav", "director.abandonPageNav()");
-        PORT_WORK.put("abandonRootTransition", "director.clearRootTransition()");
-        PORT_WORK.put("rootTransitionLive", "director.rootTransitionActive()");
-        PORT_WORK.put("navStyleIsZoom", "director.navStyleIsZoom()");
-        PORT_WORK.put("pinRootTabCapsule", "director.pinTabCapsule(from)");
-        PORT_WORK.put("markRootTabSpan", "director.markTabSpan(from, to)");
-        PORT_WORK.put("applyRootTabMotion", "director.applyTabMotion(zoom)");
-        PORT_WORK.put("resetRootTabCapsule", "director.resetTabCapsule()");
-        PORT_WORK.put("selectTabNow", "bottomTabBar.setSelectedImmediate(director.rootIndex(root))");
+        PORT_WORK.put("selectTabNow", "bottomTabBar.setSelectedIndex(BottomTabBar.rootIndex(root))");
     }
 
     // ---------------------------------------------------------------- helpers
@@ -368,9 +360,10 @@ class NavStackWiringSourceTest {
                 "the transient reset must run while the page is still on the stack");
 
         String switchRoot = body(src, "public void switchRoot(AppPage root)");
-        assertTrue(switchRoot.indexOf("navigation.replaceWithRoot(") < switchRoot.indexOf("host.markRootTabSpan("),
-                "the tab switch must land on the stack before the span is recorded");
-        assertTrue(switchRoot.indexOf("host.applyRootTabMotion(") < switchRoot.indexOf("host.resetRootTabCapsule()"),
-                "the capsule resets last, so it starts from the source cell");
+        assertTrue(switchRoot.indexOf("navigation.replaceWithRoot(") < switchRoot.indexOf("host.selectTabNow("),
+                "the tab switch lands on the stack before the bar selects its cell — the capsule "
+                        + "tweens itself from there, there is no span or motion arm any more");
+        assertFalse(switchRoot.contains("markRootTabSpan"),
+                "the transition inversion removed the root-tab span machinery");
     }
 }

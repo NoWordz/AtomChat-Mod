@@ -27,7 +27,10 @@ class ConfirmationFeedbackTest {
         var page=new SettingsSectionPage();
         var chips=page.chips(SettingsSection.CHAT);
         for(int i=0;i<chips.size();i++) if(chips.get(i).id().equals("history")) page.selectChip(SettingsSection.CHAT,i);
-        var transition=SettingsSectionPage.class.getDeclaredField("chipSwitchAtMs");transition.setAccessible(true);transition.setLong(page,0);
+        // The chip switch replays the page entrance; settling it is what "the
+        // switch has finished" means now (there is no crossfade clock left).
+        var entrance=SettingsSectionPage.class.getDeclaredField("entrance");entrance.setAccessible(true);
+        ((com.atom.chat.ui.UiStagger.Entrance) entrance.get(page)).markSettled();
         return page;
     }
     @Test void modalConsumesReleaseWithoutLeavingTheOriginCardPermanentlyPressed() throws Exception {

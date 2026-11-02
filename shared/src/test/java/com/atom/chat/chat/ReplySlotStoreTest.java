@@ -147,26 +147,25 @@ class ReplySlotStoreTest {
     }
 
     @Test
-    void eitherSideOfATransitionKeepsTheReplyRowVisible() {
+    void theDrawnPageKeepsTheReplyRowVisible() {
         ReplySlotStore store = new ReplySlotStore();
-        assertFalse(store.replyBarVisible(null, null), "nothing armed, nothing reserved");
+        assertFalse(store.replyBarVisible(null), "nothing armed, nothing reserved");
 
-        // Live field (the arriving page owns the composer).
+        // Live field (the drawn page owns the composer).
         store.arm(message("live"));
-        assertTrue(store.replyBarVisible(null, priv(ALICE)));
+        assertTrue(store.replyBarVisible(priv(ALICE)));
 
-        // Slot only (the leaving page's bar is drawn from its slot mid-transition).
+        // Slot only (the drawn page's bar comes from its slot; the transition
+        // inversion means only one page draws per frame, so the two-sided form
+        // of this check is gone).
         ReplySlotStore slots = new ReplySlotStore();
-        slots.arm(message("leaving"));
+        slots.arm(message("slot"));
         slots.syncReplySlot(AppPage.PRIVATE_CHAT, priv(BOB));
-        // The composer moved on: the live field is empty again, only the slot is armed.
         slots.disarm();
-        assertFalse(slots.replyBarVisible(null, priv(ALICE)),
-                "Alice's side is empty and Bob's slot is not on screen");
-        assertTrue(slots.replyBarVisible(priv(BOB), priv(ALICE)),
-                "the leaving side's armed slot still reserves the row");
-        assertTrue(slots.replyBarVisible(priv(ALICE), priv(BOB)),
-                "and so does the arriving side's");
+        assertFalse(slots.replyBarVisible(priv(ALICE)),
+                "Alice's page has nothing armed in its slot");
+        assertTrue(slots.replyBarVisible(priv(BOB)),
+                "Bob's page's armed slot reserves the row");
     }
 
     @Test
@@ -182,6 +181,6 @@ class ReplySlotStoreTest {
         assertNull(store.replyTarget());
         assertFalse(store.replySlotArmed(priv(ALICE)));
         assertFalse(store.replySlotArmed(world()));
-        assertFalse(store.replyBarVisible(priv(ALICE), world()));
+        assertFalse(store.replyBarVisible(priv(ALICE)));
     }
 }

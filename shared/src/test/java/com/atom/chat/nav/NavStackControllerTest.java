@@ -17,7 +17,6 @@ import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -26,19 +25,27 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  *
  * <p><b>Why an order test and not a behaviour test.</b> The nav cascade is ten
  * to twelve cross-domain steps, and the order <em>is</em> the contract: a
- * subject reset that runs before the stack pop redraws the sliding-out page as
- * the local player's profile mid-animation; a draft persisted after the stack
- * moved saves it to the wrong conversation; a signature edit aborted after the
- * borrowed field was already touched commits what navigation must never commit.
- * None of that is visible in a golden frame (the frames render page objects and
- * never run a cascade), so the sequence is pinned here, step by step, through a
- * recording port — and every assertion is written so that swapping two steps
- * turns it red.
+ * subject reset that runs before the stack pop redraws the leaving page as the
+ * local player's profile; a draft persisted after the stack moved saves it to
+ * the wrong conversation; a signature edit aborted after the borrowed field was
+ * already touched commits what navigation must never commit. None of that is
+ * visible in a golden frame, so the sequence is pinned here, step by step,
+ * through a recording port — and every assertion is written so that swapping
+ * two steps turns it red.</p>
+ *
+ * <p><b>The transition inversion this rewrite pins.</b> The old controller armed
+ * a page transition instead of finishing its own cascade: a pop left the detail
+ * page on the stack, waiting for a finished slide-out. The Dango semantics have
+ * no exit phase — {@code popPage} lands through the full {@code popNow} cascade
+ * immediately, with motion on or off — and the arriving page's entrance overlay
+ * is the only perceivable transition (pinned in {@code PageArrivalCompositeTest}
+ * and {@code UiStaggerTest}). There is deliberately no transition port left to
+ * arm: no pending-pop state, no root-tab span, no style resolution here.</p>
  *
  * <p>The recorder also records <em>which page the stack was on</em> at every
- * step. That is what makes "before the pop" / "after the pop" falsifiable
- * rather than a claim about the source: the step must observe the page it is
- * required to observe.
+ * step. That is what makes "before the pop" / "after the pop" falsifiable rather
+ * than a claim about the source: the step must observe the page it is required
+ * to observe.</p>
  */
 class NavStackControllerTest {
 
@@ -85,9 +92,9 @@ class NavStackControllerTest {
         style = config.pageNavStyle;
         blocked = config.blockedPlayers;
         config.animationEnabled = true;
-        // The tab-switch arm reads the config through the port; pin it so the
-        // recorded motion is a property of the code and not of this machine's
-        // client config file.
+        // No cascade step reads the style any more (the entrance overlay reads it
+        // at frame time); pinned only so a future regression that re-introduces a
+        // style-dependent cascade still runs deterministically.
         config.pageNavStyle = AtomChatConfig.PageNavStyle.ZOOM;
         // In memory only: BlockList.setBlocked would persist to the client config file.
         config.blockedPlayers = new ArrayList<>();
@@ -116,8 +123,6 @@ class NavStackControllerTest {
         boolean signatureEditing;
         boolean partnerOnline = true;
         String composer = "";
-        String blockedKey;
-        String offlineKey;
 
         private void note(String step) {
             String where = controller == null ? "?" : String.valueOf(controller.topNav().page());
@@ -138,6 +143,11 @@ class NavStackControllerTest {
         @Override
         public void persistCurrentDraft() {
             note("persistCurrentDraft");
+        }
+
+        @Override
+        public void syncReplySlot() {
+            note("syncReplySlot");
         }
 
         @Override
@@ -210,58 +220,9 @@ class NavStackControllerTest {
         }
 
         @Override
-        public void beginPageNav(NavPage from, NavPage to, boolean popPending) {
-            note("beginPageNav[" + from.page() + "->" + to.page() + ",pop=" + popPending + "]");
-        }
-
-        @Override
-        public void abandonPageNav() {
-            note("abandonPageNav");
-        }
-
-        @Override
-        public void abandonRootTransition() {
-            note("abandonRootTransition");
-        }
-
-        @Override
-        public boolean rootTransitionLive() {
-            note("rootTransitionLive");
-            return rootTransitionRunning;
-        }
-
-        @Override
-        public boolean navStyleIsZoom() {
-            note("navStyleIsZoom");
-            return AtomChatConfig.get().pageNavStyle == AtomChatConfig.PageNavStyle.ZOOM;
-        }
-
-        @Override
-        public void pinRootTabCapsule(AppPage from) {
-            note("pinRootTabCapsule[" + from + "]");
-        }
-
-        @Override
-        public void markRootTabSpan(AppPage from, AppPage to) {
-            note("markRootTabSpan[" + from + "->" + to + "]");
-        }
-
-        @Override
-        public void applyRootTabMotion(boolean zoom) {
-            note("applyRootTabMotion[zoom=" + zoom + "]");
-        }
-
-        @Override
-        public void resetRootTabCapsule() {
-            note("resetRootTabCapsule");
-        }
-
-        @Override
         public void selectTabNow(AppPage root) {
             note("selectTabNow[" + root + "]");
         }
-
-        boolean rootTransitionRunning;
     }
 
     /** A controller whose stack is exactly the given one, with the port attached. */
@@ -276,11 +237,11 @@ class NavStackControllerTest {
     // ------------------------------------------------------------- cascade
 
     /**
-     * {@code pushNav}: signature abort, current draft, the target page's scroll
-     * reset, the nav arming, the push, the draft load, the reply load, and the
-     * root-transition cleanup last. Every step runs on the page it must run on —
-     * the resets and the arming on the page being left, the loads on the page
-     * that has just arrived.
+     * {@code pushNav}: signature abort, current draft, the reply capture, the
+     * arriving page kind's reset, the push, the draft load, the reply load.
+     * Every step runs on the page it must run on — the resets and captures on
+     * the page being left, the loads on the page that has just arrived. There is
+     * no transition arm and no root-transition cleanup: the push is synchronous.
      */
     @Test
     void pushNavRunsTheCascadeInTheFrozenOrder() {
@@ -292,17 +253,16 @@ class NavStackControllerTest {
         assertEquals(List.of(
                 "signatureEditLive@CHAT_LIST",
                 "persistCurrentDraft@CHAT_LIST",
+                "syncReplySlot@CHAT_LIST",
                 "clearWorldScroll@CHAT_LIST",
-                "pinRootTabCapsule[CHAT_LIST]@CHAT_LIST",
-                "beginPageNav[CHAT_LIST->WORLD_CHAT,pop=false]@CHAT_LIST",
                 "adoptWorldDraft@WORLD_CHAT",
-                "armReplyFor@WORLD_CHAT",
-                "abandonRootTransition@WORLD_CHAT"), host.calls,
+                "armReplyFor@WORLD_CHAT"), host.calls,
                 "pushNav's cascade order is the contract");
-        assertEquals(AppPage.WORLD_CHAT, controller.topPage());
+        assertEquals(AppPage.WORLD_CHAT, controller.topPage(),
+                "the push lands the stack this frame (no transition to wait for)");
     }
 
-    /** The two other reset arms, and the profile-only one, stay page-specific. */
+    /** The two other reset arms stay page-specific. */
     @Test
     void pushNavResetsOnlyTheArrivingPageKind() {
         Recorder settings = new Recorder();
@@ -311,11 +271,9 @@ class NavStackControllerTest {
         assertEquals(List.of(
                 "signatureEditLive@CHAT_LIST",
                 "persistCurrentDraft@CHAT_LIST",
+                "syncReplySlot@CHAT_LIST",
                 "clearSettingsPageState@CHAT_LIST",
-                "pinRootTabCapsule[CHAT_LIST]@CHAT_LIST",
-                "beginPageNav[CHAT_LIST->SETTINGS_SECTION,pop=false]@CHAT_LIST",
-                "armReplyFor@SETTINGS_SECTION",
-                "abandonRootTransition@SETTINGS_SECTION"), settings.calls);
+                "armReplyFor@SETTINGS_SECTION"), settings.calls);
 
         Recorder profile = new Recorder();
         NavStackController toProfile = onStack(profile, List.of(NavPage.of(AppPage.CHAT_LIST)));
@@ -323,29 +281,9 @@ class NavStackControllerTest {
         assertEquals(List.of(
                 "signatureEditLive@CHAT_LIST",
                 "persistCurrentDraft@CHAT_LIST",
+                "syncReplySlot@CHAT_LIST",
                 "clearDetailScroll@CHAT_LIST",
-                "pinRootTabCapsule[CHAT_LIST]@CHAT_LIST",
-                "beginPageNav[CHAT_LIST->PROFILE_DETAIL,pop=false]@CHAT_LIST",
-                "armReplyFor@PROFILE_DETAIL",
-                "abandonRootTransition@PROFILE_DETAIL"), profile.calls);
-    }
-
-    /** A detail-to-detail push arms the nav but pins no root capsule (no root page left). */
-    @Test
-    void detailToDetailPushArmsTheNavWithoutPinningTheCapsule() {
-        Recorder host = new Recorder();
-        NavStackController controller = onStack(host,
-                List.of(NavPage.of(AppPage.CHAT_LIST), NavPage.privateChat(PARTNER)));
-
-        controller.pushNav(NavPage.of(AppPage.PROFILE_DETAIL));
-
-        assertEquals(List.of(
-                "signatureEditLive@PRIVATE_CHAT",
-                "persistCurrentDraft@PRIVATE_CHAT",
-                "clearDetailScroll@PRIVATE_CHAT",
-                "beginPageNav[PRIVATE_CHAT->PROFILE_DETAIL,pop=false]@PRIVATE_CHAT",
-                "armReplyFor@PROFILE_DETAIL",
-                "abandonRootTransition@PROFILE_DETAIL"), host.calls);
+                "armReplyFor@PROFILE_DETAIL"), profile.calls);
     }
 
     /** A live signature edit is aborted, without committing, before anything else runs. */
@@ -364,8 +302,8 @@ class NavStackControllerTest {
     }
 
     /**
-     * {@code popNow}: the private draft is persisted and the active store
-     * cleared while the page is still on top, the transient bus and the settings
+     * {@code popNow}: the reply capture and the private draft are persisted
+     * while the page is still on top, the transient bus and the settings
      * sub-page are reset, the stack pops, and only then does the subject fall
      * back — so the page that is leaving never redraws as the local player.
      */
@@ -378,6 +316,7 @@ class NavStackControllerTest {
         controller.popNow();
 
         assertEquals(List.of(
+                "syncReplySlot@PROFILE_DETAIL",
                 "clearTransientWorldUi@PROFILE_DETAIL",
                 "clearSettingsPageState@PROFILE_DETAIL",
                 "dropProfileSubject@CHAT_LIST",
@@ -396,6 +335,7 @@ class NavStackControllerTest {
         controller.popNow();
 
         assertEquals(List.of(
+                "syncReplySlot@PRIVATE_CHAT",
                 "composerTextNow@PRIVATE_CHAT",
                 "persistPrivateDraft@PRIVATE_CHAT",
                 "clearTransientWorldUi@PRIVATE_CHAT",
@@ -406,34 +346,36 @@ class NavStackControllerTest {
     }
 
     /**
-     * {@code popPage}: decorative motion off applies the pop here and now; with
-     * motion on the page stays on top and only the transition is armed — the
-     * stack changes in the transition's own finish step.
+     * Bug regression (user report: "动画期间点返回直接返回没有任何过渡" and its
+     * opposite, "退出外观设置再点外观无法打断"): {@code popPage} lands the pop
+     * immediately through the full {@code popNow} cascade — with motion on or
+     * off, identically. There is no pending state and no armed transition left
+     * behind, so the very next push (re-opening the section) runs a clean
+     * cascade whose arrival re-stamps the entrance.
      */
     @Test
-    void popPageLandsImmediatelyWithoutMotionAndDefersWithIt() {
+    void popPageLandsImmediatelyWithAndWithoutMotion() {
         AtomChatConfig.get().animationEnabled = false;
         Recorder off = new Recorder();
         NavStackController snapped = onStack(off,
                 List.of(NavPage.of(AppPage.CHAT_LIST), NavPage.of(AppPage.WORLD_CHAT)));
-
         snapped.popPage();
-
-        assertEquals(AppPage.CHAT_LIST, snapped.topPage(), "motion off must land the pop this frame");
-        assertFalse(off.calls.contains("beginPageNav[WORLD_CHAT->CHAT_LIST,pop=true]"),
-                "motion off must not arm an animation that will never be stepped");
+        assertEquals(AppPage.CHAT_LIST, snapped.topPage(), "motion off lands the pop this frame");
 
         AtomChatConfig.get().animationEnabled = true;
         Recorder on = new Recorder();
         NavStackController animated = onStack(on,
                 List.of(NavPage.of(AppPage.CHAT_LIST), NavPage.of(AppPage.WORLD_CHAT)));
-
         animated.popPage();
-
-        assertEquals(AppPage.WORLD_CHAT, animated.topPage(),
-                "with motion on the leaving page must stay on top until the transition finishes");
-        assertTrue(on.calls.contains("beginPageNav[WORLD_CHAT->CHAT_LIST,pop=true]@WORLD_CHAT"),
-                "with motion on the pop is armed through the one start helper");
+        assertEquals(AppPage.CHAT_LIST, animated.topPage(),
+                "the Dango semantics have no exit phase: the pop lands this frame with motion on too");
+        assertEquals(List.of(
+                "signatureEditLive@WORLD_CHAT",
+                "syncReplySlot@WORLD_CHAT",
+                "clearTransientWorldUi@WORLD_CHAT",
+                "clearSettingsPageState@WORLD_CHAT",
+                "armReplyFor@CHAT_LIST"), on.calls,
+                "the pop runs the full popNow cascade immediately");
     }
 
     /** A pop that would empty the stack is refused outright. */
@@ -467,12 +409,13 @@ class NavStackControllerTest {
 
     /**
      * {@code switchRoot}: signature abort, the leaving profile subject, the
-     * draft and root scroll, the snap of a running transition, then the span,
-     * the style resolution, the motion arm and the capsule reset — in that
-     * order, with the capsule last so it starts from the source cell.
+     * draft and root scroll, the stack replacement, then the tab selection — the
+     * bar tweens its own capsule from there. There is no span, style or motion
+     * arm left: the arriving root page's entrance overlay plays through the
+     * composite's key stamp.
      */
     @Test
-    void switchRootArmsSpanStyleMotionAndCapsuleInOrder() {
+    void switchRootReplacesTheStackAndSelectsTheTab() {
         Recorder host = new Recorder();
         NavStackController controller = onStack(host, List.of(NavPage.of(AppPage.CHAT_LIST)));
 
@@ -482,11 +425,7 @@ class NavStackControllerTest {
                 "signatureEditLive@CHAT_LIST",
                 "persistCurrentDraft@CHAT_LIST",
                 "clearRootScroll@CHAT_LIST",
-                "rootTransitionLive@CHAT_LIST",
-                "markRootTabSpan[CHAT_LIST->PROFILE]@PROFILE",
-                "navStyleIsZoom@PROFILE",
-                "applyRootTabMotion[zoom=true]@PROFILE",
-                "resetRootTabCapsule@PROFILE"), host.calls);
+                "selectTabNow[PROFILE]@PROFILE"), host.calls);
         assertEquals(AppPage.PROFILE, controller.topPage());
     }
 
@@ -503,46 +442,7 @@ class NavStackControllerTest {
                 "dropProfileSubject@PROFILE",
                 "persistCurrentDraft@PROFILE",
                 "clearRootScroll@PROFILE",
-                "rootTransitionLive@PROFILE",
-                "markRootTabSpan[PROFILE->CHAT_LIST]@CHAT_LIST",
-                "navStyleIsZoom@CHAT_LIST",
-                "applyRootTabMotion[zoom=true]@CHAT_LIST",
-                "resetRootTabCapsule@CHAT_LIST"), host.calls);
-    }
-
-    /** Without motion the tab lands in one frame: no span, no capsule travel. */
-    @Test
-    void switchRootLandsInOneFrameWithoutMotion() {
-        AtomChatConfig.get().animationEnabled = false;
-        Recorder host = new Recorder();
-        NavStackController controller = onStack(host, List.of(NavPage.of(AppPage.CHAT_LIST)));
-
-        controller.switchRoot(AppPage.SETTINGS);
-
-        // The tab is selected before the stack moves, as it always was: the bar
-        // reads the index it is given, not the page the stack is about to carry.
-        assertEquals(List.of(
-                "signatureEditLive@CHAT_LIST",
-                "persistCurrentDraft@CHAT_LIST",
-                "clearRootScroll@CHAT_LIST",
-                "abandonRootTransition@CHAT_LIST",
-                "selectTabNow[SETTINGS]@CHAT_LIST"), host.calls);
-        assertEquals(AppPage.SETTINGS, controller.topPage());
-    }
-
-    /** A running tab transition is snapped before the new one is armed. */
-    @Test
-    void switchRootSnapsARunningTransitionFirst() {
-        Recorder host = new Recorder();
-        host.rootTransitionRunning = true;
-        NavStackController controller = onStack(host, List.of(NavPage.of(AppPage.CHAT_LIST)));
-
-        controller.switchRoot(AppPage.PROFILE);
-
-        int snap = host.calls.indexOf("abandonRootTransition@CHAT_LIST");
-        int span = host.calls.indexOf("markRootTabSpan[CHAT_LIST->PROFILE]@PROFILE");
-        assertTrue(snap >= 0, "a running transition must be snapped: " + host.calls);
-        assertTrue(span > snap, "the snap must precede the new span: " + host.calls);
+                "selectTabNow[CHAT_LIST]@CHAT_LIST"), host.calls);
     }
 
     /** A root switch only ever targets a root page. */
@@ -561,8 +461,8 @@ class NavStackControllerTest {
 
     /**
      * The read-only rule is judged on the page it is handed, never on the stack
-     * top: a transition composites two pages in one frame, so a check that read
-     * the top would answer for the wrong page.
+     * top: a page's render state is resolved from its own entry, so a check that
+     * read the top would answer for the wrong page.
      */
     @Test
     void readOnlyIsJudgedPerPageAndNotByTheStackTop() {
@@ -631,8 +531,6 @@ class NavStackControllerTest {
             }
 
             assertEquals(target, controller.topNav(), "the door must land on the target page");
-            assertTrue(host.calls.contains("beginPageNav[CHAT_LIST->" + target.page() + ",pop=false]@CHAT_LIST"),
-                    "the door must arm the nav through the one start helper: " + host.calls);
             assertEquals("persistCurrentDraft@CHAT_LIST", host.calls.get(1),
                     "the door must run the full cascade, not a bare push: " + host.calls);
         }
@@ -677,20 +575,6 @@ class NavStackControllerTest {
                 "the tab is placed while the controller is still being built");
     }
 
-    /** The recorder answers the style from the config, so both arms are exercised. */
-    @Test
-    void theStyleArmFollowsTheConfig() {
-        AtomChatConfig.get().pageNavStyle = AtomChatConfig.PageNavStyle.SLIDE;
-        Recorder host = new Recorder();
-        NavStackController controller = onStack(host, List.of(NavPage.of(AppPage.CHAT_LIST)));
-
-        controller.switchRoot(AppPage.PROFILE);
-
-        assertTrue(host.calls.contains("applyRootTabMotion[zoom=false]@PROFILE"),
-                "the SLIDE style must arm the slide motion: " + host.calls);
-        assertNotEquals(0, host.calls.size());
-    }
-
     /** The port is told what the stack is, not what the caller guessed. */
     @Test
     void activePrivateTargetIsEmptyOnAnyOtherPage() {
@@ -700,5 +584,72 @@ class NavStackControllerTest {
         assertNull(controller.activePrivateTarget());
         assertFalse(controller.isWorldChatPage());
         assertFalse(controller.isPrivateReadOnly());
+    }
+
+    // -------------------------------------------------- interrupt regressions
+
+    /**
+     * Bug regression (user report: "退出外观设置再点外观无法打断"): back out of
+     * a settings section, then immediately re-open one. The pop has already
+     * landed, so the re-push runs a clean cascade from the root — no pending
+     * state, no armed transition, and a back click afterwards is a clean pop.
+     */
+    @Test
+    void exitingASectionThenReopeningItLeavesNoPendingState() {
+        Recorder host = new Recorder();
+        NavStackController controller = onStack(host, List.of(NavPage.of(AppPage.SETTINGS),
+                NavPage.settingsSection(SettingsSection.APPEARANCE)));
+
+        controller.popPage();
+        assertEquals(AppPage.SETTINGS, controller.topPage(), "the pop landed immediately");
+        assertEquals(1, controller.snapshot().size());
+
+        controller.pushNav(NavPage.settingsSection(SettingsSection.APPEARANCE));
+        assertEquals(AppPage.SETTINGS_SECTION, controller.topPage());
+        assertEquals(2, controller.snapshot().size());
+        assertTrue(host.calls.contains("clearSettingsPageState@SETTINGS"),
+                "the re-push runs the section's reset cascade: " + host.calls);
+
+        controller.popPage();
+        assertEquals(AppPage.SETTINGS, controller.topPage(),
+                "the re-push did not stack a duplicate — back lands on the root");
+    }
+
+    /**
+     * A tab click replaces the stack wholesale: whatever detail page was on top
+     * dies with it, and a back click on the fresh root is a no-op.
+     */
+    @Test
+    void switchRootReplacesTheWholeStack() {
+        Recorder host = new Recorder();
+        NavStackController controller = onStack(host, List.of(
+                NavPage.of(AppPage.CHAT_LIST), NavPage.of(AppPage.PROFILE_DETAIL)));
+
+        controller.switchRoot(AppPage.SETTINGS);
+
+        assertEquals(AppPage.SETTINGS, controller.topPage());
+        assertEquals(1, controller.snapshot().size());
+        controller.popPage();
+        assertEquals(AppPage.SETTINGS, controller.topPage());
+        assertEquals(1, controller.snapshot().size());
+    }
+
+    /**
+     * A second push of the page already on top is a no-op — unconditionally now:
+     * the push is synchronous, so there is no "page in flight" state to race,
+     * and pushing a duplicate was never a meaningful action (it would turn the
+     * next back click into a no-op).
+     */
+    @Test
+    void pushNavIgnoresADuplicateOfTheTopPage() {
+        Recorder host = new Recorder();
+        NavStackController controller = onStack(host, List.of(
+                NavPage.of(AppPage.CHAT_LIST), NavPage.of(AppPage.WORLD_CHAT)));
+        host.calls.clear();
+
+        controller.pushNav(NavPage.of(AppPage.WORLD_CHAT));
+
+        assertEquals(2, controller.snapshot().size(), "no duplicate of the top page");
+        assertEquals(List.of(), host.calls, "the duplicate never starts a cascade");
     }
 }

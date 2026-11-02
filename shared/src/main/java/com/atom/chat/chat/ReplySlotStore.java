@@ -24,16 +24,16 @@ import java.util.Map;
  *       slot it came from.</li>
  * </ul>
  *
- * <p>The nav transition draws two pages through one layout, so
- * {@link #replyBarVisible} takes both sides of the transition: either side's
- * armed reply has to reserve the row, or the other side's bar would be painted
- * into the zero-height rect {@code UiLayout.of} leaves at the panel origin when
+ * <p>Only one page draws per frame (the transition inversion — the Dango
+ * rewrite), so {@link #replyBarVisible} takes the page being drawn: its armed
+ * reply has to reserve the row, or a live bar would be painted into the
+ * zero-height rect {@code UiLayout.of} leaves at the panel origin when
  * {@code replyH == 0}.
  *
  * <p>Mapping-neutral by construction: the screen passes the navigation facts in
- * ({@code topPage}/{@code topNav}/{@code ownsInputField}/the transition pair)
- * rather than the store reaching for them — that is what lets this live in
- * {@code shared/} and be tested offline.
+ * ({@code topPage}/{@code topNav}/{@code ownsInputField}) rather than the store
+ * reaching for them — that is what lets this live in {@code shared/} and be
+ * tested offline.
  */
 public final class ReplySlotStore {
     /** Slot key convention shared with the history windows: private chat = the
@@ -89,17 +89,15 @@ public final class ReplySlotStore {
     }
 
     /**
-     * True while a reply bar is on screen. Both pages of a nav share one layout,
-     * so either side's armed reply must reserve the row — otherwise the other
-     * side's bar would be painted into the zero-height rect
-     * {@code UiLayout.of} leaves at the panel origin when {@code replyH == 0}.
+     * True while a reply bar is on screen: the live field holds one, or the
+     * given page still has one armed in its slot. With the transition inversion
+     * (the Dango rewrite) only one page ever draws per frame, so the two-sided
+     * transition form is gone — the caller passes the page being drawn.
      *
-     * @param navFrom the leaving page of the nav transition (may be null when no
-     *                transition is in flight)
-     * @param navTo   the arriving page of the nav transition (same)
+     * @param page the page whose slot counts (may be null)
      */
-    public boolean replyBarVisible(NavPage navFrom, NavPage navTo) {
-        return replyTarget != null || replySlotArmed(navFrom) || replySlotArmed(navTo);
+    public boolean replyBarVisible(NavPage page) {
+        return replyTarget != null || replySlotArmed(page);
     }
 
     /** True when a chat page still holds an armed reply in its slot. */

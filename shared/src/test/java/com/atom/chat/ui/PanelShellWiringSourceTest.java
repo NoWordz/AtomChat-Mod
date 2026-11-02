@@ -63,10 +63,18 @@ class PanelShellWiringSourceTest {
     static {
         REQUIRED.put("PanelOpenMotion.frameDtMs(nowNanos, lastFrameNanos)", 1);
         REQUIRED.put("PanelOpenMotion.domainFrameDtMs(nowMs, lastFrameMs)", 1);
-        REQUIRED.put("PanelOpenMotion.stepProgress(panelProgress, closing, frameDtMs,", 1);
+        // Unit E2: the open/close rides the panel motion spring (UiSpring's
+        // tokens), replacing the retired stepProgress exponential.
+        REQUIRED.put("panelMotion.setTarget(closing ? 0.0F : 1.0F)", 1);
+        REQUIRED.put("panelMotion.update(frameDtMs, Animations.enabled())", 1);
+        REQUIRED.put("panelProgress = panelMotion.value()", 1);
         REQUIRED.put("PanelOpenMotion.settled(panelProgress, closing)", 1);
         REQUIRED.put("PanelOpenMotion.closeDue(panelProgress, closing)", 1);
         REQUIRED.put("PanelOpenMotion.blurCapture(", 1);
+        // Unit V: the panel rect's edges snap to the device grid at the input,
+        // so the painted shell and the blur capture share one set of edges.
+        REQUIRED.put("UiPixelSnap.snapToDevice(ScreenMetrics.panelX())", 2);
+        REQUIRED.put("UiPixelSnap.snapToDevice(ScreenMetrics.panelY(client.getWindow()))", 2);
         REQUIRED.put("PanelOpenMotion.openScale(progress, AtomChatConfig.get().pageNavStyle)", 1);
         REQUIRED.put("PanelOpenMotion.openSlidePx(progress, AtomChatConfig.get().pageNavStyle)", 1);
         // The fade is asked for twice: the pure-overdraw judgement and the layer's paint.

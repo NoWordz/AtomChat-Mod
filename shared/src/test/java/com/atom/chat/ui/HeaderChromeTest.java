@@ -33,9 +33,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * <p><b>Scope, stated up front.</b> A recording host stands in for the screen, so
  * the label keys, the partner name and the two header rects are asserted on what
  * the domain asked for. The offscreen renders exercise the real
- * {@link ShellHeader} path. NOT covered: the shell's two {@code suppressHeader}
- * gates (they stay in the screen — see the block report), the return triggers,
- * and where the five header renders sit in the frame order — the D20 probe list.</p>
+ * {@link ShellHeader} path. NOT covered: the screen's arrival flow (the
+ * transition inversion removed the {@code suppressHeader} gates; the header now
+ * draws inside the arriving page's envelope — see
+ * {@code PageTransitionWiringSourceTest}), the return triggers, and where the
+ * five header renders sit in the frame order — the D20 probe list.</p>
  */
 class HeaderChromeTest {
     private static final int SURFACE_W = 420;

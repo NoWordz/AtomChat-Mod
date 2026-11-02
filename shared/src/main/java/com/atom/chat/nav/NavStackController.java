@@ -5,7 +5,6 @@ import com.atom.chat.chat.ChatStore;
 import com.atom.chat.chat.PlayerRef;
 import com.atom.chat.chat.PrivateChatStore;
 import com.atom.chat.settings.SettingsSection;
-import com.atom.chat.ui.Animations;
 
 import java.util.List;
 
@@ -16,28 +15,38 @@ import java.util.List;
  * <p><b>Why this class exists.</b> The stack itself was a one-field helper; the
  * value of moving it off the screen is the <em>order</em> of the cascade around
  * it. A single pop executes ten-plus cross-domain steps — persist the draft,
- * clear the world page's transient UI, reset the settings sub-page, pop,
- * drop the injected profile subject, re-point the two active stores, load the
+ * clear the world page's transient UI, reset the settings sub-page, pop, drop
+ * the injected profile subject, re-point the two active stores, load the
  * arriving draft, re-arm the arriving reply bar — and that order is the
- * contract (a resetSubject before the pop, for instance, redraws the
- * sliding-out page as the local player's profile mid-animation). On the screen
- * none of it could be asserted offline: the screen needs the Minecraft client to
- * load. Here every step is a call on {@link Host}, so a recording port pins the
- * sequence, and swapping any two steps turns a test red.
+ * contract (a resetSubject before the pop, for instance, redraws the leaving
+ * page as the local player's profile). On the screen none of it could be
+ * asserted offline: the screen needs the Minecraft client to load. Here every
+ * step is a call on {@link Host}, so a recording port pins the sequence, and
+ * swapping any two steps turns a test red.</p>
+ *
+ * <p><b>The transition inversion (the Dango adoption rewrite).</b> This class
+ * used to arm a page transition instead of finishing its own cascade: a push
+ * called {@code beginPageNav} before the push and a pop left the detail page
+ * on the stack, waiting for a finished slide-out to apply {@code popNow}. The
+ * Dango semantics have no exit phase — the stack changes the instant the user
+ * acts, and the arriving page's entrance overlay (see
+ * {@link PageTransitionComposite}) is the only perceivable transition — so
+ * every transition port method is gone: {@code popPage} applies the pop
+ * immediately through the full {@link #popNow} cascade (there is no "stay on
+ * stage and slide out" page), {@code switchRoot} replaces the root stack in
+ * one step, and the only animated thing left beside the entrance overlay is
+ * the bottom bar's capsule, which the tab bar tweens itself.</p>
  *
  * <p><b>What stayed behind.</b> Every step is a one-line delegation to a domain
  * that was already split out (D1 reply slots, D2 drafts, D11 scroll, D15
  * settings, D18 signature/subject, D19 online check, D21 composer, D25
- * transient bus) — this class owns the order, not the domains. The two things
- * that genuinely belong to the shell stay there: the copy lookup
- * ({@code tr}, a Minecraft call) and the transition state machines, which are
- * asked for through the same port ({@code beginPageNav} and friends) so that
- * block D24b can hand them over without touching this class.
+ * transient bus) — this class owns the order, not the domains. The copy lookup
+ * ({@code tr}, a Minecraft call) stays on the screen.</p>
  *
  * <p><b>Bucket.</b> Shared single source: not one {@code net.minecraft} name
  * appears here. The three screen copies keep thin delegating methods with their
  * original signatures, so the class stays the screen's {@code PageHost} and
- * {@code NotificationJumpService.NavPort} implementation.
+ * {@code NotificationJumpService.NavPort} implementation.</p>
  */
 public final class NavStackController {
 
@@ -58,6 +67,14 @@ public final class NavStackController {
 
         /** D2: persists the composer field to the page that is currently open. */
         void persistCurrentDraft();
+
+        /**
+         * D1: writes the live reply of the composer-owning page back into its
+         * slot, before the pages change. The draft save above covers the field's
+         * text; this covers its armed reply — the same two captures the old
+         * transition's start step ran, now plain cascade steps.
+         */
+        void syncReplySlot();
 
         /** D2: persists one private conversation's draft. */
         void persistPrivateDraft(PlayerRef target, String text);
@@ -98,37 +115,7 @@ public final class NavStackController {
         /** The screen's one language lookup (a Minecraft call, so it stays there). */
         String copy(String key);
 
-        /**
-         * Arms the page transition the shell owns (D24b). The stack decides
-         * <em>when</em>; the transition owns its own state.
-         */
-        void beginPageNav(NavPage from, NavPage to, boolean popPending);
-
-        /** Disarms the page transition without running it (the non-animated arm of a push). */
-        void abandonPageNav();
-
-        /** Disarms any running root-tab transition. */
-        void abandonRootTransition();
-
-        /** Whether a root-tab transition is still running. */
-        boolean rootTransitionLive();
-
-        /** The one nav-style resolution, asked for rather than re-read here. */
-        boolean navStyleIsZoom();
-
-        /** Moves the capsule to {@code from}'s cell before a transition is armed. */
-        void pinRootTabCapsule(AppPage from);
-
-        /** Records the from->to tab span and clears the motion state for a fresh run. */
-        void markRootTabSpan(AppPage from, AppPage to);
-
-        /** Arms the tab motion for the resolved style. */
-        void applyRootTabMotion(boolean zoom);
-
-        /** Resets the capsule from the span it was pinned to. */
-        void resetRootTabCapsule();
-
-        /** Selects a tab with no animation. */
+        /** Selects a bottom tab now — the bar tweens its own capsule. */
         void selectTabNow(AppPage root);
     }
 
@@ -184,9 +171,9 @@ public final class NavStackController {
     }
 
     /**
-     * {@link #isPrivateReadOnly()} for one nav page. A transition composites two
-     * pages in the same frame, so the check must never read whatever happens to
-     * sit on top of the stack while the other page is drawn.
+     * {@link #isPrivateReadOnly()} for one nav page. A page's render state is
+     * resolved from its own entry, never from whatever happens to sit on top of
+     * the stack.
      */
     public boolean isPrivateReadOnlyFor(NavPage page) {
         if (page == null || page.page() != AppPage.PRIVATE_CHAT) {
@@ -251,8 +238,20 @@ public final class NavStackController {
      * the single funnel every door ({@code pushPage} / {@code openWorldChat} /
      * {@code openPrivateChat} / {@code openSettingsSection} / the profile push)
      * still goes through — the doors stayed on the screen, the cascade did not.
+     *
+     * <p>The push is synchronous: the stack changes here, and the arriving
+     * page's entrance overlay replays on the next frame's key change (see
+     * {@link PageTransitionComposite#beginFrame}). There is no transition to
+     * arm, and a click that lands after this cascade acts on the new page.</p>
      */
     public void pushNav(NavPage page) {
+        // A duplicate of the top entry is a no-op: the double-click that used to
+        // race the push animation can no longer stack pages mid-flight (the push
+        // is synchronous now), and pushing the page already on top was never a
+        // meaningful action — the guard just makes that permanent.
+        if (topNav().equals(page)) {
+            return;
+        }
         // Leaving the profile page must not carry a live signature edit into
         // the next page: abort (never commit on navigation) before anything
         // else touches the borrowed field.
@@ -260,6 +259,7 @@ public final class NavStackController {
             host.abortSignatureEdit();
         }
         host.persistCurrentDraft();
+        host.syncReplySlot();
         AppPage fromPage = topPage();
         if (page.page() == AppPage.WORLD_CHAT) {
             host.clearWorldScroll();
@@ -270,15 +270,6 @@ public final class NavStackController {
         if (page.page() == AppPage.PROFILE_DETAIL) {
             host.clearDetailScroll();
         }
-        if (!page.isRoot() && fromPage.isRoot()) {
-            host.pinRootTabCapsule(fromPage);
-            host.beginPageNav(topNav(), page, false);
-        } else if (!page.isRoot() && !fromPage.isRoot()) {
-            // Public <-> private detail pages also use the full-width push/pop.
-            host.beginPageNav(topNav(), page, false);
-        } else {
-            host.abandonPageNav();
-        }
         navigation.push(page);
         ChatStore.setPublicActive(page.page() == AppPage.WORLD_CHAT);
         if (page.page() == AppPage.PRIVATE_CHAT) {
@@ -287,15 +278,18 @@ public final class NavStackController {
         } else if (page.page() == AppPage.WORLD_CHAT) {
             host.adoptWorldDraft();
         }
-        // The reply bar follows its page exactly like the draft above: the nav
-        // draws the leaving page's bar from its slot while the arriving page's
-        // is live in the field.
+        // The reply bar follows its page exactly like the draft above: the
+        // arriving page's reply is live in the field, the leaving page keeps
+        // its own in its slot.
         host.armReplyFor(page);
-        if (!page.isRoot()) {
-            host.abandonRootTransition();
-        }
     }
 
+    /**
+     * Pops the top page <b>immediately</b> through the full {@link #popNow}
+     * cascade. There is no pending state: the Dango semantics have no leaving
+     * page on stage, so the previous page is the top from this very frame and
+     * its entrance overlay announces the change.
+     */
     public void popPage() {
         // Same rule as pushNav: a live signature edit never survives
         // navigation, and it aborts (no commit) when the page goes away.
@@ -309,23 +303,14 @@ public final class NavStackController {
             navigation.pop();
             return;
         }
-        // With decorative motion off there is no slide-out to wait for, so the
-        // pop can be applied right here instead of in finishPageNav().
-        if (!Animations.enabled()) {
-            popNow();
-            return;
-        }
-        NavPage from = topNav();
-        NavPage previous = navigation.snapshot().get(navigation.size() - 2);
-        // Keep the detail page on top while it slides out; the actual navigation
-        // pop happens in finishPageNav(). Both root and detail targets animate.
-        // The subject reset lives in popNow(): clearing it here would redraw the
-        // sliding-out page as the local player's profile mid-animation.
-        host.beginPageNav(from, previous, true);
+        popNow();
     }
 
-    /** Applies a pending pop and restores the page underneath it. */
+    /** Applies a pop and restores the page underneath it. */
     public void popNow() {
+        // The leaving page's live reply is captured while it still owns the
+        // field (same capture the old transition's start step ran at click time).
+        host.syncReplySlot();
         boolean leavingProfile = topPage() == AppPage.PROFILE_DETAIL;
         if (topPage() == AppPage.PRIVATE_CHAT) {
             host.persistPrivateDraft(activePrivateTarget(), host.composerTextNow());
@@ -354,6 +339,12 @@ public final class NavStackController {
         host.armReplyFor(topNav());
     }
 
+    /**
+     * Replaces the root stack in one step. The tab capsule follows through
+     * {@link Host#selectTabNow} (the bar tweens it), the arriving root page's
+     * entrance overlay plays through the composite's key stamp, and there is no
+     * content clock left to arm.
+     */
     public void switchRoot(AppPage root) {
         if (!root.isRoot()) {
             return;
@@ -372,35 +363,8 @@ public final class NavStackController {
         }
         host.persistCurrentDraft();
         host.clearRootScroll();
-        // With decorative motion off the tab change is instant: no indicator
-        // slide, no body push — the new root is simply on screen.
-        if (!Animations.enabled()) {
-            host.abandonRootTransition();
-            host.selectTabNow(root);
-            navigation.replaceWithRoot(NavPage.of(root));
-            ChatStore.setPublicActive(false);
-            return;
-        }
-        // If a previous tab transition is still running, snap it before
-        // re-arming: the clocks below always start from rest.
-        if (host.rootTransitionLive() && from.isRoot()) {
-            host.abandonRootTransition();
-        }
         navigation.replaceWithRoot(NavPage.of(root));
         ChatStore.setPublicActive(false);
-        if (from.isRoot() && from != root) {
-            host.markRootTabSpan(from, root);
-            // The content transition follows the configured page-nav style,
-            // resolved once per switch through the same resolver the push/pop
-            // path uses (one rule for every switch) so it can't change
-            // mid-flight; the capsule is pinned to the source tab and travels
-            // from the same clock in stepRootNav.
-            boolean zoom = host.navStyleIsZoom();
-            host.applyRootTabMotion(zoom);
-            host.resetRootTabCapsule();
-        } else {
-            host.abandonRootTransition();
-            host.selectTabNow(root);
-        }
+        host.selectTabNow(root);
     }
 }

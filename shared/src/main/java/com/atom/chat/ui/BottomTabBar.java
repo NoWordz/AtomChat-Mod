@@ -4,6 +4,8 @@ package com.atom.chat.ui;
 
 import com.atom.lib.design.atomchat.AppIcons;
 import com.atom.lib.design.atomchat.UiTokens;
+import com.atom.chat.nav.AppPage;
+import com.atom.chat.nav.PageNavAxis;
 import com.atom.chat.render.Animator;
 import com.atom.chat.render.Easing;
 import com.atom.lib.design.atomchat.SkiaDraw;
@@ -40,6 +42,17 @@ public final class BottomTabBar {
     private final PressScale[] tabScale = {PressScale.bounce(), PressScale.bounce(), PressScale.bounce()};
     /** Tab index under an active press, for the bounce; -1 = none. */
     private int pressedTab = -1;
+    /**
+     * The bar's return entrance. The bar is not drawn at all on pushed pages,
+     * so when one pops back to a root page the bar would otherwise appear with
+     * zero frames of its own; the screen arms this on exactly that arrival.
+     */
+    private final UiStagger.Entrance entrance = new UiStagger.Entrance();
+
+    /** Arms the return entrance (fade in + lift) — pushed page back to a root page. */
+    public void markEntered() {
+        entrance.markEntered();
+    }
 
     public BottomTabBar() {
         indicatorAnim.setValue(0.0F);
@@ -60,6 +73,13 @@ public final class BottomTabBar {
 
     public void setSelectedIndex(int index) {
         if (index < 0 || index >= 3) {
+            return;
+        }
+        // The capsule is this bar's own animation now (the old two-page
+        // choreography's root-tab clock is gone): with decorative motion off it
+        // snaps, otherwise it tweens to the target cell.
+        if (!Animations.enabled()) {
+            indicatorAnim.setValue(index);
             return;
         }
         indicatorAnim.animateTo(UiMotion.TAB_MS, index);
@@ -97,6 +117,40 @@ public final class BottomTabBar {
         if (bar == null || bar.w() <= 0.0F || bar.h() <= 0.0F) {
             return;
         }
+        long now = System.currentTimeMillis();
+        boolean entering = entrance.armed() && !UiStagger.entranceSettled(entrance, now);
+        if (!entering) {
+            renderBar(canvas, bar, selectedIndex, textPrimary, accent);
+            return;
+        }
+        float alpha = UiStagger.tabBarAlpha(entrance, now);
+        // The bar rides the page envelope's axis: ZOOM lifts it while it fades
+        // in, SLIDE only fades it — a horizontal style may not hand the bar a
+        // vertical leg.
+        float rise = UiStagger.tabBarRise(entrance, now, PageNavAxis.current());
+        // The layer is padded by the shadow's reach (the float family's own pad
+        // is sized to this blur pair) plus the lift, so the tail is not sawn off
+        // at the layer edge while the bar travels.
+        float pad = UiTokens.floatSurfaceShadowPad();
+        canvas.save();
+        Paint layer = null;
+        if (alpha < 0.995F) {
+            layer = new Paint().setAlphaf(alpha);
+            canvas.saveLayer(Rect.makeXYWH(bar.x() - pad, bar.y() - pad - rise,
+                    bar.w() + pad * 2.0F, bar.h() + pad * 2.0F + rise), layer);
+        }
+        canvas.translate(0.0F, rise);
+        renderBar(canvas, bar, selectedIndex, textPrimary, accent);
+        if (layer != null) {
+            layer.close();
+            canvas.restore();
+        }
+        canvas.restore();
+    }
+
+
+    private void renderBar(Canvas canvas, UiLayout.Rect bar, int selectedIndex,
+                           int textPrimary, int accent) {
         SkiaDraw.drawChromeShadow(canvas, bar.x(), bar.y(), bar.w(), bar.h(), UiTokens.shellChromeRadius());
         SkiaDraw.drawRoundedRect(canvas, bar.x(), bar.y(), bar.w(), bar.h(),
                 UiTokens.shellChromeRadius(), UiTokens.cardFill());
@@ -179,6 +233,33 @@ public final class BottomTabBar {
         }
         int index = (int) ((x - bar.x()) / (bar.w() / 3.0F));
         return Math.max(0, Math.min(2, index));
+    }
+
+    // -------------------------------------------------- root page <-> cell
+
+    /**
+     * The bar owns its own cell table (moved here from the
+     * deleted two-page choreography): the three root pages are the three cells,
+     * in bar order. Pushed pages have no cell.
+     */
+    public static int rootIndex(AppPage page) {
+        return switch (page) {
+            case CHAT_LIST -> 0;
+            case PROFILE -> 1;
+            case SETTINGS -> 2;
+            case WORLD_CHAT, PRIVATE_CHAT, SETTINGS_SECTION, PROFILE_DETAIL ->
+                    throw new IllegalStateException("Pushed pages have no bottom tab index");
+        };
+    }
+
+    /** The root page of a cell, the inverse of {@link #rootIndex}. */
+    public static AppPage rootPageForIndex(int index) {
+        return switch (index) {
+            case 0 -> AppPage.CHAT_LIST;
+            case 1 -> AppPage.PROFILE;
+            case 2 -> AppPage.SETTINGS;
+            default -> throw new IllegalStateException("Unexpected root tab index " + index);
+        };
     }
 
     private static void drawIconCentered(Canvas canvas, Path icon, float cx, float cy,
