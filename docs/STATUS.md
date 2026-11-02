@@ -1,6 +1,24 @@
 # AtomChat 当前状态
 
-> 截至 2026-11-01。这里只维护当前快照，提交及推送事实以 Git 查询为准。
+> 截至 2026-11-02。这里只维护当前快照，提交及推送事实以 Git 查询为准。
+
+## 转场动画：采用 DangoMusic 架构 + 六轮打磨（2026-11-01 ~ 11-02，0.4.0 内，**已提交已推送**）
+
+- 版本仍是 `0.4.0`；本轮只动观感与动效，零功能改动。提交 `222c7483..59c966a7` 已推到 `origin/main`，三端 jar 各实例已替换。
+- **架构反转**：删掉 `PageTransitionDirector`（两页同时绘制 + 交叉淡入），改为 Dango 的单时间戳语义——每帧只画到达页，一个 `UiStagger.Entrance` 驱动整页包络与逐项入场。中断不再是特例，只是用同一组数字重新打戳。
+  - `PageTransitionComposite` 拥有唯一的到达戳；根页是卡片列表，用 `Host.arrivalStaggersSurfaces()` 跳过整页包络，改跑自己的逐项错峰（一帧只有一个动效）。
+  - 顶栏是 chrome，最后绘制且**不做变换**——这是"切页时上栏会动"的根因修复。
+- **样式区分**：`PageNavAxis` 是配置→运动轴的唯一解析点（SLIDE=水平、ZOOM=垂直）；五个站点与底栏都读它，不再各自 `if (ZOOM)`。条目级也吃样式分量：SLIDE 纯水平漂移 24px，ZOOM 上浮 18px + 0.97→1 缩放。
+- **六轮的具体修复**（每轮都有 `docs/verification/` 记录与逐帧实测数字）：
+  1. 入场修复：顶栏固定、slide 幅度 28px、透明度延迟 26ms 淡入。
+  2. 逐项错峰：可见槽位索引，滚动不回放进场；折叠与入场共用一层。
+  3. 中断打磨：打断即重打戳，无退出相位。
+  4. 样式轮：页面进度改 `easeOutQuad`（原 cubic 起步速度为 0，读作"没曲线、生硬"）；半屏宽度加 `halfScreenWidthCustomized` 标记，不再读手机宽度的残留值。
+  5. 阴影/贴合/轴向轮：入场 `saveLayer` 是硬裁切，补齐阴影外扩量（`CardShadowReach`，实测尾迹 13px、pad s(12)）；`AvatarRing` 让描边同心跨在位图边缘（上一轮为清晰度加的 `halfDevicePx` 圆心偏移是缝隙元凶）；`UiStagger.Axis` 删掉 SLIDE 的垂直腿。
+- **清晰度与玻璃**：`UiPixelSnap` 把面板边、卡片边、头像描边对齐设备像素网格；面板磨砂加 `glassMaxLuma` luma 上限（只压 RGB，不碰 alpha），亮背景下白字仍可读。
+- 验证：Fabric **1601** / Forge **1586** / NeoForge **1586**，0 失败，各 4 skip。孪生守卫未归类块 10（全部既存于 `SkiaGraphics` / `NotificationHudOverlay`）、陈旧台账 0；裸值棘轮收紧到 441/441。
+- 部署：三实例已换 `2026-11-02-shadow-rim-axis` 那版（Forge `9747498f…`、Fabric `57ee7966…`、NeoForge `3bcd1ac7…`），备份在 `D:/AtomChat-Backups/2026-11-02-shadow-rim-axis/20261102-134853/`。
+- **用户已实机验收通过**；仍未做：ARM64 与专服启动验证，未发版。
 
 ## Gnetum 兼容：HUD 横幅闪烁元凶定位 + uncached 路线（2026-11-01 晚，0.4.0 内，未提交）
 
