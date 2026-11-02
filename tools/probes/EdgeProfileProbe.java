@@ -39,6 +39,17 @@ import java.util.Locale;
  *
  * <p>Also prints the token arithmetic that produces those numbers, so the fix
  * target is a number, not a feeling.</p>
+ *
+ * <p><b>What it settles.</b> Every shape here is drawn at a <em>fractional</em>
+ * device phase (120 logical px at density 1.4815 is device 177.78), and the
+ * fill edge still comes out as one partial pixel plus fully covered pixels —
+ * coverage 0.223 at that phase, which is exactly what an edge at 0.78 of the
+ * way through a pixel should produce. So antialiasing quality does not depend
+ * on where the shape lands: Skia computes analytic area coverage per fragment.
+ * Snapping a <em>fill</em> to the device grid therefore buys nothing, and the
+ * only geometry worth quantizing is stroke <em>width</em> (a 1.85-device-px
+ * stroke cannot be drawn crisply at any phase) and the phase of strokes that
+ * should cover whole pixels.</p>
  */
 public final class EdgeProfileProbe {
     static final float DENSITY = 1600.0F / 1080.0F;
@@ -88,6 +99,31 @@ public final class EdgeProfileProbe {
                     UiTokens.radius(14), stroke, UiTokens.hairline());
         });
         report(crisp, 120.0F, 120.0F, 400.0F, 200.0F, "hairline @1 device px");
+
+        // --- shadow bleed: a translucent card lets its own shadow show through ---
+        BufferedImage shadowOnly = render(out, "shadow-only", canvas ->
+                SkiaDraw.drawRoundedShadow(canvas, 120.0F, 120.0F, 400.0F, 200.0F,
+                        UiTokens.radius(14), UiTokens.CONTENT_SHADOW_BLUR, UiTokens.CARD_SHADOW));
+        System.out.printf(Locale.ROOT, "%n--- inside-the-card luma (translucent fill shows the shadow) ---%n");
+        System.out.println("  x from left edge -> interior, every 20 device px:");
+        System.out.print("  card stack : ");
+        for (int step = 1; step <= 16; step++) {
+            int x = Math.min(W - 1, Math.round(120.0F * DENSITY) + step * 20);
+            System.out.print(lumaAt(card, x, SAMPLE_ROW) + " ");
+        }
+        System.out.println();
+        System.out.print("  fill only  : ");
+        for (int step = 1; step <= 16; step++) {
+            int x = Math.min(W - 1, Math.round(120.0F * DENSITY) + step * 20);
+            System.out.print(lumaAt(fillOnly, x, SAMPLE_ROW) + " ");
+        }
+        System.out.println();
+        System.out.print("  shadow only: ");
+        for (int step = 1; step <= 16; step++) {
+            int x = Math.min(W - 1, Math.round(120.0F * DENSITY) + step * 20);
+            System.out.print(lumaAt(shadowOnly, x, SAMPLE_ROW) + " ");
+        }
+        System.out.println();
 
         // --- a chat bubble, the shape the user is looking at ---
         BufferedImage bubble = render(out, "bubble", canvas ->
