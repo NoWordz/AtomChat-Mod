@@ -616,12 +616,17 @@ public final class NotificationBanner {
                         SkiaDraw.drawRoundedRect(canvas, avatarX, avatarY, avatarSize, avatarSize,
                                 avatarSize / 2.0F, UiTokens.onFloatSurfaceTint(fill));
                     }
-                    // Hairline rim hugging the avatar's outer edge (face or
-                    // placeholder): polarity-adaptive UiTokens.rim separates the
-                    // circle from the banner card behind it. Same ring language
-                    // as the swatches.
+                    // Hairline rim concentric with the bitmap (face or
+                    // placeholder): AvatarRing centres the stroke ON the bitmap
+                    // edge, so half covers the avatar and half sits past it, and
+                    // the separator's outer edge lands on the stroke's outer
+                    // edge — nothing of the card shows through. Not pixel-nudged
+                    // on purpose: that moves the ring and opens a one-side seam.
+                    // Polarity-adaptive UiTokens.rim separates the circle from
+                    // the banner card behind. Same ring language as the swatches.
                     SkiaDraw.drawRing(canvas, avatarX + avatarSize / 2.0F, avatarY + avatarSize / 2.0F,
-                            avatarSize / 2.0F + UiTokens.s(0.75F), UiTokens.s(1.0F), UiTokens.rim(fill));
+                            com.atom.chat.render.AvatarRing.rimRadius(avatarSize / 2.0F),
+                            com.atom.chat.render.AvatarRing.RIM_STROKE_PX, UiTokens.rim(fill));
                 }
 
                 float btnX = x + w - padX - BUTTON_SIZE;

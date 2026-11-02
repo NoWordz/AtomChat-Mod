@@ -1,6 +1,7 @@
 package com.atom.chat.ui;
 
 
+import com.atom.chat.ui.UiStagger;
 import com.atom.lib.design.atomchat.UiTokens;
 import com.atom.chat.config.AtomChatConfig;
 import com.atom.chat.emote.EmoteImageCache;
@@ -40,6 +41,12 @@ import java.util.function.Consumer;
  * chat {@link UiLayout} so geometry can never drift from the caller's frame.</p>
  */
 public final class EmojiPanel {
+
+    /**
+     * Page-entrance stagger (unit V): grid rows rise into place, 20ms apart.
+     * Armed when the panel opens; decoration only, hit tests unscaled.
+     */
+    private final UiStagger.Entrance entrance = new UiStagger.Entrance();
     /** Composer side effects the panel cannot own itself. */
     public interface Host {
         /** Appends text at the caret (emoji / kaomoji insert). */
@@ -179,6 +186,7 @@ public final class EmojiPanel {
         reactionMode = false;
         open = !open;
         if (open) {
+            entrance.markEntered();
             refreshEmotes();
             cellHover.clear();
             cellScale.clear();
@@ -817,10 +825,30 @@ public final class EmojiPanel {
         int rows = layout.rows();
         int addKey = emoteStore.count();
         for (int row = 0; row < rows; row++) {
-            float ey = contentY - scroll + row * cell;
+            // Entrance rise (unit V): the row lands 20ms after its neighbour,
+            // draw-only — the cell hit tests keep unscaled coordinates. The
+            // row's fade is the same progress as its rise (Dango's shifted()),
+            // so a cell is never seen opaque in a shifted position.
+            long rowNow = System.currentTimeMillis();
+            float rowAlpha = UiStagger.itemAlpha(entrance, row, rowNow);
+            // The emoji grid is not a page-navigation surface: it opens inside
+            // the composer, so it keeps the vertical rise whatever the page nav
+            // style is. Handing it the nav axis would make the grid slide in
+            // sideways on a SLIDE panel, which is a different gesture entirely.
+            float closeRow = UiStagger.itemRise(entrance, row, rowNow, UiStagger.Axis.VERTICAL);
+            float ey = contentY - scroll + row * cell + closeRow;
             if (ey + cell < contentY || ey > contentY + contentH) {
                 continue;
             }
+            boolean rowFaded = rowAlpha < 1.0F;
+            // The Paint must outlive the layer: Skia snapshots it at saveLayer
+            // time, but the existing draw sites keep it open until the matching
+            // restore, so this one does too.
+            Paint rowLayer = rowFaded ? new Paint().setAlphaf(rowAlpha) : null;
+            if (rowLayer != null) {
+                canvas.saveLayer(Rect.makeXYWH(contentX, ey, contentW, cell + closeRow + 1.0F), rowLayer);
+            }
+            try {
             if (layout.cellAt(row, 0).kind() == EmoteGridLayout.Kind.SERVER_HEADER) {
                 drawServerHeader(canvas, contentX, ey, cell, contentW);
                 continue;
@@ -882,6 +910,12 @@ public final class EmojiPanel {
                     }
                     default -> {
                     }
+                }
+            }
+            } finally {
+                if (rowLayer != null) {
+                    canvas.restore();
+                    rowLayer.close();
                 }
             }
         }

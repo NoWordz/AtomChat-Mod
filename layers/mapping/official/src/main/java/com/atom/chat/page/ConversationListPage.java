@@ -1,5 +1,7 @@
 package com.atom.chat.page;
 
+import com.atom.chat.nav.PageNavAxis;
+import com.atom.chat.ui.UiStagger;
 import com.atom.chat.config.AtomChatConfig;
 
 import com.atom.chat.chat.BlockList;
@@ -11,9 +13,11 @@ import com.atom.chat.font.FontManager;
 import com.atom.chat.image.PlayerAvatar;
 import com.atom.lib.design.atomchat.SkiaDraw;
 import com.atom.chat.render.SkiaFontRenderer;
+import com.atom.chat.render.CardShadowReach;
 import com.atom.chat.settings.SettingsSectionPage;
 import com.atom.chat.ui.Animations;
 import com.atom.lib.design.atomchat.AppIcons;
+import com.atom.chat.ui.PanelOpenMotion;
 import com.atom.chat.ui.PressScale;
 import com.atom.lib.design.atomchat.UiCards;
 import com.atom.chat.ui.UiLayout;
@@ -53,6 +57,30 @@ import java.util.Map;
  * online player (server contact book), then recently-chatted offline players.
  */
 public final class ConversationListPage {
+
+    /**
+     * Page-entrance stagger (unit V, the DangoMusic adoption): rows rise 18px
+     * into place, 20ms apart, capped at 10 items. Pure decoration — hit tests
+     * keep unscaled coordinates, the same rule every draw transform here
+     * follows. Armed by the navigation hooks (clearWorldScroll and the
+     * transient-UI reset); long-settled until then, so golden frames and
+     * probes never see a half-drawn list.
+     */
+    private final UiStagger.Entrance entrance = new UiStagger.Entrance();
+
+    /** Arms the row entrance — standalone surfaces (no page envelope) use this. */
+    public void markEntered() {
+        entrance.markEntered();
+    }
+
+    /**
+     * Keeps the rows settled: used when the page envelope already owns the
+     * arrival. Two motions over the same content (page drift + row rise) read as
+     * a jump, so the navigation arms exactly one of them.
+     */
+    public void markSettled() {
+        entrance.markSettled();
+    }
     private static final float ROW_H = UiTokens.s(64);
     private static final float ROW_GAP = UiTokens.s(8);
     private static final float AVATAR = UiTokens.s(44);
@@ -317,10 +345,28 @@ public final class ConversationListPage {
         int hovered = -1;
         float emptyTop = 0.0F;
         boolean hasPlayers = rows.stream().anyMatch(r -> r.kind() == RowKind.PLAYER);
+        // The nav style as an axis, resolved once per frame: SLIDE moves rows
+        // horizontally only, ZOOM lifts and scales them. One mapping per
+        // surface, so the two styles cannot leak into each other.
+        UiStagger.Axis axis = PageNavAxis.current();
         canvas.save();
         try {
-            SkiaDraw.clip(canvas, layout.list.x(), layout.list.y(), layout.list.w(), layout.list.h(), 0.0F);
+            // A SLIDE row starts up to ITEM_STYLE_SLIDE_PX right of its slot,
+            // which is past the viewport's right edge (the clip only clears the
+            // row gap on each side) - the rounded corner would be shaved off on
+            // the way in. Widening the right edge by exactly the drift budget
+            // while travel remains keeps it whole; once every slot has landed
+            // the clip is the plain viewport again.
+            float driftClipPad = axis == UiStagger.Axis.HORIZONTAL && !UiStagger.itemsSettled(entrance, now)
+                    ? UiStagger.ITEM_STYLE_SLIDE_PX : 0.0F;
+            SkiaDraw.clip(canvas, layout.list.x(), layout.list.y(),
+                    layout.list.w() + driftClipPad, layout.list.h(), 0.0F);
             float y = contentTop(layout, scrollY);
+            // Stagger position = the row's slot inside the VISIBLE viewport, so
+            // scrolling never re-plays an entrance for rows already on screen
+            // (Dango's per-page stagger, with the index taken from the sorted
+            // draw order rather than the absolute list index).
+            int staggerIndex = 0;
             for (int i = 0; i < rows.size(); i++) {
                 Row row = rows.get(i);
                 float h = rowHeight(row);
@@ -332,12 +378,38 @@ public final class ConversationListPage {
                         PressScale press = rowScale.computeIfAbsent(i, k -> PressScale.bounce());
                         press.update(over, pressedRow == i && now - pressedRowAtMs < ROW_PULSE_MS,
                                 dt, Animations.enabled(), rect.w());
-                        press.begin(canvas, rect.x() + rect.w() / 2.0F, y + h / 2.0F);
+                        // A hairline left un-faded would hang alone while the
+                        // cards beside it are still transparent.
+                        float rowAlpha = UiStagger.itemAlpha(entrance, staggerIndex, now);
+                        float rowRise = UiStagger.itemRise(entrance, staggerIndex, now, axis);
+                        float styleDx = styleDriftDx(axis, staggerIndex, now);
+                        canvas.save();
+                        Paint dividerLayer = null;
                         try {
-                            drawDivider(canvas, rect.x(), y, rect.w(), h);
+                            if (rowAlpha < 0.995F) {
+                                dividerLayer = new Paint().setAlphaf(rowAlpha);
+                                // Union of the slot and the travel, plus the
+                                // shadow's reach: saveLayer clips at its rect.
+                                canvas.saveLayer(CardShadowReach.layerRect(
+                                        rect.x(), y, rect.w(), h, rowRise, styleDx), dividerLayer);
+                            }
+                            canvas.translate(0.0F, rowRise);
+                            applyStyleMotion(canvas, axis, new UiLayout.Rect(rect.x(), y, rect.w(), h),
+                                    styleDx, staggerIndex, now);
+                            press.begin(canvas, rect.x() + rect.w() / 2.0F, y + h / 2.0F);
+                            try {
+                                drawDivider(canvas, rect.x(), y, rect.w(), h);
+                            } finally {
+                                canvas.restore();
+                            }
                         } finally {
+                            if (dividerLayer != null) {
+                                dividerLayer.close();
+                                canvas.restore();
+                            }
                             canvas.restore();
                         }
+                        staggerIndex++;
                     } else {
                         RowHit rect = rowRect(i, layout, y);
                         boolean over = rect.contains(vmx, vmy) && layout.list.contains(vmx, vmy);
@@ -346,15 +418,40 @@ public final class ConversationListPage {
                         }
                         boolean pulsing = pressedRow == i
                                 && now - pressedRowAtMs < ROW_PULSE_MS;
+                        // Entrance rise (unit V): draw-only, never gates input.
+                        // The offset and the fade are the SAME progress value
+                        // (Dango's shifted()), so a row is never seen fully
+                        // opaque in a shifted position — that read as a jump.
+                        float rowAlpha = UiStagger.itemAlpha(entrance, staggerIndex, now);
+                        float rowRise = UiStagger.itemRise(entrance, staggerIndex, now, axis);
+                        // The style channel rides that SAME progress (never a
+                        // second clock): SLIDE drifts the row in from the right,
+                        // ZOOM settles it from 0.97. The axis decides which one,
+                        // so a SLIDE row never also rises.
+                        float styleDx = styleDriftDx(axis, staggerIndex, now);
                         if (row.kind() == RowKind.PLAYER && privateExpansion < 1.0F) {
                             canvas.save();
                             try {
-                                SkiaDraw.clip(canvas, layout.list.x(), y, layout.list.w(), h, 0.0F);
-                                try (Paint alpha = new Paint().setAlphaf(privateExpansion)) {
-                                    canvas.saveLayer(Rect.makeXYWH(layout.list.x(), y, layout.list.w(), h), alpha);
+                                // The clip runs to the row's sunk position so the
+                                // entrance's rise is not shaved off at the slot edge.
+                                SkiaDraw.clip(canvas, layout.list.x(), y,
+                                        layout.list.w() + styleDx, h + rowRise, 0.0F);
+                                // The fold's own fade multiplies the entrance's:
+                                // one layer, so the row cannot be opaque under a
+                                // fold that is still opening.
+                                // The fold opens the row downward on top of its
+                                // entrance travel, so the layer has to hold
+                                // both before the shadow reach is added.
+                                float foldLift = UiTokens.SETTINGS_FOLD_LIFT * (1.0F - privateExpansion);
+                                try (Paint alpha = new Paint().setAlphaf(privateExpansion * rowAlpha)) {
+                                    canvas.saveLayer(CardShadowReach.layerRect(
+                                            layout.list.x(), y, layout.list.w(), h,
+                                            foldLift + rowRise, styleDx), alpha);
                                     try {
-                                        canvas.translate(0.0F, UiTokens.SETTINGS_FOLD_LIFT
-                                                * (1.0F - privateExpansion));
+                                        canvas.translate(0.0F, foldLift + rowRise);
+                                        applyStyleMotion(canvas, axis,
+                                                new UiLayout.Rect(rect.x(), y, rect.w(), h),
+                                                styleDx, staggerIndex, now);
                                         drawRow(canvas, row, rect.x(), y, rect.w(),
                                                 i == hoverRowIndex ? rowHover : 0.0F, i, over, pulsing, dt);
                                     } finally {
@@ -366,12 +463,37 @@ public final class ConversationListPage {
                                 canvas.restore();
                             }
                         } else {
-                            drawRow(canvas, row, rect.x(), y, rect.w(),
-                                    i == hoverRowIndex ? rowHover : 0.0F, i, over, pulsing, dt);
+                            canvas.save();
+                            canvas.translate(0.0F, rowRise);
+                            // Settled alpha implies a settled style channel
+                            // (0 drift / scale 1), so the fast path stays a
+                            // plain draw.
+                            if (rowAlpha >= 0.995F) {
+                                drawRow(canvas, row, rect.x(), y, rect.w(),
+                                        i == hoverRowIndex ? rowHover : 0.0F, i, over, pulsing, dt);
+                            } else {
+                                // Union of the slot and the travel, plus the
+                                // shadow's reach: saveLayer clips at its rect.
+                                try (Paint layer = new Paint().setAlphaf(rowAlpha)) {
+                                    canvas.saveLayer(CardShadowReach.layerRect(
+                                            rect.x(), y, rect.w(), h, rowRise, styleDx), layer);
+                                    applyStyleMotion(canvas, axis,
+                                            new UiLayout.Rect(rect.x(), y, rect.w(), h),
+                                            styleDx, staggerIndex, now);
+                                    try {
+                                        drawRow(canvas, row, rect.x(), y, rect.w(),
+                                                i == hoverRowIndex ? rowHover : 0.0F, i, over, pulsing, dt);
+                                    } finally {
+                                        canvas.restore();
+                                    }
+                                }
+                            }
+                            canvas.restore();
                         }
                         if (row.kind() == RowKind.PUBLIC) {
                             emptyTop = y + h + ROW_GAP;
                         }
+                        staggerIndex++;
                     }
                 }
                 y += rowAdvance(rows, i);
@@ -393,6 +515,24 @@ public final class ConversationListPage {
                         layout.list.w(), Math.min(s(120), available));
                 SettingsSectionPage.drawEmptyState(canvas, area, "atomchat.conversation.no_players");
             }
+        }
+    }
+
+
+
+    /** The style channel's drift for one stagger slot; 0 under ZOOM or once settled. */
+    private float styleDriftDx(UiStagger.Axis axis, int staggerIndex, long now) {
+        return UiStagger.itemStyleSlidePx(entrance, staggerIndex, now, axis);
+    }
+
+    /** Applies the item's style transform: ZOOM scales around {@code rect}, SLIDE drifts. */
+    private void applyStyleMotion(Canvas canvas, UiStagger.Axis axis, UiLayout.Rect rect,
+                                  float styleDx, int staggerIndex, long now) {
+        if (axis == UiStagger.Axis.VERTICAL) {
+            PanelOpenMotion.applyLayerScale(canvas, rect,
+                    UiStagger.itemStyleZoomScale(entrance, staggerIndex, now, axis));
+        } else if (styleDx != 0.0F) {
+            canvas.translate(styleDx, 0.0F);
         }
     }
 
@@ -653,11 +793,17 @@ public final class ConversationListPage {
         } else {
             SkiaDraw.drawRoundedRect(canvas, x, y, size, size, size / 2.0F, Color.makeARGB(255, 120, 130, 145));
         }
-        // Hairline rim hugging the avatar's outer edge (face or placeholder):
-        // polarity-adaptive UiTokens.rim separates the circle from the row
-        // card behind it. Same ring language as the swatches.
+        // Hairline rim concentric with the bitmap (face or placeholder):
+        // AvatarRing centres the stroke ON the bitmap's edge, so half of it
+        // covers the avatar and half sits past it, and the separator's outer
+        // edge lands exactly on the stroke's outer edge — no panel colour can
+        // show through between bitmap and rim. Not pixel-nudged on purpose:
+        // that moves the whole ring and opens a one-side seam. Polarity-adaptive
+        // UiTokens.rim separates the circle from the row card behind. Same ring
+        // language as the swatches.
         SkiaDraw.drawRing(canvas, x + size / 2.0F, y + size / 2.0F,
-                size / 2.0F + UiTokens.s(0.75F), UiTokens.s(1.0F), UiTokens.rim());
+                com.atom.chat.render.AvatarRing.rimRadius(size / 2.0F),
+                com.atom.chat.render.AvatarRing.RIM_STROKE_PX, UiTokens.rim());
     }
 
     private static String previewText(Row row) {

@@ -1,5 +1,7 @@
 package com.atom.chat.settings;
 
+import com.atom.chat.nav.PageNavAxis;
+import com.atom.chat.ui.UiStagger;
 import com.atom.chat.AtomChat;
 import com.atom.chat.chat.BlockList;
 import com.atom.chat.chat.PlayerRef;
@@ -8,6 +10,7 @@ import com.atom.chat.font.FontManager;
 import com.atom.chat.image.ImageLoader;
 import com.atom.chat.image.PlayerAvatar;
 import com.atom.chat.render.Animator;
+import com.atom.chat.render.CardShadowReach;
 import com.atom.chat.render.Easing;
 import com.atom.lib.design.atomchat.SkiaDraw;
 import com.atom.chat.render.SkiaFontRenderer;
@@ -15,6 +18,7 @@ import com.atom.chat.theme.ThemeService;
 import com.atom.chat.theme.AppearancePresetStore;
 import com.atom.chat.ui.Animations;
 import com.atom.lib.design.atomchat.AppIcons;
+import com.atom.chat.ui.PanelOpenMotion;
 import com.atom.chat.ui.PressScale;
 import com.atom.chat.ui.ToggleSwitch;
 import com.atom.chat.wallpaper.WallpaperStore;
@@ -55,6 +59,28 @@ import java.util.Map;
  * so rendering, hit-testing and measurement can never disagree.</p>
  */
 public final class SettingsSectionPage {
+
+    /**
+     * Page-entrance (unit V): the section's rows rise into place over the
+     * 240ms item clock. The chip crossfade keeps its own alpha/dy channels —
+     * the entrance adds its rise to whatever dy the crossfade hands in.
+     * Decoration only; hit tests are unscaled as everywhere.
+     */
+    private final UiStagger.Entrance entrance = new UiStagger.Entrance();
+
+    /** Arms the row entrance — standalone surfaces (no page envelope) use this. */
+    public void markEntered() {
+        entrance.markEntered();
+    }
+
+    /**
+     * Keeps the rows settled: used when the page envelope already owns the
+     * arrival. Two motions over the same content (page drift + row rise) read as
+     * a jump, so the navigation arms exactly one of them.
+     */
+    public void markSettled() {
+        entrance.markSettled();
+    }
     public enum RowKind { HERO, AUTHORS, SWITCH, SLIDER, COLOR, INFO, BLOCKED, LABEL, ACTION, THEMES, BUBBLES }
 
     public record Row(RowKind kind, SettingsItem item, SettingsSlider slider,
@@ -262,9 +288,10 @@ public final class SettingsSectionPage {
     /**
      * In-page section tabs: the segmented chip row at the top of the sections
      * whose full row list is too tall to scan (appearance, chat). Each chip
-     * shows one natural group; switching crossfades the two row sets over
-     * {@link #CHIP_SWITCH_MS} with a 3px micro-slide. Privacy and about stay
-     * single-page (no chips) - their lists fit one screen.
+     * shows one natural group; switching swaps the row set in one frame and
+     * replays the page entrance (the same per-row stagger a navigation arrival
+     * plays). Privacy and about stay single-page (no chips) - their lists fit
+     * one screen.
      */
     public record SectionChip(String id, String labelKey) {
     }
@@ -278,13 +305,8 @@ public final class SettingsSectionPage {
             new SectionChip("history", "atomchat.settings.group.chat.history"),
             new SectionChip("notify", "atomchat.settings.group.chat.notify"),
             new SectionChip("advanced", "atomchat.settings.group.chat.advanced"));
-    /** Crossfade duration of a chip switch. */
-    private static final long CHIP_SWITCH_MS = 110L;
     /** Active chip index per section id (chip-less sections never read it). */
     private final Map<String, Integer> activeChip = new HashMap<>();
-    /** Chip id a switch crossfade is coming from; null when settled. */
-    private String chipSwitchFromId;
-    private long chipSwitchAtMs;
 
     // The chip row reuses BottomTabBar's cell geometry and clock: equal cells
     // from the layout rect, a sliding selection capsule, a pure-colour hover
@@ -357,9 +379,9 @@ public final class SettingsSectionPage {
     }
 
     /**
-     * Switches the visible chip and arms the crossfade. No-op on the active
-     * chip; with decorative motion off the fade is gated at draw time, so the
-     * rows swap instantly.
+     * Switches the visible chip and replays the page entrance. No-op on the
+     * active chip; with decorative motion off the re-arm reads fully settled,
+     * so the rows swap instantly.
      */
     public void selectChip(SettingsSection section, int index) {
         List<SectionChip> sectionChips = chips(section);
@@ -367,9 +389,11 @@ public final class SettingsSectionPage {
                 || index == activeChipIndex(section)) {
             return;
         }
-        chipSwitchFromId = activeChipId(section);
-        chipSwitchAtMs = System.currentTimeMillis();
         activeChip.put(section.id(), index);
+        // The new row set draws in one frame, then rises in on the same
+        // per-row stagger a navigation arrival uses (Dango semantics: no
+        // crossfade, no second clock — the entrance IS the transition).
+        entrance.markEntered(System.currentTimeMillis());
     }
 
     /** Cancels a captured press without applying a theme, preset or setting. */
@@ -383,12 +407,6 @@ public final class SettingsSectionPage {
         setPressedRow(-1);
         setPressedChip(-1);
         setPressedSwatch(-1, -1);
-    }
-
-    public boolean chipTransitionActive() { return chipTransitionActive(System.currentTimeMillis()); }
-
-    private boolean chipTransitionActive(long now) {
-        return chipSwitchFromId != null && Animations.enabled() && now - chipSwitchAtMs < CHIP_SWITCH_MS;
     }
 
     /** Rows of one chip by id (the crossfade's outgoing layer). */
@@ -1220,30 +1238,29 @@ public final class SettingsSectionPage {
         // that matters (the snap to 0) those rows contribute exactly zero
         // height, so membership and geometry never visibly disagree.
         stepGroupExpansions(rows, dt);
-        // Chip switch crossfade: the outgoing rows fade out while sliding up
-        // and away, the incoming rows fade in while sliding up into place.
-        boolean chipFading = chipTransitionActive(now);
-        float t = chipFading
-                ? Math.min(1.0F, (now - chipSwitchAtMs) / (float) CHIP_SWITCH_MS) : 1.0F;
-        if (!chipFading) {
-            chipSwitchFromId = null;
-        }
-
         float barH = chipBarHeight(section);
         updateStepperHover(section, rows, layout, vmx, vmy, scrollY, barH, dt);
+        // The nav style as an axis, resolved once per frame: SLIDE moves rows
+        // horizontally only, ZOOM lifts and scales them.
+        UiStagger.Axis axis = PageNavAxis.current();
+        // A SLIDE row starts up to ITEM_STYLE_SLIDE_PX right of its slot, past
+        // the viewport's right edge, so its rounded corner would be shaved off
+        // on the way in. Widening only that edge by the drift budget while
+        // travel remains keeps the corner whole; once every slot has landed the
+        // clip is the plain viewport again, so a resting frame draws no wider.
+        float driftClipPad = axis == UiStagger.Axis.HORIZONTAL && !UiStagger.itemsSettled(entrance, now)
+                ? UiStagger.ITEM_STYLE_SLIDE_PX : 0.0F;
         canvas.save();
         try {
             // The chip band owns the top of the list: rows clip below it, so a
             // scrolled list never draws through the pills.
             SkiaDraw.clip(canvas, layout.list.x(), layout.list.y() + barH,
-                    layout.list.w(), layout.list.h() - barH, 0.0F);
-            if (chipFading) {
-                drawRows(canvas, layout, section,
-                        rowsForChip(section, chipSwitchFromId), vmx, vmy, scrollY,
-                        accent, dt, 1.0F - t, -t * s(3), false);
-            }
-            drawRows(canvas, layout, section, rows, vmx, vmy, scrollY, accent, dt,
-                    chipFading ? t : 1.0F, chipFading ? (1.0F - t) * s(3) : 0.0F, true);
+                    layout.list.w() + driftClipPad, layout.list.h() - barH, 0.0F);
+            // One draw of one row set: a chip switch re-armed the entrance, so
+            // the new rows rise in per row rather than crossfading against the
+            // old set (the crossfade's two layers were the "slight jump + very
+            // fast fade" the field reported on a chip switch).
+            drawRows(canvas, layout, section, rows, vmx, vmy, scrollY, accent, dt, true);
         } finally {
             canvas.restore();
         }
@@ -1270,31 +1287,30 @@ public final class SettingsSectionPage {
     }
 
     /**
-     * One chip layer: the row loop. {@code alpha}/{@code dy} carry the chip
-     * switch crossfade; the outgoing layer draws with {@code interactive}
-     * false — it must not advance hover/press state, the pointer already
-     * belongs to the incoming chip.
+     * The row loop of the active chip. {@code interactive} is false only for a
+     * non-pointer pass (a frozen layer): it must not advance hover/press state.
+     * Each visible row fades and rises on the page entrance's stagger.
      */
     private void drawRows(Canvas canvas, UiLayout layout, SettingsSection section,
                           List<Row> rows, float vmx, float vmy, float scrollY,
-                          int accent, float dt, float alpha, float dy, boolean interactive) {
+                          int accent, float dt, boolean interactive) {
         if (interactive) {
             lastInteractiveHover = -1;
         }
-        if (rows.isEmpty() || alpha <= 0.005F) {
+        if (rows.isEmpty()) {
             return;
         }
+        long now = System.currentTimeMillis();
+        // One axis for the whole pass: every row of this frame plays the same
+        // style's motion, so the mapping cannot change mid-list.
+        UiStagger.Axis axis = PageNavAxis.current();
         Font buttonFont = FontManager.font(UiTokens.FONT_QUOTE);
         int hovered = -1;
         canvas.save();
-        Paint layer = null;
         try {
-            if (alpha < 0.995F) {
-                layer = new Paint().setAlphaf(alpha);
-                canvas.saveLayer(io.github.humbleui.types.Rect.makeXYWH(
-                        layout.list.x(), layout.list.y(), layout.list.w(), layout.list.h()), layer);
-            }
-            canvas.translate(0.0F, dy);
+            // Stagger position = the row's slot inside the VISIBLE viewport, so
+            // scrolling never re-plays an entrance for rows already on screen.
+            int staggerIndex = 0;
             for (int i = 0; i < rows.size(); i++) {
                 // Every fold group renders as ONE card (the owner's
                 // single-card + hairline language): the first child draws the
@@ -1309,9 +1325,44 @@ public final class SettingsSectionPage {
                             && group.equals(owningGroup(rows, end))) {
                         end++;
                     }
-                    hovered = drawAboutCard(canvas, layout, section, rows,
-                            i, end, scrollY, vmx, vmy, buttonFont, accent, dt,
-                            interactive, hovered);
+                    // The card is one entry in the stagger: it fades and rises
+                    // as a whole (its rows are already folded into one surface).
+                    float cardAlpha = UiStagger.itemAlpha(entrance, staggerIndex, now);
+                    float cardRise = UiStagger.itemRise(entrance, staggerIndex, now, axis);
+                    float cardDx = styleDriftDx(axis, staggerIndex, now);
+                    // The card's own bounds, derived exactly as drawAboutCard does
+                    // (the union of its first and last row) — the ZOOM channel
+                    // scales around it, not around the whole viewport.
+                    UiLayout.Rect cardFirst = rowRect(section, rows, i, scrollY, layout);
+                    UiLayout.Rect cardLast = rowRect(section, rows, end - 1, scrollY, layout);
+                    UiLayout.Rect cardBounds = new UiLayout.Rect(cardFirst.x(), cardFirst.y(),
+                            cardFirst.w(), cardLast.bottom() - cardFirst.y());
+                    canvas.save();
+                    Paint cardLayer = null;
+                    try {
+                        if (cardAlpha < 0.995F) {
+                            cardLayer = new Paint().setAlphaf(cardAlpha);
+                            // The CARD's own rect, not the whole viewport: a card
+                            // flush with the viewport's top or bottom edge had
+                            // its shadow cut there. The reach pad and the travel
+                            // are added around the card, so both follow it.
+                            canvas.saveLayer(CardShadowReach.layerRect(
+                                    cardBounds.x(), cardBounds.y(), cardBounds.w(), cardBounds.h(),
+                                    cardRise, cardDx), cardLayer);
+                        }
+                        canvas.translate(0.0F, cardRise);
+                        applyStyleMotion(canvas, axis, cardBounds, cardDx, staggerIndex, now);
+                        hovered = drawAboutCard(canvas, layout, section, rows,
+                                i, end, scrollY, vmx, vmy, buttonFont, accent, dt,
+                                interactive, hovered);
+                    } finally {
+                        if (cardLayer != null) {
+                            cardLayer.close();
+                            canvas.restore();
+                        }
+                        canvas.restore();
+                    }
+                    staggerIndex++;
                     i = end - 1; // the loop's own i++ lands past the card
                     continue;
                 }
@@ -1371,21 +1422,33 @@ public final class SettingsSectionPage {
                 canvas.save();
                 Paint foldFade = null;
                 try {
-                    if (expansion < 0.995F) {
-                        // Fold fade-in: the child's content rises from up to
-                        // s(4) below its slot while fading with the expansion,
-                        // the same settle the chip crossfade's incoming layer
-                        // rides (its (1-t)*s(3)); both ends of the fold are
-                        // exactly the resting layout. The padded saveLayer
-                        // keeps press overshoot and shadow tail inside the
-                        // fade instead of punching through at full weight.
-                        canvas.translate(0.0F, UiTokens.SETTINGS_FOLD_LIFT * (1.0F - expansion));
-                        float pad = UiTokens.s(12);
-                        foldFade = new Paint().setAlphaf(expansion);
-                        canvas.saveLayer(io.github.humbleui.types.Rect.makeXYWH(
-                                rect.x() - pad, rect.y() - pad,
-                                rect.w() + pad * 2.0F, rect.h() + pad * 2.0F), foldFade);
+                    // The page entrance and the fold share one layer: either can
+                    // be at full weight and the row still fades once, and the
+                    // rise is a single translate (Dango's shifted()).
+                    float rowAlpha = UiStagger.itemAlpha(entrance, staggerIndex, now);
+                    float rowRise = UiStagger.itemRise(entrance, staggerIndex, now, axis);
+                    // The style channel rides the SAME item progress: SLIDE drifts
+                    // the row in from the right, ZOOM settles it from 0.97, so a
+                    // section arrival differs visibly under the two global styles
+                    // while a SLIDE row never also rises.
+                    float rowDx = styleDriftDx(axis, staggerIndex, now);
+                    float combinedAlpha = expansion * rowAlpha;
+                    float combinedRise = UiTokens.SETTINGS_FOLD_LIFT * (1.0F - expansion) + rowRise;
+                    if (combinedAlpha < 0.995F) {
+                        // The padded saveLayer keeps press overshoot and shadow
+                        // tail inside the fade instead of punching through at
+                        // full weight; the rect carries the drift and the rise.
+                        // It used to grow UPWARD by the rise while the content
+                        // moved down, which cut the bottom of the row's shadow.
+                        foldFade = new Paint().setAlphaf(combinedAlpha);
+                        canvas.saveLayer(CardShadowReach.layerRect(
+                                rect.x(), rect.y(), rect.w(), rect.h(), combinedRise, rowDx),
+                                foldFade);
                     }
+                    if (combinedRise != 0.0F) {
+                        canvas.translate(0.0F, combinedRise);
+                    }
+                    applyStyleMotion(canvas, axis, rect, rowDx, staggerIndex, now);
                     if (press != null) {
                         press.begin(canvas, rect.x() + rect.w() / 2.0F, rect.y() + rect.h() / 2.0F);
                     }
@@ -1404,12 +1467,9 @@ public final class SettingsSectionPage {
                     }
                     canvas.restore();
                 }
+                staggerIndex++;
             }
         } finally {
-            if (layer != null) {
-                layer.close();
-                canvas.restore();
-            }
             canvas.restore();
         }
         if (interactive) {
@@ -1523,6 +1583,24 @@ public final class SettingsSectionPage {
             chipScale.computeIfAbsent(i, key -> PressScale.bounce())
                     .update(over, over && pressedChip == i, dtMs, Animations.enabled(),
                             layout.chipRect(i, chips.size()).w());
+        }
+    }
+
+
+
+    /** The style channel's drift for one stagger slot; 0 under ZOOM or once settled. */
+    private float styleDriftDx(UiStagger.Axis axis, int staggerIndex, long now) {
+        return UiStagger.itemStyleSlidePx(entrance, staggerIndex, now, axis);
+    }
+
+    /** Applies the item's style transform: ZOOM scales around {@code rect}, SLIDE drifts. */
+    private void applyStyleMotion(Canvas canvas, UiStagger.Axis axis, UiLayout.Rect rect,
+                                  float styleDx, int staggerIndex, long now) {
+        if (axis == UiStagger.Axis.VERTICAL) {
+            PanelOpenMotion.applyLayerScale(canvas, rect,
+                    UiStagger.itemStyleZoomScale(entrance, staggerIndex, now, axis));
+        } else if (styleDx != 0.0F) {
+            canvas.translate(styleDx, 0.0F);
         }
     }
 
@@ -2291,7 +2369,7 @@ public final class SettingsSectionPage {
                 SkiaDraw.drawRoundedRect(canvas, scx - r, cy - r, 2.0F * r, 2.0F * r, r, swatch);
                 // Theme-adaptive hairline: pale swatches stay visible on light
                 // panels, dark ones on dark panels.
-                SkiaDraw.drawRing(canvas, scx, cy, r + s(0.75F), s(1.0F), UiTokens.hairline());
+                SkiaDraw.drawRing(canvas, scx + com.atom.chat.render.UiPixelSnap.halfDevicePx(), cy + com.atom.chat.render.UiPixelSnap.halfDevicePx(), r + s(0.75F), s(1.0F), UiTokens.hairline());
                 if (swatch == color.value()) {
                     // Selection ring: the functional rim stroke with a breathing
                     // gap — alpha 110, polarity-picked, so the ring survives pale
@@ -2323,7 +2401,7 @@ public final class SettingsSectionPage {
         try {
             SkiaDraw.drawRoundedRect(canvas, px - r, cy - r, 2.0F * r, 2.0F * r, r,
                     UiTokens.trackRest());
-            SkiaDraw.drawRing(canvas, px, cy, r + s(0.75F), s(1.0F), UiTokens.hairline());
+            SkiaDraw.drawRing(canvas, px + com.atom.chat.render.UiPixelSnap.halfDevicePx(), cy + com.atom.chat.render.UiPixelSnap.halfDevicePx(), r + s(0.75F), s(1.0F), UiTokens.hairline());
             drawIconCentered(canvas, AppIcons.ICON_PLUS_PATH, px, cy, s(12),
                     textPrimary());
         } finally {
@@ -2968,11 +3046,17 @@ public final class SettingsSectionPage {
                 SkiaDraw.drawRoundedRect(canvas, rect.x() + UiTokens.SETTINGS_ROW_PAD, avatarY,
                         avatar, avatar, avatar / 2.0F, Color.makeARGB(255, 120, 130, 145));
             }
-            // Hairline rim hugging the avatar's outer edge (face or placeholder):
-            // polarity-adaptive UiTokens.rim separates the circle from the row
-            // card behind it. Same ring language as the swatches.
+            // Hairline rim concentric with the bitmap (face or placeholder):
+            // AvatarRing centres the stroke ON the bitmap edge, so half covers
+            // the avatar and half sits past it, and the separator's outer edge
+            // lands on the stroke's outer edge — nothing of the row card shows
+            // through. Not pixel-nudged on purpose: that moves the ring and
+            // opens a one-side seam. Polarity-adaptive UiTokens.rim separates
+            // the circle from the row card behind. Same ring language as the
+            // swatches.
             SkiaDraw.drawRing(canvas, rect.x() + UiTokens.SETTINGS_ROW_PAD + avatar / 2.0F, avatarY + avatar / 2.0F,
-                    avatar / 2.0F + s(0.75F), s(1.0F), UiTokens.rim());
+                    com.atom.chat.render.AvatarRing.rimRadius(avatar / 2.0F),
+                    com.atom.chat.render.AvatarRing.RIM_STROKE_PX, UiTokens.rim());
         }
 
         String name = row.player() != null ? row.player().realName() : "";
@@ -3349,7 +3433,7 @@ public final class SettingsSectionPage {
     public void reset() {
         switches.clear();
         activeChip.clear();
-        chipSwitchFromId = null;
+        entrance.markSettled();
         lastInteractiveHover = -1;
         rowHover.clear();
         stepperHover.clear();

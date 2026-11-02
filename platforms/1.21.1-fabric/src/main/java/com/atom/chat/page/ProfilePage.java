@@ -8,7 +8,9 @@ import com.atom.chat.chat.PlayerRef;
 import com.atom.chat.font.FontManager;
 import com.atom.chat.image.PlayerAvatar;
 import com.atom.lib.design.atomchat.SkiaDraw;
+import com.atom.chat.nav.PageNavAxis;
 import com.atom.chat.render.SkiaFontRenderer;
+import com.atom.chat.render.CardShadowReach;
 import com.atom.chat.ui.Animations;
 import com.atom.lib.design.atomchat.AppIcons;
 import com.atom.lib.design.atomchat.UiCards;
@@ -17,6 +19,7 @@ import com.atom.chat.ui.UiLayout;
 import com.atom.chat.ui.PressScale;
 import com.atom.chat.ui.UiMotion;
 import com.atom.chat.ui.UiSpring;
+import com.atom.chat.ui.UiStagger;
 import com.atom.lib.design.atomchat.UiTokens;
 import static com.atom.lib.design.atomchat.UiTokens.s;
 import io.github.humbleui.skija.Canvas;
@@ -167,6 +170,60 @@ public final class ProfilePage {
     private RoleResolver roleResolver;
 
     private long lastFrameMs = System.currentTimeMillis();
+    /** Page-entrance stagger over the page's blocks (a tab arrival re-arms it). */
+    private final UiStagger.Entrance entrance = new UiStagger.Entrance();
+
+    /** Arms the block entrance — the screen calls this on a tab arrival. */
+    public void markEntered() {
+        entrance.markEntered();
+    }
+
+    /**
+     * One block of the page inside its entrance slot: the fade and the lift come
+     * from the same progress, and a settled slot skips both the layer and the
+     * translate (so a resting frame costs exactly what it used to).
+     */
+    private void drawStaggered(Canvas canvas, UiLayout layout, long now, int slot, Runnable block) {
+        float alpha = UiStagger.itemAlpha(entrance, slot, now);
+        if (alpha >= 0.995F) {
+            block.run();
+            return;
+        }
+        // The style channel rides the slot's own progress, and the axis decides
+        // which channels may move: SLIDE drifts the block in from the right,
+        // ZOOM lifts it and settles it from 0.97 around the page's content band
+        // (a block is a full-width section, so the band IS its bounds).
+        UiStagger.Axis axis = PageNavAxis.current();
+        float rise = UiStagger.itemRise(entrance, slot, now, axis);
+        float driftDx = UiStagger.itemStyleSlidePx(entrance, slot, now, axis);
+        canvas.save();
+        try {
+            try (Paint layer = new Paint().setAlphaf(alpha)) {
+                // The viewport padded by the shadow's reach, and by whichever
+                // travel this axis still owes. The content is only ever pushed
+                // right and down from its slot, so the extra room is on the
+                // right and bottom. The old rect grew upward instead and
+                // shaved the bottom shadow tail off by the whole lift.
+                canvas.saveLayer(CardShadowReach.layerRect(
+                        layout.list.x(), layout.list.y(),
+                        layout.list.w(), layout.list.h(), rise, driftDx), layer);
+                canvas.translate(0.0F, rise);
+                if (axis == UiStagger.Axis.VERTICAL) {
+                    com.atom.chat.ui.PanelOpenMotion.applyLayerScale(canvas,
+                            new UiLayout.Rect(layout.list.x(), layout.list.y(),
+                                    layout.list.w(), layout.list.h()),
+                            UiStagger.itemStyleZoomScale(entrance, slot, now, axis));
+                } else if (driftDx != 0.0F) {
+                    canvas.translate(driftDx, 0.0F);
+                }
+                block.run();
+                canvas.restore();
+            }
+        } finally {
+            canvas.restore();
+        }
+    }
+
     /** Hover scrim on the banner card (local player's page only). */
     private float bannerHover;
     /**
@@ -689,7 +746,7 @@ public final class ProfilePage {
         UiLayout.Rect avatar = avatarRect(layout, scrollY);
         float outset = PlayerAvatar.isE33Chat()
                 ? avatar.w() * UiTokens.E33CHAT_PROFILE_HAT_OUTSET_RATIO
-                : UiTokens.PROFILE_AVATAR_RING + s(1.25F);
+                : com.atom.chat.render.AvatarRing.SEPARATOR_PX + s(1.25F);
         UiLayout.Rect bounds = new UiLayout.Rect(
                 avatar.x() - outset, avatar.y() - outset,
                 avatar.w() + outset * 2.0F, avatar.h() + outset * 2.0F);
@@ -969,15 +1026,33 @@ public final class ProfilePage {
         lastVmx = vmx;
         lastVmy = vmy;
         lastDtMs = dt;
+        // A SLIDE block starts up to ITEM_STYLE_SLIDE_PX right of the viewport,
+        // so the clip's right edge is widened by exactly the drift budget while
+        // travel remains — otherwise a block's rounded corner is shaved flat on
+        // the way in. Once every slot has landed the clip is the plain viewport
+        // again, so a resting frame draws no wider than it used to.
+        float driftClipPad = PageNavAxis.current() == UiStagger.Axis.HORIZONTAL && !UiStagger.itemsSettled(entrance, now)
+                ? UiStagger.ITEM_STYLE_SLIDE_PX : 0.0F;
         canvas.save();
         try {
-            SkiaDraw.clip(canvas, layout.list.x(), layout.list.y(), layout.list.w(), layout.list.h(), 0.0F);
-            drawBanner(canvas, layout, scrollY);
-            drawAvatar(canvas, layout, vmx, vmy, scrollY);
-            drawNameSignature(canvas, layout, vmx, vmy, scrollY);
-            drawStatTiles(canvas, layout, vmx, vmy, scrollY);
-            drawInfoRows(canvas, layout, vmx, vmy, scrollY);
-            drawIdentityCard(canvas, layout, scrollY);
+            SkiaDraw.clip(canvas, layout.list.x(), layout.list.y(),
+                    layout.list.w() + driftClipPad, layout.list.h(), 0.0F);
+            // Page-entrance stagger over the page's blocks in reading order:
+            // banner, avatar row, stat tiles, info card, identity card. Each
+            // block fades and lifts from ONE progress value (Dango's shifted),
+            // so nothing is ever opaque while it is still shifted.
+            drawStaggered(canvas, layout, now, 0,
+                    () -> drawBanner(canvas, layout, scrollY));
+            drawStaggered(canvas, layout, now, 1, () -> {
+                drawAvatar(canvas, layout, vmx, vmy, scrollY);
+                drawNameSignature(canvas, layout, vmx, vmy, scrollY);
+            });
+            drawStaggered(canvas, layout, now, 2,
+                    () -> drawStatTiles(canvas, layout, vmx, vmy, scrollY));
+            drawStaggered(canvas, layout, now, 3,
+                    () -> drawInfoRows(canvas, layout, vmx, vmy, scrollY));
+            drawStaggered(canvas, layout, now, 4,
+                    () -> drawIdentityCard(canvas, layout, scrollY));
             drawAvatarMenu(canvas, layout, vmx, vmy, scrollY);
         } finally {
             canvas.restore();
@@ -1154,9 +1229,10 @@ public final class ProfilePage {
         avatarScale.begin(canvas, avatar.x() + avatar.w() / 2.0F, avatar.y() + avatar.h() / 2.0F);
         try {
             // The panelBg ring under the bitmap is the QQ separator: an opaque
-            // panel-coloured circle one ring wider than the avatar, so the
-            // bitmap never sits directly on the busy banner behind it.
-            float ring = UiTokens.PROFILE_AVATAR_RING;
+            // panel-coloured circle one hairline wider than the avatar
+            // (AvatarRing owns the pad) — the old s(2) pad plus the outline left
+            // a visible strip of panel colour between bitmap and rim.
+            float ring = com.atom.chat.render.AvatarRing.SEPARATOR_PX;
             SkiaDraw.drawRoundedRect(canvas, avatar.x() - ring, avatar.y() - ring,
                     avatar.w() + ring * 2.0F, avatar.h() + ring * 2.0F,
                     (avatar.w() + ring * 2.0F) / 2.0F, UiTokens.withAlpha(panelRgb(), 255));
@@ -1182,13 +1258,17 @@ public final class ProfilePage {
                 SkiaDraw.drawRoundedRect(canvas, avatar.x(), avatar.y(), avatar.w(), avatar.h(),
                         avatar.w() / 2.0F, Color.makeARGB((int) (40.0F * avatarHover), 255, 255, 255));
             }
-            // Hairline rim OUTSIDE the panelBg separator ring: it hugs the
-            // separator's outer edge (avatar radius + PROFILE_AVATAR_RING),
-            // polarity-adaptive UiTokens.rim, so the avatar assembly reads
-            // against the busy banner without touching the bitmap or the
-            // separator itself. Same ring language as the swatches.
+            // Hairline rim concentric with the avatar's own edge: AvatarRing
+            // centres the stroke ON the bitmap edge and its separator's outer
+            // edge lands on the stroke's outer edge, so the bitmap, the
+            // separator and the rim share one outer boundary (the reported
+            // "avatar and its rim must touch"). Not pixel-nudged: an offset
+            // centre splits that boundary and leaves a seam on one side.
+            // Polarity-adaptive UiTokens.rim, same ring language as the
+            // swatches.
             SkiaDraw.drawRing(canvas, avatar.x() + avatar.w() / 2.0F, avatar.y() + avatar.h() / 2.0F,
-                    avatar.w() / 2.0F + ring + UiTokens.s(0.75F), UiTokens.s(1.0F), UiTokens.rim());
+                    com.atom.chat.render.AvatarRing.rimRadius(avatar.w() / 2.0F),
+                    com.atom.chat.render.AvatarRing.RIM_STROKE_PX, UiTokens.rim());
         } finally {
             canvas.restore();
         }

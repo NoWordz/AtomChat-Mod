@@ -873,11 +873,17 @@ public final class MessageListView {
             SkiaDraw.drawRoundedRect(canvas, avatarX, avatarY, UiTokens.AVATAR_SIZE, UiTokens.AVATAR_SIZE,
                     UiTokens.AVATAR_SIZE / 2.0F, Color.makeARGB(255, 120, 130, 145));
         }
-        // Hairline rim hugging the avatar's outer edge (face or placeholder):
-        // polarity-adaptive UiTokens.rim separates the circle from whatever
-        // bubble or panel sits behind it. Same ring language as the swatches.
+        // Hairline rim concentric with the bitmap (face or placeholder):
+        // AvatarRing centres the stroke ON the bitmap's edge, so half of it
+        // covers the avatar and half sits past it, and the separator's outer
+        // edge lands exactly on the stroke's outer edge — no panel colour can
+        // show through between bitmap and rim. The centre is deliberately not
+        // pixel-nudged: that moves the whole ring and opens a one-side seam.
+        // Polarity-adaptive UiTokens.rim separates it from whatever bubble or
+        // panel sits behind. Same ring language as the swatches.
         SkiaDraw.drawRing(canvas, avatarX + UiTokens.AVATAR_SIZE / 2.0F, avatarY + UiTokens.AVATAR_SIZE / 2.0F,
-                UiTokens.AVATAR_SIZE / 2.0F + UiTokens.s(0.75F), UiTokens.s(1.0F), UiTokens.rim());
+                com.atom.chat.render.AvatarRing.rimRadius(UiTokens.AVATAR_SIZE / 2.0F),
+                com.atom.chat.render.AvatarRing.RIM_STROKE_PX, UiTokens.rim());
     }
 
     /** Clock pill height between messages (see {@link #dividerBefore}). */

@@ -2,13 +2,16 @@ package com.atom.chat.settings;
 
 import com.atom.chat.font.FontManager;
 import com.atom.lib.design.atomchat.SkiaDraw;
+import com.atom.chat.nav.PageNavAxis;
 import com.atom.chat.render.SkiaFontRenderer;
+import com.atom.chat.render.CardShadowReach;
 import com.atom.chat.ui.Animations;
 import com.atom.lib.design.atomchat.AppIcons;
 import com.atom.chat.ui.UiLayout;
 import com.atom.lib.design.atomchat.UiCards;
 import com.atom.chat.ui.PressScale;
 import com.atom.chat.ui.UiMotion;
+import com.atom.chat.ui.UiStagger;
 import com.atom.lib.design.atomchat.UiTokens;
 import io.github.humbleui.skija.Canvas;
 import io.github.humbleui.skija.Color;
@@ -37,7 +40,14 @@ public final class SettingsHomePage {
     // two tiles can ever drive the same spring; the array fills lazily because
     // PressScale only comes out of its factory methods.
     private final PressScale[] tileScale = new PressScale[sections.length];
+    /** Page-entrance stagger: tiles rise in one after another on a tab arrival. */
+    private final UiStagger.Entrance entrance = new UiStagger.Entrance();
     private long lastFrameMs = System.currentTimeMillis();
+
+    /** Arms the tile entrance — the screen calls this on a tab arrival. */
+    public void markEntered() {
+        entrance.markEntered();
+    }
 
     public float measureContent(UiLayout layout) {
         int rows = (sections.length + UiTokens.SETTINGS_TILE_COLS - 1) / UiTokens.SETTINGS_TILE_COLS;
@@ -104,22 +114,61 @@ public final class SettingsHomePage {
             tileScale[i].update(i == hovered, false, dt, Animations.enabled(), tileSide(layout));
         }
 
+        UiStagger.Axis axis = PageNavAxis.current();
         canvas.save();
         try {
-            SkiaDraw.clip(canvas, layout.list.x(), layout.list.y(), layout.list.w(), layout.list.h(), 0.0F);
+            // SLIDE starts every tile up to ITEM_STYLE_SLIDE_PX to the right,
+            // so the viewport clip would shave the rounded right edge off the
+            // tile's early frames. Widening only the right edge by exactly that
+            // budget keeps the corner whole while travel remains, and the clip
+            // drops back to the viewport once every slot has landed.
+            float driftClipPad = axis == UiStagger.Axis.HORIZONTAL && !UiStagger.itemsSettled(entrance, now)
+                    ? UiStagger.ITEM_STYLE_SLIDE_PX : 0.0F;
+            SkiaDraw.clip(canvas, layout.list.x(), layout.list.y(),
+                    layout.list.w() + driftClipPad, layout.list.h(), 0.0F);
             for (int i = 0; i < sections.length; i++) {
                 UiLayout.Rect tile = tileRect(layout, i, scrollY);
                 if (tile.bottom() < layout.list.y() || tile.y() > layout.list.bottom()) {
                     continue;
                 }
-                // Animated value only: forcing it to 1 while hovered is what
-                // made the highlight snap in instead of fading in.
-                drawTile(canvas, tile, sections[i], tileHover[i], tileScale[i]);
+                // Page-entrance stagger: the tile's fade, its lift and its
+                // style channel all come from ONE progress value, and the axis
+                // decides which channels may move — so a tile is never opaque
+                // while shifted, and SLIDE never gives it a vertical leg.
+                float tileAlpha = UiStagger.itemAlpha(entrance, i, now);
+                float tileRise = UiStagger.itemRise(entrance, i, now, axis);
+                if (tileAlpha >= 0.995F) {
+                    drawTile(canvas, tile, sections[i], tileHover[i], tileScale[i]);
+                } else {
+                    float tileDx = UiStagger.itemStyleSlidePx(entrance, i, now, axis);
+                    canvas.save();
+                    try (Paint layer = new Paint().setAlphaf(tileAlpha)) {
+                        // The layer is the tile's travel union plus the shadow's
+                        // reach. saveLayer is a hard clip, so a layer sized to
+                        // the slot alone sawed the soft shadow into a straight
+                        // line along its top edge while the tile was still
+                        // travelling.
+                        canvas.saveLayer(CardShadowReach.layerRect(
+                                tile.x(), tile.y(), tile.w(), tile.h(), tileRise, tileDx), layer);
+                        canvas.translate(0.0F, tileRise);
+                        if (axis == UiStagger.Axis.VERTICAL) {
+                            com.atom.chat.ui.PanelOpenMotion.applyLayerScale(canvas, tile,
+                                    UiStagger.itemStyleZoomScale(entrance, i, now, axis));
+                        } else if (tileDx != 0.0F) {
+                            canvas.translate(tileDx, 0.0F);
+                        }
+                        drawTile(canvas, tile, sections[i], tileHover[i], tileScale[i]);
+                        canvas.restore();
+                    } finally {
+                        canvas.restore();
+                    }
+                }
             }
         } finally {
             canvas.restore();
         }
     }
+
 
     /** Returns the section under the pointer, or null. Uses the render geometry. */
     public SettingsSection hit(float vmx, float vmy, UiLayout layout, float scrollY) {
