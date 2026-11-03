@@ -4,10 +4,14 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 
 class AtomLibDependencyCheckTest {
-    @Test void missingAndWrongVersionsExplainTheRequiredCompanion() {
+    @Test void missingVersionExplainsTheRequiredCompanion() {
         var missing=assertThrows(IllegalStateException.class,()->AtomLibDependencyCheck.validate(null,"0.1.0-local","Windows 11","amd64"));
         assertTrue(missing.getMessage().contains("AtomLib"));assertTrue(missing.getMessage().contains("0.1.0-local"));
-        assertThrows(IllegalStateException.class,()->AtomLibDependencyCheck.validate("0.0.1","0.1.0-local","Windows 11","amd64"));
+        assertThrows(IllegalStateException.class,()->AtomLibDependencyCheck.validate(" ","0.1.0-local","Windows 11","amd64"));
+    }
+    @Test void installedVersionDoesNotNeedToEqualTheBuildInput() {
+        for(String installed:new String[]{"0.1.0-local","0.1.0-beta","0.2.0","2.0.0"})
+            assertDoesNotThrow(()->AtomLibDependencyCheck.validate(installed,"0.1.0-local","Windows 11","amd64"));
     }
     @Test void supportedJvmArchitecturesAreAcceptedAndUnsupportedClientsFailEarly() {
         for(String arch:new String[]{"amd64","x86_64","aarch64","arm64"})assertDoesNotThrow(()->AtomLibDependencyCheck.validate("0.1.0-local","0.1.0-local","Windows 11",arch));

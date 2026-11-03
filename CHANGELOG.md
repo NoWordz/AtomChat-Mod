@@ -1,5 +1,31 @@
 # Changelog
 
+## v0.5.0
+
+**更改**
+
+- 渲染和布局运行时由独立的 AtomLib 提供；安装时需要同时安装对应加载器和游戏版本的 AtomLib。
+- 三端不再按版本号限制 AtomLib，客户端启动时检查所需的部分核心接口并提示不兼容情况。
+- 优化聊天面板的消息布局、图片缩放和资源缓存，减少重复计算与内存占用。
+- 改进页面切换动效、设备像素对齐和磨砂背景在亮色场景下的可读性。
+
+**修复**
+
+- 修复超出缓存预算的图片可能在绘制前被关闭的问题。
+
+----
+
+**Changed**
+
+- Move the rendering and layout runtime to the separate AtomLib mod; install the AtomLib JAR matching your loader and Minecraft version.
+- Accept AtomLib version numbers across all three loaders and check a subset of required core APIs at client startup.
+- Reduce repeated work and memory use in message layout, image scaling, and resource caches.
+- Improve page transitions, device-pixel alignment, and frosted-background readability on bright scenes.
+
+**Fixed**
+
+- Fix images exceeding the cache budget potentially being closed before drawing.
+
 ## v0.4.0
 
 **新增**

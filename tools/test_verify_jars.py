@@ -193,7 +193,7 @@ class ArtifactVariantsTest(unittest.TestCase):
             self.assertEqual(1, self.run_verifier('windows-arm64', jar).returncode)
 
 
-def consumer_artifact(path, loader='Fabric', dependency=True, side='CLIENT', extra=None):
+def consumer_artifact(path, loader='Fabric', dependency=True, side='CLIENT', extra=None, range_override=None):
     prefix = 'META-INF/jars/' if loader == 'Fabric' else 'META-INF/jarjar/'
     flatlaf = archive({
         'com/atom/chat/shaded/flatlaf/FlatLightLaf.class': b'relocated',
@@ -207,15 +207,16 @@ def consumer_artifact(path, loader='Fabric', dependency=True, side='CLIENT', ext
     if loader == 'Fabric':
         meta = {'id':'atomchat', 'environment':'*', 'jars':[{'file':prefix+'flatlaf-private.jar'}]}
         if dependency:
-            meta['suggests'] = {'atomlib': '=' + LOCK_VERSION}
-            meta['custom'] = {'atomlib:client-required': LOCK_VERSION}
+            meta['suggests'] = {'atomlib': '*' if range_override is None else range_override}
+            meta['custom'] = {'atomlib:client-required': '*'}
         entries['fabric.mod.json'] = json.dumps(meta).encode()
     else:
         entries[prefix+'metadata.json'] = json.dumps({'jars':[{'path':prefix+'flatlaf-private.jar'}]}).encode()
         kind = 'mandatory=true' if loader=='Forge' else 'type="required"'
         text = '[[mods]]\nmodId="atomchat"\n'
         if dependency:
-            text += f'[[dependencies.atomchat]]\nmodId="atomlib"\n{kind}\nversionRange="[{LOCK_VERSION}]"\nside="{side}"\n'
+            range_value = ('*' if loader == 'NeoForge' else '') if range_override is None else range_override
+            text += f'[[dependencies.atomchat]]\nmodId="atomlib"\n{kind}\nversionRange="{range_value}"\nside="{side}"\n'
         entries['META-INF/mods.toml' if loader=='Forge' else 'META-INF/neoforge.mods.toml'] = text.encode()
     if extra:
         entries.update(extra)
@@ -257,6 +258,14 @@ class AtomLibConsumerTest(unittest.TestCase):
                 self.assertEqual(1,self.run_verifier(jar).returncode)
             for loader in ['Forge','NeoForge']:
                 jar=Path(temp)/f'atomchat-{loader}-0.4.0.jar';consumer_artifact(jar,loader,side='BOTH')
+                self.assertEqual(1,self.run_verifier(jar).returncode)
+
+    def test_an_exact_version_requirement_is_rejected_on_each_loader(self):
+        with tempfile.TemporaryDirectory() as temp:
+            for loader in ['Forge','NeoForge','Fabric']:
+                jar=Path(temp)/f'atomchat-{loader}-0.4.0.jar'
+                exact = '=' + LOCK_VERSION if loader == 'Fabric' else '[' + LOCK_VERSION + ']'
+                consumer_artifact(jar,loader,range_override=exact)
                 self.assertEqual(1,self.run_verifier(jar).returncode)
 
     def test_old_architecture_specific_names_do_not_pass_as_consumers(self):

@@ -113,18 +113,38 @@ public final class ImageQuality {
                 || image.getHeight() <= target * MIN_RATIO) {
             return image;
         }
+        int wanted = target * 2;
+        // If no intermediate halving is needed, resize uses these exact
+        // dimensions. Do not allocate a bitmap that cannot enter the cache.
+        if ((long) image.getWidth() <= (long) wanted * 4) {
+            int height = Math.max(1, Math.round(wanted * (image.getHeight() / (float) image.getWidth())));
+            if ((long) wanted * height > MAX_DERIVED_PIXELS) return image;
+        }
         Entry entry = entryFor(image);
         Image cached = entry.prepared.get(target);
         if (cached != null) {
             return cached;
         }
-        Image prepared = prepare(image, target * 2);
+        Image prepared = prepare(image, wanted);
         if (prepared == null) {
             return image;
         }
+        long pixels = (long) prepared.getWidth() * prepared.getHeight();
+        if (pixels > MAX_DERIVED_PIXELS) {
+            // This copy cannot fit even in an empty cache. The source remains
+            // caller-owned and is safe to use without evicting useful copies.
+            prepared.close();
+            if (entry.prepared.isEmpty()) {
+                long fingerprint = System.identityHashCode(image);
+                List<Entry> bucket = ENTRIES.get(fingerprint);
+                bucket.remove(entry);
+                if (bucket.isEmpty()) ENTRIES.remove(fingerprint);
+            }
+            return image;
+        }
         entry.prepared.put(target, prepared);
-        derivedPixels += (long) prepared.getWidth() * prepared.getHeight();
-        trimIfNeeded();
+        derivedPixels += pixels;
+        trimIfNeeded(prepared);
         return prepared;
     }
 
@@ -212,7 +232,7 @@ public final class ImageQuality {
         entry.prepared.clear();
     }
 
-    private static void trimIfNeeded() {
+    private static void trimIfNeeded(Image current) {
         if (derivedPixels <= MAX_DERIVED_PIXELS) {
             return;
         }
@@ -220,13 +240,19 @@ public final class ImageQuality {
             List<Entry> bucket = buckets.next();
             for (Iterator<Entry> it = bucket.iterator(); it.hasNext(); ) {
                 Entry entry = it.next();
-                it.remove();
-                closeEntry(entry);
-                if (derivedPixels <= MAX_DERIVED_PIXELS) {
-                    return;
+                for (Iterator<Image> copies = entry.prepared.values().iterator(); copies.hasNext(); ) {
+                    Image image = copies.next();
+                    if (image == current) continue;
+                    copies.remove();
+                    derivedPixels -= (long) image.getWidth() * image.getHeight();
+                    image.close();
+                    if (derivedPixels <= MAX_DERIVED_PIXELS) break;
                 }
+                if (entry.prepared.isEmpty()) it.remove();
+                if (derivedPixels <= MAX_DERIVED_PIXELS) break;
             }
-            buckets.remove();
+            if (bucket.isEmpty()) buckets.remove();
+            if (derivedPixels <= MAX_DERIVED_PIXELS) return;
         }
     }
 

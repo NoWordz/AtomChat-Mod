@@ -182,6 +182,144 @@ class ImageQualityTest {
     }
 
     @Test
+    void oversizedPreparationFallsBackToTheLiveSourceWithoutEvictingCachedImages() {
+        ImageQuality.release();
+        try (Surface surface = Surface.makeRasterN32Premul(3076, 3076)) {
+            surface.getCanvas().clear(0xFF5183B5);
+            try (Image source = surface.makeImageSnapshot()) {
+                Image boundary = ImageQuality.scaledFor(source, 1024);
+                assertNotSame(source, boundary);
+                assertFalse(boundary.isClosed());
+                assertEquals(4_194_304L, ImageQuality.derivedPixels());
+
+                Image oversized = ImageQuality.scaledFor(source, 1025);
+                assertSame(source, oversized, "a copy larger than the whole budget must use the source");
+                assertFalse(oversized.isClosed());
+                assertFalse(boundary.isClosed(), "an uncacheable copy must not evict a valid cached copy");
+                assertSame(boundary, ImageQuality.scaledFor(source, 1024));
+                assertEquals(4_194_304L, ImageQuality.derivedPixels());
+            } finally {
+                ImageQuality.release();
+            }
+        }
+    }
+
+    @Test
+    void repeatedOversizedPreparationAvoidsNativeResizing() {
+        ImageQuality.release();
+        for (int height : new int[]{3076, 5000}) {
+            try (Surface surface = Surface.makeRasterN32Premul(3076, height);
+                 Image source = surface.makeImageSnapshot()) {
+                boolean wasEnabled = io.github.humbleui.skija.impl.Stats.enabled;
+                io.github.humbleui.skija.impl.Stats.enabled = true;
+                try {
+                    long before = io.github.humbleui.skija.impl.Stats.nativeCalls;
+                    for (int i = 0; i < 3; i++) {
+                        assertSame(source, ImageQuality.scaledFor(source, 1025));
+                        assertFalse(source.isClosed());
+                    }
+                    long calls = io.github.humbleui.skija.impl.Stats.nativeCalls - before;
+                    assertTrue(calls <= 12, "oversized fallback should avoid raster resize calls, got " + calls);
+                } finally {
+                    io.github.humbleui.skija.impl.Stats.enabled = wasEnabled;
+                    ImageQuality.release();
+                }
+            }
+        }
+    }
+
+    @Test
+    void combinedBudgetEvictionNeverClosesTheImageBeingReturned() {
+        ImageQuality.release();
+        try (Surface surface = Surface.makeRasterN32Premul(3076, 3076)) {
+            surface.getCanvas().clear(0xFF5183B5);
+            try (Image source = surface.makeImageSnapshot()) {
+                Image old = ImageQuality.scaledFor(source, 1024);
+                Image current = ImageQuality.scaledFor(source, 1023);
+                assertFalse(current.isClosed(), "the just-prepared image is needed by the caller");
+                assertTrue(old.isClosed(), "the older level should be evicted to stay within budget");
+                assertSame(current, ImageQuality.scaledFor(source, 1023));
+                assertEquals(4_186_116L, ImageQuality.derivedPixels());
+            } finally {
+                ImageQuality.release();
+            }
+        }
+    }
+
+    @Test
+    void budgetEvictionAcrossSourcesKeepsTheNewImageAndPreservesSourceOwnership() {
+        ImageQuality.release();
+        try (Surface surface = Surface.makeRasterN32Premul(3076, 3076)) {
+            surface.getCanvas().clear(0xFF5183B5);
+            try (Image firstSource = surface.makeImageSnapshot();
+                 Image secondSource = surface.makeImageSnapshot()) {
+                Image old = ImageQuality.scaledFor(firstSource, 1024);
+                Image current = ImageQuality.scaledFor(secondSource, 1023);
+                assertFalse(current.isClosed());
+                assertTrue(old.isClosed());
+                assertSame(current, ImageQuality.scaledFor(secondSource, 1023));
+                assertTrue(ImageQuality.derivedPixels() <= 4_194_304L);
+                ImageQuality.release();
+                assertTrue(current.isClosed());
+                assertFalse(firstSource.isClosed());
+                assertFalse(secondSource.isClosed());
+                assertEquals(0L, ImageQuality.derivedPixels());
+            } finally {
+                ImageQuality.release();
+            }
+        }
+    }
+
+    @Test
+    void perSourceLevelLimitEvictsOnlyTheOldestCopy() {
+        ImageQuality.release();
+        try (Image source = noise(256)) {
+            Image oldest = ImageQuality.scaledFor(source, 16);
+            Image kept = ImageQuality.scaledFor(source, 17);
+            ImageQuality.scaledFor(source, 18);
+            ImageQuality.scaledFor(source, 19);
+            Image newest = ImageQuality.scaledFor(source, 20);
+            assertTrue(oldest.isClosed());
+            assertFalse(kept.isClosed());
+            assertFalse(newest.isClosed());
+            assertSame(kept, ImageQuality.scaledFor(source, 17));
+            assertSame(newest, ImageQuality.scaledFor(source, 20));
+        } finally {
+            ImageQuality.release();
+        }
+    }
+
+    @Test
+    void oversizedImagesStillDrawThroughExistingConsumersAtDeviceDensity() {
+        ImageQuality.release();
+        UiPixelSnap.beginFrame(1.25F);
+        try (Surface input = Surface.makeRasterN32Premul(3076, 3076)) {
+            input.getCanvas().clear(0xFF5183B5);
+            try (Image source = input.makeImageSnapshot();
+                 Surface output = Surface.makeRasterN32Premul(820, 820)) {
+                for (int consumer = 0; consumer < 3; consumer++) {
+                    output.getCanvas().clear(0);
+                    if (consumer == 0) {
+                        SkiaImages.drawImage(output.getCanvas(), source, 0, 0, 820, 820);
+                    } else if (consumer == 1) {
+                        SkiaImages.drawRoundedImage(output.getCanvas(), source, 0, 0, 820, 820, 0);
+                    } else {
+                        ChatBubble.drawImage(output.getCanvas(), source, 0, 0, 820, 820, null, false);
+                    }
+                    assertTrue(pixels(output, 820)[410 * 820 + 410] > 0,
+                            "consumer " + consumer + " must paint the image");
+                    assertFalse(source.isClosed());
+                    assertTrue(ImageQuality.derivedPixels() <= 4_194_304L);
+                    assertEquals(0, ImageQuality.entryCount(), "an uncacheable image must not leave an empty entry");
+                }
+            } finally {
+                ImageQuality.release();
+                UiPixelSnap.beginFrame(1.0F);
+            }
+        }
+    }
+
+    @Test
     void everyImageDrawSiteGoesThroughTheDecimatingWrappers() throws Exception {
         Path root = repositoryRoot();
         List<String> offenders = new ArrayList<>();

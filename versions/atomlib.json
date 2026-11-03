@@ -2,7 +2,7 @@
   "schema_version": 1,
   "group": "com.atom.lib",
   "version": "0.1.0-beta",
-  "compatibility_range": "[0.1.0-beta]",
+  "compatibility_range": "*",
   "input_archive": {
     "url": "https://github.com/NoWordz/AtomLib/releases/download/v0.1.0-beta-beta3/atomlib-input-0.1.0-beta.zip",
     "sha256": "51a95d0ef64a2ad88960b517387e67db6cf9f4e1d47c916acba4a5a8cef882f8"

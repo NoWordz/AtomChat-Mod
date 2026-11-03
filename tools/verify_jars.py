@@ -246,8 +246,8 @@ def verify_consumer(project):
                 meta = json.loads(archive.read('fabric.mod.json'))
                 registered = {j['file'] for j in meta.get('jars', [])}
                 valid = (meta.get('environment') == '*' and
-                         meta.get('suggests', {}).get('atomlib') == '='+required and
-                         meta.get('custom', {}).get('atomlib:client-required') == required and
+                         meta.get('suggests', {}).get('atomlib') == '*' and
+                         meta.get('custom', {}).get('atomlib:client-required') == '*' and
                          'atomlib' not in meta.get('depends', {}) and
                          'com/atom/chat/compat/AtomLibDependencyCheck.class' in names and
                          b'AtomLibDependencyCheck' in archive.read('com/atom/chat/AtomChatClient.class'))
@@ -259,12 +259,12 @@ def verify_consumer(project):
                 meta = tomllib.loads(archive.read('META-INF/neoforge.mods.toml' if neo else 'META-INF/mods.toml').decode('utf-8'))
                 deps = [d for d in meta.get('dependencies', {}).get('atomchat', []) if d.get('modId') == 'atomlib']
                 valid = (len(deps) == 1 and deps[0].get('side') == 'CLIENT' and
-                         deps[0].get('versionRange') == '['+required+']' and
+                         deps[0].get('versionRange') == ('*' if neo else '') and
                          (deps[0].get('type') == 'required' if neo else deps[0].get('mandatory') is True))
             check(f'{project}: all nested jars registered', registered == nested)
             check(f'{project}: client-scoped AtomLib dependency', valid)
             identity = properties(archive.read('atomchat-atomlib.properties').decode('utf-8'))
-            check(f'{project}: runtime requirement agrees with lock', identity.get('version') == required)
+            check(f'{project}: compiled AtomLib input agrees with lock', identity.get('version') == required)
     except (OSError, ValueError, KeyError, TypeError, zipfile.BadZipFile) as error:
         check(f'{project}: valid consumer archive', False, str(error))
 

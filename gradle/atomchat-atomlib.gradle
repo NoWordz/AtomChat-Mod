@@ -6,7 +6,8 @@ def target = projectDir.name
 def definition = lock.targets[target]
 if (definition == null) throw new GradleException("No AtomLib input for ${target}")
 ext.atomlibVersion = lock.version.toString()
-ext.atomlibVersionRange = lock.compatibility_range.toString()
+// Forge uses the empty string for any version; NeoForge uses '*'.
+ext.atomlibVersionRange = target.endsWith('-forge') ? '' : lock.compatibility_range.toString()
 def coordinate = "${lock.group}:${definition.artifact}:${lock.version}".toString()
 def repositoryPath = providers.gradleProperty('atomlibMavenRepo').orElse(providers.environmentVariable('ATOMLIB_MAVEN_REPO'))
 if (!repositoryPath.isPresent()) {
