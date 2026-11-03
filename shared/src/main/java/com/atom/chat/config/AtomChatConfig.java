@@ -61,6 +61,15 @@ public class AtomChatConfig {
         Design.rippleSink(ClickRipples::region);
     }
 
+    /** Whether AtomChat replaces the vanilla chat screen. */
+    public boolean enabled = true;
+    /** Multiplier for the panel's existing Kawase sampling offsets. */
+    public float blurStrength = 1.0F;
+
+    public float effectiveBlurStrength() {
+        return Float.isFinite(blurStrength) ? Math.max(0.25F, Math.min(2.0F, blurStrength)) : 1.0F;
+    }
+
     public float panelWidth = 480.0F;
     /** Local layout preferences, independent of appearance presets. */
     public boolean halfScreenMode = false;

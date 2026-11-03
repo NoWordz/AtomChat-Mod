@@ -117,6 +117,7 @@ public final class NotificationController {
     }
 
     private static void fire(NotificationBanner.Type type, ChatMessage message) {
+        if (!com.atom.chat.config.AtomChatConfig.get().enabled) return;
         if (message == null || message.isOwn()) {
             debug("fire skipped type=" + type + " message=" + (message == null ? "null" : "own"));
             return;

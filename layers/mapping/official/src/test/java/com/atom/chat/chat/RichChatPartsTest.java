@@ -12,6 +12,18 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class RichChatPartsTest {
     @Test
+    void fallbackBodyPreservesInteractionWhenSenderCannotBeSliced() {
+        var line = Component.literal("Notice: ").append(Component.literal("Accept").setStyle(
+                Style.EMPTY.withColor(0x00ff00).withUnderlined(true)
+                        .withClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/accept"))));
+        var body = ChatPipeline.preserveRichBody(line, "Accept");
+        assertEquals("Accept", body.getString());
+        assertEquals(0x00ff00, body.runs().get(0).style().getColor().getValue());
+        assertTrue(body.runs().get(0).style().isUnderlined());
+        assertEquals("/accept", body.runs().get(0).style().getClickEvent().getValue());
+        assertEquals("Ali", ChatPipeline.preserveRichBody(Component.literal("Ali < Alice"), "Ali").getString());
+    }
+    @Test
     void slicesDecoratedLine() {
         Component line = Component.literal("[萌新]player>>谁能给我钻石？")
                 .setStyle(Style.EMPTY.withClickEvent(new ClickEvent(ClickEvent.Action.SUGGEST_COMMAND, "/msg player ")));

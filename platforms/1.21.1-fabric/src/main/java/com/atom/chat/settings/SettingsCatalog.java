@@ -62,6 +62,8 @@ public final class SettingsCatalog {
                             () -> AtomChatConfig.get().animationEnabled,
                             v -> AtomChatConfig.get().animationEnabled = v));
             case CHAT -> List.of(
+                    new SettingsItem("enabled", "atomchat.settings.chat.enabled", "atomchat.settings.chat.enabled.desc",
+                            () -> AtomChatConfig.get().enabled, v -> AtomChatConfig.get().enabled = v),
                     new SettingsItem("close_after_send",
                             "atomchat.settings.chat.close_after_send",
                             "atomchat.settings.chat.close_after_send.desc",
@@ -171,6 +173,9 @@ public final class SettingsCatalog {
     private static List<SettingsSlider> buildSliders(SettingsSection section) {
         return switch (section) {
             case APPEARANCE -> List.of(
+                    new SettingsSlider("blur_strength", "atomchat.settings.appearance.blur_strength",
+                            0.25F, 2.0F, 0.05F, () -> AtomChatConfig.get().effectiveBlurStrength(),
+                            v -> AtomChatConfig.get().blurStrength = v, v -> Math.round(v * 100.0F) + "%"),
                     new SettingsSlider("opacity",
                             "atomchat.settings.appearance.opacity",
                             0.30F, 1.00F, 0.05F,

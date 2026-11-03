@@ -1,4 +1,7 @@
 {
+  "atomchat.settings.chat.enabled": "Enable AtomChat",
+  "atomchat.settings.chat.enabled.desc": "Use vanilla chat when off. Press the AtomChat key to re-enable (default Y).",
+  "atomchat.settings.appearance.blur_strength": "Blur strength",
   "atomchat.input.image_too_large": "Image exceeds the 16 MiB file limit. Choose a smaller image.",
   "atomchat.input.image_too_many_pixels": "Image exceeds 32 million pixels. Reduce its dimensions.",
   "atomchat.input.image_invalid": "Invalid or incomplete image. Use PNG, JPEG, GIF, WebP or BMP.",

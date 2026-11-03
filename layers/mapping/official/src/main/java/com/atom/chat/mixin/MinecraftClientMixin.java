@@ -16,7 +16,7 @@ public class MinecraftClientMixin {
         // 原生库不在就不接管这一下：cancel 掉等于连原版聊天都不给开。
         // 面板在这个平台上开不了 —— Skija 的失败落在原生层，开出来是必崩而不是难看 ——
         // 而"失败得干净"的意思正是原版照常。
-        if (!SkiaSupport.available()) {
+        if (!com.atom.chat.config.AtomChatConfig.get().enabled || !SkiaSupport.available()) {
             return;
         }
         Minecraft client = (Minecraft) (Object) this;

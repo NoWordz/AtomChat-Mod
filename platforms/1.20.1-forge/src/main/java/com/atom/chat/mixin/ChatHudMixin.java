@@ -107,6 +107,10 @@ public class ChatHudMixin {
         if (atomchat$reposting) {
             return;
         }
+        if (!AtomChatConfig.get().enabled) {
+            MessageCapture.consume();
+            return;
+        }
 
         // Store the original message first; the vanilla HUD copy is rewritten
         // below only after capture has already decided what belongs in ChatStore.
@@ -254,7 +258,7 @@ public class ChatHudMixin {
             } else {
                 RichText richContent = quote != null
                         ? ChatPipeline.quoteBodyRich(RichText.of(message), body)
-                        : RichText.literal(body).linkifyUrls();
+                        : ChatPipeline.preserveRichBody(message, body);
                 atomchat$addPublic(new ChatMessage(message, ownIdentity, parsed.system(),
                         quote != null ? quote.quoteName() : null,
                         quote != null ? quote.quoteText() : null,
@@ -318,7 +322,7 @@ public class ChatHudMixin {
                 contentRich = sliced.get().content().linkifyUrls();
             } else {
                 senderRich = RichText.empty();
-                contentRich = RichText.literal(content);
+                contentRich = ChatPipeline.preserveRichBody(message, content);
             }
             SeenPlayers.remember(meta.senderUuid(),
                     meta.profileName() != null ? meta.profileName() : displayName, displayName);

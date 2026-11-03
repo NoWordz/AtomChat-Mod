@@ -57,6 +57,10 @@ public final class ChatClassifier {
      * the tolerant text fallback.
      */
     public static Route classifyByKey(Text message) {
+        return classifyByKey(message, true);
+    }
+
+    private static Route classifyByKey(Text message, boolean root) {
         if (message.getContent() instanceof net.minecraft.text.TranslatableTextContent tc) {
             String key = tc.getKey();
             if (isPlayerKey(key)) {
@@ -68,12 +72,15 @@ public final class ChatClassifier {
             if (isSystemKey(key)) {
                 return Route.SYSTEM;
             }
+            // A translated notice is not proof of a player message. Known
+            // player/private wrappers are handled before this fallback.
+            if (root) return Route.SYSTEM;
         }
         // FTB wraps its notifications in a literal team/sender prefix. Inspect
         // siblings only after known player/private keys have claimed the line:
         // a player quoting a translated notice is still player chat.
         for (Text sibling : message.getSiblings()) {
-            if (classifyByKey(sibling) == Route.SYSTEM) return Route.SYSTEM;
+            if (classifyByKey(sibling, false) == Route.SYSTEM) return Route.SYSTEM;
         }
         return Route.UNKNOWN;
     }

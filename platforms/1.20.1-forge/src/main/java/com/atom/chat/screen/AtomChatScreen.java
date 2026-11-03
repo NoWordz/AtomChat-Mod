@@ -1931,6 +1931,10 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
 
     @Override
     public void render(GuiGraphics context, int mouseX, int mouseY, float delta) {
+        if (!AtomChatConfig.get().enabled) {
+            this.client.setScreen(null);
+            return;
+        }
         // Panel progress on the exponential clock (same family as the page
         // nav): expApproach clamps dt to 50ms internally and snaps exactly to
         // the target, so the equality below is the settle test — with
@@ -1979,7 +1983,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
                     blurDrawnThisFrame = PanelBlurRenderer.render(
                             context.pose().last().pose(),
                             capture.x(), capture.y(), capture.w(), capture.h(), capture.radius(),
-                            panelProgress);
+                            panelProgress, AtomChatConfig.get().effectiveBlurStrength());
                 } catch (Throwable t) {
                     // One line, one stack trace, then the breaker: isAvailable()
                     // goes false, so the pre-pass is not even built on the next

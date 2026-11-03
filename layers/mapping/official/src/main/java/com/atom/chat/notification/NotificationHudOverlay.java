@@ -16,6 +16,7 @@ public final class NotificationHudOverlay {
     private static boolean failed;
     private NotificationHudOverlay() { }
     public static void render(GuiGraphics gui) {
+        if (!com.atom.chat.config.AtomChatConfig.get().enabled) return;
         NotificationBanner.INSTANCE.tick();
         // Under Gnetum the HUD layer pipeline is re-routed into its own
         // multi-pass cache; keep this layer on its uncached path so the

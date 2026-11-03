@@ -23,6 +23,27 @@ public final class ChatPipeline {
     private ChatPipeline() {
     }
 
+    /** Preserve the wire styles if the usual sender/body split cannot be proven. */
+    public static RichText preserveRichBody(Component line, String body) {
+        RichText rich = RichText.of(line);
+        String text = rich.getString();
+        if (body != null && !body.isEmpty()) {
+            int start = text.indexOf(body);
+            if (start >= 0 && start == text.lastIndexOf(body)) {
+                return rich.slice(start, start + body.length()).linkifyUrls();
+            }
+            // Template formats can put the body before the name. An anchored
+            // body is unambiguous even when its text is also inside that name.
+            if (text.startsWith(body) && !text.endsWith(body)) {
+                return rich.slice(0, body.length()).linkifyUrls();
+            }
+            if (text.endsWith(body) && !text.startsWith(body)) {
+                return rich.slice(text.length() - body.length(), text.length()).linkifyUrls();
+            }
+        }
+        return rich.linkifyUrls();
+    }
+
     /** Direct HUD producers (including Quark) retain structured sender/body arguments. */
     public static SenderMeta structuredPlayerLine(Component message) {
         if (!(message.getContents() instanceof net.minecraft.network.chat.contents.TranslatableContents translated)) return null;

@@ -10,6 +10,17 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ChatClassifierTest {
     @Test
+    void translatedModNoticesStaySystemEvenWhenTheyContainPlayerNames() {
+        var notice = Component.translatable("example.notice.invitation", "Alice")
+                .append(Component.literal("Accept").withStyle(s -> s.withUnderlined(true)
+                        .withClickEvent(new net.minecraft.network.chat.ClickEvent(
+                                net.minecraft.network.chat.ClickEvent.Action.RUN_COMMAND, "/accept"))));
+        assertEquals(Route.SYSTEM, ChatClassifier.classifyByKey(notice));
+        assertEquals(Route.PLAYER, ChatClassifier.classifyByKey(Component.translatable("chat.type.text", "Alice", notice)));
+        assertEquals(Route.UNKNOWN, ChatClassifier.classifyByKey(Component.literal("<Alice> ")
+                .append(Component.translatable("item.example.sword"))));
+    }
+    @Test
     void wrappedTeamNotificationsRemainSystemWhileRealTeamChatRemainsPlayer() {
         Component notice = Component.literal("<Alice @Friends> ")
                 .append(Component.translatable("ftbteams.message.joined", "Bob"));

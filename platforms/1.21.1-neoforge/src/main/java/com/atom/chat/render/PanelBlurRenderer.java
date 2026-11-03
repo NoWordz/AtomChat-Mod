@@ -90,6 +90,10 @@ public final class PanelBlurRenderer {
      * @return true only if the rounded blur quad was actually submitted
      */
     public static boolean render(Matrix4f pose, float x, float y, float width, float height, float radius, float alpha) {
+        return render(pose, x, y, width, height, radius, alpha, 1.0F);
+    }
+
+    public static boolean render(Matrix4f pose, float x, float y, float width, float height, float radius, float alpha, float strength) {
         if (alpha <= 0.003F || width <= 0.0F || height <= 0.0F) {
             return false;
         }
@@ -124,7 +128,7 @@ public final class PanelBlurRenderer {
 
         try {
             ensureTextures(pw, ph);
-            int blurTex = refreshBlur(fb.frameBufferId, fb.height, px, py, pw, ph);
+            int blurTex = refreshBlur(fb.frameBufferId, fb.height, px, py, pw, ph, strength);
             if (blurTex == -1) {
                 return false;
             }
@@ -326,7 +330,7 @@ public final class PanelBlurRenderer {
                 GL30.GL_COLOR_BUFFER_BIT, GL30.GL_LINEAR);
     }
 
-    private static int refreshBlur(int mainFbo, int fbHeight, int x, int y, int w, int h) {
+    private static int refreshBlur(int mainFbo, int fbHeight, int x, int y, int w, int h, float strength) {
         int y2 = Math.min(y + h, fbHeight);
         if (y2 <= y) {
             return lastBlurTex;
@@ -354,7 +358,7 @@ public final class PanelBlurRenderer {
             int srcTex = inputTex;
             for (int i = 0; i < KAWASE_PASSES; i++) {
                 int dstFbo = (i % 2 == 0) ? tempFbo : resultFbo;
-                kawasePass(dstFbo, srcTex, w, h, 2.0F + i * 1.5F);
+                kawasePass(dstFbo, srcTex, w, h, (2.0F + i * 1.5F) * strength);
                 srcTex = (i % 2 == 0) ? tempTex : resultTex;
             }
             lastBlurTex = (KAWASE_PASSES % 2 == 0) ? resultTex : tempTex;

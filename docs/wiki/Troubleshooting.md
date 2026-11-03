@@ -24,6 +24,8 @@ Grey means the client cannot tell whether that line is a player message, so it p
 
 The remedy is to describe the format by hand in `config/atomchat/atomchat-client.json` — `chatTemplates` for public chat and `whisperTemplates` for private chat, with the placeholders `{name}` `{display_name}` `{prefix}` `{suffix}` `{sep}` `{content}` (`{content}` must appear exactly once). **Reopen the chat screen** after editing; no game restart needed.
 
+Messages with an unknown translation key at the root are treated as system notices to preserve their styles and interactions. Public-chat templates do not override this rule, so player chat sent with a custom root translation key may also appear as a system message.
+
 ## Images
 
 An image that will not show, an old image gone broken, a failed upload → see the troubleshooting table in [Media and Transfers](Media-and-Transfers).

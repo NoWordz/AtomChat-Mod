@@ -1,4 +1,7 @@
 {
+  "atomchat.settings.chat.enabled": "启用 AtomChat",
+  "atomchat.settings.chat.enabled.desc": "关闭后使用原版聊天框，可用 AtomChat 快捷键重新启用（默认为 Y）。",
+  "atomchat.settings.appearance.blur_strength": "模糊强度",
   "atomchat.input.image_too_large": "图片超过 16 MiB 文件上限，请选择更小的图片。",
   "atomchat.input.image_too_many_pixels": "图片超过 3200 万像素，请缩小图片尺寸。",
   "atomchat.input.image_invalid": "图片无效或不完整，请使用 PNG、JPEG、GIF、WebP 或 BMP。",

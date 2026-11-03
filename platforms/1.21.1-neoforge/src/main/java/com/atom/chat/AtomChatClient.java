@@ -154,6 +154,10 @@ public class AtomChatClient {
             // try/catch 拦不住）。键位照旧注册，按下去只是什么都不发生 —— 原因在启动时
             // 由 SkiaSupport 写进日志了。
             if (client.screen == null && com.atom.chat.render.SkiaSupport.available()) {
+                if (!com.atom.chat.config.AtomChatConfig.get().enabled) {
+                    com.atom.chat.config.AtomChatConfig.get().enabled = true;
+                    com.atom.chat.config.AtomChatConfig.save(com.atom.chat.config.AtomChatConfig.get());
+                }
                 client.setScreen(new AtomChatScreen("", AtomChatScreen.AtomChatOpenMode.RESTORE));
             }
         }

@@ -918,7 +918,7 @@ public final class SettingsSectionPage {
             default -> {
                 addGroup(rows, "atomchat.settings.group.chat.input", () ->
                         addSwitches(rows, SettingsSection.CHAT,
-                                "close_after_send", "retain_draft_on_close"));
+                                "enabled", "close_after_send", "retain_draft_on_close"));
                 addGroup(rows, "atomchat.settings.group.chat.messages_display", () -> {
                     rows.add(Row.ofAction(ACTION_AVATAR_STYLE, avatarStyleItem()));
                     addSwitches(rows, SettingsSection.CHAT,
@@ -939,8 +939,10 @@ public final class SettingsSectionPage {
         List<Row> rows = new ArrayList<>();
         switch (chip == null ? "theme" : chip) {
             case "display" -> {
-                addGroup(rows, "atomchat.settings.group.appearance.effects", () ->
-                        addSwitches(rows, SettingsSection.APPEARANCE, "blur", "outline"));
+                addGroup(rows, "atomchat.settings.group.appearance.effects", () -> {
+                    addSwitches(rows, SettingsSection.APPEARANCE, "blur", "outline");
+                    addSliders(rows, SettingsSection.APPEARANCE, "blur_strength");
+                });
                 addGroup(rows, "atomchat.settings.group.appearance.motion", () -> {
                     addSwitches(rows, SettingsSection.APPEARANCE, "motion");
                     rows.add(Row.ofAction(ACTION_PAGE_NAV_STYLE, pageNavStyleItem()));
