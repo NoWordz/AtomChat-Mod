@@ -62,16 +62,18 @@ class AtomLibApiPreflightTest {
         }
     }
 
-    private static void require(IsolatedLoader loader, String version) throws Throwable {
+    private static void checkApi(IsolatedLoader loader, String version) throws Throwable {
         try {
-            loader.loadClass(CHECK).getMethod("require", String.class).invoke(null, version);
+            var method = loader.loadClass(CHECK).getDeclaredMethod("checkApi", String.class);
+            method.setAccessible(true);
+            method.invoke(null, version);
         } catch (InvocationTargetException error) {
             throw error.getCause();
         }
     }
 
     @Test void absentRequiredClassProducesAnExplicitDiagnostic() {
-        var error = assertThrows(IllegalStateException.class, () -> require(new IsolatedLoader(true, null), "2.0.0"));
+        var error = assertThrows(IllegalStateException.class, () -> checkApi(new IsolatedLoader(true, null), "2.0.0"));
         assertTrue(error.getMessage().contains(CROP), error.getMessage());
         assertTrue(error.getMessage().contains("2.0.0"), error.getMessage());
     }
@@ -83,7 +85,7 @@ class AtomLibApiPreflightTest {
                 + "public static float baseScale(float a,float b,float c,float d) {return 1;} }");
         assertEquals(0, ToolProvider.getSystemJavaCompiler().run(null, null, null, "-d", temporary.toString(), source.toString()));
         byte[] replacement = Files.readAllBytes(temporary.resolve("com/atom/lib/geometry/CropMath.class"));
-        var error = assertThrows(IllegalStateException.class, () -> require(new IsolatedLoader(false, replacement), "2.0.0"));
+        var error = assertThrows(IllegalStateException.class, () -> checkApi(new IsolatedLoader(false, replacement), "2.0.0"));
         assertTrue(error.getMessage().contains("clampScale"), error.getMessage());
         assertTrue(error.getMessage().contains(CROP), error.getMessage());
     }
@@ -95,7 +97,7 @@ class AtomLibApiPreflightTest {
                 + "public float baseScale(float a,float b,float c,float d) {return 1;} }");
         assertEquals(0, ToolProvider.getSystemJavaCompiler().run(null, null, null, "-d", temporary.toString(), source.toString()));
         byte[] replacement = Files.readAllBytes(temporary.resolve("com/atom/lib/geometry/CropMath.class"));
-        var error = assertThrows(IllegalStateException.class, () -> require(new IsolatedLoader(false, replacement), "2.0.0"));
+        var error = assertThrows(IllegalStateException.class, () -> checkApi(new IsolatedLoader(false, replacement), "2.0.0"));
         assertTrue(error.getMessage().contains("baseScale"), error.getMessage());
     }
 
@@ -111,7 +113,7 @@ class AtomLibApiPreflightTest {
                 + "public static float[] visibleRect(float a,float b,float c,float d,float e,float f,float g,float h,float i){return null;} }");
         assertEquals(0, ToolProvider.getSystemJavaCompiler().run(null, null, null, "-d", temporary.toString(), source.toString()));
         byte[] replacement = Files.readAllBytes(temporary.resolve("com/atom/lib/geometry/CropMath.class"));
-        assertDoesNotThrow(() -> require(new IsolatedLoader(false, replacement), "2.0.0"));
+        assertDoesNotThrow(() -> checkApi(new IsolatedLoader(false, replacement), "2.0.0"));
     }
 
     @Test void loadingTheCheckerDoesNotLoadClientLibraryClasses() throws Exception {
@@ -122,7 +124,7 @@ class AtomLibApiPreflightTest {
 
     @Test void actualPinnedLibraryPassesWithDifferentVersionLabels() {
         for (String version : new String[]{"0.1.0-beta", "0.2.0", "2.0.0"}) {
-            assertDoesNotThrow(() -> require(new IsolatedLoader(false, null), version));
+            assertDoesNotThrow(() -> checkApi(new IsolatedLoader(false, null), version));
         }
     }
 
@@ -130,7 +132,7 @@ class AtomLibApiPreflightTest {
         String jar = System.getProperty("atomchat.test.alternateAtomLibJar");
         Assumptions.assumeTrue(jar != null && !jar.isBlank(), "alternate jar not supplied");
         try (IsolatedLoader loader = new IsolatedLoader(false, null, new URL[]{Path.of(jar).toUri().toURL()})) {
-            assertDoesNotThrow(() -> require(loader, "0.2.0"));
+            assertDoesNotThrow(() -> checkApi(loader, "0.2.0"));
         }
     }
 

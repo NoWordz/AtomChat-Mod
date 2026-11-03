@@ -1,5 +1,11 @@
 # AtomChat 当前状态
 
+## AtomChat 0.5.0 三实例候选（2026-11-03）
+
+`3af3412b` 已推送，0.5.0 三端已替换到 Forge 1.20.1-main、Fabric 1.21.1-CCB、NeoForge Mechanomania-航空学，继续配对各端 AtomLib 0.3.0；部署前 0.4.0 旧包与哈希记录在 `D:/AtomChat-Backups/2026-11-03-atomchat-050/20261103-172920-374156/deployment.json`。部署包来自提交前的隔离源码构建，构建戳不等同于干净提交构建。
+
+三端离线全量测试分别 1610、1625、1610 项，各跳过 4 项，制品检查通过；未启动游戏。推送后云构建的 Linux 系统使接口预检测试先命中 Windows 平台守卫，已将 API 测试与平台测试隔离，并在 Windows JVM 模拟 Linux 属性复现和修复；Forge 云端另遇 ForgeGradle 插件解析失败。修复后的远端构建结论以 Actions 为准。
+
 ## AtomLib 0.3.0 三实例配对候选（2026-11-03）
 
 本地 AtomChat 0.4.0 候选与 AtomLib 0.3.0 已分别部署到 Forge 1.20.1-main、Fabric 1.21.1-CCB 和 NeoForge Mechanomania-航空学。旧包及部署哈希见 `D:/AtomChat-Backups/2026-11-03-atomlib-030/20261103-170157-794/deployment.json`；Forge 之前没有可见的 AtomLib JAR，本次补装。
