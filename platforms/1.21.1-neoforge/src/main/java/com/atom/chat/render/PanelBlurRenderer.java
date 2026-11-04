@@ -269,6 +269,7 @@ public final class PanelBlurRenderer {
         }
         destroyTextures();
         recreated = true;
+        com.atom.chat.diagnostics.FrameSegments.count(com.atom.chat.diagnostics.FrameSegments.Counter.BLUR_RESOURCE);
         texW = w;
         texH = h;
 

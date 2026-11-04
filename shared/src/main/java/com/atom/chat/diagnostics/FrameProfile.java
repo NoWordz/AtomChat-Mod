@@ -73,6 +73,10 @@ public final class FrameProfile {
     /** Labels the actual state before drawing; no query, message or player data is recorded. */
     public static void surface(Surface value) { if (enabled) surface = value; }
 
+    /** Preserve the outer panel label while a nested, unsampled panel draws. */
+    public static Surface currentSurface() { return surface; }
+    public static void restoreSurface(Surface value) { surface = value; }
+
     @jdk.jfr.Name("com.atomchat.UiFrame")
     @jdk.jfr.Label("AtomChat UI frame")
     @jdk.jfr.Category("AtomChat")

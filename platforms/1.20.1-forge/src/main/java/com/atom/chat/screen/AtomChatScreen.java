@@ -2001,9 +2001,15 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         // No super.render: ChatScreen/Screen would draw the vanilla input box and
         // widget chrome; our UI is fully Skia-drawn, the suggestor renders explicitly.
         Runnable blurPreUi = preUi;
-        graphics.draw(() -> {
-            if (blurPreUi != null) blurPreUi.run();
-            com.atom.chat.render.ItemIconRenderer.prepare(context, graphics);
+        graphics.drawPanel(() -> {
+            long segmentId = com.atom.chat.diagnostics.FrameSegments.current();
+            if (blurPreUi != null) {
+                long started = com.atom.chat.diagnostics.FrameSegments.start(segmentId);
+                try { blurPreUi.run(); } finally { com.atom.chat.diagnostics.FrameSegments.end(segmentId, com.atom.chat.diagnostics.FrameSegments.Stage.BLUR, started); }
+            }
+            long started = com.atom.chat.diagnostics.FrameSegments.start(segmentId);
+            try { com.atom.chat.render.ItemIconRenderer.prepare(context, graphics); }
+            finally { com.atom.chat.diagnostics.FrameSegments.end(segmentId, com.atom.chat.diagnostics.FrameSegments.Stage.ICONS, started); }
         }, uiDensity(), (canvas, worldSnapshot) -> {
             drawPhone(canvas, worldSnapshot, mouseX, mouseY, delta);
             chatEffects.renderExperimental(graphics.requireSurface());
@@ -2606,8 +2612,12 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
                 layout.inputBar.h(), UiTokens.shellChromeRadius());
         com.atom.chat.render.DotTexture.drawEdge(canvas, layout.inputBar, UiTokens.shellChromeRadius(), true,
                 AtomChatConfig.get().textSecondaryColor);
-        messageListView.draw(canvas, layout.list.x(), layout.list.y(), layout.list.w(), layout.list.h(),
-                messages, view.scroll());
+        long listSegmentId = com.atom.chat.diagnostics.FrameSegments.current();
+        long listStarted = com.atom.chat.diagnostics.FrameSegments.start(listSegmentId);
+        try {
+            messageListView.draw(canvas, layout.list.x(), layout.list.y(), layout.list.w(), layout.list.h(),
+                    messages, view.scroll());
+        } finally { com.atom.chat.diagnostics.FrameSegments.end(listSegmentId, com.atom.chat.diagnostics.FrameSegments.Stage.LIST, listStarted); }
         CanvasLeakWatch.probe("messageListView.draw", probeBefore, canvas);
         applyLoadEarlierRequest(page, messages, window, layout.list, view.scroll());
 

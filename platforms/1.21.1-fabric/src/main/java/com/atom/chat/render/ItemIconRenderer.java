@@ -140,6 +140,7 @@ public final class ItemIconRenderer {
         if (info == null) return;
         try {
             Image image = CACHE.request(info);
+            if (image == null) com.atom.chat.diagnostics.FrameSegments.count(com.atom.chat.diagnostics.FrameSegments.Counter.ICON_COLD);
             if (image != null) canvas.drawImageRect(image, Rect.makeXYWH(x, y, size, size));
         } catch (RuntimeException | LinkageError error) {
             disable(error);
@@ -148,6 +149,7 @@ public final class ItemIconRenderer {
 
     /** Vanilla phase only: render one item into a fresh color texture, keep no Skija handle. */
     private static Prepared drawOffscreen(DrawContext gui, HoverEvent.ItemStackContent info, ItemStack stack) {
+        com.atom.chat.diagnostics.FrameSegments.count(com.atom.chat.diagnostics.FrameSegments.Counter.ICON_RESOURCE);
         int texture = GL11C.glGenTextures();
         int framebuffer = 0;
         int depth = 0;

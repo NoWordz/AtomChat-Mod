@@ -23,11 +23,23 @@ public final class SkiaGraphics {
     public void draw(Runnable preUi, java.util.function.BiConsumer<Canvas, Image> renderer) { draw(preUi, 0.0F, renderer); }
 
     public void draw(Runnable preUi, float density, java.util.function.BiConsumer<Canvas, Image> renderer) {
+        draw(preUi, density, renderer, false);
+    }
+
+    /** Only the chat panel participates in the panel performance profile. */
+    public void drawPanel(Runnable preUi, float density, java.util.function.BiConsumer<Canvas, Image> renderer) {
+        draw(preUi, density, renderer, true);
+    }
+
+    private void draw(Runnable preUi, float density, java.util.function.BiConsumer<Canvas, Image> renderer, boolean panel) {
         RenderSystem.assertOnRenderThread();
         java.util.Objects.requireNonNull(renderer, "renderer");
-        long profileStart = FrameProfile.start();
+        long profileStart = panel ? FrameProfile.start() : 0L;
         long allocatedBefore = profileStart == 0L ? -1L : FrameProfile.allocatedBytes();
         MinecraftRenderBridge bridge = MinecraftRenderBridge.get();
+        long segmentId = com.atom.chat.diagnostics.FrameSegments.begin(profileStart != 0L);
+        FrameProfile.Surface outerSurface = profileStart != 0L && segmentId == 0 ? FrameProfile.currentSurface() : null;
+        boolean segmentSuccess = false;
         try {
             float scale = density > 0.0F ? density
                     : Math.max(1.0F, MinecraftClient.getInstance().getFramebuffer().textureHeight / 1080.0F);
@@ -37,7 +49,10 @@ public final class SkiaGraphics {
             // runs before the pre-pass so a capture rect snapped in there reads
             // the same density the panel is about to be painted at.
             UiPixelSnap.beginFrame(scale);
-            if (preUi != null) bridge.vanillaPass(preUi);
+            if (preUi != null) {
+                long started = com.atom.chat.diagnostics.FrameSegments.start(segmentId);
+                try { bridge.vanillaPass(preUi); } finally { com.atom.chat.diagnostics.FrameSegments.end(segmentId, com.atom.chat.diagnostics.FrameSegments.Stage.PRE_UI, started); }
+            }
             bridge.drawFrame((canvas, frame) -> {
                 borrowedSurface.set(frame.surface());
                 borrowedBackend.set(frame.backendRenderTarget());
@@ -45,7 +60,8 @@ public final class SkiaGraphics {
                 canvas.save();
                 canvas.scale(scale, scale);
                 try {
-                    renderer.accept(canvas, null);
+                    long started = com.atom.chat.diagnostics.FrameSegments.start(segmentId);
+                    try { renderer.accept(canvas, null); } finally { com.atom.chat.diagnostics.FrameSegments.end(segmentId, com.atom.chat.diagnostics.FrameSegments.Stage.DRAW, started); }
                 } finally {
                     int leaked = canvas.getSaveCount() - (base + 1);
                     if (leaked != 0 && com.atom.chat.config.AtomChatConfig.get().debug) {
@@ -59,9 +75,15 @@ public final class SkiaGraphics {
                     canvas.restoreToCount(base);
                 }
             });
-        } finally { borrowedSurface.remove(); borrowedBackend.remove(); }
-        if (FrameProfile.frame(profileStart, allocatedBefore)) {
-            AtomChat.LOGGER.info(com.atom.chat.diagnostics.AtomChatLog.message("render", FrameProfile.summary()));
+            segmentSuccess = true;
+        } finally {
+            borrowedSurface.remove();
+            borrowedBackend.remove();
+            com.atom.chat.diagnostics.FrameSegments.finish(segmentId, segmentSuccess);
+            if (outerSurface != null) FrameProfile.restoreSurface(outerSurface);
+        }
+        if (segmentId != 0 && FrameProfile.frame(profileStart, allocatedBefore)) {
+            AtomChat.LOGGER.info(com.atom.chat.diagnostics.AtomChatLog.message("render", FrameProfile.summary() + com.atom.chat.diagnostics.FrameSegments.summary()));
         }
     }
 

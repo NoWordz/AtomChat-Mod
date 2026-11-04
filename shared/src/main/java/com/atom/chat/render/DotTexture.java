@@ -23,6 +23,7 @@ public final class DotTexture {
     /** The bar's own rounded outline is also the origin of every dot column. */
     public static void drawEdge(Canvas canvas, UiLayout.Rect bar, float radius, boolean above, int tint) {
         if (!visible(bar, tint)) return;
+        long segmentId = com.atom.chat.diagnostics.FrameSegments.current(), started = com.atom.chat.diagnostics.FrameSegments.start(segmentId);
         float r = Math.max(0F, Math.min(radius, Math.min(bar.w(), bar.h()) / 2F));
         float depth = UiTokens.MESSAGE_DOT_DEPTH;
         RRect outline = RRect.makeXYWH(bar.x(), bar.y(), bar.w(), bar.h(), r);
@@ -49,6 +50,7 @@ public final class DotTexture {
             }
         } finally {
             canvas.restore();
+            com.atom.chat.diagnostics.FrameSegments.end(segmentId, com.atom.chat.diagnostics.FrameSegments.Stage.DOTS, started);
         }
     }
 
@@ -76,6 +78,7 @@ public final class DotTexture {
 
     private static void drawField(Canvas canvas, UiLayout.Rect box, int tint, boolean trail) {
         if (!visible(box, tint)) return;
+        long segmentId = com.atom.chat.diagnostics.FrameSegments.current(), started = com.atom.chat.diagnostics.FrameSegments.start(segmentId);
         canvas.save();
         try {
             canvas.clipRect(Rect.makeXYWH(box.x(), box.y(), box.w(), box.h()));
@@ -102,6 +105,7 @@ public final class DotTexture {
             }
         } finally {
             canvas.restore();
+            com.atom.chat.diagnostics.FrameSegments.end(segmentId, com.atom.chat.diagnostics.FrameSegments.Stage.DOTS, started);
         }
     }
 
