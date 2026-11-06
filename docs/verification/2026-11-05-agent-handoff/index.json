@@ -1,0 +1,18 @@
+[
+  {
+    "name": "euler",
+    "agent": "01a1aa0b-82d8-7d83-9c66-c6afba8c8d56",
+    "source": "C:\\Users\\NIUQU\\.codex\\sessions\\2026\\11\\05\\rollout-2026-11-05T12-50-43-01a1aa0b-82d8-7d83-9c66-c6afba8c8d56.jsonl",
+    "messages": "D:\\AtomChat-Main\\docs\\verification\\2026-11-05-agent-handoff\\euler-conversation.md",
+    "messageCount": 45,
+    "sourceBytes": 14406976
+  },
+  {
+    "name": "muonium-research",
+    "agent": "01a1aa50-c80d-7af0-8ba1-829f98fe1848",
+    "source": "C:\\Users\\NIUQU\\.codex\\sessions\\2026\\11\\05\\rollout-2026-11-05T14-06-23-01a1aa50-c80d-7af0-8ba1-829f98fe1848.jsonl",
+    "messages": "D:\\AtomChat-Main\\docs\\verification\\2026-11-05-agent-handoff\\muonium-research-conversation.md",
+    "messageCount": 13,
+    "sourceBytes": 1895890
+  }
+]

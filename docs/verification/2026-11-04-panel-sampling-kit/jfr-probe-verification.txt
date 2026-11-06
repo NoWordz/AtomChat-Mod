@@ -1,0 +1,259 @@
+$ C:/Program Files/Java/jdk-21.0.11/bin/jcmd.exe 43708 JFR.start name=atomchat settings=D:/AtomChat-Main/docs/verification/2026-11-04-panel-sampling-kit/atomchat-panel.jfc
+43708:
+Started recording 1. No limit specified, using maxsize=250MB as default.
+
+Use jcmd 43708 JFR.dump name=atomchat filename=FILEPATH to copy recording data to file.
+[exit=0]
+$ C:/Program Files/Java/jdk-21.0.11/bin/jcmd.exe 43708 JFR.dump name=atomchat filename=D:/AtomChat-Main/build/panel-perf-20261104/samples/probe.jfr
+43708:
+Dumped recording "atomchat", 121.7 kB written to:
+
+D:\AtomChat-Main\build\panel-perf-20261104\samples\probe.jfr
+[exit=0]
+$ C:/Program Files/Java/jdk-21.0.11/bin/jcmd.exe 43708 JFR.stop name=atomchat
+43708:
+Stopped recording "atomchat".
+[exit=0]
+$ C:/Program Files/Java/jdk-21.0.11/bin/jfr.exe print --events com.atomchat.UiFrame D:/AtomChat-Main/build/panel-perf-20261104/samples/probe.jfr
+com.atomchat.UiFrame {
+  startTime = 19:18:47.992 (2026-11-04)
+  frameId = 1
+  surface = "CHAT"
+  renderNanos = 1.00 ms
+  eventThread = "main" (javaThreadId = 1)
+}
+
+com.atomchat.UiFrame {
+  startTime = 19:18:48.093 (2026-11-04)
+  frameId = 2
+  surface = "CHAT"
+  renderNanos = 1.00 ms
+  eventThread = "main" (javaThreadId = 1)
+}
+
+com.atomchat.UiFrame {
+  startTime = 19:18:48.193 (2026-11-04)
+  frameId = 3
+  surface = "CHAT"
+  renderNanos = 1.00 ms
+  eventThread = "main" (javaThreadId = 1)
+}
+
+com.atomchat.UiFrame {
+  startTime = 19:18:48.293 (2026-11-04)
+  frameId = 4
+  surface = "CHAT"
+  renderNanos = 1.00 ms
+  eventThread = "main" (javaThreadId = 1)
+}
+
+com.atomchat.UiFrame {
+  startTime = 19:18:48.394 (2026-11-04)
+  frameId = 5
+  surface = "CHAT"
+  renderNanos = 1.00 ms
+  eventThread = "main" (javaThreadId = 1)
+}
+
+com.atomchat.UiFrame {
+  startTime = 19:18:48.495 (2026-11-04)
+  frameId = 6
+  surface = "CHAT"
+  renderNanos = 1.00 ms
+  eventThread = "main" (javaThreadId = 1)
+}
+
+com.atomchat.UiFrame {
+  startTime = 19:18:48.595 (2026-11-04)
+  frameId = 7
+  surface = "CHAT"
+  renderNanos = 1.00 ms
+  eventThread = "main" (javaThreadId = 1)
+}
+
+com.atomchat.UiFrame {
+  startTime = 19:18:48.695 (2026-11-04)
+  frameId = 8
+  surface = "CHAT"
+  renderNanos = 1.00 ms
+  eventThread = "main" (javaThreadId = 1)
+}
+
+com.atomchat.UiFrame {
+  startTime = 19:18:48.795 (2026-11-04)
+  frameId = 9
+  surface = "CHAT"
+  renderNanos = 1.00 ms
+  eventThread = "main" (javaThreadId = 1)
+}
+
+com.atomchat.UiFrame {
+  startTime = 19:18:48.896 (2026-11-04)
+  frameId = 10
+  surface = "CHAT"
+  renderNanos = 1.00 ms
+  eventThread = "main" (javaThreadId = 1)
+}
+
+com.atomchat.UiFrame {
+  startTime = 19:18:48.996 (2026-11-04)
+  frameId = 11
+  surface = "CHAT"
+  renderNanos = 1.00 ms
+  eventThread = "main" (javaThreadId = 1)
+}
+
+com.atomchat.UiFrame {
+  startTime = 19:18:49.107 (2026-11-04)
+  frameId = 12
+  surface = "CHAT"
+  renderNanos = 1.00 ms
+  eventThread = "main" (javaThreadId = 1)
+}
+
+com.atomchat.UiFrame {
+  startTime = 19:18:49.216 (2026-11-04)
+  frameId = 13
+  surface = "CHAT"
+  renderNanos = 1.00 ms
+  eventThread = "main" (javaThreadId = 1)
+}
+
+com.atomchat.UiFrame {
+  startTime = 19:18:49.325 (2026-11-04)
+  frameId = 14
+  surface = "CHAT"
+  renderNanos = 1.00 ms
+  eventThread = "main" (javaThreadId = 1)
+}
+
+com.atomchat.UiFrame {
+  startTime = 19:18:49.435 (2026-11-04)
+  frameId = 15
+  surface = "CHAT"
+  renderNanos = 1.00 ms
+  eventThread = "main" (javaThreadId = 1)
+}
+
+com.atomchat.UiFrame {
+  startTime = 19:18:49.544 (2026-11-04)
+  frameId = 16
+  surface = "CHAT"
+  renderNanos = 1.00 ms
+  eventThread = "main" (javaThreadId = 1)
+}
+
+com.atomchat.UiFrame {
+  startTime = 19:18:49.653 (2026-11-04)
+  frameId = 17
+  surface = "CHAT"
+  renderNanos = 1.00 ms
+  eventThread = "main" (javaThreadId = 1)
+}
+
+com.atomchat.UiFrame {
+  startTime = 19:18:49.762 (2026-11-04)
+  frameId = 18
+  surface = "CHAT"
+  renderNanos = 1.00 ms
+  eventThread = "main" (javaThreadId = 1)
+}
+
+com.atomchat.UiFrame {
+  startTime = 19:18:49.873 (2026-11-04)
+  frameId = 19
+  surface = "CHAT"
+  renderNanos = 1.00 ms
+  eventThread = "main" (javaThreadId = 1)
+}
+
+com.atomchat.UiFrame {
+  startTime = 19:18:49.982 (2026-11-04)
+  frameId = 20
+  surface = "CHAT"
+  renderNanos = 1.00 ms
+  eventThread = "main" (javaThreadId = 1)
+}
+
+com.atomchat.UiFrame {
+  startTime = 19:18:50.091 (2026-11-04)
+  frameId = 21
+  surface = "CHAT"
+  renderNanos = 1.00 ms
+  eventThread = "main" (javaThreadId = 1)
+}
+
+com.atomchat.UiFrame {
+  startTime = 19:18:50.200 (2026-11-04)
+  frameId = 22
+  surface = "CHAT"
+  renderNanos = 1.00 ms
+  eventThread = "main" (javaThreadId = 1)
+}
+
+com.atomchat.UiFrame {
+  startTime = 19:18:50.310 (2026-11-04)
+  frameId = 23
+  surface = "CHAT"
+  renderNanos = 1.00 ms
+  eventThread = "main" (javaThreadId = 1)
+}
+
+com.atomchat.UiFrame {
+  startTime = 19:18:50.418 (2026-11-04)
+  frameId = 24
+  surface = "CHAT"
+  renderNanos = 1.00 ms
+  eventThread = "main" (javaThreadId = 1)
+}
+
+com.atomchat.UiFrame {
+  startTime = 19:18:50.526 (2026-11-04)
+  frameId = 25
+  surface = "CHAT"
+  renderNanos = 1.00 ms
+  eventThread = "main" (javaThreadId = 1)
+}
+
+com.atomchat.UiFrame {
+  startTime = 19:18:50.635 (2026-11-04)
+  frameId = 26
+  surface = "CHAT"
+  renderNanos = 1.00 ms
+  eventThread = "main" (javaThreadId = 1)
+}
+
+com.atomchat.UiFrame {
+  startTime = 19:18:50.743 (2026-11-04)
+  frameId = 27
+  surface = "CHAT"
+  renderNanos = 1.00 ms
+  eventThread = "main" (javaThreadId = 1)
+}
+
+com.atomchat.UiFrame {
+  startTime = 19:18:50.851 (2026-11-04)
+  frameId = 28
+  surface = "CHAT"
+  renderNanos = 1.00 ms
+  eventThread = "main" (javaThreadId = 1)
+}
+
+com.atomchat.UiFrame {
+  startTime = 19:18:50.961 (2026-11-04)
+  frameId = 29
+  surface = "CHAT"
+  renderNanos = 1.00 ms
+  eventThread = "main" (javaThreadId = 1)
+}
+
+com.atomchat.UiFrame {
+  startTime = 19:18:51.071 (2026-11-04)
+  frameId = 30
+  surface = "CHAT"
+  renderNanos = 1.00 ms
+  eventThread = "main" (javaThreadId = 1)
+}
+[exit=0]
+JFR_FILE_BYTES=124630
+RESULT=PASS

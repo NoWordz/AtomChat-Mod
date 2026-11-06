@@ -1,5 +1,37 @@
 # AtomChat 当前状态
 
+## PBO 冷尖峰与 About 静态层（2026-11-05，已部署待统一验收）
+
+- 个人页首次皮肤读回改为有界 PBO + fence 异步轮询；8 个/96MB、2 秒过期、零等待读取，PENDING 不再写永久失败。隐藏 GL 正常/HD/满载/遗弃队列与状态恢复 8 项通过。
+- About hero 大面积点阵改为 4x 静态 Image，8 条有界 LRU；真实隐藏 GL 同场景 p50 `0.910 -> 0.072ms`，面板样背景最大差 1/255。小区域仍走逐字节一致路径。
+- 真实 GL A/B 同时确认阴影缓存稳定 key=1，但 `0.096ms` 缓存与 `0.097ms` MaskFilter 基本持平；保留 stage5 修复，不把 CPU 光栅收益误报成 GPU/FPS 收益。
+- 三端最终 `build` 全绿；候选包含新 PBO 与 HaloKey class，已备份部署 AtomChat，配对 AtomLib 不变。回执 `build/muonium-followthrough-20261105/deployment-receipt.json`。未启动游戏、提交或发布。
+- 完整会话、七项判定、GPU A/B 与仍未测的 AC 背景 blur GPU 成本见 [Muonium 对照落地](verification/2026-11-05-muonium-followthrough.md)。
+
+## GPU 阴影与关于页续修（2026-11-05，已部署待实机验收）
+
+- 修复关于页“清理图片缓存”每帧重新扫缓存目录；图片缓存大小改为 1 秒展示缓存，并由加载器写入/清理立即刷新。
+- 设置页无参数翻译按资源代缓存，资源重载清空；离屏同页分配下降约 30–44%。
+- AtomLib 卡片阴影改为按尺寸/圆角/blur/颜色预烘焙后贴图；60 个阴影离屏 p50 从 1.154ms 降到 0.138ms，最大像素差 1/255，入场阴影尾影回归通过。
+- 干净三端源码全量测试：Forge 1654、Fabric 1669、NeoForge 1654，失败/错误均 0，各 6 个既有 skip；目标检查和三端产物断言通过。
+- 已备份部署三端 AtomChat 与配对 AtomLib 0.3.1-shadowcache，回执 build/stage5-ac-20261105/deployment-receipt.json。部署前目标实例均未运行；未启动游戏、提交、推送或发布。
+- 当前日志、MuoniumPlayer 对照与剩余 GPU 风险见 [GPU 阴影与关于页性能续修](verification/2026-11-05-gpu-shadow-and-about-performance.md)。
+
+## 设置页文字密集页续修（2026-11-05，已部署待实机验收）
+
+- 抓到设置页 `rowRect`/`rowExpansion` 的重复前缀扫描：80 行旧路径每帧做 `3,240` 次文字块测量，现由线性行几何降为 `80`；同帧 `CompactText` 也按行复用。
+- `wrap`/`wrapWords` 增加有界 LRU；超过塑形缓存上限的文本不再创建每帧无法回收的原生 `TextBlob`。
+- 三端隔离源码全量测试：Forge `1653`、Fabric `1668`、NeoForge `1653`，失败/错误均 `0`，各 `6` 个既有 skip；产物断言和目标检查通过。
+- 已备份并部署三端新包，回执 `build/stage3-ac-20261105/deployment-receipt.json`。目标实例当时均未运行；检查中存在的另一个无关 MC 实例未被替换。未启动目标游戏、未提交、未推送、未发布。
+- 用户日志、MuoniumPlayer 对照、离线基准和剩余 GPU 风险见 [设置页与文字密集页性能审计](verification/2026-11-05-settings-text-performance.md)。
+
+## 面板切页性能续修（2026-11-05，已部署待实机验收）
+
+- 修复 AC 重复文字塑形/二次测量、设置页同帧重复构建行模型、头像名每帧正则；保留页面入场和各卡片 alpha 图层动画。
+- 三端隔离源码构建与全量测试通过：Forge 1651、Fabric 1666、NeoForge 1651，失败/错误均为 0，各 6 个既定诊断 skip；产物级检查通过。
+- 已备份并部署三端 `atomchat-*-v0.5.0.jar` 新包；回执 `build/stage2-ac-20261105/deployment-receipt.json`。未启动游戏、未提交、未推送、未发布。
+- 旧 JFR、分段分析与隐藏 GL A/B 证据见 [切页性能审计](verification/2026-11-05-panel-transition-performance.md)。部署后 CCB 实时窗口随切页从 panel p50/p95 `2.14/3.47ms` 到 `2.49/5.43ms`，聊天帧间隔 p50/p95 保持 `3.32/4.73ms`；max `44.20ms` 冷长尾仍在。首次 PROFILE 皮肤读回和外部 EMF/Sodium/Iris 成本仍是已知边界。
+
 ## AtomChat 0.5.0 三实例候选（2026-11-03）
 
 `3af3412b` 已推送，0.5.0 三端已替换到 Forge 1.20.1-main、Fabric 1.21.1-CCB、NeoForge Mechanomania-航空学，继续配对各端 AtomLib 0.3.0；部署前 0.4.0 旧包与哈希记录在 `D:/AtomChat-Backups/2026-11-03-atomchat-050/20261103-172920-374156/deployment.json`。部署包来自提交前的隔离源码构建，构建戳不等同于干净提交构建。

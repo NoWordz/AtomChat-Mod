@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Explicit JFR settings for AtomChat panel sampling. The JDK "default" and
+  "profile" configurations do NOT enable custom com.atomchat.* events, so a
+  custom settings file with threshold 0 is required. Verified against a test
+  JVM before being handed to the user (see jfr-probe-verification.txt).
+-->
+<configuration version="2.0" label="AtomChat Panel Diagnosis"
+               description="Per-frame panel CPU segments, navigation, screen lifecycle, stacks, file I/O, allocation and GC"
+               provider="AtomChat">
+
+  <event name="com.atomchat.UiFrame">
+    <setting name="enabled">true</setting>
+    <setting name="threshold">0 ns</setting>
+    <setting name="stackTrace">false</setting>
+  </event>
+  <event name="com.atomchat.PanelSegments">
+    <setting name="enabled">true</setting>
+    <setting name="threshold">0 ns</setting>
+    <setting name="stackTrace">false</setting>
+  </event>
+  <event name="com.atomchat.Navigation">
+    <setting name="enabled">true</setting>
+    <setting name="threshold">0 ns</setting>
+    <setting name="stackTrace">false</setting>
+  </event>
+  <event name="com.atomchat.ScreenLifecycle">
+    <setting name="enabled">true</setting>
+    <setting name="threshold">0 ns</setting>
+    <setting name="stackTrace">true</setting>
+  </event>
+
+  <event name="jdk.ExecutionSample">
+    <setting name="enabled">true</setting>
+    <setting name="period">10 ms</setting>
+  </event>
+  <event name="jdk.NativeMethodSample">
+    <setting name="enabled">true</setting>
+    <setting name="period">10 ms</setting>
+  </event>
+  <event name="jdk.FileRead">
+    <setting name="enabled">true</setting>
+    <setting name="threshold">0 ns</setting>
+    <setting name="stackTrace">true</setting>
+  </event>
+  <event name="jdk.FileWrite">
+    <setting name="enabled">true</setting>
+    <setting name="threshold">0 ns</setting>
+    <setting name="stackTrace">true</setting>
+  </event>
+  <event name="jdk.SocketRead">
+    <setting name="enabled">true</setting>
+    <setting name="threshold">10 ms</setting>
+    <setting name="stackTrace">true</setting>
+  </event>
+  <event name="jdk.ObjectAllocationInNewTLAB">
+    <setting name="enabled">true</setting>
+    <setting name="stackTrace">true</setting>
+  </event>
+  <event name="jdk.GarbageCollection">
+    <setting name="enabled">true</setting>
+  </event>
+  <event name="jdk.JavaMonitorEnter">
+    <setting name="enabled">true</setting>
+    <setting name="threshold">10 ms</setting>
+    <setting name="stackTrace">true</setting>
+  </event>
+</configuration>
