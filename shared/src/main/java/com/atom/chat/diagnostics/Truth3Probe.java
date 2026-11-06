@@ -33,6 +33,23 @@ import java.util.Objects;
  * debug=off 时档位恒 A、采样器静默（仍记录、不打印任何实验日志），
  * 因此全新安装 / debug=off / 未按键的产品渲染路径与日志行为逐字节不变。
  *
+ * <p>第二采样入口 {@link #onPumpFrame(long, boolean, String)}（E1 外部尺子）：
+ * 挂在<strong>与当前屏幕无关</strong>的每帧 HUD/界面事件上（三端各注册 1 处），
+ * 供 G0 无屏幕 / G1 原版 ChatScreen / G2 原版 InventoryScreen / G3 AC 面板
+ * <strong>共用同一个采样点</strong>。它拥有自己的环形窗口与计数器，输出独立的
+ * {@code frame_pump} 行，<strong>不读写</strong> {@link #onRenderFrame(long)} 的
+ * 任何状态，因此历史 {@code frame_probe} 数据继续可比。AC 面板打开时两者同时存在，
+ * 可用于交叉校准：HUD 阶段先于 Screen.render，两者的相邻帧间隔分布应几乎相同
+ * （同一帧边界、只差一个固定相位），p50 若明显不同即说明采样点本身有问题。
+ *
+ * <p>E0 仪表标定：{@link #instrumentEnabled(boolean, boolean)} 是
+ * {@code debug && !measureOnly} 的唯一实现，宿主的 FrameProfile / PrepassProbe
+ * 门控都用它；帧探针本身不受 measureOnly 影响。measureOnly 是
+ * <strong>双层语义</strong>：配置字段 {@code diagnosticMeasureOnly} 只提供启动初始值
+ * （{@link #seedMeasureOnly(boolean)} 一次性灌入），之后由 Shift+F6
+ * （{@link #toggleMeasureOnly()}，仅 debug=on）在运行时翻转，不写回配置文件。
+ * 翻转会同时重置 frame_probe 与 frame_pump 两个窗口，保证数据不跨配置混合。
+ *
  * <p>D 档限频是<strong>按单调时间</strong>（{@code System.nanoTime()}，
  * 阈值 {@link #BLUR_CADENCE_NS}）而非按帧数——帧率在 300–400 之间变化，按帧数会漂移。
  * 首次 / 切档进入 D 时 {@code blurReusable=false}，{@link #blurRefreshDue(long)} 强制
@@ -51,8 +68,9 @@ import java.util.Objects;
  *       全部短命）、1 行日志，D 档再多 1 行 blur_cadence + 1 次 String.format；
  *       摊还每帧 ≤ 10 次 long 比较、≤ 0.02 个短命对象量级、1/{@value #REPORT_EVERY} 次日志 I/O；</li>
  *   <li>debug=off 时：无日志 I/O、无格式化、无排序，只有稳态每帧那十余条指令与 0 分配；</li>
- *   <li>内存：环形窗口 {@value #WINDOW}×8 B + 预分配排序缓冲 {@value #WINDOW}×8 B =
- *       固定 16 KiB，D 档额外 5 个 long/int 标量（< 64 B），与运行时长/帧数无关，无界增长为 0。</li>
+ *   <li>内存：每个采样器（render / pump）各 {@value #WINDOW}×8 B 环形窗口 +
+ *       {@value #WINDOW}×8 B 预分配排序缓冲；两者合计固定 32 KiB，D 档额外 5 个
+ *       long/int 标量（< 64 B），与运行时长/帧数无关，无界增长为 0。</li>
  * </ul>
  */
 public final class Truth3Probe {
@@ -80,9 +98,23 @@ public final class Truth3Probe {
             "^\\[AtomChat\\]\\[probe\\] frame_probe mode=([ABCD]) n=([0-9]+) "
             + "p50=([0-9]+\\.[0-9]+) p95=([0-9]+\\.[0-9]+) "
             + "fps_p50=([0-9]+\\.[0-9]+) max=([0-9]+\\.[0-9]+)$";
+    /**
+     * frame_pump 行契约（E1 屏幕无关采样点）。字段形状与 frame_probe 完全一致，
+     * 只换行名，方便两个采样点逐字段交叉校准；mode 取自配置字段（与 frame_probe 同源）。
+     */
+    public static final String PUMP_LINE_RE =
+            "^\\[AtomChat\\]\\[probe\\] frame_pump mode=([ABCD]) n=([0-9]+) "
+            + "p50=([0-9]+\\.[0-9]+) p95=([0-9]+\\.[0-9]+) "
+            + "fps_p50=([0-9]+\\.[0-9]+) max=([0-9]+\\.[0-9]+)$";
     /** mode_switch 行契约（四档循环 A→B→C→D→A）。 */
     public static final String SWITCH_LINE_RE =
             "^\\[AtomChat\\]\\[probe\\] mode_switch from=([ABCD]) to=([ABCD]) t=([0-9]+)$";
+    /**
+     * measure_switch 行契约（Shift+F6 翻转运行时 measureOnly；仅 debug=on）。
+     * 字段：measure_only=翻转后的状态；t=nanoTime 单调时钟（仅供排序/去重）。
+     */
+    public static final String MEASURE_LINE_RE =
+            "^\\[AtomChat\\]\\[probe\\] measure_switch measure_only=(true|false) t=([0-9]+)$";
     /**
      * blur_cadence 行契约（D 档每 {@value #REPORT_EVERY} 帧一行，稳定可解析）。
      * 字段：hz=目标频率标签；n=窗口帧数(=refresh+reuse)；refresh=本窗口刷新帧数；
@@ -108,6 +140,20 @@ public final class Truth3Probe {
     private boolean configured;
     private boolean lastDebug;
     private String lastConfigMode;
+
+    // ---- E0 运行时仪表开关（Shift+F6）：配置字段只做首帧初始值，之后由热键翻转 ----
+    private boolean measureOnly;
+    private boolean measureSeeded;
+
+    // ---- 第二采样入口（frame_pump）自有窗口：与上面的 render 窗口零共享 ----
+    private final long[] pumpSamples = new long[WINDOW];
+    private final long[] pumpSortBuf = new long[WINDOW];
+    private int pumpSize;
+    private int pumpHead;
+    private long pumpLastNanos = -1L;
+    private long pumpSinceReport;
+    private boolean pumpArmed;
+    private Mode pumpMode = Mode.A;
 
     // ---- D 档 30Hz 时序状态（纯 Java，可单测；切档即 resetBlurCadence） ----
     private long lastBlurRefreshNanos = -1L;   // 上次刷新时刻（单调时钟）
@@ -177,6 +223,51 @@ public final class Truth3Probe {
 
     public Mode mode() { return mode; }
     public boolean isDebug() { return debug; }
+
+    /**
+     * E0 仪表标定的唯一门控式：{@code debug && !measureOnly}。
+     *
+     * <p>宿主用它同时关闭 FrameProfile（面板/解码/塑形分桶 + JFR）、FrameSegments
+     * （由 {@code FrameProfile} 的 {@code start()} 返回 0 天然旁路）与 PrepassProbe；
+     * {@code Truth3Probe} 自己的 {@code frame_probe} / {@code frame_pump} 不经过这里，
+     * 因此 measureOnly 下仍然照常出数。纯 Java，无副作用，可单测。
+     *
+     * <p>{@code measureOnly} 参数应当传 {@link #measureOnly()}（运行时状态），
+     * 而不是配置字段 —— 配置字段只是启动时的初始值。
+     */
+    public static boolean instrumentEnabled(boolean debug, boolean measureOnly) {
+        return debug && !measureOnly;
+    }
+
+    /** 运行时 measureOnly 状态（配置字段的首值 + 热键翻转的结果）。 */
+    public boolean measureOnly() { return measureOnly; }
+
+    /**
+     * 把配置字段 {@code diagnosticMeasureOnly} 作为<strong>启动初始值</strong>灌一次；
+     * 之后再调用无效（幂等），因此热键翻转结果不会被每帧/每 tick 的配置读取覆盖。
+     * 本方法不写文件、不改配置对象 —— 双层语义里「配置=初始值，热键=运行时」的接缝。
+     */
+    public void seedMeasureOnly(boolean initial) {
+        if (measureSeeded) return;
+        measureSeeded = true;
+        measureOnly = initial;
+    }
+
+    /**
+     * Shift+F6：仅 debug=on 时翻转运行时 measureOnly，并<strong>同时重置</strong>
+     * frame_probe 与 frame_pump 两个采样窗口（否则窗口跨两种仪表配置混合，
+     * 与切档污染同一个毛病）。返回一行 measure_switch 或 null。
+     *
+     * <p>不写配置文件：这是实验开关，只影响本会话的运行时状态。
+     */
+    public String toggleMeasureOnly() {
+        if (!debug) return null;
+        measureOnly = !measureOnly;
+        resetWindow();      // frame_probe 窗口（含 D 档 cadence 计数）
+        resetPumpWindow();  // frame_pump 窗口
+        return PREFIX + "measure_switch measure_only=" + measureOnly
+                + " t=" + System.nanoTime();
+    }
 
     /**
      * D 档每帧调用（其它档不调用；宿主在构造 preUi 之前按 {@link #blurComposite()} 门控）：
@@ -255,6 +346,61 @@ public final class Truth3Probe {
         return null;
     }
 
+    /**
+     * 第二采样入口（E1 外部尺子）：由宿主挂在<strong>与当前屏幕无关</strong>的
+     * 每帧 HUD/界面事件上，传入该帧的 {@code System.nanoTime()}、本帧 debug 与配置档位。
+     *
+     * <p>与 {@link #onRenderFrame(long)} <strong>零共享状态</strong>：自己的环形窗口、
+     * 排序缓冲与计数器，切档（debug 开关或档位变化）只重置 pump 窗口，绝不触碰
+     * frame_probe 的窗口，因此 AC 面板打开时两条线可同时使用并逐字段交叉校准。
+     *
+     * <p>debug=off 直接返回 null：产品默认下每帧只有一次字段读取与返回，
+     * 不取时钟、不采样、不格式化、不打日志。debug=on 时每 {@value #REPORT_EVERY}
+     * 帧返回一行 {@code frame_pump}。
+     *
+     * @param debug      本帧 {@code config.debug}
+     * @param configMode 本帧 {@code config.diagnosticRenderMode}（与 frame_probe 同源，
+     *                   非法值回退 A；G0/G1/G2 没有 AC 屏幕时也按配置字段报档）
+     */
+    public String onPumpFrame(long nowNanos, boolean debug, String configMode) {
+        if (!debug) {
+            if (pumpArmed) {
+                resetPumpWindow();
+                pumpArmed = false;
+            }
+            return null;
+        }
+        Mode want = parseMode(configMode);
+        if (!pumpArmed || want != pumpMode) {
+            resetPumpWindow();
+            pumpMode = want;
+            pumpArmed = true;
+        }
+        if (pumpLastNanos >= 0L) {
+            long dt = nowNanos - pumpLastNanos;
+            if (dt > 0L && dt < MAX_FRAME_INTERVAL_NS) {
+                pumpSamples[pumpHead] = dt;
+                pumpHead = pumpHead + 1 == WINDOW ? 0 : pumpHead + 1;
+                if (pumpSize < WINDOW) pumpSize++;
+                pumpSinceReport++;
+            }
+        }
+        pumpLastNanos = nowNanos;
+        if (pumpSinceReport >= REPORT_EVERY && pumpSize > 0) {
+            pumpSinceReport = 0;
+            return pumpLine();
+        }
+        return null;
+    }
+
+    /** 只清 pump 窗口；不影响 frame_probe / blur_cadence 的任何状态。 */
+    private void resetPumpWindow() {
+        pumpSize = 0;
+        pumpHead = 0;
+        pumpSinceReport = 0;
+        pumpLastNanos = -1L;
+    }
+
     /** 切档：清空统计窗口并断开上一帧时间戳，保证每档数据不串；同时重置 D 档时序状态。 */
     private void resetWindow() {
         size = 0;
@@ -291,6 +437,33 @@ public final class Truth3Probe {
         double maxMs = max / 1_000_000.0;
         double fps = p50ms > 0.0 ? 1000.0 / p50ms : 0.0;
         return PREFIX + "frame_probe mode=" + mode.name()
+                + " n=" + n
+                + " p50=" + String.format(Locale.ROOT, "%.3f", p50ms)
+                + " p95=" + String.format(Locale.ROOT, "%.3f", p95ms)
+                + " fps_p50=" + String.format(Locale.ROOT, "%.1f", fps)
+                + " max=" + String.format(Locale.ROOT, "%.2f", maxMs);
+    }
+
+    /**
+     * frame_pump 行：与 {@link #frameLine()} 同一算法与字段格式（n 取窗口内最近
+     * {@value #REPORT_EVERY} 个样本），只读 pump 自己的窗口，避免两条线互相污染。
+     */
+    private String pumpLine() {
+        int n = Math.min(REPORT_EVERY, pumpSize);
+        for (int i = 0; i < n; i++) {
+            int idx = pumpHead - 1 - i;
+            while (idx < 0) idx += WINDOW;
+            pumpSortBuf[i] = pumpSamples[idx];
+        }
+        Arrays.sort(pumpSortBuf, 0, n);
+        long p50 = percentile(pumpSortBuf, n, 0.50);
+        long p95 = percentile(pumpSortBuf, n, 0.95);
+        long max = pumpSortBuf[n - 1];
+        double p50ms = p50 / 1_000_000.0;
+        double p95ms = p95 / 1_000_000.0;
+        double maxMs = max / 1_000_000.0;
+        double fps = p50ms > 0.0 ? 1000.0 / p50ms : 0.0;
+        return PREFIX + "frame_pump mode=" + pumpMode.name()
                 + " n=" + n
                 + " p50=" + String.format(Locale.ROOT, "%.3f", p50ms)
                 + " p95=" + String.format(Locale.ROOT, "%.3f", p95ms)

@@ -58,6 +58,13 @@ public class AtomChatClient {
         NeoForge.EVENT_BUS.addListener(AtomChatClient::onPlayerJoin);
         NeoForge.EVENT_BUS.addListener(AtomChatClient::onPlayerDisconnect);
         NeoForge.EVENT_BUS.addListener(AtomChatClient::onClientTick);
+        // E1 外部尺子：与当前屏幕无关的每帧采样点（G0–G3 共用，先于 Screen.render）。
+        NeoForge.EVENT_BUS.addListener(AtomChatClient::onRenderGuiPost);
+    }
+
+    /** RenderGuiEvent.Post 每渲染帧恰好一次（GuiLayerManager.render 末尾）。 */
+    private static void onRenderGuiPost(net.neoforged.neoforge.client.event.RenderGuiEvent.Post event) {
+        com.atom.chat.diagnostics.FramePump.onFrame();
     }
 
 

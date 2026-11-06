@@ -187,6 +187,19 @@ public class AtomChatConfig {
      * 非法值回退 A（见 Truth3Probe.parseMode）。
      */
     public String diagnosticRenderMode = "A";
+    /**
+     * E0 仪表标定：{@code debug=on && diagnosticMeasureOnly=true} 时 {@code Truth3Probe}
+     * 的帧探针（{@code frame_probe} / {@code frame_pump}）照常输出，但
+     * {@code FrameProfile}（面板/解码/塑形分桶 + JFR）、{@code FrameSegments}
+     * 与 {@code PrepassProbe}（背景模糊 pre-pass 分段）全部关闭，用来确认
+     * 0.1–0.3ms 级差异不是诊断代码自身造成的。
+     *
+     * <p>默认 <b>false</b>：门控式子是 {@code debug && !diagnosticMeasureOnly}，
+     * 因此默认值下 debug=off / debug=on 的既有行为都逐字节不变。只在 debug=on 时
+     * 有意义；不加热键，仅配置文件字段（与 {@link #diagnosticRenderMode} 同一做法）。
+     * 该开关<strong>不</strong>改 {@code errorCheckDue()} 在 debug=on 时恒 true 的既有行为。
+     */
+    public boolean diagnosticMeasureOnly = false;
     /** [Mode-D 子项桩，默认关、本轮未实现] 半径槽（Muonium GlassBlurLevels 对应）。 */
     public boolean modeDBlurRadiusSlots = false;
     /** [Mode-D 子项桩，默认关、本轮未实现] 旧代借用（GlassBackdrop 落后 8 个采集代对应）。 */

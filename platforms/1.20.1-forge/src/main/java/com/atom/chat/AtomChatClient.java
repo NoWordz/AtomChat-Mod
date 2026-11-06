@@ -63,6 +63,13 @@ public final class AtomChatClient {
         MinecraftForge.EVENT_BUS.addListener(AtomChatClient::onPlayerJoin);
         MinecraftForge.EVENT_BUS.addListener(AtomChatClient::onPlayerDisconnect);
         MinecraftForge.EVENT_BUS.addListener(AtomChatClient::onClientTick);
+        // E1 外部尺子：与当前屏幕无关的每帧采样点（G0–G3 共用，先于 Screen.render）。
+        MinecraftForge.EVENT_BUS.addListener(AtomChatClient::onRenderGuiPost);
+    }
+
+    /** RenderGuiEvent.Post 每渲染帧恰好一次（ForgeGui.render 末尾）。 */
+    private static void onRenderGuiPost(net.minecraftforge.client.event.RenderGuiEvent.Post event) {
+        com.atom.chat.diagnostics.FramePump.onFrame();
     }
 
     private static void onClientSetup(FMLClientSetupEvent event) {

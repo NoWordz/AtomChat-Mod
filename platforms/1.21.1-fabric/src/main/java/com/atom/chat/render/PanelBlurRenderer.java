@@ -76,8 +76,10 @@ public final class PanelBlurRenderer {
     }
 
     public static boolean render(Matrix4f pose, float x, float y, float width, float height, float radius, float alpha, float strength) {
-        // prepass_probe: 分段计时（诊断，只在 debug=on 取时钟）。debug=off 完全静默、产品行为不变。
-        final boolean probeOn = com.atom.chat.config.AtomChatConfig.get().debug;
+        // prepass_probe: 分段计时（诊断，只在 debug=on 且非 measureOnly 取时钟）。两者皆否则完全静默、产品行为不变。
+        com.atom.chat.config.AtomChatConfig probeCfg = com.atom.chat.config.AtomChatConfig.get();
+        final boolean probeOn = com.atom.chat.diagnostics.Truth3Probe.instrumentEnabled(
+                probeCfg.debug, com.atom.chat.diagnostics.Truth3Probe.get().measureOnly());
         long ppM0 = probeOn ? System.nanoTime() : 0L;   // ⭐ 总墙钟起点 / entry 段起点
         long ppM1 = 0L, ppM2 = 0L, ppM3 = 0L, ppM4 = 0L, ppM5 = 0L;
         long ppM6 = 0L, ppM7 = 0L, ppM8 = 0L, ppM9 = 0L;
@@ -224,7 +226,9 @@ public final class PanelBlurRenderer {
         if (lastBlurTex == -1 || recreated) {
             return render(pose, x, y, width, height, radius, alpha, strength);
         }
-        final boolean probeOn = com.atom.chat.config.AtomChatConfig.get().debug;
+        com.atom.chat.config.AtomChatConfig probeCfg = com.atom.chat.config.AtomChatConfig.get();
+        final boolean probeOn = com.atom.chat.diagnostics.Truth3Probe.instrumentEnabled(
+                probeCfg.debug, com.atom.chat.diagnostics.Truth3Probe.get().measureOnly());
         long prM0 = probeOn ? System.nanoTime() : 0L;
         boolean ok = drawRoundedQuad(pose, x, y, width, height, radius, alpha, lastBlurTex);
         long prM1 = probeOn ? System.nanoTime() : 0L;
@@ -295,9 +299,9 @@ public final class PanelBlurRenderer {
 
     public static boolean isAvailable() {
         // prepass_probe: 每帧（A/B/C 三档都在 drawPanel 门控之前调用本方法）推进帧计数、
-        // 检测切档并重置窗口；debug=off 完全静默。日志行由宿主 LOGGER.info 输出。
+        // 检测切档并重置窗口；debug=off / measureOnly 完全静默。日志行由宿主 LOGGER.info 输出。
         com.atom.chat.config.AtomChatConfig cfg = com.atom.chat.config.AtomChatConfig.get();
-        if (cfg.debug) {
+        if (com.atom.chat.diagnostics.Truth3Probe.instrumentEnabled(cfg.debug, com.atom.chat.diagnostics.Truth3Probe.get().measureOnly())) {
             String prepassLine = com.atom.chat.diagnostics.PrepassProbe.get().onFrame(
                     com.atom.chat.diagnostics.Truth3Probe.get().mode().ordinal(), true);
             if (prepassLine != null) AtomChat.LOGGER.info(prepassLine);

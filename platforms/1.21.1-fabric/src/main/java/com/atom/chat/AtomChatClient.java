@@ -49,6 +49,10 @@ public class AtomChatClient implements ClientModInitializer {
         ImageLoader.get().init(CacheDirs.imageCacheDir());
         net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback.EVENT.register(
                 (gui, ticks) -> com.atom.chat.notification.NotificationHudOverlay.render(gui));
+        // E1 外部尺子：与当前屏幕无关的每帧采样点（G0–G3 共用）。全平台只注册这一处，
+        // debug=off / 未进实验时 FramePump 每帧只读一次配置即返回。
+        net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback.EVENT.register(
+                (gui, ticks) -> com.atom.chat.diagnostics.FramePump.onFrame());
         com.atom.chat.net.AvatarCompanionClient.init();
         com.atom.chat.net.PokeCompanionClient.init();
         com.atom.chat.net.ReactionCompanionClient.init();

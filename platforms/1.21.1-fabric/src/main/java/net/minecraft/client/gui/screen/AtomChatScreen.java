@@ -3203,12 +3203,20 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
     @Override
     public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
         // Truth3 诊断热键（仅 debug=on 生效）：裸 F6 循环 A→B→C→D→A；备用 Ctrl+Shift+F6；
+        // Shift+F6（E0）翻转运行时 measureOnly（全仪表 ↔ 仅帧探针），不写配置。
         // Alt / Super 组合留给第三方 mod，避免抢键。
         com.atom.chat.diagnostics.Truth3Probe truth3 = com.atom.chat.diagnostics.Truth3Probe.get();
         boolean truth3Key = keyCode == TRUTH3_KEY_F6
                 && (((modifiers & 15) == 0) || ((modifiers & 3) == 3 && (modifiers & 12) == 0));
         if (truth3Key && truth3.isDebug()) {
             String line = truth3.cycle();
+            if (line != null) AtomChat.LOGGER.info(line);
+            return true;
+        }
+        // Shift+F6：只认「仅 Shift」这一种修饰（裸 F6 / Ctrl+Shift+F6 已在上方分支处理）。
+        boolean measureKey = keyCode == TRUTH3_KEY_F6 && (modifiers & 15) == 1;
+        if (measureKey && truth3.isDebug()) {
+            String line = truth3.toggleMeasureOnly();
             if (line != null) AtomChat.LOGGER.info(line);
             return true;
         }

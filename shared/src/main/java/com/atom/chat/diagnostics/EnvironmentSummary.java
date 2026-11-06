@@ -90,7 +90,11 @@ public final class EnvironmentSummary {
             AtomChatConfig config = AtomChatConfig.get();
             // 这把是渲染耗时尺子的开关。在这里同步而不是让每个打点处去读配置：整棵树里
             // 只有这一处本来每帧就握着 debug 开关，而热路径上多一次配置读取是白花的。
-            FrameProfile.setEnabled(config.debug);
+            // E0 measureOnly：配置字段只做启动初始值（一次性灌入 Truth3Probe），运行时由
+            // Shift+F6 翻转；这里按运行时状态同步重仪表，帧探针照常。
+            Truth3Probe truth3 = Truth3Probe.get();
+            truth3.seedMeasureOnly(config.diagnosticMeasureOnly);
+            FrameProfile.setEnabled(Truth3Probe.instrumentEnabled(config.debug, truth3.measureOnly()));
             if (config.debug && DEBUG_BLOCK_DONE.compareAndSet(false, true)) {
                 AtomChat.LOGGER.info(com.atom.chat.diagnostics.AtomChatLog.message("startup", debugBlock(reportedVersion, artifact, config, EnvironmentSummary::gpuLine)));
             }
