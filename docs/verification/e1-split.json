@@ -1,0 +1,45 @@
+{
+  "pumpSamples": 77,
+  "panelOpenSamples": 39,
+  "panelShutSamples": 38,
+  "panelOpen": {
+    "n": 39,
+    "median": 2.897,
+    "min": 2.496,
+    "max": 4.412,
+    "fps_median": 345.2
+  },
+  "panelShut": {
+    "n": 38,
+    "median": 2.498,
+    "min": 2.481,
+    "max": 2.51,
+    "fps_median": 400.2
+  },
+  "cappedSamples": 40,
+  "cappedShare": 1.053,
+  "delta_median": 0.398,
+  "transitions": [
+    {
+      "t": "20:31:41->20:31:43",
+      "open": 2.833,
+      "shut": 2.505,
+      "delta": 0.328
+    },
+    {
+      "t": "20:32:25->20:32:27",
+      "shut": 2.507,
+      "open": 2.496,
+      "delta": -0.011
+    },
+    {
+      "t": "20:32:32->20:32:34",
+      "open": 2.909,
+      "shut": 2.498,
+      "delta": 0.411
+    }
+  ],
+  "pumpProbeAbsMedian": 0.001,
+  "pumpProbeAbsMax": 0.465,
+  "pumpProbePairs": 33
+}
