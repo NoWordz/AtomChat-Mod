@@ -2,7 +2,9 @@ package com.atom.chat.render;
 
 
 import com.atom.lib.design.atomchat.UiTokens;
+import com.atom.chat.diagnostics.FirstOpenBudget;
 import com.atom.chat.diagnostics.FrameProfile;
+import com.atom.chat.font.FontManager;
 import com.atom.chat.theme.ThemeService;
 import io.github.humbleui.skija.Canvas;
 import io.github.humbleui.skija.Color;
@@ -22,8 +24,13 @@ public final class SkiaFontRenderer {
     /** Render-thread scratch paints; every draw sets the properties it reads. */
     private static final Paint TEXT_PAINT = new Paint();
     private static final Paint SHADOW_PAINT = new Paint();
-    static void clearEmojiGlyphCache() { EMOJI_GLYPHS.clear(); clearTextShapeCache(); }
+    static void clearEmojiGlyphCache() {
+        EMOJI_GLYPHS.clear();
+        clearTextShapeCache();
+        clearPrewarmedFonts();
+    }
     static long emojiGlyphBuilds() { return EMOJI_GLYPHS.builds(); }
+    static long emojiPrewarmHits() { return EMOJI_GLYPHS.prewarmHits(); }
     static long shapedPlanBuilds() { return shapeCacheBuilds; }
 
     /** One shaped fallback-font run. The width is measured once with the blob. */
@@ -98,7 +105,128 @@ public final class SkiaFontRenderer {
     private static final java.util.Map<Font, java.util.BitSet> PRIMARY_GLYPH_HITS =
             new java.util.IdentityHashMap<>();
 
+    /**
+     * Faces resolved by the background prewarm, keyed exactly like
+     * {@link #FALLBACK_FONT_CACHE} ({@code codepoint@size}). The render thread
+     * takes one (removing it) and installs it in the normal cache; ownership
+     * transfers exactly once. Bounded so a pathological backlog cannot pin
+     * native fonts forever.
+     */
+    private static final int PREWARMED_FONT_MAX = 256;
+    private static final Object PREWARM_FONT_LOCK = new Object();
+    private static final java.util.Map<String, Font> PREWARMED_FONTS = new java.util.HashMap<>();
+    private static volatile boolean hasPrewarmedFonts;
+    private static long prewarmFontGeneration;
+    private static volatile long prewarmFontHits;
+
     private SkiaFontRenderer() {
+    }
+
+    static long emojiPrewarmFontHits() {
+        return prewarmFontHits;
+    }
+
+    /**
+     * Background-thread entry point. Resolves each emoji face once per
+     * {@code (size, codepoint)} and rasterizes the glyphs the first frame would
+     * otherwise have built. CPU-only: no GL and no {@code DirectContext}.
+     */
+    static void prewarmEmojiGlyphs(java.util.List<EmojiPrewarmSpec> specs) {
+        if (specs == null || specs.isEmpty()) {
+            return;
+        }
+        io.github.humbleui.skija.Typeface typeface = FontManager.getDefaultTypeface();
+        if (typeface == null) {
+            return;
+        }
+        boolean fauxBold = FontManager.usesSystemFallback();
+        long generation;
+        synchronized (PREWARM_FONT_LOCK) {
+            generation = prewarmFontGeneration;
+        }
+        java.util.Map<String, Font> local = new java.util.HashMap<>();
+        java.util.Set<String> primaryOnly = new java.util.HashSet<>();
+        try {
+            for (EmojiPrewarmSpec spec : specs) {
+                if (spec.text().isEmpty()) {
+                    continue;
+                }
+                int cp = spec.text().codePointAt(0);
+                String key = cp + "@" + (int) spec.size();
+                Font font = local.get(key);
+                if (font == null) {
+                    Font primary = new Font(typeface, spec.size());
+                    if (fauxBold) {
+                        primary.setEmboldened(true);
+                    }
+                    if (primary.getUTF32Glyph(cp) != 0) {
+                        font = primary;
+                        primaryOnly.add(key);
+                    } else {
+                        Font fallback = resolveFallbackFont(primary, cp);
+                        if (fallback == null) {
+                            font = primary;
+                            primaryOnly.add(key);
+                        } else {
+                            primary.close();
+                            font = fallback;
+                        }
+                    }
+                    local.put(key, font);
+                }
+                EMOJI_GLYPHS.prewarmOne(font, spec.text(), spec.rgb(), 2);
+            }
+        } finally {
+            for (var entry : local.entrySet()) {
+                if (primaryOnly.contains(entry.getKey())) {
+                    entry.getValue().close();
+                } else {
+                    depositPrewarmedFont(entry.getKey(), entry.getValue(), generation);
+                }
+            }
+        }
+    }
+
+    private static Font takePrewarmedFont(String key) {
+        if (!hasPrewarmedFonts) {
+            return null;
+        }
+        synchronized (PREWARM_FONT_LOCK) {
+            Font font = PREWARMED_FONTS.remove(key);
+            if (font != null) {
+                prewarmFontHits++;
+                if (PREWARMED_FONTS.isEmpty()) {
+                    hasPrewarmedFonts = false;
+                }
+            }
+            return font;
+        }
+    }
+
+    private static void depositPrewarmedFont(String key, Font font, long generation) {
+        synchronized (PREWARM_FONT_LOCK) {
+            if (generation != prewarmFontGeneration || PREWARMED_FONTS.size() >= PREWARMED_FONT_MAX) {
+                font.close();
+                return;
+            }
+            Font previous = PREWARMED_FONTS.put(key, font);
+            if (previous != null) {
+                previous.close();
+            }
+            hasPrewarmedFonts = true;
+        }
+    }
+
+    private static void clearPrewarmedFonts() {
+        synchronized (PREWARM_FONT_LOCK) {
+            prewarmFontGeneration++;
+            for (Font font : PREWARMED_FONTS.values()) {
+                font.close();
+            }
+            PREWARMED_FONTS.clear();
+            hasPrewarmedFonts = false;
+            prewarmFontHits = 0;
+        }
     }
 
     /**
@@ -569,43 +697,76 @@ public final class SkiaFontRenderer {
         if (cached != null) {
             return cached;
         }
-        Font resolved = null;
-        try {
-            io.github.humbleui.skija.FontMgr mgr = io.github.humbleui.skija.FontMgr.getDefault();
-            if (mgr != null) {
-                io.github.humbleui.skija.Typeface match = null;
-                if (isEmojiCodepoint(codepoint)) {
-                    String emojiFamily = firstFamilyWithGlyph(EMOJI_FAMILIES,
-                            name -> familyCarriesGlyph(mgr, name, codepoint));
-                    if (emojiFamily != null) {
-                        match = mgr.matchFamilyStyle(emojiFamily, io.github.humbleui.skija.FontStyle.NORMAL);
-                    } else {
-                        reportNoEmojiFontIfMissing(mgr);
-                    }
-                }
-                if (match == null) {
-                    // The bundled font is a GB2312 subset, so kaomoji lean on
-                    // exotic ranges (kana, Thai, Hangul, phonetic, symbols). A
-                    // narrow list leaves tofu even though the system has the
-                    // glyphs: DengXian/MS Gothic cover kana, Malgun Gothic
-                    // covers Hangul, Leelawadee UI covers Thai, Cambria/Calibri
-                    // cover symbols — and on Linux the Noto/DejaVu/WenQuanYi
-                    // tail stands in for all of them.
-                    match = mgr.matchFamiliesStyleCharacter(
-                            FALLBACK_FAMILIES,
-                            io.github.humbleui.skija.FontStyle.NORMAL, null, codepoint);
-                }
-                if (match != null) {
-                    resolved = new Font(match, primary.getSize());
-                }
-            }
-        } catch (Throwable t) {
-            // No fallback available: primary renders tofu, same as before.
+        // A background prewarm may have already resolved the same face. Taking
+        // it is the whole point of the move: the first emoji frame must not walk
+        // the family list again.
+        Font prewarmed = takePrewarmedFont(key);
+        if (prewarmed != null) {
+            FALLBACK_FONT_CACHE.put(key, prewarmed);
+            return prewarmed;
+        }
+        long budgetStart = FirstOpenBudget.active() && isEmojiCodepoint(codepoint)
+                ? System.nanoTime() : 0L;
+        Font resolved = resolveFallbackFont(primary, codepoint);
+        if (budgetStart != 0L) {
+            FirstOpenBudget.addEmoji(System.nanoTime() - budgetStart);
         }
         if (resolved == null) {
             resolved = primary;
         }
         FALLBACK_FONT_CACHE.put(key, resolved);
+        return resolved;
+    }
+
+    /** Resolve the fallback face, or null when none carries the codepoint. */
+    private static Font resolveFallbackFont(Font primary, int codepoint) {
+        try {
+            io.github.humbleui.skija.FontMgr mgr = io.github.humbleui.skija.FontMgr.getDefault();
+            if (mgr == null) {
+                return null;
+            }
+            return resolveFont(mgr, primary, codepoint);
+        } catch (Throwable t) {
+            // No fallback available: primary renders tofu, same as before.
+            return null;
+        }
+    }
+
+    /**
+     * The family walk, shared by the draw path and the background prewarm. The
+     * prewarm must make the exact same choice or its glyph pixels would differ.
+     */
+    private static Font resolveFont(io.github.humbleui.skija.FontMgr mgr, Font primary, int codepoint) {
+        Font resolved = null;
+        try {
+            io.github.humbleui.skija.Typeface match = null;
+            if (isEmojiCodepoint(codepoint)) {
+                String emojiFamily = firstFamilyWithGlyph(EMOJI_FAMILIES,
+                        name -> familyCarriesGlyph(mgr, name, codepoint));
+                if (emojiFamily != null) {
+                    match = mgr.matchFamilyStyle(emojiFamily, io.github.humbleui.skija.FontStyle.NORMAL);
+                } else {
+                    reportNoEmojiFontIfMissing(mgr);
+                }
+            }
+            if (match == null) {
+                // The bundled font is a GB2312 subset, so kaomoji lean on
+                // exotic ranges (kana, Thai, Hangul, phonetic, symbols). A
+                // narrow list leaves tofu even though the system has the
+                // glyphs: DengXian/MS Gothic cover kana, Malgun Gothic
+                // covers Hangul, Leelawadee UI covers Thai, Cambria/Calibri
+                // cover symbols — and on Linux the Noto/DejaVu/WenQuanYi
+                // tail stands in for all of them.
+                match = mgr.matchFamiliesStyleCharacter(
+                        FALLBACK_FAMILIES,
+                        io.github.humbleui.skija.FontStyle.NORMAL, null, codepoint);
+            }
+            if (match != null) {
+                resolved = new Font(match, primary.getSize());
+            }
+        } catch (Throwable t) {
+            // No fallback available: primary renders tofu, same as before.
+        }
         return resolved;
     }
 

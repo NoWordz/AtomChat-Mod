@@ -309,6 +309,20 @@ public final class PanelBlurRenderer {
                 + "({}); the panel keeps its solid background"), reason);
     }
 
+    /**
+     * 首开前预热：按面板尺寸分配三张 ping-pong 纹理，让首开帧直接命中容量复用。
+     * shader 在本平台由 RegisterShadersEvent 在启动期注册，这里不重新编译。
+     */
+    public static void prewarm(int widthPx, int heightPx) {
+        if (disabled || roundedShader == null || kawaseShader == null) {
+            return;
+        }
+        if (widthPx <= 0 || heightPx <= 0) {
+            return;
+        }
+        ensureTextures(widthPx, heightPx, false);
+    }
+
     public static boolean isAvailable() {
         // prepass_probe: 每帧（A/B/C 三档都在 drawPanel 门控之前调用本方法）推进帧计数、
         // 检测切档并重置窗口；debug=off / measureOnly 完全静默。日志行由宿主 LOGGER.info 输出。
@@ -425,7 +439,13 @@ public final class PanelBlurRenderer {
             capW = nw;
             capH = nh;
         }
-        allocate(nw, nh);
+        if (com.atom.chat.diagnostics.FirstOpenBudget.active()) {
+            final int allocW = nw;
+            final int allocH = nh;
+            com.atom.chat.diagnostics.FirstOpenBudget.timeBlurInit(() -> allocate(allocW, allocH));
+        } else {
+            allocate(nw, nh);
+        }
     }
 
     private static int nextPow2(int v) {

@@ -32,6 +32,44 @@ public class AtomChatClient implements ClientModInitializer {
             new KeyBinding("key.atomchat.open", InputUtil.Type.KEYSYM, GLFW.GLFW_KEY_Y,
                     "key.atomchat.category"));
 
+    /** Render-thread, once per process: create the Skija bridge/surface and blur textures. */
+    private static void warmupGl(net.minecraft.client.MinecraftClient client, boolean blurEnabled) {
+        if (!com.atom.chat.render.SkiaSupport.available()) {
+            return;
+        }
+        long started = System.nanoTime();
+        try {
+            com.atom.lib.client.render.MinecraftRenderBridge.get().prepare();
+            if (blurEnabled
+                    && !com.atom.chat.wallpaper.WallpaperStore.isSet()) {
+                var window = client.getWindow();
+                double scale = window.getScaleFactor();
+                int w = (int) Math.ceil(com.atom.chat.screen.ScreenMetrics.panelWidth(window) * scale);
+                int h = (int) Math.ceil(com.atom.chat.screen.ScreenMetrics.panelHeight(window) * scale);
+                com.atom.chat.render.PanelBlurRenderer.prewarm(w, h);
+            }
+        } catch (Throwable t) {
+            AtomChat.LOGGER.warn(com.atom.chat.diagnostics.AtomChatLog.message("render",
+                    "AtomChat first-open warmup failed; the panel still opens"), t);
+        } finally {
+            com.atom.chat.diagnostics.FirstOpenBudget.setPrewarmGl(System.nanoTime() - started);
+        }
+    }
+
+    /** Current backlog text + reaction emoji, for the emoji prewarm scanner. */
+    private static java.util.List<String> firstOpenWarmupTexts() {
+        java.util.List<String> messages = new java.util.ArrayList<>();
+        java.util.List<String> reactions = new java.util.ArrayList<>();
+        for (com.atom.chat.chat.ChatMessage message : com.atom.chat.chat.ChatStore.get().snapshot()) {
+            messages.add(message.getContentText());
+            for (com.atom.chat.reaction.ReactionWire.Entry entry
+                    : com.atom.chat.reaction.ReactionClient.entries(message)) {
+                reactions.add(entry.emoji());
+            }
+        }
+        return com.atom.chat.render.FirstOpenWarmup.warmupTexts(messages, reactions);
+    }
+
     @Override
     public void onInitializeClient() {
         com.atom.chat.compat.AtomLibDependencyCheck.require(net.fabricmc.loader.api.FabricLoader.getInstance()
@@ -79,6 +117,9 @@ public class AtomChatClient implements ClientModInitializer {
                 com.atom.chat.settings.SettingsSectionPage.clearTranslationCache();
             }
         });
+        // Cold-start the bundled font decoder now; the first panel open must not
+        // be the first time the game reads a 3.9 MB OTF.
+        com.atom.chat.render.FirstOpenWarmup.prewarmFontsAsync();
         AtomChat.LOGGER.info(com.atom.chat.diagnostics.AtomChatLog.message("startup", "AtomChat client initialized"));
 
         ClientPlayConnectionEvents.JOIN.register((handler, sender, client) -> {
@@ -94,6 +135,8 @@ public class AtomChatClient implements ClientModInitializer {
             com.atom.chat.net.PackSyncClient.onJoin();
             com.atom.chat.chat.OwnIdentity.reset();
             com.atom.chat.chat.TeleportCommands.reset();
+            com.atom.chat.render.FirstOpenWarmup.prewarmEmojiAsync(firstOpenWarmupTexts());
+            com.atom.chat.render.FirstOpenWarmup.requestGlWarmup();
         });
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
             // Save before the stores are cleared, then drop the world key.
@@ -112,10 +155,14 @@ public class AtomChatClient implements ClientModInitializer {
             com.atom.chat.net.PokeCompanionClient.setHandler(null);
         com.atom.chat.net.PackSyncClient.onDisconnect();
         com.atom.chat.net.ConfigScreenClient.onDisconnect();
+        com.atom.chat.render.FirstOpenWarmup.onDisconnect();
         });
         NotificationController.registerSound();
         com.atom.chat.audio.FeedbackSoundController.registerSound();
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
+            if (com.atom.chat.render.FirstOpenWarmup.consumeGlWarmup()) {
+                warmupGl(client, com.atom.chat.config.AtomChatConfig.get().blurEnabled);
+            }
             // First tick only (self-guarded): identity always, the detailed
             // block when debug is on. It lives here rather than in client init
             // because the GPU rows need a current GL context, which only the

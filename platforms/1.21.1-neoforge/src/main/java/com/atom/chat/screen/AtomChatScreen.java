@@ -1,5 +1,6 @@
 package com.atom.chat.screen;
 import com.atom.chat.AtomChat;
+import com.atom.chat.diagnostics.FirstOpenBudget;
 
 import com.atom.chat.chat.BlockList;
 import com.atom.chat.chat.PublicEchoTracker;
@@ -1555,6 +1556,9 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
 
     public AtomChatScreen(String originalChatText, AtomChatOpenMode mode) {
         super(originalChatText);
+        // First-open budget: claimed once per process; debug=off makes this a
+        // single CAS with no clock read, no allocation and no output.
+        FirstOpenBudget.beginFirstOpen(AtomChatConfig.get().debug);
         this.originalChatText = originalChatText;
         // Screen objects are constructed fresh on every open (init() re-runs on
         // resize), so this is the right hook for picking up hand-edited config
@@ -1934,6 +1938,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
     @Override
     public void render(GuiGraphics context, int mouseX, int mouseY, float delta) {
         if (!AtomChatConfig.get().enabled) {
+            FirstOpenBudget.abort();
             this.client.setScreen(null);
             return;
         }
@@ -1969,6 +1974,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         // and the exponential tail would only delay setScreen(null) (see
         // PANEL_CLOSE_TAU_MS for why the close runs a shorter tau at all).
         if (PanelOpenMotion.closeDue(panelProgress, closing)) {
+            FirstOpenBudget.abort();
             this.client.setScreen(null);
             return;
         }
@@ -2045,8 +2051,12 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
                     try { blurPreUi.run(); } finally { com.atom.chat.diagnostics.FrameSegments.end(segmentId, com.atom.chat.diagnostics.FrameSegments.Stage.BLUR, started); }
                 }
                 long started = com.atom.chat.diagnostics.FrameSegments.start(segmentId);
+                long iconBudget = FirstOpenBudget.active() ? System.nanoTime() : 0L;
                 try { com.atom.chat.render.ItemIconRenderer.prepare(context, graphics); }
-                finally { com.atom.chat.diagnostics.FrameSegments.end(segmentId, com.atom.chat.diagnostics.FrameSegments.Stage.ICONS, started); }
+                finally {
+                    com.atom.chat.diagnostics.FrameSegments.end(segmentId, com.atom.chat.diagnostics.FrameSegments.Stage.ICONS, started);
+                    if (iconBudget != 0L) FirstOpenBudget.addIcons(System.nanoTime() - iconBudget);
+                }
             }, uiDensity(), (canvas, worldSnapshot) -> {
                 drawPhone(canvas, worldSnapshot, mouseX, mouseY, delta);
                 chatEffects.renderExperimental(graphics.requireSurface());
@@ -2089,6 +2099,8 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
                 && !imagePreview.isActive() && !imageCropper.isActive() && !colorPicker.isActive()) {
             context.renderComponentHoverEffect(this.font, hovered, mouseX, mouseY);
         }
+        String firstOpenLine = FirstOpenBudget.endFrame();
+        if (firstOpenLine != null) AtomChat.LOGGER.info(firstOpenLine);
     }
 
     /**

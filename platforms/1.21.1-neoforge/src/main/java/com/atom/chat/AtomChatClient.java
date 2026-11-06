@@ -68,6 +68,44 @@ public class AtomChatClient {
     }
 
 
+    /** Render-thread, once per process: create the Skija bridge/surface and blur textures. */
+    private static void warmupGl(Minecraft client, boolean blurEnabled) {
+        if (!com.atom.chat.render.SkiaSupport.available()) {
+            return;
+        }
+        long started = System.nanoTime();
+        try {
+            com.atom.lib.client.render.MinecraftRenderBridge.get().prepare();
+            if (blurEnabled
+                    && !com.atom.chat.wallpaper.WallpaperStore.isSet()) {
+                var window = client.getWindow();
+                double scale = window.getGuiScale();
+                int w = (int) Math.ceil(com.atom.chat.screen.ScreenMetrics.panelWidth(window) * scale);
+                int h = (int) Math.ceil(com.atom.chat.screen.ScreenMetrics.panelHeight(window) * scale);
+                com.atom.chat.render.PanelBlurRenderer.prewarm(w, h);
+            }
+        } catch (Throwable t) {
+            AtomChat.LOGGER.warn(com.atom.chat.diagnostics.AtomChatLog.message("render",
+                    "AtomChat first-open warmup failed; the panel still opens"), t);
+        } finally {
+            com.atom.chat.diagnostics.FirstOpenBudget.setPrewarmGl(System.nanoTime() - started);
+        }
+    }
+
+    /** Current backlog text + reaction emoji, for the emoji prewarm scanner. */
+    private static java.util.List<String> firstOpenWarmupTexts() {
+        java.util.List<String> messages = new java.util.ArrayList<>();
+        java.util.List<String> reactions = new java.util.ArrayList<>();
+        for (com.atom.chat.chat.ChatMessage message : com.atom.chat.chat.ChatStore.get().snapshot()) {
+            messages.add(message.getContentText());
+            for (com.atom.chat.reaction.ReactionWire.Entry entry
+                    : com.atom.chat.reaction.ReactionClient.entries(message)) {
+                reactions.add(entry.emoji());
+            }
+        }
+        return com.atom.chat.render.FirstOpenWarmup.warmupTexts(messages, reactions);
+    }
+
     private static void onClientSetup(net.neoforged.fml.event.lifecycle.FMLClientSetupEvent event) {
         AtomChatConfig.get();
         CacheDirs.migrateFromOldConfigPaths();
@@ -83,6 +121,9 @@ public class AtomChatClient {
         com.atom.chat.net.MediaCompanionClient.init();
         com.atom.chat.net.ProfileCompanionClient.init();
         com.atom.chat.history.ChatHistory.init(CacheDirs.historyDir());
+        // Cold-start the bundled font decoder now; the first panel open must not
+        // be the first time the game reads a 3.9 MB OTF.
+        com.atom.chat.render.FirstOpenWarmup.prewarmFontsAsync();
         AtomChat.LOGGER.info(com.atom.chat.diagnostics.AtomChatLog.message("startup", "AtomChat client initialized"));
     }
 
@@ -120,6 +161,8 @@ public class AtomChatClient {
         com.atom.chat.net.PackSyncClient.onJoin();
         com.atom.chat.chat.OwnIdentity.reset();
         com.atom.chat.chat.TeleportCommands.reset();
+        com.atom.chat.render.FirstOpenWarmup.prewarmEmojiAsync(firstOpenWarmupTexts());
+        com.atom.chat.render.FirstOpenWarmup.requestGlWarmup();
     }
 
     private static void onPlayerDisconnect(ClientPlayerNetworkEvent.LoggingOut event) {
@@ -140,10 +183,14 @@ public class AtomChatClient {
         com.atom.chat.net.PokeCompanionClient.setHandler(null);
         com.atom.chat.net.PackSyncClient.onDisconnect();
         com.atom.chat.net.ConfigScreenClient.onDisconnect();
+        com.atom.chat.render.FirstOpenWarmup.onDisconnect();
     }
 
     private static void onClientTick(ClientTickEvent.Post event) {
         Minecraft client = Minecraft.getInstance();
+        if (com.atom.chat.render.FirstOpenWarmup.consumeGlWarmup()) {
+            warmupGl(client, com.atom.chat.config.AtomChatConfig.get().blurEnabled);
+        }
         // First tick only (self-guarded): identity always, the detailed block
         // when debug is on. It lives here rather than in client setup because
         // the GPU rows need a current GL context, which only the render thread

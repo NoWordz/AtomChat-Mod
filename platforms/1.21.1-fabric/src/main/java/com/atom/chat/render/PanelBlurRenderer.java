@@ -297,6 +297,22 @@ public final class PanelBlurRenderer {
         getKawaseShader();
     }
 
+    /**
+     * 首开前预热：在渲染线程、当前 GL 上下文里编译/链接两个 shader，并按面板尺寸
+     * 分配三张 ping-pong 纹理。只创建资源，不画任何东西；首开帧随后命中容量复用，
+     * 不再重建。纹理参数、尺寸取整（2 的幂容量）与正式路径完全一致。
+     */
+    public static void prewarm(int widthPx, int heightPx) {
+        ensureLoaded();
+        if (disabled || roundedShader == null || kawaseShader == null) {
+            return;
+        }
+        if (widthPx <= 0 || heightPx <= 0) {
+            return;
+        }
+        ensureTextures(widthPx, heightPx, false);
+    }
+
     public static boolean isAvailable() {
         // prepass_probe: 每帧（A/B/C 三档都在 drawPanel 门控之前调用本方法）推进帧计数、
         // 检测切档并重置窗口；debug=off / measureOnly 完全静默。日志行由宿主 LOGGER.info 输出。
@@ -451,7 +467,13 @@ public final class PanelBlurRenderer {
             capW = nw;
             capH = nh;
         }
-        allocate(nw, nh);
+        if (com.atom.chat.diagnostics.FirstOpenBudget.active()) {
+            final int allocW = nw;
+            final int allocH = nh;
+            com.atom.chat.diagnostics.FirstOpenBudget.timeBlurInit(() -> allocate(allocW, allocH));
+        } else {
+            allocate(nw, nh);
+        }
     }
 
     private static int nextPow2(int v) {

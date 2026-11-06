@@ -22,10 +22,19 @@ public final class FontManager {
     /** True-bold face (same character set as the bundled regular) for headings. */
     private static final String BUNDLED_BOLD_FONT = "/com/atom/lib/fonts/bundled-default-bold.otf";
     /** Faux-bold for thin system fallback fonts; a real bundled font makes this redundant. */
-    private static boolean usingFallbackTypeface;
-    private static Typeface defaultTypeface;
-    private static boolean boldLookupDone;
-    private static Typeface boldTypeface;
+    private static volatile boolean usingFallbackTypeface;
+    /**
+     * Published once, by whichever thread wins the load. {@code volatile} is the
+     * hand-off: the background prewarm writes it, the render thread reads it on
+     * the first frame without a lock. The actual decode is guarded by
+     * {@link #LOAD_LOCK} so the two threads never decode two copies.
+     */
+    private static volatile Typeface defaultTypeface;
+    private static volatile boolean boldLookupDone;
+    private static volatile Typeface boldTypeface;
+    private static final Object LOAD_LOCK = new Object();
+    private static final java.util.concurrent.atomic.AtomicInteger SYNC_LOADS =
+            new java.util.concurrent.atomic.AtomicInteger();
     private static final java.util.Map<String, Font> CACHE = new java.util.HashMap<>();
     private static final java.util.Map<String, Font> BOLD_CACHE = new java.util.HashMap<>();
 
@@ -33,16 +42,62 @@ public final class FontManager {
     }
 
     public static Typeface getDefaultTypeface() {
-        if (defaultTypeface != null) {
+        Typeface cached = defaultTypeface;
+        if (cached != null) {
+            return cached;
+        }
+        synchronized (LOAD_LOCK) {
+            cached = defaultTypeface;
+            if (cached != null) {
+                return cached;
+            }
+            // This is the cold, render-thread path: no prewarm finished in time.
+            // It is deliberately still here so a slow/absent prewarm degrades to
+            // exactly the previous behaviour instead of an empty or broken face.
+            SYNC_LOADS.incrementAndGet();
+            long started = com.atom.chat.diagnostics.FirstOpenBudget.active()
+                    ? System.nanoTime() : 0L;
+            cached = loadDefaultTypefaceLocked();
+            defaultTypeface = cached;
+            if (started != 0L) {
+                com.atom.chat.diagnostics.FirstOpenBudget.addFont(System.nanoTime() - started);
+            }
+            return cached;
+        }
+    }
+
+    /**
+     * Loads the regular and bold bundled faces ahead of the first panel frame.
+     *
+     * <p>Safe to call from any thread: the work is file IO + Skia CPU typeface
+     * decoding, no GL and no Skija {@code DirectContext}. The render thread may
+     * call it too (tests, or a platform without a background scheduler); it is
+     * idempotent and returns the published instance.
+     *
+     * @return the regular face, or null only when even the system-font fallback
+     *         failed (the previous code would return null there as well)
+     */
+    public static Typeface prewarmBlocking() {
+        synchronized (LOAD_LOCK) {
+            if (defaultTypeface == null) {
+                defaultTypeface = loadDefaultTypefaceLocked();
+            }
+            if (!boldLookupDone) {
+                boldLookupDone = true;
+                boldTypeface = loadBoldTypefaceLocked();
+            }
             return defaultTypeface;
         }
+    }
 
+    /** The single bundled-first / system-fallback decode, callers hold {@link #LOAD_LOCK}. */
+    private static Typeface loadDefaultTypefaceLocked() {
         // Bundled font first.
         try {
-            defaultTypeface = mediumWeight(decodeTypeface(bundledSource(BUNDLED_FONT).read()));
+            Typeface face = mediumWeight(decodeTypeface(bundledSource(BUNDLED_FONT).read()));
             usingFallbackTypeface = false;
             AtomChat.LOGGER.info(com.atom.chat.diagnostics.AtomChatLog.message("resource", "Loaded bundled font {}"), BUNDLED_FONT);
-            return defaultTypeface;
+            return face;
         } catch (Exception e) {
             AtomChat.LOGGER.warn(com.atom.chat.diagnostics.AtomChatLog.message("resource", "Failed to load bundled font, falling back to system font"), e);
         }
@@ -56,18 +111,30 @@ public final class FontManager {
         for (String name : candidates) {
             Typeface tf = FontMgr.getDefault().matchFamilyStyle(name, FontStyle.NORMAL);
             if (tf != null && !tf.getFamilyName().toLowerCase(Locale.ROOT).contains("arial") || tf != null && tf.getFamilyName().toLowerCase(Locale.ROOT).contains("yahei")) {
-                defaultTypeface = tf;
                 AtomChat.LOGGER.info(com.atom.chat.diagnostics.AtomChatLog.message("resource", "Using system font {}"), tf.getFamilyName());
-                return defaultTypeface;
+                return tf;
             }
             if (tf != null) {
-                defaultTypeface = tf;
                 AtomChat.LOGGER.info(com.atom.chat.diagnostics.AtomChatLog.message("resource", "Using system font {}"), tf.getFamilyName());
-                return defaultTypeface;
+                return tf;
             }
         }
-        defaultTypeface = FontMgr.getDefault().matchFamilyStyle(null, FontStyle.NORMAL);
-        return defaultTypeface;
+        return FontMgr.getDefault().matchFamilyStyle(null, FontStyle.NORMAL);
+    }
+
+    /** True when the bundled face was unavailable and text is faux-bolded. */
+    public static boolean usesSystemFallback() {
+        return usingFallbackTypeface;
+    }
+
+    /** Synchronous (render-thread) loads so far. Test seam for the prewarm boundary. */
+    static int syncLoadCount() {
+        return SYNC_LOADS.get();
+    }
+
+    /** Test seam: zero the counter without touching the loaded face. */
+    static void resetLoadCountersForTest() {
+        SYNC_LOADS.set(0);
     }
 
     /** Older compatible AtomLib builds may not expose the resource factory. */
@@ -80,7 +147,7 @@ public final class FontManager {
     }
 
     /** Skija 0.143 returns null for rejected data; preserve the caller's fallback path. */
-    static Typeface decodeTypeface(byte[] bytes) throws IOException {
+    public static Typeface decodeTypeface(byte[] bytes) throws IOException {
         try (Data data = Data.makeFromBytes(bytes)) {
             Typeface face = FontMgr.getDefault().makeFromData(data);
             if (face == null) {
@@ -91,7 +158,7 @@ public final class FontManager {
     }
 
     /** Variable fonts are cloned at Medium (wght 500) so text is not too thin. */
-    private static Typeface mediumWeight(Typeface face) {
+    static Typeface mediumWeight(Typeface face) {
         try {
             if (face.getVariations().length > 0) {
                 return face.makeClone(new FontVariation("wght", 500));
@@ -145,13 +212,30 @@ public final class FontManager {
         if (boldLookupDone) {
             return boldTypeface;
         }
-        boldLookupDone = true;
+        synchronized (LOAD_LOCK) {
+            if (boldLookupDone) {
+                return boldTypeface;
+            }
+            long started = com.atom.chat.diagnostics.FirstOpenBudget.active()
+                    ? System.nanoTime() : 0L;
+            boldTypeface = loadBoldTypefaceLocked();
+            boldLookupDone = true;
+            if (started != 0L) {
+                com.atom.chat.diagnostics.FirstOpenBudget.addFont(System.nanoTime() - started);
+            }
+            return boldTypeface;
+        }
+    }
+
+    /** Callers hold {@link #LOAD_LOCK}. */
+    private static Typeface loadBoldTypefaceLocked() {
         try {
-            boldTypeface = decodeTypeface(bundledSource(BUNDLED_BOLD_FONT).read());
+            Typeface face = decodeTypeface(bundledSource(BUNDLED_BOLD_FONT).read());
             AtomChat.LOGGER.info(com.atom.chat.diagnostics.AtomChatLog.message("resource", "Loaded bundled bold font {}"), BUNDLED_BOLD_FONT);
+            return face;
         } catch (Exception e) {
             AtomChat.LOGGER.warn(com.atom.chat.diagnostics.AtomChatLog.message("resource", "Failed to load bundled bold font, falling back to faux bold"), e);
+            return null;
         }
-        return boldTypeface;
     }
 }
