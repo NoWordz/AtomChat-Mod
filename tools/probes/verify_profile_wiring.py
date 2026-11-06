@@ -31,12 +31,20 @@ stubs={
 'net/minecraft/client/gui/DrawContext.java':'''package net.minecraft.client.gui; public class DrawContext { public void draw(){} }''',
 'net/minecraft/client/Minecraft.java':'''package net.minecraft.client; public class Minecraft {public static Minecraft getInstance(){return new Minecraft();}public Target getMainRenderTarget(){return new Target();}public Object getWindow(){return null;}public static class Target {public int width=800,height=500;}}''',
 'net/minecraft/client/MinecraftClient.java':'''package net.minecraft.client; public class MinecraftClient {public static MinecraftClient getInstance(){return new MinecraftClient();}public Target getFramebuffer(){return new Target();}public Object getWindow(){return null;}public static class Target {public int textureWidth=800,textureHeight=500;}}''',
+# P1 diagnostics: FrameSegments now owns a bounded GPU timer ring. The wiring
+# harness only checks segment/surface/frameId semantics, so provide no-op
+# stand-ins for the two new types (no GL, no timing) instead of pulling in
+# LWJGL. Harness assertions themselves are unchanged.
+'com/atom/chat/diagnostics/GpuTimerQuery.java':'''package com.atom.chat.diagnostics; import java.util.*; public final class GpuTimerQuery implements AutoCloseable { public interface Gl { boolean timerQuerySupported(); boolean contextStillValid(); boolean otherQueryActive(); int createQuery(); void deleteQuery(int q); void beginQuery(int q); void endQuery(); boolean resultAvailable(int q); long resultNanos(int q); } public record Sample(long frameId,long gpuNanos,long latencyNanos){} public GpuTimerQuery(Gl gl,int capacity){} public boolean beginFrame(long id){return false;} public void endFrame(){} public List<Sample> poll(){return List.of();} public void reset(){} public long completed(){return 0;} public long dropped(){return 0;} public long expired(){return 0;} public long skipped(){return 0;} public long stalled(){return 0;} public int pending(){return 0;} public void close(){} }''',
+'com/atom/chat/diagnostics/GlGpuTimer.java':'''package com.atom.chat.diagnostics; public final class GlGpuTimer implements GpuTimerQuery.Gl { public boolean timerQuerySupported(){return false;} public boolean contextStillValid(){return false;} public boolean otherQueryActive(){return false;} public int createQuery(){return 0;} public void deleteQuery(int q){} public void beginQuery(int q){} public void endQuery(){} public boolean resultAvailable(int q){return false;} public long resultNanos(int q){return 0L;} }''',
 }
 harness='''package com.atom.chat.diagnostics;
 import com.atom.chat.render.SkiaGraphics; import com.atom.chat.notification.NotificationHudOverlay;
 public class ProfileWiringHarness {
  static void check(boolean v,String m){if(!v)throw new AssertionError(m+"\\n"+FrameSegments.summary()+"\\n"+FrameProfile.summary());}
  public static void main(String[] args) throws Exception {
+  var recording = new jdk.jfr.Recording();
+  recording.enable("com.atomchat.UiFrame"); recording.enable("com.atomchat.PanelSegments"); recording.start();
   FrameProfile.setEnabled(true); NotificationHudOverlay.render(new GUI());
   check(FrameSegments.summary().contains("frames=0"),"HUD polluted segments");
   check(FrameProfile.summary().contains("panel  no samples"),"HUD polluted panel bucket");
@@ -49,6 +57,21 @@ public class ProfileWiringHarness {
   check(FrameProfile.summary().contains("chat_render n=1") && !FrameProfile.summary().contains("emoji_render"),"nested panel changed outer surface label");
   check(FrameSegments.summary().contains("ICON_COLD=1"),"nested HUD polluted outer panel");
   check(FrameSegments.summary().contains("BLUR_RESOURCE=1"),"panel prepass missing");
+  check(FrameSegments.summary().contains("BRIDGE_ENTER n=1") && FrameSegments.summary().contains("BRIDGE_EXIT n=1"),"bridge boundaries missing or nested frame leaked");
+  try { g.drawPanel(null,1f,(c,i)->{ throw new IllegalStateException("outer"); }); throw new AssertionError("outer failure missing"); }
+  catch (IllegalStateException expected) {}
+  g.drawPanel(null,1f,(c,i)->FrameProfile.surface(FrameProfile.Surface.CHAT));
+  recording.stop(); var file=java.nio.file.Files.createTempFile("atomchat-pair-", ".jfr");
+  try {
+   recording.dump(file);
+   var all=jdk.jfr.consumer.RecordingFile.readAllEvents(file);
+   var ui=all.stream().filter(e->e.getEventType().getName().equals("com.atomchat.UiFrame")).toList();
+   var seg=all.stream().filter(e->e.getEventType().getName().equals("com.atomchat.PanelSegments")).toList();
+   check(ui.size()==2 && seg.size()==2,"failed or nested draw generated an event; ui="+ui.size()+" seg="+seg.size());
+   long first=ui.get(0).getLong("frameId"), second=ui.get(1).getLong("frameId");
+   check(first>0 && second>first,"invalid or duplicate frame IDs");
+   check(first==seg.get(0).getLong("frameId") && second==seg.get(1).getLong("frameId"),"UiFrame/PanelSegments mismatch");
+  } finally { recording.close(); java.nio.file.Files.deleteIfExists(file); }
   System.out.println("PASS actual NotificationHudOverlay.render + SkiaGraphics HUD and panel entry points, nested exclusion");
  }
 }'''

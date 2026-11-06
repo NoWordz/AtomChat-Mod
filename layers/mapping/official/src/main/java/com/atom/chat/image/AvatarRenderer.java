@@ -70,6 +70,7 @@ public final class AvatarRenderer {
         SKIN_FACE_CACHE.clear();
         HAT_CACHE.clear();
         FAILED.clear();
+        SkinTextureReader.release();
     }
     private static boolean dumped;
 
@@ -85,13 +86,16 @@ public final class AvatarRenderer {
         if (FAILED.contains(skin)) {
             return null;
         }
-        Image sampled = sample(skin);
-        if (sampled == null) {
+        SampleOutcome sampled = sample(skin);
+        if (sampled.state() == SkinTextureReader.State.PENDING) {
+            return null;
+        }
+        if (sampled.state() != SkinTextureReader.State.READY || sampled.image() == null) {
             FAILED.add(skin);
             return null;
         }
-        FACE_CACHE.put(skin, sampled);
-        return sampled;
+        FACE_CACHE.put(skin, sampled.image());
+        return sampled.image();
     }
 
     public static Image skinFace(ResourceLocation skin) {
@@ -112,14 +116,19 @@ public final class AvatarRenderer {
         return Image.makeFromBitmap(bitmap);
     }
 
-    private static Image sample(ResourceLocation skin) {
+    private record SampleOutcome(SkinTextureReader.State state, Image image) {}
+
+    private static SampleOutcome sample(ResourceLocation skin) {
         try {
             Minecraft client = Minecraft.getInstance();
             AbstractTexture texture = client.getTextureManager().getTexture(skin);
             int glId = texture.getId();
 
-            ByteBuffer buf = SkinTextureReader.read(glId);
-            if (buf == null) return null;
+            SkinTextureReader.Result read = SkinTextureReader.readAsync(glId);
+            if (read.state() != SkinTextureReader.State.READY) {
+                return new SampleOutcome(read.state(), null);
+            }
+            ByteBuffer buf = read.pixels();
 
             // MC uploads skin images top-down without flipping, so buffer row v IS
             // skin row v - no GL flip here. Face blend (hat over face), then a CPU
@@ -170,9 +179,9 @@ public final class AvatarRenderer {
             HAT_CACHE.put(skin, layerImage(hatPixels, FACE_SIZE * scale));
             maybeDump(buf, pixels);
             // Keep the bitmap alive: makeFromBitmap may share the pixel ref.
-            return Image.makeFromBitmap(bitmap);
+            return new SampleOutcome(SkinTextureReader.State.READY, Image.makeFromBitmap(bitmap));
         } catch (Throwable t) {
-            return null;
+            return new SampleOutcome(SkinTextureReader.State.INVALID, null);
         }
     }
 

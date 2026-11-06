@@ -8,22 +8,57 @@ import io.github.humbleui.skija.Canvas;
 import io.github.humbleui.skija.Color;
 import io.github.humbleui.skija.Font;
 import io.github.humbleui.skija.Paint;
+import io.github.humbleui.skija.TextBlob;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Minimal Skia text renderer with Minecraft color-code support (ported from Tuui's FontRenderer).
  */
 public final class SkiaFontRenderer {
     private static final EmojiGlyphCache EMOJI_GLYPHS = new EmojiGlyphCache();
-    static void clearEmojiGlyphCache() { EMOJI_GLYPHS.clear(); }
+    /** Render-thread scratch paints; every draw sets the properties it reads. */
+    private static final Paint TEXT_PAINT = new Paint();
+    private static final Paint SHADOW_PAINT = new Paint();
+    static void clearEmojiGlyphCache() { EMOJI_GLYPHS.clear(); clearTextShapeCache(); }
     static long emojiGlyphBuilds() { return EMOJI_GLYPHS.builds(); }
+    static long shapedPlanBuilds() { return shapeCacheBuilds; }
+
+    /** One shaped fallback-font run. The width is measured once with the blob. */
+    private record ShapedRun(Font font, String text, TextBlob blob, float width) {}
+    /** All fallback runs for one visible string, retained across repeated frames. */
+    private record ShapedPlan(List<ShapedRun> runs, float width) {}
+    private record ShapeKey(Font font, String text) {}
+
+    /**
+     * Repeated labels otherwise enter Canvas.drawString on every frame, which
+     * shapes the same run again in native Skia. The cache is deliberately
+     * bounded by both entries and UTF-16 characters; the render thread is the
+     * only writer, like the width and fallback-font caches beside it.
+     */
+    private static final int SHAPE_CACHE_ENTRIES = 2048;
+    private static final int SHAPE_CACHE_CHARACTERS = 131_072;
+    private static final Map<ShapeKey, ShapedPlan> SHAPE_CACHE =
+            new java.util.LinkedHashMap<>(256, 0.75F, true);
+    private static int shapeCacheCharacters;
+    private static long shapeCacheBuilds;
+    private static final int PARSE_CACHE_ENTRIES = 2048;
+    private static final Map<String, List<TextSegment>> PARSE_CACHE =
+            new java.util.LinkedHashMap<>(256, 0.75F, true);
+    private record WrapKey(Font font, String text, float maxWidth, boolean words) {}
+    private static final int WRAP_CACHE_ENTRIES = 2048;
+    private static final int WRAP_CACHE_CHARACTERS = 131_072;
+    private static final Map<WrapKey, List<String>> WRAP_CACHE =
+            new java.util.LinkedHashMap<>(256, 0.75F, true);
+    private static int wrapCacheCharacters;
+    private static long wrapCacheBuilds;
     /** Native editable/ordered text is literal; section signs are not a second formatting language. */
     public static float literalWidth(Font font,String text) { return text == null || text.isEmpty() ? 0 : measureRuns(font,text); }
     public static void drawLiteralText(Canvas canvas,Font font,String text,float x,float y,int color) {
         if (text == null || text.isEmpty()) return;
-        try (Paint paint = new Paint().setColor(color)) { drawRuns(canvas,text,x,y,font,paint); }
+        drawRuns(canvas, text, x, y, font, TEXT_PAINT.setColor(color));
     }
     private static final int[] COLOR_CODE_RGB = new int[]{
             0x000000, 0x0000AA, 0x00AA00, 0x00AAAA,
@@ -330,15 +365,14 @@ public final class SkiaFontRenderer {
                 // when this layer is restored below.
                 float pad = 8.0F;
                 var metrics = font.getMetrics();
-                try (Paint layer = new Paint()) {
-                    layer.setImageFilter(shadow);
-                    canvas.saveLayer(io.github.humbleui.types.Rect.makeXYWH(
-                            x - pad, y + metrics.getAscent() - pad,
-                            getStringWidth(font, text) + pad * 2.0F,
-                            (metrics.getDescent() - metrics.getAscent()) + pad * 2.0F), layer);
-                }
+                canvas.saveLayer(io.github.humbleui.types.Rect.makeXYWH(
+                        x - pad, y + metrics.getAscent() - pad,
+                        getStringWidth(font, text) + pad * 2.0F,
+                        (metrics.getDescent() - metrics.getAscent()) + pad * 2.0F),
+                        SHADOW_PAINT.setImageFilter(shadow));
             }
-            try (Paint paint = new Paint().setColor(color)) {
+            try {
+                Paint paint = TEXT_PAINT;
                 int currentColor = color;
                 float drawX = x;
                 for (TextSegment segment : parseColoredText(text)) {
@@ -347,8 +381,7 @@ public final class SkiaFontRenderer {
                     }
                     if (!segment.text.isEmpty()) {
                         paint.setColor(currentColor);
-                        drawRuns(canvas, segment.text, drawX, y, font, paint);
-                        drawX += measureRuns(font, segment.text);
+                        drawX += drawRuns(canvas, segment.text, drawX, y, font, paint);
                     }
                 }
             } finally {
@@ -356,6 +389,7 @@ public final class SkiaFontRenderer {
                     // Exactly one restore per saveLayer, before the bare
                     // save's own restore.
                     canvas.restore();
+                    SHADOW_PAINT.setImageFilter(null);
                 }
             }
         } finally {
@@ -393,10 +427,8 @@ public final class SkiaFontRenderer {
     private static void drawLinesPass(Canvas canvas, Font font, java.util.List<String> lines, float x, float blockTop, float lineHeight, int color,
                                       io.github.humbleui.skija.ImageFilter shadow) {
         canvas.save();
-        try (Paint paint = new Paint()) {
-            if (shadow != null) {
-                paint.setImageFilter(shadow);
-            }
+        try {
+            Paint paint = shadow == null ? TEXT_PAINT : SHADOW_PAINT.setImageFilter(shadow);
             for (int i = 0; i < lines.size(); i++) {
                 float baseline = centerBaselineY(font, blockTop + (i + 0.5F) * lineHeight);
                 int currentColor = color;
@@ -407,12 +439,12 @@ public final class SkiaFontRenderer {
                     }
                     if (!segment.text.isEmpty()) {
                         paint.setColor(currentColor);
-                        drawRuns(canvas, segment.text, drawX, baseline, font, paint);
-                        drawX += measureRuns(font, segment.text);
+                        drawX += drawRuns(canvas, segment.text, drawX, baseline, font, paint);
                     }
                 }
             }
         } finally {
+            if (shadow != null) SHADOW_PAINT.setImageFilter(null);
             canvas.restore();
         }
     }
@@ -591,31 +623,98 @@ public final class SkiaFontRenderer {
      */
     private static final char EMOJI_VARIATION_SELECTOR = '\uFE0F';
 
-    private static void drawRuns(Canvas canvas, String text, float x, float y, Font primary, Paint paint) {
+    private static float drawRuns(Canvas canvas, String text, float x, float y, Font primary, Paint paint) {
         // Keep the original string intact; only strip the presentation selector
         // from the glyph run we hand to Skia so it cannot add phantom width.
         if (text.indexOf(EMOJI_VARIATION_SELECTOR) >= 0) {
             text = text.replace(String.valueOf(EMOJI_VARIATION_SELECTOR), "");
         }
+        if (text.isEmpty()) {
+            return 0.0F;
+        }
+        ShapedPlan plan = shapedPlan(primary, text);
         float drawX = x;
+        for (ShapedRun run : plan.runs) {
+            if (!EMOJI_GLYPHS.draw(canvas, run.font, run.text, drawX, y, paint)) {
+                if (run.blob == null) {
+                    canvas.drawString(run.text, drawX, y, run.font, paint);
+                } else {
+                    canvas.drawTextBlob(run.blob, drawX, y, paint);
+                }
+            }
+            drawX += run.width;
+        }
+        return drawX - x;
+    }
+
+    private static ShapedPlan shapedPlan(Font primary, String text) {
+        ShapeKey key = new ShapeKey(primary, text);
+        ShapedPlan cached = SHAPE_CACHE.get(key);
+        if (cached != null) {
+            return cached;
+        }
+        List<ShapedRun> runs = new ArrayList<>();
+        float width = 0.0F;
         int i = 0;
-        int n = text.length();
-        while (i < n) {
+        while (i < text.length()) {
             int cp = text.codePointAt(i);
             Font runFont = fontFor(primary, cp);
-            int j = i;
-            while (j < n) {
-                int cp2 = text.codePointAt(j);
-                if (fontFor(primary, cp2) != runFont) {
-                    break;
-                }
-                j += Character.charCount(cp2);
+            int end = i + Character.charCount(cp);
+            while (end < text.length()) {
+                int next = text.codePointAt(end);
+                if (fontFor(primary, next) != runFont) break;
+                end += Character.charCount(next);
             }
-            String run = text.substring(i, j);
-            if (!EMOJI_GLYPHS.draw(canvas, runFont, run, drawX, y, paint))
-                canvas.drawString(run, drawX, y, runFont, paint);
-            drawX += runFont.measureTextWidth(run);
-            i = j;
+            String runText = text.substring(i, end);
+            TextBlob blob = null;
+            float runWidth;
+            // Oversized strings are intentionally not retained. Do not allocate
+            // native TextBlobs for them either, or an uncached draw would leak
+            // one blob per frame in long-lived sessions.
+            if (runText.length() <= 512 && text.length() <= SHAPE_CACHE_CHARACTERS) {
+                try {
+                    short[] glyphs = runFont.getStringGlyphs(runText);
+                    if (glyphs.length > 0) {
+                        float[] positions = runFont.getXPositions(glyphs, 0.0F);
+                        blob = TextBlob.makeFromPosH(glyphs, positions, 0.0F, runFont);
+                    }
+                } catch (RuntimeException | LinkageError ignored) {
+                    // Canvas.drawString below remains the compatibility path.
+                }
+            }
+            runWidth = runFont.measureTextWidth(runText);
+            runs.add(new ShapedRun(runFont, runText, blob, runWidth));
+            width += runWidth;
+            i = end;
+        }
+        ShapedPlan plan = new ShapedPlan(List.copyOf(runs), width);
+        shapeCacheBuilds++;
+        if (text.length() <= SHAPE_CACHE_CHARACTERS) {
+            SHAPE_CACHE.put(key, plan);
+            shapeCacheCharacters += text.length();
+            while (SHAPE_CACHE.size() > SHAPE_CACHE_ENTRIES
+                    || shapeCacheCharacters > SHAPE_CACHE_CHARACTERS) {
+                var eldest = SHAPE_CACHE.entrySet().iterator().next();
+                shapeCacheCharacters -= eldest.getKey().text().length();
+                closePlan(eldest.getValue());
+                SHAPE_CACHE.remove(eldest.getKey());
+            }
+        }
+        return plan;
+    }
+
+    static void clearTextShapeCache() {
+        for (ShapedPlan plan : SHAPE_CACHE.values()) closePlan(plan);
+        SHAPE_CACHE.clear();
+        PARSE_CACHE.clear();
+        shapeCacheCharacters = 0;
+        WRAP_CACHE.clear();
+        wrapCacheCharacters = 0;
+    }
+
+    private static void closePlan(ShapedPlan plan) {
+        for (ShapedRun run : plan.runs) {
+            if (run.blob != null) run.blob.close();
         }
     }
 
@@ -644,10 +743,12 @@ public final class SkiaFontRenderer {
     }
 
     public static List<String> wrap(Font font, String text, float maxWidth) {
+        if (text.isEmpty()) return List.of();
+        WrapKey key = new WrapKey(font, text, maxWidth, false);
+        List<String> cached = WRAP_CACHE.get(key);
+        if (cached != null) return cached;
+        wrapCacheBuilds++;
         List<String> lines = new ArrayList<>();
-        if (text.isEmpty()) {
-            return lines;
-        }
         StringBuilder current = new StringBuilder();
         float currentWidth = 0.0F;
         for (int i = 0; i < text.length(); i++) {
@@ -683,7 +784,7 @@ public final class SkiaFontRenderer {
         if (current.length() > 0) {
             lines.add(current.toString());
         }
-        return lines;
+        return cacheWrap(key, lines);
     }
 
     /**
@@ -692,8 +793,30 @@ public final class SkiaFontRenderer {
      * first and only splits a word that cannot fit a line by itself.
      */
     public static List<String> wrapWords(Font font, String text, float maxWidth) {
-        return wrapWords(text, maxWidth, s -> getStringWidth(font, s));
+        if (text == null || text.isEmpty()) return List.of();
+        WrapKey key = new WrapKey(font, text, maxWidth, true);
+        List<String> cached = WRAP_CACHE.get(key);
+        if (cached != null) return cached;
+        wrapCacheBuilds++;
+        return cacheWrap(key, wrapWords(text, maxWidth, s -> getStringWidth(font, s)));
     }
+
+    private static List<String> cacheWrap(WrapKey key, List<String> lines) {
+        List<String> immutable = List.copyOf(lines);
+        if (key.text().length() <= WRAP_CACHE_CHARACTERS) {
+            WRAP_CACHE.put(key, immutable);
+            wrapCacheCharacters += key.text().length();
+            while (WRAP_CACHE.size() > WRAP_CACHE_ENTRIES
+                    || wrapCacheCharacters > WRAP_CACHE_CHARACTERS) {
+                var eldest = WRAP_CACHE.entrySet().iterator().next();
+                wrapCacheCharacters -= eldest.getKey().text().length();
+                WRAP_CACHE.remove(eldest.getKey());
+            }
+        }
+        return immutable;
+    }
+
+    static long wrapCacheBuilds() { return wrapCacheBuilds; }
 
     static List<String> wrapWords(String text, float maxWidth,
                                   java.util.function.Function<String, Float> measure) {
@@ -778,6 +901,8 @@ public final class SkiaFontRenderer {
     }
 
     private static List<TextSegment> parseColoredText(String text) {
+        List<TextSegment> cached = PARSE_CACHE.get(text);
+        if (cached != null) return cached;
         List<TextSegment> segments = new ArrayList<>();
         StringBuilder current = new StringBuilder();
         String pendingColor = null;
@@ -811,7 +936,12 @@ public final class SkiaFontRenderer {
         if (current.length() > 0) {
             segments.add(new TextSegment(current.toString(), pendingColor));
         }
-        return segments;
+        List<TextSegment> parsed = List.copyOf(segments);
+        PARSE_CACHE.put(text, parsed);
+        if (PARSE_CACHE.size() > PARSE_CACHE_ENTRIES) {
+            PARSE_CACHE.remove(PARSE_CACHE.keySet().iterator().next());
+        }
+        return parsed;
     }
 
     private static boolean isHex(String s) {

@@ -72,6 +72,7 @@ public class AtomChatClient implements ClientModInitializer {
                 // Decimated copies were built from the old resource-supplied
                 // bitmaps; keep them pointed at images that still exist.
                 com.atom.chat.render.ImageQuality.release();
+                com.atom.chat.settings.SettingsSectionPage.clearTranslationCache();
             }
         });
         AtomChat.LOGGER.info(com.atom.chat.diagnostics.AtomChatLog.message("startup", "AtomChat client initialized"));

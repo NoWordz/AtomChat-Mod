@@ -108,8 +108,8 @@ class SkiaDrawBenchmark {
             // 一次性成本：真机上面板第一帧的 max 是 174 ms，而稳定态 p50 只有 1.12 ms。
             // 最像的是"两个 OTF 一共 7.2 MB，第一次用到才解析" —— 那就把它量出来，别猜。
             sb.append("\nAtomChat bench:   one-time first-touch costs (per session)");
-            sb.append('\n').append(parseRow("/assets/atomchat/font/bundled.otf"));
-            sb.append('\n').append(parseRow("/assets/atomchat/font/bundled-bold.otf"));
+            sb.append('\n').append(parseRow("/com/atom/lib/fonts/bundled-default.otf"));
+            sb.append('\n').append(parseRow("/com/atom/lib/fonts/bundled-default-bold.otf"));
             System.out.println(sb);
 
             assertTrue(drawnBytes(surface) > 0, "基准画了个空 —— 那量出来的数没有意义");

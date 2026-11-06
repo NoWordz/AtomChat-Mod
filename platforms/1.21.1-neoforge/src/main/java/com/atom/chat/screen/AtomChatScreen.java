@@ -1405,6 +1405,8 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
     // the way in, the shorter PANEL_CLOSE_TAU_MS on the way out), so its shape
     // and fade resolve on one timeline per direction.
     private static final int GLFW_KEY_V = 86;
+    /** Truth3 诊断热键：F6（GLFW 295）；备用 Ctrl+Shift+F6，见交付报告。 */
+    private static final int TRUTH3_KEY_F6 = 295;
     /** Slack around the panel in the fade layer, so bezel/shadow are not clipped. */
     private static final float LAYER_CHROME = 32.0F;
     private final long openStart = System.currentTimeMillis();
@@ -1942,6 +1944,20 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         long nowNanos = System.nanoTime();
         float frameDtMs = PanelOpenMotion.frameDtMs(nowNanos, lastFrameNanos);
         lastFrameNanos = nowNanos;
+        // Truth3: 独立帧间隔采样器 + 配置灌入。放在 drawPanel 之前、与其完全解耦，
+        // 因此 C 档（不调用 drawPanel）仍出数。复用入口已取的 nowNanos，不额外取时钟。
+        com.atom.chat.diagnostics.Truth3Probe probe = com.atom.chat.diagnostics.Truth3Probe.get();
+        com.atom.chat.config.AtomChatConfig truth3Cfg = com.atom.chat.config.AtomChatConfig.get();
+        String modeSwitch = probe.configure(truth3Cfg.debug, truth3Cfg.diagnosticRenderMode);
+        if (modeSwitch != null) AtomChat.LOGGER.info(modeSwitch);
+        String frameProbe = probe.onRenderFrame(nowNanos);
+        if (frameProbe != null) AtomChat.LOGGER.info(frameProbe);
+        // [Mode-D] blur_cadence 刷新率统计行：仅 debug=on 且 D 档输出；其余档
+        // cadenceLine() 直接返回 null，产品默认（debug=off）零调用、零开销。
+        if (truth3Cfg.debug) {
+            String cadence = probe.cadenceLine();
+            if (cadence != null) AtomChat.LOGGER.info(cadence);
+        }
         // The open/close rides a spring (unit E2): quicker than the retired
         // tau-70 exponential with a restrained settle, same exact-landing
         // snap so the equality settle test and the 6% close cut keep working.
@@ -1968,8 +1984,22 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         }
 
         graphics.checkFrameBufferId();
+        // [Mode-D] D 档（Muonium 时序策略）：画面板 + 玻璃，背景采集/模糊按 30Hz 单调时间限频。
+        // 非刷新帧复用上一代结果纹理；首次进入 D 时 blurRefreshDue 强制刷新一次，renderReuse
+        // 内还有二级降级。A/B/C 档不进入 D 分支（reusePrevFrame 恒 false），A 路径一字不动。
+        // 三条档位共用同一次 capture 推导：PanelShellWiringSourceTest 断言此处只能有一处
+        // blurCapture(，复制第二份会让 capture 与 drawPhone 的变换悄悄漂移。
+        com.atom.chat.diagnostics.Truth3Probe truth3Mode = com.atom.chat.diagnostics.Truth3Probe.get();
+        boolean blurComposite = truth3Mode.blurComposite();
         Runnable preUi = null;
-        if (blurWanted && PanelBlurRenderer.isAvailable()) {
+        if (blurWanted && PanelBlurRenderer.isAvailable()
+                && (truth3Mode.blurPrepass() || blurComposite)) {
+            // D 档每帧问一次限频（刷新计数与窗口都在 blurRefreshDue 里）；非 D 档不进这一步。
+            // 只在面板已稳定（settled）且不在关闭中才复用旧档：开合动画期间 panel 矩形每帧
+            // 都在变，复用旧尺寸的结果纹理会把背景拉伸错位（A 档每帧重采，此处必须与之一致）。
+            // 动画期照常每帧刷新，D 与 A 的差别因此只落在稳态——正是本实验要测的那一段。
+            final boolean reusePrevFrame = blurComposite && panelSettled
+                    && !truth3Mode.blurRefreshDue(nowNanos);
             preUi = () -> {
                 try {
                     float strokeWidth = UiTokens.panelInset();
@@ -1980,7 +2010,12 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
                             panelProgress, AtomChatConfig.get().pageNavStyle,
                             panelX(), panelY(), panelWidth(), panelHeight(), strokeWidth,
                             uiDensity(), this.client.getWindow().getGuiScale());
-                    blurDrawnThisFrame = PanelBlurRenderer.render(
+                    blurDrawnThisFrame = reusePrevFrame
+                            ? PanelBlurRenderer.renderReuse(
+                            context.pose().last().pose(),
+                            capture.x(), capture.y(), capture.w(), capture.h(), capture.radius(),
+                            panelProgress, AtomChatConfig.get().effectiveBlurStrength())
+                            : PanelBlurRenderer.render(
                             context.pose().last().pose(),
                             capture.x(), capture.y(), capture.w(), capture.h(), capture.radius(),
                             panelProgress, AtomChatConfig.get().effectiveBlurStrength());
@@ -2001,19 +2036,22 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         // No super.render: ChatScreen/Screen would draw the vanilla input box and
         // widget chrome; our UI is fully Skia-drawn, the suggestor renders explicitly.
         Runnable blurPreUi = preUi;
-        graphics.drawPanel(() -> {
-            long segmentId = com.atom.chat.diagnostics.FrameSegments.current();
-            if (blurPreUi != null) {
+        // Truth3: C 档整帧不调用 drawPanel（只留 MC 本体）；A / B 档照常调用。
+        if (com.atom.chat.diagnostics.Truth3Probe.get().drawPanel()) {
+            graphics.drawPanel(() -> {
+                long segmentId = com.atom.chat.diagnostics.FrameSegments.current();
+                if (blurPreUi != null) {
+                    long started = com.atom.chat.diagnostics.FrameSegments.start(segmentId);
+                    try { blurPreUi.run(); } finally { com.atom.chat.diagnostics.FrameSegments.end(segmentId, com.atom.chat.diagnostics.FrameSegments.Stage.BLUR, started); }
+                }
                 long started = com.atom.chat.diagnostics.FrameSegments.start(segmentId);
-                try { blurPreUi.run(); } finally { com.atom.chat.diagnostics.FrameSegments.end(segmentId, com.atom.chat.diagnostics.FrameSegments.Stage.BLUR, started); }
-            }
-            long started = com.atom.chat.diagnostics.FrameSegments.start(segmentId);
-            try { com.atom.chat.render.ItemIconRenderer.prepare(context, graphics); }
-            finally { com.atom.chat.diagnostics.FrameSegments.end(segmentId, com.atom.chat.diagnostics.FrameSegments.Stage.ICONS, started); }
-        }, uiDensity(), (canvas, worldSnapshot) -> {
-            drawPhone(canvas, worldSnapshot, mouseX, mouseY, delta);
-            chatEffects.renderExperimental(graphics.requireSurface());
-        });
+                try { com.atom.chat.render.ItemIconRenderer.prepare(context, graphics); }
+                finally { com.atom.chat.diagnostics.FrameSegments.end(segmentId, com.atom.chat.diagnostics.FrameSegments.Stage.ICONS, started); }
+            }, uiDensity(), (canvas, worldSnapshot) -> {
+                drawPhone(canvas, worldSnapshot, mouseX, mouseY, delta);
+                chatEffects.renderExperimental(graphics.requireSurface());
+            });
+        }
         // Keep third-party chat additions in their original GUI coordinates.
         // The inherited input field remains only an IME carrier, never painted.
         if (canRenderForeignChatUi()) {
@@ -3153,6 +3191,16 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
 
     @Override
     public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
+        // Truth3 诊断热键（仅 debug=on 生效）：裸 F6 循环 A→B→C→D→A；备用 Ctrl+Shift+F6；
+        // Alt / Super 组合留给第三方 mod，避免抢键。
+        com.atom.chat.diagnostics.Truth3Probe truth3 = com.atom.chat.diagnostics.Truth3Probe.get();
+        boolean truth3Key = keyCode == TRUTH3_KEY_F6
+                && (((modifiers & 15) == 0) || ((modifiers & 3) == 3 && (modifiers & 12) == 0));
+        if (truth3Key && truth3.isDebug()) {
+            String line = truth3.cycle();
+            if (line != null) AtomChat.LOGGER.info(line);
+            return true;
+        }
         Boolean direct = gate.key(keyCode, scanCode, modifiers);
         if (direct != null) {
             return direct;

@@ -46,8 +46,10 @@ import net.minecraft.text.Text;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * Body of one settings section: a vertical list of rows in the same visual
@@ -391,6 +393,7 @@ public final class SettingsSectionPage {
             return;
         }
         activeChip.put(section.id(), index);
+        rowGeometry = null;
         // The new row set draws in one frame, then rises in on the same
         // per-row stagger a navigation arrival uses (no crossfade, no second
         // clock — the entrance IS the transition).
@@ -514,6 +517,15 @@ public final class SettingsSectionPage {
     private int pressedRow = -1;
     /** Per-swatch bounce scales, keyed by {@link #swatchKey}. */
     private final Map<Long, PressScale> swatchScale = new HashMap<>();
+    /** Row list from this frame's measure pass, reused by the immediately following draw. */
+    private SettingsSection measuredRowsSection;
+    private String measuredRowsChip;
+    private List<Row> measuredRows;
+    private long rowBuilds;
+    private long compactTextBuilds;
+    private List<Row> rowGroupRows;
+    private String[] rowGroups;
+    private RowGeometry rowGeometry;
     /** Swatch hover/press state (row-local swatch index), -1 = none. */
     private int hoveredSwatch = -1;
     private int pressedSwatch = -1;
@@ -544,6 +556,7 @@ public final class SettingsSectionPage {
     private long settleStart;
     private int hoveredIndex = -1;
     private long lastFrameMs = System.currentTimeMillis();
+    private static final Map<String, String> NO_ARG_TEXT = new HashMap<>();
 
     /** Title/value/verb/icon colour — follows the interface text colour setting. */
     private static int textPrimary() {
@@ -556,8 +569,21 @@ public final class SettingsSectionPage {
         return Color.makeARGB(alpha, (c >> 16) & 0xFF, (c >> 8) & 0xFF, c & 0xFF);
     }
 
+    private static String tr(String key) {
+        String cached = NO_ARG_TEXT.get(key);
+        if (cached != null) return cached;
+        String value = Text.translatable(key).getString();
+        NO_ARG_TEXT.put(key, value);
+        return value;
+    }
+
     private static String tr(String key, Object... args) {
-        return Text.translatable(key, args).getString();
+        return args.length == 0 ? tr(key) : Text.translatable(key, args).getString();
+    }
+
+    /** Resource reloads cover language changes and pack changes; keep no stale copy across them. */
+    public static void clearTranslationCache() {
+        NO_ARG_TEXT.clear();
     }
 
     private static String humanBytes(long bytes) {
@@ -592,7 +618,19 @@ public final class SettingsSectionPage {
     private record CompactText(List<String> title, List<String> description,
                                float titleH, float descriptionH, float controlH, float height) {}
 
+    /** One frame's row heights, tops and text measurements. */
+    private record RowGeometry(List<Row> rows, SettingsSection section,
+                               float listX, float listY, float listW,
+                               float cardWidth, float[] tops, float[] heights,
+                               float contentHeight,
+                               IdentityHashMap<Row, CompactText> compactTexts) {}
+
     private CompactText compactText(Row row, float width) {
+        if (rowGeometry != null && Float.compare(rowGeometry.cardWidth(), width) == 0
+                && rowGeometry.compactTexts().containsKey(row)) {
+            return rowGeometry.compactTexts().get(row);
+        }
+        compactTextBuilds++;
         Font titleFont = FontManager.font(UiTokens.SETTINGS_TILE_TITLE);
         Font subFont = FontManager.font(UiTokens.SETTINGS_TILE_SUB);
         float inner = Math.max(1.0F, width - UiTokens.SETTINGS_ROW_PAD * 2.0F);
@@ -682,9 +720,12 @@ public final class SettingsSectionPage {
     }
 
     public float rowHeight(Row row, UiLayout layout) {
+        return rowHeight(row, layout, compactText(row, rowCardWidth(layout)));
+    }
+
+    private float rowHeight(Row row, UiLayout layout, CompactText compact) {
         RowKind kind = row.kind();
         float base = rowHeight(kind);
-        CompactText compact = compactText(row, rowCardWidth(layout));
         if (compact != null) base = compact.height();
         if (kind == RowKind.COLOR) {
             int columns = swatchColumns(new UiLayout.Rect(0, 0, rowCardWidth(layout), base));
@@ -819,6 +860,7 @@ public final class SettingsSectionPage {
 
     /** Rows in display order for the given section (active chip applied). */
     public List<Row> rows(SettingsSection section) {
+        rowBuilds++;
         return switch (section) {
             case CHAT -> chatRows(activeChipId(section));
             case APPEARANCE -> appearanceRows(activeChipId(section));
@@ -826,6 +868,10 @@ public final class SettingsSectionPage {
             case ABOUT -> aboutRows();
         };
     }
+
+    long rowBuildsForTest() { return rowBuilds; }
+
+    long compactTextBuildsForTest() { return compactTextBuilds; }
 
     /**
      * Adds a collapsible group: the label is always present; the children are
@@ -1050,19 +1096,30 @@ public final class SettingsSectionPage {
      * that). Deriving membership from the list itself keeps rendering,
      * hit-testing and measurement in lockstep without tagging rows.
      */
-    private static String owningGroup(List<Row> rows, int index) {
-        if (index >= 0 && index < rows.size() && rows.get(index).kind() == RowKind.LABEL
-                && foldableGroup(rows.get(index).labelKey()) != null) {
-            return null;
+    private String owningGroup(List<Row> rows, int index) {
+        return rowGroups(rows)[index];
+    }
+
+    /** Resolves every row's fold owner in one pass; callers used to rescan the prefix. */
+    private String[] rowGroups(List<Row> rows) {
+        if (rowGroupRows == rows && rowGroups != null && rowGroups.length == rows.size()) {
+            return rowGroups;
         }
-        String group = null;
-        for (int i = 0; i < index && i < rows.size(); i++) {
+        String[] resolved = new String[rows.size()];
+        String active = null;
+        for (int i = 0; i < rows.size(); i++) {
             Row row = rows.get(i);
             if (row.kind() == RowKind.LABEL) {
-                group = foldableGroup(row.labelKey());
+                String own = foldableGroup(row.labelKey());
+                resolved[i] = own == null ? active : null;
+                active = own;
+            } else {
+                resolved[i] = active;
             }
         }
-        return group;
+        rowGroupRows = rows;
+        rowGroups = resolved;
+        return resolved;
     }
 
     /** Live expansion of the group owning row {@code index}; 1.0 outside
@@ -1100,8 +1157,12 @@ public final class SettingsSectionPage {
         }
         for (Map.Entry<String, Float> entry : groupExpansion.entrySet()) {
             float target = collapsedColorGroups.contains(entry.getKey()) ? 0.0F : 1.0F;
-            entry.setValue(UiMotion.expApproach(entry.getValue(), target, dtMs,
-                    GROUP_FOLD_TAU_MS));
+            float next = UiMotion.expApproach(entry.getValue(), target, dtMs,
+                    GROUP_FOLD_TAU_MS);
+            if (Float.compare(next, entry.getValue()) != 0) {
+                rowGeometry = null;
+            }
+            entry.setValue(next);
         }
     }
 
@@ -1127,7 +1188,7 @@ public final class SettingsSectionPage {
      * list itself (via {@link #owningGroup}), like every other geometry
      * consumer.
      */
-    private static boolean isAboutCardChild(List<Row> rows, int index) {
+    private boolean isAboutCardChild(List<Row> rows, int index) {
         // AUTHORS draws two independent cards; its fold group owns visibility only.
         return rows.get(index).kind() != RowKind.AUTHORS && owningGroup(rows, index) != null;
     }
@@ -1149,19 +1210,57 @@ public final class SettingsSectionPage {
         return rowHeight(rows.get(index), layout) * expansion + gap;
     }
 
+    private RowGeometry buildRowGeometry(SettingsSection section, List<Row> rows,
+                                         UiLayout layout) {
+        float width = rowCardWidth(layout);
+        String[] groups = rowGroups(rows);
+        float[] tops = new float[rows.size()];
+        float[] heights = new float[rows.size()];
+        IdentityHashMap<Row, CompactText> compactTexts = new IdentityHashMap<>();
+        float y = 0.0F;
+        for (int i = 0; i < rows.size(); i++) {
+            Row row = rows.get(i);
+            CompactText compact = compactText(row, width);
+            compactTexts.put(row, compact);
+            float expansion = groups[i] == null ? 1.0F : expansionOf(groups[i]);
+            float height = rowHeight(row, layout, compact) * expansion;
+            tops[i] = y;
+            heights[i] = height;
+            y += height;
+            if (i + 1 < rows.size()) {
+                String nextGroup = groups[i + 1];
+                float nextExpansion = nextGroup == null ? 1.0F : expansionOf(nextGroup);
+                float gap = UiTokens.SETTINGS_ROW_GAP * nextExpansion;
+                if (groups[i] != null && groups[i].equals(nextGroup)) gap = 0.0F;
+                y += gap;
+            }
+        }
+        float contentHeight = rows.isEmpty() ? 0.0F : tops[rows.size() - 1] + heights[rows.size() - 1];
+        RowGeometry geometry = new RowGeometry(rows, section, layout.list.x(), layout.list.y(),
+                layout.list.w(), width, tops, heights, contentHeight, compactTexts);
+        rowGeometry = geometry;
+        return geometry;
+    }
+
+    private RowGeometry rowGeometry(SettingsSection section, List<Row> rows, UiLayout layout) {
+        RowGeometry cached = rowGeometry;
+        if (cached != null && cached.rows() == rows && cached.section() == section
+                && Float.compare(cached.listX(), layout.list.x()) == 0
+                && Float.compare(cached.listY(), layout.list.y()) == 0
+                && Float.compare(cached.listW(), layout.list.w()) == 0) {
+            return cached;
+        }
+        return buildRowGeometry(section, rows, layout);
+    }
+
     public float measureContent(UiLayout layout, SettingsSection section) {
         List<Row> rows = rows(section);
-        if (rows.isEmpty()) {
-            return UiTokens.ROOT_CONTENT_GAP + chipBarHeight(section);
-        }
-        float total = UiTokens.ROOT_CONTENT_GAP + chipBarHeight(section);
-        for (int i = 0; i < rows.size(); i++) {
-            // Same walk as rowAdvance (the card's zero child-gap lives there),
-            // except the last row: nothing follows it, so no gap either way.
-            total += i < rows.size() - 1
-                    ? rowAdvance(rows, i, layout)
-                    : rowHeight(rows.get(i), layout) * rowExpansion(rows, i);
-        }
+        measuredRowsSection = section;
+        measuredRowsChip = activeChipId(section);
+        measuredRows = rows;
+        RowGeometry geometry = buildRowGeometry(section, rows, layout);
+        if (rows.isEmpty()) return UiTokens.ROOT_CONTENT_GAP + chipBarHeight(section);
+        float total = UiTokens.ROOT_CONTENT_GAP + chipBarHeight(section) + geometry.contentHeight();
         // Leave the same hover-clearance under the last card that rowCardWidth
         // leaves at its sides. Without it, scrolling to the end parks the card
         // exactly on the clip edge and the press spring shears its bottom.
@@ -1197,12 +1296,10 @@ public final class SettingsSectionPage {
     /** Package-private so layout tests can assert the scroll-end clearance. */
     UiLayout.Rect rowRect(SettingsSection section, List<Row> rows, int index,
                           float scrollY, UiLayout layout) {
-        float y = contentTop(layout, section) - scrollY;
-        for (int i = 0; i < index; i++) {
-            y += rowAdvance(rows, i, layout);
-        }
+        RowGeometry geometry = rowGeometry(section, rows, layout);
+        float y = contentTop(layout, section) - scrollY + geometry.tops()[index];
         return new UiLayout.Rect(layout.list.x() + ROW_CLIP_INSET, y,
-                rowCardWidth(layout), rowHeight(rows.get(index), layout) * rowExpansion(rows, index));
+                geometry.cardWidth(), geometry.heights()[index]);
     }
 
     private static UiLayout.Rect sliderTrackRect(UiLayout.Rect row) {
@@ -1234,7 +1331,9 @@ public final class SettingsSectionPage {
         pointerX = vmx;
         pointerY = vmy;
 
-        List<Row> rows = rows(section);
+        String chip = activeChipId(section);
+        List<Row> rows = measuredRowsSection == section && Objects.equals(measuredRowsChip, chip)
+                && measuredRows != null ? measuredRows : rows(section);
         // Fold animation clock: advances every group's expansion toward the
         // state the collapsed set names, before drawing consumes it. The row
         // list above was built against last frame's values; at the one moment

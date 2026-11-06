@@ -30,7 +30,7 @@ class AvatarReadbackWiringTest {
             String source = Files.readString(root.resolve(path));
             assertFalse(source.contains("glGetTexImage("),
                     path + ": fixed-size client buffers let HD skins overwrite native memory");
-            assertTrue(source.contains("SkinTextureReader.read(glId)"), path);
+            assertTrue(source.contains("SkinTextureReader.readAsync(glId)"), path);
         }
     }
 
@@ -42,6 +42,7 @@ class AvatarReadbackWiringTest {
             for (Path file : files.filter(Files::isRegularFile).toList()) {
                 String relative = root.relativize(file).toString().replace('\\', '/');
                 if (!relative.contains("/src/main/java/") || !relative.endsWith(".java")) continue;
+                if (relative.startsWith("build/") || relative.startsWith(".work/")) continue;
                 if (Files.readString(file).contains("glGetTexImage(")) callers.add(relative);
             }
         }
@@ -76,8 +77,8 @@ class AvatarReadbackWiringTest {
             glfwInitialized = GLFW.glfwInit();
             assertTrue(glfwInitialized, "GLFW initialization failed");
             GLFW.glfwWindowHint(GLFW.GLFW_VISIBLE, GLFW.GLFW_FALSE);
-            GLFW.glfwWindowHint(GLFW.GLFW_CONTEXT_VERSION_MAJOR, 2);
-            GLFW.glfwWindowHint(GLFW.GLFW_CONTEXT_VERSION_MINOR, 1);
+            GLFW.glfwWindowHint(GLFW.GLFW_CONTEXT_VERSION_MAJOR, 3);
+            GLFW.glfwWindowHint(GLFW.GLFW_CONTEXT_VERSION_MINOR, 2);
             window = GLFW.glfwCreateWindow(32, 32, "AtomChat skin readback test", 0, 0);
             assertNotEquals(0L, window, "could not create hidden OpenGL window");
             GLFW.glfwMakeContextCurrent(window);
@@ -87,6 +88,7 @@ class AvatarReadbackWiringTest {
         @AfterEach
         void closeHiddenContext() {
             if (window != 0L) {
+                SkinTextureReader.release();
                 for (int buffer : buffers) GL15C.glDeleteBuffers(buffer);
                 for (int texture : textures) GL11C.glDeleteTextures(texture);
                 GLFW.glfwMakeContextCurrent(0);
@@ -97,6 +99,69 @@ class AvatarReadbackWiringTest {
                 GLFW.glfwTerminate();
                 glfwInitialized = false;
             }
+        }
+
+        @Test
+        void pboReadIsIssuedBeforeWaitingAndKeepsTheTexturePathAsynchronous() {
+            int texture = createTexture(128, 128);
+            int previous = createTexture(64, 64);
+            GL11C.glBindTexture(GL11C.GL_TEXTURE_2D, previous);
+
+            SkinTextureReader.Result started = SkinTextureReader.readAsync(texture);
+            assertEquals(SkinTextureReader.State.PENDING, started.state());
+            assertNull(started.pixels());
+
+            GL11C.glFinish();
+            SkinTextureReader.Result ready = SkinTextureReader.readAsync(texture);
+            assertEquals(SkinTextureReader.State.READY, ready.state());
+            assertNotNull(ready.pixels());
+            assertPattern(ready.pixels(), 8, 8, 2, "asynchronous face");
+            assertEquals(previous, GL11C.glGetInteger(GL11C.GL_TEXTURE_BINDING_2D));
+            assertGlClean();
+        }
+
+        @Test
+        void fullQueueWaitsForCapacityInsteadOfRestartingTheOldestRead() {
+            int[] skins = new int[9];
+            for (int i = 0; i < skins.length; i++) skins[i] = createTexture(128, 128);
+            int previous = createTexture(64, 64);
+            GL11C.glBindTexture(GL11C.GL_TEXTURE_2D, previous);
+
+            for (int skin : skins) {
+                assertEquals(SkinTextureReader.State.PENDING, SkinTextureReader.readAsync(skin).state());
+            }
+            GL11C.glFinish();
+
+            SkinTextureReader.Result ninthWhileFull = SkinTextureReader.readAsync(skins[8]);
+            assertEquals(SkinTextureReader.State.PENDING, ninthWhileFull.state());
+            GL11C.glFinish();
+
+            assertEquals(SkinTextureReader.State.READY, SkinTextureReader.readAsync(skins[0]).state(),
+                    "a full queue must not evict the first outstanding read");
+            assertEquals(SkinTextureReader.State.PENDING, SkinTextureReader.readAsync(skins[8]).state(),
+                    "the ninth read starts only after a slot is delivered");
+            GL11C.glFinish();
+            assertEquals(SkinTextureReader.State.READY, SkinTextureReader.readAsync(skins[8]).state(),
+                    "the ninth skin must not starve behind capacity churn");
+            assertEquals(previous, GL11C.glGetInteger(GL11C.GL_TEXTURE_BINDING_2D));
+            assertGlClean();
+        }
+
+        @Test
+        void abandonedFullQueueExpiresEvenWhenItsOwnersStopBeingDrawn() throws Exception {
+            int[] abandoned = new int[8];
+            for (int i = 0; i < abandoned.length; i++) abandoned[i] = createTexture(128, 128);
+            for (int skin : abandoned) {
+                assertEquals(SkinTextureReader.State.PENDING, SkinTextureReader.readAsync(skin).state());
+            }
+
+            Thread.sleep(2_100L);
+            int next = createTexture(128, 128);
+            assertEquals(SkinTextureReader.State.PENDING, SkinTextureReader.readAsync(next).state(),
+                    "the new texture starts after stale owners are reclaimed");
+            GL11C.glFinish();
+            assertEquals(SkinTextureReader.State.READY, SkinTextureReader.readAsync(next).state());
+            assertGlClean();
         }
 
         @Test

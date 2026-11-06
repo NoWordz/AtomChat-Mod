@@ -536,6 +536,31 @@ class NavStackControllerTest {
         }
     }
 
+    @Test
+    void navigationEventsCarryFrameIdAndIgnoreNoops(@TempDir Path dir) throws Exception {
+        Recorder host = new Recorder();
+        NavStackController controller = new NavStackController(host, false);
+        host.controller = controller;
+        com.atom.chat.diagnostics.FrameProfile.setEnabled(true);
+        try (var recording = new jdk.jfr.Recording()) {
+            recording.enable("com.atomchat.Navigation").withThreshold(java.time.Duration.ZERO);
+            recording.start();
+            long id = com.atom.chat.diagnostics.FrameSegments.begin(true);
+            controller.pushPage(AppPage.PROFILE_DETAIL);
+            controller.pushPage(AppPage.PROFILE_DETAIL);
+            com.atom.chat.diagnostics.FrameSegments.finish(id, true);
+            controller.popPage();
+            recording.stop(); Path file = dir.resolve("navigation.jfr"); recording.dump(file);
+            var events = jdk.jfr.consumer.RecordingFile.readAllEvents(file).stream()
+                .filter(e -> e.getEventType().getName().equals("com.atomchat.Navigation")).toList();
+            assertEquals(2, events.size());
+            assertEquals("push", events.get(0).getString("action"));
+            assertEquals(id, events.get(0).getLong("frameId"));
+            assertEquals("pop", events.get(1).getString("action"));
+            assertEquals(0, events.get(1).getLong("frameId"));
+        } finally { com.atom.chat.diagnostics.FrameProfile.setEnabled(false); }
+    }
+
     // -------------------------------------------------------- construction
 
     /** The vanilla chat key opens on the public feed, pushed over the list. */

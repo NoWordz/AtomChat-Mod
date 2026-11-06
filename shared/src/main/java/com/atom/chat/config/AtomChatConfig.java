@@ -87,15 +87,6 @@ public class AtomChatConfig {
     /** Rounded panel background blur (raw GL + core shader, outside Skia). */
     public boolean blurEnabled = true;
     /**
-     * Glass readability clamp on the blurred panel (the glass luma clamp):
-     * the rounded draw-back shader scales the blurred RGB down
-     * whenever its luma exceeds a ceiling (0.35), so white panel text stays
-     * readable over bright backdrops (snow, desert noon). Alpha is never
-     * touched. Off = the exact previous rendering (the shader's no-op 1.0
-     * default), so the switch is a pure escape hatch, not a fallback path.
-     */
-    public boolean glassMaxLuma = true;
-    /**
      * Master switch for decorative motion: message entrance, page/tab push,
      * the panel open slide, the avatar poke shake and scroll snapping.
      * Functional feedback (hover tint, wheel glide) is deliberately kept even
@@ -188,6 +179,20 @@ public class AtomChatConfig {
     public float contentScale = 1.0F;
     /** Dumps avatar sampling PNGs to {@code <gameDir>/atomchat/cache/debug/} for color debugging. */
     public boolean debug = false;
+    /**
+     * 「四档归零对照」诊断实验兜底档位："A"=完整（产品默认，每帧新鲜毛玻璃）、
+     * "B"=只跳背景模糊 pre-pass、"C"=整个 drawPanel 旁路、
+     * "D"=Muonium 时序策略实验档（背景采集/模糊 30Hz 限频、非刷新帧复用上一代结果纹理）。
+     * 仅当 debug=on 时生效；debug=off / 全新安装 / 未按键时恒等于 A，产品视觉逐字节不变。
+     * 非法值回退 A（见 Truth3Probe.parseMode）。
+     */
+    public String diagnosticRenderMode = "A";
+    /** [Mode-D 子项桩，默认关、本轮未实现] 半径槽（Muonium GlassBlurLevels 对应）。 */
+    public boolean modeDBlurRadiusSlots = false;
+    /** [Mode-D 子项桩，默认关、本轮未实现] 旧代借用（GlassBackdrop 落后 8 个采集代对应）。 */
+    public boolean modeDStaleGenerationBorrow = false;
+    /** [Mode-D 子项桩，默认关、本轮未实现] 开合动画期实色（GlassLook.java:151 对应）。 */
+    public boolean modeDOpaqueDuringAnimation = false;
     public int accentColor = 0xFF4A90E2;
     public int bubbleTextColor = 0xFFFFFFFF;
     public int ownBubbleColor = 0xFF1E90FF;
@@ -526,7 +531,15 @@ public class AtomChatConfig {
      * templates take effect without a game restart.
      */
     public static void reload() {
-        instance = load();
+        long token = com.atom.chat.diagnostics.FrameProfile.screenStage("CONFIG_RELOAD");
+        boolean ok = false;
+        try {
+            instance = load();
+            ok = true;
+        } finally {
+            // Covers the synchronous config file read on every screen open, on all three loaders.
+            com.atom.chat.diagnostics.FrameProfile.screenStageEnd("CONFIG_RELOAD", token, ok);
+        }
     }
 
     /**

@@ -68,7 +68,10 @@ public final class SkiaGraphics {
                 long started = com.atom.chat.diagnostics.FrameSegments.start(segmentId);
                 try { bridge.vanillaPass(preUi); } finally { com.atom.chat.diagnostics.FrameSegments.end(segmentId, com.atom.chat.diagnostics.FrameSegments.Stage.PRE_UI, started); }
             }
+            long bridgeStarted = com.atom.chat.diagnostics.FrameSegments.start(segmentId);
+            long[] bridgeExitStarted = segmentId == 0 ? null : new long[1];
             bridge.drawFrame((canvas, frame) -> {
+                com.atom.chat.diagnostics.FrameSegments.end(segmentId, com.atom.chat.diagnostics.FrameSegments.Stage.BRIDGE_ENTER, bridgeStarted);
                 borrowedSurface.set(frame.surface());
                 borrowedBackend.set(frame.backendRenderTarget());
                 int base = canvas.getSaveCount();
@@ -88,8 +91,10 @@ public final class SkiaGraphics {
                         }
                     }
                     canvas.restoreToCount(base);
+                    if (bridgeExitStarted != null) bridgeExitStarted[0] = com.atom.chat.diagnostics.FrameSegments.start(segmentId);
                 }
             });
+            if (bridgeExitStarted != null) com.atom.chat.diagnostics.FrameSegments.end(segmentId, com.atom.chat.diagnostics.FrameSegments.Stage.BRIDGE_EXIT, bridgeExitStarted[0]);
             segmentSuccess = true;
         } finally {
             borrowedSurface.remove();
@@ -97,7 +102,7 @@ public final class SkiaGraphics {
             com.atom.chat.diagnostics.FrameSegments.finish(segmentId, segmentSuccess);
             if (outerSurface != null) FrameProfile.restoreSurface(outerSurface);
         }
-        if (segmentId != 0 && FrameProfile.frame(profileStart, allocatedBefore)) {
+        if (segmentId != 0 && FrameProfile.frame(profileStart, allocatedBefore, segmentId)) {
             AtomChat.LOGGER.info(com.atom.chat.diagnostics.AtomChatLog.message("render", FrameProfile.summary() + com.atom.chat.diagnostics.FrameSegments.summary()));
         }
     }

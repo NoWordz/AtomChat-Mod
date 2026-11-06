@@ -6,7 +6,7 @@ cache. Opens no visible window and does not launch Minecraft or edit its
 instances.
 
 Optional args are forwarded to the probe: [repoRoot] [fshPath] [vshPath].
-The mutation test passes a clamp-stripped fsh copy and expects a failure.
+The mutation test passes a clamp-enabled fsh copy and expects a failure.
 """
 from pathlib import Path
 import os

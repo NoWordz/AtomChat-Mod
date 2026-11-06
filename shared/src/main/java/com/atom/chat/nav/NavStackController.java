@@ -271,6 +271,8 @@ public final class NavStackController {
             host.clearDetailScroll();
         }
         navigation.push(page);
+        com.atom.chat.diagnostics.FrameSegments.navigation("push",
+                page.page().name() + (page.param() != null ? ":" + page.param() : ""));
         ChatStore.setPublicActive(page.page() == AppPage.WORLD_CHAT);
         if (page.page() == AppPage.PRIVATE_CHAT) {
             PrivateChatStore.setActive(page.target());
@@ -300,7 +302,7 @@ public final class NavStackController {
             return;
         }
         if (topPage().isRoot()) {
-            navigation.pop();
+            if (navigation.pop()) com.atom.chat.diagnostics.FrameSegments.navigation("pop", topPage().name());
             return;
         }
         popNow();
@@ -318,7 +320,7 @@ public final class NavStackController {
         }
         host.clearTransientWorldUi();
         host.clearSettingsPageState();
-        navigation.pop();
+        if (navigation.pop()) com.atom.chat.diagnostics.FrameSegments.navigation("pop", topPage().name());
         // Falling back to the local player only once the page is off the stack,
         // so the Profile root tab never shows a stale injected subject.
         if (leavingProfile) {
@@ -364,6 +366,7 @@ public final class NavStackController {
         host.persistCurrentDraft();
         host.clearRootScroll();
         navigation.replaceWithRoot(NavPage.of(root));
+        com.atom.chat.diagnostics.FrameSegments.navigation("root", root.name());
         ChatStore.setPublicActive(false);
         host.selectTabNow(root);
     }

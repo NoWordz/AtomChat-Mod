@@ -85,6 +85,13 @@ public final class ImageLoader {
      * are user files and do not live here.
      */
     public static final long MAX_DISK_AGE_MS = 7L * 86_400_000L;
+    /**
+     * How long the settings surface may reuse the last disk-cache total.
+     * The value is display metadata, not a cache invariant: files written by
+     * this loader refresh it immediately through {@link #trimDiskCache()},
+     * while an external file appearing in the directory can wait one second.
+     */
+    static final long DISK_BYTES_TTL_MS = 1_000L;
     /** WebP quality for the processed disk cache (80 keeps photos small). */
     private static final int DISK_CACHE_QUALITY = 80;
     /** Custom CICode scheme whose bytes come from the server media companion. */
@@ -134,6 +141,8 @@ public final class ImageLoader {
     private final ConcurrentHashMap<String, Boolean> pending = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, Long> failedUntil = new ConcurrentHashMap<>();
     private volatile Path diskDir;
+    private volatile long diskBytes = -1L;
+    private volatile long diskBytesAt = Long.MIN_VALUE / 2L;
 
     private ImageLoader(Fetcher fetcher, LongSupplier clock, Executor executor) {
         this.fetcher = fetcher;
@@ -455,6 +464,8 @@ public final class ImageLoader {
     public void trimDiskCache() {
         Path dir = diskDir;
         if (!com.atom.chat.util.DataMigration.allowPersonalPath(dir) || !Files.isDirectory(dir)) {
+            diskBytes = 0L;
+            diskBytesAt = clock.getAsLong();
             return;
         }
         long cutoff = System.currentTimeMillis() - MAX_DISK_AGE_MS;
@@ -493,15 +504,25 @@ public final class ImageLoader {
                     AtomChat.LOGGER.warn(com.atom.chat.diagnostics.AtomChatLog.message("resource", "Failed to trim image cache file {}"), oldest, e);
                 }
             }
+            diskBytes = total;
+            diskBytesAt = clock.getAsLong();
         } catch (IOException e) {
+            diskBytes = -1L;
             AtomChat.LOGGER.warn(com.atom.chat.diagnostics.AtomChatLog.message("resource", "Failed to scan image cache directory {}"), dir, e);
         }
     }
 
     /** Total bytes currently stored in the disk cache (0 when not initialised). */
     public long diskCacheBytes() {
+        long now = clock.getAsLong();
+        long cached = diskBytes;
+        if (cached >= 0L && now >= diskBytesAt && now - diskBytesAt < DISK_BYTES_TTL_MS) {
+            return cached;
+        }
         Path dir = diskDir;
         if (!com.atom.chat.util.DataMigration.allowPersonalPath(dir) || !Files.isDirectory(dir)) {
+            diskBytes = 0L;
+            diskBytesAt = now;
             return 0L;
         }
         long total = 0L;
@@ -512,8 +533,11 @@ public final class ImageLoader {
                 }
             }
         } catch (IOException e) {
+            diskBytes = -1L;
             AtomChat.LOGGER.warn(com.atom.chat.diagnostics.AtomChatLog.message("resource", "Failed to size image cache directory {}"), dir, e);
         }
+        diskBytes = total;
+        diskBytesAt = now;
         return total;
     }
 
@@ -546,9 +570,12 @@ public final class ImageLoader {
                 }
             }
         } catch (IOException e) {
+            diskBytes = -1L;
             AtomChat.LOGGER.warn(com.atom.chat.diagnostics.AtomChatLog.message("resource", "Failed to clear image cache directory {}"), dir, e);
             return -1;
         }
+        diskBytes = 0L;
+        diskBytesAt = clock.getAsLong();
         return deleted;
     }
 

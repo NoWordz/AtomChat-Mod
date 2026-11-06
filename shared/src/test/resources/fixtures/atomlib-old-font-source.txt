@@ -1,0 +1,3 @@
+atomlib-old-font-source.class: FontSource.class extracted from the previously resolved Fabric 1.21.1 AtomLib 0.1.0-beta Loom remapped JAR, SHA-256 8f6806b35de2f20e101fbf9271cd21f90660130e3f7a042a25c69d14e2db5285.
+Class SHA-256: 5254333417bb7fbf99999a1e03d6feb389f3c833885492fe60d327305dd343bd.
+This real older binary exposes read/file/bytes but no resource(String); it is a test fixture, not an AtomLib dependency.

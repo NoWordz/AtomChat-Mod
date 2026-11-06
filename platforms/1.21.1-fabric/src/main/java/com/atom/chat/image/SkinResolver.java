@@ -38,11 +38,7 @@ public final class SkinResolver {
     };
 
     private static String skinNameKey(String name) {
-        if (name == null) {
-            return null;
-        }
-        String key = name.replaceAll("§.", "").trim().toLowerCase(java.util.Locale.ROOT);
-        return key.isEmpty() ? null : key;
+        return SkinNameCacheKey.of(name);
     }
 
     private static void rememberSkin(UUID uuid, String name, Identifier tex) {

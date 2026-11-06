@@ -136,8 +136,8 @@ class SettingsHomeReplicationTest {
                 writePng(acSurface, "ac-settings-home.png");
 
                 // ---- Replica: AtomLib Yoga + TextService + design package. ----
-                byte[] regular = resourceBytes("/assets/atomchat/font/bundled.otf");
-                byte[] bold = resourceBytes("/assets/atomchat/font/bundled-bold.otf");
+                byte[] regular = resourceBytes("/com/atom/lib/fonts/bundled-default.otf");
+                byte[] bold = resourceBytes("/com/atom/lib/fonts/bundled-default-bold.otf");
                 checks.add(new Check("fontFixtureBytes", regular != null && bold != null,
                         "regular=" + (regular == null ? -1 : regular.length) + "B bold="
                                 + (bold == null ? -1 : bold.length) + "B (the same files FontManager loads)"));

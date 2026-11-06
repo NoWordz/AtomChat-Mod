@@ -235,6 +235,23 @@ class ImageLoaderTest {
     }
 
     @Test
+    void diskCacheBytesIsReusedAcrossFramesAndRefreshesAfterTtl() throws Exception {
+        AtomicLong now = new AtomicLong(10_000L);
+        Files.writeString(tempDir.resolve("first.bin"), "1234");
+        ImageLoader loader = loader(now::get, url -> png(2, 2));
+
+        assertEquals(4L, loader.diskCacheBytes());
+
+        // The About page asks for this value on every frame. A second file that
+        // appears out of band must not turn that draw path into a directory scan.
+        Files.writeString(tempDir.resolve("second.bin"), "123456");
+        assertEquals(4L, loader.diskCacheBytes());
+
+        now.addAndGet(ImageLoader.DISK_BYTES_TTL_MS);
+        assertEquals(10L, loader.diskCacheBytes());
+    }
+
+    @Test
     void sha256HexIsStableAndWellFormed() {
         String a = ImageLoader.sha256Hex("http://example.com/a.png");
         String b = ImageLoader.sha256Hex("http://example.com/a.png");

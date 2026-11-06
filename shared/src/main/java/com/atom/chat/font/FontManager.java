@@ -1,6 +1,7 @@
 package com.atom.chat.font;
 
 import com.atom.chat.AtomChat;
+import com.atom.lib.font.FontSource;
 import io.github.humbleui.skija.Data;
 import io.github.humbleui.skija.Font;
 import io.github.humbleui.skija.FontVariation;
@@ -8,7 +9,6 @@ import io.github.humbleui.skija.FontStyle;
 import io.github.humbleui.skija.FontMgr;
 import io.github.humbleui.skija.Typeface;
 
-import java.io.InputStream;
 import java.io.IOException;
 import java.util.Locale;
 
@@ -17,10 +17,10 @@ import java.util.Locale;
  * otherwise falls back to a system font so development can proceed without assets.
  */
 public final class FontManager {
-    /** Drop a licensed font file here (e.g. Noto Sans SC) to bundle it. */
-    private static final String BUNDLED_FONT = "/assets/atomchat/font/bundled.otf";
+    /** Resource inside the locked AtomLib dependency. */
+    private static final String BUNDLED_FONT = "/com/atom/lib/fonts/bundled-default.otf";
     /** True-bold face (same character set as the bundled regular) for headings. */
-    private static final String BUNDLED_BOLD_FONT = "/assets/atomchat/font/bundled-bold.otf";
+    private static final String BUNDLED_BOLD_FONT = "/com/atom/lib/fonts/bundled-default-bold.otf";
     /** Faux-bold for thin system fallback fonts; a real bundled font makes this redundant. */
     private static boolean usingFallbackTypeface;
     private static Typeface defaultTypeface;
@@ -38,13 +38,11 @@ public final class FontManager {
         }
 
         // Bundled font first.
-        try (InputStream in = FontManager.class.getResourceAsStream(BUNDLED_FONT)) {
-            if (in != null) {
-                defaultTypeface = mediumWeight(decodeTypeface(in.readAllBytes()));
-                usingFallbackTypeface = false;
-                AtomChat.LOGGER.info(com.atom.chat.diagnostics.AtomChatLog.message("resource", "Loaded bundled font {}"), BUNDLED_FONT);
-                return defaultTypeface;
-            }
+        try {
+            defaultTypeface = mediumWeight(decodeTypeface(bundledSource(BUNDLED_FONT).read()));
+            usingFallbackTypeface = false;
+            AtomChat.LOGGER.info(com.atom.chat.diagnostics.AtomChatLog.message("resource", "Loaded bundled font {}"), BUNDLED_FONT);
+            return defaultTypeface;
         } catch (Exception e) {
             AtomChat.LOGGER.warn(com.atom.chat.diagnostics.AtomChatLog.message("resource", "Failed to load bundled font, falling back to system font"), e);
         }
@@ -70,6 +68,15 @@ public final class FontManager {
         }
         defaultTypeface = FontMgr.getDefault().matchFamilyStyle(null, FontStyle.NORMAL);
         return defaultTypeface;
+    }
+
+    /** Older compatible AtomLib builds may not expose the resource factory. */
+    private static FontSource bundledSource(String name) throws IOException {
+        try {
+            return FontSource.resource(name);
+        } catch (NoSuchMethodError missingResourceFactory) {
+            throw new IOException("Installed AtomLib does not expose the bundled font source", missingResourceFactory);
+        }
     }
 
     /** Skija 0.143 returns null for rejected data; preserve the caller's fallback path. */
@@ -139,11 +146,9 @@ public final class FontManager {
             return boldTypeface;
         }
         boldLookupDone = true;
-        try (InputStream in = FontManager.class.getResourceAsStream(BUNDLED_BOLD_FONT)) {
-            if (in != null) {
-                boldTypeface = decodeTypeface(in.readAllBytes());
-                AtomChat.LOGGER.info(com.atom.chat.diagnostics.AtomChatLog.message("resource", "Loaded bundled bold font {}"), BUNDLED_BOLD_FONT);
-            }
+        try {
+            boldTypeface = decodeTypeface(bundledSource(BUNDLED_BOLD_FONT).read());
+            AtomChat.LOGGER.info(com.atom.chat.diagnostics.AtomChatLog.message("resource", "Loaded bundled bold font {}"), BUNDLED_BOLD_FONT);
         } catch (Exception e) {
             AtomChat.LOGGER.warn(com.atom.chat.diagnostics.AtomChatLog.message("resource", "Failed to load bundled bold font, falling back to faux bold"), e);
         }

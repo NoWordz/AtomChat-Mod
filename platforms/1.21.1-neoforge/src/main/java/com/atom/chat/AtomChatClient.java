@@ -95,6 +95,7 @@ public class AtomChatClient {
             // bitmaps; drop them with the shader so nothing points at a
             // generation that no longer exists.
             com.atom.chat.render.ImageQuality.release();
+            com.atom.chat.settings.SettingsSectionPage.clearTranslationCache();
         });
     }
 

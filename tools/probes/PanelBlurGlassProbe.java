@@ -13,28 +13,7 @@ import java.nio.FloatBuffer;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
-/**
- * Hidden-window raw-GL probe for the panel blur's glass readability clamp
- * (unit B).
- *
- * <p>Compiles the repo's actual {@code atomchat_panel_blur} fsh/vsh with
- * plain LWJGL (no Minecraft, no ShaderInstance): the core shader is
- * GLSL 150, so a 3.2 core context speaks the same language the mod does.
- * It feeds the shader a synthetic constant-color "blurred" texture and reads
- * the drawn pixels back, asserting the maxLuma contract:</p>
- *
- * <ul>
- *   <li>bright backdrop + clamp on: RGB luma scales down to the ceiling,</li>
- *   <li>bright backdrop + clamp off (u_MaxLuma 1.0): unchanged,</li>
- *   <li>dark backdrop: unchanged either way (the clamp never brightens),</li>
- *   <li>alpha identical between on and off — the display path treats
- *       framebuffer alpha as color, so the clamp must stay RGB-only.</li>
- * </ul>
- *
- * <p>Run through {@code tools/run_panel_glass_probe.py}. Optional args:
- * {@code <fshPath> <vshPath>} — the mutation test feeds a clamp-stripped fsh
- * copy and expects this probe to fail.</p>
- */
+/** Compiles the real shaders and checks RGB and mask alpha on an offscreen context. */
 public final class PanelBlurGlassProbe {
     private static final int W = 320;
     private static final int H = 200;
@@ -71,10 +50,6 @@ public final class PanelBlurGlassProbe {
 
         program = link(vsh, fsh);
         int maxLumaLoc = GL20C.glGetUniformLocation(program, "u_MaxLuma");
-        if (maxLumaLoc == -1) {
-            throw new AssertionError("u_MaxLuma uniform missing from the compiled program "
-                    + "(stripped or not declared): " + fshPath);
-        }
 
         // Full-screen quad as two triangles in NDC (identity matrices make
         // clip space the coordinate space, so pixel coords would clip away):
@@ -100,8 +75,9 @@ public final class PanelBlurGlassProbe {
         GL20C.glVertexAttribPointer(1, 2, GL11C.GL_FLOAT, false, 9 * 4, 12L);
         GL20C.glVertexAttribPointer(2, 4, GL11C.GL_FLOAT, false, 9 * 4, 20L);
 
-        texBright = constantTexture(0.92F);
-        texDark = constantTexture(0.12F);
+        texBright = constantTexture(0.92F, 0.92F, 0.92F);
+        texDark = constantTexture(0.12F, 0.12F, 0.12F);
+        int texColor = constantTexture(0.90F, 0.60F, 0.30F);
 
         GL11C.glDisable(GL11C.GL_BLEND);
         GL11C.glDisable(GL11C.GL_DEPTH_TEST);
@@ -132,36 +108,23 @@ public final class PanelBlurGlassProbe {
         // Establish a clean error queue before the first measured frame.
         GL11C.glGetError();
 
-        // bright + clamp on: luma must land on the ceiling.
-        float[] on = draw(maxLumaLoc, texBright, 0.35F);
-        float onLuma = luma(on);
-        expect("bright backdrop, clamp ON: luma scales to the ceiling", onLuma, 0.35F, 0.02F);
-
-        // bright + clamp off: exact passthrough.
-        float[] off = draw(maxLumaLoc, texBright, 1.0F);
-        float offLuma = luma(off);
-        expect("bright backdrop, clamp OFF (u_MaxLuma=1): unchanged", offLuma, 0.92F, 0.02F);
-        if (!(onLuma < offLuma - 0.3F)) {
-            throw new AssertionError("the clamp must darken the bright backdrop for readability: on="
-                    + onLuma + " off=" + offLuma);
-        }
-
-        // dark: the clamp never brightens, either way.
-        expect("dark backdrop, clamp ON: unchanged", luma(draw(maxLumaLoc, texDark, 0.35F)), 0.12F, 0.02F);
-        expect("dark backdrop, clamp OFF: unchanged", luma(draw(maxLumaLoc, texDark, 1.0F)), 0.12F, 0.02F);
-
-        // alpha is the rounded mask + fade only, identical on and off.
-        expectAlpha("alpha untouched by the clamp (ON)", on[3], 1.0F);
-        expectAlpha("alpha untouched by the clamp (OFF)", off[3], 1.0F);
-        if (Math.abs(on[3] - off[3]) > 0.5F / 255F) {
-            throw new AssertionError("alpha drifted between clamp ON and OFF: "
-                    + on[3] + " vs " + off[3]);
-        }
-
+        // Old shader is exercised with its actual default ceiling when present.
+        checkColor("bright", draw(maxLumaLoc, texBright, 0.35F), 0.92F, 0.92F, 0.92F);
+        checkColor("dark", draw(maxLumaLoc, texDark, 0.35F), 0.12F, 0.12F, 0.12F);
+        checkColor("color", draw(maxLumaLoc, texColor, 0.35F), 0.90F, 0.60F, 0.30F);
+        GL20C.glUniform4f(GL20C.glGetUniformLocation(program, "ColorModulator"), 1.0F, 1.0F, 1.0F, 0.5F);
+        float[] faded = draw(maxLumaLoc, texBright, 0.35F);
+        expect("fade alpha ignores texture alpha", faded[3], 0.5F, 0.005F);
         GLFW.glfwDestroyWindow(window);
         GLFW.glfwTerminate();
-        System.out.println("PANEL_GLASS_PROBE_PASS lumaOn=" + onLuma + " lumaOff=" + offLuma
-                + " alphaOn=" + on[3] + " alphaOff=" + off[3] + " fsh=" + fshPath);
+        System.out.println("PANEL_GLASS_PROBE_PASS fsh=" + fshPath);
+    }
+
+    private static void checkColor(String label, float[] actual, float r, float g, float b) {
+        expect(label + " red", actual[0], r, 0.02F);
+        expect(label + " green", actual[1], g, 0.02F);
+        expect(label + " blue", actual[2], b, 0.02F);
+        expectAlpha(label + " alpha", actual[3], 1.0F);
     }
 
     /** Draws one frame and reads back the center pixel as RGBA in 0..1. */
@@ -202,7 +165,7 @@ public final class PanelBlurGlassProbe {
     }
 
     /** A 4x4 RGBA8 texture of one constant color, LINEAR/CLAMP like the blur result. */
-    private static int constantTexture(float gray) {
+    private static int constantTexture(float r, float g, float b) {
         int tex = GL11C.glGenTextures();
         GL11C.glBindTexture(GL11C.GL_TEXTURE_2D, tex);
         GL11C.glTexParameteri(GL11C.GL_TEXTURE_2D, GL11C.GL_TEXTURE_MIN_FILTER, GL11C.GL_LINEAR);
@@ -212,7 +175,7 @@ public final class PanelBlurGlassProbe {
         ByteBuffer px = ByteBuffer.allocateDirect(16 * 4 * 4).order(ByteOrder.nativeOrder());
         FloatBuffer f = px.asFloatBuffer();
         for (int i = 0; i < 16; i++) {
-            f.put(gray).put(gray).put(gray).put(1.0F);
+            f.put(r).put(g).put(b).put(0.2F);
         }
         GL11C.glTexImage2D(GL11C.GL_TEXTURE_2D, 0, GL11C.GL_RGBA, 4, 4, 0, GL11C.GL_RGBA, GL11C.GL_FLOAT, px);
         return tex;
@@ -242,10 +205,6 @@ public final class PanelBlurGlassProbe {
             throw new AssertionError("program failed to link:\n" + GL20C.glGetProgramInfoLog(p));
         }
         return p;
-    }
-
-    private static float luma(float[] rgba) {
-        return 0.2126F * rgba[0] + 0.7152F * rgba[1] + 0.0722F * rgba[2];
     }
 
     private static void expect(String what, float actual, float expected, float tol) {

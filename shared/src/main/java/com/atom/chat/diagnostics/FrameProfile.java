@@ -70,6 +70,22 @@ public final class FrameProfile {
     private static final java.util.Map<Surface, Bucket> SURFACE_CPU = new java.util.EnumMap<>(Surface.class);
     private static final java.util.Map<Surface, Bucket> SURFACE_INTERVAL = new java.util.EnumMap<>(Surface.class);
 
+    /** Page-level attribution. The surface OTHER bucket mixes settings / about /
+     *  profile / nav, so P1 adds a SEPARATE, additive set of buckets. The
+     *  existing panel/decode/layout and *_render / *_interval surface buckets
+     *  keep their exact semantics (cross-version comparability is preserved). */
+    public enum Page { SETTINGS, ABOUT, PROFILE, NAVIGATION, CHAT, OTHER }
+    public enum Phase { TRANSITION, STEADY }
+    /** A navigation opens a bounded transition window; steady frames follow. */
+    private static final int TRANSITION_FRAMES = 90;
+    private static volatile Page page = Page.OTHER;
+    private static volatile Phase phase = Phase.STEADY;
+    private static volatile boolean firstOpen;
+    private static int framesSinceNavigation = TRANSITION_FRAMES;
+    private static final java.util.Set<String> seenPages =
+            java.util.Collections.synchronizedSet(new java.util.HashSet<>());
+    private static final java.util.Map<String, Bucket> PAGE_RENDER = new java.util.TreeMap<>();
+
     /** Labels the actual state before drawing; no query, message or player data is recorded. */
     public static void surface(Surface value) { if (enabled) surface = value; }
 
@@ -77,15 +93,78 @@ public final class FrameProfile {
     public static Surface currentSurface() { return surface; }
     public static void restoreSurface(Surface value) { surface = value; }
 
+    /**
+     * Set the page-level diagnostic context. Called from FrameSegments.navigation
+     * on push/pop/root; the key persists across frames until the next navigation.
+     * Never touches the Surface buckets. "firstOpen" distinguishes a page's
+     * first visit from a later reopen within this debug session.
+     */
+    public static void page(String rawNavigationPage) {
+        if (!enabled) return;
+        page = classify(rawNavigationPage);
+        String key = rawNavigationPage == null ? "OTHER" : rawNavigationPage;
+        firstOpen = seenPages.add(key);
+        phase = Phase.TRANSITION;
+        framesSinceNavigation = 0;
+    }
+
+    private static Page classify(String raw) {
+        if (raw == null) return Page.OTHER;
+        String up = raw.toUpperCase(java.util.Locale.ROOT);
+        if (up.contains("SETTINGS_SECTION") && up.contains("ABOUT")) return Page.ABOUT;
+        if (up.contains("SETTINGS")) return Page.SETTINGS;
+        if (up.contains("PROFILE")) return Page.PROFILE;
+        if (up.contains("CHAT_LIST")) return Page.NAVIGATION;
+        if (up.contains("WORLD_CHAT") || up.contains("PRIVATE_CHAT")) return Page.CHAT;
+        return Page.OTHER;
+    }
+
     @jdk.jfr.Name("com.atomchat.UiFrame")
     @jdk.jfr.Label("AtomChat UI frame")
     @jdk.jfr.Category("AtomChat")
     @jdk.jfr.StackTrace(false)
     static final class UiFrameEvent extends jdk.jfr.Event {
         static final jdk.jfr.EventType TYPE = jdk.jfr.EventType.getEventType(UiFrameEvent.class);
+        public long frameId;
         public String surface;
         @jdk.jfr.Timespan(jdk.jfr.Timespan.NANOSECONDS) public long renderNanos;
         @jdk.jfr.Timespan(jdk.jfr.Timespan.NANOSECONDS) public long frameIntervalNanos;
+    }
+
+    /**
+     * Screen construction / config reload / init / first-frame stages. These
+     * happen outside a panel draw, so frameId is 0 unless a sampled frame is
+     * active; align them with the monotonic stamp and JFR timestamps.
+     */
+    @jdk.jfr.Name("com.atomchat.ScreenLifecycle")
+    @jdk.jfr.Label("AtomChat screen lifecycle")
+    @jdk.jfr.Category("AtomChat")
+    @jdk.jfr.StackTrace(false)
+    static final class ScreenLifecycleEvent extends jdk.jfr.Event {
+        static final jdk.jfr.EventType TYPE = jdk.jfr.EventType.getEventType(ScreenLifecycleEvent.class);
+        String stage;
+        long frameId;
+        long monotonicNanos;
+        @jdk.jfr.Timespan(jdk.jfr.Timespan.NANOSECONDS) long elapsedNanos;
+        boolean success;
+    }
+
+    /** Returns a monotonic token, or 0 when diagnosis is off. Pair with {@link #screenStageEnd}. */
+    public static long screenStage(String stage) {
+        if (!enabled || !ScreenLifecycleEvent.TYPE.isEnabled()) return 0L;
+        long now = System.nanoTime();
+        return now == 0L ? 1L : now;
+    }
+
+    public static void screenStageEnd(String stage, long token, boolean success) {
+        if (token == 0L || !enabled || !ScreenLifecycleEvent.TYPE.isEnabled()) return;
+        var event = new ScreenLifecycleEvent();
+        event.stage = stage;
+        event.frameId = FrameSegments.current();
+        event.monotonicNanos = token;
+        event.elapsedNanos = Math.max(0L, System.nanoTime() - token);
+        event.success = success;
+        event.commit();
     }
 
     private FrameProfile() {
@@ -116,6 +195,11 @@ public final class FrameProfile {
      * @param allocatedBefore {@link #allocatedBytes()} 在帧开始时的值；-1 = 这个 JVM 不支持
      */
     public static boolean frame(long startedAt, long allocatedBefore) {
+        return frame(startedAt, allocatedBefore, 0L);
+    }
+
+    /** frameId is the matching sampled panel ID, or zero when unavailable. */
+    public static boolean frame(long startedAt, long allocatedBefore, long frameId) {
         if (startedAt == 0L) {
             return false;
         }
@@ -123,12 +207,18 @@ public final class FrameProfile {
         long elapsed = System.nanoTime() - startedAt;
         PANEL_BUCKET.add(elapsed, allocated);
         SURFACE_CPU.computeIfAbsent(surface, ignored -> new Bucket(true)).add(elapsed, allocated);
+        // Additive page attribution: separate buckets, surface semantics untouched.
+        if (framesSinceNavigation < TRANSITION_FRAMES) framesSinceNavigation++;
+        else phase = Phase.STEADY;
+        PAGE_RENDER.computeIfAbsent(
+                page.name().toLowerCase(java.util.Locale.ROOT) + (firstOpen ? "_first" : "_repeat"),
+                ignored -> new Bucket(true)).add(elapsed, allocated);
         long interval = previousSurface == surface && previousFrameStart != 0 ? startedAt - previousFrameStart : 0;
         if (interval > 0 && interval < 1_000_000_000L)
             SURFACE_INTERVAL.computeIfAbsent(surface, ignored -> new Bucket(false)).add(interval, -1);
         previousFrameStart = startedAt; previousSurface = surface;
         if (UiFrameEvent.TYPE.isEnabled()) {
-            var event = new UiFrameEvent(); event.surface = surface.name(); event.renderNanos = elapsed;
+            var event = new UiFrameEvent(); event.frameId = frameId; event.surface = surface.name(); event.renderNanos = elapsed;
             event.frameIntervalNanos = interval > 0 && interval < 1_000_000_000L ? interval : 0; event.commit();
         }
         // A later HUD draw using this bridge must not inherit the last screen's popup label.
@@ -185,6 +275,30 @@ public final class FrameProfile {
         return sb.toString();
     }
 
+    /**
+     * Additive, stable page-level output. Deliberately kept OUT of summary()
+     * so the existing 5-line panel/decode/layout/surface report stays
+     * byte-stable (FrameProfileTest.theSummaryIsAsciiWithOneLinePerBucket).
+     * FrameSegments.summary() appends this to the debug log line.
+     */
+    public static String pageSummary() {
+        StringBuilder sb = new StringBuilder();
+        for (Page p : Page.values()) {
+            for (boolean first : new boolean[]{true, false}) {
+                String key = p.name().toLowerCase(java.util.Locale.ROOT)
+                        + (first ? "_first" : "_repeat");
+                Bucket bucket = PAGE_RENDER.get(key);
+                if (bucket != null && bucket.size > 0) {
+                    sb.append('\n').append(bucket.row("page=" + key));
+                }
+            }
+        }
+        sb.append("\n  page_phase=").append(phase.name().toLowerCase(java.util.Locale.ROOT))
+          .append(" page_firstopen=").append(firstOpen ? 1 : 0)
+          .append(" page_current=").append(page.name().toLowerCase(java.util.Locale.ROOT));
+        return sb.toString();
+    }
+
     /** 丢掉窗口里的样本（单测用；客户端不需要 —— 滚动窗口自己会往前走）。 */
     static void reset() {
         PANEL_BUCKET.clear();
@@ -192,6 +306,11 @@ public final class FrameProfile {
         LAYOUT_BUCKET.clear();
         framesSinceReport = 0;
         SURFACE_CPU.clear(); SURFACE_INTERVAL.clear(); previousFrameStart = 0; previousSurface = null; surface = Surface.OTHER;
+        PAGE_RENDER.clear();
+        page = Page.OTHER; phase = Phase.STEADY; firstOpen = false;
+        framesSinceNavigation = TRANSITION_FRAMES;
+        seenPages.clear();
+        FrameSegments.resetDiagnostics();
     }
 
     /** 一个桶：滚动窗口 + 分配统计。只在渲染线程上写，报告时读。 */
