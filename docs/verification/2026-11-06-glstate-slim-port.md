@@ -178,9 +178,16 @@ ModernUI 抄来的方案里有一项是「纹理单元限 12 个 + 最后一个�
 
 > 22:33 那次 AC 集成构建失败**不是瘦身的问题**：是 AC 侧当时半成品的两个守护测试红（`AtomLibApiPreflightTest`、`PrepassProbeTest`），已由 AC 提交 `6a4230c9` / `8f5a88ac` 修掉。
 
-**变异红灯（尚未做）** ⬅ 本报告唯一的硬缺口
+**变异红灯：本轮尝试未达成（如实记录，2026-11-07 离线阶段）** ⬅ 仍为硬缺口
 
-计划：故意删掉一项**必须恢复**的状态（建议先拿 `indexedBlendFunc` 开刀，它是唯一「Skija 会写」却被瘦身排除的族）→ 像素 diff 或测试变红 → 恢复 → 变绿。
+- 绿灯基线 / 红灯命令（同一条）：`cd /d/AtomLib/platforms/1.21.1-fabric && JAVA_HOME=<JDK21> ./gradlew hiddenGlTest --tests "com.atom.lib.client.render.SlimSnapshotTest.slimAndFullProduceIdenticalPixelsAcrossAlternatingPasses" --offline --console=plain` → `PASSED` / `BUILD SUCCESSFUL in 12s`。
+- 按方案依次只改一处并用 `git diff` 确认：`:401` GL40C `glBlendFuncSeparatei`→`;`、`:403` ARB `glBlendFuncSeparateiARB`→`;`、`:395` `glEnablei`→`;`（均保留 `glBlendEquationSeparatei` 侧）。
+- 三次红灯输出原文：`SlimSnapshotTest > slimAndFullProduceIdenticalPixelsAcrossAlternatingPasses() PASSED`、`BUILD SUCCESSFUL in 12/12/14s`，`12 actionable tasks: 2 executed`。**均未出现 `FAILED`、无失败断言**（该用例 `:103` 断言为 `assertArrayEquals(fullPixels, slimPixels, "slim must not change a single pixel")`）。
+- 卡在哪：test-results XML 显示 GL 上下文 `version=3.3.0`（`capabilities.OpenGL40=false`，走 :403 ARB）；且 :395/:401/:403 全在 `close()` 的 `if(!indexedUniform)` 块（`GlStateScope.java:393`）内，本用例宿主 per-buffer 状态 uniform ⇒ 块被跳过。Fabric 端 `GlStateScope.class` 反编译核验 `glEnablei=0` 证明变异已编译生效，非「编译未生效」，而是变异点为运行时 no-op。
+- **实际命中行：无**（方案给定三个候选点均未触发红灯）；未新增/改动任何测试与配置，未绕过。
+- 还原：Edit 精确改回三处原文；`git diff --exit-code -- .../GlStateScope.java` 退出码 0（无输出）；`git -C /d/AtomLib status --short` 为空，源码与 `dd31c42` 字节一致。
+- 还原后绿灯：同一命令 → `PASSED` / `BUILD SUCCESSFUL in 15s`。
+- 遗留：需另选会被该用例执行的变异点（`if(!indexedUniform)` 块外 / slim 专属分支），或先让宿主产生 per-buffer 差异再变异；由主代理复核，本轮不自行扩大范围。
 
 ---
 
