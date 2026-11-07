@@ -178,16 +178,18 @@ ModernUI 抄来的方案里有一项是「纹理单元限 12 个 + 最后一个�
 
 > 22:33 那次 AC 集成构建失败**不是瘦身的问题**：是 AC 侧当时半成品的两个守护测试红（`AtomLibApiPreflightTest`、`PrepassProbeTest`），已由 AC 提交 `6a4230c9` / `8f5a88ac` 修掉。
 
-**变异红灯：本轮尝试未达成（如实记录，2026-11-07 离线阶段）** ⬅ 仍为硬缺口
+**变异红灯：两轮共五种变异均未变红（最终结论，2026-11-07 离线阶段）** ⬅ 仍为硬缺口
 
-- 绿灯基线 / 红灯命令（同一条）：`cd /d/AtomLib/platforms/1.21.1-fabric && JAVA_HOME=<JDK21> ./gradlew hiddenGlTest --tests "com.atom.lib.client.render.SlimSnapshotTest.slimAndFullProduceIdenticalPixelsAcrossAlternatingPasses" --offline --console=plain` → `PASSED` / `BUILD SUCCESSFUL in 12s`。
-- 按方案依次只改一处并用 `git diff` 确认：`:401` GL40C `glBlendFuncSeparatei`→`;`、`:403` ARB `glBlendFuncSeparateiARB`→`;`、`:395` `glEnablei`→`;`（均保留 `glBlendEquationSeparatei` 侧）。
-- 三次红灯输出原文：`SlimSnapshotTest > slimAndFullProduceIdenticalPixelsAcrossAlternatingPasses() PASSED`、`BUILD SUCCESSFUL in 12/12/14s`，`12 actionable tasks: 2 executed`。**均未出现 `FAILED`、无失败断言**（该用例 `:103` 断言为 `assertArrayEquals(fullPixels, slimPixels, "slim must not change a single pixel")`）。
-- 卡在哪：test-results XML 显示 GL 上下文 `version=3.3.0`（`capabilities.OpenGL40=false`，走 :403 ARB）；且 :395/:401/:403 全在 `close()` 的 `if(!indexedUniform)` 块（`GlStateScope.java:393`）内，本用例宿主 per-buffer 状态 uniform ⇒ 块被跳过。Fabric 端 `GlStateScope.class` 反编译核验 `glEnablei=0` 证明变异已编译生效，非「编译未生效」，而是变异点为运行时 no-op。
-- **实际命中行：无**（方案给定三个候选点均未触发红灯）；未新增/改动任何测试与配置，未绕过。
-- 还原：Edit 精确改回三处原文；`git diff --exit-code -- .../GlStateScope.java` 退出码 0（无输出）；`git -C /d/AtomLib status --short` 为空，源码与 `dd31c42` 字节一致。
+- 绿灯基线 / 红灯命令（同一条）：`cd /d/AtomLib/platforms/1.21.1-fabric && JAVA_HOME=<JDK21> ./gradlew hiddenGlTest --tests "com.atom.lib.client.render.SlimSnapshotTest.slimAndFullProduceIdenticalPixelsAcrossAlternatingPasses" --offline --console=plain` → `PASSED` / `BUILD SUCCESSFUL in 11s`。
+- 第一轮（方案原三点）：`:401` GL40C `glBlendFuncSeparatei`→`;`、`:403` ARB `glBlendFuncSeparateiARB`→`;`、`:395` `glEnablei`→`;`；三点全在 `close()` 的 `if(!indexedUniform)` 块（`:393`）内，本用例宿主 per-buffer 状态 uniform ⇒ 块被跳过，三次均 `PASSED`，属运行时 no-op。
+- 第二轮（主代理修正、**只影响 slim**）：变异体 A = `GlStateScope.java:381` 改为 `if(!slim) { glViewport(...);glScissor(...); } spend(2);`（slim 漏恢复 viewport/scissor）；变异体 B = `close()` 内 `closed=true;` 前插 `if(slim) glClearColor(0.5f,0.5f,0.5f,0.5f);`（slim 专属 clearColor 污染）。每次 `git diff` 确认只改一处。
+- 两次红灯输出原文：`SlimSnapshotTest > slimAndFullProduceIdenticalPixelsAcrossAlternatingPasses() PASSED`、`BUILD SUCCESSFUL in 15s / 14s`、`12 actionable tasks: 2 executed`。**均未出现 `FAILED`、无失败断言**（该用例 `:103` 断言为 `assertArrayEquals(fullPixels, slimPixels, "slim must not change a single pixel")`）。
+- 编译核验（排除「没编译」）：`GlStateScope.class` mtime `2026-11-07 17:09:50`，`javap -c -p` 含 `getfield slim:Z / ifeq / 0.5f×4 / glClearColor`（调用数 2），XML `timestamp=2026-11-07T09:09:52` ⇒ 变异确实编译并运行，不是缓存旧 class。
+- 卡在哪：两类污染都发生在 `close()` 末尾、`sequence()` 下一轮 `paint()` 的 `canvas.clear(0xff102030)` / Skija 每轮重设 viewport 之前，被下一帧覆盖，未落到 `pixels()` 的 readback 结果 ⇒ full 与 slim 像素仍逐字节相同。
+- **证明力边界（必须明确）**：本轮**未能**证明「像素等价测试能杀死 slim 专属状态泄漏」；即便将来某变异变红，它也只证明「该用例对该类 slim 专属泄漏敏感」，**不**证明「瘦身丢弃的族选得对」——后者仍由 `verifyTripwireReportsNoOmittedWrites`（无遗漏写入报告）与真实 GL shader + readback 逐字节等价（`slimAndFullBoundariesProduceByteIdenticalShaderFrames`）保证。
+- 还原：Edit 精确改回两种变异；`git diff --exit-code -- .../GlStateScope.java` 退出码 0（无输出）；`git -C /d/AtomLib status --short` 为空，源码与 `dd31c42` 字节一致。
 - 还原后绿灯：同一命令 → `PASSED` / `BUILD SUCCESSFUL in 15s`。
-- 遗留：需另选会被该用例执行的变异点（`if(!indexedUniform)` 块外 / slim 专属分支），或先让宿主产生 per-buffer 差异再变异；由主代理复核，本轮不自行扩大范围。
+- 遗留：按主代理「最多试这两种」不再扩大；需另选能落到 readback 像素的变异点，或改用直接断言 GL 状态的用例做反证；由主代理复核。
 
 ---
 
