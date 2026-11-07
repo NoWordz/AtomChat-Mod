@@ -86,6 +86,12 @@
 
 ### Task 1 — 补变异红灯（报告 §8 唯一硬缺口）
 
+> **执行结果（2026-11-07 离线阶段）：未达成，已如实记录，不再追加变异。**
+> 两轮共 5 种变异全部 `PASSED`、无红灯：① 方案原 `:395/:401/:403` 三点全在 `close()` 的 `if(!indexedUniform)`（`:393`）块内，用例宿主 per-buffer 状态 uniform ⇒ 块被跳过，属运行时 no-op；② 主代理修正的 slim 专属变异 A = `:381` 改 `if(!slim){glViewport;glScissor;} spend(2);`、B = `close()` 内 `closed=true;` 前插 `if(slim) glClearColor(0.5f,...)`，两者污染都落在 `close()` 末尾，被 `sequence()` 下一轮 `canvas.clear()` / Skija 重设 viewport 覆盖，未落到 `pixels()` 的 readback。编译核验（class mtime 17:09:50、`javap -c -p` 含 `getfield slim` / `0.5f×4` / `glClearColor`×2、XML timestamp 同步）排除「变异没编译」。
+> 每种变异均用 Edit 精确还原，`git diff --exit-code` 退出码 0、Lib 仓干净、复跑绿灯 `BUILD SUCCESSFUL in 15s`。
+> **证明力边界**：即便变红也只证明「像素等价用例对 slim 专属泄漏敏感」，**不**证明「瘦身丢弃的族选得对」；后者由 Task 2 的 `verifyTripwireReportsNoOmittedWrites` 全绿与真实 GL shader + readback 逐字节等价保证。证据见 `docs/verification/2026-11-06-glstate-slim-port.md` §8（提交 `20b971a7`）。
+> **处置**：记为已记录的已知验证缺口，由 Task 6 真机视觉确认 + JFR `GlStateCapture success` 兜底；**不写新测试用例、不造新 GL 场景**（那属于开新线，违背「交现成作业」的专项定位）。
+
 **Files:** 临时修改 `GlStateScope.java:401`；追加 `docs/verification/2026-11-06-glstate-slim-port.md` §8。
 
 **Interfaces:** 复用 `SlimSnapshotTest.slimAndFullProduceIdenticalPixelsAcrossAlternatingPasses()`（已存在，`HiddenGlFixture` 真实 GL 上下文，无 skip 路径）。
@@ -142,6 +148,8 @@ cd /d/AtomLib/platforms/1.21.1-neoforge && JAVA_HOME="$J21" ./gradlew hiddenGlTe
 
 Expected: 三端均 `BUILD SUCCESSFUL`；Fabric 与 Forge 的 slim 用例全绿，**NeoForge 这次要有实际测试数**（此前只有构建成功）。
 
+> **实测**：Fabric `25s` / Forge 1.20.1 `33s`，各 **79 tests / 0 failures**，含 SlimSnapshot XML。NeoForge 首次 `--offline` 挂在 `icu4j-71.1` 的 Gradle metadata（`jar` 本地其实有，只是离线元数据缺），去掉 `--offline` 单次解析后 `BUILD SUCCESSFUL in 2m37s`、**79 tests / 0 failures / 21 XML，含 3 个 SlimSnapshot XML**（mtime 17:17:45）——此前「NeoForge 只有构建成功」的缺口已补上，且未改 `build.gradle`。
+
 - [ ] **Step 2: 离线 verify 模式**
 
 用环境变量把开关透传给 gradle fork 出的测试 JVM（比改 build.gradle 更轻，且不留下源码改动）：
@@ -151,6 +159,11 @@ cd /d/AtomLib/platforms/1.21.1-fabric && \
   JAVA_TOOL_OPTIONS="-Datomlib.glscope.verify=true" JAVA_HOME="C:/Program Files/Java/jdk-21.0.11" \
   ./gradlew hiddenGlTest --tests "com.atom.lib.client.render.SlimSnapshotTest" --offline --console=plain 2>&1 | tail -20
 ```
+
+> **判据修正（方案原文写错，已复核）**：`GlStateScope.java:241` 的 `captureDropped = !slim || verifySlim` 与 `:295` 的 `textureUnits = verifySlim ? allUnits(unitCount) : tierUnits` 决定 verify 模式下 slim **照样抓一遍被丢弃的族**，因此 `SlimSnapshotTest.java:76` 的 `assertTrue(slim[0] < full[0])` 必然红。这是设计固有冲突，**不是状态遗漏、不是缺陷**。正确做法是只跑 verify 专项用例：
+> `--tests "com.atom.lib.client.render.SlimSnapshotTest.verifyTripwireReportsNoOmittedWrites"`
+>
+> **实测**：`Picked up JAVA_TOOL_OPTIONS` 出现 2 次、`verifyTripwireReportsNoOmittedWrites() PASSED`、`BUILD SUCCESSFUL in 10s`、全绿、无遗漏报告。
 
 Expected: 全绿且日志中**无 `verifyDroppedFamilies` 的遗漏写入报告**；有则停，回到 `GlStateScope` 补回该族，不继续部署。
 
@@ -168,6 +181,11 @@ cd /d/AtomLib/platforms/1.21.1-fabric && JAVA_HOME="C:/Program Files/Java/jdk-21
 ```
 
 产物：`platforms/1.21.1-fabric/build/libs/atomlib-1.21.1-fabric-<atomlib_version>.jar`（`gradle.properties` 默认 `0.3.0`）。用 `ls -t build/libs/*.jar | head -1` 取实际路径。
+
+> **执行结果：`build` 路线被既有字体测试阻塞，改用 `assemble`。** `./gradlew build --offline` 挂在 `:runtime:test` 的 `FontIsolationTest.java:15`（要求 `-Datomlib.testFont`）；补 `arial.ttf` 后 `TextLayoutTest` CJK 宽度 `105.0 vs 140.0` 红，换 `simhei.ttf` 后 `ParagraphTextServiceTest` 红——均是与 GL 瘦身无关的既有字体敏感用例，不再换字体、不 `-x test`、不改 `build.gradle`。最终 `./gradlew assemble --rerun-tasks --offline` → `BUILD SUCCESSFUL 56s / 18 executed`，产出 `atomlib-Fabric-1.21.1-v0.3.0.jar`。
+> **候选 jar 等价性由主代理字节码级复核定案**：jar 内 `GlStateScope.class`（`1be6c6d9…`）与当前 HEAD `dd31c42` 的 `:compileJava` 产物（`965fc3b7…`）`javap -p` 成员签名完全一致、`javap -c -p` 3162 行归一化后**指令序列逐条一致**，仅常量池布局导致字节码偏移差 5（exception table）。即候选 jar 确为当前源码编译产物，不是来路不明的旧二进制。
+> **三项体检全过**：`slimSnapshot`/`verifyDroppedFamilies`/`captureCalls` 在、真机旧 jar 这三项计数为 **0**；`GlScopeDiagnostics.class` 在；`atomlib.glscope.slim` / `.verify` 字符串在。
+> **归档**：`build/atomlib-slim-20261107/candidates/atomlib-slim.jar`，sha256 `7e12ad1c0ebffed05721b6245ab4f298084ac32ccc17c877a80f105febfebe51`。
 
 - [ ] **Step 2: 体检（三项全过才可用）**
 
@@ -213,6 +231,8 @@ Expected: 无 `-` 开头的行（无删除 / 无签名变更）；允许 `+` 新
 - [ ] **Step 2: 分支判定**
 
 无删除 → **AC 包不动**，继续 Task 5。出现删除或签名变更 → 用新 Lib 重新构建 AC 三端（`-PatomlibMavenRepo=<新隔离 maven>`），并把「AC 包字节变化」记入变量清单，判据 3 的容忍度收紧到 0.03 ms；**不默认走这条**。
+
+> **正式结论（用确定候选 jar，非历史代理）**：5 类 `javap -public` diff 五段均无输出，`-` 开头行 **0**（`+` 也 0）；`GlStateScope` 公开签名新旧完全相同，瘦身全部落在私有成员。⇒ **AC 包可不动**，Task 5 走「只换 Lib jar 字节」的单变量路线成立。
 
 ### Task 5 — 部署（单变量）
 
@@ -314,15 +334,29 @@ cd /d/AtomChat-Main && git add .workbuddy/memory/2026-11-07.md docs/superpowers/
 | 稳态帕累托 / 首开 / `client_work` | 见 §1 | 待填 | 待判 |
 | 视觉与异常 | — | 待填 | 待判 |
 
-**新 jar sha：** 待填　**备份名：** 待填　**JFR 样本：** 待填　**最终决策：** 待填
+**新 jar sha：** `7e12ad1c0ebffed05721b6245ab4f298084ac32ccc17c877a80f105febfebe51`（候选已归档，尚未部署）　**备份名：** 待填　**JFR 样本：** 待填　**最终决策：** 待填
+
+### 5.1 离线阶段（Task 1–4）执行结果 — 2026-11-07 17:26 完成
+
+| Task | 状态 | 交付物 / 证据 |
+| --- | --- | --- |
+| 1 变异红灯 | ⚠ **未达成，已如实记录** | 两轮 5 种变异均未变红；`docs/verification/2026-11-06-glstate-slim-port.md` §8（`20b971a7`）；源码精确还原、Lib 仓干净、复跑绿灯。记为已知验证缺口，真机兜底 |
+| 2 三端 + verify | ✅ 达标 | Fabric 79/0、Forge 79/0、NeoForge 79/0（含 3 个 SlimSnapshot XML，补上旧缺口）；`verifyTripwireReportsNoOmittedWrites` 全绿、无遗漏写入报告 |
+| 3 候选 jar | ✅ 达标 | `build/atomlib-slim-20261107/candidates/atomlib-slim.jar`，三项体检全过；字节码级证明等价于 HEAD `dd31c42` |
+| 4 API 兼容 | ✅ 达标 | 5 类公开签名 `-` 行 0 ⇒ **AC 包可不动**，单变量部署成立 |
+
+**离线阶段提交**：`a4b408e1`（§8 首轮记录）、`20b971a7`（§8 最终结论）、本文件就地更新与当天工作日志。**未 push、未发布、未改 `versions/atomlib.json`、未碰真机 mods 目录**；Lib 仓工作区干净、HEAD 仍 `dd31c42`。
+
+**方案自身的三处修正**（均已就地写入对应 Task）：Task 1 变异点全在 `if(!indexedUniform)` 块内属 no-op；Task 2 「verify 全绿」判据与 `:241/:295` 设计固有冲突，应只跑 verify 专项用例；Task 3 `build` 被既有字体测试阻塞，改用 `assemble`。三处都是**方案写错**，不是代码缺陷。
 
 ---
 
 ## 执行交接
 
-方案已保存至 `docs/superpowers/plans/2026-11-07-atomlib-glstate-slim-deploy.md`。两种执行方式：
+**当前状态：Task 1–4 已完成，停在 Task 5 部署前的确认点。**
 
-1. **按任务顺序在当前会话执行（推荐）** — 我逐任务跑、每个任务结束报一次结果，你在 Task 5 部署前有一次确认机会。
-2. **分阶段执行** — 先只做 Task 1–4（离线全绿 + 构建 + 兼容性），把候选 jar 和结论交给你，部署与实机另起一轮。
+- 候选 jar 已就绪且经字节码级验证等价于 `dd31c42`；AC 包公开签名兼容、无需重构建。
+- **未部署、未启动游戏、未发布、未 push**；真机 `atomlib-Fabric-1.21.1-v0.3.1-shadowcache.jar` 仍是 `76c4ba40…`。
+- Task 1 变异红灯未达成，作为**已记录的已知验证缺口**接受，由 Task 6 真机视觉确认 + JFR `GlStateCapture success=false` 计数兜底；不再写新测试用例。
 
-本次只写方案，**未改任何源码、未构建、未部署**。你说「开工」或选一种方式，我就从 Task 1 开始。
+**下一步需要用户拍板**：说「部署」才执行 Task 5（只换 Lib jar 字节、文件名不变、AC 包与版本锁不动、备份可回滚），随后按 Task 6 协议由用户开一次游戏。若要收手，用备份或保留现状即可，无需回退任何代码。
