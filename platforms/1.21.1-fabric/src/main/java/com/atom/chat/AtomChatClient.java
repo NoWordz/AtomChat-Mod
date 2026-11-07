@@ -42,11 +42,7 @@ public class AtomChatClient implements ClientModInitializer {
             com.atom.lib.client.render.MinecraftRenderBridge.get().prepare();
             if (blurEnabled
                     && !com.atom.chat.wallpaper.WallpaperStore.isSet()) {
-                var window = client.getWindow();
-                double scale = window.getScaleFactor();
-                int w = (int) Math.ceil(com.atom.chat.screen.ScreenMetrics.panelWidth(window) * scale);
-                int h = (int) Math.ceil(com.atom.chat.screen.ScreenMetrics.panelHeight(window) * scale);
-                com.atom.chat.render.PanelBlurRenderer.prewarm(w, h);
+                com.atom.chat.render.PanelBlurRenderer.prewarm();
             }
         } catch (Throwable t) {
             AtomChat.LOGGER.warn(com.atom.chat.diagnostics.AtomChatLog.message("render",
@@ -135,7 +131,6 @@ public class AtomChatClient implements ClientModInitializer {
             com.atom.chat.net.PackSyncClient.onJoin();
             com.atom.chat.chat.OwnIdentity.reset();
             com.atom.chat.chat.TeleportCommands.reset();
-            com.atom.chat.render.FirstOpenWarmup.prewarmEmojiAsync(firstOpenWarmupTexts());
             com.atom.chat.render.FirstOpenWarmup.requestGlWarmup();
         });
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
@@ -160,6 +155,15 @@ public class AtomChatClient implements ClientModInitializer {
         NotificationController.registerSound();
         com.atom.chat.audio.FeedbackSoundController.registerSound();
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
+            // Emoji rasterization must not happen on the render thread of the
+            // first panel frame. The backlog only exists after join, so the
+            // warmup follows the content instead of the join event: poll the
+            // cheap generation counter and start a warmup when it moved.
+            if (client.currentScreen == null) {
+                com.atom.chat.render.FirstOpenWarmup.pollEmojiPrewarm(
+                        com.atom.chat.chat.ChatStore.generation(),
+                        () -> firstOpenWarmupTexts());
+            }
             if (com.atom.chat.render.FirstOpenWarmup.consumeGlWarmup()) {
                 warmupGl(client, com.atom.chat.config.AtomChatConfig.get().blurEnabled);
             }

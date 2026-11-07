@@ -39,12 +39,23 @@ public final class FirstOpenWarmup {
     private static final int MAX_WARMUP_MESSAGES = 200;
     /** Hard upper bound for one warmup pass; keeps a pathological backlog bounded. */
     private static final int MAX_EMOJI_SPECS = 192;
+    /** Minimum gap between two emoji warmup polls, so a busy chat cannot thrash the list. */
+    private static final long EMOJI_POLL_INTERVAL_NANOS = 2_000_000_000L;
 
     private static final AtomicBoolean FONT_STARTED = new AtomicBoolean();
-    private static final AtomicBoolean EMOJI_STARTED = new AtomicBoolean();
+    private static final AtomicBoolean EMOJI_RUNNING = new AtomicBoolean();
     private static final AtomicBoolean GL_PENDING = new AtomicBoolean();
     private static final AtomicBoolean GL_DONE = new AtomicBoolean();
     private static volatile CountDownLatch fontReady = new CountDownLatch(1);
+
+    /**
+     * The {@code ChatStore} generation the running/last emoji prewarm covers.
+     * A new generation means the backlog changed, so a fresh warmup is worth
+     * doing; the same generation means there is nothing new to rasterize.
+     */
+    private static volatile long emojiGeneration = -1L;
+    /** Wall clock of the last poll, so a busy chat cannot rebuild the list every tick. */
+    private static volatile long lastEmojiPollNanos;
 
     private FirstOpenWarmup() {
     }
@@ -72,31 +83,89 @@ public final class FirstOpenWarmup {
     }
 
     /**
-     * Warms the emoji faces and glyphs used by the current backlog. The scanner
-     * itself is pure and runs on the caller (render) thread; only the Skia work
-     * is moved to the daemon.
-     *
-     * @param texts message content and reaction emoji strings, in display order
+     * The colors the emoji glyphs are drawn with. Must match the render path
+     * exactly: the prewarmed bitmap is the bitmap the panel will draw, so a
+     * different color here is a different picture.
      */
-    public static void prewarmEmojiAsync(List<String> texts) {
-        if (texts == null || texts.isEmpty()) {
-            return;
+    private static int[] emojiColors() {
+        try {
+            AtomChatConfig cfg = AtomChatConfig.get();
+            return new int[]{cfg.bubbleTextColor, cfg.otherBubbleTextColor, 0xFFFFFF,
+                    cfg.textPrimaryColor, cfg.textSecondaryColor};
+        } catch (Throwable unavailable) {
+            // No config (unit test, config not loaded yet): fall back to the
+            // neutral colour. The product always has a config at this point.
+            return new int[]{0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF};
         }
-        AtomChatConfig cfg = AtomChatConfig.get();
-        List<EmojiPrewarmSpec> specs = EmojiPrewarmScanner.collect(texts,
+    }
+
+    /**
+     * Warms the emoji faces and glyphs used by the current backlog.
+     *
+     * <p><b>Why this is polled instead of fired once.</b> The first version of
+     * this ran once on world join. At that moment the chat was still empty, so
+     * the spec list came back empty and the warmup silently did nothing — the
+     * first panel open then rasterized every emoji on the render thread, which
+     * is exactly the 150 ms spike the warmup was supposed to remove (the
+     * budget line showed {@code prewarm_emoji=-1.000}). The backlog only exists
+     * <em>after</em> join, so the trigger has to follow the content.
+     *
+     * <p>The caller polls from the client tick with the cheap
+     * {@code ChatStore.generation()} counter; the expensive part (building the
+     * spec list) only runs when the generation moved, and at most once every
+     * {@link #EMOJI_POLL_INTERVAL_NANOS}.
+     *
+     * @param generation the chat generation the caller is asking about
+     * @param texts      supplies the message/reaction text; only called when a
+     *                   warmup is actually going to run
+     * @return true when a warmup was started by this call
+     */
+    public static boolean pollEmojiPrewarm(long generation,
+                                           java.util.function.Supplier<List<String>> texts) {
+        if (generation == emojiGeneration) {
+            return false;
+        }
+        long now = System.nanoTime();
+        long last = lastEmojiPollNanos;
+        if (now - last < EMOJI_POLL_INTERVAL_NANOS) {
+            return false;
+        }
+        if (!EMOJI_RUNNING.compareAndSet(false, true)) {
+            return false;
+        }
+        List<String> current;
+        try {
+            current = texts.get();
+        } catch (Throwable ignored) {
+            EMOJI_RUNNING.set(false);
+            return false;
+        }
+        if (current == null || current.isEmpty()) {
+            // Nothing to rasterize yet. Record the generation so we do not ask
+            // again until the backlog actually changes, and let the caller see
+            // that the warmup did run (0 ms) instead of never happening.
+            emojiGeneration = generation;
+            lastEmojiPollNanos = now;
+            EMOJI_RUNNING.set(false);
+            FirstOpenBudget.setPrewarmEmoji(0L);
+            return false;
+        }
+        List<EmojiPrewarmSpec> specs = EmojiPrewarmScanner.collect(current,
                 new float[]{UiTokens.FONT_BODY, UiTokens.FONT_QUOTE, UiTokens.FONT_EMOJI},
-                new int[]{cfg.bubbleTextColor, cfg.otherBubbleTextColor, 0xFFFFFF,
-                        cfg.textPrimaryColor, cfg.textSecondaryColor});
-        if (specs.isEmpty()) {
-            return;
-        }
+                emojiColors());
         if (specs.size() > MAX_EMOJI_SPECS) {
             specs = specs.subList(0, MAX_EMOJI_SPECS);
         }
-        if (!claimEmojiPrewarm()) {
-            return;
+        if (specs.isEmpty()) {
+            emojiGeneration = generation;
+            lastEmojiPollNanos = now;
+            EMOJI_RUNNING.set(false);
+            FirstOpenBudget.setPrewarmEmoji(0L);
+            return false;
         }
-        List<EmojiPrewarmSpec> work = specs;
+        emojiGeneration = generation;
+        lastEmojiPollNanos = now;
+        final List<EmojiPrewarmSpec> work = specs;
         startColdThread("AtomChat-EmojiPrewarm", () -> {
             long started = System.nanoTime();
             try {
@@ -106,8 +175,10 @@ public final class FirstOpenWarmup {
                 // Best effort: a failed warmup only means the old cold path pays.
             } finally {
                 FirstOpenBudget.setPrewarmEmoji(System.nanoTime() - started);
+                EMOJI_RUNNING.set(false);
             }
         });
+        return true;
     }
 
     /**
@@ -152,7 +223,9 @@ public final class FirstOpenWarmup {
 
     /** A new world may have a different emoji backlog; its warmup may run again. */
     public static void onDisconnect() {
-        EMOJI_STARTED.set(false);
+        emojiGeneration = -1L;
+        EMOJI_RUNNING.set(false);
+        lastEmojiPollNanos = 0L;
         GL_PENDING.set(false);
     }
 
@@ -162,8 +235,9 @@ public final class FirstOpenWarmup {
         return FONT_STARTED.compareAndSet(false, true);
     }
 
-    static boolean claimEmojiPrewarm() {
-        return EMOJI_STARTED.compareAndSet(false, true);
+    /** The chat generation the emoji warmup currently covers. */
+    public static long emojiGeneration() {
+        return emojiGeneration;
     }
 
     static Thread startColdThread(String name, Runnable task) {
@@ -175,7 +249,9 @@ public final class FirstOpenWarmup {
 
     static void resetForTest() {
         FONT_STARTED.set(false);
-        EMOJI_STARTED.set(false);
+        EMOJI_RUNNING.set(false);
+        emojiGeneration = -1L;
+        lastEmojiPollNanos = 0L;
         GL_PENDING.set(false);
         GL_DONE.set(false);
         fontReady = new CountDownLatch(1);

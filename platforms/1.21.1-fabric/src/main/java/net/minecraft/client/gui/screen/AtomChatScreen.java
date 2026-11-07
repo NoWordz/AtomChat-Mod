@@ -1946,6 +1946,9 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
 
     @Override
     public void render(DrawContext context, int mouseX, int mouseY, float delta) {
+        // First-open attribution: how long the first render() call takes.
+        // The clock lives in the budget so the screen stays free of nanoTime.
+        long firstDrawStart = FirstOpenBudget.markDrawStart();
         if (!AtomChatConfig.get().enabled) {
             FirstOpenBudget.abort();
             this.client.setScreen(null);
@@ -2110,6 +2113,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
                 && !imagePreview.isActive() && !imageCropper.isActive() && !colorPicker.isActive()) {
             context.drawHoverEvent(this.textRenderer, hovered, mouseX, mouseY);
         }
+        FirstOpenBudget.addFirstDraw(firstDrawStart);
         String firstOpenLine = FirstOpenBudget.endFrame();
         if (firstOpenLine != null) AtomChat.LOGGER.info(firstOpenLine);
     }

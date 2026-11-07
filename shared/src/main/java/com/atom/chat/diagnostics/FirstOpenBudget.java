@@ -47,7 +47,7 @@ public final class FirstOpenBudget {
             "^\\[AtomChat\\]\\[probe\\] first_open_budget "
                     + "total=([0-9]+\\.[0-9]{3}) font=([0-9]+\\.[0-9]{3}) "
                     + "emoji=([0-9]+\\.[0-9]{3}) blur_init=([0-9]+\\.[0-9]{3}) "
-                    + "icons=([0-9]+\\.[0-9]{3}) other=([0-9]+\\.[0-9]{3}) "
+                    + "icons=([0-9]+\\.[0-9]{3}) other=([0-9]+\\.[0-9]{3}) first_draw=([0-9]+\\.[0-9]{3}) "
                     + "prewarm_font=(-?[0-9]+\\.[0-9]{3}) prewarm_emoji=(-?[0-9]+\\.[0-9]{3}) "
                     + "prewarm_gl=(-?[0-9]+\\.[0-9]{3})$";
 
@@ -59,6 +59,8 @@ public final class FirstOpenBudget {
     private static final AtomicLong EMOJI = new AtomicLong();
     private static final AtomicLong BLUR_INIT = new AtomicLong();
     private static final AtomicLong ICONS = new AtomicLong();
+    /** Wall clock of the first render() call; the rest of the path is the rest. */
+    private static final AtomicLong FIRST_DRAW = new AtomicLong();
     private static final AtomicLong PREWARM_FONT = new AtomicLong(-1_000_000L);
     private static final AtomicLong PREWARM_EMOJI = new AtomicLong(-1_000_000L);
     private static final AtomicLong PREWARM_GL = new AtomicLong(-1_000_000L);
@@ -126,6 +128,22 @@ public final class FirstOpenBudget {
         if (LIVE.get()) ICONS.addAndGet(Math.max(0L, nanos));
     }
 
+    /**
+     * Marks the start of the first render() call. Returns 0 when no measurement
+     * is live, so the caller can skip the clock entirely.
+     */
+    public static long markDrawStart() {
+        return LIVE.get() ? System.nanoTime() : 0L;
+    }
+
+    /** Files the first render() call's wall clock under {@code first_draw}. */
+    public static void addFirstDraw(long startNanos) {
+        if (startNanos == 0L) {
+            return;
+        }
+        FIRST_DRAW.addAndGet(Math.max(0L, System.nanoTime() - startNanos));
+    }
+
     /** 预热线程完成后的总墙钟；可在首开前/后任意时刻写入，-1 表示尚未完成。 */
     public static void setPrewarmFont(long nanos) {
         PREWARM_FONT.set(Math.max(0L, nanos));
@@ -161,8 +179,9 @@ public final class FirstOpenBudget {
         return PREFIX + "first_open_budget"
                 + String.format(Locale.ROOT,
                 " total=%.3f font=%.3f emoji=%.3f blur_init=%.3f icons=%.3f other=%.3f"
-                        + " prewarm_font=%.3f prewarm_emoji=%.3f prewarm_gl=%.3f",
+                        + " first_draw=%.3f prewarm_font=%.3f prewarm_emoji=%.3f prewarm_gl=%.3f",
                 total / 1e6, font / 1e6, emoji / 1e6, blur / 1e6, icons / 1e6, other / 1e6,
+                FIRST_DRAW.get() / 1e6,
                 PREWARM_FONT.get() / 1e6, PREWARM_EMOJI.get() / 1e6, PREWARM_GL.get() / 1e6);
     }
 
@@ -181,6 +200,7 @@ public final class FirstOpenBudget {
         EMOJI.set(0L);
         BLUR_INIT.set(0L);
         ICONS.set(0L);
+        FIRST_DRAW.set(0L);
         PREWARM_FONT.set(-1_000_000L);
         PREWARM_EMOJI.set(-1_000_000L);
         PREWARM_GL.set(-1_000_000L);

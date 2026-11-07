@@ -46,12 +46,18 @@ class FirstOpenPrewarmWiringTest {
         for (String rel : CLIENTS) {
             String s = src(rel);
             assertEquals(1, count(s, "FirstOpenWarmup.prewarmFontsAsync();"), rel);
-            assertEquals(1, count(s, "FirstOpenWarmup.prewarmEmojiAsync(firstOpenWarmupTexts())"), rel);
+            // The emoji warmup follows the backlog, not the join event: at join
+            // the chat is still empty, so a join-triggered warmup silently did
+            // nothing and the first panel frame rasterized every emoji on the
+            // render thread (the 150 ms spike).
+            assertEquals(1, count(s, "FirstOpenWarmup.pollEmojiPrewarm("), rel);
+            assertEquals(0, count(s, "FirstOpenWarmup.prewarmEmojiAsync("),
+                    rel + ": 旧的 join 触发必须已经没有了");
             assertEquals(1, count(s, "FirstOpenWarmup.requestGlWarmup();"), rel);
             assertEquals(1, count(s, "FirstOpenWarmup.consumeGlWarmup()"), rel);
             assertEquals(1, count(s, "FirstOpenWarmup.onDisconnect();"), rel);
             assertTrue(s.contains("MinecraftRenderBridge.get().prepare()"), rel + ": GL 预热必须真的建桥");
-            assertTrue(s.contains("PanelBlurRenderer.prewarm("), rel + ": 模糊纹理必须真的预分配");
+            assertTrue(s.contains("PanelBlurRenderer.prewarm()"), rel + ": 模糊 shader 必须真的预编译");
         }
     }
 
@@ -60,16 +66,26 @@ class FirstOpenPrewarmWiringTest {
             String s = src(rel);
             assertEquals(1, count(s, "FirstOpenBudget.beginFirstOpen("), rel);
             assertEquals(1, count(s, "FirstOpenBudget.endFrame()"), rel);
+            assertEquals(1, count(s, "FirstOpenBudget.markDrawStart()"), rel + ": 首帧必须单独计时");
+            assertEquals(1, count(s, "FirstOpenBudget.addFirstDraw("), rel + ": 首帧必须单独归因");
             assertTrue(count(s, "FirstOpenBudget.active()") >= 1, rel + ": 至少 icon 段要计时");
         }
     }
 
-    @Test void everyBlurRendererCanPrewarmItsTextures() throws Exception {
+    @Test void everyBlurRendererPrewarmsShadersButNeverTextures() throws Exception {
         for (String rel : RENDERERS) {
             String s = src(rel);
             assertEquals(1, count(s, "public static void prewarm("), rel);
-            assertTrue(s.contains("ensureTextures(widthPx, heightPx, false)"), rel);
+            assertFalse(s.contains("ensureTextures(widthPx, heightPx, false)"), rel
+                    + ": 预热不得分配纹理——容量下限只涨不缩，会让正式路径的纹理永久偏大");
             assertTrue(s.contains("FirstOpenBudget.timeBlurInit("), rel + ": 分配段必须可归因");
+            // Fabric 懒编译 shader，预热必须真的把它编译掉；Forge/NeoForge 的
+            // shader 由启动期注册回调准备好，预热自然无事可做——但两种情况都
+            // 不许退回「预热里分配纹理」。
+            boolean lazyShaders = s.contains("ensureLoaded();");
+            boolean registeredAtStartup = s.contains("注册回调");
+            assertTrue(lazyShaders || registeredAtStartup,
+                    rel + ": 预热要么编译 shader，要么说明 shader 是启动期注册好的");
         }
     }
 }

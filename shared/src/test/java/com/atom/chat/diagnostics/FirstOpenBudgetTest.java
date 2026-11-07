@@ -47,9 +47,13 @@ class FirstOpenBudgetTest {
         double other = Double.parseDouble(m.group(6));
         assertTrue(total >= font + emoji + blur + icons, line);
         assertTrue(other >= 0.0, line);
-        assertEquals(125.000, Double.parseDouble(m.group(7)), 1e-9);
-        assertEquals(840.000, Double.parseDouble(m.group(8)), 1e-9);
-        assertEquals(310.000, Double.parseDouble(m.group(9)), 1e-9);
+        // group 7 is first_draw; it is a slice of the total, not an addition.
+        double firstDraw = Double.parseDouble(m.group(7));
+        assertTrue(firstDraw >= 0.0, line);
+        assertTrue(firstDraw <= total, line);
+        assertEquals(125.000, Double.parseDouble(m.group(8)), 1e-9);
+        assertEquals(840.000, Double.parseDouble(m.group(9)), 1e-9);
+        assertEquals(310.000, Double.parseDouble(m.group(10)), 1e-9);
     }
 
     @Test void onlyTheFirstConstructionIsMeasured() {
@@ -66,8 +70,8 @@ class FirstOpenBudgetTest {
         assertNotNull(line);
         Matcher m = Pattern.compile(FirstOpenBudget.LINE_RE).matcher(line);
         assertTrue(m.matches(), line);
-        assertEquals("-1.000", m.group(7));
         assertEquals("-1.000", m.group(8));
         assertEquals("-1.000", m.group(9));
+        assertEquals("-1.000", m.group(10));
     }
 }

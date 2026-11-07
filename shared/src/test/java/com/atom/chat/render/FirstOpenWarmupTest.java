@@ -31,14 +31,30 @@ class FirstOpenWarmupTest {
     }
 
     @Test void disconnectReopensOnlyTheJoinScopedWarmups() {
-        assertTrue(FirstOpenWarmup.claimEmojiPrewarm());
+        assertTrue(FirstOpenWarmup.claimFontPrewarm());
         FirstOpenWarmup.requestGlWarmup();
         assertTrue(FirstOpenWarmup.consumeGlWarmup(), "首次请求应真的跑一次");
         FirstOpenWarmup.onDisconnect();
-        assertTrue(FirstOpenWarmup.claimEmojiPrewarm(), "新世界可以按自己的 backlog 重新预热 emoji");
+        assertEquals(-1L, FirstOpenWarmup.emojiGeneration(), "新世界可以按自己的 backlog 重新预热 emoji");
         // GL 资源属于进程；onDisconnect 只丢弃待办，不重开已完成的那一次。
         FirstOpenWarmup.requestGlWarmup();
         assertFalse(FirstOpenWarmup.consumeGlWarmup(), "完成过的 GL 预热不得再跑第二次");
+    }
+
+    @Test void emojiPrewarmFollowsTheBacklogInsteadOfTheJoinEvent() {
+        java.util.List<String> backlog = java.util.List.of("hello \uD83D\uDE00");
+        assertTrue(FirstOpenWarmup.pollEmojiPrewarm(7L, () -> backlog),
+                "backlog 变了就该启动一次预热");
+        assertEquals(7L, FirstOpenWarmup.emojiGeneration());
+        assertFalse(FirstOpenWarmup.pollEmojiPrewarm(7L, () -> backlog),
+                "同一代 backlog 不得重复预热");
+    }
+
+    @Test void anEmptyBacklogDoesNotBurnTheWarmup() {
+        java.util.List<String> empty = java.util.List.of();
+        assertFalse(FirstOpenWarmup.pollEmojiPrewarm(3L, () -> empty));
+        assertEquals(3L, FirstOpenWarmup.emojiGeneration(),
+                "空 backlog 也要记下这一代，否则每 tick 都会重问一次");
     }
 
     @Test void coldWorkRunsOnADaemonThreadNotTheCaller() throws Exception {

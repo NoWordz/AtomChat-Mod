@@ -298,19 +298,18 @@ public final class PanelBlurRenderer {
     }
 
     /**
-     * 首开前预热：在渲染线程、当前 GL 上下文里编译/链接两个 shader，并按面板尺寸
-     * 分配三张 ping-pong 纹理。只创建资源，不画任何东西；首开帧随后命中容量复用，
-     * 不再重建。纹理参数、尺寸取整（2 的幂容量）与正式路径完全一致。
+     * 首开前预热：只把 shader 准备好，**不分配纹理**。
+     *
+     * <p>容量模式下的容量下限（capW/capH）只会变大不会变小——正式路径取
+     * {@code max(nextPow2(w), capW)}。预热若用自己的面板尺寸分配过纹理，会把
+     * 下限抬到一个再也降不回去的值，正式路径的纹理就永久偏大；而模糊 pass
+     * 跑的是整张容量纹理，于是每帧都在为多出来的面积买单（真机实测
+     * pre-pass 0.220ms -> 0.284ms，passes 0.168 -> 0.218）。
+     *
+     * <p>shader 才是首开的大头，而且与面板尺寸无关，因此留在预热里。
      */
-    public static void prewarm(int widthPx, int heightPx) {
+    public static void prewarm() {
         ensureLoaded();
-        if (disabled || roundedShader == null || kawaseShader == null) {
-            return;
-        }
-        if (widthPx <= 0 || heightPx <= 0) {
-            return;
-        }
-        ensureTextures(widthPx, heightPx, false);
     }
 
     public static boolean isAvailable() {
