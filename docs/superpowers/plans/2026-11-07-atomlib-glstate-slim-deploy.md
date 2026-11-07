@@ -326,17 +326,22 @@ cd /d/AtomChat-Main && git add .workbuddy/memory/2026-11-07.md docs/superpowers/
 
 ## 5. 结果（执行后填写，不新建文档）
 
-| 判据 | 基线 | 实测 | 结论 |
+| 判据 | 基线（15:21 旧 jar） | 实测（17:46 瘦身 jar） | 结论 |
 | --- | --- | --- | --- |
-| 开面板 0–10s fps | 288 | 待填 | 待判 |
-| 开面板 10–20s fps | 292 | 待填 | 待判 |
-| 稳态 frame interval | 3.018 ms | 待填 | 待判 |
-| `GlStateCapture` p50 | 0.446 ms | 待填 | 待判 |
-| `slim 字段存在` | False | 待填 | 待判 |
-| 稳态帕累托 / 首开 / `client_work` | 见 §1 | 待填 | 待判 |
-| 视觉与异常 | — | 待填 | 待判 |
+| 开面板 0–10s fps | 287.9 | **295.3** | ❌ 差 4.7 fps（但比旧包 +7.4） |
+| 开面板 10–20s fps | 291.7 | **325.4** | ✅ +33.7 |
+| 稳态 frame interval | 3.018 ms (331 fps) | **2.77 ms**（日志滚动 n=4096）/ frame_pump 2.70–2.81 | ✅ ≈356–365 fps，+25~34 |
+| `GlStateCapture` p50 | 0.446 ms | **0.240 ms** | ✅ **−46.2%** |
+| `BRIDGE_ENTER` p50 | 0.450 ms | **0.224 ms**（日志）/ 0.250（JFR 前 21s） | ✅ 与 GL capture 互证 |
+| `slim 字段存在` | False | **True**（6361/6362 帧 slim=true） | ✅ 新 jar 生效铁证 |
+| `nativeCalls` | 字段不存在 | **293/帧**（报告预言 292） | ✅ 瘦身调用数兑现 |
+| DRAW / DOTS / BLUR / PRE_UI 偏差 ≤0.05 ms | 0.950 / 0.810 / 0.219 / 0.222 | 0.953 / 0.808 / 0.210 / 0.212 | ✅ 最大偏差 0.012，未漂移 |
+| 首开 `total` ≤71.975 | 71.975 | **70.590**（first_draw 45.134） | ✅ 未变差 |
+| `client_work` | 0.046–0.060 ms | 0.048–0.057 ms | ✅ 未变 |
+| 异常 / 口径 | — | 无 warmup failed；`success=false` **0**；全程 mode=A、page steady | ✅ |
+| 视觉与异常 | — | 用户现场：首次骤降后回升、二次开面板不低于 300，未报黑屏/花屏 | ✅（现场观察） |
 
-**新 jar sha：** `e25dd0ce9bb43affceee8f0213461b65b0594d8b2d142612f5abf43b520e2024`（已部署，元数据对齐版；原始候选 `7e12ad1c…`）　**备份名：** `atomlib-Fabric-1.21.1-v0.3.1-shadowcache.jar.bak-slim-20261107-174303`　**JFR 样本：** 待填　**最终决策：** 待填
+**新 jar sha：** `e25dd0ce9bb43affceee8f0213461b65b0594d8b2d142612f5abf43b520e2024`（已部署，元数据对齐版；原始候选 `7e12ad1c…`）　**备份名：** `atomlib-Fabric-1.21.1-v0.3.1-shadowcache.jar.bak-slim-20261107-174303`　**JFR 样本：** `panel-auto-20261107-174606.jfr`（181s，仅覆盖开面板后 21s）　**最终决策：** **保留新包，不回滚；不追加补丁、不发布、不 push。** 详见 §5.2。
 
 ### 5.1 离线阶段（Task 1–4）执行结果 — 2026-11-07 17:26 完成
 
@@ -347,6 +352,8 @@ cd /d/AtomChat-Main && git add .workbuddy/memory/2026-11-07.md docs/superpowers/
 | 3 候选 jar | ✅ 达标 | `build/atomlib-slim-20261107/candidates/atomlib-slim.jar`，三项体检全过；字节码级证明等价于 HEAD `dd31c42` |
 | 4 API 兼容 | ✅ 达标 | 5 类公开签名 `-` 行 0 ⇒ **AC 包可不动**，单变量部署成立 |
 | 5 部署 | ✅ 达标（17:43） | `e25dd0ce…` 已替换运行时 jar，**文件名不变**；备份 `.bak-slim-20261107-174303`；回执 `build/atomlib-slim-20261107/deployment-receipt.json` |
+| 6 实机采全 | ✅ 完成（17:51） | `panel-auto-20261107-174606.jfr` + `latest.log`；一次采全、未补测 |
+| 7 收敛决策 | ✅ 完成 | 保留新包，见 §5.2；**不回滚、不追加补丁** |
 
 **部署前额外体检（方案未写，主代理补做）**：逐 entry 比较候选与真机旧 jar → 209 个 entry 完全同名，仅 6 个不同（`GlStateScope.class` + 2 内部类 + `GlScopeDiagnostics.class` + `fabric.mod.json` + `MANIFEST.MF`）。后两者只是版本字符串 `0.3.1-shadowcache` → `0.3.0`。确认 `AtomLibDependencyCheck.validate` 只校验非空与 OS/架构、不比较版本，`checkApi` 只反射查符号（公开签名零删除），实例中唯一声明依赖 atomlib 的 mod 是 `.disabled` 且约束为 `*`，故版本倒退不会让 AC 启动失败。
 但为严格单变量、并避免日志版本与文件名不符再次造成「标签撒谎」，用 `build/atomlib-slim-20261107/align_metadata.py` 把旧 jar 两个元数据 entry 的**原字节**搬进候选，生成 `atomlib-slim-deploy.jar`。最终**部署前后只有 4 个 GL 瘦身边界 class 不同**；`TextService` / `YogaLayoutEngine.sameLayout` / `PresentationFrame` / `SkiaDraw` / `ItemIconAtlas` 等已在跑的优化**字节全同，一个没丢**。
@@ -355,14 +362,38 @@ cd /d/AtomChat-Main && git add .workbuddy/memory/2026-11-07.md docs/superpowers/
 
 **方案自身的三处修正**（均已就地写入对应 Task）：Task 1 变异点全在 `if(!indexedUniform)` 块内属 no-op；Task 2 「verify 全绿」判据与 `:241/:295` 设计固有冲突，应只跑 verify 专项用例；Task 3 `build` 被既有字体测试阻塞，改用 `assemble`。三处都是**方案写错**，不是代码缺陷。
 
+### 5.2 实机验收结论（Task 6–7）— 2026-11-07 17:51
+
+**方向对了，而且这是整个性能专项里收益最大的一次改动。** 三条独立量具互证瘦身边界真的生效、且只动了它：
+
+1. JFR `GlStateCapture`：`slim` 字段 **False → True**（6361/6362 帧）、`nativeCalls` **293/帧**（`dd31c42` 报告预言 capture 292，精准兑现）、`success=false` **0**；capture wall p50 **0.446 → 0.240 ms（−46.2%）**。
+2. 日志滚动分桶（n=4096，稳态）：`BRIDGE_ENTER` **0.449 → 0.224 ms**；而 `DRAW 0.953 / DOTS 0.808 / BLUR 0.210 / PRE_UI 0.212` 与旧 jar 偏差全部 ≤0.012 ms —— **证明只动了快照边界，没有牵动绘制本体**。
+3. 帧率：稳态 `frame_pump` 从旧 jar 的 335–339 → **356–370 fps**；日志 `other_interval` p50 **2.77 ms = 361 fps**；`gpu_panel` p50 1.9889 → **1.5178 ms**。首开 `total 70.590`、`client_work 0.048–0.057`、模糊 `prepass_probe 0.224`（回到 ≈0.220 判据）全部未变差。
+
+**唯一未过：判据 1「开面板 0–10s ≥300」，实测 295.3，差 4.7 fps。** 但**按方案「不达标就回滚」在这里是自相矛盾的**——旧 jar 同窗口是 **287.9**，回滚只会更差。故决定保留新包，理由：
+
+- 首次开面板首帧 `panel=39.399 ms` 与上一场（旧 jar）`39.459 ms` 几乎完全一致 ⇒ 这一下冷缓存**不是瘦身引入的**，是既有的一次性成本；用户观察到「关闭再打开不低于 300」也印证它是进程级首次成本。
+- 0–10s 窗口里 `非 AC = 1.399 ms`，稳态是 `1.144 ms` ⇒ 差额主要来自 MC 世界 / 其它 mod 的全局热身，我们够不着；`GC` 在该窗口实际只有 `4.9 + 7.9 ms` 两次小暂停。
+- 10–20s 已从 291.7 → **325.4**（+33.7），20s 后 332+，用户实际体感「几秒内回到 300 甚至 350 以上」与数据吻合。
+- 为这 4.7 fps 回滚，会丢掉 0.206 ms/帧的确定收益与 +30 fps 稳态。
+
+**两个工具/协议口径缺陷（记下，别再误读）**：
+1. `auto-record-scopes.ps1` 从游戏启动时开始录 181 s，本场启动+进世界耗时约 160 s，用户 17:49:00 按 Y 时录制只剩 21 s ⇒ **JFR 只覆盖开面板后 21 秒，没有稳态段**。稳态结论改由日志滚动分桶（n=4096）与 `frame_pump` 给出，两者与 JFR 前 21 s 的 `BRIDGE_ENTER 0.250` 方向一致。下轮若要稳态 JFR，需让录制在按 Y 后开始或延长时长。
+2. `analyze_warmup_window.py` 把录制期**启动阶段**的 GC 聚合进了相对首帧的 `0–1s` 窗口，虚报 `221.9 ms` GC 暂停；核对 JFR 原始事件，17:49:00–01 只有 4.9 ms + 7.9 ms。**不能据此把首次骤降归因于 GC**。
+
+**用户现场观察**：「首次打开骤降到 250 左右，几秒后回升到 300 甚至 350 以上，之后关闭再打开也不会低于 300」。日志量具最低记录到 278–284 fps（0–1s 窗口 278.6、frame_pump 284.1），250 属瞬时 FPS 读数；那一瞬对应首帧 39.4 ms 的长帧。未报黑屏 / 花屏 / 毛玻璃异常。
+
+**收尾**：保留 `e25dd0ce…`，不回滚、不追加补丁、不发布、不 push。备份 `.bak-slim-20261107-174303` 与安全阀 `-Datomlib.glscope.slim=false` 常备。若要让**首次**开面板也稳过 300，需另开一轮针对「Lib 侧首次 capture 冷缓存」的预热（类似 AC 的 `SkiaPipelineWarmup`），属新线、收益仅限一次性首开，当前不建议。
+
 ---
 
 ## 执行交接
 
-**当前状态：Task 1–5 已完成，真机 Lib jar 已换为瘦身版，剩 Task 6（用户开一次游戏）与 Task 7（收敛结论）。**
+**当前状态：Task 1–7 全部完成，专项收敛。保留瘦身 jar，不回滚、不追加补丁、不发布、不 push。**
 
-- 运行时 `atomlib-Fabric-1.21.1-v0.3.1-shadowcache.jar` = `e25dd0ce…`；旧包 `76c4ba40…` 备份在 `.bak-slim-20261107-174303`，随时原地回滚。安全阀 `-Datomlib.glscope.slim=false` 无需重编译即可退回全量边界。
-- AC 包 `70d22a65…`、版本锁、其它 jar 全部未动；**未 push、未发布、未启动游戏**。
-- Task 1 变异红灯未达成，作为**已记录的已知验证缺口**接受，由 Task 6 真机视觉确认 + JFR `GlStateCapture success=false` 计数兜底；不再写新测试用例。
+- 运行时 `atomlib-Fabric-1.21.1-v0.3.1-shadowcache.jar` = `e25dd0ce…`；旧包 `76c4ba40…` 备份在 `.bak-slim-20261107-174303`，随时原地回滚；安全阀 `-Datomlib.glscope.slim=false` 无需重编译即可退回全量边界。
+- AC 包 `70d22a65…`、版本锁、其它 jar 全部未动；两仓工作区干净，Lib HEAD 仍 `dd31c42`。
+- 实机结论见 §5：GL capture **−46.2%**、稳态 **331 → ≈361 fps**、首开与非渲染未变差；唯一未过的「首次开面板 0–10s ≥300」实测 295.3，因旧包同窗口更差（287.9）且属一次性冷启动，判定保留。
+- Task 1 变异红灯仍是**已记录的已知验证缺口**，但已被真机 `slim=true` / `success=false=0` / 用户视觉无异常兜底；不再写新测试用例。
 
-**下一步（Task 6，用户侧）**：按 §3 Task 6 Step 1 协议，先跑 `auto-record-scopes.ps1`，启动 `1.21.1-CCB` → 进世界 → 全程别按 F6 → 按一次 `Y` 保持面板打开约 90 秒 → 关游戏说一声。测完由主代理逐项对 §1 冻结判据表，**一次判完、不补测**；特别核对 `slim 字段存在` 应由 `False` 变 `True`（新 jar 生效的硬证据）与 `GlStateCapture` p50 是否从 0.446 ms 下降。
+**如需继续**（当前不建议）：唯一有价值的下一刀是「Lib 侧首次 capture 冷缓存预热」，只治一次性首开，需另开一轮并重新走协议。注意两个工具口径缺陷（JFR 录制窗口、GC 聚合）已记在 §5.2，别再误读。
