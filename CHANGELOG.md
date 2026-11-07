@@ -1,5 +1,35 @@
 # Changelog
 
+## v0.6.0
+
+**性能**
+
+- 首次打开聊天面板前预热 Skia 绘制管线，明显减轻首帧卡顿。
+- 精简 AtomLib 的 GL 状态快照，面板打开时的稳态帧率提升约 30 帧。
+
+**修复**
+
+- 修正诊断日志中档位标记与实际运行档位不一致的问题。
+
+**新增**
+
+- 增加按调用点分桶的渲染耗时观测与非渲染 tick 计时，默认关闭且不影响正常游戏。
+
+----
+
+**Performance**
+
+- Warm up the Skia drawing pipeline before the chat panel first opens, noticeably reducing first-frame stutter.
+- Slim down AtomLib's GL state snapshot, raising steady-state frame rate by about 30 fps while the panel is open.
+
+**Fixed**
+
+- Corrected diagnostic log mode labels that did not match the runtime mode.
+
+**Added**
+
+- Added per-call-site render timing and non-render tick timing; disabled by default with no overhead in normal play.
+
 ## v0.5.0
 
 **更改**

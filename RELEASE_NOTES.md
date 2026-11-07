@@ -1,5 +1,27 @@
 # Release Notes
 
+## v0.6.0
+
+**性能**
+
+- 首次打开聊天面板的卡顿明显减轻。
+- 面板打开时的帧率提升约 30 帧。
+
+**说明**
+
+- 本次配套发布 AtomLib v0.4.0；安装时需同时安装对应加载器和游戏版本的 AtomLib。
+
+----
+
+**Performance**
+
+- Noticeably less stutter the first time the chat panel opens.
+- About 30 fps higher while the panel is open.
+
+**Notes**
+
+- AtomLib v0.4.0 is released alongside this version; install the AtomLib build for the same loader and Minecraft version.
+
 ## v0.5.0
 
 **更改**
