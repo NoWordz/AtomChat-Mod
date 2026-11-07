@@ -359,8 +359,9 @@ public final class Truth3Probe {
      * 帧返回一行 {@code frame_pump}。
      *
      * @param debug      本帧 {@code config.debug}
-     * @param configMode 本帧 {@code config.diagnosticRenderMode}（与 frame_probe 同源，
-     *                   非法值回退 A；G0/G1/G2 没有 AC 屏幕时也按配置字段报档）
+     * @param configMode 保留签名兼容：宿主仍传 {@code config.diagnosticRenderMode}。
+     *                   档位一律取运行时状态机 {@link #mode()}——热键切档不写回配置，
+     *                   用配置字段报档会把 D 档数据误标成 A 档（2026-11-07 12:28 事故）。
      */
     public String onPumpFrame(long nowNanos, boolean debug, String configMode) {
         if (!debug) {
@@ -370,7 +371,8 @@ public final class Truth3Probe {
             }
             return null;
         }
-        Mode want = parseMode(configMode);
+        // 与 frame_probe 同源：只认真实运行时档位。configMode 仅保留给调用方签名兼容。
+        Mode want = mode;
         if (!pumpArmed || want != pumpMode) {
             resetPumpWindow();
             pumpMode = want;
@@ -463,7 +465,7 @@ public final class Truth3Probe {
         double p95ms = p95 / 1_000_000.0;
         double maxMs = max / 1_000_000.0;
         double fps = p50ms > 0.0 ? 1000.0 / p50ms : 0.0;
-        return PREFIX + "frame_pump mode=" + pumpMode.name()
+        return PREFIX + "frame_pump mode=" + mode.name()
                 + " n=" + n
                 + " p50=" + String.format(Locale.ROOT, "%.3f", p50ms)
                 + " p95=" + String.format(Locale.ROOT, "%.3f", p95ms)

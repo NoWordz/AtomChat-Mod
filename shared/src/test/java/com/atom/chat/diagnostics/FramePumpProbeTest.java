@@ -95,14 +95,16 @@ class FramePumpProbeTest {
     }
 
     @Test
-    void pumpModeComesFromConfigAndDoesNotTouchTheRenderMode() {
+    void pumpReportsRuntimeModeNotConfigMode() {
         Truth3Probe p = new Truth3Probe();
         p.configure(true, "A");
+        // 第三参故意喂 "C"（配置字段），但运行时档位仍是 A：热键切档不写回配置，
+        // 日志若报 C 就会在真机上把 D 档数据误标成 A 档（12:28 那次事故的复现）。
         String line = pump(p, Truth3Probe.REPORT_EVERY + 1, START, true, "C");
         assertNotNull(line);
-        assertEquals("C", match(Truth3Probe.PUMP_LINE_RE, line).group(1),
-                "G0–G2 没有 AC 屏幕时，pump 必须按配置字段报档");
-        assertEquals(Truth3Probe.Mode.A, p.mode(), "pump 不得改写 frame_probe 的档位状态");
+        assertEquals("A", match(Truth3Probe.PUMP_LINE_RE, line).group(1),
+                "frame_pump 必须报真实运行时档位，不得用配置字段伪装");
+        assertEquals(Truth3Probe.Mode.A, p.mode(), "pump 不得改写运行时档位状态");
     }
 
     // --- 2. debug 门控 -------------------------------------------------------
@@ -121,13 +123,15 @@ class FramePumpProbeTest {
     // --- 3. 切档重置 pump 窗口 ----------------------------------------------
 
     @Test
-    void pumpWindowResetsWhenTheModeChanges() {
+    void pumpWindowResetsWhenRuntimeModeChanges() {
         Truth3Probe p = new Truth3Probe();
+        p.configure(true, "A");
         assertNull(pump(p, 300, START, true, "A"), "不足 600 帧不输出");
-        String line = pump(p, Truth3Probe.REPORT_EVERY + 1, START + 300L * STEP_NS, true, "D");
+        p.cycle(); // 真实热键切档 A -> B（配置字段始终不变，仍是 "A"）
+        String line = pump(p, Truth3Probe.REPORT_EVERY + 1, START + 300L * STEP_NS, true, "A");
         assertNotNull(line, "切档后重新攒满 600 帧才输出");
         Matcher m = match(Truth3Probe.PUMP_LINE_RE, line);
-        assertEquals("D", m.group(1));
+        assertEquals("B", m.group(1), "标签必须跟随运行时档位");
         assertEquals("600", m.group(2), "切档前的 300 帧必须被清空");
     }
 

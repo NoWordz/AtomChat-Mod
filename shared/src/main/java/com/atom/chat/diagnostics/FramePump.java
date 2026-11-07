@@ -32,8 +32,10 @@ public final class FramePump {
         }
         String line = Truth3Probe.get().onPumpFrame(
                 System.nanoTime(), true, config.diagnosticRenderMode);
-        if (line != null) {
-            AtomChat.LOGGER.info(line);
+        String work = ClientWorkBudget.get().summaryLine();
+        // 仍是唯一一个日志出口：两行按各自窗口节奏合并后一次转发，不新增 outlet。
+        if (line != null || work != null) {
+            AtomChat.LOGGER.info(line == null ? work : (work == null ? line : line + "\n" + work));
         }
     }
 }

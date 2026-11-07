@@ -155,6 +155,7 @@ public class AtomChatClient implements ClientModInitializer {
         NotificationController.registerSound();
         com.atom.chat.audio.FeedbackSoundController.registerSound();
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
+            long workStart = com.atom.chat.diagnostics.ClientWorkBudget.get().startTick();
             // Emoji rasterization must not happen on the render thread of the
             // first panel frame. The backlog only exists after join, so the
             // warmup follows the content instead of the join event: poll the
@@ -192,6 +193,7 @@ public class AtomChatClient implements ClientModInitializer {
                     client.setScreen(new AtomChatScreen("", AtomChatOpenMode.RESTORE));
                 }
             }
+            com.atom.chat.diagnostics.ClientWorkBudget.get().endTick(workStart);
         });
     }
 }

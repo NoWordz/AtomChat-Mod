@@ -182,6 +182,7 @@ public class AtomChatClient {
     }
 
     private static void onClientTick(ClientTickEvent.Post event) {
+        long workStart = com.atom.chat.diagnostics.ClientWorkBudget.get().startTick();
         Minecraft client = Minecraft.getInstance();
         // Emoji rasterization must not happen on the render thread of the
         // first panel frame. The backlog only exists after join, so the
@@ -220,5 +221,6 @@ public class AtomChatClient {
                 client.setScreen(new AtomChatScreen("", AtomChatScreen.AtomChatOpenMode.RESTORE));
             }
         }
+        com.atom.chat.diagnostics.ClientWorkBudget.get().endTick(workStart);
     }
 }
