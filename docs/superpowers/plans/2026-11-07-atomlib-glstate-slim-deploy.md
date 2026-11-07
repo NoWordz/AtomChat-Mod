@@ -34,7 +34,9 @@
 | `dd31c42` 的修复 | 桥自己的 Skija 通路走瘦身边界：**854 → 495 次**（capture 292 + restore 203，−42%）；通用宿主路径一字未动 |
 | 相对旧基线 | **仍多 235 次**（495 vs 260，约 1.9 倍），恢复侧还有 203 次（纹理单元 32×4 类 + indexed blend） |
 | 已验证 | 真实 GLSL + readback 逐字节像素等价（`SlimSnapshotPixelEquivalenceTest`）；AC × 瘦身版三端集成构建全绿 |
-| **未验证** | 未部署真机；**变异红灯未做**；状态泄漏反证只补一条；NeoForge 的 slim 验证只有 BUILD SUCCESSFUL；真机收益未知 |
+| **未验证（本表为 16:19 写方案时的快照）** | 未部署真机；**变异红灯未做**；状态泄漏反证只补一条；NeoForge 的 slim 验证只有 BUILD SUCCESSFUL；真机收益未知 |
+>
+> **17:43 进展**：已部署（§5.1）；NeoForge 补到 79/0 含 3 个 SlimSnapshot XML；变异红灯两轮未达成但已如实记录；**仅「真机收益未知」仍成立**，等 Task 6。
 
 **2026-11-07 16:11 的重要更正**：此前判断「`8724387` 一整批优化从未上真机」是**错的**。逐类 `javap` 拆开 `v0.3.1-shadowcache.jar` 后确认，`TextService` 的 `shapes/cache/shaper`、`YogaLayoutEngine.sameLayout`、`PresentationFrame.paintingFrames`、`SkiaDraw` 的 `SHARED_PAINT/SHADOW_IMAGES`、`GlStateScope.captureSkia`、`GlScopeDiagnostics` **全部已在真机 jar 内**。旧 jar 里唯一缺席的是 `slimSnapshot` / `verifyDroppedFamilies` / `nativeCalls` 三个字段——两边界接口建好了，瘦身实现没交。这与 JFR `slim 字段存在 = False` 互证。
 
@@ -250,7 +252,7 @@ Expected: `0`。同时 `latest.log` 静止 >60s（`mv` 本身兼作文件占用�
 
 ```bash
 set -euo pipefail
-SRC=/d/AtomChat-Main/build/atomlib-slim-20261107/candidates/atomlib-slim.jar
+SRC=/d/AtomChat-Main/build/atomlib-slim-20261107/candidates/atomlib-slim-deploy.jar   # 元数据对齐后的部署包，见 §5.1
 MODS=/d/Myworld/.minecraft/versions/1.21.1-CCB/mods
 DST=$MODS/atomlib-Fabric-1.21.1-v0.3.1-shadowcache.jar
 AC=$MODS/atomchat-Fabric-1.21.1-v0.5.0.jar
@@ -334,7 +336,7 @@ cd /d/AtomChat-Main && git add .workbuddy/memory/2026-11-07.md docs/superpowers/
 | 稳态帕累托 / 首开 / `client_work` | 见 §1 | 待填 | 待判 |
 | 视觉与异常 | — | 待填 | 待判 |
 
-**新 jar sha：** `7e12ad1c0ebffed05721b6245ab4f298084ac32ccc17c877a80f105febfebe51`（候选已归档，尚未部署）　**备份名：** 待填　**JFR 样本：** 待填　**最终决策：** 待填
+**新 jar sha：** `e25dd0ce9bb43affceee8f0213461b65b0594d8b2d142612f5abf43b520e2024`（已部署，元数据对齐版；原始候选 `7e12ad1c…`）　**备份名：** `atomlib-Fabric-1.21.1-v0.3.1-shadowcache.jar.bak-slim-20261107-174303`　**JFR 样本：** 待填　**最终决策：** 待填
 
 ### 5.1 离线阶段（Task 1–4）执行结果 — 2026-11-07 17:26 完成
 
@@ -344,8 +346,12 @@ cd /d/AtomChat-Main && git add .workbuddy/memory/2026-11-07.md docs/superpowers/
 | 2 三端 + verify | ✅ 达标 | Fabric 79/0、Forge 79/0、NeoForge 79/0（含 3 个 SlimSnapshot XML，补上旧缺口）；`verifyTripwireReportsNoOmittedWrites` 全绿、无遗漏写入报告 |
 | 3 候选 jar | ✅ 达标 | `build/atomlib-slim-20261107/candidates/atomlib-slim.jar`，三项体检全过；字节码级证明等价于 HEAD `dd31c42` |
 | 4 API 兼容 | ✅ 达标 | 5 类公开签名 `-` 行 0 ⇒ **AC 包可不动**，单变量部署成立 |
+| 5 部署 | ✅ 达标（17:43） | `e25dd0ce…` 已替换运行时 jar，**文件名不变**；备份 `.bak-slim-20261107-174303`；回执 `build/atomlib-slim-20261107/deployment-receipt.json` |
 
-**离线阶段提交**：`a4b408e1`（§8 首轮记录）、`20b971a7`（§8 最终结论）、本文件就地更新与当天工作日志。**未 push、未发布、未改 `versions/atomlib.json`、未碰真机 mods 目录**；Lib 仓工作区干净、HEAD 仍 `dd31c42`。
+**部署前额外体检（方案未写，主代理补做）**：逐 entry 比较候选与真机旧 jar → 209 个 entry 完全同名，仅 6 个不同（`GlStateScope.class` + 2 内部类 + `GlScopeDiagnostics.class` + `fabric.mod.json` + `MANIFEST.MF`）。后两者只是版本字符串 `0.3.1-shadowcache` → `0.3.0`。确认 `AtomLibDependencyCheck.validate` 只校验非空与 OS/架构、不比较版本，`checkApi` 只反射查符号（公开签名零删除），实例中唯一声明依赖 atomlib 的 mod 是 `.disabled` 且约束为 `*`，故版本倒退不会让 AC 启动失败。
+但为严格单变量、并避免日志版本与文件名不符再次造成「标签撒谎」，用 `build/atomlib-slim-20261107/align_metadata.py` 把旧 jar 两个元数据 entry 的**原字节**搬进候选，生成 `atomlib-slim-deploy.jar`。最终**部署前后只有 4 个 GL 瘦身边界 class 不同**；`TextService` / `YogaLayoutEngine.sameLayout` / `PresentationFrame` / `SkiaDraw` / `ItemIconAtlas` 等已在跑的优化**字节全同，一个没丢**。
+
+**提交与边界**：`a4b408e1`（§8 首轮）、`20b971a7`（§8 最终）、`fbf64b53`（离线收敛）、本次部署更新。**未 push、未发布、未改 `versions/atomlib.json`、未重构建 AC、未启动游戏**；Lib 仓工作区干净、HEAD 仍 `dd31c42`。AC 包 `70d22a65…` 与其它 jar 聚合哈希均未变。
 
 **方案自身的三处修正**（均已就地写入对应 Task）：Task 1 变异点全在 `if(!indexedUniform)` 块内属 no-op；Task 2 「verify 全绿」判据与 `:241/:295` 设计固有冲突，应只跑 verify 专项用例；Task 3 `build` 被既有字体测试阻塞，改用 `assemble`。三处都是**方案写错**，不是代码缺陷。
 
@@ -353,10 +359,10 @@ cd /d/AtomChat-Main && git add .workbuddy/memory/2026-11-07.md docs/superpowers/
 
 ## 执行交接
 
-**当前状态：Task 1–4 已完成，停在 Task 5 部署前的确认点。**
+**当前状态：Task 1–5 已完成，真机 Lib jar 已换为瘦身版，剩 Task 6（用户开一次游戏）与 Task 7（收敛结论）。**
 
-- 候选 jar 已就绪且经字节码级验证等价于 `dd31c42`；AC 包公开签名兼容、无需重构建。
-- **未部署、未启动游戏、未发布、未 push**；真机 `atomlib-Fabric-1.21.1-v0.3.1-shadowcache.jar` 仍是 `76c4ba40…`。
+- 运行时 `atomlib-Fabric-1.21.1-v0.3.1-shadowcache.jar` = `e25dd0ce…`；旧包 `76c4ba40…` 备份在 `.bak-slim-20261107-174303`，随时原地回滚。安全阀 `-Datomlib.glscope.slim=false` 无需重编译即可退回全量边界。
+- AC 包 `70d22a65…`、版本锁、其它 jar 全部未动；**未 push、未发布、未启动游戏**。
 - Task 1 变异红灯未达成，作为**已记录的已知验证缺口**接受，由 Task 6 真机视觉确认 + JFR `GlStateCapture success=false` 计数兜底；不再写新测试用例。
 
-**下一步需要用户拍板**：说「部署」才执行 Task 5（只换 Lib jar 字节、文件名不变、AC 包与版本锁不动、备份可回滚），随后按 Task 6 协议由用户开一次游戏。若要收手，用备份或保留现状即可，无需回退任何代码。
+**下一步（Task 6，用户侧）**：按 §3 Task 6 Step 1 协议，先跑 `auto-record-scopes.ps1`，启动 `1.21.1-CCB` → 进世界 → 全程别按 F6 → 按一次 `Y` 保持面板打开约 90 秒 → 关游戏说一声。测完由主代理逐项对 §1 冻结判据表，**一次判完、不补测**；特别核对 `slim 字段存在` 应由 `False` 变 `True`（新 jar 生效的硬证据）与 `GlStateCapture` p50 是否从 0.446 ms 下降。
