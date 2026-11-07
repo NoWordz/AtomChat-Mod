@@ -112,11 +112,13 @@ nw = Math.max(nextPow2(w), wasCapacity ? capW : 0);   // capW 是下限
 
 | 平台 | 构建 | 测试 |
 | --- | --- | --- |
-| Fabric 1.21.1 | BUILD SUCCESSFUL | 见 §6.1 |
-| Forge 1.20.1 | BUILD SUCCESSFUL | 见 §6.1 |
-| NeoForge 1.21.1 | BUILD SUCCESSFUL | 见 §6.1 |
+| Fabric 1.21.1 | BUILD SUCCESSFUL (1m22s) | **1745** / 0 失败 / 0 错误 / 7 跳过 |
+| Forge 1.20.1 | BUILD SUCCESSFUL (1m41s) | **1730** / 0 失败 / 0 错误 / 7 跳过 |
+| NeoForge 1.21.1 | BUILD SUCCESSFUL (1m34s) | **1730** / 0 失败 / 0 错误 / 7 跳过 |
 
-（构建日志：`build/first-open-20261106/build-{fabric,forge,neoforge}.log`）
+（构建日志：`build/first-open-20261106/build-{fabric,forge,neoforge}.log`；上一轮基线 1743/1728/1728，本轮各 +2 个新测试）
+
+**已部署**：`D:/Myworld/.minecraft/versions/1.21.1-CCB`，jar sha256 `108ec1a94686e24438fd1eab0687d0086aeae8770b059854a0a819416c03c365`，旧包备份 `atomchat-Fabric-1.21.1-v0.5.0.jar.bak-firstopen-20261107-121153`。未启动游戏。
 
 **红线复查**：`full = true` 三端各 1；无 `BlurMotionGate`；`PanelOpenMotion.blurCapture(` 三端各 1；渲染器 `System.nanoTime()` 三端各 13。
 
