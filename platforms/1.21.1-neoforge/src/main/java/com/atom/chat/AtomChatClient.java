@@ -80,6 +80,15 @@ public class AtomChatClient {
                     && !com.atom.chat.wallpaper.WallpaperStore.isSet()) {
                 com.atom.chat.render.PanelBlurRenderer.prewarm();
             }
+            // Compile the Skia pipeline before the first panel frame: the 86 ms
+            // first frame is program/atlas cold-cache work, not a slow method.
+            // withContext borrows the bridge's single DirectContext and already
+            // restores every GL state change made by the offscreen FBO.
+            com.atom.chat.render.SkiaPipelineWarmup.runOnce(() ->
+                    com.atom.lib.client.render.MinecraftRenderBridge.get().withContext(ctx -> {
+                        com.atom.chat.render.SkiaPipelineWarmup.drawWarmupFrame(ctx);
+                        return null;
+                    }));
         } catch (Throwable t) {
             AtomChat.LOGGER.warn(com.atom.chat.diagnostics.AtomChatLog.message("render",
                     "AtomChat first-open warmup failed; the panel still opens"), t);
