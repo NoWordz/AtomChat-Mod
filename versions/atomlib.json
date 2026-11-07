@@ -1,11 +1,11 @@
 {
   "schema_version": 1,
   "group": "com.atom.lib",
-  "version": "0.1.0-beta",
+  "version": "0.4.0",
   "compatibility_range": "*",
   "input_archive": {
-    "url": "https://github.com/NoWordz/AtomLib/releases/download/v0.1.0-beta-beta3/atomlib-input-0.1.0-beta.zip",
-    "sha256": "51a95d0ef64a2ad88960b517387e67db6cf9f4e1d47c916acba4a5a8cef882f8"
+    "url": "https://github.com/NoWordz/AtomLib/releases/download/v0.4.0/atomlib-input-0.4.0.zip",
+    "sha256": "8d48e39f53f3809caa5f67889ba399dd003d62ee18e07e10a42c4184cf990baf"
   },
   "client_platforms": [
     "windows-x64",
@@ -26,8 +26,8 @@
     }
   },
   "sha256": {
-    "1.20.1-forge": "19bcf14a064b85c46771c586f29d7444b5bfffa39cf4545fb0a0a4a67cdd5c0e",
-    "1.21.1-fabric": "2d0040c9de92d2270f7815a74a4c2f0b7f5393379324364546f02ef0cececaef",
-    "1.21.1-neoforge": "f211ce9ba146f7f7c1672806f1fd64efb2c9e59647b7ae4b42a35eb85af0519b"
+    "1.20.1-forge": "d685fb88d1906c8a25ecac0adeb0c81b6f4be3383617f1f3d096a92dbc5c9692",
+    "1.21.1-fabric": "13ff83bb080fc33bf35e5362242a07a752a331d36eeab763ad1a604bbcd9c069",
+    "1.21.1-neoforge": "ba58073f3d091b2ab3f5cc2e521f8a49e4cbb2217f4476824bf3dc365dfb7688"
   }
 }

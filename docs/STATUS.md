@@ -57,6 +57,7 @@ AtomChat 仍以公开 beta3 坐标及哈希编译，三端测试额外加载相�
 - 根据用户要求，三端运行时不再按 AtomLib 版本号精确匹配：Forge 客户端依赖使用空范围，NeoForge 客户端依赖使用 `*`，Fabric `suggests` 使用 `*`，客户端启动检查仍要求已安装 AtomLib 和受支持的 Windows JVM 架构。编译输入仍固定 `0.1.0-beta` 及 SHA；接受版本号不代表任意版本的 API 都兼容，也未增加完整 API 能力预检。
 - 先在旧实现上复现不同版本被拒绝，再更新代码；新检查覆盖缺失、空版本、多个不同版本与不受支持架构。三端完整构建通过：Forge 1596、Fabric 1611、NeoForge 1596 项，各 0 失败/错误、4 skip；`tools/test_verify_jars.py` 17 项通过，三端消费者制品检查及 `tools/verify_targets.py` 通过。
 - 三端旧版 AtomLib beta3 与本地 `0.2.0` 的字节码接口比对：Forge 与 NeoForge 各 68 个公开类及 884 项公开/受保护成员与类层级标记，Fabric 69 个公开类及 889 项，均未发现缺失或标记差异；这不是 MC 内运行或行为兼容验证。NeoForge 本地候选 Jar 与 AtomLib 0.2.0 已按用户要求复制到桌面并校验 SHA-256，未启动游戏或部署实例。AtomChat 修改当前位于工作区，Git 状态以实际查询为准。
+- 2026-11-07 更新：编译输入锁由 `0.1.0-beta` 同步为 `0.4.0`，`versions/atomlib.json` 的三端 SHA-256 与 `input_archive` 指向新的 `atomlib-input-0.4.0.zip`（挂在 AtomLib v0.4.0 Release）。运行时版本约束保持任意版本（`compatibility_range = "*"`、Forge 空范围、Fabric `suggests: "*"`），启动检查仍只校验已安装与 API 符号。三端在不跳过 `verifyAtomLibInput` 的情况下构建通过。
 
 ## 转场动画：单时间戳架构 + 六轮打磨（2026-11-01 ~ 11-02，0.4.0 内，**已提交已推送**）
 
