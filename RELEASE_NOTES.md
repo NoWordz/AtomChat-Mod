@@ -1,5 +1,27 @@
 # Release Notes
 
+## v0.6.1
+
+**修复**
+
+- 修复 1.20.1 Forge 上装了 AtomLib 也提示缺少 AtomLib 的问题，此前该平台的 0.6.0 无法启动。
+
+**说明**
+
+- 三端依赖声明审计后只改这一处版本范围；Fabric 与 NeoForge 的声明本来就是正确的，但仍随本次一并升到 0.6.1。
+- 本次仍配套 AtomLib v0.4.0，安装时需同时安装对应加载器和游戏版本的 AtomLib。
+
+----
+
+**Fixed**
+
+- Fix 1.20.1 Forge reporting a missing AtomLib even when AtomLib is installed; the 0.6.0 build for that loader could not start at all.
+
+**Notes**
+
+- All three loaders' dependency declarations were audited; only the version range needed changing. Fabric and NeoForge were already correct but are versioned 0.6.1 as well.
+- AtomLib v0.4.0 is still the paired release; install the AtomLib build for the same loader and Minecraft version.
+
 ## v0.6.0
 
 **性能**

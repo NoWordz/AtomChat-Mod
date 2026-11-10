@@ -1,5 +1,17 @@
 # Changelog
 
+## v0.6.1
+
+**修复**
+
+- 修复 1.20.1 Forge 上装了任意版本 AtomLib 仍提示缺少 AtomLib、AtomChat 完全无法加载的问题：依赖声明的版本范围是空串，被 Maven 的版本范围解析当成「一个版本都不匹配」，三端统一改用锁里的通配范围。
+
+----
+
+**Fixed**
+
+- Fix 1.20.1 Forge reporting a missing AtomLib (and refusing to load AtomChat at all) with any AtomLib version installed: the dependency declared an empty version range, which Maven's version-range parser reads as "no version matches". All three targets now use the wildcard range from the lock.
+
 ## v0.6.0
 
 **性能**

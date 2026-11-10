@@ -6,8 +6,23 @@ def target = projectDir.name
 def definition = lock.targets[target]
 if (definition == null) throw new GradleException("No AtomLib input for ${target}")
 ext.atomlibVersion = lock.version.toString()
-// Forge uses the empty string for any version; NeoForge uses '*'.
-ext.atomlibVersionRange = target.endsWith('-forge') ? '' : lock.compatibility_range.toString()
+// 【空串不是通配符，三端一律用锁里的 compatibility_range】
+// 这里曾按目标分成两套写法（Forge 空串、NeoForge '*'），凭的是一句「Forge 用空串
+// 表示任意版本」。它是错的：两端都把这段字符串交给 Maven 的
+// VersionRange.createFromVersionSpec()，而空串解析出来的范围里没有任何 Restriction，
+// VersionRange.containsVersion() 只遍历 Restriction —— 于是恒返回 false。
+// 后果不是「范围放宽」，而是「一个版本都不匹配」：装了任何版本的 AtomLib，
+// Forge 的 ModSorter 都报 Missing or unsupported mandatory dependencies 里的
+// Expected range: ''，atomchat 整个加载不起来。改成 '*' 之后才真的匹配全部版本。
+// 所以别再按加载器分叉：版本范围的语义由 Maven 定，三端同一份字符串。
+def compatibilityRange = lock.compatibility_range?.toString()?.trim()
+if (!compatibilityRange) {
+    throw new GradleException(
+        "versions/atomlib.json 的 compatibility_range 为空。\n" +
+        "空串会被 Maven 的 VersionRange 解析成「没有任何版本可满足」，" +
+        "打出来的 jar 会拒绝掉任意版本的 AtomLib。写 \"*\" 表示任意版本。")
+}
+ext.atomlibVersionRange = compatibilityRange
 def coordinate = "${lock.group}:${definition.artifact}:${lock.version}".toString()
 def repositoryPath = providers.gradleProperty('atomlibMavenRepo').orElse(providers.environmentVariable('ATOMLIB_MAVEN_REPO'))
 if (!repositoryPath.isPresent()) {

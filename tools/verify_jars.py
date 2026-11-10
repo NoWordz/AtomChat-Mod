@@ -198,6 +198,13 @@ def verify_consumer(project):
     path = jars[0]
     check(f'{project}: architecture-independent name', not any(path.stem.endswith('-'+p) for p in PLATFORMS), path.name)
     required = json.loads((ROOT / 'versions/atomlib.json').read_text(encoding='utf-8'))['version']
+    # 依赖范围串直接取自锁，不在校验器里另立一套字面量。
+    # 【为什么这条断言非有不可】Forge 的 mods.toml 曾写 versionRange=""，看着像
+    # 「任意版本」，实际被 Maven 的 VersionRange 解析成「没有任何版本可满足」，
+    # 任何版本的 AtomLib 都匹配不上。校验器当时也在期待那个空串，于是它一路绿到发布。
+    # 现在只认锁里的值，并且它必须非空 —— 空串就是那个 bug 的形状。
+    expected_range = json.loads((ROOT / 'versions/atomlib.json').read_text(encoding='utf-8'))['compatibility_range']
+    check(f'{project}: lock declares a dependency range', bool(str(expected_range).strip()), repr(expected_range))
     classes, all_names, flatlaf, bad = set(), set(), [], []
 
     def scan(raw, location, depth=0):
@@ -246,8 +253,8 @@ def verify_consumer(project):
                 meta = json.loads(archive.read('fabric.mod.json'))
                 registered = {j['file'] for j in meta.get('jars', [])}
                 valid = (meta.get('environment') == '*' and
-                         meta.get('suggests', {}).get('atomlib') == '*' and
-                         meta.get('custom', {}).get('atomlib:client-required') == '*' and
+                         meta.get('suggests', {}).get('atomlib') == expected_range and
+                         meta.get('custom', {}).get('atomlib:client-required') == expected_range and
                          'atomlib' not in meta.get('depends', {}) and
                          'com/atom/chat/compat/AtomLibDependencyCheck.class' in names and
                          b'AtomLibDependencyCheck' in archive.read('com/atom/chat/AtomChatClient.class'))
@@ -258,8 +265,10 @@ def verify_consumer(project):
                 neo = 'META-INF/neoforge.mods.toml' in names
                 meta = tomllib.loads(archive.read('META-INF/neoforge.mods.toml' if neo else 'META-INF/mods.toml').decode('utf-8'))
                 deps = [d for d in meta.get('dependencies', {}).get('atomchat', []) if d.get('modId') == 'atomlib']
+                # Forge 与 NeoForge 同一个期望值：范围串的语义由 Maven 的 VersionRange
+                # 决定，加载器之间没有差别（空串对两端都是「一个都不匹配」）。
                 valid = (len(deps) == 1 and deps[0].get('side') == 'CLIENT' and
-                         deps[0].get('versionRange') == ('*' if neo else '') and
+                         deps[0].get('versionRange') == expected_range and
                          (deps[0].get('type') == 'required' if neo else deps[0].get('mandatory') is True))
             check(f'{project}: all nested jars registered', registered == nested)
             check(f'{project}: client-scoped AtomLib dependency', valid)

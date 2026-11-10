@@ -12,6 +12,7 @@ import zipfile
 VERIFIER = Path(__file__).with_name('verify_jars.py')
 ROOT = Path(__file__).resolve().parent.parent
 LOCK_VERSION = json.loads((ROOT / 'versions/atomlib.json').read_text(encoding='utf-8'))['version']
+LOCK_RANGE = json.loads((ROOT / 'versions/atomlib.json').read_text(encoding='utf-8'))['compatibility_range']
 
 
 def archive(entries):
@@ -207,15 +208,15 @@ def consumer_artifact(path, loader='Fabric', dependency=True, side='CLIENT', ext
     if loader == 'Fabric':
         meta = {'id':'atomchat', 'environment':'*', 'jars':[{'file':prefix+'flatlaf-private.jar'}]}
         if dependency:
-            meta['suggests'] = {'atomlib': '*' if range_override is None else range_override}
-            meta['custom'] = {'atomlib:client-required': '*'}
+            meta['suggests'] = {'atomlib': LOCK_RANGE if range_override is None else range_override}
+            meta['custom'] = {'atomlib:client-required': LOCK_RANGE if range_override is None else range_override}
         entries['fabric.mod.json'] = json.dumps(meta).encode()
     else:
         entries[prefix+'metadata.json'] = json.dumps({'jars':[{'path':prefix+'flatlaf-private.jar'}]}).encode()
         kind = 'mandatory=true' if loader=='Forge' else 'type="required"'
         text = '[[mods]]\nmodId="atomchat"\n'
         if dependency:
-            range_value = ('*' if loader == 'NeoForge' else '') if range_override is None else range_override
+            range_value = LOCK_RANGE if range_override is None else range_override
             text += f'[[dependencies.atomchat]]\nmodId="atomlib"\n{kind}\nversionRange="{range_value}"\nside="{side}"\n'
         entries['META-INF/mods.toml' if loader=='Forge' else 'META-INF/neoforge.mods.toml'] = text.encode()
     if extra:
@@ -267,6 +268,16 @@ class AtomLibConsumerTest(unittest.TestCase):
                 exact = '=' + LOCK_VERSION if loader == 'Fabric' else '[' + LOCK_VERSION + ']'
                 consumer_artifact(jar,loader,range_override=exact)
                 self.assertEqual(1,self.run_verifier(jar).returncode)
+
+    def test_blank_version_range_is_rejected_on_each_loader(self):
+        # v0.6.0 的 Forge jar 就写成了 versionRange=""：Maven 的 VersionRange 把空串
+        # 解析成「没有任何版本可满足」，于是任何版本的 AtomLib 都匹配不上，atomchat
+        # 一个也加载不起来。空串必须被校验器拦下，而不是被当成「任意版本」放行。
+        with tempfile.TemporaryDirectory() as temp:
+            for loader in ['Forge','NeoForge','Fabric']:
+                jar=Path(temp)/f'atomchat-{loader}-0.6.1.jar'
+                consumer_artifact(jar,loader,range_override='')
+                self.assertEqual(1,self.run_verifier(jar).returncode,loader)
 
     def test_old_architecture_specific_names_do_not_pass_as_consumers(self):
         with tempfile.TemporaryDirectory() as temp:
