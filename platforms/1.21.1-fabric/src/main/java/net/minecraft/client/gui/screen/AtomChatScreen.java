@@ -388,6 +388,87 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
      * precedent — D14's dialog bridge, D7's feedback, D4's history windows and
      * D10's two layouts.
      */
+
+    private java.util.List<NavPage> tutorialReturnStack;
+    private final com.atom.chat.onboarding.TutorialController tutorial = new com.atom.chat.onboarding.TutorialController(
+            new com.atom.chat.onboarding.TutorialController.Host() {
+        public String translate(String key) { return tr(key); }
+        public void enter() {
+            tutorialReturnStack = navStack.snapshot();
+            cancelTransitionPointer(0);
+            composerTools.close();
+            emojiPanel.close();
+            closePhrasePanel();
+        }
+        public void show(com.atom.chat.onboarding.TutorialSession.Step step) { showTutorialStep(step); }
+        public void leave() {
+            cancelTransitionPointer(0);
+            if (tutorialReturnStack != null && !tutorialReturnStack.isEmpty()) {
+                var saved = tutorialReturnStack;
+                tutorialReturnStack = null;
+                switchRoot(saved.get(0).page());
+                for (int i = 1; i < saved.size(); i++) pushNav(saved.get(i));
+            }
+        }
+        public void selectRoot(int index) {
+            switchRoot(index == 0 ? AppPage.CHAT_LIST : index == 1 ? AppPage.PROFILE : AppPage.SETTINGS);
+        }
+        public boolean mayOffer() {
+            return !closing && panelProgress >= .999F && !imageCropper.isActive() && !colorPicker.isActive()
+                    && !imagePreview.isActive() && !settingsSectionPage.confirmation().isActive() && !composerTools.active();
+        }
+        public void feedback(String key) { AtomChatScreen.this.feedback(key, false); }
+        public UiLayout.Rect anchor(com.atom.chat.onboarding.TutorialSession.Step step) {
+            if(step == com.atom.chat.onboarding.TutorialSession.Step.PROFILE)
+                return profilePage.tutorialHero(rootLayout(),scrollSync.rootScroll().getScrollY());
+            if(step == com.atom.chat.onboarding.TutorialSession.Step.ABOUT)
+                return settingsSectionPage.actionAnchor(SettingsSection.ABOUT,"onboarding_replay",layout(),scrollSync.detailScroll().getScrollY());
+            if(step == com.atom.chat.onboarding.TutorialSession.Step.SETTINGS_HOME) {
+                var first=SettingsHomePage.tileRect(rootLayout(),0,scrollSync.rootScroll().getScrollY());
+                var last=SettingsHomePage.tileRect(rootLayout(),3,scrollSync.rootScroll().getScrollY());
+                return new UiLayout.Rect(first.x(),first.y(),last.right()-first.x(),last.bottom()-first.y());
+            }
+            return null;
+        }
+        public boolean liveKeyboardActive() {
+            return topNav().section() == SettingsSection.APPEARANCE && (colorPicker.isActive()
+                    || imageCropper.isActive() || settingsSectionPage.confirmation().isActive() || settingsSectionPage.isEditingNumber());
+        }
+        public boolean liveModalActive() {
+            return colorPicker.isActive() || imageCropper.isActive() || settingsSectionPage.confirmation().isActive();
+        }
+        public boolean allowLivePointer(com.atom.chat.onboarding.TutorialSession.Step step, float x, float y) {
+            if (step == com.atom.chat.onboarding.TutorialSession.Step.APPEARANCE) {
+                return topNav().section() == SettingsSection.APPEARANCE
+                        && (layout().list.contains(x,y) || layout().chipBar.contains(x,y)
+                        || imageCropper.isActive() || colorPicker.isActive() || settingsSectionPage.confirmation().isActive());
+            }
+            return step == com.atom.chat.onboarding.TutorialSession.Step.CHAT_SETTINGS && layout().chipBar.contains(x,y);
+        }
+    }, this::toVirtualX, this::toVirtualY);
+
+    private void showTutorialStep(com.atom.chat.onboarding.TutorialSession.Step step) {
+        SettingsSection section = switch (step) {
+            case CHAT_SETTINGS, NOTIFICATIONS -> SettingsSection.CHAT;
+            case APPEARANCE -> SettingsSection.APPEARANCE;
+            case PRIVACY -> SettingsSection.PRIVACY;
+            case ABOUT -> SettingsSection.ABOUT;
+            default -> null;
+        };
+        AppPage page = switch (step) {
+            case COMPOSE, MESSAGE_ACTIONS, SEARCH_FILTER, EXPRESSIONS, IMAGES, QUICK_PHRASES -> AppPage.WORLD_CHAT;
+            case PROFILE -> AppPage.PROFILE;
+            case SETTINGS_HOME -> AppPage.SETTINGS;
+            default -> section == null ? AppPage.CHAT_LIST : AppPage.SETTINGS_SECTION;
+        };
+        if (topPage() != page || (section != null && topNav().section() != section)) {
+            switchRoot(page.isRoot() ? page : section != null ? AppPage.SETTINGS : AppPage.CHAT_LIST);
+            if (section != null) openSettingsSection(section);
+            else if (!page.isRoot()) pushPage(page);
+        }
+        if (step == com.atom.chat.onboarding.TutorialSession.Step.NOTIFICATIONS) settingsSectionPage.selectChip(SettingsSection.CHAT, 2);
+    }
+
     private final SettingsActions settingsActions = new SettingsActions(new SettingsActions.Host() {
         @Override
         public AvatarStore avatarStore() {
@@ -408,6 +489,9 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         public MinecraftClient client() {
             return client;
         }
+
+        @Override
+        public void openTutorial() { tutorial.start(); }
 
         @Override
         public void openNotificationHudEditor() {
@@ -532,7 +616,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
             new com.atom.chat.compat.ForeignChatPointer();
 
     private boolean canUseCompletions() {
-        return !closing && isWorldChatPage() && !imagePreview.isActive() && !imageCropper.isActive()
+        return !tutorial.active() && !closing && isWorldChatPage() && !imagePreview.isActive() && !imageCropper.isActive()
                 && !colorPicker.isActive() && !settingsSectionPage.confirmation().isActive() && !composerTools.active()
                 && !isPrivateReadOnly() && !emojiPanel.isOpen() && (!quickPhrasePanel.isOpen() || quickPhrasePanel.isEditing());
     }
@@ -553,7 +637,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
     }
 
     private boolean canRenderForeignChatUi() {
-        return !closing && isWorldChatPage()
+        return !tutorial.active() && !closing && isWorldChatPage()
                 && !imagePreview.isActive() && !imageCropper.isActive() && !colorPicker.isActive() && !composerTools.active() && !settingsSectionPage.confirmation().isActive()
                 && !contextMenu.hasMessageMenu() && !contextMenu.hasPlayerCardMenu()
                 && !emojiPanel.isOpen() && !quickPhrasePanel.isOpen();
@@ -682,7 +766,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
 
     /**
      * Ordered input routing (D23a). Priority (first registered wins): closing
-     * guard, confirmation, completion, foreign chat UI, outside-panel close, modals (cropper/colour picker), composer tools, pushed-subpage Esc, screen Esc,
+     * guard, tutorial, confirmation, completion, foreign chat UI, outside-panel close, modals (cropper/colour picker), composer tools, pushed-subpage Esc, screen Esc,
      * root pages, world chat. New interactive features register a handler
      * instead of inserting branches into the former if-else chains.
      *
@@ -712,6 +796,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         }
     })
             .add(new ClosingStateInput())
+            .add(tutorial)
             .add(new com.atom.chat.ui.ConfirmationInput(settingsSectionPage::confirmation,
                     this::toVirtualX, this::toVirtualY))
             .add(completionInput)
@@ -1397,6 +1482,12 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
     // two-page choreography is gone — the capsule and the arriving page's
     // entrance overlay are independent animations now).
     private final BottomTabBar bottomTabBar = new BottomTabBar();
+    private final com.atom.chat.ui.BottomChromeTransition bottomChrome = new com.atom.chat.ui.BottomChromeTransition();
+    private Boolean navigationComposerFocus;
+    private float pointerGuiX, pointerGuiY;
+    private long animationContextId;
+    private Object animationWorld;
+
 
     /**
      * Public-feed view filter (all / system only / players only), cycled by the
@@ -1464,6 +1555,12 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
 
         @Override
         public void persistCurrentDraft() {
+            if (isWorldChatPage()) {
+                navigationComposerFocus = composer.fieldFocused();
+                if (chatField != null) chatField.setFocused(false);
+                composer.setFocused(false);
+                dismissSuggestor();
+            }
             saveCurrentDraft();
         }
 
@@ -1495,6 +1592,15 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         @Override
         public void armReplyFor(NavPage page) {
             loadReplyFor(page);
+            if (isWorldChatPage() && navigationComposerFocus != null) {
+                boolean restore = navigationComposerFocus;
+                navigationComposerFocus = null;
+                if (restore) composer.focusGuarded();
+                else {
+                    composer.setFocused(false);
+                    if (chatField != null) chatField.setFocused(false);
+                }
+            }
         }
 
         @Override
@@ -1685,6 +1791,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
                 @Override
                 public void drawArrivingBody(Canvas canvas, UiLayout layout, int mouseX, int mouseY) {
                     switch (topPage()) {
+                        case CHAT_LIST, PROFILE, SETTINGS -> drawRootBody(canvas, mouseX, mouseY, topPage());
                         case SETTINGS_SECTION -> drawSettingsSection(canvas, mouseX, mouseY, topNav().section());
                         case PROFILE_DETAIL -> drawProfileDetail(canvas, mouseX, mouseY);
                         default -> drawChatPageBody(canvas, layout, mouseX, mouseY, chatPageViewFor(topNav()));
@@ -1695,6 +1802,8 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
                 public void drawArrivingHeader(Canvas canvas, UiLayout layout, int mouseX, int mouseY,
                                                float vmx, float vmy) {
                     switch (topPage()) {
+                        case CHAT_LIST, PROFILE, SETTINGS -> ShellHeader.render(canvas, rootLayout().header,
+                                headerChrome.shellTitleFor(topPage()), false, null, 0, textPrimary());
                         // The settings/profile pushed header draws through the
                         // detail header rect; the chat pages' header carries the
                         // back button, the online status and the feed filter.
@@ -1718,8 +1827,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
                  */
                 @Override
                 public boolean arrivalStaggersSurfaces() {
-                    return topPage() == AppPage.SETTINGS_SECTION
-                            || topPage() == AppPage.PROFILE_DETAIL;
+                    return false;
                 }
             });
     private UiLayout.Rect filterButton() {
@@ -1772,18 +1880,21 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
     }
 
     private void pushNav(NavPage page) {
+        composite.navigationDirection(false);
         navStack.pushNav(page);
                 com.atom.chat.audio.FeedbackSoundController.play(com.atom.chat.audio.FeedbackCue.BUTTON);
     }
 
     @Override
     public void popPage() {
+        composite.navigationDirection(true);
         navStack.popPage();
                 com.atom.chat.audio.FeedbackSoundController.play(com.atom.chat.audio.FeedbackCue.BUTTON);
     }
 
     /** Applies a pending pop and restores the page underneath it. */
     private void popNow() {
+        composite.navigationDirection(true);
         navStack.popNow();
     }
 
@@ -1821,6 +1932,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
 
     @Override
     public void switchRoot(AppPage root) {
+        composite.navigationDirection(root.isRoot() && topPage().isRoot() && BottomTabBar.rootIndex(root) < BottomTabBar.rootIndex(topPage()));
         navStack.switchRoot(root);
                 com.atom.chat.audio.FeedbackSoundController.play(com.atom.chat.audio.FeedbackCue.BUTTON);
     }
@@ -1946,6 +2058,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
 
     @Override
     public void render(DrawContext context, int mouseX, int mouseY, float delta) {
+        rememberPointer(mouseX, mouseY);
         // First-open attribution: how long the first render() call takes.
         // The clock lives in the budget so the screen stays free of nanoTime.
         long firstDrawStart = FirstOpenBudget.markDrawStart();
@@ -1953,6 +2066,19 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
             FirstOpenBudget.abort();
             this.client.setScreen(null);
             return;
+        }
+        if (animationWorld != client.world) {
+            composite.reset(); bottomChrome.reset(); animationWorld = client.world;
+        }
+        com.atom.chat.wallpaper.WallpaperPresets.viewport((int)Math.ceil(panelWidth()*uiDensity()), (int)Math.ceil(panelHeight()*uiDensity()), System.currentTimeMillis());
+        composite.deviceDensity(uiDensity());
+        composite.beginFrame(System.currentTimeMillis());
+        if (composite.needsCompaction()) {
+            graphics.withContext(contextOwner -> {
+                syncAnimationContext(io.github.humbleui.skija.impl.Native.getPtr(contextOwner));
+                composite.compact(contextOwner);
+                return null;
+            });
         }
         // Panel progress on the exponential clock (same family as the page
         // nav): expApproach clamps dt to 50ms internally and snaps exactly to
@@ -2022,7 +2148,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
                     && !truth3Mode.blurRefreshDue(nowNanos);
             preUi = () -> {
                 try {
-                    float strokeWidth = UiTokens.panelInset();
+                    float strokeWidth = PanelBackground.outlineInset();
                     // The capture rect must be the rect drawPhone paints: the
                     // inset panel rect carried through the same open transform
                     // (zoom around the panel centre, then the slide offset).
@@ -2072,6 +2198,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
                     if (iconBudget != 0L) FirstOpenBudget.addIcons(System.nanoTime() - iconBudget);
                 }
             }, uiDensity(), (canvas, worldSnapshot) -> {
+                syncAnimationContext(graphics.contextIdentity());
                 drawPhone(canvas, worldSnapshot, mouseX, mouseY, delta);
                 chatEffects.renderExperimental(graphics.requireSurface());
             });
@@ -2228,6 +2355,11 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
 
     @Override
     protected void init() {
+        tutorial.initialize(com.atom.chat.util.CacheDirs.clientRoot().resolve("onboarding.json"));
+        composite.reset();
+        bottomChrome.reset();
+        com.atom.chat.wallpaper.WallpaperPresets.viewport((int)Math.ceil(panelWidth()*uiDensity()), (int)Math.ceil(panelHeight()*uiDensity()), System.currentTimeMillis());
+        com.atom.chat.wallpaper.WallpaperPresets.ensureFirstUse(AtomChatConfig.get());
         String previousText = chatField != null ? chatField.getText() : null;
         super.init();
         String restoredText = previousText != null ? previousText
@@ -2320,6 +2452,12 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         }
     }
 
+    private void syncAnimationContext(long contextId) {
+        if (animationContextId != contextId) {
+            composite.reset(); bottomChrome.reset(); animationContextId = contextId;
+        }
+    }
+
     private void drawPhone(Canvas canvas, Image worldSnapshot, int mouseX, int mouseY, float delta) {
         float x = panelX();
         float y = panelY();
@@ -2345,6 +2483,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
             composerTools.render(canvas, toVirtualX(mouseX), toVirtualY(mouseY), frameDt);
             if (composerTools.active()) notificationJump.drawActionFeedback(canvas, layout());
             settingsSectionPage.confirmation().render(canvas, layout().rect(), toVirtualX(mouseX), toVirtualY(mouseY), frameDt);
+            tutorial.render(canvas, layout(), rootLayout(), bottomChrome.paintedRect(), toVirtualX(mouseX), toVirtualY(mouseY), frameDt);
             clickRipples.end(canvas, frameDt);
             CanvasLeakWatch.probe("drawPanel+banners", probeBefore, canvas);
             return;
@@ -2360,7 +2499,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
             float cx = x + panelWidth() / 2.0F;
             float cy = y + panelHeight() / 2.0F;
             PanelOpenMotion.LayerRect layerRect = PanelOpenMotion.fadeLayer(progress,
-                    AtomChatConfig.get().pageNavStyle, x, y, panelWidth(), panelHeight(), LAYER_CHROME);
+                    AtomChatConfig.get().pageNavStyle, x, y, panelWidth(), panelHeight(), Math.max(LAYER_CHROME, com.atom.chat.render.SoftShadow.panelPad()));
             canvas.saveLayer(Rect.makeXYWH(layerRect.x(), layerRect.y(), layerRect.w(), layerRect.h()),
                     layer);
             // Scale around the panel centre, then slide: the exact transform
@@ -2380,6 +2519,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
             composerTools.render(canvas, toVirtualX(mouseX), toVirtualY(mouseY), frameDt);
             if (composerTools.active()) notificationJump.drawActionFeedback(canvas, layout());
             settingsSectionPage.confirmation().render(canvas, layout().rect(), toVirtualX(mouseX), toVirtualY(mouseY), frameDt);
+            tutorial.render(canvas, layout(), rootLayout(), bottomChrome.paintedRect(), toVirtualX(mouseX), toVirtualY(mouseY), frameDt);
             clickRipples.end(canvas, frameDt);
             CanvasLeakWatch.probe("drawPanel+banners", probeBefore, canvas);
             canvas.restore();
@@ -2409,11 +2549,15 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
 
     /** Window-wide: the drop event carries no cursor position we could hit-test with. */
     private void onFilesDropped(int count, long names) {
+        if (tutorial.active()) return;
         dragDropPaste.onFilesDropped(count, names);
     }
 
     @Override
     public void removed() {
+        tutorial.reset();
+        composite.close();
+        bottomChrome.close();
         composerTools.close();
         clickRipples.clear();
         settingsSectionPage.confirmation().reset();
@@ -2477,18 +2621,16 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         quickPhrasePanel.update(frameDt);
         UiLayout layout = layout();
         UiLayout.Rect panel = layout.rect();
-        // Phone bezel: background is inset by the full stroke width so nothing can
-        // bleed outside; the white ring itself is drawn LAST (see end of method)
-        // so every component sits beneath a clean edge.
-        float strokeWidth = UiTokens.panelInset();
+        com.atom.chat.render.SoftShadow.drawPanel(canvas, panel.x(), panel.y(), panel.w(), panel.h(), UiTokens.panelRadius());
+        // Background covers the outer contour beneath the final bezel; adjacent AA edges must overlap.
         // A custom wallpaper owns the panel background and beats the blur: one
         // shows the world through, the other covers it, so they never stack.
         Image wallpaper = WallpaperImage.current(WallpaperStore.current());
-        float innerX = panel.x() + strokeWidth;
-        float innerY = panel.y() + strokeWidth;
-        float innerW = panel.w() - strokeWidth * 2.0F;
-        float innerH = panel.h() - strokeWidth * 2.0F;
-        float innerRadius = Math.max(0F, UiTokens.panelRadius() - strokeWidth);
+        float innerX = panel.x();
+        float innerY = panel.y();
+        float innerW = panel.w();
+        float innerH = panel.h();
+        float innerRadius = UiTokens.panelRadius();
 
         if (wallpaper != null) {
             // Solid base first, then the image on top at the configured
@@ -2538,73 +2680,44 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
 
         ShellHeader.drawBackdrop(canvas, layout.header);
 
-        // One arrival stamp per frame: the composite notices a page-key change
-        // and re-arms its entrance (the only transition there is). The pointer
-        // is mapped here rather than inside the composite: the paths below need
-        // the same two values anyway.
         float vmx = toVirtualX(mouseX);
         float vmy = toVirtualY(mouseY);
         long arrivalMs = System.currentTimeMillis();
-        composite.beginFrame(arrivalMs);
-        boolean arrived = composite.consumeArrivalEvent();
-
-        // The arriving surface owns the entrance, and only ONE motion plays it.
-        //
-        // Root pages are lists (conversation cards, settings tiles, profile
-        // blocks), so they run the per-item stagger and NOT the whole-page
-        // overlay: drawRootPageBody draws them straight, each item fading and
-        // rising off its own slot. A tab switch re-arms the arriving page's
-        // stagger; the bar itself stays put and only slides its capsule.
-        if (topPage().isRoot()) {
-            if (arrived) {
-                switch (topPage()) {
-                    case CHAT_LIST -> conversationListPage.markEntered();
-                    case SETTINGS -> settingsHomePage.markEntered();
-                    case PROFILE -> profilePage.markEntered();
-                    default -> {
-                    }
-                }
-                // The bar is not drawn at all on pushed pages, so popping back
-                // to a root page is the one arrival that gives it a transition
-                // of its own (fade in + lift).
-                if (composite.arrivalFromPushedToRoot()) {
-                    bottomTabBar.markEntered();
-                }
-            }
-            drawRootScreen(canvas, mouseX, mouseY, topPage());
-            contextMenu.draw(canvas, vmx, vmy);
-            drawBezel(canvas, layout);
-            return;
-        }
-        // Pushed pages are single surfaces without an item list of their own
-        // (a chat's message stack is virtualised and already animates its own
-        // entrance), so they keep the whole-page envelope — and their rows stay
-        // settled under it: one transition, one motion. The two pushed CARD
-        // LISTS (settings section, profile detail) are the exception: they
-        // stagger their own rows and draw without the envelope.
-        if (arrived) {
-            if (topPage() == AppPage.SETTINGS_SECTION) {
-                settingsSectionPage.markEntered();
-            } else if (topPage() == AppPage.PROFILE_DETAIL) {
-                profilePage.markEntered();
+        if (isWorldChatPage()) layout = composer.updateLayout(layout);
+        if (composite.consumeArrivalEvent()) {
+            switch (topPage()) {
+                case CHAT_LIST -> conversationListPage.markEntered(composite.entrance().enteredAtMs());
+                case SETTINGS -> settingsHomePage.markEntered(composite.entrance().enteredAtMs());
+                case PROFILE, PROFILE_DETAIL -> profilePage.markEntered(composite.entrance().enteredAtMs());
+                case SETTINGS_SECTION -> settingsSectionPage.markEntered(composite.entrance().enteredAtMs());
+                default -> { }
             }
         }
-        // The chat header's back hover is stepped here; the settings/profile
-        // pushed header steps the same spring inside drawPushedHeader.
-        if (isWorldChatPage()) {
-            headerChrome.stepBackButtonHover(vmx, vmy);
-        }
+        com.atom.chat.ui.BottomChromeTransition.Mode chromeMode = isWorldChatPage()
+                ? com.atom.chat.ui.BottomChromeTransition.Mode.CHAT
+                : topPage().isRoot() ? com.atom.chat.ui.BottomChromeTransition.Mode.NAV
+                : com.atom.chat.ui.BottomChromeTransition.Mode.HIDDEN;
+        bottomChrome.beginFrame(chromeMode, layout.inputBar, rootLayout().tabBar, arrivalMs,
+                com.atom.chat.ui.Animations.enabled());
+        if (isWorldChatPage()) headerChrome.stepBackButtonHover(vmx, vmy);
         filterButtonHover = UiMotion.approach(filterButtonHover,
-                topPage() == AppPage.WORLD_CHAT && isFilterButtonHit(vmx, vmy) ? 1.0F : 0.0F,
+                topPage() == AppPage.WORLD_CHAT && isFilterButtonHit(vmx, vmy) ? 1 : 0,
                 frameDt, UiMotion.HOVER_MS);
-
-        // The arriving page draws whole — body and header together, inside the
-        // entrance overlay. Grow the input bar before the list is measured, so
-        // the list loses exactly the height the bar gains.
-        if (isWorldChatPage()) {
-            layout = composer.updateLayout(layout);
-        }
+        bottomChrome.drawBackdrop(canvas);
         composite.drawArrivingFrame(canvas, layout, mouseX, mouseY, vmx, vmy, arrivalMs);
+        UiLayout chromeLayout = layout;
+        bottomChrome.draw(canvas, content -> {
+            if (isWorldChatPage()) drawChatComposer(content, chromeLayout, mouseX, mouseY, chatPageViewFor(topNav()));
+            else if (topPage().isRoot()) {
+                UiLayout root = rootLayout();
+                bottomTabBar.update(frameDt, toVirtualX(mouseX), toVirtualY(mouseY), root.tabBar);
+                bottomTabBar.renderContents(content, root.tabBar, BottomTabBar.rootIndex(topPage()), textPrimary(), accent());
+            }
+        });
+        if (topPage().isRoot()) {
+            imageCropper.render(canvas, layout.rect(), vmx, vmy);
+            colorPicker.render(canvas, layout.rect(), vmx, vmy, accent());
+        }
 
         // The overlays live above the envelope, untransformed: they belong to
         // the screen, not to the entering page.
@@ -2674,10 +2787,6 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         HistoryWindow window = historyWindowForNav(page, messages.size());
         messageListView.setVisibleStart(window.visibleStart());
         messageListView.setLoadEarlierHovered(toVirtualX(mouseX), toVirtualY(mouseY));
-        SkiaDraw.drawChromeShadow(canvas, layout.inputBar.x(), layout.inputBar.y(), layout.inputBar.w(),
-                layout.inputBar.h(), UiTokens.shellChromeRadius());
-        com.atom.chat.render.DotTexture.drawEdge(canvas, layout.inputBar, UiTokens.shellChromeRadius(), true,
-                AtomChatConfig.get().textSecondaryColor);
         long listSegmentId = com.atom.chat.diagnostics.FrameSegments.current();
         long listStarted = com.atom.chat.diagnostics.FrameSegments.start(listSegmentId);
         try {
@@ -2702,13 +2811,18 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
                     SkiaFontRenderer.centerBaselineY(replyFont, replyRect.y() + s(13)), textPrimary());
         }
 
+        // Scrollbar (e33chat style): fades in near/hinting scroll, draggable, highlights.
+        drawScrollbar(canvas, layout, toVirtualX(mouseX), toVirtualY(mouseY), view.scroll());
+        drawJumpLatest(canvas, layout, toVirtualX(mouseX), toVirtualY(mouseY), view.scroll(), view.ownsField());
+    }
+
+    private void drawChatComposer(Canvas canvas, UiLayout layout, int mouseX, int mouseY, ChatPageView view) {
+        if (view == null) return;
         // Input bar: one button row (image / emoji … send), text row below.
         // The list layout already ends at this bar's top, so the translucent
         // card never has message content underneath it.
         UiLayout.Rect bar = layout.inputBar;
         boolean readOnly = view.readOnly() && !composerTools.searching();
-        SkiaDraw.drawRoundedRect(canvas, bar.x(), bar.y(), bar.w(), bar.h(), UiTokens.shellChromeRadius(), UiTokens.cardFill());
-        com.atom.chat.render.ChromeMaterial.drawDetails(canvas, bar, UiTokens.shellChromeRadius());
         if (quickPhrasePanel.isEditing() || composerTools.searching()) {
             // The composer is borrowed as the phrase editor: ring it with the
             // accent so the mode is unmistakable.
@@ -2861,9 +2975,6 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
             canvas.restore();
         }
 
-        // Scrollbar (e33chat style): fades in near/hinting scroll, draggable, highlights.
-        drawScrollbar(canvas, layout, toVirtualX(mouseX), toVirtualY(mouseY), view.scroll());
-        drawJumpLatest(canvas, layout, toVirtualX(mouseX), toVirtualY(mouseY), view.scroll(), view.ownsField());
     }
 
     /**
@@ -2873,16 +2984,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
      * respected, even when its contrast against the panel is low.
      */
     private void drawBezel(Canvas canvas, UiLayout layout) {
-        if (AtomChatConfig.get().halfScreenMode || !AtomChatConfig.get().panelOutline) {
-            return;
-        }
-        UiLayout.Rect panel = layout.rect();
-        float strokeWidth = UiTokens.panelInset();
-        try (Paint border = new Paint().setMode(PaintMode.STROKE).setStrokeWidth(strokeWidth)
-                .setColor(AtomChatConfig.get().panelOutlineColor)) {
-            canvas.drawRRect(RRect.makeXYWH(panel.x() + strokeWidth / 2.0F, panel.y() + strokeWidth / 2.0F,
-                    panel.w() - strokeWidth, panel.h() - strokeWidth, UiTokens.panelRadius()), border);
-        }
+        PanelBackground.drawBezel(canvas, layout.rect());
     }
 
     private UiLayout rootLayout() {
@@ -2933,6 +3035,16 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
     /** Body of a pushed profile detail page (another player's profile). */
     private void drawProfileDetail(Canvas canvas, int mouseX, int mouseY) {
         profileWiring.drawProfileDetail(canvas, mouseX, mouseY);
+    }
+
+    private void drawRootBody(Canvas canvas, int mouseX, int mouseY, AppPage rootPage) {
+        UiLayout root = rootLayout();
+        rootMouseX = toVirtualX(mouseX);
+        rootMouseY = toVirtualY(mouseY);
+        scrollSync.rootScroll().setContent(measureRootContent(root, rootPage), root.list.h());
+        scrollSync.rootScroll().updateAnimation(System.currentTimeMillis());
+        drawRootPageBody(canvas, root, rootPage, 0);
+        drawScrollbar(canvas, root, rootMouseX, rootMouseY, scrollSync.rootScroll());
     }
 
     /** Renders the full root screen (header + page body + bottom tab bar). */
@@ -3164,6 +3276,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
 
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double horizontalAmount, double verticalAmount) {
+        rememberPointer(mouseX, mouseY);
         Boolean direct = gate.scroll(mouseX, mouseY, horizontalAmount, verticalAmount);
         if (direct != null) {
             return direct;
@@ -3173,6 +3286,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
 
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
+        rememberPointer(mouseX, mouseY);
         // Completes the input trio next to keyPressed:/charTyped:. The whole UI is
         // Skia-drawn, so without this line a "the button does nothing" report has
         // no way to tell "the click never arrived" from "it arrived somewhere
@@ -3201,6 +3315,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
 
     @Override
     public boolean mouseDragged(double mouseX, double mouseY, int button, double dragX, double dragY) {
+        rememberPointer(mouseX, mouseY);
         Boolean direct = gate.drag(mouseX, mouseY, button, dragX, dragY);
         if (direct != null) {
             return direct;
@@ -3210,6 +3325,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
 
     @Override
     public boolean mouseReleased(double mouseX, double mouseY, int button) {
+        rememberPointer(mouseX, mouseY);
         foreignPointer.release(button);
         Boolean direct = gate.release(mouseX, mouseY, button);
         if (direct != null) {
@@ -3444,12 +3560,47 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
      * @return a layout rebuilt with the updated height.
      */
     /** Extra input-bar height a page's own draft needs (read-only pages need none). */
+    private void rememberPointer(double x, double y) {
+        pointerGuiX = (float) x; pointerGuiY = (float) y;
+    }
+
+    private boolean motionPointerExcluded() {
+        return imagePreview.isActive() || imageCropper.isActive() || colorPicker.isActive()
+                || (contextMenu.hasMessageMenu() || contextMenu.hasPlayerCardMenu()) || settingsSectionPage.confirmation().isActive() || composerTools.active();
+    }
+
+    private boolean pointerInBottom(float y) {
+        if (!isWorldChatPage() && !topPage().isRoot()) return false;
+        UiLayout.Rect rest = isWorldChatPage() ? layout().inputBar : rootLayout().tabBar;
+        return y >= Math.min(rest.y(), bottomChrome.paintedRect().y());
+    }
+
+    private com.atom.chat.ui.StaggerHitMap.Point bodyPointer(float x, float y) {
+        float bx = composite.bodyX(x), by = composite.bodyY(y);
+        var hits = switch (topPage()) {
+            case CHAT_LIST -> conversationListPage.staggerHits();
+            case SETTINGS -> settingsHomePage.staggerHits();
+            case PROFILE, PROFILE_DETAIL -> profilePage.staggerHits();
+            case SETTINGS_SECTION -> settingsSectionPage.staggerHits();
+            default -> null;
+        };
+        return hits == null ? new com.atom.chat.ui.StaggerHitMap.Point(bx, by) : hits.inverse(bx, by);
+    }
+
     private float toVirtualX(double guiX) {
-        return ScreenMetrics.toVirtualX(client.getWindow(), guiX);
+        float x = ScreenMetrics.toVirtualX(client.getWindow(), guiX);
+        float y = ScreenMetrics.toVirtualY(client.getWindow(), pointerGuiY);
+        if (motionPointerExcluded()) return x;
+        if (pointerInBottom(y)) return bottomChrome.inverseX(x);
+        return y > layout().header.bottom() ? bodyPointer(x, y).x() : x;
     }
 
     private float toVirtualY(double guiY) {
-        return ScreenMetrics.toVirtualY(client.getWindow(), guiY);
+        float x = ScreenMetrics.toVirtualX(client.getWindow(), pointerGuiX);
+        float y = ScreenMetrics.toVirtualY(client.getWindow(), guiY);
+        if (motionPointerExcluded()) return y;
+        if (pointerInBottom(y)) return bottomChrome.inverseY(y);
+        return y > layout().header.bottom() ? bodyPointer(x, y).y() : y;
     }
 
     @Override

@@ -123,14 +123,10 @@ class PageNavStyleSourceTest {
      */
     @Test
     void bothVariantsConsumeTheOneRead() throws IOException {
-        String src = source(COMPOSITE);
-        String envelope = body(src, "public void drawArrivingFrame(Canvas canvas, UiLayout layout");
-        assertTrue(envelope.contains("PageNavStyle.ZOOM"),
-                "the envelope branches on the resolved style");
-        assertTrue(envelope.contains("overlayZoomScale(nowMs)"),
-                "ZOOM rides the scale variant");
-        assertTrue(envelope.contains("overlaySlideDx(nowMs)"),
-                "SLIDE rides the drift variant");
+        String src=source(COMPOSITE);
+        assertTrue(body(src,"public void beginFrame(long nowMs)").contains("style() == AtomChatConfig.PageNavStyle.ZOOM"));
+        String envelope=body(src,"public void drawArrivingFrame(Canvas canvas, UiLayout layout");
+        assertTrue(envelope.contains("frame.dx()"));assertTrue(envelope.contains("frame.scale()"));
     }
 
     /**

@@ -16,6 +16,8 @@ public final class ConfirmationDialog {
     private String title = "", message = "", cancelLabel = "", confirmLabel = "";
     private ConfirmationLayout geometry;
     private boolean visible;
+    private boolean tutorial;
+    private Runnable dismissAction;
     private float progress, pulse;
     private int pressed = -1;
     private final float[] hover = new float[2];
@@ -24,24 +26,38 @@ public final class ConfirmationDialog {
     public boolean hasPendingAction() { return state.active(); }
     ConfirmationLayout geometry() { return geometry; }
     public void open(String title, String message, String cancelLabel, String confirmLabel, Runnable action) {
+        tutorial = false; dismissAction = null;
         this.title = title; this.message = message; this.cancelLabel = cancelLabel; this.confirmLabel = confirmLabel;
         geometry = null; visible = true; state.open(action);
         hover[0] = hover[1] = 0; pressed = -1; pulse = 0;
         scale[0] = PressScale.bounce(); scale[1] = PressScale.bounce();
     }
-    public void cancel() { state.cancel(); }
+    public void openTutorial(String title, String message, String cancelLabel, String confirmLabel,
+                             Runnable dismiss, Runnable watch) {
+        open(title, message, cancelLabel, confirmLabel, watch);
+        tutorial = true; dismissAction = dismiss;
+        state.key(258); // Watching is the primary tutorial action; destructive dialogs still focus Cancel.
+    }
+    public void cancel() {
+        boolean run = tutorial && state.active();
+        state.cancel();
+        if (run && dismissAction != null) dismissAction.run();
+    }
     public void reset() { state.cancel(); visible = false; progress = 0; geometry = null; }
     public void key(int key) {
         if (!state.active()) return;
+        if (tutorial && key == 256) return;
         if (progress < 1 && (key == 257 || key == 335 || key == 32)) return;
         if (key == 257 || key == 335 || key == 32) press(state.confirmFocused() ? 1 : 0);
-        state.key(key);
+        if (tutorial && (key == 257 || key == 335 || key == 32)) {
+            if (state.confirmFocused()) state.confirm(); else cancel();
+        } else state.key(key);
     }
     private void press(int button) { pressed = button; pulse = UiMotion.POPUP_MS; }
     public void click(float x, float y, int button) {
         if (button != 0 || geometry == null || !state.active() || progress < 1) return;
         if (geometry.cancel().contains(x, y)) { press(0); cancel(); }
-        else if (!geometry.surface().contains(x, y)) cancel();
+        else if (!geometry.surface().contains(x, y)) { if (!tutorial) cancel(); }
         else if (geometry.confirm().contains(x, y)) { press(1); state.confirm(); }
     }
     public void render(Canvas canvas, UiLayout.Rect panel, float mx, float my) {
@@ -84,8 +100,10 @@ public final class ConfirmationDialog {
             float pad = geometry.padding();
             float x = box.x() + pad;
             var titleFont = FontManager.font(UiTokens.SETTINGS_TILE_TITLE);
-            com.atom.chat.render.DrawPrimitives.drawIconCentered(canvas,AppIcons.ICON_WARNING_PATH,
-                    x+UiTokens.COMPOSER_ICON_SIZE/2,geometry.titleCenterY(),UiTokens.COMPOSER_ICON_SIZE,UiTokens.dangerColor());
+            com.atom.chat.render.DrawPrimitives.drawIconCentered(canvas,
+                    tutorial ? com.atom.chat.onboarding.GuideIcon.PATH : AppIcons.ICON_WARNING_PATH,
+                    x+UiTokens.COMPOSER_ICON_SIZE/2,geometry.titleCenterY(),UiTokens.COMPOSER_ICON_SIZE,
+                    tutorial ? com.atom.chat.config.AtomChatConfig.get().accentColor : UiTokens.dangerColor());
             SkiaFontRenderer.drawText(canvas,titleFont,SkiaFontRenderer.truncate(titleFont,title,
                             Math.max(0,box.right()-pad-geometry.titleTextX())),geometry.titleTextX(),
                     SkiaFontRenderer.centerBaselineY(titleFont,geometry.titleCenterY()),0xFFFFFFFF);
@@ -111,13 +129,19 @@ public final class ConfirmationDialog {
         scale[index].update(hovered, pressed == index && pulse > 0, dt, Animations.enabled(), rect.w());
         scale[index].begin(canvas, rect.x() + rect.w() / 2, rect.y() + rect.h() / 2);
         try {
-        PickerModalPaint.buttonFace(canvas,rect,hover[index],255,index==1);
+        if (tutorial && index == 1) {
+            int accent = com.atom.chat.config.AtomChatConfig.get().accentColor;
+            SkiaDraw.drawRoundedRect(canvas, rect.x(), rect.y(), rect.w(), rect.h(), PickerModalPaint.buttonRadius(rect), accent);
+            if (hover[index] > .01F) SkiaDraw.drawRoundedRect(canvas,rect.x(),rect.y(),rect.w(),rect.h(),PickerModalPaint.buttonRadius(rect),
+                    io.github.humbleui.skija.Color.makeARGB((int)(60*hover[index]),255,255,255));
+        } else PickerModalPaint.buttonFace(canvas,rect,hover[index],255,index==1);
         ClickRipples.region(rect.x(),rect.y(),rect.w(),rect.h(),PickerModalPaint.buttonRadius(rect),
-                index==1?UiTokens.dangerColor():0xFF23272F);
+                index==1?(tutorial?com.atom.chat.config.AtomChatConfig.get().accentColor:UiTokens.dangerColor()):0xFF23272F);
         var font = FontManager.font(UiTokens.FONT_BUTTON);
         float width = SkiaFontRenderer.getStringWidth(font, label);
         SkiaFontRenderer.drawText(canvas, font, label, rect.x() + (rect.w() - width) / 2,
-                SkiaFontRenderer.centerBaselineY(font, rect.y() + rect.h() / 2), 0xFFFFFFFF);
+                SkiaFontRenderer.centerBaselineY(font, rect.y() + rect.h() / 2),
+                tutorial && index == 1 ? UiTokens.onAccent(com.atom.chat.config.AtomChatConfig.get().accentColor) : 0xFFFFFFFF);
         } finally { canvas.restore(); }
     }
 }

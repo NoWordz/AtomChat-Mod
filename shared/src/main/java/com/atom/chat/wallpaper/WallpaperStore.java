@@ -21,15 +21,60 @@ public final class WallpaperStore {
     private static final String BASE_NAME = "wallpaper";
 
     private static Path dir;
-    private static Path current;
+    private static volatile Path current;
+    private static volatile String presetId = "";
+    private static volatile boolean retiredGeneratedImage;
+    private static volatile long revision;
+    public static long revision() { return revision; }
+    public static String presetId() { return presetId; }
+    /** Decode provenance is independent of an active preset's resize/regeneration identity. */
+    public static boolean isGeneratedImage() { return retiredGeneratedImage || !presetId.isEmpty(); }
+    private static void clearPresetMarker() {
+        presetId = "";
+        retiredGeneratedImage = false;
+        try { if (dir != null) Files.deleteIfExists(dir.resolve("selected-preset.txt")); }
+        catch (IOException ignored) { }
+        revision++;
+    }
+    static synchronized boolean setPresetPng(String id, byte[] bytes, int generation) {
+        if (!WallpaperPresets.isCurrentRequest(generation)) return false;
+        if (!writePng(bytes)) return false;
+        try {
+            Path marker = dir.resolve("selected-preset.txt");
+            if (!com.atom.chat.util.DataMigration.allowPersonalPath(marker)) return false;
+            Files.writeString(marker, id);
+            presetId = id;
+            retiredGeneratedImage = false;
+            revision++;
+            return true;
+        } catch (IOException e) { return false; }
+    }
 
     private WallpaperStore() {
     }
 
     /** Must be called once from client init, before any UI reads the wallpaper. */
-    public static void init(Path wallpaperDir) {
+    public static synchronized void init(Path wallpaperDir) {
+        WallpaperPresets.cancelPending();
         dir = wallpaperDir;
         refresh();
+        presetId = "";
+        retiredGeneratedImage = false;
+        if (dir != null && com.atom.chat.util.DataMigration.allowPersonalPath(dir)) {
+            Path marker = dir.resolve("selected-preset.txt");
+            if (com.atom.chat.util.DataMigration.allowPersonalPath(marker)) {
+                try { if (Files.isRegularFile(marker)) {
+                    String stored = Files.readString(marker).trim();
+                    boolean available = java.util.Arrays.stream(WallpaperPresets.presets()).anyMatch(p -> p.id().equals(stored));
+                    if (available && current != null) presetId = stored;
+                    // Retain the existing marker only as decode provenance. Keeping
+                    // presetId empty excludes this image from all resize generation.
+                    else if (current != null && "graphite".equals(stored)) retiredGeneratedImage = true;
+                    else clearPresetMarker();
+                } }
+                catch (IOException ignored) { }
+            }
+        }
     }
 
     public static boolean isSupportedName(String name) {
@@ -46,7 +91,8 @@ public final class WallpaperStore {
     }
 
     /** Re-scans the wallpaper dir for a {@code wallpaper.*} file. */
-    public static void refresh() {
+    public static synchronized void refresh() {
+        revision++;
         current = null;
         if (!com.atom.chat.util.DataMigration.allowPersonalPath(dir) || !Files.isDirectory(dir)) {
             return;
@@ -82,7 +128,8 @@ public final class WallpaperStore {
      * only after the move landed. A failed copy therefore leaves the previous
      * image in place instead of the old {@code removeExisting() -> copy}
      * order's blank window.</p> */
-    public static boolean set(Path source) {
+    public static synchronized boolean set(Path source) {
+        WallpaperPresets.cancelPending();
         if (dir == null || source == null || !Files.isRegularFile(source)) {
             return false;
         }
@@ -97,6 +144,7 @@ public final class WallpaperStore {
             Path dest = dir.resolve(BASE_NAME + ext);
             if (!com.atom.chat.util.DataMigration.allowPersonalPath(dest)) return false;
             if (source.toAbsolutePath().normalize().equals(dest.toAbsolutePath().normalize())) {
+                clearPresetMarker();
                 refresh();
                 return true;
             }
@@ -105,6 +153,7 @@ public final class WallpaperStore {
             Files.copy(source, tmp, StandardCopyOption.REPLACE_EXISTING);
             moveIntoPlace(tmp, dest);
             removeExistingExcept(dest);
+            clearPresetMarker();
             refresh();
             return true;
         } catch (IOException e) {
@@ -116,7 +165,14 @@ public final class WallpaperStore {
      * Stores raw PNG bytes (the cropper's output) as {@code wallpaper.png},
      * replacing any previous wallpaper. Same staged order as {@link #set}.
      */
-    public static boolean setPng(byte[] bytes) {
+    public static synchronized boolean setPng(byte[] bytes) {
+        WallpaperPresets.cancelPending();
+        boolean ok = writePng(bytes);
+        if (ok) clearPresetMarker();
+        return ok;
+    }
+
+    private static boolean writePng(byte[] bytes) {
         if (dir == null || bytes == null || bytes.length == 0) {
             return false;
         }
@@ -146,7 +202,9 @@ public final class WallpaperStore {
     }
 
     /** Deletes the wallpaper; the panel falls back to blur/solid. */
-    public static boolean clear() {
+    public static synchronized boolean clear() {
+        WallpaperPresets.cancelPending();
+        clearPresetMarker();
         if (dir == null) {
             return false;
         }

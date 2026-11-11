@@ -46,8 +46,16 @@ public final class SettingsHomePage {
 
     /** Arms the tile entrance — the screen calls this on a tab arrival. */
     public void markEntered() {
-        entrance.markEntered();
+        markEntered(UiStagger.frameTimeMillis());
     }
+
+    public void markEntered(long nowMs) {
+        entrance.markEntered(nowMs);
+        staggerHits.clear();
+    }
+    private final com.atom.chat.ui.StaggerHitMap staggerHits = new com.atom.chat.ui.StaggerHitMap();
+    public com.atom.chat.ui.StaggerHitMap staggerHits() { return staggerHits; }
+
 
     public float measureContent(UiLayout layout) {
         int rows = (sections.length + UiTokens.SETTINGS_TILE_COLS - 1) / UiTokens.SETTINGS_TILE_COLS;
@@ -82,7 +90,8 @@ public final class SettingsHomePage {
     }
 
     public void render(Canvas canvas, UiLayout layout, float vmx, float vmy, float scrollY) {
-        long now = System.currentTimeMillis();
+        staggerHits.clear();
+        long now = UiStagger.frameTimeMillis();
         float dt = Math.min(50.0F, Math.max(1.0F, now - lastFrameMs));
         lastFrameMs = now;
 
@@ -137,6 +146,9 @@ public final class SettingsHomePage {
                 // while shifted, and SLIDE never gives it a vertical leg.
                 float tileAlpha = UiStagger.itemAlpha(entrance, i, now);
                 float tileRise = UiStagger.itemRise(entrance, i, now, axis);
+                staggerHits.add(tile, tileAlpha >= .995F ? 0 : UiStagger.itemStyleSlidePx(entrance, i, now, axis),
+                        tileAlpha >= .995F ? 0 : tileRise,
+                        tileAlpha >= .995F ? 1 : UiStagger.itemStyleZoomScale(entrance, i, now, axis));
                 if (tileAlpha >= 0.995F) {
                     drawTile(canvas, tile, sections[i], tileHover[i], tileScale[i]);
                 } else {

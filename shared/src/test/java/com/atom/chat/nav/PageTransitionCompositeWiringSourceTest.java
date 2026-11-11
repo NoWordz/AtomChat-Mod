@@ -112,20 +112,13 @@ class PageTransitionCompositeWiringSourceTest {
     @Test
     void theEnvelopeWrapsTheBodyAndLeavesTheHeaderFixed() throws IOException {
         String src = source(COMPOSITE);
-        String envelope = body(src, "public void drawArrivingFrame(Canvas canvas, UiLayout layout");
-        assertTrue(envelope.contains("if (!overlaySettled(nowMs) && !host.arrivalStaggersSurfaces())"),
-                "a settled stamp, or a self-staggering surface, must skip the envelope outright");
-        assertTrue(envelope.indexOf("drawArrivingBody(") < envelope.indexOf("drawArrivingHeader("),
-                "the header draws after the body");
-        // The header must be OUTSIDE the layer: the restore/close pair must all
-        // precede it, or the header would fade and drift with the page again.
-        int headerAt = envelope.indexOf("drawArrivingHeader(");
-        int lastRestore = envelope.lastIndexOf("canvas.restore();", headerAt);
-        int layerClose = envelope.lastIndexOf("layer.close();", headerAt);
-        assertTrue(layerClose > 0 && lastRestore > layerClose,
-                "the header must draw after the layer is restored (it never moves with the page)");
-        assertTrue(envelope.contains("setAlphaf(alpha)"),
-                "the envelope fades through the layer's alpha");
+        String envelope=body(src,"public void drawArrivingFrame(Canvas canvas, UiLayout layout");
+        assertTrue(envelope.contains("host.drawArrivingBody(recording"));
+        assertTrue(envelope.contains("lastFrame.playback(canvas)"));
+        assertTrue(envelope.indexOf("lastFrame.playback(canvas)") < envelope.indexOf("host.drawArrivingHeader("));
+        assertTrue(src.contains("departing.playback(recording)"));
+        assertTrue(src.contains("canvas.restoreToCount(save)"));
+        assertFalse(src.contains("drawDepartingBody"),"old business draw cannot run on retirement");
     }
 
     // ------------------------------------------------------------ the screens
@@ -139,7 +132,7 @@ class PageTransitionCompositeWiringSourceTest {
     void theScreenKeepsNoTransitionStateOfItsOwn() throws IOException {
         for (String screen : SCREENS) {
             String src = source(screen);
-            for (String dead : List.of("UiStagger.Entrance entrance", "enteredAtMs",
+            for (String dead : List.of("UiStagger.Entrance entrance",
                     "navFastProgress", "navEnterAlpha", "navExitAlpha", "rootZoomPhase",
                     "rootTabFrom", "rootTabTo", "pageNavZoom", "pageNavFast")) {
                 assertFalse(src.contains(dead),
@@ -159,7 +152,7 @@ class PageTransitionCompositeWiringSourceTest {
         portWork.put("topNav", "navStack.topNav()");
         portWork.put("drawArrivingBody", "drawChatPageBody(canvas, layout, mouseX, mouseY, chatPageViewFor(topNav()))");
         portWork.put("drawArrivingHeader", "headerChrome.backButton()");
-        portWork.put("arrivalStaggersSurfaces", "topPage() == AppPage.SETTINGS_SECTION");
+        portWork.put("arrivalStaggersSurfaces", "return false");
         for (String screen : SCREENS) {
             String src = source(screen);
             assertEquals(1, occurrences(src, "new PageTransitionComposite("),

@@ -101,6 +101,7 @@ public final class SettingsActions {
 
         /** Opens the screen-owned visual HUD layout editor. */
         default void openNotificationHudEditor() { }
+        default void openTutorial() { }
     }
 
     private final Host host;
@@ -184,6 +185,7 @@ public final class SettingsActions {
     /** Settings action cards: the wallpaper pair, the theme presets and the
      *  teleport mode cycle. */
     public void handleSettingsAction(String actionId) {
+        if ("onboarding_replay".equals(actionId)) { host.openTutorial(); return; }
         if (SettingsSectionPage.ACTION_THEME_PRESET_SAVE.equals(actionId)) {
             saveThemePreset();
         } else if (actionId != null && actionId.startsWith(SettingsSectionPage.ACTION_THEME_PRESET_APPLY)) {
@@ -191,6 +193,8 @@ public final class SettingsActions {
         } else if (actionId != null && actionId.startsWith(SettingsSectionPage.ACTION_THEME_PRESET_DELETE)) {
             deleteThemePreset(actionId.substring(
                     SettingsSectionPage.ACTION_THEME_PRESET_DELETE.length()));
+        } else if (actionId != null && actionId.startsWith("wallpaper_preset:")) {
+            com.atom.chat.wallpaper.WallpaperPresets.apply(actionId.substring("wallpaper_preset:".length()));
         } else if ("wallpaper_pick".equals(actionId)) {
             pickWallpaperFile();
         } else if ("wallpaper_clear".equals(actionId)) {
@@ -257,7 +261,7 @@ public final class SettingsActions {
 
     private void saveThemePreset() {
         boolean ok = AppearancePresetStore.get()
-                .saveCurrent(AtomChatConfig.get(), WallpaperStore.current()).ok();
+                .saveCurrent(AtomChatConfig.get(), null).ok();
         if (ok) {
             host.sectionPage().requestRevealLatestPreset();
         }
@@ -266,11 +270,6 @@ public final class SettingsActions {
 
     private void applyThemePreset(String id) {
         boolean ok = AppearancePresetStore.get().apply(id, AtomChatConfig.get()).ok();
-        if (ok) {
-            // The wallpaper store copies to the same fixed file name, so path
-            // equality alone cannot invalidate the cached bitmap.
-            WallpaperImage.release();
-        }
         host.feedback(ok ? "atomchat.feedback.presetApplied" : "atomchat.feedback.presetFailed", ok);
     }
 

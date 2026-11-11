@@ -247,8 +247,8 @@ public final class ScrollSyncService {
         canvas.save();
         try (Paint layer = new Paint()) {
             layer.setColor(Color.makeARGB((int) (255.0F * jumpLatestAnim), 0, 0, 0));
-            canvas.saveLayer(Rect.makeXYWH(x - UiTokens.s(4), y - UiTokens.s(4),
-                    size + UiTokens.s(8), size + UiTokens.s(8)), layer);
+            float pad = com.atom.chat.render.SoftShadow.jumpPad();
+            canvas.saveLayer(Rect.makeXYWH(x - pad, y - pad, size + pad * 2, size + pad * 2), layer);
             float cx = x + size / 2.0F;
             float cy = y + size / 2.0F;
             jumpLatestScale.begin(canvas, cx, cy);
@@ -259,9 +259,7 @@ public final class ScrollSyncService {
                 int bg = DrawPrimitives.lerpArgb(Color.makeARGB(235, 52, 58, 70),
                         Color.makeARGB(245, 70, 76, 90), jumpLatestHover);
                 float fabRadius = UiTokens.radius(size / (2.0F * UiTokens.SCALE));
-                SkiaDraw.drawRoundedRect(canvas, x, y, size, size, fabRadius, bg);
-                SkiaDraw.drawRoundedShadow(canvas, x, y, size, size, fabRadius, UiTokens.s(8),
-                        UiTokens.CHROME_SHADOW);
+                com.atom.chat.render.SoftShadow.drawJumpSurface(canvas, x, y, size, fabRadius, bg);
                 // Glyph pinned white like the pill itself: the pill is fixed dark,
                 // so a themed text colour would go dark-on-dark on light themes.
                 host.primitives().drawIconCentered(canvas, DrawPrimitives.ICON_JUMP_DOWN_PATH, cx, cy,

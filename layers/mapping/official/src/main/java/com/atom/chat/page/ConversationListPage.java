@@ -61,18 +61,25 @@ public final class ConversationListPage {
 
     /**
      * Page-entrance stagger: rows rise 18px into place, 25ms apart, capped at
-     * 10 items. Pure decoration — hit tests
-     * keep unscaled coordinates, the same rule every draw transform here
-     * follows. Armed by the navigation hooks (clearWorldScroll and the
+     * 10 items. Navigation records each painted row transform for pointer inversion;
+     * the independent press feedback retains its existing draw-only hit policy. Armed by the navigation hooks (clearWorldScroll and the
      * transient-UI reset); long-settled until then, so golden frames and
      * probes never see a half-drawn list.
      */
     private final UiStagger.Entrance entrance = new UiStagger.Entrance();
 
-    /** Arms the row entrance — standalone surfaces (no page envelope) use this. */
+    /** Arms the same item clock for navigation arrivals and local chip changes. */
     public void markEntered() {
-        entrance.markEntered();
+        markEntered(UiStagger.frameTimeMillis());
     }
+
+    public void markEntered(long nowMs) {
+        entrance.markEntered(nowMs);
+        staggerHits.clear();
+    }
+    private final com.atom.chat.ui.StaggerHitMap staggerHits = new com.atom.chat.ui.StaggerHitMap();
+    public com.atom.chat.ui.StaggerHitMap staggerHits() { return staggerHits; }
+
 
     /**
      * Keeps the rows settled: used when the page envelope already owns the
@@ -228,7 +235,7 @@ public final class ConversationListPage {
 
     /** Row list in display order (cached; see {@link #ROWS_REBUILD_MS}). */
     public List<Row> rows() {
-        long now = System.currentTimeMillis();
+        long now = UiStagger.frameTimeMillis();
         if (rowsDirty || now - rowsBuiltAt >= ROWS_REBUILD_MS) {
             cachedRows = buildRows();
             rowsBuiltAt = now;
@@ -324,7 +331,7 @@ public final class ConversationListPage {
     public float measureContent(UiLayout layout) {
         // Measurement takes the frame's expansion snapshot. Draw and hit only
         // read it, so all three consumers walk exactly the same row geometry.
-        long now = System.currentTimeMillis();
+        long now = UiStagger.frameTimeMillis();
         float dt = Math.min(50.0F, Math.max(0.0F, now - foldMeasuredAtMs));
         foldMeasuredAtMs = now;
         float target = privateCollapsed ? 0.0F : 1.0F;
@@ -339,7 +346,8 @@ public final class ConversationListPage {
     }
 
     public void render(Canvas canvas, UiLayout layout, float vmx, float vmy, float scrollY) {
-        long now = System.currentTimeMillis();
+        long now = UiStagger.frameTimeMillis();
+        staggerHits.clear();
         float dt = Math.min(50.0F, Math.max(1.0F, now - lastFrameMs));
         lastFrameMs = now;
         List<Row> rows = rows();
@@ -384,6 +392,8 @@ public final class ConversationListPage {
                         float rowAlpha = UiStagger.itemAlpha(entrance, staggerIndex, now);
                         float rowRise = UiStagger.itemRise(entrance, staggerIndex, now, axis);
                         float styleDx = styleDriftDx(axis, staggerIndex, now);
+                        staggerHits.add(new UiLayout.Rect(rect.x(), y, rect.w(), h), styleDx,
+                                rowRise, UiStagger.itemStyleZoomScale(entrance, staggerIndex, now, axis));
                         canvas.save();
                         Paint dividerLayer = null;
                         try {
@@ -430,6 +440,10 @@ public final class ConversationListPage {
                         // ZOOM settles it from 0.97. The axis decides which one,
                         // so a SLIDE row never also rises.
                         float styleDx = styleDriftDx(axis, staggerIndex, now);
+                        boolean stylePainted = rowAlpha < .995F || row.kind() == RowKind.PLAYER && privateExpansion < 1;
+                        staggerHits.add(new UiLayout.Rect(rect.x(), y, rect.w(), h), stylePainted ? styleDx : 0,
+                                rowRise + (row.kind() == RowKind.PLAYER ? UiTokens.SETTINGS_FOLD_LIFT * (1 - privateExpansion) : 0),
+                                stylePainted ? UiStagger.itemStyleZoomScale(entrance, staggerIndex, now, axis) : 1);
                         if (row.kind() == RowKind.PLAYER && privateExpansion < 1.0F) {
                             canvas.save();
                             try {
@@ -685,7 +699,7 @@ public final class ConversationListPage {
         // throw out of the layer cannot leak the matrix.
         canvas.save();
         try {
-            canvas.saveLayer(Rect.makeXYWH(x - 1, y - 1, w + 2, ROW_H + 2), BLOCKED_LAYER);
+            canvas.saveLayer(CardShadowReach.layerRect(x, y, w, ROW_H, 0, 0), BLOCKED_LAYER);
             UiCards.drawCard(canvas, x, y, w, ROW_H, UiTokens.settingsRowRadius(), hoverAlpha);
             drawRowContent(canvas, row, x, y, w);
             canvas.restore();

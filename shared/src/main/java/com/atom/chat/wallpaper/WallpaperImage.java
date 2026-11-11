@@ -18,7 +18,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * <ul>
  *   <li>The decode never runs on the render thread — a background daemon does
  *       the work and the panel simply draws the fallback until it lands.</li>
- *   <li>The bitmap is downscaled once to at most {@link #MAX_DIM} on its long
+     *   <li>A custom bitmap is downscaled once to at most {@link #MAX_DIM} on its long
  *       edge. A 4K photo decoded raw would sit in memory at ~33 MB forever;
  *       at {@code MAX_DIM} it is under 2 MB and still far sharper than the
  *       panel will ever display.</li>
@@ -34,6 +34,7 @@ public final class WallpaperImage {
     private static volatile Image decoded;
     private static volatile Path decodedFrom;
     private static volatile boolean failed;
+    private static volatile long decodedRevision = -1;
 
     private WallpaperImage() {
     }
@@ -48,7 +49,7 @@ public final class WallpaperImage {
             release();
             return null;
         }
-        if (path.equals(decodedFrom)) {
+        if (path.equals(decodedFrom) && decodedRevision == WallpaperStore.revision()) {
             return decoded;
         }
         startLoad(path);
@@ -67,7 +68,7 @@ public final class WallpaperImage {
     }
 
     private static synchronized void startLoad(Path path) {
-        if (path.equals(decodedFrom)) {
+        if (path.equals(decodedFrom) && decodedRevision == WallpaperStore.revision()) {
             return;
         }
         release();
@@ -76,13 +77,15 @@ public final class WallpaperImage {
         // so one thread per change is fine; the generation counter makes the
         // latest request win if the user swaps files mid-decode.
         decodedFrom = path;
+        decodedRevision = WallpaperStore.revision();
         failed = false;
         int generation = GENERATION.incrementAndGet();
+        int maxSide = WallpaperStore.isGeneratedImage() ? WallpaperViewport.MAX_SIDE : MAX_DIM;
         Thread worker = new Thread(() -> {
             Image result = null;
             boolean ok = false;
             try {
-                result = downscale(Image.makeFromEncoded(Files.readAllBytes(path)));
+                result = downscale(Image.makeFromEncoded(Files.readAllBytes(path)), maxSide);
                 ok = result != null;
             } catch (Throwable ignored) {
                 ok = false;
@@ -101,13 +104,13 @@ public final class WallpaperImage {
     }
 
     /** Fits the image inside {@link #MAX_DIM} without ever upscaling it. */
-    private static Image downscale(Image source) {
+    private static Image downscale(Image source, int maxSide) {
         if (source == null) {
             return null;
         }
         int w = source.getWidth();
         int h = source.getHeight();
-        float scale = Math.min(1.0F, Math.min((float) MAX_DIM / w, (float) MAX_DIM / h));
+        float scale = Math.min(1.0F, Math.min((float) maxSide / w, (float) maxSide / h));
         if (scale >= 0.999F) {
             return source;
         }

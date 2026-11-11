@@ -75,12 +75,12 @@ class ThemeServiceTest {
         config.panelOutline = false;
         config.themeName = ThemeService.MODERN;
         ThemeService.apply(config, ThemeService.FROSTED);
-        assertEquals(0.93F, config.panelOpacity, 1e-6F);
+        assertEquals(0.6990596F, config.panelOpacity, 1e-6F);
         assertTrue(config.blurEnabled);
         assertTrue(config.panelOutline);
         // 0.235 ≈ white @ alpha 60 — the shipped frosted look on the new
         // "0% means invisible" card-tint axis.
-        assertEquals(0.235F, config.cardTint, 1e-6F);
+        assertEquals(0.59866506F, config.cardTint, 1e-6F);
         assertEquals(ThemeService.FROSTED, config.themeName);
     }
 

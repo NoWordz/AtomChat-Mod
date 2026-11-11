@@ -309,7 +309,7 @@ public final class ThemeService {
             case MODERN -> {
                 config.panelOpacity = 1.0F;
                 config.blurEnabled = false;
-                config.panelOutline = true;
+                config.setPanelOutlineWidth(AtomChatConfig.DEFAULT.panelOutlineWidth);
                 config.cardTint = 1.0F;
                 config.cardColor = 0xFF222831;
             }
@@ -327,7 +327,7 @@ public final class ThemeService {
                 config.panelOpacity = preset.panelOpacity() != null
                         ? preset.panelOpacity() : 1.0F;
                 config.blurEnabled = Boolean.TRUE.equals(preset.blurEnabled());
-                config.panelOutline = true;
+                config.setPanelOutlineWidth(AtomChatConfig.DEFAULT.panelOutlineWidth);
                 config.cardTint = 1.0F;
                 preset.applyTo(config);
             }
@@ -362,7 +362,7 @@ public final class ThemeService {
         config.secondaryCapsuleText = def.secondaryCapsuleText;
         config.panelOpacity = def.panelOpacity;
         config.blurEnabled = def.blurEnabled;
-        config.panelOutline = def.panelOutline;
+        config.setPanelOutlineWidth(def.effectivePanelOutlineWidth());
         config.cardTint = def.cardTint;
     }
 }

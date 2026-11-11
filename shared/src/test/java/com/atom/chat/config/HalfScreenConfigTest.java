@@ -75,6 +75,21 @@ class HalfScreenConfigTest {
                 .invoke(config, width), "missing active width writer");
     }
 
+    @Test void freshConfigStartsWithoutWallpaperAndOldAppearanceRemainsIntact() throws Exception {
+        AtomChatConfig.reload();
+        assertFalse(AtomChatConfig.get().wallpaperFirstUsePending);
+        Files.writeString(configFile(), "{\"panelOutline\":true,\"panelBgColor\":-12345,\"cardTint\":0.72}");
+        AtomChatConfig.reload();
+        var old=AtomChatConfig.get();
+        assertFalse(old.wallpaperFirstUsePending);
+        assertEquals(2F,old.effectivePanelOutlineWidth());
+        assertEquals(-12345,old.panelBgColor);
+        assertEquals(.72F,old.cardTint);
+        Files.writeString(configFile(), "{\"panelOutline\":false}");
+        AtomChatConfig.reload();
+        assertEquals(0F,AtomChatConfig.get().effectivePanelOutlineWidth());
+    }
+
     @Test
     void switchingKeepsEachWidthThroughRealSaveAndReload() throws Exception {
         AtomChatConfig config = new AtomChatConfig();

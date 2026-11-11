@@ -1,5 +1,70 @@
 # Changelog
 
+## v0.7.0
+
+**更改**
+
+- 页面入场与出场同时进行，连续操作从当前画面接续，目标页面立即接收交互。
+- 聊天输入框与导航底栏连续形变，进入具体设置页时底栏向中心收拢，返回时反向展开。
+- 默认主题采用深灰配色，面板约 70% 不透明度、卡片约 60%，默认圆角 25px，保留蓝色强调色与 #14161B 边框。
+- 面板边框改为 0–4 逻辑像素调节，新配置默认 3，已有配置保留原粗细或无边框。
+- 主题预设与壁纸独立，应用主题不再替换壁纸。
+
+**新增**
+
+- 首次打开面板可选择观看新手教程，批注引导覆盖主要功能，关于页可从头重播；提醒记录独立于可分发配置。
+
+- 增加七款静态壁纸预设，包括暖陶几何、翡翠流体、紫红琥珀丝带与沙金层叠曲面，后台生成并提供独立选择入口。
+- 手机面板及半屏可见边缘增加软阴影。
+
+**修复**
+
+- 修复面板背景与描边圆角之间的细缝，并避免两行输入、表情面板变化重复叠加导航弹簧。
+- 修复“无在线玩家”“无屏蔽玩家”等空状态未随页面动画运动的问题。
+- 恢复页面卡片与列表的错峰入场，放缓底栏形变并增加轻微弹性回弹。
+- 壁纸预设统一采用主题预设的排版与选中反馈，“石墨”替换为深蓝层叠曲面，新用户默认不启用壁纸，已有图片保留。
+- 补齐中英文描边粗细语言键，恢复右键菜单原有边缘高光。
+- 恢复底栏形变路径遗漏的点阵装饰，保持原有颜色与密度并随底栏运动。
+- 去除面板描边的重复绘制，保留旧“石墨”壁纸的高清解码能力。
+- 修复回到底部按钮与灰化会话卡片的阴影被裁成硬边，以及部分透明浮层被自身阴影压暗的问题。
+
+**已知问题**
+
+- 实机已报告页面过渡相关原生崩溃，尚未修复；动画和教程观感未通过验收。
+
+----
+
+**Changed**
+
+- Run page entrance and exit together, continue interrupted transitions from the current presentation, and enable target-page interaction immediately.
+- Morph the chat composer into the navigation bar; collapse the bar into its center on detailed settings pages and expand it on return.
+- Use deep-grey defaults with approximately 70% panel opacity, 60% card tint and a 25px default corner radius, retaining the blue accent and #14161B outline.
+- Replace the panel outline toggle with a 0–4 logical-pixel width control; default to 3 for new configurations and preserve existing widths or disabled outlines.
+- Keep theme presets and wallpapers independent; applying a theme no longer replaces the wallpaper.
+
+**Added**
+
+- Offer an interactive annotated tutorial on first panel opening, covering the main features with replay from About and a reminder choice stored outside distributable configuration.
+
+- Add seven static wallpaper presets with warm geometric shapes, emerald folds, plum-and-amber ribbons, and layered sand-gold surfaces, generated in the background and selected independently.
+- Add soft shadows around the phone panel and the exposed edges in half-screen mode.
+
+**Fixed**
+
+- Close the gap between the panel background and bezel corners, and prevent composer wrapping or emoji-panel changes from starting an additional navigation spring.
+- Make empty states, including no online players and no blocked players, follow page transitions.
+- Restore staggered card and list entrances and slow down bottom-bar morphing with a subtle settling bounce.
+- Match wallpaper presets to theme-preset typography and selection feedback, replace Graphite with layered deep-blue surfaces, and leave wallpapers disabled for new users while preserving existing images.
+- Complete Chinese and English outline-width labels and restore the original context-menu edge highlight.
+- Restore the dot decoration omitted by bottom-bar morphing, preserving its color and density as the bar moves.
+- Remove duplicate panel-outline painting and preserve high-resolution decoding for existing Graphite wallpapers.
+- Fix clipped shadows on the jump-to-bottom button and dimmed conversation cards, and prevent some translucent surfaces from being darkened by their own shadows.
+
+**Known issues**
+
+- A native crash involving page transitions remains unresolved; animation and tutorial presentation have not passed in-game acceptance.
+
+
 ## v0.6.1
 
 **修复**

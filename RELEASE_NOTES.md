@@ -1,5 +1,64 @@
 # Release Notes
 
+## v0.7.0
+
+**更改**
+
+- 页面同时入场与出场，连续点击与返回平滑接续，输入框和底栏增加连续形变。
+- 默认主题采用深灰配色，面板约 70% 不透明度、卡片约 60%，默认圆角 25px，保留蓝色强调色与 #14161B 边框。
+- 面板边框可在 0–4 逻辑像素之间调节，0 为无边框；新配置默认 3，旧配置保留原样。
+
+**新增**
+
+- 首次打开面板可选择观看新手教程，批注引导覆盖主要功能，关于页可从头重播；提醒记录独立于可分发配置。
+
+- 增加七款静态壁纸，涵盖简约几何、流体褶面、丝带与层叠曲面，主题和壁纸独立选择。
+
+**修复**
+
+- 修复面板背景与描边圆角之间的细缝，并避免两行输入、表情面板变化重复叠加导航弹簧。
+- 修复“无在线玩家”“无屏蔽玩家”等空状态不跟随页面动画的问题。
+- 恢复页面错峰入场，底栏形变放缓并增加轻微回弹。
+- 壁纸预设与主题预设采用一致排版和选中反馈，新增深蓝层叠曲面替换“石墨”，新用户默认无壁纸，已有壁纸保留。
+- 修复描边粗细显示语言键的问题，恢复右键菜单边缘高光。
+- 恢复底栏点阵装饰，并使其跟随底栏形变。
+- 修复面板描边重复绘制，保留已有“石墨”壁纸的清晰度。
+- 修复回到底部按钮和灰化会话卡片的阴影硬边，以及部分透明浮层被自身阴影压暗的问题。
+
+**已知问题**
+
+- 实机已报告页面过渡相关原生崩溃，尚未修复；动画和教程观感未通过验收。
+
+----
+
+**Changed**
+
+- Add simultaneous page entrance and exit with smooth interruption, plus continuous composer and navigation-bar morphing.
+- Use deep-grey defaults with approximately 70% panel opacity, 60% card tint and a 25px default corner radius, retaining the blue accent and #14161B outline.
+- Adjust panel outlines from 0–4 logical pixels, with 0 disabling the outline; new configurations default to 3 and existing configurations retain their appearance.
+
+**Added**
+
+- Offer an interactive annotated tutorial on first panel opening, covering the main features with replay from About and a reminder choice stored outside distributable configuration.
+
+- Add seven static wallpapers featuring minimal geometry, flowing folds, ribbons, and layered surfaces, selected independently of themes.
+
+**Fixed**
+
+- Close the gap between the panel background and bezel corners, and prevent composer wrapping or emoji-panel changes from starting an additional navigation spring.
+- Make empty states, including no online players and no blocked players, follow page animations.
+- Restore staggered page entrances and give bottom-bar morphing more time and a subtle bounce.
+- Match wallpaper-preset typography and selection feedback to themes, replace Graphite with layered deep-blue surfaces, and disable wallpapers by default for new users while preserving existing images.
+- Fix untranslated outline-width labels and restore context-menu edge highlights.
+- Restore the bottom-bar dot decoration and make it follow the morphing bar.
+- Fix duplicate panel-outline painting and preserve the clarity of existing Graphite wallpapers.
+- Fix hard shadow edges on the jump-to-bottom button and dimmed conversation cards, and prevent some translucent surfaces from being darkened by their own shadows.
+
+**Known issues**
+
+- A native crash involving page transitions remains unresolved; animation and tutorial presentation have not passed in-game acceptance.
+
+
 ## v0.6.1
 
 **修复**

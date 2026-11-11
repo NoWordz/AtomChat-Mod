@@ -114,12 +114,21 @@ public final class DotTexture {
 
     /** The bar's own rounded outline is also the origin of every dot column. */
     public static void drawEdge(Canvas canvas, UiLayout.Rect bar, float radius, boolean above, int tint) {
+        drawEdge(canvas, bar, radius, above, tint, true);
+    }
+
+    /** Changing bar geometry uses the identical primitives without allocating transient Pictures. */
+    public static void drawMovingEdge(Canvas canvas, UiLayout.Rect bar, float radius, boolean above, int tint) {
+        drawEdge(canvas, bar, radius, above, tint, false);
+    }
+
+    private static void drawEdge(Canvas canvas, UiLayout.Rect bar, float radius, boolean above, int tint, boolean useCache) {
         if (!visible(bar, tint)) return;
         long segmentId = com.atom.chat.diagnostics.FrameSegments.current(), started = com.atom.chat.diagnostics.FrameSegments.start(segmentId);
         try {
             float r = Math.max(0F, Math.min(radius, Math.min(bar.w(), bar.h()) / 2F));
             RRect outline = RRect.makeXYWH(bar.x(), bar.y(), bar.w(), bar.h(), r);
-            if (cached) {
+            if (cached && useCache) {
                 Key key = new Key(KIND_EDGE, bar.x(), bar.y(), bar.w(), bar.h(), radius, tint, above, UiTokens.SCALE);
                 Picture picture = picture(key, c -> edgeBody(c, bar, r, outline, above, tint));
                 canvas.save();

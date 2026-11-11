@@ -172,6 +172,9 @@ public final class SkiaPipelineWarmup {
             DotTexture.drawEdge(canvas, bar, 10F, true, 0xFF99CCFF);
             DotTexture.drawHalo(canvas, new UiLayout.Rect(10F, 62F, 60F, 26F), 0xFF99CCFF);
             ChromeMaterial.drawDetails(canvas, bar, 10F);
+            // Precompile the outside clip + nine-patch path and build both radius variants off the first panel frame.
+            SoftShadow.drawPanel(canvas, 12F, 12F, 420F, 620F, UiTokens.panelRadius());
+            SoftShadow.drawPanel(canvas, 48F, 36F, 420F, 620F, 0F);
             SkiaFontRenderer.drawText(canvas, FontManager.font(UiTokens.FONT_BODY),
                     "AtomChat 预热 123", 12F, 56F, 0xFFFFFFFF);
 

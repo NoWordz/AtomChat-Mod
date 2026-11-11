@@ -262,6 +262,11 @@ public final class ContextMenuController<M> {
         float menuY = Math.min(y, panel.y() + panel.h() - menuH - UiTokens.s(8));
         return new Bounds(menuX, menuY, menuW, menuH);
     }
+    /** Read-only anchor for overlays; shares the production draw and hit geometry. */
+    public UiLayout.Rect surfaceRect() {
+        Bounds b=bounds(mode,imageRow(mode,subject));
+        return new UiLayout.Rect(b.x(),b.y(),b.w(),b.h());
+    }
 
     /**
      * Whether the image row belongs to this menu: only the bubble menu has one,

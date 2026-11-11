@@ -99,41 +99,19 @@ class NavInterruptWiringSourceTest {
 
     @Test
     void rootTabsStaggerTheirOwnItemsAndKeepTheEnvelopeForPushedPages() throws Exception {
-        for (String screen : SCREENS) {
-            String s = source(root(), screen);
-            // Root pages are lists, so they animate per item instead of riding
-            // the whole-page envelope: a drifting page plus a
-            // rising row was the reported "the cards jump up on arrival".
-            int rootDraw = s.indexOf("private void drawRootPage(Canvas canvas");
-            assertTrue(rootDraw >= 0, screen + ": drawRootPage missing");
-            String rootBody = s.substring(rootDraw, s.indexOf("\n    }", rootDraw));
-            assertFalse(rootBody.contains("composite.overlaySlideDx("),
-                    screen + ": the root page must not drift while its rows rise");
-            assertFalse(rootBody.contains("composite.overlayZoomScale("),
-                    screen + ": the root page must not scale while its rows rise");
-            // The arrival arms the arriving root page's own stagger.
-            assertTrue(s.contains("conversationListPage.markEntered()"), screen);
-            assertTrue(s.contains("settingsHomePage.markEntered()"), screen);
-            assertTrue(s.contains("profilePage.markEntered()"), screen);
-            // Pushed pages keep the envelope, gated by a surface-owned flag.
-            assertTrue(s.contains("arrivalStaggersSurfaces()"),
-                    screen + ": the pushed-page envelope must be skippable by a self-staggering list");
-            for (String dead : List.of("rootTabFast", "rootFastProgress", "rootZoomExiting",
-                    "stepRootNav", "rootTabProgress", "pageNavFast")) {
-                assertFalse(s.contains(dead),
-                        screen + ": the deleted root-tab machine left \"" + dead + "\" behind");
-            }
+        for(String screen:SCREENS){
+            String s=source(root(),screen);
+            assertTrue(s.contains("case CHAT_LIST, PROFILE, SETTINGS -> drawRootBody("));
+            for(String page:List.of("conversationListPage","settingsHomePage","profilePage","settingsSectionPage"))
+                assertFalse(s.contains(page+".markEntered()"),"page composite must not stack item restarts: "+screen);
         }
     }
 
     @Test
     void returningToARootPageGivesTheBottomBarItsOwnEntrance() throws Exception {
-        for (String screen : SCREENS) {
-            String s = source(root(), screen);
-            assertTrue(s.contains("composite.arrivalFromPushedToRoot()"),
-                    screen + ": the bar entrance must arm only on a pushed->root pop");
-            assertTrue(s.contains("bottomTabBar.markEntered()"),
-                    screen + ": the bar is not drawn on pushed pages, so it needs an arrival");
+        for(String screen:SCREENS){String s=source(root(),screen);
+            assertTrue(s.contains("bottomChrome.beginFrame("));assertTrue(s.contains("bottomChrome.draw("));
+            assertFalse(s.contains("bottomTabBar.markEntered()"));
         }
     }
 
@@ -164,10 +142,8 @@ class NavInterruptWiringSourceTest {
                     screen + ": the root list now staggers on arrival");
             assertFalse(s.contains("settingsSectionPage.markSettled()"),
                     screen + ": the settings section now staggers on arrival");
-            int arm = s.indexOf("if (topPage() == AppPage.SETTINGS_SECTION) {");
-            assertTrue(arm >= 0, screen + ": the pushed-page arrival arm missing");
-            assertTrue(s.substring(arm, arm + 200).contains("settingsSectionPage.markEntered()"),
-                    screen + ": the pushed settings page arms its own stagger");
+            assertTrue(s.contains("composite.drawArrivingFrame("));
+            assertFalse(s.contains("settingsSectionPage.markEntered()"));
         }
         for (String page : List.of(
                 "layers/mapping/official/src/main/java/com/atom/chat/page/ConversationListPage.java",

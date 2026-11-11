@@ -72,6 +72,10 @@ public final class QuickPhrasePanel {
 
     private final Host host;
     private final IntSupplier accent;
+    /** Tutorial-only mode: own in-memory rows and never read/write the player's phrase store. */
+    private final boolean sandboxMode;
+    private final List<String> sandboxPhrases;
+    private final List<String> sandboxServerPhrases;
     private final Map<Integer, Float> rowHover = new HashMap<>();
     private final Map<Integer, Float> btnHover = new HashMap<>();
     // Per-cell press/hover bounce, keyed like the hover maps above: one spring per
@@ -100,8 +104,21 @@ public final class QuickPhrasePanel {
     private int editingIndex = NO_EDIT;
 
     public QuickPhrasePanel(Host host, IntSupplier accent) {
+        this(host, accent, false);
+    }
+
+    private QuickPhrasePanel(Host host, IntSupplier accent, boolean sandboxMode) {
         this.host = host;
         this.accent = accent;
+        this.sandboxMode = sandboxMode;
+        this.sandboxPhrases = sandboxMode
+                ? new ArrayList<>(List.of("你好！", "稍等一下", "谢谢")) : null;
+        this.sandboxServerPhrases = sandboxMode ? List.of("集合点：出生点") : null;
+    }
+
+    /** Explicit tutorial-only construction with an isolated in-memory phrase set. */
+    public static QuickPhrasePanel sandbox(Host host, IntSupplier accent) {
+        return new QuickPhrasePanel(host, accent, true);
     }
 
     /** Rows of the scrolling list: the player's phrases, a group label, the server's. */
@@ -110,19 +127,20 @@ public final class QuickPhrasePanel {
     private static final int ROW_SERVER = 2;
 
     /** The joined server's phrases; never written to, only inserted (decision 9). */
-    private static List<String> serverPhrases() {
+    private List<String> serverPhrases() {
+        if (sandboxMode) return sandboxServerPhrases;
         com.atom.chat.pack.ServerPackStore store = com.atom.chat.pack.ServerPackStore.current();
         // Nothing to offer means no group label and no rows at all.
         return store.hasContent() ? store.phrases() : List.of();
     }
 
-    private static int rowCount() {
+    private int rowCount() {
         int local = phrases().size();
         int server = serverPhrases().size();
         return local + (server > 0 ? 1 + server : 0);
     }
 
-    private static int rowKind(int position) {
+    private int rowKind(int position) {
         int local = phrases().size();
         if (position < local) {
             return ROW_LOCAL;
@@ -131,6 +149,8 @@ public final class QuickPhrasePanel {
     }
 
     /** Text of one row: the player's phrase, the group label, or the server's phrase. */
+    public int localPhraseCount() { return phrases().size(); }
+
     public String rowTextAt(int position) {
         int local = phrases().size();
         return switch (rowKind(position)) {
@@ -144,7 +164,8 @@ public final class QuickPhrasePanel {
         };
     }
 
-    private static List<String> phrases() {
+    private List<String> phrases() {
+        if (sandboxMode) return sandboxPhrases;
         List<String> list = AtomChatConfig.get().quickPhrases;
         if (list == null) {
             list = new ArrayList<>();
@@ -424,7 +445,7 @@ public final class QuickPhrasePanel {
         } else if (editingIndex > index) {
             editingIndex--;
         }
-        AtomChatConfig.save(AtomChatConfig.get());
+        if (!sandboxMode) AtomChatConfig.save(AtomChatConfig.get());
         scroll = Math.max(0, Math.min(maxScroll(), scroll));
         // Every row below the removed one shifts up, so a highlight or a spring
         // keyed to a position would otherwise land on a different phrase.
@@ -451,7 +472,7 @@ public final class QuickPhrasePanel {
             }
         }
         editingIndex = NO_EDIT;
-        AtomChatConfig.save(AtomChatConfig.get());
+        if (!sandboxMode) AtomChatConfig.save(AtomChatConfig.get());
     }
 
     /** Ends the current add/edit session without saving. */

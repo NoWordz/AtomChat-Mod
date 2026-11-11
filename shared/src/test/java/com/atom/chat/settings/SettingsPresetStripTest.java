@@ -60,6 +60,30 @@ class SettingsPresetStripTest {
     }
 
     @Test
+    void wallpapersUseTheSameHorizontalStripGestureAndIndependentAction() throws Exception {
+        int display = java.util.stream.IntStream.range(0,page.chips(SettingsSection.APPEARANCE).size())
+                .filter(i -> page.chips(SettingsSection.APPEARANCE).get(i).id().equals("display"))
+                .findFirst().orElseThrow();
+        page.selectChip(SettingsSection.APPEARANCE,display);
+        assertTrue(page.rows(SettingsSection.APPEARANCE).stream().anyMatch(r -> r.kind().name().equals("WALLPAPERS")));
+        UiLayout tall = UiLayout.ofDetail(0,0,480,1800);
+        try(Surface surface=Surface.makeRasterN32Premul(480,1800)) {
+            page.render(surface.getCanvas(),tall,SettingsSection.APPEARANCE,-1,-1,0,AtomChatConfig.get().accentColor);
+            boolean selected=false;
+            for(float y=tall.list.y();y<tall.list.bottom() && !selected;y+=UiTokens.s(4)) {
+                for(float x=tall.list.x();x<tall.list.right() && !selected;x+=UiTokens.s(6)) {
+                    actions.clear();
+                    if(page.themesPress(x,y,tall,SettingsSection.APPEARANCE,0)) {
+                        page.endThemeStrip();
+                        selected=actions.contains("wallpaper_preset:cobalt");
+                    }
+                }
+            }
+            assertTrue(selected,"wallpaper cards must use the shared strip click routing");
+        }
+    }
+
+    @Test
     void aSavedAppearanceExcludesTheDefaultThemeSelectionBorder() throws Exception {
         AtomChatConfig.reload();
         AtomChatConfig cfg = AtomChatConfig.get();

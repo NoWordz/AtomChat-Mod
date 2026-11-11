@@ -69,6 +69,7 @@ class InputWiringSourceTest {
      */
     private static final String FROZEN_CHAIN_FLAT =
             ".add(newClosingStateInput())"
+                    + ".add(tutorial)"
                     + ".add(newcom.atom.chat.ui.ConfirmationInput(settingsSectionPage::confirmation,this::toVirtualX,this::toVirtualY))"
                     + ".add(completionInput)"
                     + ".add(foreignChatUiInput())"
@@ -83,7 +84,7 @@ class InputWiringSourceTest {
 
     /** The prose contract that carries the priority list, quoted from the source. */
     private static final String FROZEN_PRIORITY_PROSE =
-            "Priority (first registered wins): closing guard, confirmation, completion, foreign chat UI, outside-panel close, modals (cropper/colour "
+            "Priority (first registered wins): closing guard, tutorial, confirmation, completion, foreign chat UI, outside-panel close, modals (cropper/colour "
                     + "picker), composer tools, pushed-subpage Esc, screen Esc, root pages, world chat.";
 
     private static final String FROZEN_NO_BRANCHES_PROSE =
@@ -186,8 +187,8 @@ class InputWiringSourceTest {
                             + " the gate owns the chain. A second chain leaves the gate's router"
                             + " empty, and every event falls through to super.");
             String gate = gateStatement(src);
-            assertEquals(12, occurrences(gate, ".add("),
-                    screen + ": the gate declaration must register exactly the twelve handlers.\n"
+            assertEquals(13, occurrences(gate, ".add("),
+                    screen + ": the gate declaration must register exactly the thirteen handlers.\n"
                             + gate);
             assertTrue(flatten(gate).endsWith(".add(newWorldChatInput());"),
                     screen + ": the gate chain must end on WorldChatInput, the lowest-priority"

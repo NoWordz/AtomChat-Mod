@@ -176,16 +176,37 @@ public final class ProfilePage {
 
     /** Arms the block entrance — the screen calls this on a tab arrival. */
     public void markEntered() {
-        entrance.markEntered();
+        markEntered(UiStagger.frameTimeMillis());
     }
+
+    public void markEntered(long nowMs) {
+        entrance.markEntered(nowMs);
+        staggerHits.clear();
+    }
+    private final com.atom.chat.ui.StaggerHitMap staggerHits = new com.atom.chat.ui.StaggerHitMap();
+    public com.atom.chat.ui.StaggerHitMap staggerHits() { return staggerHits; }
+
 
     /**
      * One block of the page inside its entrance slot: the fade and the lift come
      * from the same progress, and a settled slot skips both the layer and the
      * translate (so a resting frame costs exactly what it used to).
      */
-    private void drawStaggered(Canvas canvas, UiLayout layout, long now, int slot, Runnable block) {
+    private void drawStaggered(Canvas canvas, UiLayout layout, long now, int slot, float scrollY, Runnable block) {
         float alpha = UiStagger.itemAlpha(entrance, slot, now);
+        UiLayout.Rect band = switch (slot) {
+            case 0 -> bannerRect(layout, scrollY);
+            case 1 -> new UiLayout.Rect(layout.list.x(), avatarHitBounds(layout, scrollY).y(),
+                    layout.list.w(), signatureRect(layout, scrollY).bottom() - avatarHitBounds(layout, scrollY).y());
+            case 2 -> new UiLayout.Rect(layout.list.x(), tileRect(layout, 0, scrollY, 1).y(), layout.list.w(), UiTokens.PROFILE_TILE_H);
+            case 3 -> infoCardRect(layout, infoRows().size(), scrollY);
+            default -> idCardRect(layout, scrollY);
+        };
+        UiStagger.Axis hitAxis = PageNavAxis.current();
+        staggerHits.add(band, alpha >= .995F ? 0 : UiStagger.itemStyleSlidePx(entrance, slot, now, hitAxis),
+                alpha >= .995F ? 0 : UiStagger.itemRise(entrance, slot, now, hitAxis),
+                alpha >= .995F ? 1 : UiStagger.itemStyleZoomScale(entrance, slot, now, hitAxis),
+                layout.list.x() + layout.list.w() / 2, layout.list.y() + layout.list.h() / 2);
         if (alpha >= 0.995F) {
             block.run();
             return;
@@ -544,7 +565,7 @@ public final class ProfilePage {
         if (client.player == null) {
             return null;
         }
-        long now = System.currentTimeMillis();
+        long now = UiStagger.frameTimeMillis();
         if (statsCache != null && now - statsCacheMs < 1000L) {
             return statsCache;
         }
@@ -721,6 +742,11 @@ public final class ProfilePage {
      * The banner CARD, inset from the list edges by UiTokens.ROW_CLIP_INSET
      * (it must not touch the panel sides) and from the top by its own margin.
      */
+    public UiLayout.Rect tutorialHero(UiLayout layout, float scrollY) {
+        var banner=bannerRect(layout,scrollY);
+        return new UiLayout.Rect(layout.list.x(),banner.y(),layout.list.w(),signatureRect(layout,scrollY).bottom()-banner.y());
+    }
+
     private UiLayout.Rect bannerRect(UiLayout layout, float scrollY) {
         return new UiLayout.Rect(
                 layout.list.x() + UiTokens.ROW_CLIP_INSET,
@@ -744,6 +770,10 @@ public final class ProfilePage {
 
     /** Shared occlusion guard for both buttons and the banner hover. */
     private boolean onAvatarArea(UiLayout layout, float scrollY, float vmx, float vmy) {
+        return avatarHitBounds(layout, scrollY).contains(vmx, vmy) || badgeRect(layout, scrollY).contains(vmx, vmy);
+    }
+
+    private UiLayout.Rect avatarHitBounds(UiLayout layout, float scrollY) {
         UiLayout.Rect avatar = avatarRect(layout, scrollY);
         float outset = PlayerAvatar.isE33Chat()
                 ? avatar.w() * UiTokens.E33CHAT_PROFILE_HAT_OUTSET_RATIO
@@ -751,7 +781,7 @@ public final class ProfilePage {
         UiLayout.Rect bounds = new UiLayout.Rect(
                 avatar.x() - outset, avatar.y() - outset,
                 avatar.w() + outset * 2.0F, avatar.h() + outset * 2.0F);
-        return bounds.contains(vmx, vmy) || badgeRect(layout, scrollY).contains(vmx, vmy);
+        return bounds;
     }
 
     private UiLayout.Rect badgeRect(UiLayout layout, float scrollY) {
@@ -920,7 +950,7 @@ public final class ProfilePage {
                         // Disabled row: consume the click, keep the menu open.
                         return true;
                     }
-                    long now = System.currentTimeMillis();
+                    long now = UiStagger.frameTimeMillis();
                     if (clearArmIndex != i || now - clearArmedAt > CLEAR_ARM_MS) {
                         // Arm: the row turns red and the menu stays open.
                         clearArmIndex = i;
@@ -1020,8 +1050,9 @@ public final class ProfilePage {
     // ------------------------------------------------------------------
 
     public void render(Canvas canvas, UiLayout layout, float vmx, float vmy, float scrollY) {
+        staggerHits.clear();
         syncAvatarInteraction();
-        long now = System.currentTimeMillis();
+        long now = UiStagger.frameTimeMillis();
         float dt = Math.min(50.0F, Math.max(1.0F, now - lastFrameMs));
         lastFrameMs = now;
         lastVmx = vmx;
@@ -1042,18 +1073,19 @@ public final class ProfilePage {
             // banner, avatar row, stat tiles, info card, identity card. Each
             // block fades and lifts from ONE progress value, so nothing is
             // ever opaque while it is still shifted.
-            drawStaggered(canvas, layout, now, 0,
+            drawStaggered(canvas, layout, now, 0, scrollY,
                     () -> drawBanner(canvas, layout, scrollY));
-            drawStaggered(canvas, layout, now, 1, () -> {
+            drawStaggered(canvas, layout, now, 1, scrollY, () -> {
                 drawAvatar(canvas, layout, vmx, vmy, scrollY);
                 drawNameSignature(canvas, layout, vmx, vmy, scrollY);
             });
-            drawStaggered(canvas, layout, now, 2,
+            drawStaggered(canvas, layout, now, 2, scrollY,
                     () -> drawStatTiles(canvas, layout, vmx, vmy, scrollY));
-            drawStaggered(canvas, layout, now, 3,
+            drawStaggered(canvas, layout, now, 3, scrollY,
                     () -> drawInfoRows(canvas, layout, vmx, vmy, scrollY));
-            drawStaggered(canvas, layout, now, 4,
+            drawStaggered(canvas, layout, now, 4, scrollY,
                     () -> drawIdentityCard(canvas, layout, scrollY));
+            if (avatarMenuOpen) staggerHits.add(menuRect(layout, scrollY), 0, 0, 1);
             drawAvatarMenu(canvas, layout, vmx, vmy, scrollY);
         } finally {
             canvas.restore();

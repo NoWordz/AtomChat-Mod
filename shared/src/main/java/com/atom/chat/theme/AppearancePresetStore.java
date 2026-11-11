@@ -27,7 +27,7 @@ import java.util.stream.Stream;
  * <p>The manifest is an explicit whitelist: twelve colours plus the layout,
  * opacity, card, corner, motion and page-navigation values. Chat, privacy,
  * audio, identity and history are never serialised. A preset owns a separate
- * wallpaper copy; applying a preset with no wallpaper clears the active one.</p>
+ * historical wallpaper copy; applying a theme never changes the independent wallpaper.</p>
  *
  * <p>Each directory has a UUID identity unrelated to its display number. The
  * smallest free positive number is assigned on save, and deleting a preset
@@ -54,7 +54,7 @@ public final class AppearancePresetStore {
                            int secondaryCapsuleBg, int secondaryCapsuleText,
                            float panelOpacity, float panelWidth, float panelHeight,
                            float uiScale, float contentScale, float cardTint,
-                           float cornerRadius, boolean blurEnabled, boolean panelOutline,
+                           float cornerRadius, boolean blurEnabled, boolean panelOutline, float panelOutlineWidth,
                            boolean animationEnabled, String pageNavStyle, String themeName,
                            String bubbleStyle) {
         public static Snapshot capture(AtomChatConfig config) {
@@ -65,7 +65,7 @@ public final class AppearancePresetStore {
                     config.secondaryCapsuleBg, config.secondaryCapsuleText,
                     config.panelOpacity, config.panelWidth, config.panelHeight,
                     config.uiScale, config.contentScale, config.cardTint, config.cornerRadius,
-                    config.blurEnabled, config.panelOutline, config.animationEnabled,
+                    config.blurEnabled, config.panelOutline, config.effectivePanelOutlineWidth(), config.animationEnabled,
                     config.pageNavStyle.name(), config.themeName == null ? "" : config.themeName,
                     config.effectiveBubbleStyle().name());
         }
@@ -92,6 +92,7 @@ public final class AppearancePresetStore {
             config.cornerRadius = cornerRadius;
             config.blurEnabled = blurEnabled;
             config.panelOutline = panelOutline;
+            config.setPanelOutlineWidth(panelOutlineWidth);
             config.animationEnabled = animationEnabled;
             config.pageNavStyle = AtomChatConfig.PageNavStyle.valueOf(pageNavStyle);
             config.themeName = themeName == null ? "" : themeName;
@@ -153,13 +154,6 @@ public final class AppearancePresetStore {
         if (!validSnapshot(snapshot)) {
             return Result.failure("invalid_snapshot");
         }
-        String extension = null;
-        if (wallpaperSource != null) {
-            if (!validWallpaper(wallpaperSource)) {
-                return Result.failure("invalid_wallpaper");
-            }
-            extension = extensionOf(wallpaperSource.getFileName().toString());
-        }
         boolean[] used = new boolean[Math.max(MAX_PRESETS + 2, current.size() + 2)];
         for (Preset preset : current) {
             if (preset.number() > 0 && preset.number() < used.length) {
@@ -175,7 +169,7 @@ public final class AppearancePresetStore {
         }
         int order = current.stream().mapToInt(Preset::order).max().orElse(0) + 1;
         String id = UUID.randomUUID().toString();
-        return write(id, order, number, snapshot, wallpaperSource, extension);
+        return write(id, order, number, snapshot, null, null);
     }
 
     public synchronized Result apply(String id, AtomChatConfig config) {
@@ -186,50 +180,17 @@ public final class AppearancePresetStore {
         if (preset == null) {
             return Result.failure("invalid_preset");
         }
-        Path wallpaper = preset.hasWallpaper()
-                ? dir.resolve(id).resolve(WALLPAPER + preset.wallpaperExtension()) : null;
-        if (wallpaper != null && !validWallpaper(wallpaper)) {
-            return Result.failure("invalid_wallpaper");
-        }
-
         Snapshot previous = Snapshot.capture(config);
-        Path activeWallpaper = WallpaperStore.current();
-        Path backup = null;
-        boolean backupReady = false;
-        boolean wallpaperTouched = false;
         try {
-            if (activeWallpaper != null) {
-                Path backupDir = dir.resolve(".wallpaper-backup");
-                com.atom.chat.util.DataMigration.noLinks(backupDir);
-                com.atom.chat.util.DataMigration.noLinks(activeWallpaper);
-                Files.createDirectories(backupDir);
-                backup = Files.createTempFile(backupDir, "wallpaper-",
-                        extensionOf(activeWallpaper.toString()));
-                Files.copy(activeWallpaper, backup, StandardCopyOption.REPLACE_EXISTING);
-                backupReady = true;
-            }
-            wallpaperTouched = true;
-            if (wallpaper != null ? !WallpaperStore.set(wallpaper) : !clearWallpaper()) {
-                restoreWallpaper(backup, backupReady, activeWallpaper != null);
-                return Result.failure("wallpaper_io");
-            }
             preset.snapshot().applyTo(config);
             if (!AtomChatConfig.saveChecked(config)) {
                 previous.applyTo(config);
-                restoreWallpaper(backup, backupReady, activeWallpaper != null);
                 return Result.failure("config_io");
             }
             return Result.success(preset);
-        } catch (IOException | RuntimeException e) {
+        } catch (RuntimeException e) {
             previous.applyTo(config);
-            if (wallpaperTouched) {
-                restoreWallpaper(backup, backupReady, activeWallpaper != null);
-            }
             return Result.failure("apply_io");
-        } finally {
-            if (backup != null) {
-                try { Files.deleteIfExists(backup); } catch (IOException ignored) { }
-            }
         }
     }
 
@@ -345,6 +306,7 @@ public final class AppearancePresetStore {
                     number(a, "panelOpacity"), number(a, "panelWidth"), number(a, "panelHeight"),
                     number(a, "uiScale"), number(a, "contentScale"), number(a, "cardTint"),
                     number(a, "cornerRadius"), bool(a, "blurEnabled"), bool(a, "panelOutline"),
+                    a.has("panelOutlineWidth") ? number(a, "panelOutlineWidth") : (bool(a, "panelOutline") ? 2F : 0F),
                     bool(a, "animationEnabled"), string(a, "pageNavStyle"),
                     string(a, "themeName"),
                     a.has("bubbleStyle") ? string(a, "bubbleStyle") : "CLASSIC");
@@ -355,8 +317,7 @@ public final class AppearancePresetStore {
                     ? string(root, "wallpaper") : null;
             if (extension != null) {
                 extension = extension.toLowerCase(Locale.ROOT);
-                if (!supportedExtension(extension)
-                        || !validWallpaper(presetDir.resolve(WALLPAPER + extension))) {
+                if (!supportedExtension(extension)) {
                     return null;
                 }
             }
@@ -374,7 +335,8 @@ public final class AppearancePresetStore {
                 || !finite(s.uiScale(), 0.75F, 1.5F)
                 || !finite(s.contentScale(), 0.8F, 1.5F)
                 || !finite(s.cardTint(), 0F, 1F)
-                || !finite(s.cornerRadius(), 0F, 25F)) {
+                || !finite(s.cornerRadius(), 0F, 25F)
+                || !finite(s.panelOutlineWidth(), 0F, 4F)) {
             return false;
         }
         try {
@@ -496,6 +458,7 @@ public final class AppearancePresetStore {
         a.addProperty("cornerRadius", s.cornerRadius());
         a.addProperty("blurEnabled", s.blurEnabled());
         a.addProperty("panelOutline", s.panelOutline());
+        a.addProperty("panelOutlineWidth", s.panelOutlineWidth());
         a.addProperty("animationEnabled", s.animationEnabled());
         a.addProperty("pageNavStyle", s.pageNavStyle());
         a.addProperty("themeName", s.themeName());

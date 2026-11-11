@@ -20,6 +20,7 @@ public final class SkiaGraphics {
     private static int leakLogCount;
     private final ThreadLocal<Surface> borrowedSurface = new ThreadLocal<>();
     private final ThreadLocal<BackendRenderTarget> borrowedBackend = new ThreadLocal<>();
+    private final ThreadLocal<Long> borrowedContextIdentity = new ThreadLocal<>();
 
     /** Kept for callers from the former standalone renderer; the bridge checks size on every pass. */
     public void checkFrameBufferId() { }
@@ -78,9 +79,11 @@ public final class SkiaGraphics {
                 canvas.save();
                 canvas.scale(scale, scale);
                 try {
+                    borrowedContextIdentity.set(io.github.humbleui.skija.impl.Native.getPtr(frame.context()));
                     long started = com.atom.chat.diagnostics.FrameSegments.start(segmentId);
                     try { renderer.accept(canvas, null); } finally { com.atom.chat.diagnostics.FrameSegments.end(segmentId, com.atom.chat.diagnostics.FrameSegments.Stage.DRAW, started); }
                 } finally {
+                    borrowedContextIdentity.remove();
                     int leaked = canvas.getSaveCount() - (base + 1);
                     if (leaked != 0 && com.atom.chat.config.AtomChatConfig.get().debug) {
                         leakLogCount++;
@@ -115,6 +118,13 @@ public final class SkiaGraphics {
     public <T> T withContext(java.util.function.Function<DirectContext,T> action) {
         RenderSystem.assertOnRenderThread();
         return MinecraftRenderBridge.get().withContext(java.util.Objects.requireNonNull(action));
+    }
+
+    /** Identity only, valid on this thread inside the current paint callback. */
+    public long contextIdentity() {
+        Long identity = borrowedContextIdentity.get();
+        if (identity == null || identity == 0) throw new IllegalStateException("Context identity is only borrowed during a Skia paint callback");
+        return identity;
     }
 
     public BackendRenderTarget requireRenderTarget() {

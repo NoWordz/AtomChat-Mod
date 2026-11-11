@@ -51,11 +51,6 @@ public final class SettingsCatalog {
                             () -> AtomChatConfig.get().blurEnabled,
                             v -> AtomChatConfig.get().blurEnabled = v,
                             () -> !WallpaperStore.isSet()),
-                    new SettingsItem("outline",
-                            "atomchat.settings.appearance.outline",
-                            "atomchat.settings.appearance.outline.desc",
-                            () -> AtomChatConfig.get().panelOutline,
-                            v -> AtomChatConfig.get().panelOutline = v),
                     new SettingsItem("motion",
                             "atomchat.settings.appearance.motion",
                             "atomchat.settings.appearance.motion.desc",
@@ -173,6 +168,10 @@ public final class SettingsCatalog {
     private static List<SettingsSlider> buildSliders(SettingsSection section) {
         return switch (section) {
             case APPEARANCE -> List.of(
+                    new SettingsSlider("outline_width", "atomchat.settings.appearance.outline_width",
+                            0F, 4F, 0.25F, () -> AtomChatConfig.get().effectivePanelOutlineWidth(),
+                            v -> AtomChatConfig.get().setPanelOutlineWidth(v),
+                            v -> String.format(java.util.Locale.ROOT, "%.2f px", v)),
                     new SettingsSlider("blur_strength", "atomchat.settings.appearance.blur_strength",
                             0.25F, 2.0F, 0.05F, () -> AtomChatConfig.get().effectiveBlurStrength(),
                             v -> AtomChatConfig.get().blurStrength = v, v -> Math.round(v * 100.0F) + "%"),

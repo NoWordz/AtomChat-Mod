@@ -13,7 +13,7 @@
 分组是编译期事实：甲组少一个类型，那个目标当场编不过。判据用简单名的词边界匹配
 （覆盖 import 全限定名与同包简单名两种写法），偏保守 —— 注释里的提及也算，宁可多列。
 
-当前：甲组 **141** 个，乙组 **75** 个。
+当前：甲组 **142** 个，乙组 **75** 个。
 
 ## 甲：共用代码引用了的（接缝）
 
@@ -87,6 +87,7 @@
 | `com.atom.chat.page.MessageResponsiveLayoutTest` | 1.21.1-fabric |
 | `com.atom.chat.page.ProfilePage` | 1.21.1-fabric |
 | `com.atom.chat.platform.NeoForgePlatform` | 1.21.1-neoforge |
+| `com.atom.chat.render.BlockedCardShadowTest` | 1.21.1-fabric |
 | `com.atom.chat.render.ClickableSpan` | 1.21.1-fabric |
 | `com.atom.chat.render.GoldenFrameTest` | 1.21.1-fabric |
 | `com.atom.chat.render.ItemIconModelView` | 1.20.1-forge, 1.21.1-fabric, 1.21.1-neoforge |

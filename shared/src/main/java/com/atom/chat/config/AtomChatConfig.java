@@ -160,7 +160,7 @@ public class AtomChatConfig {
      * to the blur tint alike, so one slider governs how much world shows
      * through regardless of whether blur is on.
      */
-    public float panelOpacity = 0.93F;
+    public float panelOpacity = 0.6990596F;
     /**
      * AtomChat-only UI scale multiplier on top of the vanilla GUI scale. It is
      * applied at the Skia canvas and in every coordinate conversion, never to
@@ -209,15 +209,15 @@ public class AtomChatConfig {
     public int accentColor = 0xFF4A90E2;
     public int bubbleTextColor = 0xFFFFFFFF;
     public int ownBubbleColor = 0xFF1E90FF;
-    public int otherBubbleColor = 0xFF2C3E50;
-    public int panelBgColor = 0xEE16191F;
+    public int otherBubbleColor = 0xFF1E293B;
+    public int panelBgColor = 0xFF101418;
     public int textPrimaryColor = 0xFFFFFFFF;
     public int textSecondaryColor = 0xE8B7BDCA;
     /**
-     * Card/chrome surface colour. The card-tint slider sets this colour's
-     * alpha (60 at 0% → 255 at 100%); white keeps the shipped frosted look.
+     * Card/chrome surface colour. Card tint multiplies its alpha from 0 to 255;
+     * the factory slate surface uses a 50% tint over the cool dark panel.
      */
-    public int cardColor = 0xFFFFFFFF;
+    public int cardColor = 0xFF14161B;
     /** Global blocked-player real names, persisted locally. */
     public java.util.List<String> blockedPlayers = new java.util.ArrayList<>();
     /**
@@ -274,7 +274,7 @@ public class AtomChatConfig {
      * afterwards. Presets and the factory-default reset deliberately leave
      * this knob alone.
      */
-    public float cornerRadius = 20f;
+    public float cornerRadius = 25f;
     /**
      * Legacy three-step corner style ({@code large}/{@code medium}/
      * {@code small}). Migration source only: {@link #load()} folds it into
@@ -368,14 +368,33 @@ public class AtomChatConfig {
      * panel colour. In between they slide through a semi-transparent grey —
      * one axis, three visual stops.
      */
-    public float cardTint = 0.235F;
+    public float cardTint = 0.59866506F;
     /** Panel outline (bezel ring) colour. */
-    public int panelOutlineColor = 0xFFFFFFFF;
+    public int panelOutlineColor = 0xFF14161B;
     /**
      * White phone-style bezel ring around the panel. Part of the frosted look;
      * the opaque modern preset turns it off.
      */
     public boolean panelOutline = true;
+    /** Width in unscaled UI logical pixels. Zero disables the outline. */
+    public float panelOutlineWidth = 3.0F;
+    /** Only the genuinely missing-config path arms the first wallpaper. */
+    public boolean wallpaperFirstUsePending = false;
+
+    public float effectivePanelOutlineWidth() {
+        if (!panelOutline) return 0F;
+        return Float.isFinite(panelOutlineWidth) ? Math.max(0F, Math.min(4F, panelOutlineWidth)) : 3F;
+    }
+
+    public void setPanelOutlineWidth(float width) {
+        panelOutlineWidth = Float.isFinite(width) ? Math.max(0F, Math.min(4F, width)) : 3F;
+        panelOutline = panelOutlineWidth > 0F;
+    }
+
+    public void migrateOutlineWidth(boolean widthKeyPresent) {
+        if (!widthKeyPresent) panelOutlineWidth = panelOutline ? 2F : 0F;
+        setPanelOutlineWidth(effectivePanelOutlineWidth());
+    }
     /**
      * Body/quote text colour inside <em>other</em> players' bubbles. Own
      * bubbles keep {@link #bubbleTextColor}.
@@ -684,6 +703,7 @@ public class AtomChatConfig {
                     config.avatarStyle = config.effectiveAvatarStyle();
                     config.bubbleStyle = config.effectiveBubbleStyle();
                     config.worldFeedFilter = config.effectiveWorldFeedFilter();
+                    config.migrateOutlineWidth(hasKey(json, "panelOutlineWidth"));
                     config.migrateCornerStyle();
                     config.migratePixelRadius();
                     config.clampContentScale();
@@ -709,6 +729,7 @@ public class AtomChatConfig {
         // "unset means legacy" default would make the next load() divide the
         // fresh 20 down to ~14.3.
         config.pixelRadiusMigrated = true;
+        config.wallpaperFirstUsePending = false;
         boolean personalLoaded = PersonalDataStore.load(config);
         seedGuiTip(config);
         if (personalLoaded) save(config);

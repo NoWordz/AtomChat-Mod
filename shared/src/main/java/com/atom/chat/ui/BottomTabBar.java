@@ -156,6 +156,12 @@ public final class BottomTabBar {
                 UiTokens.shellChromeRadius(), UiTokens.cardFill());
         com.atom.chat.render.ChromeMaterial.drawDetails(canvas, bar, UiTokens.shellChromeRadius());
 
+        renderContents(canvas, bar, selectedIndex, textPrimary, accent);
+    }
+
+    /** Content only, for the shared composer/tab chrome morph. */
+    public void renderContents(Canvas canvas, UiLayout.Rect bar, int selectedIndex,
+                               int textPrimary, int accent) {
         float cellWidth = bar.w() / 3.0F;
         // The selected/hover capsule is inset from the bar by TAB_EDGE_PAD on
         // all four sides; its height is bar height minus the two vertical edge

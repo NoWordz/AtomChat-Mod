@@ -2,6 +2,7 @@ package com.atom.chat.settings;
 
 import com.atom.chat.nav.PageNavAxis;
 import com.atom.chat.ui.UiStagger;
+import com.atom.chat.ui.WallpaperTokens;
 import com.atom.chat.AtomChat;
 import com.atom.chat.chat.BlockList;
 import com.atom.chat.chat.PlayerRef;
@@ -65,16 +66,24 @@ public final class SettingsSectionPage {
 
     /**
      * Page-entrance (unit V): the section's rows rise into place over the
-     * 240ms item clock. The chip crossfade keeps its own alpha/dy channels —
+     * 380ms item clock. The chip crossfade keeps its own alpha/dy channels —
      * the entrance adds its rise to whatever dy the crossfade hands in.
-     * Decoration only; hit tests are unscaled as everywhere.
+     * Painted row transforms are recorded for navigation pointer inversion.
      */
     private final UiStagger.Entrance entrance = new UiStagger.Entrance();
 
-    /** Arms the row entrance — standalone surfaces (no page envelope) use this. */
+    /** Arms the same item clock for navigation arrivals and local chip changes. */
     public void markEntered() {
-        entrance.markEntered();
+        markEntered(UiStagger.frameTimeMillis());
     }
+
+    public void markEntered(long nowMs) {
+        entrance.markEntered(nowMs);
+        staggerHits.clear();
+    }
+    private final com.atom.chat.ui.StaggerHitMap staggerHits = new com.atom.chat.ui.StaggerHitMap();
+    public com.atom.chat.ui.StaggerHitMap staggerHits() { return staggerHits; }
+
 
     /**
      * Keeps the rows settled: used when the page envelope already owns the
@@ -84,7 +93,7 @@ public final class SettingsSectionPage {
     public void markSettled() {
         entrance.markSettled();
     }
-    public enum RowKind { HERO, AUTHORS, SWITCH, SLIDER, COLOR, INFO, BLOCKED, LABEL, ACTION, THEMES, BUBBLES }
+    public enum RowKind { HERO, AUTHORS, SWITCH, SLIDER, COLOR, INFO, BLOCKED, LABEL, ACTION, THEMES, BUBBLES, WALLPAPERS }
 
     public record Row(RowKind kind, SettingsItem item, SettingsSlider slider,
                       SettingsColor color, SettingsCatalog.InfoRow info, PlayerRef player,
@@ -496,7 +505,8 @@ public final class SettingsSectionPage {
     }
     private final CardStrip themeStrip = new CardStrip(RowKind.THEMES);
     private final CardStrip bubbleStrip = new CardStrip(RowKind.BUBBLES);
-    private final CardStrip[] previewStrips = {themeStrip, bubbleStrip};
+    private final CardStrip wallpaperStrip = new CardStrip(RowKind.WALLPAPERS);
+    private final CardStrip[] previewStrips = {themeStrip, bubbleStrip, wallpaperStrip};
     private CardStrip pointerStrip = themeStrip;
     private final Map<Integer, Float> themeDeleteHover = new HashMap<>();
     private boolean revealLatestPresetPending;
@@ -601,7 +611,7 @@ public final class SettingsSectionPage {
         return switch (kind) {
             case LABEL -> UiTokens.SETTINGS_LABEL_H;
             case SLIDER, COLOR -> UiTokens.SETTINGS_SLIDER_ROW_H;
-            case THEMES -> UiTokens.SETTINGS_THEME_ROW_H;
+            case THEMES, WALLPAPERS -> UiTokens.SETTINGS_THEME_ROW_H;
             case BUBBLES -> UiTokens.SETTINGS_THEME_ROW_H;
             case HERO -> UiTokens.SETTINGS_HERO_H;
             case AUTHORS -> UiTokens.SETTINGS_AUTHOR_ROW_H;
@@ -764,6 +774,9 @@ public final class SettingsSectionPage {
         } else if (redConfirm) {
             subtitle = tr(item.subtitleKey());
             verb = tr("atomchat.settings.appearance.wallpaper.clear.confirm");
+        } else if ("onboarding_replay".equals(row.actionId())) {
+            subtitle = tr(item.subtitleKey());
+            verb = tr("atomchat.tutorial.replay");
         } else if (ACTION_WALLPAPER_PICK.equals(row.actionId())) {
             Path wallpaper = WallpaperStore.current();
             subtitle = wallpaper != null && wallpaper.getFileName() != null
@@ -986,14 +999,15 @@ public final class SettingsSectionPage {
         switch (chip == null ? "theme" : chip) {
             case "display" -> {
                 addGroup(rows, "atomchat.settings.group.appearance.effects", () -> {
-                    addSwitches(rows, SettingsSection.APPEARANCE, "blur", "outline");
-                    addSliders(rows, SettingsSection.APPEARANCE, "blur_strength");
+                    addSwitches(rows, SettingsSection.APPEARANCE, "blur");
+                    addSliders(rows, SettingsSection.APPEARANCE, "blur_strength", "outline_width");
                 });
                 addGroup(rows, "atomchat.settings.group.appearance.motion", () -> {
                     addSwitches(rows, SettingsSection.APPEARANCE, "motion");
                     rows.add(Row.ofAction(ACTION_PAGE_NAV_STYLE, pageNavStyleItem()));
                 });
                 addGroup(rows, "atomchat.settings.group.appearance.wallpaper", () -> {
+                    rows.add(new Row(RowKind.WALLPAPERS, null, null, null, null, null, null, null, null, null));
                     rows.add(Row.ofAction(ACTION_WALLPAPER_PICK, wallpaperPickItem()));
                     if (WallpaperStore.isSet()) {
                         rows.add(Row.ofAction(ACTION_WALLPAPER_CLEAR, wallpaperClearItem()));
@@ -1048,6 +1062,8 @@ public final class SettingsSectionPage {
     private List<Row> aboutRows() {
         List<Row> rows = new ArrayList<>();
         rows.add(Row.ofHero());
+        rows.add(Row.ofAction("onboarding_replay", new SettingsItem("onboarding_replay",
+                "atomchat.tutorial.prompt.title", "atomchat.tutorial.replay.desc", () -> true, v -> { })));
         addGroup(rows, "atomchat.settings.about.authors", () -> rows.add(Row.ofAuthors()));
         addGroup(rows, LABEL_MOD_INFO, () -> {
             for (SettingsCatalog.InfoRow info : SettingsCatalog.aboutCoreRows()) {
@@ -1294,6 +1310,12 @@ public final class SettingsSectionPage {
     }
 
     /** Package-private so layout tests can assert the scroll-end clearance. */
+    public UiLayout.Rect actionAnchor(SettingsSection section, String actionId, UiLayout layout, float scrollY) {
+        var rows=rows(section);
+        for(int i=0;i<rows.size();i++) if(actionId.equals(rows.get(i).actionId())) return rowRect(section,rows,i,scrollY,layout);
+        return layout.list;
+    }
+
     UiLayout.Rect rowRect(SettingsSection section, List<Row> rows, int index,
                           float scrollY, UiLayout layout) {
         RowGeometry geometry = rowGeometry(section, rows, layout);
@@ -1324,7 +1346,8 @@ public final class SettingsSectionPage {
 
     public void render(Canvas canvas, UiLayout layout, SettingsSection section,
                        float vmx, float vmy, float scrollY, int accent) {
-        long now = System.currentTimeMillis();
+        staggerHits.clear();
+        long now = UiStagger.frameTimeMillis();
         float dt = Math.min(50.0F, Math.max(1.0F, now - lastFrameMs));
         lastFrameMs = now;
         currentSectionForSettle = section;
@@ -1402,7 +1425,7 @@ public final class SettingsSectionPage {
         if (rows.isEmpty()) {
             return;
         }
-        long now = System.currentTimeMillis();
+        long now = UiStagger.frameTimeMillis();
         // One axis for the whole pass: every row of this frame plays the same
         // style's motion, so the mapping cannot change mid-list.
         UiStagger.Axis axis = PageNavAxis.current();
@@ -1439,6 +1462,8 @@ public final class SettingsSectionPage {
                     UiLayout.Rect cardLast = rowRect(section, rows, end - 1, scrollY, layout);
                     UiLayout.Rect cardBounds = new UiLayout.Rect(cardFirst.x(), cardFirst.y(),
                             cardFirst.w(), cardLast.bottom() - cardFirst.y());
+                    staggerHits.add(cardBounds, cardDx, cardRise,
+                            UiStagger.itemStyleZoomScale(entrance, staggerIndex, now, axis));
                     canvas.save();
                     Paint cardLayer = null;
                     try {
@@ -1536,6 +1561,8 @@ public final class SettingsSectionPage {
                     float rowDx = styleDriftDx(axis, staggerIndex, now);
                     float combinedAlpha = expansion * rowAlpha;
                     float combinedRise = UiTokens.SETTINGS_FOLD_LIFT * (1.0F - expansion) + rowRise;
+                    staggerHits.add(rect, rowDx, combinedRise,
+                            UiStagger.itemStyleZoomScale(entrance, staggerIndex, now, axis));
                     if (combinedAlpha < 0.995F) {
                         // The padded saveLayer keeps press overshoot and shadow
                         // tail inside the fade instead of punching through at
@@ -1744,6 +1771,7 @@ public final class SettingsSectionPage {
             case SLIDER -> drawSlider(canvas, row, rect, accent);
             case COLOR -> drawColor(canvas, row, rect, dtMs);
             case THEMES -> drawThemes(canvas, rect, dtMs);
+            case WALLPAPERS -> drawWallpapers(canvas, rect, dtMs);
             case BUBBLES -> drawBubblePreviews(canvas, rect, dtMs);
             case INFO -> drawInfo(canvas, row, rect);
             case BLOCKED -> drawBlocked(canvas, row, rect, hover, buttonFont);
@@ -1950,7 +1978,8 @@ public final class SettingsSectionPage {
     }
 
     private int stripCardCount(CardStrip strip) {
-        return strip.kind == RowKind.BUBBLES ? AtomChatConfig.BubbleStyle.values().length : themeCardCount();
+        return strip.kind == RowKind.BUBBLES ? AtomChatConfig.BubbleStyle.values().length
+                : strip.kind == RowKind.WALLPAPERS ? com.atom.chat.wallpaper.WallpaperPresets.presets().length : themeCardCount();
     }
 
     private int builtInThemeCount() {
@@ -2104,6 +2133,12 @@ public final class SettingsSectionPage {
                 ? themeDeleteAt(rect, pointerStrip.pressX, pointerStrip.pressY, pointerStrip.scroll) : -1;
         pointerStrip.pressed = false;
         pointerStrip.pressedCard = -1;
+        if (select && pointerStrip.kind == RowKind.WALLPAPERS) {
+            var presets = com.atom.chat.wallpaper.WallpaperPresets.presets();
+            if (actionHandler != null && card < presets.length)
+                actionHandler.onAction("wallpaper_preset:" + presets[card].id());
+            return;
+        }
         if (select && pointerStrip.kind == RowKind.BUBBLES) {
             if (actionHandler != null && card < AtomChatConfig.BubbleStyle.values().length) {
                 actionHandler.onAction(ACTION_BUBBLE_STYLE + AtomChatConfig.BubbleStyle.values()[card].name());
@@ -2188,6 +2223,40 @@ public final class SettingsSectionPage {
      * panel in its theme's own colours; the selected card wears an accent
      * hairline and the whole strip scrolls by wheel or drag.
      */
+    private void drawWallpapers(Canvas canvas, UiLayout.Rect row, float dtMs) {
+        advanceStrip(wallpaperStrip, row);
+        wallpaperStrip.rect = row;
+        Font title = FontManager.font(UiTokens.SETTINGS_TILE_TITLE);
+        Font value = FontManager.font(UiTokens.SETTINGS_TILE_SUB);
+        SkiaFontRenderer.drawText(canvas, title, tr("atomchat.settings.wallpaper.presets"),
+                row.x() + UiTokens.SETTINGS_ROW_PAD,
+                SkiaFontRenderer.centerBaselineY(title, row.y() + WallpaperTokens.CAPTION_Y), textPrimary());
+        String selected = com.atom.chat.wallpaper.WallpaperPresets.selectedId();
+        String status = com.atom.chat.wallpaper.WallpaperPresets.error();
+        if (com.atom.chat.wallpaper.WallpaperPresets.loading()) status = "atomchat.settings.wallpaper.generating";
+        if (status.isEmpty()) status = selected.isEmpty()
+                ? WallpaperStore.isSet() ? "atomchat.settings.wallpaper.custom" : "atomchat.settings.wallpaper.none"
+                : "atomchat.settings.wallpaper." + selected;
+        SkiaFontRenderer.drawTextRight(canvas, value, tr(status),
+                row.right() - UiTokens.SETTINGS_ROW_PAD, row.y() + WallpaperTokens.CAPTION_Y, sec(255));
+        canvas.save();
+        try {
+            SkiaDraw.clip(canvas, row.x(), themeCardY(row) - WallpaperTokens.CLIP_PAD, row.w(),
+                    UiTokens.THEME_CARD_H + WallpaperTokens.CLIP_EXTRA, UiTokens.radius(6));
+            var presets = com.atom.chat.wallpaper.WallpaperPresets.presets();
+            for (int i = 0; i < presets.length; i++) {
+                var preset = presets[i];
+                var cfg = AtomChatConfig.get();
+                var preview = new ThemeService.Preview(cfg.accentColor, preset.previewColor(),
+                        cfg.cardColor, cfg.ownBubbleColor, cfg.otherBubbleColor, UiTokens.radiusFactor(cfg.cornerRadius));
+                drawPreviewCard(canvas, wallpaperStrip, row, i, preview,
+                        tr("atomchat.settings.wallpaper." + preset.id()), preset.id().equals(selected),
+                        false, cfg.effectiveBubbleStyle(), dtMs,
+                        com.atom.chat.wallpaper.WallpaperPresets.preview(preset.id()), true);
+            }
+        } finally { canvas.restore(); }
+    }
+
     private void drawBubblePreviews(Canvas canvas, UiLayout.Rect row, float dtMs) {
         advanceStrip(bubbleStrip, row);
         bubbleStrip.rect = row;
@@ -2329,6 +2398,12 @@ public final class SettingsSectionPage {
     private void drawPreviewCard(Canvas canvas, CardStrip strip, UiLayout.Rect rect, int index,
                                  ThemeService.Preview preview, String name,
                                  boolean selected, boolean deletable, AtomChatConfig.BubbleStyle bubbleStyle, float dtMs) {
+        drawPreviewCard(canvas, strip, rect, index, preview, name, selected, deletable, bubbleStyle, dtMs, null, false);
+    }
+
+    private void drawPreviewCard(Canvas canvas, CardStrip strip, UiLayout.Rect rect, int index,
+                                 ThemeService.Preview preview, String name,
+                                 boolean selected, boolean deletable, AtomChatConfig.BubbleStyle bubbleStyle, float dtMs, io.github.humbleui.skija.Image image, boolean wallpaper) {
         float x = themeCardX(rect, index, strip.scroll);
         float y = themeCardY(rect);
         float w = UiTokens.THEME_CARD_W;
@@ -2345,15 +2420,21 @@ public final class SettingsSectionPage {
         try {
             SkiaDraw.drawRoundedShadow(canvas, x, y, w, h, radius, s(6), UiTokens.CARD_SHADOW);
             SkiaDraw.drawRoundedRect(canvas, x, y, w, h, radius, preview.panelBg());
+            if (wallpaper) {
+                if (image != null) {
+                    canvas.save();
+                    try {
+                        SkiaDraw.clip(canvas, x, y, w, h, radius);
+                        canvas.drawImageRect(image, io.github.humbleui.types.Rect.makeXYWH(x, y, w, h));
+                    } finally { canvas.restore(); }
+                }
+            } else {
             // Title bar strip + its accent dot.
             float barH = s(12);
             float barY = y + s(7);
             SkiaDraw.drawRoundedRect(canvas, x + s(7), barY, w - s(14), barH,
                     s(4) * preview.cornerFactor(), preview.card());
-            float dotR = s(2.5F);
-            float dotY = barY + barH / 2.0F;
-            SkiaDraw.drawRoundedRect(canvas, x + w - s(12) - dotR, dotY - dotR,
-                    dotR * 2.0F, dotR * 2.0F, dotR, preview.accent());
+
             // The other player's bubble on the left, the player's own on the right.
             float bubbleH = s(16);
             drawThemeBubble(canvas, x + s(7), y + s(27), w - s(30), bubbleH, bubbleStyle, false, preview.otherBubble());
@@ -2370,6 +2451,11 @@ public final class SettingsSectionPage {
             SkiaDraw.drawRoundedRect(canvas, x + s(7), y + h - s(19), w - s(14), s(12),
                     s(4) * preview.cornerFactor(),
                     UiTokens.withAlpha(preview.card(), 255.0F * composerTint));
+            }
+            float dotR = WallpaperTokens.DOT_RADIUS;
+            float dotY = y + WallpaperTokens.DOT_Y;
+            SkiaDraw.drawRoundedRect(canvas, x + w - WallpaperTokens.DOT_RIGHT - dotR, dotY - dotR,
+                    dotR * 2, dotR * 2, dotR, preview.accent());
             if (selected) {
                 SkiaDraw.drawEdgeHighlight(canvas, x, y, w, h, radius, s(1.5F), preview.accent());
             }
@@ -2786,7 +2872,15 @@ public final class SettingsSectionPage {
         Font titleFont = FontManager.font(UiTokens.SETTINGS_TILE_TITLE);
         Font subFont = FontManager.font(UiTokens.SETTINGS_TILE_SUB);
         float textX = rect.x() + UiTokens.SETTINGS_ROW_PAD;
-        float maxW = rect.w() - UiTokens.SETTINGS_ROW_PAD * 2.0F;
+        boolean guide = "onboarding_replay".equals(row.actionId());
+        if (guide) {
+            com.atom.chat.render.DrawPrimitives.drawIconCentered(canvas, com.atom.chat.onboarding.GuideIcon.PATH,
+                    textX + UiTokens.COMPOSER_ICON_SIZE / 2, rect.y() + rect.h() / 2,
+                    UiTokens.COMPOSER_ICON_SIZE, textPrimary());
+            textX += UiTokens.COMPOSER_ICON_SIZE + UiTokens.SETTINGS_TILE_TEXT_GAP;
+        }
+        float guideInset = guide ? UiTokens.COMPOSER_ICON_SIZE + UiTokens.SETTINGS_TILE_TEXT_GAP : 0;
+        float maxW = rect.w() - UiTokens.SETTINGS_ROW_PAD * 2.0F - guideInset;
         CompactText compact = compactText(row, rect.w());
         boolean stepper = SettingsStepper.supports(row.actionId());
         if (compact != null) {
@@ -2804,7 +2898,7 @@ public final class SettingsSectionPage {
                 SkiaFontRenderer.centerBaselineY(titleFont, rect.y() + s(20)),
                 textPrimary());
         drawWrappedDescription(canvas, rect, subFont, copy.subtitle(), textX,
-                descriptionMaxWidth(row, rect.w()), copy.redConfirm()
+                Math.max(0, descriptionMaxWidth(row, rect.w()) - guideInset), copy.redConfirm()
                         ? DANGER_RED
                         : sec(copy.available() ? 200 : 130));
         // Same treatment as the link cards' "Open": full-weight, centred —
@@ -3200,13 +3294,14 @@ public final class SettingsSectionPage {
             if (kind == RowKind.AUTHORS) {
                 continue;
             }
-            if (kind == RowKind.BUBBLES) {
+            if (kind == RowKind.BUBBLES || kind == RowKind.WALLPAPERS) {
                 if (layout.list.contains(vmx, vmy)) {
-                    int cardIndex = stripCardAt(bubbleStrip, rect, vmx, vmy);
+                    int cardIndex = stripCardAt(kind == RowKind.WALLPAPERS ? wallpaperStrip : bubbleStrip, rect, vmx, vmy);
                     if (cardIndex >= 0) {
-                        Row action = Row.ofAction(ACTION_BUBBLE_STYLE
-                                + AtomChatConfig.BubbleStyle.values()[cardIndex].name(), bubbleStyleItem());
-                        float x = themeCardX(rect, cardIndex, bubbleStrip.scroll);
+                        Row action = kind == RowKind.WALLPAPERS
+                                ? Row.ofAction("wallpaper_preset:" + com.atom.chat.wallpaper.WallpaperPresets.presets()[cardIndex].id(), wallpaperPickItem())
+                                : Row.ofAction(ACTION_BUBBLE_STYLE + AtomChatConfig.BubbleStyle.values()[cardIndex].name(), bubbleStyleItem());
+                        float x = themeCardX(rect, cardIndex, kind == RowKind.WALLPAPERS ? wallpaperStrip.scroll : bubbleStrip.scroll);
                         float y = themeCardY(rect);
                         return new RowHit(action, i, Math.max(x, rect.x()), y,
                                 Math.min(x + UiTokens.THEME_CARD_W, rect.right()) - Math.max(x, rect.x()),

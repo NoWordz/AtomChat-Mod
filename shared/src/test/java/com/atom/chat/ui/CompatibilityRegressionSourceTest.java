@@ -31,7 +31,8 @@ class CompatibilityRegressionSourceTest {
             "platforms/1.21.1-neoforge/src/main/java/com/atom/chat/screen/AtomChatScreen.java",
             "platforms/1.21.1-fabric/src/main/java/net/minecraft/client/gui/screen/AtomChatScreen.java");
     private String method(String src, String name) {
-        int start = src.indexOf(name + "(");
+        var definition = java.util.regex.Pattern.compile("(?m)^\\s*(?:public|private|protected)\\s+[\\w<>.]+\\s+" + java.util.regex.Pattern.quote(name) + "\\s*\\(").matcher(src);
+        int start = definition.find() ? definition.start() : -1;
         assertTrue(start >= 0, name);
         int open = src.indexOf('{', start), depth = 1, end = open + 1;
         while (depth > 0 && end < src.length()) {

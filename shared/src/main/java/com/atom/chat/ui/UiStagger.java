@@ -44,6 +44,20 @@ import com.atom.chat.render.Easing;
  * <p>Bucket: shared single source, no Minecraft names. Pure arithmetic.</p>
  */
 public final class UiStagger {
+    private static final ThreadLocal<Long> FRAME_TIME = new ThreadLocal<>();
+
+    /** Item clocks share the exact timestamp used to paint the page envelope. */
+    public static long frameTimeMillis() {
+        Long now = FRAME_TIME.get();
+        return now == null ? System.currentTimeMillis() : now;
+    }
+
+    public static void atFrame(long now, Runnable drawing) {
+        Long previous = FRAME_TIME.get();
+        FRAME_TIME.set(now);
+        try { drawing.run(); }
+        finally { if (previous == null) FRAME_TIME.remove(); else FRAME_TIME.set(previous); }
+    }
     /** The page/header envelope: the 320ms page clock. */
     public static final long PAGE_MS = 320L;
     /**

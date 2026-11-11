@@ -18,10 +18,31 @@ public final class PanelBackground {
     private PanelBackground() {
     }
 
+    public static float outlineInset() {
+        var config = com.atom.chat.config.AtomChatConfig.get();
+        return config.halfScreenMode ? 0 : UiTokens.s(config.effectivePanelOutlineWidth());
+    }
+
+    /** Inset stroke centre and radius together, keeping the outer contour identical to the fill. */
+    public static void drawBezel(io.github.humbleui.skija.Canvas canvas, UiLayout.Rect panel) {
+        var config = com.atom.chat.config.AtomChatConfig.get();
+        float width = outlineInset();
+        if (width <= 0) return;
+        float half = width / 2;
+        try (var paint = new io.github.humbleui.skija.Paint()
+                .setMode(io.github.humbleui.skija.PaintMode.STROKE).setStrokeWidth(width)
+                .setAntiAlias(true).setColor(config.panelOutlineColor)) {
+            canvas.drawRRect(io.github.humbleui.types.RRect.makeXYWH(
+                    panel.x() + half, panel.y() + half,
+                    Math.max(0, panel.w() - width), Math.max(0, panel.h() - width),
+                    Math.max(0, UiTokens.panelRadius() - half)), paint);
+        }
+    }
+
     /** Clip panel-local overlays to the same inner contour as the wallpaper.
      * The caller owns the enclosing canvas save/restore. */
     public static void clipInterior(io.github.humbleui.skija.Canvas canvas, UiLayout.Rect panel) {
-        float inset = UiTokens.panelInset();
+        float inset = outlineInset();
         com.atom.lib.design.atomchat.SkiaDraw.clip(canvas,
                 panel.x() + inset, panel.y() + inset,
                 Math.max(0F, panel.w() - 2F * inset), Math.max(0F, panel.h() - 2F * inset),

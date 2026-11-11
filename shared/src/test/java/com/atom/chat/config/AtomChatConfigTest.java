@@ -47,8 +47,8 @@ class AtomChatConfigTest {
     @Test
     void factoryDefaultIsTheShippedPixelRadius() {
         AtomChatConfig config = new AtomChatConfig();
-        assertEquals(20f, config.cornerRadius, 0.0F,
-                "shipped default is 20 real screen pixels");
+        assertEquals(25f, config.cornerRadius, 0.0F,
+                "shipped default is 25 logical UI pixels");
         assertNull(config.cornerStyle, "a fresh config carries no legacy style");
         // The field's own default is the legacy marker: a config that has never
         // been through load() has not been stamped, which is exactly how a

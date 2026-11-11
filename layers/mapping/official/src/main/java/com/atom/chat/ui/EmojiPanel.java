@@ -104,6 +104,8 @@ public final class EmojiPanel {
         cellHover.clear(); cellScale.clear(); pressedCellKey = -1;
     }
     private final Host host;
+    /** Tutorial-only panels never resolve or scan any emote directory. */
+    private final boolean sandboxMode;
     /** Local emote pack plus the joined server's read-only one; see {@link EmoteStore}. */
     private final EmoteStore emoteStore;
     /** Cached {@code server-icon.png} decode, keyed by the pack it came from. */
@@ -145,12 +147,22 @@ public final class EmojiPanel {
     private int tabAnimTo = -1;
 
     public EmojiPanel(Host host) {
+        this(host, false);
+    }
+
+    private EmojiPanel(Host host, boolean sandboxMode) {
         this.host = host;
-        this.emoteStore = new EmoteStore(
+        this.sandboxMode = sandboxMode;
+        this.emoteStore = sandboxMode ? null : new EmoteStore(
                  com.atom.chat.util.CacheDirs.emotesDir(),
                 // Read at scan time, so a hand-edited cap is picked up on the next scan
                 // instead of being frozen at construction.
                 () -> com.atom.chat.config.AtomChatConfig.get().emoteMax);
+    }
+
+    /** Explicit tutorial-only construction: no local/server pack access or mutation. */
+    public static EmojiPanel sandbox(Host host) {
+        return new EmojiPanel(host, true);
     }
 
     public int diagnosticTab() { return tab; }
@@ -164,11 +176,13 @@ public final class EmojiPanel {
 
     /** The grid model for the current sources; hover, click and draw all use it. */
     private EmoteGridLayout emoteLayout() {
+        if (sandboxMode) return new EmoteGridLayout(UiTokens.EMOTE_COLS, 0, 0);
         return new EmoteGridLayout(UiTokens.EMOTE_COLS, emoteStore.count(), emoteStore.serverCount());
     }
 
     /** Re-scans the local folder and re-points the server half at the installed pack. */
     private void refreshEmotes() {
+        if (sandboxMode) return;
         ServerPackStore store = ServerPackStore.current();
         // A pack with nothing to show is treated as "no distribution": no
         // server rows, no header, no status line.
@@ -285,6 +299,7 @@ public final class EmojiPanel {
         // The emote (sticker) tab has its own grid — images, an add slot and a
         // per-cell remove button. It does its work inline and never inserts text.
         if (tab == 2) {
+            if (sandboxMode) return "☺";
             return emotePanelClick(layout, mx, my);
         }
         // Content grid.
@@ -425,6 +440,7 @@ public final class EmojiPanel {
 
     /** Adding an emote may overwrite an existing file of the same name, so the decode cache clears wholesale — ten entries, so it is cheap. */
     public void addEmote(Path file) {
+        if (sandboxMode) return;
         if (emoteStore.add(file.toFile())) {
             emoteImageCache.clear();
             cellHover.clear();
@@ -551,6 +567,7 @@ public final class EmojiPanel {
                 || my < contentY || my > contentY + contentH) {
             return -1;
         }
+        if (sandboxMode) return -1;
         float colW = contentW / UiTokens.EMOTE_COLS;
         int col = (int) ((mx - contentX) / colW);
         int row = (int) ((my - contentY + scroll) / UiTokens.EMOTE_CELL);
@@ -703,6 +720,11 @@ public final class EmojiPanel {
     private void drawTabGrid(Canvas canvas, int tab, float contentX, float contentY, float contentW, float contentH,
                              boolean interactive) {
         if (tab == 2) {
+            if (sandboxMode) {
+                float colW = contentW / UiTokens.EMOTE_COLS;
+                drawSandboxSticker(canvas, contentX, contentY, colW, UiTokens.EMOTE_CELL);
+                return;
+            }
             drawEmoteGrid(canvas, contentX, contentY, contentW, contentH, interactive);
         } else {
             drawTextGrid(canvas, tab, contentX, contentY, contentW, contentH, interactive);
@@ -768,6 +790,7 @@ public final class EmojiPanel {
      * button to hit first. Always returns "" because nothing is inserted here.
      */
     private String emotePanelClick(UiLayout layout, float mx, float my) {
+        if (sandboxMode) return "☺";
         float px = panelX(layout);
         float py = panelY(layout);
         float pw = panelW();
@@ -991,6 +1014,16 @@ public final class EmojiPanel {
         Font addFont = FontManager.font(UiTokens.FONT_EMOJI);
         SkiaFontRenderer.drawTextCentered(canvas, addFont, "+", ex + colW / 2.0F, ey + cell / 2.0F,
                 disabled ? SKIN_DIM_TEXT : textPrimary());
+    }
+
+    /** A transient drawn sticker demonstrates selection without files or an emote store. */
+    private static void drawSandboxSticker(Canvas canvas, float ex, float ey, float colW, float cell) {
+        float pad = UiTokens.EMOJI_PANEL_PAD;
+        SkiaDraw.drawRoundedRect(canvas, ex + pad, ey + pad, Math.max(0,colW-pad*2), Math.max(0,cell-pad*2),
+                UiTokens.settingsRowRadius(), 0xFF355E9C);
+        Font font = FontManager.font(UiTokens.FONT_EMOJI);
+        SkiaFontRenderer.drawTextCentered(canvas, font, "☺", ex + colW / 2.0F,
+                ey + cell / 2.0F, 0xFFFFFFFF);
     }
 
     /**

@@ -19,7 +19,7 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class AppearancePresetStoreTest {
-    @Test void linkedWallpaperBackupIsRejectedBeforeTouchingTheCurrentWallpaper() throws Exception {
+    @Test void unrelatedWallpaperBackupLinkDoesNotAffectThemeApplication() throws Exception {
         String id = store.saveCurrent(new AtomChatConfig(),null).preset().id();
         assertTrue(WallpaperStore.set(wallpaper("keep.png")));
         Path active = WallpaperStore.current();
@@ -33,13 +33,29 @@ class AppearancePresetStoreTest {
             assertTrue(process.waitFor(10,java.util.concurrent.TimeUnit.SECONDS));
             assertEquals(0,process.exitValue());
         }
-        assertFalse(store.apply(id,new AtomChatConfig()).ok());
+        assertTrue(store.apply(id,new AtomChatConfig()).ok());
         assertEquals(active,WallpaperStore.current());
         assertTrue(Files.isRegularFile(active));
         try (var files = Files.list(target)) { assertEquals(0,files.count()); }
     }
     private static final byte[] PNG = Base64.getDecoder().decode(
             "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAFgwJ/lK3Q6wAAAABJRU5ErkJggg==");
+
+    @Test void outlineWidthRoundTripsAndLegacyPresetsKeepTwoPixels() throws Exception {
+        var c = new AtomChatConfig();
+        AtomChatConfig.class.getMethod("setPanelOutlineWidth", float.class).invoke(c, 3.75F);
+        var result = store.saveCurrent(c, null);
+        assertTrue(result.ok());
+        var target = new AtomChatConfig();
+        assertTrue(store.apply(result.preset().id(), target).ok());
+        assertEquals(3.75F, ((Number) AtomChatConfig.class.getMethod("effectivePanelOutlineWidth").invoke(target)).floatValue());
+        Path manifest = tmp.resolve("appearance-presets").resolve(result.preset().id()).resolve("preset.json");
+        var json = com.google.gson.JsonParser.parseString(Files.readString(manifest)).getAsJsonObject();
+        json.getAsJsonObject("appearance").remove("panelOutlineWidth");
+        Files.writeString(manifest, json.toString());
+        assertTrue(store.apply(result.preset().id(), target).ok());
+        assertEquals(2F, ((Number) AtomChatConfig.class.getMethod("effectivePanelOutlineWidth").invoke(target)).floatValue());
+    }
 
     @TempDir
     Path tmp;
@@ -135,7 +151,7 @@ class AppearancePresetStoreTest {
         saved.notificationSoundEnabled = false;
         AppearancePresetStore.Result result = store.saveCurrent(saved, wallpaper("source.png"));
         assertTrue(result.ok(), result.error());
-        assertTrue(result.preset().hasWallpaper());
+        assertFalse(result.preset().hasWallpaper(), "new themes contain appearance only");
         Files.delete(tmp.resolve("source.png"));
 
         AtomChatConfig target = new AtomChatConfig();
@@ -158,8 +174,7 @@ class AppearancePresetStoreTest {
         assertEquals("custom", target.themeName);
         assertTrue(target.hideBlockedMessages, "privacy is outside the appearance whitelist");
         assertTrue(target.notificationSoundEnabled, "sound is outside the appearance whitelist");
-        assertTrue(WallpaperStore.isSet());
-        assertEquals(PNG.length, Files.size(WallpaperStore.current()));
+        assertFalse(WallpaperStore.isSet(), "applying a theme never installs its historical wallpaper");
     }
 
     @Test
@@ -187,11 +202,11 @@ class AppearancePresetStoreTest {
     }
 
     @Test
-    void applyingAPresetWithoutWallpaperClearsTheCurrentWallpaper() throws IOException {
+    void applyingAPresetWithoutWallpaperPreservesTheCurrentWallpaper() throws IOException {
         assertTrue(WallpaperStore.set(wallpaper("active.png")));
         String id = store.saveCurrent(new AtomChatConfig(), null).preset().id();
         assertTrue(store.apply(id, new AtomChatConfig()).ok());
-        assertFalse(WallpaperStore.isSet());
+        assertTrue(WallpaperStore.isSet());
     }
 
     @Test
@@ -201,7 +216,7 @@ class AppearancePresetStoreTest {
         assertTrue(store.apply(id, active).ok());
         assertTrue(store.delete(id).ok());
         assertEquals(0xFF010203, active.accentColor);
-        assertTrue(WallpaperStore.isSet(), "deleting the definition does not undo its application");
+        assertFalse(WallpaperStore.isSet(), "theme definitions do not install wallpaper");
         assertTrue(store.list().isEmpty());
     }
 
@@ -252,24 +267,26 @@ class AppearancePresetStoreTest {
     void failedSaveLeavesNoHalfPreset() throws IOException {
         AtomChatConfig config = new AtomChatConfig();
         Files.write(tmp.resolve("too-large.png"), new byte[16 * 1024 * 1024 + 1]);
+        config.uiScale = 99F;
         assertFalse(store.saveCurrent(config, tmp.resolve("too-large.png")).ok());
         assertTrue(store.list().isEmpty());
     }
 
     @Test
-    void corruptOrOversizedWallpaperHeadersAreRejectedBeforeTheyCanReplaceTheActiveImage()
-            throws IOException {
+    void savingAThemeDoesNotInspectOrCopyWallpaperBytes() throws IOException {
         Path fake = tmp.resolve("fake.png");
         Files.writeString(fake, "not an image");
-        assertFalse(store.saveCurrent(new AtomChatConfig(), fake).ok(),
-                "an extension is not proof that the bytes are an image");
-        assertTrue(store.list().isEmpty());
-
-        String id = store.saveCurrent(new AtomChatConfig(), wallpaper("valid.png")).preset().id();
-        Path presetWallpaper = tmp.resolve("appearance-presets").resolve(id).resolve("wallpaper.png");
-        Files.writeString(presetWallpaper, "corrupt after save");
-        assertFalse(store.apply(id, new AtomChatConfig()).ok(),
-                "a damaged preset wallpaper is refused rather than applied as success");
+        var result = store.saveCurrent(new AtomChatConfig(), fake);
+        assertTrue(result.ok(), "wallpaper is outside the theme whitelist");
+        assertFalse(result.preset().hasWallpaper());
+        Path presetDir = tmp.resolve("appearance-presets").resolve(result.preset().id());
+        assertFalse(Files.exists(presetDir.resolve("wallpaper.png")));
+        // Old manifests carrying a wallpaper remain readable even without that file.
+        Path manifest = presetDir.resolve("preset.json");
+        var json = com.google.gson.JsonParser.parseString(Files.readString(manifest)).getAsJsonObject();
+        json.addProperty("wallpaper", ".png");
+        Files.writeString(manifest, json.toString());
+        assertTrue(store.apply(result.preset().id(), new AtomChatConfig()).ok());
     }
 
     @Test
@@ -280,8 +297,8 @@ class AppearancePresetStoreTest {
         Path blocker = tmp.resolve("appearance-presets").resolve(".wallpaper-backup");
         Files.writeString(blocker, "not a directory");
 
-        assertFalse(store.apply(id, new AtomChatConfig()).ok());
-        assertTrue(WallpaperStore.isSet(), "a failed backup must not clear the active wallpaper");
+        assertTrue(store.apply(id, new AtomChatConfig()).ok());
+        assertTrue(WallpaperStore.isSet(), "themes never back up or clear the active wallpaper");
         assertEquals(active, WallpaperStore.current());
         assertTrue(Files.exists(active));
     }
