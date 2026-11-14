@@ -1,0 +1,23 @@
+{
+  "at": "2026-11-14T23:19:24.089814+08:00",
+  "targets": [
+    {
+      "target": "1.20.1-forge",
+      "candidate_installed_backup_match": true,
+      "single_enabled_jar": true,
+      "sha256": "3886e4b1fed1864f1a003196ab818cdb62554033bd00aaa03c593091f48b4a6d"
+    },
+    {
+      "target": "1.21.1-fabric",
+      "candidate_installed_backup_match": true,
+      "single_enabled_jar": true,
+      "sha256": "e7c35c112ad98a837026b6a9452f37cd6dba131e0308cd7e29e277bc38bfb94d"
+    },
+    {
+      "target": "1.21.1-neoforge",
+      "candidate_installed_backup_match": true,
+      "single_enabled_jar": true,
+      "sha256": "0b4eae34dd11159cd8fd870de539c863445f41b8147a81e5a83fd1eef92aa668"
+    }
+  ]
+}

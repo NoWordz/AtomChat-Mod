@@ -1,18 +1,22 @@
 # AtomChat 当前状态
 
-## 2026-11-14 0.7.1 验收通过，提交收口
+## 2026-11-14 23:19 0.7.1 验收通过，已推送，CI 全绿
 
 - 用户已明确验收通过，授权提交、推送、临时文件移入回收站及 README/项目状态更新。上述验收不等于已复现并解决所有历史多人服偶发问题。
 - README 已整理安装入口、功能与通知说明、布局和配置表格，移除过时的主题数量、固定第三方保留时长和冲突的平台支持描述。
-- 沿用21:56交付前的集中独审、三端完整测试及最终63项/端增量测试与构建；本轮只改文档，重新核对 targets/seams/diff 和远端状态。测试范围与跳过项详见下方最终验证记录。
-- 本轮探针、重复日志和 Python 缓存先归档，再移入 Windows 回收站；最终JAR、AtomLib构建输入、截图及长期验证记录保留。无关UI调研文档保留在工作区，未混入本次提交。
-- 推送目标为 `origin/main`（`NoWordz/AtomChat-Mod`），只提交代码和文档，不打标签、不创建Release或发布商店。CI结果待本次推送后补记。
+- 沿用21:56交付前的集中独审和测试；本轮先完成文档收口，随后修正CI暴露的确认框换行缺陷。最终本地Fabric14项专项+build、Forge/Neo各1967项全量+build通过（各9跳过），未把此前结果冒充新跑。
+- 两批共93个临时文件（4,932,323字节）先归档校验再移入Windows回收站；最终JAR、AtomLib构建输入、截图及长期验证记录保留。测试重新生成的15张历史PNG已另行归档，并恢复提交中的原始证据字节。无关UI调研文档保留未提交。
+- `b0514f60`（0.7.1主体及README）、`4a3395f1`（确认框修复）已推送 `origin/main`（`NoWordz/AtomChat-Mod`），此前已验收的 `20df2ab8` 一并推送。未打标签、创建Release或发布商店。
+- [最终CI](https://github.com/NoWordz/AtomChat-Mod/actions/runs/43608399703)全部通过：矩阵与三端测试/构建、干净构建戳和产物内容检查均成功，三份AC+AtomLib配对产物已上传。这里只证明CI产物与默认测试，不扩大为所有整合包实机验收。
+- 确认框修复包已备份同步三个测试实例并独立回读，未改AtomLib或配置。记录见[CI修复部署](evidence/2026-11-14-v071-audit-fixes/verification/ci-fix-deployment.json)与[回读](evidence/2026-11-14-v071-audit-fixes/verification/ci-fix-readback.json)。
 
 ### CI 跟进
 
 - `b0514f60` 已推送，连同此前已验收的 `20df2ab8`；[首次CI](https://github.com/NoWordz/AtomChat-Mod/actions/runs/43606084185)矩阵通过，三端各4项确认框渲染测试失败，已进入实际测试，与上一轮软件源DNS失败不同。
 - 根因是 `ConfirmationText.wrap` 为平衡单字中文末行而修改渲染器返回的不可变列表；Linux字体度量触发该分支。现在只复制为可变列表再调整，仍保留共享缓存的只读契约。
-- 新增按实际字宽构造的回归，在Windows也先得到相同 `UnsupportedOperationException`，再修复通过；同时验证缓存内容未变，不跳过原失败用例。后续三端结果与CI复跑状态在完成后补记。
+- 新增按实际字宽构造的回归，在Windows也先得到相同 `UnsupportedOperationException`，再修复通过；同时验证缓存内容未变，不跳过原失败用例。局部自审确认其他换行消费者只读，不扩大改渲染器缓存契约。
+- Forge首次单独选择UI测试未初始化原版注册表；补选另一个初始化用例仍未改变实际执行顺序，因此改跑完整套件，通过后才推送。两次局部夹具失败没有当作产品修复失败或测试通过。
+- [本地增量/全量范围](evidence/2026-11-14-v071-audit-fixes/verification/ci-fix-local-tests.json)、[首次失败回执](evidence/2026-11-14-v071-audit-fixes/verification/ci-first-run.json)、[最终成功回执](evidence/2026-11-14-v071-audit-fixes/verification/ci-final-run.json)、[首批回收](evidence/2026-11-14-v071-audit-fixes/verification/cleanup.json)、[CI临时文件回收](evidence/2026-11-14-v071-audit-fixes/verification/ci-cleanup.json)。
 
 ## 2026-11-14 21:56 审计建议落实并部署
 

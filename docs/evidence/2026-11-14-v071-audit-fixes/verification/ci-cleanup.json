@@ -1,0 +1,97 @@
+{
+  "archive": "D:\\AtomChat-Backups\\2026-11-14-v071-accepted\\20261114-223312\\ci-temporary-evidence.zip",
+  "archive_sha256": "d851cd32b3193c06911ee6a5795ff5484630cae35f8e89b1d2784c2c550fef89",
+  "recycled": true,
+  "items": [
+    {
+      "path": "D:\\AtomChat-Main\\build\\ci-han-tail-bootstrapped-1.20.1-forge.log",
+      "kind": "file",
+      "files": 1,
+      "bytes": 2951
+    },
+    {
+      "path": "D:\\AtomChat-Main\\build\\ci-han-tail-full-1.20.1-forge.log",
+      "kind": "file",
+      "files": 1,
+      "bytes": 482282
+    },
+    {
+      "path": "D:\\AtomChat-Main\\build\\ci-han-tail-full-1.21.1-neoforge.log",
+      "kind": "file",
+      "files": 1,
+      "bytes": 2480
+    },
+    {
+      "path": "D:\\AtomChat-Main\\build\\ci-han-tail-green-1.20.1-forge.log",
+      "kind": "file",
+      "files": 1,
+      "bytes": 4790
+    },
+    {
+      "path": "D:\\AtomChat-Main\\build\\ci-han-tail-green-fabric.log",
+      "kind": "file",
+      "files": 1,
+      "bytes": 2516
+    },
+    {
+      "path": "D:\\AtomChat-Main\\build\\ci-han-tail-jars.log",
+      "kind": "file",
+      "files": 1,
+      "bytes": 3536
+    },
+    {
+      "path": "D:\\AtomChat-Main\\build\\ci-han-tail-red.log",
+      "kind": "file",
+      "files": 1,
+      "bytes": 2223
+    },
+    {
+      "path": "D:\\AtomChat-Main\\build\\ci-previous-fabric.log",
+      "kind": "file",
+      "files": 1,
+      "bytes": 21332
+    },
+    {
+      "path": "D:\\AtomChat-Main\\build\\ci-previous-failed.log",
+      "kind": "file",
+      "files": 1,
+      "bytes": 87595
+    },
+    {
+      "path": "D:\\AtomChat-Main\\build\\ci-previous-jobs.json",
+      "kind": "file",
+      "files": 1,
+      "bytes": 8271
+    },
+    {
+      "path": "D:\\AtomChat-Main\\build\\ci-v071-failed.log",
+      "kind": "file",
+      "files": 1,
+      "bytes": 749584
+    },
+    {
+      "path": "D:\\AtomChat-Main\\build\\v071-recycle-candidates.json",
+      "kind": "file",
+      "files": 1,
+      "bytes": 11334
+    },
+    {
+      "path": "D:\\AtomChat-Main\\build\\v071-precommit-status.txt",
+      "kind": "file",
+      "files": 1,
+      "bytes": 11856
+    },
+    {
+      "path": "D:\\AtomChat-Main\\build\\v071-commit-status.txt",
+      "kind": "file",
+      "files": 1,
+      "bytes": 12635
+    }
+  ],
+  "targets": 14,
+  "files": 14,
+  "bytes": 1403385,
+  "generated_png_archive": "D:\\AtomChat-Backups\\2026-11-14-v071-accepted\\20261114-223312\\ci-generated-evidence.zip",
+  "historical_pngs_restored": 15,
+  "completed_at": "2026-11-14T23:20:10+08:00"
+}
