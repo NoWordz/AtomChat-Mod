@@ -9,6 +9,7 @@
 
 **修复**
 
+- 修复部分字体下确认弹窗中文换行异常。
 - 图片上传不再跨连接或串入其他会话，失败会提示，草稿满时保留上传结果。
 - 限制图片任务排队和集中发包，减少主题重绘、配置重载及历史处理的同步磁盘工作。
 - 优化图片磁盘缓存复用与后台容量统计，补充故障诊断且不记录输入内容。
@@ -26,6 +27,7 @@
 
 **Fixed**
 
+- Fixed Chinese confirmation text reflow with some font metrics.
 - Kept uploads within their original connection and conversation, reported failures, and retained results when drafts are full.
 - Bounded image queues and packet bursts, and reduced synchronous disk work in theme repainting, config reloads and history handling.
 - Improved disk-image cache reuse and background sizing, with additional diagnostics that exclude typed content.

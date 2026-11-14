@@ -23,7 +23,7 @@ record ConfirmationText(float size,float lineHeight,List<String> lines) {
         var font=FontManager.font(size);
         var lines=new ArrayList<String>();
         for(String paragraph:text.split("\n",-1)) {
-            var wrapped=SkiaFontRenderer.wrapWords(font,paragraph,width);
+            var wrapped=new ArrayList<>(SkiaFontRenderer.wrapWords(font,paragraph,width));
             if(wrapped.size()>1) {
                 int last=wrapped.size()-1;String tail=wrapped.get(last),previous=wrapped.get(last-1);
                 if(tail.codePointCount(0,tail.length())==1&&!previous.isEmpty()

@@ -10,6 +10,7 @@
 
 **修复**
 
+- 修复确认框中文换行调整可能修改只读列表而抛出异常的问题。
 - 图片上传绑定连接与原始会话，断线取消不再触发外部回退，草稿空间不足时保留结果并提示。
 - 上传与下载任务增加排队上限，服务器图片分片按 tick 限量发送。
 - 主题预设稳定重绘不再查询路径属性，未变更配置与个人数据不再重复写盘。
@@ -33,6 +34,7 @@
 
 **Fixed**
 
+- Fixed confirmation text reflow throwing when balancing a single-character Chinese line.
 - Bound image uploads to their original connection and conversation, cancelled disconnects without external fallback, and retained results when drafts lack room.
 - Bounded upload and download queues and limited server image chunks per tick.
 - Removed path checks from warm theme repaints and redundant writes of unchanged settings and personal data.

@@ -1,0 +1,31 @@
+{
+  "root_cause": "ConfirmationText mutated the immutable wrapWords cache result",
+  "red": "Font-relative seven-Han-character regression failed with UnsupportedOperationException on Windows before the fix",
+  "tests": [
+    {
+      "target": "1.21.1-fabric",
+      "scope": "3 affected classes + build",
+      "tests": 14,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "target": "1.20.1-forge",
+      "scope": "full test build (narrow run lacked Minecraft registry bootstrap)",
+      "tests": 1967,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 9
+    },
+    {
+      "target": "1.21.1-neoforge",
+      "scope": "full test build (narrow run lacked Minecraft registry bootstrap)",
+      "tests": 1967,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 9
+    }
+  ],
+  "notes": "The first narrow Forge selection failed before registry bootstrap; repeating with another selected class still ran the UI first. The full suite supplied the normal bootstrap and passed. No tests were disabled."
+}

@@ -14,6 +14,20 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class ConfirmationPickerFamilyTest {
     @BeforeAll static void setup(@TempDir Path root)throws Exception{UiFeatureRenderTest.setup(root);}
+    @Test void singleHanTailRebalancesWithoutMutatingCachedWrapping() {
+        var font=com.atom.chat.font.FontManager.font(UiTokens.SETTINGS_TILE_SUB);
+        float glyphWidth=com.atom.chat.render.SkiaFontRenderer.getStringWidth(font,"中");
+        assertTrue(glyphWidth>0);
+        float width=glyphWidth*6.5F;
+        String copy="中".repeat(7);
+        var original=java.util.List.of("中".repeat(6),"中");
+        assertEquals(original,com.atom.chat.render.SkiaFontRenderer.wrapWords(font,copy,width),
+                "font-relative width must exercise the single-Han tail on every OS");
+        var fitted=ConfirmationText.wrap(copy,width,UiTokens.SETTINGS_TILE_SUB);
+        assertEquals(java.util.List.of("中".repeat(5),"中中"),fitted.lines());
+        assertEquals(original,com.atom.chat.render.SkiaFontRenderer.wrapWords(font,copy,width),
+                "balancing a dialog must not modify the renderer's shared wrap cache");
+    }
     @Test void modalPlateMatchesTheActualColourPickerMaterial() throws Exception {
         var panel=new UiLayout.Rect(10,10,430,800);
         var picker=new ColorPickerOverlay(text->{});
