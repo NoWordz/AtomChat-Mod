@@ -258,11 +258,13 @@ public final class AvatarClickWiring {
         return new ProfilePage.Handler() {
             @Override
             public void openAvatarPicker() {
+                if (tutorialWriteBlocked()) return;
                 host.pickAvatarFile();
             }
 
             @Override
             public void clearAvatar() {
+                if (tutorialWriteBlocked()) return;
                 boolean removed = host.clearAvatar();
                 AvatarImage.release();
                 if (removed || com.atom.chat.profile.ProfileSync.remoteOnlyImage(com.atom.chat.profile.ProfileField.AVATAR)) {
@@ -275,11 +277,13 @@ public final class AvatarClickWiring {
 
             @Override
             public void openBannerPicker() {
+                if (tutorialWriteBlocked()) return;
                 host.pickBannerFile();
             }
 
             @Override
             public void clearBanner() {
+                if (tutorialWriteBlocked()) return;
                 // Delete image = off: the file goes, the accent gradient returns.
                 boolean removed = host.clearBanner();
                 BannerImage.release();
@@ -298,12 +302,14 @@ public final class AvatarClickWiring {
 
             @Override
             public void beginSignatureEdit() {
+                if (tutorialWriteBlocked()) return;
                 // The page has one handler: D18b owns it, D18a's borrow passes through.
                 host.beginSignatureEdit();
             }
 
             @Override
             public void endSignatureEdit(boolean commit) {
+                if (tutorialWriteBlocked()) return;
                 host.endSignatureEdit(commit);
             }
         };
@@ -319,6 +325,12 @@ public final class AvatarClickWiring {
         }
         host.profilePage().setSubject(player);
         host.openProfileDetailPage();
+    }
+
+    private boolean tutorialWriteBlocked() {
+        if (!com.atom.chat.onboarding.TutorialSandbox.active()) return false;
+        host.feedback("atomchat.tutorial.preview_only", false);
+        return true;
     }
 
     /** Opens the profile detail for a message's sender (avatar single click). */
@@ -400,6 +412,7 @@ public final class AvatarClickWiring {
      * the server relays it.
      */
     private void sendPoke(MessageFacts target) {
+        if (com.atom.chat.onboarding.TutorialSandbox.active()) {com.atom.chat.onboarding.TutorialSandbox.action();return;}
         UUID uuid = target == null ? null : target.senderUuid();
         if (uuid == null) {
             return;

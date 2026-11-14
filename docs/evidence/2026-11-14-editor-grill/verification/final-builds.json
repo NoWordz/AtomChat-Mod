@@ -1,0 +1,215 @@
+[
+  {
+    "target": "1.21.1-fabric",
+    "command": [
+      "cmd",
+      "/d",
+      "/c",
+      "gradlew.bat",
+      "test",
+      "build",
+      "--offline",
+      "--no-daemon",
+      "-PatomlibMavenRepo=D:/AtomChat-Main/build/atomlib-slim-20261107/atomlib-maven-v040-final"
+    ],
+    "java_home": "C:/Program Files/Microsoft/jdk-21.0.8.9-hotspot",
+    "start": "2026-11-14T15:12:52.358935",
+    "seconds": 116.71087551116943,
+    "exit": 0,
+    "log": "D:\\AtomChat-Main\\build\\editor-grill-20261114\\final-1.21.1-fabric.log",
+    "successful": true,
+    "tests": {
+      "tests": 1894,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 7
+    },
+    "ui_style_contract": [
+      {
+        "tests": "4",
+        "failures": "0",
+        "errors": "0",
+        "skipped": "0"
+      }
+    ],
+    "skips": [
+      {
+        "suite": "com.atom.chat.compat.AtomLibApiPreflightTest",
+        "test": "alternateLibraryJarPassesTheSameClientPreflight()",
+        "reason": ""
+      },
+      {
+        "suite": "com.atom.chat.render.AboutGpuBenchmark",
+        "test": "shadowAndAboutStaticLayers()",
+        "reason": ""
+      },
+      {
+        "suite": "com.atom.chat.render.GoldenFrameTest",
+        "test": "goldenFrames()",
+        "reason": ""
+      },
+      {
+        "suite": "com.atom.chat.render.PageEntranceGpuBenchmark",
+        "test": "layeredEntranceAgainstSettledDraw()",
+        "reason": ""
+      },
+      {
+        "suite": "com.atom.chat.render.SkiaDrawBenchmark",
+        "test": "primitiveCostPerFrame()",
+        "reason": ""
+      },
+      {
+        "suite": "com.atom.chat.ui.EmojiPanelPerformanceTest",
+        "test": "measureSteadyEmojiRendering(Path)",
+        "reason": ""
+      },
+      {
+        "suite": "com.atom.chat.ui.EmojiPanelPerformanceTest",
+        "test": "measureGlEmojiRendering(Path)",
+        "reason": ""
+      }
+    ]
+  },
+  {
+    "target": "1.20.1-forge",
+    "command": [
+      "cmd",
+      "/d",
+      "/c",
+      "gradlew.bat",
+      "test",
+      "build",
+      "--offline",
+      "--no-daemon",
+      "-PatomlibMavenRepo=D:/AtomChat-Main/build/atomlib-slim-20261107/atomlib-maven-v040-final"
+    ],
+    "java_home": "C:/Program Files/Microsoft/jdk-21.0.8.9-hotspot",
+    "start": "2026-11-14T15:14:51.502764",
+    "seconds": 126.17256808280945,
+    "exit": 0,
+    "log": "D:\\AtomChat-Main\\build\\editor-grill-20261114\\final-1.20.1-forge.log",
+    "successful": true,
+    "tests": {
+      "tests": 1879,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 7
+    },
+    "ui_style_contract": [
+      {
+        "tests": "4",
+        "failures": "0",
+        "errors": "0",
+        "skipped": "0"
+      }
+    ],
+    "skips": [
+      {
+        "suite": "com.atom.chat.compat.AtomLibApiPreflightTest",
+        "test": "alternateLibraryJarPassesTheSameClientPreflight()",
+        "reason": ""
+      },
+      {
+        "suite": "com.atom.chat.render.AboutGpuBenchmark",
+        "test": "shadowAndAboutStaticLayers()",
+        "reason": ""
+      },
+      {
+        "suite": "com.atom.chat.render.GoldenFrameTest",
+        "test": "goldenFrames()",
+        "reason": ""
+      },
+      {
+        "suite": "com.atom.chat.render.PageEntranceGpuBenchmark",
+        "test": "layeredEntranceAgainstSettledDraw()",
+        "reason": ""
+      },
+      {
+        "suite": "com.atom.chat.render.SkiaDrawBenchmark",
+        "test": "primitiveCostPerFrame()",
+        "reason": ""
+      },
+      {
+        "suite": "com.atom.chat.ui.EmojiPanelPerformanceTest",
+        "test": "measureSteadyEmojiRendering(Path)",
+        "reason": ""
+      },
+      {
+        "suite": "com.atom.chat.ui.EmojiPanelPerformanceTest",
+        "test": "measureGlEmojiRendering(Path)",
+        "reason": ""
+      }
+    ]
+  },
+  {
+    "target": "1.21.1-neoforge",
+    "command": [
+      "cmd",
+      "/d",
+      "/c",
+      "gradlew.bat",
+      "test",
+      "build",
+      "--offline",
+      "--no-daemon",
+      "-PatomlibMavenRepo=D:/AtomChat-Main/build/atomlib-slim-20261107/atomlib-maven-v040-final"
+    ],
+    "java_home": "C:/Program Files/Microsoft/jdk-21.0.8.9-hotspot",
+    "start": "2026-11-14T15:17:00.728027",
+    "seconds": 130.8658149242401,
+    "exit": 0,
+    "log": "D:\\AtomChat-Main\\build\\editor-grill-20261114\\final-1.21.1-neoforge.log",
+    "successful": true,
+    "tests": {
+      "tests": 1879,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 7
+    },
+    "ui_style_contract": [
+      {
+        "tests": "4",
+        "failures": "0",
+        "errors": "0",
+        "skipped": "0"
+      }
+    ],
+    "skips": [
+      {
+        "suite": "com.atom.chat.compat.AtomLibApiPreflightTest",
+        "test": "alternateLibraryJarPassesTheSameClientPreflight()",
+        "reason": "Assumption failed: alternate jar not supplied"
+      },
+      {
+        "suite": "com.atom.chat.render.AboutGpuBenchmark",
+        "test": "shadowAndAboutStaticLayers()",
+        "reason": "Assumption failed: set ATOMCHAT_GPU_BENCH=1 for the hidden-GL A/B"
+      },
+      {
+        "suite": "com.atom.chat.render.GoldenFrameTest",
+        "test": "goldenFrames()",
+        "reason": "Assumption failed: 基准帧只在 goldenCapture / goldenCompare / goldenDeterminism 下跑（CI 不跑：跨机器不保证逐字节一致，也没有「拆前」可比）"
+      },
+      {
+        "suite": "com.atom.chat.render.PageEntranceGpuBenchmark",
+        "test": "layeredEntranceAgainstSettledDraw()",
+        "reason": "Assumption failed: set ATOMCHAT_BENCH=1 to run the hidden-GL entrance benchmark"
+      },
+      {
+        "suite": "com.atom.chat.render.SkiaDrawBenchmark",
+        "test": "primitiveCostPerFrame()",
+        "reason": "Assumption failed: 微基准默认不跑：ATOMCHAT_BENCH=1 ./gradlew test --tests '*SkiaDrawBenchmark*'"
+      },
+      {
+        "suite": "com.atom.chat.ui.EmojiPanelPerformanceTest",
+        "test": "measureSteadyEmojiRendering(Path)",
+        "reason": "Assumption failed: assumption is not true"
+      },
+      {
+        "suite": "com.atom.chat.ui.EmojiPanelPerformanceTest",
+        "test": "measureGlEmojiRendering(Path)",
+        "reason": "Assumption failed: assumption is not true"
+      }
+    ]
+  }
+]

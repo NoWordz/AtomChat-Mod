@@ -91,6 +91,8 @@ public final class ImagePreviewOverlay {
         dragging = false;
         closeHover = 0F;
         this.lastFrameMs = System.currentTimeMillis();
+        if (com.atom.chat.onboarding.TutorialSandbox.active())
+            com.atom.chat.onboarding.TutorialSandbox.imageAction();
     }
 
     public boolean isActive() {

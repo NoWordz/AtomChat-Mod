@@ -6,6 +6,17 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 
 class FeedbackLanguageTest {
+    @Test void aboutTutorialExplainsWhereDiagnosticLoggingIsEnabled() throws Exception {
+        Path root=Path.of(System.getProperty("atomchat.repoRoot","../..")).toAbsolutePath().normalize();
+        for(String target:new String[]{"1.20.1-forge","1.21.1-fabric","1.21.1-neoforge"}) {
+            var zh=JsonParser.parseString(Files.readString(root.resolve("platforms/"+target+"/src/main/resources/assets/atomchat/lang/zh_cn.json"))).getAsJsonObject();
+            var en=JsonParser.parseString(Files.readString(root.resolve("platforms/"+target+"/src/main/resources/assets/atomchat/lang/en_us.json"))).getAsJsonObject();
+            assertTrue(zh.get("atomchat.tutorial.about.body").getAsString().contains("诊断"));
+            assertTrue(zh.get("atomchat.tutorial.about.body").getAsString().contains("高级"));
+            assertTrue(zh.get("atomchat.tutorial.about.body").getAsString().contains("调试模式"));
+            assertTrue(en.get("atomchat.tutorial.about.body").getAsString().toLowerCase().contains("diagnostic"));
+        }
+    }
     @Test void allSixCatalogsContainTheActualOutlineAndWallpaperKeys() throws Exception {
         Path root=Path.of(System.getProperty("atomchat.repoRoot","../..")).toAbsolutePath().normalize();
         for(String target:new String[]{"1.20.1-forge","1.21.1-fabric","1.21.1-neoforge"})

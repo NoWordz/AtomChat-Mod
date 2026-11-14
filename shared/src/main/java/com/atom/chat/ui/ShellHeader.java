@@ -193,7 +193,7 @@ public final class ShellHeader {
 
     private static void drawIconCentered(Canvas canvas, io.github.humbleui.skija.Path icon,
                                          float cx, float cy, float size, int color) {
-        Rect b = icon.getBounds();
+        Rect b = com.atom.chat.render.OutlineIconBounds.of(icon);
         if (b == null || b.isEmpty()) {
             return;
         }

@@ -37,6 +37,14 @@ public final class ToolMenu {
     }
     public PlayerRef playerAt(int row) { return playersOpen && row > 0 && row <= players.size() ? players.get(row - 1) : null; }
     private int rows() { return playersOpen ? Math.max(2, players.size() + 1) : 3; }
+    public UiLayout.Rect paintedBounds(UiLayout source){return ComposerPopupTransform.of(bounds(source),anim).paintedBounds(bounds(source));}
+    public UiLayout.Rect paintedRow(UiLayout source, int row) {
+        if (!open || playersOpen || row < 0 || row >= rows()) return null;
+        var box = bounds(source);
+        var rect = new UiLayout.Rect(box.x(), box.y() + row * ToolLayout.MENU_ROW_H - scroll,
+                box.w(), ToolLayout.MENU_ROW_H);
+        return ComposerPopupTransform.of(box, anim).paintedBounds(rect);
+    }
     public UiLayout.Rect bounds(UiLayout source) { return ToolLayout.menu(source, rows()); }
     public int hit(UiLayout source, float x, float y) {
         var box = bounds(source);

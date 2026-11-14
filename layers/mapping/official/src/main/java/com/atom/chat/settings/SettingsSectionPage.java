@@ -200,6 +200,7 @@ public final class SettingsSectionPage {
     private static final String ACTION_TELEPORT_MODE = "teleport_mode";
     private static final String ACTION_PAGE_NAV_STYLE = "page_nav_style";
     private static final String ACTION_HUD_EDIT = "hud_edit";
+    private static final String ACTION_PANEL_EDIT = "panel_edit";
     private static final String ACTION_AVATAR_STYLE = "avatar_style";
     public static final String ACTION_BUBBLE_STYLE = "bubble_style:";
     private static final String ACTION_HISTORY_CLEAR = "history_clear";
@@ -225,6 +226,11 @@ public final class SettingsSectionPage {
                 "atomchat.settings.appearance.wallpaper.clear.desc",
                 () -> true, v -> {
         });
+    }
+
+    private SettingsItem panelEditItem() {
+        return new SettingsItem("panel_edit", "atomchat.panel_editor.title",
+                "atomchat.panel_editor.desc", () -> true, v -> { });
     }
 
     private SettingsItem hudEditItem() {
@@ -352,6 +358,23 @@ public final class SettingsSectionPage {
         }
         int index = activeChip.getOrDefault(section.id(), 0);
         return Math.max(0, Math.min(index, sectionChips.size() - 1));
+    }
+
+    public void requestTabReset(SettingsSection section, java.util.function.BiConsumer<String, Boolean> feedback) {
+        requestTabReset(section, feedback, () -> {});
+    }
+
+    public void requestTabReset(SettingsSection section, java.util.function.BiConsumer<String, Boolean> feedback,
+                               Runnable afterGeometryReset) {
+        String chip = activeChipId(section);
+        String label = tr("atomchat.settings." + section.id());
+        if (!chips(section).isEmpty()) label += " · " + tr(chips(section).get(activeChipIndex(section)).labelKey());
+        new SettingsTabResetPrompt(confirmation, AtomChatConfig::get, AtomChatConfig::saveChecked,
+                key -> tr(key), feedback, () -> {
+                    rowGeometry = null;
+                    com.atom.chat.chat.TeleportCommands.reset();
+                    if (section == SettingsSection.APPEARANCE && "adjust".equals(chip)) afterGeometryReset.run();
+                }).request(section, chip, label);
     }
 
     private String activeChipId(SettingsSection section) {
@@ -493,17 +516,19 @@ public final class SettingsSectionPage {
         long animStart;
         boolean animActive, pressed, dragged;
         int pressedCard = -1;
+        int hoveredCard = -1;
         UiLayout.Rect rect;
         final Map<Integer, PressScale> scales = new HashMap<>();
         CardStrip(RowKind kind) { this.kind = kind; }
         void reset() {
             scroll = target = 0F;
             animActive = pressed = dragged = false;
-            pressedCard = -1;
+            pressedCard = hoveredCard = -1;
             rect = null;
             scales.clear();
         }
     }
+    private long stripHitTests;
     private final CardStrip themeStrip = new CardStrip(RowKind.THEMES);
     private final CardStrip bubbleStrip = new CardStrip(RowKind.BUBBLES);
     private final CardStrip wallpaperStrip = new CardStrip(RowKind.WALLPAPERS);
@@ -792,7 +817,7 @@ public final class SettingsSectionPage {
             verb = tr(AtomChatConfig.get().effectiveAvatarStyle() == AtomChatConfig.AvatarStyle.E33CHAT
                     ? "atomchat.settings.chat.avatar_style.e33chat"
                     : "atomchat.settings.chat.avatar_style.atomchat");
-        } else if (ACTION_HUD_EDIT.equals(row.actionId())) {
+        } else if (ACTION_HUD_EDIT.equals(row.actionId()) || "panel_edit".equals(row.actionId())) {
             subtitle = tr(item.subtitleKey());
             verb = tr("atomchat.settings.action.edit");
         } else if (ACTION_PAGE_NAV_STYLE.equals(row.actionId())) {
@@ -1016,9 +1041,10 @@ public final class SettingsSectionPage {
             }
             case "adjust" -> {
                 addGroup(rows, "atomchat.settings.group.appearance.layout", () -> {
+                    rows.add(Row.ofAction("panel_edit", panelEditItem()));
                     addSwitches(rows, SettingsSection.APPEARANCE, "half_screen");
                     addSliders(rows, SettingsSection.APPEARANCE,
-                            "width", "scale", "contentscale");
+                            "width", "height", "scale", "contentscale");
                 });
                 addGroup(rows, "atomchat.settings.group.appearance.transparency", () ->
                         addSliders(rows, SettingsSection.APPEARANCE,
@@ -1307,6 +1333,56 @@ public final class SettingsSectionPage {
     /** Width one row card gets: the list minus the clip clearance on both sides. */
     private static float rowCardWidth(UiLayout layout) {
         return layout.list.w() - ROW_CLIP_INSET * 2.0F;
+    }
+
+    public record TutorialFolds(java.util.Set<String> collapsed,java.util.Map<String,Float> expansion) { }
+    public TutorialFolds tutorialFolds(){return new TutorialFolds(java.util.Set.copyOf(collapsedColorGroups),java.util.Map.copyOf(groupExpansion));}
+    public void restoreTutorialFolds(TutorialFolds saved){collapsedColorGroups.clear();collapsedColorGroups.addAll(saved.collapsed());groupExpansion.clear();groupExpansion.putAll(saved.expansion());}
+    public void expandTutorialGroup(SettingsSection section,int index) {
+        var visible=rows(section);if(index<0||index>=visible.size())return;
+        String group=null;
+        for(int i=0;i<=index;i++)if(visible.get(i).kind()==RowKind.LABEL)group=foldableGroup(visible.get(i).labelKey());
+        if(group!=null){collapsedColorGroups.remove(group);groupExpansion.put(group,1f);}
+    }
+    public record TutorialRow(String title,String body,boolean startsGroup,boolean standalone) { }
+    public List<TutorialRow> tutorialRows(SettingsSection section) {
+        var result=new java.util.ArrayList<TutorialRow>();
+        for(var row:rows(section)) {
+            String title=row.item()!=null?tr(row.item().titleKey()):row.slider()!=null?tr(row.slider().titleKey())
+                    :row.color()!=null?tr(row.color().titleKey()):row.info()!=null?tr(row.info().titleKey())
+                    :row.labelKey()!=null?tr(row.labelKey()):row.kind()==RowKind.THEMES?tr("atomchat.settings.appearance.theme")
+                    :row.kind()==RowKind.WALLPAPERS?tr("atomchat.settings.appearance.wallpaper")
+                    :row.kind()==RowKind.BUBBLES?tr("atomchat.tutorial.appearance.title"):tr("atomchat.tutorial."+section.id()+".title");
+            String body=descriptionText(row);
+            if(body==null||body.isBlank())body=title;
+            result.add(new TutorialRow(title,body,row.kind()==RowKind.LABEL,row.kind()==RowKind.THEMES||row.kind()==RowKind.WALLPAPERS||row.kind()==RowKind.BUBBLES));
+        }
+        return java.util.List.copyOf(result);
+    }
+    /** The same row geometry used by paint and hit testing, scrolled into view before annotating. */
+    public UiLayout.Rect tutorialAnchor(SettingsSection section,int index,UiLayout layout,com.atom.chat.ui.ScrollController scroll) {
+        expandTutorialGroup(section,index);
+        var rows=rows(section);
+        if(index<0||index>=rows.size())return layout.list;
+        var rect=rowRect(section,rows,index,scroll.getScrollY(),layout);
+        if(rect.y()<layout.list.y()||rect.bottom()>layout.list.bottom()) {
+            float top=contentTop(layout,section);
+            var geometry=rowGeometry(section,rows,layout);
+            scroll.setContent(Math.max(layout.list.h(),geometry.contentHeight()+top-layout.list.y()),layout.list.h());
+            scroll.scrollTo(Math.max(0,geometry.tops()[index]),false);
+            rect=rowRect(section,rows,index,scroll.getScrollY(),layout);
+        }
+        return staggerHits.paintedBounds(rect);
+    }
+
+    public UiLayout.Rect tutorialGroupAnchor(SettingsSection section,int first,int last,UiLayout layout,float scrollY) {
+        var rows=rows(section);
+        if(first<0||first>=rows.size())return layout.list;
+        var a=rowRect(section,rows,first,scrollY,layout);
+        var b=rowRect(section,rows,Math.min(last,rows.size()-1),scrollY,layout);
+        a=staggerHits.paintedBounds(a);b=staggerHits.paintedBounds(b);
+        float top=Math.max(layout.list.y(),a.y()),bottom=Math.min(layout.list.bottom(),b.bottom());
+        return new UiLayout.Rect(a.x(),top,a.w(),Math.max(0,bottom-top));
     }
 
     /** Package-private so layout tests can assert the scroll-end clearance. */
@@ -2009,15 +2085,23 @@ public final class SettingsSectionPage {
         return rect.y() + s(28);
     }
 
+    /** The strip clip owns the edges; drawing fully hidden cards only burns frames. */
+    private static boolean stripCardVisible(UiLayout.Rect rect,float x,float w) {
+        float reach=com.atom.chat.render.CardShadowReach.PAD;
+        return x+w+reach>=rect.x()&&x-reach<=rect.right();
+    }
+
     /** Card index under the pointer, or -1. Mirrors the renderer geometry. */
     private int stripCardAt(CardStrip strip, UiLayout.Rect rect, float vmx, float vmy) {
+        stripHitTests++;
         if (!rect.contains(vmx, vmy)) return -1;
         float scroll = strip.scroll;
         float top = themeCardY(rect);
         if (vmy < top || vmy > top + UiTokens.THEME_CARD_H + s(18)) {
             return -1;
         }
-        for (int i = 0; i < stripCardCount(strip); i++) {
+        int count = stripCardCount(strip);
+        for (int i = 0; i < count; i++) {
             float x = themeCardX(rect, i, scroll);
             if (vmx >= x && vmx <= x + UiTokens.THEME_CARD_W) {
                 return i;
@@ -2226,6 +2310,7 @@ public final class SettingsSectionPage {
     private void drawWallpapers(Canvas canvas, UiLayout.Rect row, float dtMs) {
         advanceStrip(wallpaperStrip, row);
         wallpaperStrip.rect = row;
+        wallpaperStrip.hoveredCard = stripCardAt(wallpaperStrip, row, pointerX, pointerY);
         Font title = FontManager.font(UiTokens.SETTINGS_TILE_TITLE);
         Font value = FontManager.font(UiTokens.SETTINGS_TILE_SUB);
         SkiaFontRenderer.drawText(canvas, title, tr("atomchat.settings.wallpaper.presets"),
@@ -2260,6 +2345,7 @@ public final class SettingsSectionPage {
     private void drawBubblePreviews(Canvas canvas, UiLayout.Rect row, float dtMs) {
         advanceStrip(bubbleStrip, row);
         bubbleStrip.rect = row;
+        bubbleStrip.hoveredCard = stripCardAt(bubbleStrip, row, pointerX, pointerY);
         AtomChatConfig cfg = AtomChatConfig.get();
         var preview = previewOf(AppearancePresetStore.Snapshot.capture(cfg));
         Font title = FontManager.font(UiTokens.SETTINGS_TILE_TITLE);
@@ -2298,6 +2384,7 @@ public final class SettingsSectionPage {
             themeStrip.animActive = false;
             revealLatestPresetPending = false;
         }
+        themeStrip.hoveredCard = stripCardAt(themeStrip, rect, pointerX, pointerY);
         Font titleFont = FontManager.font(UiTokens.SETTINGS_TILE_TITLE);
         Font valueFont = FontManager.font(UiTokens.SETTINGS_TILE_SUB);
         String currentId = AtomChatConfig.get().themeName;
@@ -2409,12 +2496,13 @@ public final class SettingsSectionPage {
         float w = UiTokens.THEME_CARD_W;
         float h = UiTokens.THEME_CARD_H;
         float radius = UiTokens.radius(10);
+        if(!stripCardVisible(rect,x,w))return;
 
         // The cards are separated by THEME_CARD_GAP and packed against the
         // strip's own clip; the width budget keeps the gap and the rounded
         // edges visible. The scaled shape is the card itself (w).
         PressScale press = strip.scales.computeIfAbsent(index, k -> PressScale.bounce());
-        press.update(stripCardAt(strip, rect, pointerX, pointerY) == index,
+        press.update(strip.hoveredCard == index,
                 strip.pressed && strip.pressedCard == index, dtMs, Animations.enabled(), w);
         press.begin(canvas, x + w / 2.0F, y + h / 2.0F);
         try {
@@ -2460,7 +2548,7 @@ public final class SettingsSectionPage {
                 SkiaDraw.drawEdgeHighlight(canvas, x, y, w, h, radius, s(1.5F), preview.accent());
             }
             if (deletable) {
-                int hoveredCard = stripCardAt(strip, rect, pointerX, pointerY);
+                int hoveredCard = strip.hoveredCard;
                 boolean hover = hoveredCard == index;
                 float fade = UiMotion.approach(themeDeleteHover.getOrDefault(index, 0.0F),
                         hover ? 1.0F : 0.0F, dtMs, UiMotion.HOVER_MS);
@@ -2490,8 +2578,9 @@ public final class SettingsSectionPage {
         float y = themeCardY(rect);
         float w = UiTokens.THEME_CARD_W;
         float h = UiTokens.THEME_CARD_H;
+        if(!stripCardVisible(rect,x,w))return;
         PressScale press = themeStrip.scales.computeIfAbsent(index, k -> PressScale.bounce());
-        press.update(stripCardAt(themeStrip, rect, pointerX, pointerY) == index,
+        press.update(themeStrip.hoveredCard == index,
                 themeStrip.pressed && themeStrip.pressedCard == index, dtMs, Animations.enabled(), w);
         press.begin(canvas, x + w / 2.0F, y + h / 2.0F);
         try {
@@ -3593,7 +3682,7 @@ public final class SettingsSectionPage {
                         bodyKey += ".memory";
                     }
                     cancelPointer(); // The modal will consume the mouse-up belonging to this card.
-                    confirmation.open(tr(hit.row().item().titleKey()), tr(bodyKey),
+                    confirmation.openDangerous(tr(hit.row().item().titleKey()), tr(bodyKey),
                             tr("atomchat.confirm.cancel"), tr("atomchat.confirm.confirm"),
                             () -> actionHandler.onAction(actionId));
                     return true;

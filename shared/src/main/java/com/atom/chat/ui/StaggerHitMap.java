@@ -19,6 +19,14 @@ public final class StaggerHitMap {
     public void add(UiLayout.Rect rect, float dx, float dy, float scale) {
         add(rect, dx, dy, scale, rect.x() + rect.w() / 2, rect.y() + rect.h() / 2);
     }
+    public UiLayout.Rect paintedBounds(UiLayout.Rect rect) {
+        for(int i=items.size()-1;i>=0;i--) {
+            Item item=items.get(i);
+            if(item.rect.equals(rect))return new UiLayout.Rect(item.cx+(rect.x()-item.cx)*item.scale+item.dx,
+                item.cy+(rect.y()-item.cy)*item.scale+item.dy,rect.w()*item.scale,rect.h()*item.scale);
+        }
+        return rect;
+    }
     public Point inverse(float x, float y) {
         for (int i = items.size() - 1; i >= 0; i--) {
             Item item = items.get(i);

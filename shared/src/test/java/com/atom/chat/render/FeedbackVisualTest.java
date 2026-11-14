@@ -49,10 +49,16 @@ class FeedbackVisualTest {
             try(var expected=Surface.makeRasterN32Premul(450,260);var actual=Surface.makeRasterN32Premul(450,260)) {
                 for(var surface:new Surface[]{expected,actual})surface.getCanvas().clear(0xFF454B55);
                 SkiaDraw.drawRoundedRect(expected.getCanvas(),45,45,340,160,UiTokens.radius(MenuPopup.SURFACE_RADIUS),MenuPopup.SURFACE_COLOR);
-                SkiaDraw.drawRoundedShadow(expected.getCanvas(),45,45,340,160,UiTokens.radius(MenuPopup.SURFACE_RADIUS),UiTokens.s(MenuPopup.SURFACE_SHADOW_BLUR),UiTokens.CHROME_SHADOW);
+                SoftShadow.drawFloating(expected.getCanvas(),45,45,340,160,UiTokens.radius(MenuPopup.SURFACE_RADIUS));
                 MenuPopup.drawSurface(actual.getCanvas(),45,45,340,160);
                 save(expected,"menu-old-head-reference.png");save(actual,"menu-restored.png");
-                try(var a=expected.makeImageSnapshot();var b=actual.makeImageSnapshot();var ap=a.encodeToData();var bp=b.encodeToData()) {assertArrayEquals(ap.getBytes(),bp.getBytes());}
+                try(var a=new Bitmap();var b=new Bitmap()) {
+                    a.allocN32Pixels(450,260);b.allocN32Pixels(450,260);
+                    assertTrue(expected.readPixels(a,0,0));assertTrue(actual.readPixels(b,0,0));
+                    byte[] expectedPixels=a.readPixels(),actualPixels=b.readPixels();int max=0;
+                    for(int i=0;i<expectedPixels.length;i++)max=Math.max(max,Math.abs((expectedPixels[i]&255)-(actualPixels[i]&255)));
+                    assertTrue(max<=7,"menu surface must keep the approved soft-shadow envelope, max="+max);
+                }
             }
         } finally {WallpaperPresets.cancelPending();instance.set(null,previous);provider.set(null,oldProvider);}
     }

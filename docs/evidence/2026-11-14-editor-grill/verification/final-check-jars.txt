@@ -1,0 +1,26 @@
+[ok] D:\AtomChat-Main\platforms\1.20.1-forge\build\atomlib-consumer\libs\atomchat-Forge-1.20.1-v0.7.0.jar: exactly one AtomLib consumer jar -- [WindowsPath('D:/AtomChat-Main/platforms/1.20.1-forge/build/atomlib-consumer/libs/atomchat-Forge-1.20.1-v0.7.0.jar')]
+[ok] D:\AtomChat-Main\platforms\1.20.1-forge\build\atomlib-consumer\libs\atomchat-Forge-1.20.1-v0.7.0.jar: architecture-independent name -- atomchat-Forge-1.20.1-v0.7.0.jar
+[ok] D:\AtomChat-Main\platforms\1.20.1-forge\build\atomlib-consumer\libs\atomchat-Forge-1.20.1-v0.7.0.jar: lock declares a dependency range -- '*'
+[ok] D:\AtomChat-Main\platforms\1.20.1-forge\build\atomlib-consumer\libs\atomchat-Forge-1.20.1-v0.7.0.jar: no duplicated UI Java/native payload
+[ok] D:\AtomChat-Main\platforms\1.20.1-forge\build\atomlib-consumer\libs\atomchat-Forge-1.20.1-v0.7.0.jar: private relocated FlatLaf retained
+[ok] D:\AtomChat-Main\platforms\1.20.1-forge\build\atomlib-consumer\libs\atomchat-Forge-1.20.1-v0.7.0.jar: all nested jars registered
+[ok] D:\AtomChat-Main\platforms\1.20.1-forge\build\atomlib-consumer\libs\atomchat-Forge-1.20.1-v0.7.0.jar: client-scoped AtomLib dependency
+[ok] D:\AtomChat-Main\platforms\1.20.1-forge\build\atomlib-consumer\libs\atomchat-Forge-1.20.1-v0.7.0.jar: compiled AtomLib input agrees with lock
+[ok] D:\AtomChat-Main\platforms\1.21.1-fabric\build\atomlib-consumer\libs\atomchat-Fabric-1.21.1-v0.7.0.jar: exactly one AtomLib consumer jar -- [WindowsPath('D:/AtomChat-Main/platforms/1.21.1-fabric/build/atomlib-consumer/libs/atomchat-Fabric-1.21.1-v0.7.0.jar')]
+[ok] D:\AtomChat-Main\platforms\1.21.1-fabric\build\atomlib-consumer\libs\atomchat-Fabric-1.21.1-v0.7.0.jar: architecture-independent name -- atomchat-Fabric-1.21.1-v0.7.0.jar
+[ok] D:\AtomChat-Main\platforms\1.21.1-fabric\build\atomlib-consumer\libs\atomchat-Fabric-1.21.1-v0.7.0.jar: lock declares a dependency range -- '*'
+[ok] D:\AtomChat-Main\platforms\1.21.1-fabric\build\atomlib-consumer\libs\atomchat-Fabric-1.21.1-v0.7.0.jar: no duplicated UI Java/native payload
+[ok] D:\AtomChat-Main\platforms\1.21.1-fabric\build\atomlib-consumer\libs\atomchat-Fabric-1.21.1-v0.7.0.jar: private relocated FlatLaf retained
+[ok] D:\AtomChat-Main\platforms\1.21.1-fabric\build\atomlib-consumer\libs\atomchat-Fabric-1.21.1-v0.7.0.jar: all nested jars registered
+[ok] D:\AtomChat-Main\platforms\1.21.1-fabric\build\atomlib-consumer\libs\atomchat-Fabric-1.21.1-v0.7.0.jar: client-scoped AtomLib dependency
+[ok] D:\AtomChat-Main\platforms\1.21.1-fabric\build\atomlib-consumer\libs\atomchat-Fabric-1.21.1-v0.7.0.jar: compiled AtomLib input agrees with lock
+[ok] D:\AtomChat-Main\platforms\1.21.1-neoforge\build\atomlib-consumer\libs\atomchat-NeoForge-1.21.1-v0.7.0.jar: exactly one AtomLib consumer jar -- [WindowsPath('D:/AtomChat-Main/platforms/1.21.1-neoforge/build/atomlib-consumer/libs/atomchat-NeoForge-1.21.1-v0.7.0.jar')]
+[ok] D:\AtomChat-Main\platforms\1.21.1-neoforge\build\atomlib-consumer\libs\atomchat-NeoForge-1.21.1-v0.7.0.jar: architecture-independent name -- atomchat-NeoForge-1.21.1-v0.7.0.jar
+[ok] D:\AtomChat-Main\platforms\1.21.1-neoforge\build\atomlib-consumer\libs\atomchat-NeoForge-1.21.1-v0.7.0.jar: lock declares a dependency range -- '*'
+[ok] D:\AtomChat-Main\platforms\1.21.1-neoforge\build\atomlib-consumer\libs\atomchat-NeoForge-1.21.1-v0.7.0.jar: no duplicated UI Java/native payload
+[ok] D:\AtomChat-Main\platforms\1.21.1-neoforge\build\atomlib-consumer\libs\atomchat-NeoForge-1.21.1-v0.7.0.jar: private relocated FlatLaf retained
+[ok] D:\AtomChat-Main\platforms\1.21.1-neoforge\build\atomlib-consumer\libs\atomchat-NeoForge-1.21.1-v0.7.0.jar: all nested jars registered
+[ok] D:\AtomChat-Main\platforms\1.21.1-neoforge\build\atomlib-consumer\libs\atomchat-NeoForge-1.21.1-v0.7.0.jar: client-scoped AtomLib dependency
+[ok] D:\AtomChat-Main\platforms\1.21.1-neoforge\build\atomlib-consumer\libs\atomchat-NeoForge-1.21.1-v0.7.0.jar: compiled AtomLib input agrees with lock
+
+产物断言全部通过。

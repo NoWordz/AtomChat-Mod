@@ -1,0 +1,102 @@
+{
+  "baseline": "513f1942404407f0971975fb45c65250a068a290",
+  "artifacts": {
+    "1.20.1-forge": {
+      "artifact": "D:\\AtomChat-Main\\platforms\\1.20.1-forge\\build\\atomlib-consumer\\libs\\atomchat-Forge-1.20.1-v0.7.0.jar",
+      "sha256": "2c5fe5c5b76e0ea52ba4d14f6bd1d9fc05291df66906a06eb87bfc9976e35e08",
+      "tests": {
+        "tests": 1813,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 7
+      },
+      "java_class_major": 61
+    },
+    "1.21.1-fabric": {
+      "artifact": "D:\\AtomChat-Main\\platforms\\1.21.1-fabric\\build\\atomlib-consumer\\libs\\atomchat-Fabric-1.21.1-v0.7.0.jar",
+      "sha256": "1fcdb30785f0c38d24d0072a1e003990220cc6cb0a61e0c34717185ddcdf49b7",
+      "tests": {
+        "tests": 1828,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 7
+      },
+      "java_class_major": 65
+    },
+    "1.21.1-neoforge": {
+      "artifact": "D:\\AtomChat-Main\\platforms\\1.21.1-neoforge\\build\\atomlib-consumer\\libs\\atomchat-NeoForge-1.21.1-v0.7.0.jar",
+      "sha256": "19d3847f6f3bbeb6664c662c5ac89612203254afc1570af90c536dad6ecf0720",
+      "tests": {
+        "tests": 1813,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 7
+      },
+      "java_class_major": 65
+    }
+  },
+  "deployment": {
+    "date": "2026-11-13T22:29:01.860464+08:00",
+    "backup": "D:\\AtomChat-Backups\\2026-11-13-panel-followup\\20261113-222901",
+    "targets": {
+      "1.20.1-forge": {
+        "instance": "1.20.1-main",
+        "installed": "D:\\Myworld\\.minecraft\\versions\\1.20.1-main\\mods\\atomchat-Forge-1.20.1-v0.7.0.jar",
+        "sha256": "2c5fe5c5b76e0ea52ba4d14f6bd1d9fc05291df66906a06eb87bfc9976e35e08",
+        "backup_file": "D:\\AtomChat-Backups\\2026-11-13-panel-followup\\20261113-222901\\1.20.1-forge\\atomchat-Forge-1.20.1-v0.7.0.jar",
+        "old_sha256": "f7417afa0e89f56a6eed522f7eb6217d215a1a832d0c580b067ce55c6218184f",
+        "protected_files": 217,
+        "protected_unchanged": true
+      },
+      "1.21.1-fabric": {
+        "instance": "1.21.1-CCB",
+        "installed": "D:\\Myworld\\.minecraft\\versions\\1.21.1-CCB\\mods\\atomchat-Fabric-1.21.1-v0.7.0.jar",
+        "sha256": "1fcdb30785f0c38d24d0072a1e003990220cc6cb0a61e0c34717185ddcdf49b7",
+        "backup_file": "D:\\AtomChat-Backups\\2026-11-13-panel-followup\\20261113-222901\\1.21.1-fabric\\atomchat-Fabric-1.21.1-v0.7.0.jar",
+        "old_sha256": "4cf8ef6ce2f2801349fb9803c5e3b8d54cf3b1f44a0a9d88dc11ea1adb67f371",
+        "protected_files": 462,
+        "protected_unchanged": true
+      },
+      "1.21.1-neoforge": {
+        "instance": "Mechanomania-航空学",
+        "installed": "D:\\Myworld\\.minecraft\\versions\\Mechanomania-航空学\\mods\\atomchat-NeoForge-1.21.1-v0.7.0.jar",
+        "sha256": "19d3847f6f3bbeb6664c662c5ac89612203254afc1570af90c536dad6ecf0720",
+        "backup_file": "D:\\AtomChat-Backups\\2026-11-13-panel-followup\\20261113-222901\\1.21.1-neoforge\\atomchat-NeoForge-1.21.1-v0.7.0.jar",
+        "old_sha256": "7be2c190a335749286918080c0dd66448ceba9f550ae90cc2499b00d940f916c",
+        "protected_files": 239,
+        "protected_unchanged": true
+      }
+    }
+  },
+  "independent_check": {
+    "targets": {
+      "1.20.1-forge": {
+        "installed_sha256": "2c5fe5c5b76e0ea52ba4d14f6bd1d9fc05291df66906a06eb87bfc9976e35e08",
+        "backup_matches": true,
+        "protected_files": 217,
+        "protected_unchanged": true
+      },
+      "1.21.1-fabric": {
+        "installed_sha256": "1fcdb30785f0c38d24d0072a1e003990220cc6cb0a61e0c34717185ddcdf49b7",
+        "backup_matches": true,
+        "protected_files": 462,
+        "protected_unchanged": true
+      },
+      "1.21.1-neoforge": {
+        "installed_sha256": "19d3847f6f3bbeb6664c662c5ac89612203254afc1570af90c536dad6ecf0720",
+        "backup_matches": true,
+        "protected_files": 239,
+        "protected_unchanged": true
+      }
+    },
+    "source_files_unchanged": 550,
+    "passed": true
+  },
+  "review": "Parent reviewed and corrected coordinate/input ownership defects after Terra medium implementation; child exited on 429",
+  "limits": [
+    "No Minecraft client started",
+    "CPU offscreen performance measurement is not GPU timing or whole-game FPS",
+    "Gameplay, IME and resizing acceptance pending",
+    "No commit, push or release"
+  ]
+}

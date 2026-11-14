@@ -636,7 +636,9 @@ class ContextMenuControllerTest {
         for (int y = 0; y < SURFACE_H; y++) {
             int run = 0;
             for (int x = 0; x < SURFACE_W; x++) {
-                if ((px[(y * SURFACE_W + x) * 4 + 3] & 0xFF) > 90) {
+                // Measure the plate itself, not the outer soft shadow. The shadow
+                // can otherwise make a faded menu look wider than the open one.
+                if ((px[(y * SURFACE_W + x) * 4 + 3] & 0xFF) > 200) {
                     widest = Math.max(widest, ++run);
                 } else {
                     run = 0;

@@ -183,7 +183,7 @@ public final class DrawPrimitives {
     /** Draws an icon centered on an arbitrary point; used by toolbar and menus. */
     public static void drawIconCentered(Canvas canvas, Path icon, float cx, float cy,
                                  float size, int color) {
-        Rect b = icon.getBounds();
+        Rect b = com.atom.chat.render.OutlineIconBounds.of(icon);
         if (b == null || b.isEmpty()) {
             return;
         }

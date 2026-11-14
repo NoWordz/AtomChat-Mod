@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.atom.chat.settings.ThemeHoverBenchmarkTest" tests="1" skipped="0" failures="0" errors="0" timestamp="2026-11-13T13:54:20" hostname="E33EPUS" time="1.097">
+  <properties/>
+  <testcase name="reportActualThemeRowWorkInsideAndOutside(Path)" classname="com.atom.chat.settings.ThemeHoverBenchmarkTest" time="1.097"/>
+  <system-out><![CDATA[[21:54:20] [Test worker/INFO]: [AtomChat][resource] Loaded bundled font /com/atom/lib/fonts/bundled-default.otf
+theme-row inside=false mean_ms=4.133
+theme-row inside=true mean_ms=5.102
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

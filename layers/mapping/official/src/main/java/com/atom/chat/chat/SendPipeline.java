@@ -98,6 +98,9 @@ public final class SendPipeline {
         if (normalized.isEmpty()) {
             return;
         }
+        if (com.atom.chat.onboarding.TutorialSandbox.send(normalized)) {
+            host.clearComposer();host.replySlots().disarm();host.focusComposer();host.stickToBottom();return;
+        }
         Minecraft client = host.client();
         if (client.player == null) {
             return;

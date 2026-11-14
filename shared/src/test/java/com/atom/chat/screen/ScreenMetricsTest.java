@@ -65,6 +65,17 @@ class ScreenMetricsTest {
     void restoreConfig() {
         AtomChatConfig.get().contentScale = DEFAULT_CS;
         AtomChatConfig.get().uiScale = DEFAULT_UI;
+        AtomChatConfig.get().panelPositionCustom = false;
+    }
+
+    @Test void customPositionClampsToViewportAndSharesThePointerCoordinateSpace() {
+        var cfg=AtomChatConfig.get(); cfg.panelPositionCustom=true; cfg.panelPositionX=1F; cfg.panelPositionY=1F;
+        float vw=ScreenMetrics.vw(1280,720), vh=ScreenMetrics.vh(720);
+        float x=ScreenMetrics.panelX(1280,720), y=ScreenMetrics.panelY(720);
+        assertEquals(vw, x+ScreenMetrics.panelWidth(1280,720), .01F);
+        assertEquals(vh, y+ScreenMetrics.panelHeight(720), .01F);
+        assertEquals(x, ScreenMetrics.toVirtualX(x/2F,2F,720), .01F);
+        assertEquals(y, ScreenMetrics.toVirtualY(y/2F,2F,720), .01F);
     }
 
     @Test

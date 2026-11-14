@@ -150,6 +150,7 @@ public final class ImageUploadPipeline {
      * picker and by Ctrl+V pastes.
      */
     public void uploadAndAppend(Path file) {
+        if(com.atom.chat.onboarding.TutorialSandbox.active()){com.atom.chat.onboarding.TutorialSandbox.action();return;}
         ImageBounds.Inspection inspection;
         try {
             inspection = ImageBounds.inspect(file);
@@ -232,6 +233,7 @@ public final class ImageUploadPipeline {
      * happens off-thread via {@link ImageSaver} so the raw bytes stay identical.
      */
     public void saveImage(ChatMessage message) {
+        if(com.atom.chat.onboarding.TutorialSandbox.active()){com.atom.chat.onboarding.TutorialSandbox.action();return;}
         String url = Cicodes.extractImageUrl(message.getRawText());
         if (url == null) {
             return;

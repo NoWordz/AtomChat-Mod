@@ -496,4 +496,12 @@ class HeaderChromeTest {
             bitmap.close();
         }
     }
+    @Test void adjacentActionMatchesBackSizeAndChatFilterSpacing() {
+        var chrome = new HeaderChrome(new Recorder());
+        var back = chrome.backButton(); var action = chrome.adjacentButton();
+        assertEquals(back.w(),action.w());assertEquals(back.h(),action.h());
+        assertEquals(back.y(),action.y());
+        assertEquals(UiTokens.EDGE_CONTROL_INSET,action.x()-back.right(),.001F);
+        assertFalse(back.contains(action.x()+action.w()/2,action.y()+action.h()/2));
+    }
 }

@@ -90,6 +90,12 @@ public final class HeaderChrome {
         return new UiLayout.Rect(header.x() + UiTokens.EDGE_CONTROL_INSET, y, size, size);
     }
 
+    /** Adjacent action shares the chat filter's size, gap and vertical alignment. */
+    public UiLayout.Rect adjacentButton() {
+        var back = backButton();
+        return new UiLayout.Rect(back.right() + UiTokens.EDGE_CONTROL_INSET, back.y(), back.w(), back.h());
+    }
+
     public boolean isBackButtonHit(float vmx, float vmy) {
         return backButton().contains(vmx, vmy);
     }
@@ -111,9 +117,13 @@ public final class HeaderChrome {
 
     /** Fixed header (with back affordance) for a pushed settings sub-page. */
     public void drawPushedHeader(Canvas canvas, float vmx, float vmy, NavPage nav) {
+        drawPushedHeader(canvas, vmx, vmy, nav, null);
+    }
+
+    public void drawPushedHeader(Canvas canvas, float vmx, float vmy, NavPage nav, ShellHeader.HeaderAction action) {
         stepBackButtonHover(vmx, vmy);
         ShellHeader.render(canvas, host.pushedHeaderRect(), shellTitleFor(nav), true,
-                backButton(), backButtonHover, host.textPrimary(), null);
+                backButton(), backButtonHover, host.textPrimary(), null, action);
     }
 
     public String shellTitleFor(NavPage nav) {

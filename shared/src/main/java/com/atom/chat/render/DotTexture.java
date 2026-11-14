@@ -26,25 +26,25 @@ public final class DotTexture {
     private static final Paint DOT = new Paint().setAntiAlias(true);
     private static final MaskFilter BLUR = MaskFilter.makeBlur(FilterBlurMode.NORMAL, UiTokens.DOT_GLOW_BLUR);
     private static final Paint GLOW = new Paint().setAntiAlias(true).setMaskFilter(BLUR);
-    private static final int[] ALPHAS = {12, 16, 20, 24, 28, 31, 34, 37, 40};
+    private static final int[] ALPHAS = {19, 26, 32, 38, 45, 50, 54, 59, 64};
 
     private static final int KIND_EDGE = 0, KIND_TRAIL = 1, KIND_HALO = 2;
     private static final int MAX_CACHED = 64;
     private static final int MAX_HALO_IMAGES = 8;
     private static final long MAX_HALO_BYTES = 32L * 1024L * 1024L;
     private static final int HALO_SUPERSAMPLE = 4;
-    private static final float HALO_IMAGE_MIN_AREA = 40_000.0F;
+    private static final int MAX_IMAGE_DIMENSION = 4096;
+    /** Keep the previous oversized-field fallback; a cold bake stays below 512k logical pixels. */
+    private static final int MAX_IMAGE_PIXELS = 512 * 1024;
+    private static final float FIELD_IMAGE_MIN_AREA = 40_000.0F;
     /** Covers every possible dot coordinate so the recorder never drops a command. */
     private static final Rect CULL_RECT = Rect.makeXYWH(-1_000_000F, -1_000_000F, 2_000_000F, 2_000_000F);
 
     /**
-     * Enabled by default. Edges and trails record their exact commands into a
-     * Picture; the About hero halo is a large, position-independent static
-     * field, so it is rasterised once into a bounded 2x Image and emitted as
-     * one texture draw. Only fields of at least 40k logical square pixels use
-     * the Image path (bounded at eight LSB per channel); smaller fields
-     * keep byte-identical Picture/direct paths. Setting the
-     * system property false keeps the original per-circle fallback.
+     * Small edges/fields retain exact Picture replay. Large halo and trail fields
+     * share the established 4x raster bake and bounded image cache (8 entries / 32MiB).
+     * This avoids thousands of circle submissions without changing the sampling
+     * strategy across GUI density, content scale or entrance transforms.
      */
     private static volatile boolean cached = !"false".equalsIgnoreCase(
             System.getProperty("atomchat.dots.cached", "true"));
@@ -67,7 +67,7 @@ public final class DotTexture {
                 }
             };
 
-    private record HaloKey(float width, float height, int tint, float density) {}
+    private record HaloKey(float width, float height, int tint, float density, boolean trail, int resolution) {}
 
     /**
      * cacheKey: kind, strip origin/width/height, radius, theme tint (the
@@ -206,8 +206,9 @@ public final class DotTexture {
         long segmentId = com.atom.chat.diagnostics.FrameSegments.current(), started = com.atom.chat.diagnostics.FrameSegments.start(segmentId);
         try {
             if (cached) {
-                if (!trail && box.w() * box.h() >= HALO_IMAGE_MIN_AREA) {
-                    Image image = haloImage(box, tint);
+                boolean largeField = box.w() * box.h() >= FIELD_IMAGE_MIN_AREA;
+                if (largeField) {
+                    Image image = fieldImage(box, tint, trail, HALO_SUPERSAMPLE);
                     if (image != null) {
                         canvas.save();
                         try {
@@ -246,15 +247,19 @@ public final class DotTexture {
         }
     }
 
-    private static Image haloImage(UiLayout.Rect box, int tint) {
-        HaloKey key = new HaloKey(box.w(), box.h(), tint, UiTokens.SCALE);
+    private static Image fieldImage(UiLayout.Rect box, int tint, boolean trail, int resolution) {
+        HaloKey key = new HaloKey(box.w(), box.h(), tint, UiTokens.SCALE, trail, resolution);
         Image existing = HALO_IMAGES.get(key);
         if (existing != null) {
             hitCount++;
             return existing;
         }
-        int width = Math.max(1, (int) Math.ceil(box.w() * HALO_SUPERSAMPLE));
-        int height = Math.max(1, (int) Math.ceil(box.h() * HALO_SUPERSAMPLE));
+        if ((double) box.w() * box.h() > MAX_IMAGE_PIXELS) return null;
+        double pixelWidth = Math.ceil((double) box.w() * resolution);
+        double pixelHeight = Math.ceil((double) box.h() * resolution);
+        if (pixelWidth > MAX_IMAGE_DIMENSION || pixelHeight > MAX_IMAGE_DIMENSION) return null;
+        int width = Math.max(1, (int) pixelWidth);
+        int height = Math.max(1, (int) pixelHeight);
         long bytes = (long) width * height * 4L;
         if (bytes > MAX_HALO_BYTES) return null;
         Surface surface = null;
@@ -262,9 +267,8 @@ public final class DotTexture {
             surface = Surface.makeRaster(ImageInfo.makeN32Premul(width, height));
             Canvas raster = surface.getCanvas();
             raster.clear(0);
-            raster.scale(HALO_SUPERSAMPLE, HALO_SUPERSAMPLE);
-            raster.translate(-box.x(), -box.y());
-            fieldBody(raster, box, tint, false);
+            raster.scale(resolution, resolution);
+            fieldBody(raster, new UiLayout.Rect(0, 0, box.w(), box.h()), tint, trail);
             Image created = surface.makeImageSnapshot();
             java.util.Iterator<Map.Entry<HaloKey, Image>> eldest = HALO_IMAGES.entrySet().iterator();
             while (eldest.hasNext() && haloBytes() + bytes > MAX_HALO_BYTES) {
@@ -314,7 +318,9 @@ public final class DotTexture {
     }
 
     private static boolean visible(UiLayout.Rect rect, int tint) {
-        return rect != null && rect.w() > 0F && rect.h() > 0F && (tint >>> 24) > 0;
+        return rect != null && Float.isFinite(rect.x()) && Float.isFinite(rect.y())
+                && Float.isFinite(rect.w()) && Float.isFinite(rect.h())
+                && rect.w() > 0F && rect.h() > 0F && (tint >>> 24) > 0;
     }
 
     private static int tinted(int tint, float alpha) {

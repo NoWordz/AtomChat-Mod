@@ -176,13 +176,13 @@ public final class EmojiPanel {
 
     /** The grid model for the current sources; hover, click and draw all use it. */
     private EmoteGridLayout emoteLayout() {
-        if (sandboxMode) return new EmoteGridLayout(UiTokens.EMOTE_COLS, 0, 0);
+        if (sandboxMode || com.atom.chat.onboarding.TutorialSandbox.active()) return new EmoteGridLayout(UiTokens.EMOTE_COLS, 0, 0);
         return new EmoteGridLayout(UiTokens.EMOTE_COLS, emoteStore.count(), emoteStore.serverCount());
     }
 
     /** Re-scans the local folder and re-points the server half at the installed pack. */
     private void refreshEmotes() {
-        if (sandboxMode) return;
+        if (sandboxMode || com.atom.chat.onboarding.TutorialSandbox.active()) return;
         ServerPackStore store = ServerPackStore.current();
         // A pack with nothing to show is treated as "no distribution": no
         // server rows, no header, no status line.
@@ -241,6 +241,8 @@ public final class EmojiPanel {
                 scroll - (int) (verticalAmount * s(18)), maxScroll()));
     }
 
+    public float paintedRadius(UiLayout layout){return UiTokens.radius(UiTokens.COMPOSER_POPUP_RADIUS)*ComposerPopupTransform.of(bounds(layout),anim).scale();}
+    public UiLayout.Rect paintedBounds(UiLayout layout){return ComposerPopupTransform.of(bounds(layout),anim).paintedBounds(bounds(layout));}
     public UiLayout.Rect bounds(UiLayout layout) { return ComposerPopupLayout.place(layout,panelW(),panelH()); }
     private ComposerPopupTransform.Point localPointer(UiLayout layout,float x,float y) {
         return ComposerPopupTransform.of(bounds(layout),anim).toLocal(x,y);
@@ -299,7 +301,7 @@ public final class EmojiPanel {
         // The emote (sticker) tab has its own grid — images, an add slot and a
         // per-cell remove button. It does its work inline and never inserts text.
         if (tab == 2) {
-            if (sandboxMode) return "☺";
+            if (sandboxMode || com.atom.chat.onboarding.TutorialSandbox.active()) return "☺";
             return emotePanelClick(layout, mx, my);
         }
         // Content grid.
@@ -440,7 +442,7 @@ public final class EmojiPanel {
 
     /** Adding an emote may overwrite an existing file of the same name, so the decode cache clears wholesale — ten entries, so it is cheap. */
     public void addEmote(Path file) {
-        if (sandboxMode) return;
+        if (sandboxMode || com.atom.chat.onboarding.TutorialSandbox.active()) return;
         if (emoteStore.add(file.toFile())) {
             emoteImageCache.clear();
             cellHover.clear();
@@ -567,7 +569,7 @@ public final class EmojiPanel {
                 || my < contentY || my > contentY + contentH) {
             return -1;
         }
-        if (sandboxMode) return -1;
+        if (sandboxMode || com.atom.chat.onboarding.TutorialSandbox.active()) return -1;
         float colW = contentW / UiTokens.EMOTE_COLS;
         int col = (int) ((mx - contentX) / colW);
         int row = (int) ((my - contentY + scroll) / UiTokens.EMOTE_CELL);
@@ -720,7 +722,7 @@ public final class EmojiPanel {
     private void drawTabGrid(Canvas canvas, int tab, float contentX, float contentY, float contentW, float contentH,
                              boolean interactive) {
         if (tab == 2) {
-            if (sandboxMode) {
+            if (sandboxMode || com.atom.chat.onboarding.TutorialSandbox.active()) {
                 float colW = contentW / UiTokens.EMOTE_COLS;
                 drawSandboxSticker(canvas, contentX, contentY, colW, UiTokens.EMOTE_CELL);
                 return;
@@ -790,7 +792,7 @@ public final class EmojiPanel {
      * button to hit first. Always returns "" because nothing is inserted here.
      */
     private String emotePanelClick(UiLayout layout, float mx, float my) {
-        if (sandboxMode) return "☺";
+        if (sandboxMode || com.atom.chat.onboarding.TutorialSandbox.active()) return "☺";
         float px = panelX(layout);
         float py = panelY(layout);
         float pw = panelW();

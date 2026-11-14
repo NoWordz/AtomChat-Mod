@@ -9,7 +9,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class TutorialControllerTest {
     @TempDir Path root;
-    static final class Host implements TutorialController.Host {
+    static class Host implements TutorialController.Host {
         int enters,leaves,navigation;
         TutorialSession.Step current;
         public String translate(String key){return key.substring(key.lastIndexOf('.')+1);}

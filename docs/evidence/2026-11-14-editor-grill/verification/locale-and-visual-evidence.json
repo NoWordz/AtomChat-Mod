@@ -1,0 +1,99 @@
+{
+  "locale_content_parity": {
+    "zh_cn": {
+      "entries": 521,
+      "all_three_equal": true
+    },
+    "en_us": {
+      "entries": 521,
+      "all_three_equal": true
+    }
+  },
+  "screenshots": [
+    {
+      "path": "D:\\AtomChat-Main\\docs\\evidence\\2026-11-14-editor-grill\\1.20.1-forge\\panel-eight-way.png",
+      "size": [
+        1300,
+        1050
+      ],
+      "sha256": "193058e618b4d844af99d80477e96c442fdaf311f1b05abe11a7599f481894e5",
+      "mtime_ns": 1794640597261901100
+    },
+    {
+      "path": "D:\\AtomChat-Main\\docs\\evidence\\2026-11-14-editor-grill\\1.20.1-forge\\settings-reset-confirm.png",
+      "size": [
+        1300,
+        1050
+      ],
+      "sha256": "8762a20393dcccd1e34d1c22b7b34d28977d4e4e8d96825436c5ce7defc00343",
+      "mtime_ns": 1794640597206374000
+    },
+    {
+      "path": "D:\\AtomChat-Main\\docs\\evidence\\2026-11-14-editor-grill\\1.20.1-forge\\settings-reset.png",
+      "size": [
+        1300,
+        1050
+      ],
+      "sha256": "e0dedc5903be9d7646b856fa44c2bd40836bff81d76931610e1ee28a90823d71",
+      "mtime_ns": 1794640597153881500
+    },
+    {
+      "path": "D:\\AtomChat-Main\\docs\\evidence\\2026-11-14-editor-grill\\1.21.1-fabric\\panel-eight-way.png",
+      "size": [
+        1300,
+        1050
+      ],
+      "sha256": "eb9e2be092d3604c605ae88e4e0808414635beae99376fb164ed92e60386a924",
+      "mtime_ns": 1794640472283505100
+    },
+    {
+      "path": "D:\\AtomChat-Main\\docs\\evidence\\2026-11-14-editor-grill\\1.21.1-fabric\\settings-reset-confirm.png",
+      "size": [
+        1300,
+        1050
+      ],
+      "sha256": "92727090af61f8165439c1b35cdd3b1ea082a930cdeb9da5879bb7d70d30e632",
+      "mtime_ns": 1794640472223914300
+    },
+    {
+      "path": "D:\\AtomChat-Main\\docs\\evidence\\2026-11-14-editor-grill\\1.21.1-fabric\\settings-reset.png",
+      "size": [
+        1300,
+        1050
+      ],
+      "sha256": "a79c414b540f00d644980f6bbbeb0d5c56df7543e6c457111cd04fd3d2868c0f",
+      "mtime_ns": 1794640472174089000
+    },
+    {
+      "path": "D:\\AtomChat-Main\\docs\\evidence\\2026-11-14-editor-grill\\1.21.1-neoforge\\panel-eight-way.png",
+      "size": [
+        1300,
+        1050
+      ],
+      "sha256": "c1c41afc3417607835e222b5b87aec90a72c034ceede99dd09bc6751bc2addc4",
+      "mtime_ns": 1794640741089867800
+    },
+    {
+      "path": "D:\\AtomChat-Main\\docs\\evidence\\2026-11-14-editor-grill\\1.21.1-neoforge\\settings-reset-confirm.png",
+      "size": [
+        1300,
+        1050
+      ],
+      "sha256": "97964ddd1488cfe667fc0d6c6967a227b0646cd87c4d892d997ea3545bcfac89",
+      "mtime_ns": 1794640741031769700
+    },
+    {
+      "path": "D:\\AtomChat-Main\\docs\\evidence\\2026-11-14-editor-grill\\1.21.1-neoforge\\settings-reset.png",
+      "size": [
+        1300,
+        1050
+      ],
+      "sha256": "7d961b29f63a3714b5af080a571ba963879d6e1c75a6852487bfcb5fdbaaff88",
+      "mtime_ns": 1794640740981169900
+    }
+  ],
+  "manual_inspection": [
+    "Fabric settings-reset-confirm: red warning and confirm, neutral grey cancel, captured tab name",
+    "Fabric panel-eight-way: eight resize points, external centered move capsule, nine fixed anchors, real page, two-button footer"
+  ]
+}

@@ -30,6 +30,8 @@ public final class ComposerTools implements InputHandler {
     private final ComposerSearch search;
     private float playerRefresh;
     public ComposerTools(Host host) { this.host = host; search = new ComposerSearch(host); }
+    public UiLayout.Rect tutorialBounds(){return menu.isOpen()?menu.paintedBounds(host.layout()):null;}
+    public UiLayout.Rect tutorialActionBounds(int row) { return menu.paintedRow(host.layout(), row); }
     public boolean active() { return menu.isOpen() || searching(); }
     public boolean searching() { return search.active(); }
     public boolean appendToParkedDraft(String text) { return search.appendToParkedDraft(text); }
@@ -76,7 +78,7 @@ public final class ComposerTools implements InputHandler {
                 menu.close();
                 if (row == 0) search.open();
                 if (row == 1) { search.close(); menu.toggle(); menu.showPlayers(host.onlinePlayers()); }
-                if (row == 2) { search.close(); host.pickImage(); }
+                if (row == 2) { search.close(); if(com.atom.chat.onboarding.TutorialSandbox.active()){com.atom.chat.onboarding.TutorialSandbox.imageAction();host.feedback("atomchat.tutorial.preview_only");}else host.pickImage(); }
             }
             return true;
         }

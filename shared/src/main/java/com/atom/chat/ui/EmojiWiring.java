@@ -86,11 +86,13 @@ public final class EmojiWiring {
 
             @Override
             public void sendSticker(Path file) {
+                if(com.atom.chat.onboarding.TutorialSandbox.active()){com.atom.chat.onboarding.TutorialSandbox.action();return;}
                 host.uploadSticker(file);
             }
 
             @Override
             public void pickEmoteFile() {
+        if(com.atom.chat.onboarding.TutorialSandbox.active())return;
                 EmojiWiring.this.pickEmoteFile();
             }
         };
@@ -102,6 +104,7 @@ public final class EmojiWiring {
      * thread; the store mutation hops back to the render thread.
      */
     public void pickEmoteFile() {
+        if(com.atom.chat.onboarding.TutorialSandbox.active())return;
         Thread worker = new Thread(() -> {
             Path file = FilePicker.pickImage(host::suspendAutoIconify,
                     host::restoreAutoIconify, EmoteStore::isSupportedName);

@@ -1,0 +1,140 @@
+{
+  "1.20.1-forge": {
+    "artifact": "D:\\AtomChat-Main\\platforms\\1.20.1-forge\\build\\atomlib-consumer\\libs\\atomchat-Forge-1.20.1-v0.7.0.jar",
+    "sha256": "967f4d3239551f50d2d866b59ad4aa12d5ada266f372cf64fc526ad193b1e4e7",
+    "size": 2946384,
+    "tests": {
+      "tests": 1879,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 7
+    },
+    "java_class_major": 61,
+    "screen_class": "com/atom/chat/screen/AtomChatScreen.class",
+    "class_sha256": {
+      "ui/PanelEditor": "ce924b41276884b4287283fed61d7b647c05839d58fb77df863df00f8d977347",
+      "ui/PanelEditorGeometry": "78958290dda87139c4acef23a287c47a3a2b17a33a953badb7db870bf3a85751",
+      "ui/PanelEditorLayout": "aff88a899a34231eccefaff4d1ac678ae7ad9d7d7ef55b468fea9bea6a425079",
+      "ui/PanelEditorModel": "3865099ce5287f682d0a992d0ab313db537c096a245ec3756c3d2e8f4c7f4da8",
+      "ui/PanelEditorInput": "828b34d88406114f362ad689a474452d9a65c6a79b2a95086917cc877227e7fa",
+      "ui/ConfirmationDialog": "a9ba882b22b3d4bdb04714831daa606fc1e2b010eb1726510975f18ffd11d705",
+      "ui/ConfirmationSurface": "d0b4b4fe94fac3cf9a0858fdaf0baff68fb461d4971640a2cbf60327c6976f5b",
+      "ui/HeaderChrome": "a23a3971fa303640887aadf3d6b7310d125665d9c0b6dbf07860ca458390df34",
+      "ui/EditorActionIcons": "fb2a9f9dbb9589f937e1d008b4a0cd5a495dbf13a072618ca1e81a5aca6cd02d",
+      "settings/SettingsTabDefaults": "32195ed4215f9b4faf7433467fc63d528a7c076fd15c5a21950a60324a5a2b8e",
+      "settings/SettingsTabResetPrompt": "4c1007e808dbd742153d146ed3697b767a3cb89f54d25bac855a85c6822b17fb",
+      "render/OutlineIconBounds": "5d8b1514fb7610ce079e40eac51cc824853fc990073fb85fa65bb45576c56866",
+      "nav/PageTransitionComposite": "d7cab817d046fca2ce1192f62f7cb39403ef517968289ee4d8b5ba3335fb3d79",
+      "ui/BottomChromeTransition": "3dce6bc7839406b5fa1a7a70dfc3627dcca613a88d28f99702077e8fe38ae8bb",
+      "onboarding/TutorialGuide": "528afcd4feb74bcb7d7158e3c9372ae3b8b3dbe593240055bc147e19eb5828d0",
+      "onboarding/TutorialSandbox": "73582ecd92a4d7a055c67c981741e6a11c95e7ea9865cbe8fa49b87374893abf",
+      "onboarding/TutorialFocusMotion": "24563721ebe0fdc3b1c4ef9561573d1e3a9b1af4687e6a6fc54263cafc8a506d",
+      "render/DotTexture": "512722485b968ac1ddb6d46e8901d21ff185277c6bc68fd68f2bca6bde064ca8",
+      "render/SoftShadow": "c99ae39d429a0299297f2bfc3893d4403456f866d9692a193fa7e8b9bc4aea27"
+    },
+    "locales": {
+      "zh_cn": {
+        "sha256": "e040811469e4db5073da53154f1e951c0c01a5f8c23f0f90920f4bef65d14e36",
+        "hint": "拖动把手移动 · 拖动边框改尺寸"
+      },
+      "en_us": {
+        "sha256": "31d9b189ee1deb4a00e7d0cdc47116805c4df1223a94d337a6322da2bdb7a404",
+        "hint": "Drag the handle to move · Drag the border to resize"
+      }
+    },
+    "ui_style_contract_tests": 4,
+    "native_icon_raster_samples": 45
+  },
+  "1.21.1-fabric": {
+    "artifact": "D:\\AtomChat-Main\\platforms\\1.21.1-fabric\\build\\atomlib-consumer\\libs\\atomchat-Fabric-1.21.1-v0.7.0.jar",
+    "sha256": "87704c398cf5d3cfd7888658e21a383df26fbf75b5d2c71cea50db17ec0ee872",
+    "size": 2971184,
+    "tests": {
+      "tests": 1894,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 7
+    },
+    "java_class_major": 65,
+    "screen_class": "net/minecraft/client/gui/screen/AtomChatScreen.class",
+    "class_sha256": {
+      "ui/PanelEditor": "3c43a7049bbbccac42791592c95782a240e1583767383ff699be4ff549815cae",
+      "ui/PanelEditorGeometry": "5daf1f68ef77829e9c2f99a849454b59eb3751efaad7a27da2c3c5b9f0fba800",
+      "ui/PanelEditorLayout": "78f7c51f95d25c5d1fdc77a357072110e4ece25a1792becd28e47944473337d7",
+      "ui/PanelEditorModel": "25ba21f6d7651a018fbb28ce8ab5af42a01b3f13c3d9792a50a10ddee7f5c45b",
+      "ui/PanelEditorInput": "ee5af05aafe887edfec26b72baa8ce6cc8b4fd4f3f6e2a9f7a11fb36af6652ff",
+      "ui/ConfirmationDialog": "a3d0b6618935a730c5047180ae9cb57d18da8d13681becd1fadb8321d96f758a",
+      "ui/ConfirmationSurface": "2dfdf2ffb7f64bd2d66bc4d1777e7bc716955df3f1f641352e693f9779771717",
+      "ui/HeaderChrome": "ba4c1254f14ab740204409d957b88faf90690a78f51c6e8cd58ebd1401a83c9d",
+      "ui/EditorActionIcons": "d6d3414eada93e3a4a34035dc89bee195817d71a55614e2dc4f4c4aa46b4e38e",
+      "settings/SettingsTabDefaults": "6e3243a1f6a454122590bbd82fcea82cd288d28f0c310b90d0b23232ae4adb65",
+      "settings/SettingsTabResetPrompt": "436c2e0fc4838158a250d3ae918f98e6a45dbe2cc176d32fa1fd1430028a171e",
+      "render/OutlineIconBounds": "b29b01400cf361125c71ab031b9d6d9b3a58f728958d2e964798dde73d954f74",
+      "nav/PageTransitionComposite": "bbfcd17f4b2b1cd399190381c0ef57b218d975f20ae258bd5585f148c1d00361",
+      "ui/BottomChromeTransition": "b10fe3a8e91c79dc34ae3e859a4554c5e062bb36c92704c3905c0595900e8d3d",
+      "onboarding/TutorialGuide": "625e0fcf2b95f374cbc11a19a809c247848d0ec5dde80e920905474114fe23c0",
+      "onboarding/TutorialSandbox": "012e54574a476688b7869e68d4bb4253039bf8b54b3e68098a202f9a06a192b7",
+      "onboarding/TutorialFocusMotion": "b53623b502d3f513806aee50d4bc0639c29a9f74bbe5de43e8f1a6a30844bfb2",
+      "render/DotTexture": "271582d7eb398ef0cd7f50e5f0404ea441643fb4be227e7e5b77e50eda805882",
+      "render/SoftShadow": "7e06b1dbbaf8dc51415785ff7c3fa07cc84f895414fc97a9d6db2621876bb726"
+    },
+    "locales": {
+      "zh_cn": {
+        "sha256": "e040811469e4db5073da53154f1e951c0c01a5f8c23f0f90920f4bef65d14e36",
+        "hint": "拖动把手移动 · 拖动边框改尺寸"
+      },
+      "en_us": {
+        "sha256": "31d9b189ee1deb4a00e7d0cdc47116805c4df1223a94d337a6322da2bdb7a404",
+        "hint": "Drag the handle to move · Drag the border to resize"
+      }
+    },
+    "ui_style_contract_tests": 4,
+    "native_icon_raster_samples": 45
+  },
+  "1.21.1-neoforge": {
+    "artifact": "D:\\AtomChat-Main\\platforms\\1.21.1-neoforge\\build\\atomlib-consumer\\libs\\atomchat-NeoForge-1.21.1-v0.7.0.jar",
+    "sha256": "89deaccd1404a1f816964da0e79ebac80eab5d57f8e0cbe1abe972e6b5dacc95",
+    "size": 2959041,
+    "tests": {
+      "tests": 1879,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 7
+    },
+    "java_class_major": 65,
+    "screen_class": "com/atom/chat/screen/AtomChatScreen.class",
+    "class_sha256": {
+      "ui/PanelEditor": "47a69d1413ac5f7c0cf58ad554d569569303a37dca25806742c5780bb73cf862",
+      "ui/PanelEditorGeometry": "6f892eeb651b7807fc04acf79fcc74a3bdeb6db9dccc6cca14af7d85e3823786",
+      "ui/PanelEditorLayout": "0969456882d3c6294f6ac27b561fc6640e901c2813571b47b6cf11f573a18426",
+      "ui/PanelEditorModel": "01c976530943aa814c60b0a6e3334428b3642ed01ed53373a9e1dd5bb4ccd2a1",
+      "ui/PanelEditorInput": "50a7d10aa3d75b92714ffa604c924bc8348a0bf2ecafa0c932d5c98b35b564ce",
+      "ui/ConfirmationDialog": "7bece2b0f384dda4dac36a7beb75ad9c4a726f25fb5b416b4de72db14ca28690",
+      "ui/ConfirmationSurface": "b3ee00ff5d8c644e0066faa55655c2f6e14f69d3346417ea78abbb7d45a25e87",
+      "ui/HeaderChrome": "040618818bab27c89c7f74f32eb4042d1594272a102506f802d238edef8d1ffd",
+      "ui/EditorActionIcons": "c26021f6cd70eb2f13882aeeb597d57c9cf32ba6dcc3070fd1660b6dfcb99cc0",
+      "settings/SettingsTabDefaults": "6e876bcf3bc3c6064a08a3beefee941fbd81b24565454392ff8f66c135c0b9d6",
+      "settings/SettingsTabResetPrompt": "771833d1ff8cdecb8f68f873109eeebaf22c825f3b1ab59bba0dc828e5d9ceb1",
+      "render/OutlineIconBounds": "f1ddd89cd83c0a5802fbe8c2c733219ee54edfd17fd3a225230cb553a3bc4f90",
+      "nav/PageTransitionComposite": "cc358c2f6db0cd8104e8273910b9a3bfcde4eabd5a585a597bd118ec78651541",
+      "ui/BottomChromeTransition": "2e74f51b59a7255dee1899eafe69e0544fbd3ddf8183525231ccf7d420203ca8",
+      "onboarding/TutorialGuide": "3299d63f5b734bdc0e1a3e0f301cfe5c6e1220e5f4179acac46b4a5071450f41",
+      "onboarding/TutorialSandbox": "522730bf53e0a8876f00f7b731450fbdb46c5c957a89d2fde13cfd238e828880",
+      "onboarding/TutorialFocusMotion": "e50bd4ae4ec5fdbd2030a0aa50a78f821f8814ebf5d045d3da03bd067eff48cf",
+      "render/DotTexture": "c83c5e9b9e5daba51bd9f2a82430884486759af2fca6d02852991e39ecf6d879",
+      "render/SoftShadow": "eb507026bbae1d6f37cd0b2364b62d9127feebb0aafd47265f188ddf681b202c"
+    },
+    "locales": {
+      "zh_cn": {
+        "sha256": "e040811469e4db5073da53154f1e951c0c01a5f8c23f0f90920f4bef65d14e36",
+        "hint": "拖动把手移动 · 拖动边框改尺寸"
+      },
+      "en_us": {
+        "sha256": "31d9b189ee1deb4a00e7d0cdc47116805c4df1223a94d337a6322da2bdb7a404",
+        "hint": "Drag the handle to move · Drag the border to resize"
+      }
+    },
+    "ui_style_contract_tests": 4,
+    "native_icon_raster_samples": 45
+  }
+}

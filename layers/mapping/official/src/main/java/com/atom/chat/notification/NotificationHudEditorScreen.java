@@ -10,10 +10,13 @@ import org.lwjgl.glfw.GLFW;
 /** Thin native screen bridge; geometry and interaction live in the shared editor. */
 public final class NotificationHudEditorScreen extends Screen {
     private final Screen parent;
+    private final Runnable returned,abandoned;
+    private boolean returning;
     private final NotificationHudEditor editor = new NotificationHudEditor(key -> Component.translatable(key).getString());
     private final SkiaGraphics graphics = new SkiaGraphics();
-    public NotificationHudEditorScreen(Screen parent) {
-        super(Component.translatable("atomchat.notify.editor.title")); this.parent=parent;
+    public NotificationHudEditorScreen(Screen parent){this(parent,()->{},()->{});}
+    public NotificationHudEditorScreen(Screen parent,Runnable returned,Runnable abandoned) {
+        super(Component.translatable("atomchat.notify.editor.title"));this.parent=parent;this.returned=returned;this.abandoned=abandoned;
     }
     private float vx(double x) { return ScreenMetrics.toVirtualX(minecraft.getWindow(),x); }
     private float vy(double y) { return ScreenMetrics.toVirtualY(minecraft.getWindow(),y); }
@@ -21,6 +24,7 @@ public final class NotificationHudEditorScreen extends Screen {
         gui.flush(); graphics.checkFrameBufferId();
         graphics.draw(null,ScreenMetrics.uiDensity(minecraft.getWindow()),
                 (canvas,snapshot)->editor.render(canvas,vx(width),vy(height),vx(mx),vy(my)));
+        if(editor.closed()){returning=true;minecraft.setScreen(parent);returned.run();}
     }
     @Override public boolean mouseClicked(double x,double y,int button) {
         var action=editor.click(vx(x),vy(y),vx(width),vy(height),button);
@@ -33,6 +37,7 @@ public final class NotificationHudEditorScreen extends Screen {
     }
     @Override public boolean mouseReleased(double x,double y,int button) { editor.release(); return true; }
     @Override public boolean keyPressed(int key,int scan,int modifiers) {
+        if(editor.closing())return true;
         if(key==GLFW.GLFW_KEY_ESCAPE) onClose();
         else if(key==GLFW.GLFW_KEY_ENTER || key==GLFW.GLFW_KEY_KP_ENTER) { editor.save(); onClose(); }
         else {
@@ -44,7 +49,7 @@ public final class NotificationHudEditorScreen extends Screen {
         }
         return true;
     }
-    @Override public void onClose() { minecraft.setScreen(parent); }
+    @Override public void onClose() { editor.requestClose(); }
     @Override public boolean isPauseScreen() { return false; }
-    @Override public void removed() { graphics.close(); super.removed(); }
+    @Override public void removed() { if(!returning)abandoned.run();graphics.close(); super.removed(); }
 }

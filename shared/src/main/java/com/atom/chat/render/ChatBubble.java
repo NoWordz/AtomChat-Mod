@@ -17,8 +17,11 @@ public final class ChatBubble {
     private ChatBubble() { }
 
     private static RRect outline(float x, float y, float w, float h, BubbleStyle style, boolean own) {
+        return outline(x,y,w,h,style,own,1);
+    }
+    public static RRect outline(float x,float y,float w,float h,BubbleStyle style,boolean own,float scale) {
         float r = Math.min(Math.min(w, h) / 2F,
-                style == null || style == BubbleStyle.CLASSIC ? UiTokens.BUBBLE_RADIUS : UiTokens.BUBBLE_ROUND_RADIUS);
+                (style == null || style == BubbleStyle.CLASSIC ? UiTokens.BUBBLE_RADIUS : UiTokens.BUBBLE_ROUND_RADIUS)*scale);
         float tl = style == BubbleStyle.CORNER && !own ? 0F : r;
         float tr = style == BubbleStyle.CORNER && own ? 0F : r;
         return RRect.makeComplexLTRB(x, y, x + w, y + h, new float[]{tl, tl, tr, tr, r, r, r, r});

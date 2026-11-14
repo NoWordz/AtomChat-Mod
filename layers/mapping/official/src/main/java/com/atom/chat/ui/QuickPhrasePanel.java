@@ -407,6 +407,8 @@ public final class QuickPhrasePanel {
         }
     }
 
+    public float paintedRadius(UiLayout layout){return UiTokens.radius(UiTokens.COMPOSER_POPUP_RADIUS)*ComposerPopupTransform.of(bounds(layout),anim).scale();}
+    public UiLayout.Rect paintedBounds(UiLayout layout){return ComposerPopupTransform.of(bounds(layout),anim).paintedBounds(bounds(layout));}
     public UiLayout.Rect bounds(UiLayout layout) { return ComposerPopupLayout.place(layout,panelW(),panelH()); }
     private ComposerPopupTransform.Point localPointer(UiLayout layout,float x,float y) {
         return ComposerPopupTransform.of(bounds(layout),anim).toLocal(x,y);

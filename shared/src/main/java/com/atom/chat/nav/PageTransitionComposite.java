@@ -22,7 +22,7 @@ public final class PageTransitionComposite implements AutoCloseable {
     private final Host host;
     private final InterruptiblePageMotion motion = new InterruptiblePageMotion();
     private final UiStagger.Entrance entrance = new UiStagger.Entrance();
-    private final Paint alphaPaint = new Paint();
+    private Paint alphaPaint = new Paint();
     private NavPage stamped;
     private Picture lastFrame, departing;
     private UiLayout.Rect bounds;
@@ -74,6 +74,12 @@ public final class PageTransitionComposite implements AutoCloseable {
     public float bodyX(float x) {
         return bounds == null ? x : motion.sample(frameTime).inverseX(x, bounds.x() + bounds.w() / 2);
     }
+    public UiLayout.Rect paintedBodyRect(UiLayout.Rect rect) {
+        if(bounds==null)return rect;
+        var frame=motion.sample(frameTime);
+        return new UiLayout.Rect(frame.forwardX(rect.x(),bounds.x()+bounds.w()/2),frame.forwardY(rect.y(),bounds.y()+bounds.h()/2),rect.w()*frame.scale(),rect.h()*frame.scale());
+    }
+    public float paintedBodyScale() {return bounds==null?1:motion.sample(frameTime).scale();}
     public float bodyY(float y) {
         return bounds == null ? y : motion.sample(frameTime).inverseY(y, bounds.y() + bounds.h() / 2);
     }
@@ -173,6 +179,9 @@ public final class PageTransitionComposite implements AutoCloseable {
         if (lastFrame != null) { lastFrame.close(); lastFrame = null; }
         if (departing != null) { departing.close(); departing = null; }
     }
-    public void reset() { clearPictures(); motion.finish(); stamped = null; bounds = null; }
-    @Override public void close() { clearPictures(); alphaPaint.close(); }
+    public void reset() {
+        if (alphaPaint.isClosed()) alphaPaint = new Paint();
+        clearPictures(); motion.finish(); stamped = null; bounds = null; arrivalEvent = false;
+    }
+    @Override public void close() { clearPictures(); if (!alphaPaint.isClosed()) alphaPaint.close(); }
 }

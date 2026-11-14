@@ -64,10 +64,10 @@ public class AtomChatConfig {
     /** Whether AtomChat replaces the vanilla chat screen. */
     public boolean enabled = true;
     /** Multiplier for the panel's existing Kawase sampling offsets. */
-    public float blurStrength = 1.0F;
+    public float blurStrength = 2.0F;
 
     public float effectiveBlurStrength() {
-        return Float.isFinite(blurStrength) ? Math.max(0.25F, Math.min(2.0F, blurStrength)) : 1.0F;
+        return Float.isFinite(blurStrength) ? Math.max(0.25F, Math.min(3.0F, blurStrength)) : 2.0F;
     }
 
     public float panelWidth = 480.0F;
@@ -84,6 +84,10 @@ public class AtomChatConfig {
      */
     public boolean halfScreenWidthCustomized = false;
     public float panelHeight = 860.0F;
+    /** Relative position inside the available viewport; old configurations keep their docked anchor. */
+    public boolean panelPositionCustom = false;
+    public float panelPositionX = 0F;
+    public float panelPositionY = 0.5F;
     /** Rounded panel background blur (raw GL + core shader, outside Skia). */
     public boolean blurEnabled = true;
     /**
@@ -377,17 +381,17 @@ public class AtomChatConfig {
      */
     public boolean panelOutline = true;
     /** Width in unscaled UI logical pixels. Zero disables the outline. */
-    public float panelOutlineWidth = 3.0F;
+    public float panelOutlineWidth = 4.0F;
     /** Only the genuinely missing-config path arms the first wallpaper. */
     public boolean wallpaperFirstUsePending = false;
 
     public float effectivePanelOutlineWidth() {
         if (!panelOutline) return 0F;
-        return Float.isFinite(panelOutlineWidth) ? Math.max(0F, Math.min(4F, panelOutlineWidth)) : 3F;
+        return Float.isFinite(panelOutlineWidth) ? Math.max(0F, Math.min(6F, panelOutlineWidth)) : 4F;
     }
 
     public void setPanelOutlineWidth(float width) {
-        panelOutlineWidth = Float.isFinite(width) ? Math.max(0F, Math.min(4F, width)) : 3F;
+        panelOutlineWidth = Float.isFinite(width) ? Math.max(0F, Math.min(6F, width)) : 4F;
         panelOutline = panelOutlineWidth > 0F;
     }
 
@@ -703,6 +707,7 @@ public class AtomChatConfig {
                     config.avatarStyle = config.effectiveAvatarStyle();
                     config.bubbleStyle = config.effectiveBubbleStyle();
                     config.worldFeedFilter = config.effectiveWorldFeedFilter();
+                    config.blurStrength = config.effectiveBlurStrength();
                     config.migrateOutlineWidth(hasKey(json, "panelOutlineWidth"));
                     config.migrateCornerStyle();
                     config.migratePixelRadius();
@@ -742,6 +747,7 @@ public class AtomChatConfig {
 
     /** Reports persistence failure to actions that must roll back a live preview. */
     public static boolean saveChecked(AtomChatConfig config) {
+        if (ConfigPreviewTransaction.interceptSave(config)) return true;
         Path path = com.atom.chat.platform.Platform.configDir().resolve("atomchat/atomchat-client.json");
         Path staged = null;
         try {

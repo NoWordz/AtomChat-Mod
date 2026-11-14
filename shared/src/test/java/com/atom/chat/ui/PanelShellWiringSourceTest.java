@@ -73,7 +73,7 @@ class PanelShellWiringSourceTest {
         REQUIRED.put("PanelOpenMotion.blurCapture(", 1);
         // Unit V: the panel rect's edges snap to the device grid at the input,
         // so the painted shell and the blur capture share one set of edges.
-        REQUIRED.put("UiPixelSnap.snapToDevice(ScreenMetrics.panelX())", 2);
+        REQUIRED.put("UiPixelSnap.snapToDevice(ScreenMetrics.panelX(client.getWindow()))", 2);
         REQUIRED.put("UiPixelSnap.snapToDevice(ScreenMetrics.panelY(client.getWindow()))", 2);
         REQUIRED.put("PanelOpenMotion.openScale(progress, AtomChatConfig.get().pageNavStyle)", 1);
         REQUIRED.put("PanelOpenMotion.openSlidePx(progress, AtomChatConfig.get().pageNavStyle)", 1);

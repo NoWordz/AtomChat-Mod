@@ -43,12 +43,12 @@ class AppearancePresetStoreTest {
 
     @Test void outlineWidthRoundTripsAndLegacyPresetsKeepTwoPixels() throws Exception {
         var c = new AtomChatConfig();
-        AtomChatConfig.class.getMethod("setPanelOutlineWidth", float.class).invoke(c, 3.75F);
+        AtomChatConfig.class.getMethod("setPanelOutlineWidth", float.class).invoke(c, 6F);
         var result = store.saveCurrent(c, null);
         assertTrue(result.ok());
         var target = new AtomChatConfig();
         assertTrue(store.apply(result.preset().id(), target).ok());
-        assertEquals(3.75F, ((Number) AtomChatConfig.class.getMethod("effectivePanelOutlineWidth").invoke(target)).floatValue());
+        assertEquals(6F, ((Number) AtomChatConfig.class.getMethod("effectivePanelOutlineWidth").invoke(target)).floatValue());
         Path manifest = tmp.resolve("appearance-presets").resolve(result.preset().id()).resolve("preset.json");
         var json = com.google.gson.JsonParser.parseString(Files.readString(manifest)).getAsJsonObject();
         json.getAsJsonObject("appearance").remove("panelOutlineWidth");

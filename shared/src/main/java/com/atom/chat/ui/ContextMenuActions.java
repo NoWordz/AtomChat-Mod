@@ -237,6 +237,7 @@ public final class ContextMenuActions {
     }
 
     public void sendTeleportCommand(PlayerRef player) {
+        if(com.atom.chat.onboarding.TutorialSandbox.active()){com.atom.chat.onboarding.TutorialSandbox.action();return;}
         if (!host.hasLocalPlayer() || player == null || player.realName() == null) {
             return;
         }

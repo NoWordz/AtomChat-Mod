@@ -1,0 +1,70 @@
+{
+  "date": "2026-11-14",
+  "backup": "D:\\AtomChat-Backups\\2026-11-14-session-close\\20261114-154456",
+  "evidence_archive": "D:\\AtomChat-Backups\\2026-11-14-session-close\\20261114-154456\\session-temporary-evidence.zip",
+  "archive_sha256": "a07bd35eefde1d765fd1cb1a17ab20669690892167bd7a54811217c89abce00d",
+  "cleanup": [
+    {
+      "path": "D:\\AtomChat-Main\\build\\editor-grill-20261114",
+      "relative": "build/editor-grill-20261114",
+      "kind": "directory",
+      "files": 1071,
+      "bytes": 5337378
+    },
+    {
+      "path": "D:\\AtomChat-Main\\build\\editor-incident-20261113",
+      "relative": "build/editor-incident-20261113",
+      "kind": "directory",
+      "files": 1082,
+      "bytes": 7925330
+    },
+    {
+      "path": "D:\\AtomChat-Main\\build\\error-20261114-153432",
+      "relative": "build/error-20261114-153432",
+      "kind": "directory",
+      "files": 3,
+      "bytes": 68401
+    },
+    {
+      "path": "D:\\AtomChat-Main\\build\\panel-followup-20261113",
+      "relative": "build/panel-followup-20261113",
+      "kind": "directory",
+      "files": 923,
+      "bytes": 3714358
+    },
+    {
+      "path": "D:\\AtomChat-Main\\build\\v071-ui-refinement",
+      "relative": "build/v071-ui-refinement",
+      "kind": "directory",
+      "files": 1116,
+      "bytes": 7870496
+    },
+    {
+      "path": "D:\\AtomChat-Main\\.work\\evidence\\2026-11-13-followup",
+      "relative": ".work/evidence/2026-11-13-followup",
+      "kind": "directory",
+      "files": 5,
+      "bytes": 214911
+    },
+    {
+      "path": "D:\\AtomChat-Main\\docs\\evidence\\2026-11-13-editor-incident\\error-report.zip",
+      "relative": "docs/evidence/2026-11-13-editor-incident/error-report.zip",
+      "kind": "file",
+      "files": 1,
+      "bytes": 123986
+    },
+    {
+      "path": "D:\\AtomChat-Main\\docs\\evidence\\2026-11-14-153432-error",
+      "relative": "docs/evidence/2026-11-14-153432-error",
+      "kind": "directory",
+      "files": 1,
+      "bytes": 82505
+    }
+  ],
+  "recycled": true,
+  "proof_directory": "docs/evidence/2026-11-14-editor-grill/verification",
+  "raw_reports_private": true,
+  "new_error_investigation": "Stopped at user request; no source changes or dependency installation",
+  "recycle_api": "Microsoft.VisualBasic.FileIO.FileSystem / SendToRecycleBin",
+  "recycle_receipt": "D:\\AtomChat-Backups\\2026-11-14-session-close\\20261114-154456\\recycle-receipt.json"
+}

@@ -108,6 +108,10 @@ public final class ReplySlotStore {
         return replies.get(replyKeyForNav(page)) != null;
     }
 
+    public record Snapshot(Map<String,ChatMessage> slots,ChatMessage target) { }
+    public Snapshot snapshot(){return new Snapshot(Map.copyOf(replies),replyTarget);}
+    public void restore(Snapshot snapshot){replies.clear();replies.putAll(snapshot.slots());replyTarget=snapshot.target();}
+
     /** The live reply of the page owning the composer (null when none is armed). */
     public ChatMessage replyTarget() {
         return replyTarget;

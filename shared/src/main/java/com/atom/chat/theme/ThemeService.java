@@ -117,7 +117,7 @@ public final class ThemeService {
             0xFF2563D8, 0xFFFFFFFF,
             0xFFB9CDE6, 0xFF1A1D21,
             0xFFF7F8FA, 0xFF151A22, 0xFF596273,
-            0xFFFFFFFF, 0xFF6B7280,
+            0xFFFFFFFF, 0xFF4A6285,
             0xFFECEEF2, 0xFF6B7280,
             null, null, "small");
     /** 青柠 (id "summer", shown as 夏日 before) — lime accent with soft olive incoming bubbles. */
@@ -126,7 +126,7 @@ public final class ThemeService {
             0xFF84CC16, 0xFF1A2E05,
             0xFFC3D38D, 0xFF1F2937,
             0xFFFAFCF3, 0xFF192521, 0xFF56634C,
-            0xFFFFFFFF, 0xFF6B7280,
+            0xFFFFFFFF, 0xFF5A732A,
             0xFFEBF2DC, 0xFF4D7C0F,
             null, null, "medium");
     /** 典雅 — warm paper, clay-sand incoming bubbles and a terracotta accent. */
@@ -135,7 +135,7 @@ public final class ThemeService {
             0xFFBD6043, 0xFFFFFFFF,
             0xFFD0B294, 0xFF3D3929,
             0xFFF5F0E8, 0xFF332E23, 0xFF71685C,
-            0xFFE8DDD0, 0xFF8A8377,
+            0xFFE8DDD0, 0xFF806445,
             0xFFEAE1D3, 0xFF7A7264,
             null, null, "medium");
     /** 黑鸦 — deep black-blue night, gold accent, GitHub-dark surfaces. */
@@ -144,7 +144,7 @@ public final class ThemeService {
             0xFFE3B341, 0xFF1C1901,
             0xFF27323F, 0xFFF0F4F8,
             0xFF0D1117, 0xFFF0F4F8, 0xFFA4AFBD,
-            0xFF161B27, 0xFF8B949E,
+            0xFF161B27, 0xFFAAB5C4,
             0xFF2A313C, 0xFF8B949E,
             null, null, "medium");
     /** 枢纽 — pure black terminal with the orange accent; sharp corners, no softness. */
@@ -153,7 +153,7 @@ public final class ThemeService {
             0xFFFF9000, 0xFF1A0E00,
             0xFF111111, 0xFFF5F5F5,
             0xFF0A0A0A, 0xFFFFFFFF, 0xFFB0B9C7,
-            0xFF141414, 0xFF9CA3AF,
+            0xFF141414, 0xFFC0CAD5,
             0xFF161616, 0xFFD4D4D4,
             null, null, "small");
     /** 活力 — pale pink background, muted rose incoming bubbles and a punchy pink accent. */
@@ -162,7 +162,7 @@ public final class ThemeService {
             0xFFCA3F70, 0xFFFFFFFF,
             0xFFDEA6BE, 0xFF3D2C35,
             0xFFFDF0F4, 0xFF36212B, 0xFF785666,
-            0xFFFFFFFF, 0xFF9A7F8C,
+            0xFFFFFFFF, 0xFF8C526B,
             0xFFF9DCE7, 0xFFB04A70,
             null, null, "medium");
     /** 薄暮 — grey-blue dusk with a violet cast: translucent smoky panel over
@@ -172,7 +172,7 @@ public final class ThemeService {
             0xFFA78BFA, 0xFF241536,
             0xFF333950, 0xFFECEEF4,
             0xFF232633, 0xFFF5F6FA, 0xFFB3B8CD,
-            0xFF2B2E3D, 0xFF9BA0B5,
+            0xFF2B2E3D, 0xFFB9B2D5,
             0xFF313548, 0xFFC9CDE0,
             0.88F, true, "large");
     /** 薄荷 — deep teal-green base worn translucent, mint accent and bubble,
@@ -182,7 +182,7 @@ public final class ThemeService {
             0xFF5EEAD4, 0xFF082620,
             0xFF1B3B34, 0xFFE7F5F0,
             0xFF0F2622, 0xFFF3FCF8, 0xFFB2CEC3,
-            0xFF16332D, 0xFF9DB8AF,
+            0xFF16332D, 0xFF9EDCCB,
             0xFF1E423A, 0xFFBFE8DC,
             0.9F, true, "large");
 

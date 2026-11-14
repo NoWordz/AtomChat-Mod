@@ -1,0 +1,9 @@
+目标 6 条：
+  1.21.1-fabric      mc=1.21.1  loader=Fabric    java=21 gradle=8.8 发/有工程 layers=['1.21+', 'fabric']
+  1.21.1-neoforge    mc=1.21.1  loader=NeoForge  java=21 gradle=9.2.1 发/有工程 layers=['1.21+', 'official', 'neoforge']
+  1.20.1-forge       mc=1.20.1  loader=Forge     java=17 gradle=8.8 发/有工程 layers=['official', 'forge']
+  1.21.1-forge       mc=1.21.1  loader=Forge     java=21 gradle=8.8 不发/无工程 layers=['1.21+', 'official', 'forge']
+  1.20.1-fabric      mc=1.20.1  loader=Fabric    java=17 gradle=8.8 不发/无工程 layers=['fabric']
+  1.20.1-neoforge    mc=1.20.1  loader=NeoForge  java=17 gradle=8.8 不发/无工程 layers=['official', 'neoforge']
+
+校验通过。

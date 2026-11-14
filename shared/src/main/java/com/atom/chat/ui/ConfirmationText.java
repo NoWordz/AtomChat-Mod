@@ -15,7 +15,12 @@ record ConfirmationText(float size,float lineHeight,List<String> lines) {
         float widest=0;
         for(String paragraph:text.split("\n")) widest=Math.max(widest,SkiaFontRenderer.getStringWidth(font,paragraph));
         if(widest>width)size=Math.max(UiTokens.DIALOG_MIN_TEXT_SIZE,size*width/widest);
-        font=FontManager.font(size);
+        return wrap(text,width,size);
+    }
+    /** Fixed-size wrapping for tutorial copy: width changes never lower the glyph size. */
+    static ConfirmationText wrap(String text,float width,float requestedSize) {
+        float size=Math.max(UiTokens.DIALOG_MIN_TEXT_SIZE,requestedSize);
+        var font=FontManager.font(size);
         var lines=new ArrayList<String>();
         for(String paragraph:text.split("\n",-1)) {
             var wrapped=SkiaFontRenderer.wrapWords(font,paragraph,width);

@@ -1,0 +1,82 @@
+[
+  {
+    "preset": "MINIMAL",
+    "differences": [
+      [
+        9,
+        "0xFF6B7280",
+        "0xFF4A6285"
+      ]
+    ]
+  },
+  {
+    "preset": "SUMMER",
+    "differences": [
+      [
+        9,
+        "0xFF6B7280",
+        "0xFF5A732A"
+      ]
+    ]
+  },
+  {
+    "preset": "ELEGANT",
+    "differences": [
+      [
+        9,
+        "0xFF8A8377",
+        "0xFF806445"
+      ]
+    ]
+  },
+  {
+    "preset": "RAVEN",
+    "differences": [
+      [
+        9,
+        "0xFF8B949E",
+        "0xFFAAB5C4"
+      ]
+    ]
+  },
+  {
+    "preset": "HUB",
+    "differences": [
+      [
+        9,
+        "0xFF9CA3AF",
+        "0xFFC0CAD5"
+      ]
+    ]
+  },
+  {
+    "preset": "VIVID",
+    "differences": [
+      [
+        9,
+        "0xFF9A7F8C",
+        "0xFF8C526B"
+      ]
+    ]
+  },
+  {
+    "preset": "DUSK",
+    "differences": [
+      [
+        9,
+        "0xFF9BA0B5",
+        "0xFFB9B2D5"
+      ]
+    ]
+  },
+  {
+    "preset": "MINT",
+    "differences": [
+      [
+        9,
+        "0xFF9DB8AF",
+        "0xFF9EDCCB"
+      ]
+    ]
+  }
+]

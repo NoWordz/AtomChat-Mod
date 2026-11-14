@@ -1017,9 +1017,22 @@ public final class SkiaFontRenderer {
                     }
                 }
                 if (currentWidth + width > maxWidth && current.length() > 0) {
-                    lines.add(current.toString());
-                    current.setLength(0);
-                    currentWidth = 0.0F;
+                    if (cannotStartLine(cp)) {
+                        // CJK punctuation stays with the preceding glyph instead
+                        // of becoming a one-character orphan at the line start.
+                        int carry = current.offsetByCodePoints(current.length(), -1);
+                        String tail = current.substring(carry);
+                        if (carry > 0) {
+                            lines.add(current.substring(0, carry));
+                            current.setLength(0);
+                            current.append(tail);
+                            currentWidth = measure.apply(tail);
+                        }
+                    } else {
+                        lines.add(current.toString());
+                        current.setLength(0);
+                        currentWidth = 0.0F;
+                    }
                 }
                 if (Character.isWhitespace(cp)) {
                     // A reflow can move the line break to an earlier space,
@@ -1041,6 +1054,14 @@ public final class SkiaFontRenderer {
             lines.add(current.toString());
         }
         return lines;
+    }
+
+    private static boolean cannotStartLine(int cp) {
+        return cp=='\u3001'||cp=='\u3002'||cp=='\uff0c'||cp=='\uff1b'||cp=='\uff1a'
+                ||cp=='\uff01'||cp=='\uff1f'||cp==')'||cp==']'||cp=='}'
+                ||cp=='\uff09'||cp=='\u300b'||cp=='\u300d'||cp=='\u300f'||cp=='\u3011'
+                ||cp=='\u3015'||cp=='\u3009'||cp=='\u300b'
+                ||cp=='\u2026'||cp=='\u2014'||cp=='.'||cp==','||cp==';'||cp==':'||cp=='!'||cp=='?';
     }
 
     private static int getColorFromCode(String code, int currentColor, int originalColor) {

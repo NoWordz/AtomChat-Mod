@@ -6,6 +6,17 @@ import java.util.List;
 
 /** One geometry for annotation painting and pointer routing, recomputed after resize. */
 public record TutorialLayout(Rect panel, Rect target, Rect card, List<Rect> buttons) {
+    public static TutorialLayout of(Rect viewport,Rect target,float height,Rect phone) {
+        float gap=UiTokens.SETTINGS_ROW_PAD;
+        float left=phone.x()-viewport.x()-gap*2,right=viewport.right()-phone.right()-gap*2;
+        float minimum=UiTokens.DIALOG_STACK_WIDTH;
+        if(Math.max(left,right)>=minimum) {
+            boolean after=right>=left;float width=Math.min(UiTokens.DIALOG_MAX_WIDTH,after?right:left);
+            Rect region=new Rect(after?phone.right()+gap:viewport.x()+gap,viewport.y(),width,viewport.h());
+            return of(region,target,height);
+        }
+        return of(viewport,target,height);
+    }
     public static TutorialLayout of(Rect panel, Rect target, float contentHeight) {
         float pad = UiTokens.SETTINGS_ROW_PAD, gap = UiTokens.BUTTON_GAP;
         float width = Math.max(0, panel.w() - pad * 2);

@@ -1,0 +1,114 @@
+[
+  {
+    "file": "shared/src/main/java/com/atom/chat/onboarding/TutorialController.java",
+    "sha256": "2b939f057c271f7685d0d44e363ab18fdc2434935537d72b08a472931430a70c",
+    "exact_1700": false,
+    "lf_1700": false,
+    "crlf_1700": true
+  },
+  {
+    "file": "shared/src/main/java/com/atom/chat/onboarding/TutorialOverlay.java",
+    "sha256": "c793ccfd4c92ae0bcc6ae043b90fb741012809f202bce92fbb9e82547d3974af",
+    "exact_1700": false,
+    "lf_1700": false,
+    "crlf_1700": true
+  },
+  {
+    "file": "shared/src/main/java/com/atom/chat/onboarding/TutorialLayout.java",
+    "sha256": "413a46e0ace2075eea3db013be1e835843d8c9b87a6cfb025309786da21147de",
+    "exact_1700": false,
+    "lf_1700": false,
+    "crlf_1700": true
+  },
+  {
+    "file": "shared/src/main/java/com/atom/chat/onboarding/TutorialSession.java",
+    "sha256": "272709fb602b300989a162280d0061a890cc6757d3a2e7b511b75fa4c260ccbb",
+    "exact_1700": false,
+    "lf_1700": false,
+    "crlf_1700": true
+  },
+  {
+    "file": "shared/src/main/java/com/atom/chat/onboarding/TutorialGuide.java",
+    "sha256": "12acb58fa8d7cebd2101f031fb88fe187f63311f8129a8e4cb2391e20276b5c7",
+    "exact_1700": true,
+    "lf_1700": false,
+    "crlf_1700": true
+  },
+  {
+    "file": "shared/src/main/java/com/atom/chat/onboarding/TutorialFocusMotion.java",
+    "sha256": "4a41000508df6c4d28095739b9926cea56794741796d2c9399c032c051356814",
+    "exact_1700": true,
+    "lf_1700": false,
+    "crlf_1700": true
+  },
+  {
+    "file": "shared/src/main/java/com/atom/chat/onboarding/TutorialPointerPolicy.java",
+    "sha256": "41a4e6e45a78558495d1f91b0b03509f8d9d2f8459ba5af4e9249f36e82899d4",
+    "exact_1700": true,
+    "lf_1700": false,
+    "crlf_1700": true
+  },
+  {
+    "file": "shared/src/main/java/com/atom/chat/onboarding/TutorialSandbox.java",
+    "sha256": "77fb0987f29ac653ff567487fc7f9f1ecaf476741f829883a004fc7a8b31bd25",
+    "exact_1700": true,
+    "lf_1700": false,
+    "crlf_1700": true
+  },
+  {
+    "file": "shared/src/main/java/com/atom/chat/onboarding/TutorialAnchor.java",
+    "sha256": "ff5516aced9b8d712eaa08146411a4cef4041107808a56e786d49fd17bd21884",
+    "exact_1700": false,
+    "lf_1700": true,
+    "crlf_1700": false
+  },
+  {
+    "file": "shared/src/main/java/com/atom/chat/notification/NotificationHudEditor.java",
+    "sha256": "069093ccf96c5487bf33beb2613be2659a5c427c4fd81176095f29a0511690c3",
+    "exact_1700": false,
+    "lf_1700": false,
+    "crlf_1700": true
+  },
+  {
+    "file": "shared/src/main/java/com/atom/chat/ui/ConfirmationSurface.java",
+    "sha256": "fcda9dcffd86bf09ca079d802348a0e6ae804d25976a3d6e66696dac6ef9758c",
+    "exact_1700": true,
+    "lf_1700": false,
+    "crlf_1700": true
+  },
+  {
+    "file": "shared/src/main/java/com/atom/chat/ui/ConfirmationDialog.java",
+    "sha256": "8c67e31c5ee3773c52ced9d438106321735a9e9e182b8d4e932b91f62ebada4e",
+    "exact_1700": false,
+    "lf_1700": false,
+    "crlf_1700": true
+  },
+  {
+    "file": "shared/src/main/java/com/atom/chat/nav/PageTransitionComposite.java",
+    "sha256": "11f7566e9fa9be57916f663ef7948f3c33cee9676689706bf6c07f7319a305fe",
+    "exact_1700": false,
+    "lf_1700": false,
+    "crlf_1700": true
+  },
+  {
+    "file": "shared/src/main/java/com/atom/chat/ui/BottomChromeTransition.java",
+    "sha256": "580a4f5a16e6a456a95da77453b27f9e96c0e3a3d4aeadcdffd4c6bd3a10a15f",
+    "exact_1700": false,
+    "lf_1700": false,
+    "crlf_1700": true
+  },
+  {
+    "file": "shared/src/main/java/com/atom/chat/render/DotTexture.java",
+    "sha256": "fe70f2ba13f52ca7d7ed31e6291628b63521e2e1a29780df6106b788fea2d55d",
+    "exact_1700": false,
+    "lf_1700": false,
+    "crlf_1700": true
+  },
+  {
+    "file": "shared/src/main/java/com/atom/chat/theme/ThemeService.java",
+    "sha256": "ea5b83021da05d8dde4cf49709f99dabf767aab26f67181f1cc6123012074eb6",
+    "exact_1700": false,
+    "lf_1700": false,
+    "crlf_1700": true
+  }
+]

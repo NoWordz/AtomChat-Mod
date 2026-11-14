@@ -12,6 +12,10 @@ class DefaultInstancePaletteTest {
         assertEquals(.6990596F, config.panelOpacity);
         assertEquals(.59866506F, config.cardTint);
         assertEquals(25F, config.cornerRadius);
-        assertEquals(3F, config.panelOutlineWidth);
+        assertEquals(4F, config.panelOutlineWidth);
+        config.setPanelOutlineWidth(6F);
+        assertEquals(6F, config.effectivePanelOutlineWidth());
+        config.setPanelOutlineWidth(7F);
+        assertEquals(6F, config.effectivePanelOutlineWidth());
     }
 }

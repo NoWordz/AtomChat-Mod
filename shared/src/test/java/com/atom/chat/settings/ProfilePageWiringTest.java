@@ -163,6 +163,19 @@ class ProfilePageWiringTest {
         }
     }
 
+    @Test void tutorialSignatureCallbacksCannotBorrowOrCommitTheRealSignature() {
+        Composer composer=new Composer(tmp.resolve("avatar"));
+        ProfilePageWiring wiring=wiring(composer);
+        String previous=AtomChatConfig.get().playerSignature;
+        try(var sandbox=new com.atom.chat.onboarding.TutorialSandbox((text,own)->com.atom.chat.chat.LocalEcho.build(
+                text,text,null,null,null,"Guide",com.atom.chat.text.RichText.literal("Guide")),"one","two")) {
+            composer.text="tutorial text";
+            wiring.beginSignatureEdit();composer.text="tutorial replacement";wiring.endSignatureEdit(true);
+            assertEquals(previous,AtomChatConfig.get().playerSignature,"the real profile callback must not commit tutorial text");
+            assertFalse(composer.calls.contains("focus"),"tutorial must not borrow the signature editor");
+        } finally {AtomChatConfig.get().playerSignature=previous;}
+    }
+
     private ProfilePageWiring wiring(Composer composer) {
         return new ProfilePageWiring(composer);
     }

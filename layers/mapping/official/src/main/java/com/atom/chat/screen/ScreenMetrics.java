@@ -80,8 +80,10 @@ public final class ScreenMetrics {
      * contentScale-invariant, so the physical left margin must be too: the
      * virtual constant divides back out against the density's content factor.
      */
-    public static float panelX() {
-        return panelXValue();
+    public static float panelX() { return panelXValue(); }
+
+    public static float panelX(Window window) {
+        return panelX(window.getWidth(), window.getHeight());
     }
 
     public static float panelY(Window window) {
@@ -102,12 +104,12 @@ public final class ScreenMetrics {
 
     /** A root tab page: tab bar, no composer. */
     public static UiLayout rootLayout(Window window) {
-        return UiLayout.ofRoot(panelX(), panelY(window), panelWidth(window), panelHeight(window), AtomChatConfig.get().halfScreenMode);
+        return UiLayout.ofRoot(panelX(window), panelY(window), panelWidth(window), panelHeight(window), AtomChatConfig.get().halfScreenMode);
     }
 
     /** A pushed settings sub-page: no composer, no tab bar, tallest possible list. */
     public static UiLayout detailLayout(Window window) {
-        return UiLayout.ofDetail(panelX(), panelY(window), panelWidth(window), panelHeight(window), AtomChatConfig.get().halfScreenMode);
+        return UiLayout.ofDetail(panelX(window), panelY(window), panelWidth(window), panelHeight(window), AtomChatConfig.get().halfScreenMode);
     }
 
     /** Layout of whatever list the top page is showing (D24 supplies the page). */
@@ -126,12 +128,14 @@ public final class ScreenMetrics {
     }
 
     public static float panelWidthForViewport(float viewportWidth) {
-        return Math.min(UiTokens.s(AtomChatConfig.get().activePanelWidth()) / contentScaleValue(), viewportWidth - 32.0F);
+        return Math.min(UiTokens.s(AtomChatConfig.get().activePanelWidth()) / contentScaleValue(),
+                Math.max(1F, viewportWidth - (AtomChatConfig.get().panelPositionCustom ? 0F : 32.0F)));
     }
 
     static float panelHeight(int height) {
         if (AtomChatConfig.get().halfScreenMode) return vh(height);
-        return Math.min(UiTokens.s(AtomChatConfig.get().panelHeight) / contentScaleValue(), vh(height) - 32.0F);
+        return Math.min(UiTokens.s(AtomChatConfig.get().panelHeight) / contentScaleValue(),
+                Math.max(1F, vh(height) - (AtomChatConfig.get().panelPositionCustom ? 0F : 32.0F)));
     }
 
     static float contentScaleValue() {
@@ -151,6 +155,14 @@ public final class ScreenMetrics {
         return height / uiDensity(height);
     }
 
+    static float panelX(int width, int height) {
+        var cfg=AtomChatConfig.get();
+        if (!cfg.halfScreenMode && cfg.panelPositionCustom) {
+            return Math.max(0F, vw(width,height)-panelWidth(width,height)) * Math.max(0F,Math.min(1F,cfg.panelPositionX));
+        }
+        return panelXValue();
+    }
+
     static float panelXValue() {
         if (AtomChatConfig.get().halfScreenMode) return 0F;
         return UiTokens.PANEL_ANCHOR_X / contentScaleValue();
@@ -158,7 +170,9 @@ public final class ScreenMetrics {
 
     static float panelY(int height) {
         if (AtomChatConfig.get().halfScreenMode) return 0F;
-        return (vh(height) - panelHeight(height)) / 2.0F;
+        float available = Math.max(0F, vh(height) - panelHeight(height));
+        return AtomChatConfig.get().panelPositionCustom
+                ? available * Math.max(0F,Math.min(1F,AtomChatConfig.get().panelPositionY)) : available / 2.0F;
     }
 
     static float toVirtualX(double guiX, double guiScale, int height) {

@@ -1,0 +1,48 @@
+{
+  "verification_pid": 18284,
+  "verified_at": "2026-11-14T15:30:31.680181+08:00",
+  "independent_script": "independent_deployment_readback.py (does not import deployment helper)",
+  "targets": {
+    "1.20.1-forge": {
+      "instance": "1.20.1-main",
+      "installed": "D:\\Myworld\\.minecraft\\versions\\1.20.1-main\\mods\\atomchat-Forge-1.20.1-v0.7.0.jar",
+      "installed_sha256": "967f4d3239551f50d2d866b59ad4aa12d5ada266f372cf64fc526ad193b1e4e7",
+      "candidate_sha256": "967f4d3239551f50d2d866b59ad4aa12d5ada266f372cf64fc526ad193b1e4e7",
+      "backup": "D:\\AtomChat-Backups\\2026-11-14-editor-grill\\20261114-152929-912953\\1.20.1-forge\\atomchat-Forge-1.20.1-v0.7.0.jar",
+      "backup_sha256": "004eb47a53099a0775cbf31394fa2e4e367f4f78322fd2b9813d87b4e1f13627",
+      "backup_matches_prior_independent_preparation": true,
+      "other_files": 217,
+      "other_hash_size_mtime_unchanged": true
+    },
+    "1.21.1-fabric": {
+      "instance": "1.21.1-CCB",
+      "installed": "D:\\Myworld\\.minecraft\\versions\\1.21.1-CCB\\mods\\atomchat-Fabric-1.21.1-v0.7.0.jar",
+      "installed_sha256": "87704c398cf5d3cfd7888658e21a383df26fbf75b5d2c71cea50db17ec0ee872",
+      "candidate_sha256": "87704c398cf5d3cfd7888658e21a383df26fbf75b5d2c71cea50db17ec0ee872",
+      "backup": "D:\\AtomChat-Backups\\2026-11-14-editor-grill\\20261114-152929-912953\\1.21.1-fabric\\atomchat-Fabric-1.21.1-v0.7.0.jar",
+      "backup_sha256": "ca1ab35882be3b991e737f93d10eddda6b65c2edb23b7ea1562e7a5cf77818d3",
+      "backup_matches_prior_independent_preparation": true,
+      "other_files": 434,
+      "other_hash_size_mtime_unchanged": true
+    },
+    "1.21.1-neoforge": {
+      "instance": "Mechanomania-航空学",
+      "installed": "D:\\Myworld\\.minecraft\\versions\\Mechanomania-航空学\\mods\\atomchat-NeoForge-1.21.1-v0.7.0.jar",
+      "installed_sha256": "89deaccd1404a1f816964da0e79ebac80eab5d57f8e0cbe1abe972e6b5dacc95",
+      "candidate_sha256": "89deaccd1404a1f816964da0e79ebac80eab5d57f8e0cbe1abe972e6b5dacc95",
+      "backup": "D:\\AtomChat-Backups\\2026-11-14-editor-grill\\20261114-152929-912953\\1.21.1-neoforge\\atomchat-NeoForge-1.21.1-v0.7.0.jar",
+      "backup_sha256": "bd826e6d50156424a2bf9f5fee204c45204b4763566bfaa1ae799803e2cf488b",
+      "backup_matches_prior_independent_preparation": true,
+      "other_files": 239,
+      "other_hash_size_mtime_unchanged": true
+    }
+  },
+  "backup": "D:\\AtomChat-Backups\\2026-11-14-editor-grill\\20261114-152929-912953",
+  "source_files": 562,
+  "all_sources_match_reviewed_freeze": true,
+  "all_installed_and_backups_verified": true,
+  "other_mods_unchanged_from_fresh_deploy_baseline": true,
+  "started_game": false,
+  "production_sources_changed": false,
+  "readonly_or_guard_created": false
+}

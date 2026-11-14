@@ -18,7 +18,7 @@ public final class BottomChromeTransition implements AutoCloseable {
     private Mode mode;
     private UiLayout.Rect rest;
     private long frameTime;
-    private final Paint alpha = new Paint();
+    private Paint alpha = new Paint();
 
     public void beginFrame(Mode mode, UiLayout.Rect chatRect, UiLayout.Rect navRect, long now, boolean enabled) {
         frameTime = now;
@@ -37,6 +37,12 @@ public final class BottomChromeTransition implements AutoCloseable {
     public UiLayout.Rect paintedRect() {
         var shape = paintedShape();
         return new UiLayout.Rect(shape.x(), shape.y(), shape.w(), shape.h());
+    }
+    public UiLayout.Rect paintedBounds(UiLayout.Rect logical) {
+        var shape=paintedShape();
+        if(rest==null||rest.w()<=0||rest.h()<=0)return logical;
+        return new UiLayout.Rect(shape.x()+(logical.x()-rest.x())*shape.w()/rest.w(),
+            shape.y()+(logical.y()-rest.y())*shape.h()/rest.h(),logical.w()*shape.w()/rest.w(),logical.h()*shape.h()/rest.h());
     }
     public float inverseX(float x) {
         var s = paintedShape();
@@ -117,10 +123,14 @@ public final class BottomChromeTransition implements AutoCloseable {
             picture.playback(canvas);
         } finally { canvas.restoreToCount(save); }
     }
-    public void reset() {
+    private void clear() {
         if (chat != null) { chat.close(); chat = null; }
         if (nav != null) { nav.close(); nav = null; }
         mode = null; rest = null; geometry.reset(); blend.reset();
     }
-    @Override public void close() { reset(); alpha.close(); }
+    public void reset() {
+        if (alpha.isClosed()) alpha = new Paint();
+        clear();
+    }
+    @Override public void close() { clear(); if (!alpha.isClosed()) alpha.close(); }
 }

@@ -75,12 +75,44 @@ class HalfScreenConfigTest {
                 .invoke(config, width), "missing active width writer");
     }
 
+    @Test void appearanceDefaultsAndExplicitValuesSurviveRealConfigRoundTrips() throws Exception {
+        AtomChatConfig.reload();
+        assertEquals(2F, AtomChatConfig.get().blurStrength);
+        assertEquals(4F, AtomChatConfig.get().effectivePanelOutlineWidth());
+        AtomChatConfig.save(AtomChatConfig.get());
+        AtomChatConfig.reload();
+        assertEquals(4F, AtomChatConfig.get().effectivePanelOutlineWidth());
+        for (float[] values : new float[][]{{1F, 3F}, {2.75F, 5.5F}, {.25F, 0F}, {3F, 6F}}) {
+            Files.writeString(configFile(), "{\"blurStrength\":" + values[0]
+                    + ",\"panelOutlineWidth\":" + values[1] + "}");
+            AtomChatConfig.reload();
+            assertEquals(values[0], AtomChatConfig.get().blurStrength);
+            assertEquals(values[1], AtomChatConfig.get().effectivePanelOutlineWidth());
+            AtomChatConfig.save(AtomChatConfig.get());
+            AtomChatConfig.reload();
+            assertEquals(values[0], AtomChatConfig.get().effectiveBlurStrength());
+            assertEquals(values[1], AtomChatConfig.get().effectivePanelOutlineWidth());
+        }
+    }
+
+    @Test void loadingNormalizesOutOfRangeAppearanceValues() throws Exception {
+        Files.createDirectories(configFile().getParent());
+        for (float[] values : new float[][]{{10F, 10F, 3F, 6F}, {-1F, -1F, .25F, 0F}}) {
+            Files.writeString(configFile(), "{\"blurStrength\":" + values[0]
+                    + ",\"panelOutlineWidth\":" + values[1] + "}");
+            AtomChatConfig.reload();
+            assertEquals(values[2], AtomChatConfig.get().blurStrength);
+            assertEquals(values[3], AtomChatConfig.get().panelOutlineWidth);
+        }
+    }
+
     @Test void freshConfigStartsWithoutWallpaperAndOldAppearanceRemainsIntact() throws Exception {
         AtomChatConfig.reload();
         assertFalse(AtomChatConfig.get().wallpaperFirstUsePending);
         Files.writeString(configFile(), "{\"panelOutline\":true,\"panelBgColor\":-12345,\"cardTint\":0.72}");
         AtomChatConfig.reload();
         var old=AtomChatConfig.get();
+        assertEquals(2F, old.effectiveBlurStrength(), "absent blur uses the new default");
         assertFalse(old.wallpaperFirstUsePending);
         assertEquals(2F,old.effectivePanelOutlineWidth());
         assertEquals(-12345,old.panelBgColor);

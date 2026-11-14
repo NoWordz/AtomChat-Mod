@@ -117,6 +117,7 @@ public final class ProfilePageWiring {
      * is the shell's object, so these are what its handler calls.
      */
     public void beginSignatureEdit() {
+        if(com.atom.chat.onboarding.TutorialSandbox.active())return;
         // The quick-phrase editor's borrow, pointed at the signature: park
         // the composer draft, load the current signature into the field
         // (the IME carrier) and focus it. The page flips into its editing
@@ -130,6 +131,7 @@ public final class ProfilePageWiring {
     }
 
     public void endSignatureEdit(boolean commit) {
+        if(com.atom.chat.onboarding.TutorialSandbox.active())return;
         if (commit) {
             String text = host.composerText();
             if (text.length() > 256) {

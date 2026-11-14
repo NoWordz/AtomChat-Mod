@@ -86,7 +86,7 @@ class SoftShadowTest {
             assertEquals(0,pixels.getColor(350,400),"transparent wallpaper area must stay unshaded");
             int near=pixels.getColor(580,400)>>>24;
             int middle=pixels.getColor(594,400)>>>24;
-            int far=pixels.getColor(619,400)>>>24;
+            int far=pixels.getColor(Math.round(570 + SoftShadow.panelPad() - 1),400)>>>24;
             assertTrue(near>middle && middle>far,"shadow must decay gradually: "+near+","+middle+","+far);
             assertTrue(middle>0,"a visible soft tail must extend beyond a thin rim");
             assertTrue(far<=1,"tail must die out before the layer edge");
@@ -117,14 +117,14 @@ class SoftShadowTest {
         int w=850,h=950;
         try(var actual=Surface.makeRasterN32Premul(w,h);var expected=Surface.makeRasterN32Premul(w,h);
             var a=new Bitmap();var b=new Bitmap();var paint=new io.github.humbleui.skija.Paint().setAntiAlias(true);
-            var wide=io.github.humbleui.skija.MaskFilter.makeBlur(io.github.humbleui.skija.FilterBlurMode.NORMAL,17.5F);
-            var contact=io.github.humbleui.skija.MaskFilter.makeBlur(io.github.humbleui.skija.FilterBlurMode.NORMAL,3.75F)) {
+            var wide=io.github.humbleui.skija.MaskFilter.makeBlur(io.github.humbleui.skija.FilterBlurMode.NORMAL,22.5F);
+            var contact=io.github.humbleui.skija.MaskFilter.makeBlur(io.github.humbleui.skija.FilterBlurMode.NORMAL,5F)) {
             actual.getCanvas().clear(0);expected.getCanvas().clear(0);
             SoftShadow.drawPanel(actual.getCanvas(),160,130,510,690,28);
             var c=expected.getCanvas();c.save();
             c.clipRRect(io.github.humbleui.types.RRect.makeXYWH(160,130,510,690,28),io.github.humbleui.skija.ClipMode.DIFFERENCE,true);
-            c.drawRRect(io.github.humbleui.types.RRect.makeXYWH(160,137.5F,510,690,28),paint.setColor(0x52000000).setMaskFilter(wide));
-            c.drawRRect(io.github.humbleui.types.RRect.makeXYWH(160,132.5F,510,690,28),paint.setColor(0x28000000).setMaskFilter(contact));
+            c.drawRRect(io.github.humbleui.types.RRect.makeXYWH(160,145F,510,690,28),paint.setColor(0x78000000).setMaskFilter(wide));
+            c.drawRRect(io.github.humbleui.types.RRect.makeXYWH(160,133.75F,510,690,28),paint.setColor(0x44000000).setMaskFilter(contact));
             c.restore();
             a.allocN32Pixels(w,h);b.allocN32Pixels(w,h);assertTrue(actual.readPixels(a,0,0));assertTrue(expected.readPixels(b,0,0));
             int peakDifference=0;long error=0;int count=0;

@@ -1,0 +1,7 @@
+
+裸值：基线 441 处 / 实测 433 处（21 个文件）
+✓ 通过；实测低于基线，可以跑 --update 收紧棘轮
+注意：以下文件的基线还有余量（文件被删/搬走或裸值已清）—— 不拦构建，但该跑 --update 收紧，别让余量变成以后新增裸值的空间：
+   layers/mapping/official/src/main/java/com/atom/chat/page/MessageListView.java: 29 → 28
+   layers/mapping/official/src/main/java/com/atom/chat/settings/SettingsSectionPage.java: 120 → 118
+   shared/src/main/java/com/atom/chat/ui/ScrollSyncService.java: 20 → 15

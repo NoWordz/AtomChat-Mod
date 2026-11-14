@@ -25,7 +25,7 @@ class ConfirmationPickerFamilyTest {
         try(var expected=Surface.makeRasterN32Premul(460,820);var actual=Surface.makeRasterN32Premul(460,820)) {
             expected.getCanvas().clear(0xFF343D4B);actual.getCanvas().clear(0xFF343D4B);
             picker.render(expected.getCanvas(),panel,-1,-1,0);
-            var dialog=new ConfirmationDialog();dialog.open("清空记录","无法恢复","取消","确认清除",()->{});
+            var dialog=new ConfirmationDialog();dialog.openDangerous("清空记录","无法恢复","取消","确认清除",()->{});
             dialog.render(actual.getCanvas(),panel,-1,-1,200);
             var box=dialog.geometry().surface();
             assertEquals(pixel(expected,(int)(float)cardX.invoke(null,panel)+5,(int)((float)cardY.invoke(null,panel)+(float)cardH.invoke(null)/2)),
@@ -34,7 +34,7 @@ class ConfirmationPickerFamilyTest {
     }
     @Test void destructiveConfirmAndWarningAreRedWhileCancelHasNoAccentRing() {
         try(var surface=Surface.makeRasterN32Premul(460,820)) {
-            var dialog=new ConfirmationDialog();dialog.open("清空记录","无法恢复","取消","确认清除",()->{});
+            var dialog=new ConfirmationDialog();dialog.openDangerous("清空记录","无法恢复","取消","确认清除",()->{});
             surface.getCanvas().clear(0);dialog.render(surface.getCanvas(),new UiLayout.Rect(10,10,430,800),-1,-1,200);
             var g=dialog.geometry();var b=g.confirm();
             int confirm=pixel(surface,(int)b.x()+8,(int)(b.y()+b.h()/2));
@@ -51,7 +51,7 @@ class ConfirmationPickerFamilyTest {
         var panel=new UiLayout.Rect(15,15,260,310);
         try(var surface=Surface.makeRasterN32Premul(460,820)) {
             var dialog=new ConfirmationDialog();
-            dialog.open("清空聊天记录",UiFeatureRenderTest.tr("atomchat.confirm.history_clear"),"取消","确认清除",()->{});
+            dialog.openDangerous("清空聊天记录",UiFeatureRenderTest.tr("atomchat.confirm.history_clear"),"取消","确认清除",()->{});
             dialog.render(surface.getCanvas(),panel,-1,-1,200);
             var g=dialog.geometry();
             // CJK fallback metrics differ per OS: the same copy wraps to two lines
@@ -67,7 +67,7 @@ class ConfirmationPickerFamilyTest {
         for(float width:new float[]{260,430}) {
             try(var surface=Surface.makeRasterN32Premul(460,820)) {
                 var dialog=new ConfirmationDialog();
-                dialog.open("清空聊天记录",UiFeatureRenderTest.tr("atomchat.confirm.history_clear"),"取消","确认清除",()->{});
+                dialog.openDangerous("清空聊天记录",UiFeatureRenderTest.tr("atomchat.confirm.history_clear"),"取消","确认清除",()->{});
                 dialog.render(surface.getCanvas(),new UiLayout.Rect(15,15,width,310),-1,-1,200);
                 var g=dialog.geometry();
                 assertEquals(g.cancel().y(),g.confirm().y(),"cancel left, confirm right at every supported width");

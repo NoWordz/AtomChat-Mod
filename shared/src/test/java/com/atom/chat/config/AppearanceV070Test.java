@@ -7,8 +7,8 @@ class AppearanceV070Test {
     private static float width(AtomChatConfig config) throws Exception {
         return ((Number) AtomChatConfig.class.getMethod("effectivePanelOutlineWidth").invoke(config)).floatValue();
     }
-    @Test void newOutlineIsThreeLogicalPixels() throws Exception {
-        assertEquals(3F, width(new AtomChatConfig()));
+    @Test void newOutlineIsFourLogicalPixels() throws Exception {
+        assertEquals(4F, width(new AtomChatConfig()));
     }
     @Test void oldOutlineMigratesWithoutChangingItsAppearance() throws Exception {
         var c = new AtomChatConfig();

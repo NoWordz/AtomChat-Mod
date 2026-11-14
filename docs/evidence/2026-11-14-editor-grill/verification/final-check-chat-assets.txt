@@ -1,0 +1,3 @@
+PASS chat assets/version: D:\AtomChat-Main\platforms\1.20.1-forge\build\atomlib-consumer\libs\atomchat-Forge-1.20.1-v0.7.0.jar
+PASS chat assets/version: D:\AtomChat-Main\platforms\1.21.1-fabric\build\atomlib-consumer\libs\atomchat-Fabric-1.21.1-v0.7.0.jar
+PASS chat assets/version: D:\AtomChat-Main\platforms\1.21.1-neoforge\build\atomlib-consumer\libs\atomchat-NeoForge-1.21.1-v0.7.0.jar

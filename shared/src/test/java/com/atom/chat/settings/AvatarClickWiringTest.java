@@ -588,6 +588,19 @@ class AvatarClickWiringTest {
                         .toList());
     }
 
+    @Test void tutorialProfileActionsNeverReachPersonalFilesOrSignatureWrites() {
+        setUp();
+        try(var sandbox=new com.atom.chat.onboarding.TutorialSandbox((text,own)->com.atom.chat.chat.LocalEcho.build(
+                text,text,null,null,null,"Guide",com.atom.chat.text.RichText.literal("Guide")),"one","two")) {
+            var handler=wiring.handler();
+            handler.openAvatarPicker();handler.openBannerPicker();handler.clearAvatar();handler.clearBanner();
+            handler.beginSignatureEdit();handler.endSignatureEdit(true);
+            assertTrue(host.calls.stream().noneMatch(c->c.equals("pickAvatar")||c.equals("pickBanner")
+                    ||c.equals("clearAvatar")||c.equals("clearBanner")||c.startsWith("beginSignature")||c.startsWith("endSignature")),
+                    "tutorial reached a real personal-data action: "+host.calls);
+        }
+    }
+
     // --------------------------------------------- 6. openProfileDetail guard
 
     @Test

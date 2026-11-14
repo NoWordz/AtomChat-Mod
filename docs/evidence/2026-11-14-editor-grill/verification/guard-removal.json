@@ -1,0 +1,25 @@
+{
+  "date": "2026-11-14T15:11:14.603040",
+  "authority": "User explicitly revoked guard requirement; retain features and ordinary regression tests",
+  "backup": "D:\\AtomChat-Main\\build\\editor-grill-20261114\\withdrawn-guard-backup",
+  "removed": [
+    "D:\\AtomChat-Main\\tools\\ui_contract_lock.json",
+    "D:\\AtomChat\\.git\\worktrees\\AtomChat-Main\\atomchat-ui-contract.json",
+    "D:\\AtomChat\\.git\\hooks\\pre-commit",
+    "D:\\AtomChat-Main\\tools\\verify_ui_contract.py",
+    "D:\\AtomChat-Main\\.githooks\\pre-commit",
+    "D:\\AtomChat-Main\\build\\editor-grill-20261114\\initialize_once.py",
+    "D:\\AtomChat-Main\\build\\editor-grill-20261114\\guard_mutations.py"
+  ],
+  "edited": [
+    "D:\\AtomChat-Main\\gradle\\atomchat-layers.gradle",
+    "D:\\AtomChat-Main\\.gitattributes",
+    "D:\\AtomChat-Main\\AGENTS.md",
+    "D:\\AtomChat-Main\\docs\\UI_CONTRACT.md"
+  ],
+  "readonly_was_never_activated": true,
+  "no_existing_hook_overwritten_or_removed": true,
+  "mutation_run_cancelled": true,
+  "deployment_performed": false,
+  "staged_paths_after": []
+}

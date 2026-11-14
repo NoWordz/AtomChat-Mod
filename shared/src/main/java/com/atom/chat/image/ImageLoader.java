@@ -246,6 +246,18 @@ public final class ImageLoader {
         return get(url, false);
     }
 
+    /** Seeds the normal draw and preview cache without I/O; tutorial-only state owns removal. */
+    public void putMemoryImage(String url, Image image) {
+        if(url==null||image==null)return;
+        synchronized(cache){cache.put(url,image);failedUntil.remove(url);}
+    }
+
+    /** Releases a memory-only seed; the cache holds the sole reference. */
+    public void removeMemoryImage(String url) {
+        if(url==null)return;
+        synchronized(cache){cache.remove(url);}
+    }
+
     /**
      * Returns the decoded image, or null while it loads. Only a
      * {@code visible} call may start a fetch — the message list calls this

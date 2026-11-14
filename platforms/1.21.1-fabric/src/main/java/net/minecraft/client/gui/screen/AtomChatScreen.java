@@ -390,6 +390,15 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
      */
 
     private java.util.List<NavPage> tutorialReturnStack;
+    private com.atom.chat.config.ConfigPreviewTransaction tutorialPreview;
+    private com.atom.chat.onboarding.TutorialSandbox tutorialSandbox;
+    private DraftStore tutorialSavedDraftStore;
+    private ReplySlotStore.Snapshot tutorialSavedReplies;
+    private SettingsSectionPage.TutorialFolds tutorialSavedFolds;
+    private String tutorialSavedText;
+    private int tutorialSavedCaret;
+    private boolean tutorialSavedFocus;
+
     private final com.atom.chat.onboarding.TutorialController tutorial = new com.atom.chat.onboarding.TutorialController(
             new com.atom.chat.onboarding.TutorialController.Host() {
         public String translate(String key) { return tr(key); }
@@ -399,16 +408,49 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
             composerTools.close();
             emojiPanel.close();
             closePhrasePanel();
+            tutorialSavedFolds=settingsSectionPage.tutorialFolds();
+            tutorialSavedText=composer.text();tutorialSavedCaret=composer.caretIndex();tutorialSavedFocus=composer.focused();
+            tutorialSavedDraftStore=draftStore;draftStore=new DraftStore();tutorialSavedReplies=replySlots.snapshot();replySlots.clearAll();
+            tutorialPreview=com.atom.chat.config.ConfigPreviewTransaction.begin(AtomChatConfig.get());
+            tutorialSandbox=new com.atom.chat.onboarding.TutorialSandbox((body,own)->new ChatMessage(Text.literal(body),own,false,null,null,
+                    own?null:java.util.UUID.nameUUIDFromBytes("atomchat-tutorial-guide".getBytes(java.nio.charset.StandardCharsets.UTF_8)),"Guide","Guide",body),
+                    tr("atomchat.tutorial.sample.incoming"),tr("atomchat.tutorial.sample.outgoing"));
+            composer.setText("");composer.setFocused(false);
+        }
+        public java.util.List<com.atom.chat.onboarding.TutorialGuide.Entry> itinerary() {
+            return com.atom.chat.onboarding.TutorialGuide.build(new SettingsSectionPage(),key->tr(key));
+        }
+        public boolean keepPreview(){return tutorialPreview==null||tutorialPreview.keep();}
+        public UiLayout.Rect viewport(){return new UiLayout.Rect(0,0,ScreenMetrics.vw(client.getWindow()),ScreenMetrics.vh(client.getWindow()));}
+        public boolean actionCompleted(com.atom.chat.onboarding.TutorialSession.Step step) {
+            return switch(step) {
+                case COMPOSE -> com.atom.chat.onboarding.TutorialSandbox.revision()>0;
+                case MESSAGE_ACTIONS,PLAYERS_BLOCK -> contextMenu.hasMessageMenu()||contextMenu.hasPlayerCardMenu()||replySlots.replyTarget()!=null;
+                case EXPRESSIONS -> emojiPanel.isOpen();
+                case IMAGES -> com.atom.chat.onboarding.TutorialSandbox.imageActionPerformed();
+                case QUICK_PHRASES -> quickPhrasePanel.isOpen();
+                case SEARCH_FILTER -> composerTools.searching();
+                case FILTER -> AtomChatConfig.get().effectiveWorldFeedFilter()!=com.atom.chat.chat.MessageFilter.ALL;
+                case AVATAR_PROFILE -> topPage()==AppPage.PROFILE_DETAIL;
+                default -> false;
+            };
         }
         public void show(com.atom.chat.onboarding.TutorialSession.Step step) { showTutorialStep(step); }
         public void leave() {
-            cancelTransitionPointer(0);
+            cancelTransitionPointer(0);composerTools.close();emojiPanel.close();closePhrasePanel();contextMenu.close();
+            if(tutorialPreview!=null){tutorialPreview.close();tutorialPreview=null;}
             if (tutorialReturnStack != null && !tutorialReturnStack.isEmpty()) {
                 var saved = tutorialReturnStack;
                 tutorialReturnStack = null;
                 switchRoot(saved.get(0).page());
                 for (int i = 1; i < saved.size(); i++) pushNav(saved.get(i));
             }
+            if(tutorialSavedFolds!=null){settingsSectionPage.restoreTutorialFolds(tutorialSavedFolds);tutorialSavedFolds=null;}
+            if(tutorialSavedDraftStore!=null){draftStore=tutorialSavedDraftStore;tutorialSavedDraftStore=null;}
+            if(tutorialSavedReplies!=null){replySlots.restore(tutorialSavedReplies);tutorialSavedReplies=null;}
+            composer.setText(tutorialSavedText);composer.moveCaretTo(tutorialSavedCaret);composer.setFocused(tutorialSavedFocus);
+            imagePreview.close();
+            if(tutorialSandbox!=null){tutorialSandbox.close();tutorialSandbox=null;}
         }
         public void selectRoot(int index) {
             switchRoot(index == 0 ? AppPage.CHAT_LIST : index == 1 ? AppPage.PROFILE : AppPage.SETTINGS);
@@ -419,35 +461,114 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         }
         public void feedback(String key) { AtomChatScreen.this.feedback(key, false); }
         public UiLayout.Rect anchor(com.atom.chat.onboarding.TutorialSession.Step step) {
-            if(step == com.atom.chat.onboarding.TutorialSession.Step.PROFILE)
-                return profilePage.tutorialHero(rootLayout(),scrollSync.rootScroll().getScrollY());
-            if(step == com.atom.chat.onboarding.TutorialSession.Step.ABOUT)
-                return settingsSectionPage.actionAnchor(SettingsSection.ABOUT,"onboarding_replay",layout(),scrollSync.detailScroll().getScrollY());
-            if(step == com.atom.chat.onboarding.TutorialSession.Step.SETTINGS_HOME) {
+            var entry=tutorial.entry();
+            if(tutorialDetailNeedsBack())return headerChrome.backButton();
+            if(step==com.atom.chat.onboarding.TutorialSession.Step.FILTER)return filterButton();
+            if(entry!=null&&entry.section()!=null) {
+                var first=settingsSectionPage.tutorialGroupAnchor(entry.section(),entry.row(),entry.lastRow(),layout(),scrollSync.detailScroll().getScrollY());
+                return composite.paintedBodyRect(first);
+            }
+            if(step==com.atom.chat.onboarding.TutorialSession.Step.EXPRESSIONS&&emojiPanel.isOpen())return emojiPanel.paintedBounds(layout());
+            if(step==com.atom.chat.onboarding.TutorialSession.Step.QUICK_PHRASES&&quickPhrasePanel.isOpen())return quickPhrasePanel.paintedBounds(layout());
+            if(contextMenu.hasMessageMenu()||contextMenu.hasPlayerCardMenu())return contextMenu.surfaceRect();
+            if(step==com.atom.chat.onboarding.TutorialSession.Step.MESSAGE_ACTIONS||step==com.atom.chat.onboarding.TutorialSession.Step.PLAYERS_BLOCK||step==com.atom.chat.onboarding.TutorialSession.Step.AVATAR_PROFILE) {
+                var hits=messageListView.hits();
+                if(!hits.isEmpty()) {
+                    var hit=hits.get(0);
+                    return composite.paintedBodyRect((step==com.atom.chat.onboarding.TutorialSession.Step.PLAYERS_BLOCK||step==com.atom.chat.onboarding.TutorialSession.Step.AVATAR_PROFILE)
+                        ?new UiLayout.Rect(hit.avatarX(),hit.avatarY(),hit.avatarSize(),hit.avatarSize())
+                        :new UiLayout.Rect(hit.bubbleX(),hit.bubbleY(),hit.bubbleWidth(),hit.bubbleBottom()-hit.bubbleY()));
+                }
+            }
+            if(step==com.atom.chat.onboarding.TutorialSession.Step.PROFILE)return composite.paintedBodyRect(profilePage.tutorialHero(rootLayout(),scrollSync.rootScroll().getScrollY()));
+            if(step==com.atom.chat.onboarding.TutorialSession.Step.NAVIGATION)return bottomChrome.paintedRect();
+            if(step==com.atom.chat.onboarding.TutorialSession.Step.COMPOSE)return bottomChrome.paintedBounds(layout().inputBar);
+            if(step==com.atom.chat.onboarding.TutorialSession.Step.EXPRESSIONS)return bottomChrome.paintedBounds(layout().emojiBtn);
+            if(step==com.atom.chat.onboarding.TutorialSession.Step.QUICK_PHRASES)return bottomChrome.paintedBounds(layout().phraseBtn);
+            if(step==com.atom.chat.onboarding.TutorialSession.Step.IMAGES) {
+                for(var hit:messageListView.hits())if(hit.imageUrl()!=null)return composite.paintedBodyRect(new UiLayout.Rect(hit.bubbleX(),hit.bubbleY(),hit.bubbleWidth(),hit.bubbleBottom()-hit.bubbleY()));
+            }
+            if(step==com.atom.chat.onboarding.TutorialSession.Step.IMAGES||step==com.atom.chat.onboarding.TutorialSession.Step.SEARCH_FILTER)return composerTools.tutorialActionBounds(step==com.atom.chat.onboarding.TutorialSession.Step.SEARCH_FILTER?0:2)!=null?composerTools.tutorialActionBounds(step==com.atom.chat.onboarding.TutorialSession.Step.SEARCH_FILTER?0:2):bottomChrome.paintedBounds(layout().imageBtn);
+            if(step==com.atom.chat.onboarding.TutorialSession.Step.SETTINGS_HOME) {
                 var first=SettingsHomePage.tileRect(rootLayout(),0,scrollSync.rootScroll().getScrollY());
                 var last=SettingsHomePage.tileRect(rootLayout(),3,scrollSync.rootScroll().getScrollY());
-                return new UiLayout.Rect(first.x(),first.y(),last.right()-first.x(),last.bottom()-first.y());
+                return composite.paintedBodyRect(new UiLayout.Rect(first.x(),first.y(),last.right()-first.x(),last.bottom()-first.y()));
             }
             return null;
         }
+        public com.atom.chat.onboarding.TutorialAnchor anchorShape(com.atom.chat.onboarding.TutorialSession.Step step) {
+            var rect=anchor(step);if(rect==null)return null;
+            float radius=UiTokens.settingsRowRadius()*composite.paintedBodyScale();
+            if(tutorialDetailNeedsBack()||step==com.atom.chat.onboarding.TutorialSession.Step.FILTER)return new com.atom.chat.onboarding.TutorialAnchor(rect,rect.h()/2);
+            if(tutorial.entry()!=null&&tutorial.entry().section()!=null)return new com.atom.chat.onboarding.TutorialAnchor(rect,radius);
+            if(step==com.atom.chat.onboarding.TutorialSession.Step.EXPRESSIONS&&emojiPanel.isOpen())radius=emojiPanel.paintedRadius(layout());
+            else if(step==com.atom.chat.onboarding.TutorialSession.Step.QUICK_PHRASES&&quickPhrasePanel.isOpen())radius=quickPhrasePanel.paintedRadius(layout());
+            else if(contextMenu.hasMessageMenu()||contextMenu.hasPlayerCardMenu())radius=contextMenu.surfaceRadius();
+            else if(step==com.atom.chat.onboarding.TutorialSession.Step.NAVIGATION||step==com.atom.chat.onboarding.TutorialSession.Step.COMPOSE)radius=UiTokens.shellChromeRadius();
+            else if(step==com.atom.chat.onboarding.TutorialSession.Step.PLAYERS_BLOCK||step==com.atom.chat.onboarding.TutorialSession.Step.AVATAR_PROFILE)radius=rect.w()/2;
+            else if(step==com.atom.chat.onboarding.TutorialSession.Step.MESSAGE_ACTIONS||step==com.atom.chat.onboarding.TutorialSession.Step.IMAGES) {
+                for(var hit:messageListView.hits())if(step==com.atom.chat.onboarding.TutorialSession.Step.MESSAGE_ACTIONS||hit.imageUrl()!=null)
+                    return new com.atom.chat.onboarding.TutorialAnchor(rect,com.atom.chat.render.ChatBubble.outline(
+                        rect.x(),rect.y(),rect.w(),rect.h(),AtomChatConfig.get().effectiveBubbleStyle(),hit.message().isOwn(),composite.paintedBodyScale()));
+            }
+            return new com.atom.chat.onboarding.TutorialAnchor(rect,radius);
+        }
+        private boolean tutorialDetailNeedsBack() {
+            var expected = com.atom.chat.onboarding.TutorialPointerPolicy.returnPage(tutorial.step());
+            return expected != null && topPage() != expected;
+        }
+        public boolean livePopupActive() { return contextMenu.hasMessageMenu()||contextMenu.hasPlayerCardMenu()||tutorialDetailNeedsBack(); }
+        public boolean returnFromDetail() { if(!tutorialDetailNeedsBack())return false;popPage();return true; }
         public boolean liveKeyboardActive() {
-            return topNav().section() == SettingsSection.APPEARANCE && (colorPicker.isActive()
-                    || imageCropper.isActive() || settingsSectionPage.confirmation().isActive() || settingsSectionPage.isEditingNumber());
+            return colorPicker.isActive()||settingsSectionPage.confirmation().isActive()||settingsSectionPage.isEditingNumber()
+                || isWorldChatPage()&&(composer.focused()||composerTools.active()||quickPhrasePanel.isEditing());
         }
         public boolean liveModalActive() {
-            return colorPicker.isActive() || imageCropper.isActive() || settingsSectionPage.confirmation().isActive();
+            return colorPicker.isActive()||imageCropper.isActive()||imagePreview.isActive()||settingsSectionPage.confirmation().isActive();
         }
-        public boolean allowLivePointer(com.atom.chat.onboarding.TutorialSession.Step step, float x, float y) {
-            if (step == com.atom.chat.onboarding.TutorialSession.Step.APPEARANCE) {
-                return topNav().section() == SettingsSection.APPEARANCE
-                        && (layout().list.contains(x,y) || layout().chipBar.contains(x,y)
-                        || imageCropper.isActive() || colorPicker.isActive() || settingsSectionPage.confirmation().isActive());
+        public boolean allowLivePointer(com.atom.chat.onboarding.TutorialSession.Step step,float x,float y) {
+            if (liveModalActive()) return true;
+            if (tutorialDetailNeedsBack()) return headerChrome.backButton().contains(x,y);
+            if (step == com.atom.chat.onboarding.TutorialSession.Step.FILTER) return filterButton().contains(x,y);
+            var allowed = new java.util.ArrayList<UiLayout.Rect>();
+            switch (step) {
+                case COMPOSE -> {
+                    allowed.add(bottomChrome.paintedBounds(layout().inputBar));
+                    allowed.add(bottomChrome.paintedBounds(layout().sendBtn));
+                }
+                case MESSAGE_ACTIONS, PLAYERS_BLOCK, AVATAR_PROFILE -> {
+                    if (contextMenu.hasMessageMenu() || contextMenu.hasPlayerCardMenu())
+                        allowed.add(contextMenu.surfaceRect());
+                }
+                case EXPRESSIONS -> {
+                    allowed.add(bottomChrome.paintedBounds(layout().emojiBtn));
+                    if (emojiPanel.isOpen()) allowed.add(emojiPanel.paintedBounds(layout()));
+                }
+                case QUICK_PHRASES -> {
+                    allowed.add(bottomChrome.paintedBounds(layout().phraseBtn));
+                    if (quickPhrasePanel.isOpen()) allowed.add(quickPhrasePanel.paintedBounds(layout()));
+                    allowed.add(bottomChrome.paintedBounds(layout().inputBar));
+                }
+                case IMAGES, SEARCH_FILTER -> {
+                    allowed.add(bottomChrome.paintedBounds(layout().imageBtn));
+                    int row = step == com.atom.chat.onboarding.TutorialSession.Step.SEARCH_FILTER ? 0 : 2;
+                    allowed.add(composerTools.tutorialActionBounds(row));
+                    if (composerTools.searching()) allowed.add(bottomChrome.paintedBounds(layout().inputBar));
+                }
+                default -> { }
             }
-            return step == com.atom.chat.onboarding.TutorialSession.Step.CHAT_SETTINGS && layout().chipBar.contains(x,y);
+            return com.atom.chat.onboarding.TutorialPointerPolicy.allows(
+                    anchor(step),layout().header,layout().chipBar,allowed,x,y);
         }
-    }, this::toVirtualX, this::toVirtualY);
+
+    }, value->ScreenMetrics.toVirtualX(client.getWindow(),value), value->ScreenMetrics.toVirtualY(client.getWindow(),value));
 
     private void showTutorialStep(com.atom.chat.onboarding.TutorialSession.Step step) {
+        composerTools.close();emojiPanel.close();closePhrasePanel();contextMenu.close();
+        avatarWiring.settlePendingAvatarClick(0,true);
+        composer.setFocused(step==com.atom.chat.onboarding.TutorialSession.Step.COMPOSE);
+        if(step==com.atom.chat.onboarding.TutorialSession.Step.FILTER)AtomChatConfig.get().worldFeedFilter=com.atom.chat.chat.MessageFilter.ALL;
+        if(step==com.atom.chat.onboarding.TutorialSession.Step.IMAGES&&tutorialSandbox!=null)tutorialSandbox.showImage();
         SettingsSection section = switch (step) {
             case CHAT_SETTINGS, NOTIFICATIONS -> SettingsSection.CHAT;
             case APPEARANCE -> SettingsSection.APPEARANCE;
@@ -456,7 +577,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
             default -> null;
         };
         AppPage page = switch (step) {
-            case COMPOSE, MESSAGE_ACTIONS, SEARCH_FILTER, EXPRESSIONS, IMAGES, QUICK_PHRASES -> AppPage.WORLD_CHAT;
+            case COMPOSE, MESSAGE_ACTIONS, SEARCH_FILTER, FILTER, EXPRESSIONS, IMAGES, QUICK_PHRASES, PLAYERS_BLOCK, AVATAR_PROFILE -> AppPage.WORLD_CHAT;
             case PROFILE -> AppPage.PROFILE;
             case SETTINGS_HOME -> AppPage.SETTINGS;
             default -> section == null ? AppPage.CHAT_LIST : AppPage.SETTINGS_SECTION;
@@ -466,7 +587,28 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
             if (section != null) openSettingsSection(section);
             else if (!page.isRoot()) pushPage(page);
         }
-        if (step == com.atom.chat.onboarding.TutorialSession.Step.NOTIFICATIONS) settingsSectionPage.selectChip(SettingsSection.CHAT, 2);
+        if(page==AppPage.WORLD_CHAT)AtomChatConfig.get().worldFeedFilter=com.atom.chat.chat.MessageFilter.ALL;
+        var entry=tutorial.entry();
+        if(entry!=null&&entry.section()!=null) {
+            settingsSectionPage.selectChip(entry.section(),entry.chip());
+            settingsSectionPage.tutorialAnchor(entry.section(),entry.row(),layout(),scrollSync.detailScroll());
+        }
+        if(step==com.atom.chat.onboarding.TutorialSession.Step.COMPOSE)composer.focus();
+    }
+
+    private com.atom.chat.ui.PanelEditor panelEditor;
+    private boolean panelEditorBlocked() {
+        return tutorial.active() || imagePreview.isActive() || imageCropper.isActive() || colorPicker.isActive()
+                || settingsSectionPage.confirmation().isActive();
+    }
+
+    private InputHandler panelEditorInput() {
+        return new com.atom.chat.ui.PanelEditorInput(() -> panelEditor, save -> {
+                if (!panelEditor.requestClose(save)) feedback("atomchat.panel_editor.save_failed", true);
+            }, value -> ScreenMetrics.toVirtualX(client.getWindow(), value),
+                    value -> ScreenMetrics.toVirtualY(client.getWindow(), value),
+                    () -> ScreenMetrics.vw(client.getWindow()), () -> ScreenMetrics.vh(client.getWindow()),
+                    this::panelEditorBlocked);
     }
 
     private final SettingsActions settingsActions = new SettingsActions(new SettingsActions.Host() {
@@ -494,9 +636,20 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         public void openTutorial() { tutorial.start(); }
 
         @Override
-        public void openNotificationHudEditor() {
-            client.setScreen(new com.atom.chat.notification.NotificationHudEditorScreen(AtomChatScreen.this));
+        public void openPanelEditor() {
+            if (tutorial.active()) { feedback("atomchat.tutorial.preview_only", false); return; }
+            if (panelEditor != null) return;
+            panelEditor = new com.atom.chat.ui.PanelEditor(AtomChatConfig.get(), key -> Text.translatable(key).getString(),
+                    panelX(), panelY(), panelWidth(), panelHeight(),
+                    ScreenMetrics.vw(client.getWindow()), ScreenMetrics.vh(client.getWindow()));
         }
+
+        @Override
+        public void openNotificationHudEditor() {
+            tutorial.suspendForChild();
+            client.setScreen(new com.atom.chat.notification.NotificationHudEditorScreen(AtomChatScreen.this,tutorial::resumeFromChild,tutorial::reset));
+        }
+
 
         @Override
         public NativeDialogBridge dialogs() {
@@ -766,7 +919,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
 
     /**
      * Ordered input routing (D23a). Priority (first registered wins): closing
-     * guard, tutorial, confirmation, completion, foreign chat UI, outside-panel close, modals (cropper/colour picker), composer tools, pushed-subpage Esc, screen Esc,
+     * guard, tutorial, confirmation, panel editing handles, completion, foreign chat UI, outside-panel close, modals (cropper/colour picker), composer tools, pushed-subpage Esc, screen Esc,
      * root pages, world chat. New interactive features register a handler
      * instead of inserting branches into the former if-else chains.
      *
@@ -799,6 +952,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
             .add(tutorial)
             .add(new com.atom.chat.ui.ConfirmationInput(settingsSectionPage::confirmation,
                     this::toVirtualX, this::toVirtualY))
+            .add(panelEditorInput())
             .add(completionInput)
             .add(foreignChatUiInput())
             .add(outsidePanelInput())
@@ -1498,6 +1652,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
     private final WorldFeedFilter worldFeed = new WorldFeedFilter();
     /** Hover wash behind the header filter button (world chat only). */
     private float filterButtonHover;
+    private float settingsResetHover;
     /** Hover washes for the emoji panel tab strip (owned by {@link EmojiPanel}). */
 
     // Animation state — durations live in UiMotion so every transition is tuned
@@ -1808,7 +1963,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
                         // detail header rect; the chat pages' header carries the
                         // back button, the online status and the feed filter.
                         case SETTINGS_SECTION, PROFILE_DETAIL ->
-                                headerChrome.drawPushedHeader(canvas, vmx, vmy, topNav());
+                                headerChrome.drawPushedHeader(canvas, vmx, vmy, topNav(), headerActionFor(topNav()));
                         default -> ShellHeader.render(canvas, layout.header,
                                 headerChrome.shellTitleFor(topNav()), true,
                                 headerChrome.backButton(), headerChrome.backButtonHover(),
@@ -1831,8 +1986,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
                 }
             });
     private UiLayout.Rect filterButton() {
-        UiLayout.Rect back = headerChrome.backButton();
-        return new UiLayout.Rect(back.x() + back.w() + UiTokens.EDGE_CONTROL_INSET, back.y(), back.w(), back.h());
+        return headerChrome.adjacentButton();
     }
 
     private boolean isFilterButtonHit(float vmx, float vmy) {
@@ -1855,6 +2009,10 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
     private ShellHeader.HeaderAction headerActionFor(NavPage page) {
         // The filter's state, icons and tint live in WorldFeedFilter; the button's
         // rect and hover wash are header chrome and stay here (D20).
+        if (page.page() == AppPage.SETTINGS_SECTION && page.section() != null) {
+            return new ShellHeader.HeaderAction(headerChrome.adjacentButton(), settingsResetHover,
+                    com.atom.chat.ui.EditorActionIcons.RESTORE, textPrimary());
+        }
         return worldFeed.headerActionFor(page, filterButton(), filterButtonHover);
     }
 
@@ -2200,6 +2358,13 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
             }, uiDensity(), (canvas, worldSnapshot) -> {
                 syncAnimationContext(graphics.contextIdentity());
                 drawPhone(canvas, worldSnapshot, mouseX, mouseY, delta);
+                if (panelEditor != null && !panelEditorBlocked()) {
+                    panelEditor.followPanel(panelX(), panelY(), panelWidth(), panelHeight(),
+                            ScreenMetrics.vw(client.getWindow()), ScreenMetrics.vh(client.getWindow()));
+                    panelEditor.render(canvas, ScreenMetrics.vw(client.getWindow()), ScreenMetrics.vh(client.getWindow()),
+                            ScreenMetrics.toVirtualX(client.getWindow(), mouseX), ScreenMetrics.toVirtualY(client.getWindow(), mouseY), frameDt);
+                    if (panelEditor.closed()) { panelEditor.cancel(); panelEditor = null; }
+                }
                 chatEffects.renderExperimental(graphics.requireSurface());
             });
         }
@@ -2555,7 +2720,8 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
 
     @Override
     public void removed() {
-        tutorial.reset();
+        if (panelEditor != null) { panelEditor.cancel(); panelEditor = null; }
+        if(!tutorial.suspended())tutorial.reset();
         composite.close();
         bottomChrome.close();
         composerTools.close();
@@ -2574,7 +2740,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
             PrivateChatStore.clearActive();
         }
         ChatStore.setPublicActive(false);
-        AtomChatState.save(navStack.snapshot());
+        if(!tutorial.suspended())AtomChatState.save(navStack.snapshot());
         uninstallDropCallback();
         // Give back the GPU texture the panel blur was sampling.
         graphics.releaseWorldSnapshot();
@@ -2702,6 +2868,9 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         if (isWorldChatPage()) headerChrome.stepBackButtonHover(vmx, vmy);
         filterButtonHover = UiMotion.approach(filterButtonHover,
                 topPage() == AppPage.WORLD_CHAT && isFilterButtonHit(vmx, vmy) ? 1 : 0,
+                frameDt, UiMotion.HOVER_MS);
+        settingsResetHover = UiMotion.approach(settingsResetHover,
+                topPage() == AppPage.SETTINGS_SECTION && headerChrome.adjacentButton().contains(vmx, vmy) ? 1 : 0,
                 frameDt, UiMotion.HOVER_MS);
         bottomChrome.drawBackdrop(canvas);
         composite.drawArrivingFrame(canvas, layout, mouseX, mouseY, vmx, vmy, arrivalMs);
@@ -3287,6 +3456,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
         rememberPointer(mouseX, mouseY);
+
         // Completes the input trio next to keyPressed:/charTyped:. The whole UI is
         // Skia-drawn, so without this line a "the button does nothing" report has
         // no way to tell "the click never arrived" from "it arrived somewhere
@@ -3492,8 +3662,8 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
     // drift. Width/height are edge differences (snap(x+w) - snap(x)), not
     // independent snaps, so the right/bottom edges stay glued to the panel.
     private float panelWidth() {
-        return UiPixelSnap.snapToDevice(ScreenMetrics.panelX() + ScreenMetrics.panelWidth(client.getWindow()))
-                - UiPixelSnap.snapToDevice(ScreenMetrics.panelX());
+        return UiPixelSnap.snapToDevice(ScreenMetrics.panelX(client.getWindow()) + ScreenMetrics.panelWidth(client.getWindow()))
+                - UiPixelSnap.snapToDevice(ScreenMetrics.panelX(client.getWindow()));
     }
 
     private float panelHeight() {
@@ -3521,7 +3691,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
 
     /** Panel anchor (D10): contentScale-invariant, see {@link ScreenMetrics#panelX()}. */
     private float panelX() {
-        return UiPixelSnap.snapToDevice(ScreenMetrics.panelX());
+        return UiPixelSnap.snapToDevice(ScreenMetrics.panelX(client.getWindow()));
     }
 
     private float panelY() {
@@ -3869,6 +4039,18 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
             }
             // A pushed settings sub-page: back arrow, then switch rows.
             if (topPage() == AppPage.SETTINGS_SECTION) {
+                if (button == 0 && headerChrome.adjacentButton().contains(mx, my)) {
+                    ShellHeader.armActionPress();
+                    settingsSectionPage.requestTabReset(topNav().section(), (key, failed) -> feedback(key, failed), () -> {
+                        if (panelEditor != null) {
+                            panelEditor.followPanel(panelX(), panelY(), panelWidth(), panelHeight(),
+                                    ScreenMetrics.vw(client.getWindow()), ScreenMetrics.vh(client.getWindow()));
+                            panelEditor.finishAfterSettingsReset();
+                        }
+                    });
+                    com.atom.chat.audio.FeedbackSoundController.play(com.atom.chat.audio.FeedbackCue.BUTTON);
+                    return true;
+                }
                 if (button == 0 && headerChrome.isBackButtonHit(mx, my)) {
                     popPage();
                     return true;

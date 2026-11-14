@@ -121,6 +121,11 @@ public final class MessageListWiring<S> {
      * Resolved per call, so a transition's two sides each get their own.
      */
     public List<ChatMessage> messagesForNav(NavPage page) {
+        if (com.atom.chat.onboarding.TutorialSandbox.active()) {
+            var samples = com.atom.chat.onboarding.TutorialSandbox.messages();
+            return page != null && page.page() == AppPage.WORLD_CHAT
+                    ? host.worldFeed().filterFeed(samples) : samples;
+        }
         if (page == null) {
             return List.of();
         }

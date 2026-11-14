@@ -45,6 +45,7 @@ import java.util.List;
 public final class ActionToast {
     private static final float PAD_X = UiTokens.s(12);
     private static final float ICON = UiTokens.s(12);
+    private static final float LINE_HEIGHT = UiTokens.s(18);
 
     private ActionToast() {
     }
@@ -65,7 +66,7 @@ public final class ActionToast {
         }
         boolean motion = Animations.enabled();
         Font font = FontManager.font(UiTokens.FONT_NAME);
-        float rowH = UiTokens.s(36);
+        float stackBottom = bottom - UiTokens.s(8);
         float gap = UiTokens.s(8);
         canvas.save();
         try {
@@ -77,15 +78,17 @@ public final class ActionToast {
                     continue;
                 }
                 String label = entry.label() != null ? entry.label() : translator.text(entry.key());
-                float textW = SkiaFontRenderer.getStringWidth(font, label);
-                float w = Math.min(panelW - UiTokens.s(32), textW + PAD_X * 2.0F + ICON + UiTokens.s(8));
+                RowLayout row = layout(font, label, panelW);
+                float w = row.width();
+                float rowH = row.height();
                 float x = panelX + (panelW - w) / 2.0F;
                 // Index 0 (the entry snapshot() puts first) sits nearest the
                 // anchor and later entries climb away from it. Note this is not
                 // "stable under new arrivals": a fresh ERROR is placed at index 0
                 // and shifts the rest up a slot, and past MAX_VISIBLE the cap
                 // drops the newest success. Both are the queue's own rules.
-                float y = ActionFeedback.Entry.rowTop(bottom, i, rowH, gap, UiTokens.s(8));
+                float y = stackBottom - rowH;
+                stackBottom = y - gap;
                 if (y + rowH < clipTop) {
                     break;
                 }
@@ -105,7 +108,7 @@ public final class ActionToast {
                         canvas.saveLayer(Rect.makeXYWH(x - pad, y - pad,
                                 w + pad * 2.0F, rowH + pad * 2.0F), layer);
                         try {
-                            drawRow(canvas, font, entry, x, y, w, rowH, label);
+                            drawRow(canvas, font, entry, x, y, w, rowH, row.lines());
                         } finally {
                             canvas.restore();
                         }
@@ -119,8 +122,21 @@ public final class ActionToast {
         }
     }
 
+    record RowLayout(float width, float height, float textWidth, List<String> lines) {}
+
+    static RowLayout layout(Font font, String label, float panelWidth) {
+        float extra = PAD_X * 2.0F + ICON + UiTokens.s(8);
+        float maxWidth = Math.max(1.0F, panelWidth - UiTokens.s(32));
+        float textWidth = Math.max(1.0F, maxWidth - extra);
+        List<String> lines = SkiaFontRenderer.wrapWords(font, label, textWidth);
+        float measured = 0.0F;
+        for (String line : lines) measured = Math.max(measured, SkiaFontRenderer.getStringWidth(font, line));
+        float height = Math.max(2.0F * LINE_HEIGHT, (lines.size() + 1) * LINE_HEIGHT);
+        return new RowLayout(Math.min(maxWidth, measured + extra), height, textWidth, lines);
+    }
+
     private static void drawRow(Canvas canvas, Font font, ActionFeedback.Entry entry,
-                                float x, float y, float w, float h, String label) {
+                                float x, float y, float w, float h, List<String> lines) {
         // The float-surface family, shared with the notification banner: an
         // opaque fill that follows the theme's card colour, on the two-tier chrome
         // shadow, with its ink derived from that fill. The row's own fade rides the
@@ -130,8 +146,8 @@ public final class ActionToast {
         float cy = y + h / 2.0F;
         float ix = x + PAD_X;
         drawGlyph(canvas, entry.outcome(), ix, cy, fill);
-        SkiaFontRenderer.drawText(canvas, font, label, ix + ICON + UiTokens.s(8),
-                SkiaFontRenderer.centerBaselineY(font, cy), UiTokens.onFloatSurface(fill));
+        SkiaFontRenderer.drawLines(canvas, font, lines, ix + ICON + UiTokens.s(8),
+                cy, LINE_HEIGHT, UiTokens.onFloatSurface(fill));
     }
 
     private static void drawGlyph(Canvas canvas, ActionFeedback.Outcome outcome, float x, float cy,

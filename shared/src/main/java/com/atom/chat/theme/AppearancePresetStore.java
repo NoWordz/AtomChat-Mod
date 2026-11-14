@@ -336,7 +336,7 @@ public final class AppearancePresetStore {
                 || !finite(s.contentScale(), 0.8F, 1.5F)
                 || !finite(s.cardTint(), 0F, 1F)
                 || !finite(s.cornerRadius(), 0F, 25F)
-                || !finite(s.panelOutlineWidth(), 0F, 4F)) {
+                || !finite(s.panelOutlineWidth(), 0F, 6F)) {
             return false;
         }
         try {

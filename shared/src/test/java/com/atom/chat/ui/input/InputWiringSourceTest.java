@@ -71,6 +71,7 @@ class InputWiringSourceTest {
             ".add(newClosingStateInput())"
                     + ".add(tutorial)"
                     + ".add(newcom.atom.chat.ui.ConfirmationInput(settingsSectionPage::confirmation,this::toVirtualX,this::toVirtualY))"
+                    + ".add(panelEditorInput())"
                     + ".add(completionInput)"
                     + ".add(foreignChatUiInput())"
                     + ".add(outsidePanelInput())"
@@ -84,7 +85,7 @@ class InputWiringSourceTest {
 
     /** The prose contract that carries the priority list, quoted from the source. */
     private static final String FROZEN_PRIORITY_PROSE =
-            "Priority (first registered wins): closing guard, tutorial, confirmation, completion, foreign chat UI, outside-panel close, modals (cropper/colour "
+            "Priority (first registered wins): closing guard, tutorial, confirmation, panel editing handles, completion, foreign chat UI, outside-panel close, modals (cropper/colour "
                     + "picker), composer tools, pushed-subpage Esc, screen Esc, root pages, world chat.";
 
     private static final String FROZEN_NO_BRANCHES_PROSE =
@@ -176,7 +177,7 @@ class InputWiringSourceTest {
      * event and the overrides fall through to vanilla. Hence both halves: no
      * {@code InputRouter} anywhere in the screen (the gate owns it, so the
      * screen needs neither the type nor the import), and the gate statement
-     * itself carrying all nine registrations.
+     * itself carrying all fourteen registrations.
      */
     @Test
     void theScreenHasExactlyOneHandlerChainAndItIsTheGatesOwn() throws IOException {
@@ -187,8 +188,8 @@ class InputWiringSourceTest {
                             + " the gate owns the chain. A second chain leaves the gate's router"
                             + " empty, and every event falls through to super.");
             String gate = gateStatement(src);
-            assertEquals(13, occurrences(gate, ".add("),
-                    screen + ": the gate declaration must register exactly the thirteen handlers.\n"
+            assertEquals(14, occurrences(gate, ".add("),
+                    screen + ": the gate declaration must register exactly the fourteen handlers.\n"
                             + gate);
             assertTrue(flatten(gate).endsWith(".add(newWorldChatInput());"),
                     screen + ": the gate chain must end on WorldChatInput, the lowest-priority"
@@ -197,7 +198,7 @@ class InputWiringSourceTest {
     }
 
     /**
-     * The nine registrations keep their frozen relative order. Registration
+     * The fourteen registrations keep their frozen relative order. Registration
      * order <em>is</em> the priority contract: a swap silently changes which
      * handler sees an event first, which is how the modal/root/world handlers
      * stay out of each other's way.

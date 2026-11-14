@@ -101,6 +101,7 @@ public final class SettingsActions {
 
         /** Opens the screen-owned visual HUD layout editor. */
         default void openNotificationHudEditor() { }
+        default void openPanelEditor() { }
         default void openTutorial() { }
     }
 
@@ -185,6 +186,12 @@ public final class SettingsActions {
     /** Settings action cards: the wallpaper pair, the theme presets and the
      *  teleport mode cycle. */
     public void handleSettingsAction(String actionId) {
+        if (com.atom.chat.onboarding.TutorialSandbox.active() && (
+                actionId == null || actionId.contains("wallpaper") || actionId.contains("preset")
+                || actionId.contains("clear") || actionId.contains("avatar") || actionId.contains("banner")
+                || "onboarding_replay".equals(actionId) || "panel_edit".equals(actionId))) {
+            host.feedback("atomchat.tutorial.preview_only",false);return;
+        }
         if ("onboarding_replay".equals(actionId)) { host.openTutorial(); return; }
         if (SettingsSectionPage.ACTION_THEME_PRESET_SAVE.equals(actionId)) {
             saveThemePreset();
@@ -204,8 +211,11 @@ public final class SettingsActions {
                     removed);
         } else if ("test_sound".equals(actionId)) {
             com.atom.chat.notification.NotificationController.playTestSound();
+        } else if ("panel_edit".equals(actionId)) {
+            host.openPanelEditor();
         } else if ("hud_edit".equals(actionId)) {
             host.openNotificationHudEditor();
+
         } else if ("teleport_mode".equals(actionId) || "teleport_mode:prev".equals(actionId)) {
             AtomChatConfig cfg = AtomChatConfig.get();
             cfg.teleportCommandMode = SettingsStepper.teleport(cfg.teleportCommandMode,

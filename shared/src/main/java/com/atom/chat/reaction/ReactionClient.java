@@ -142,6 +142,7 @@ public final class ReactionClient {
     }
 
     public static void toggle(ChatMessage row,String emoji) {
+        if(com.atom.chat.onboarding.TutorialSandbox.active()){com.atom.chat.onboarding.TutorialSandbox.action();return;}
         UUID k=key(row);
         if(k==null || !supported.getAsBoolean() || !ReactionEmoji.allowed(emoji)) return;
         boolean active=entries(row).stream().filter(e->e.emoji().equals(emoji)).noneMatch(ReactionClient::own);

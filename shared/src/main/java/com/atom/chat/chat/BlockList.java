@@ -18,6 +18,7 @@ public final class BlockList {
         if (player == null) {
             return false;
         }
+        if(com.atom.chat.onboarding.TutorialSandbox.active())return com.atom.chat.onboarding.TutorialSandbox.blocked(player.realName());
         return isBlocked(player.realName());
     }
 
@@ -46,6 +47,7 @@ public final class BlockList {
     }
 
     public static void setBlocked(PlayerRef player, boolean blocked) {
+        if(com.atom.chat.onboarding.TutorialSandbox.active()){if(player!=null)com.atom.chat.onboarding.TutorialSandbox.block(player.realName(),blocked);return;}
         if (player == null) {
             return;
         }

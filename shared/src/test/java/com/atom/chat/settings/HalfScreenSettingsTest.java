@@ -62,6 +62,38 @@ class HalfScreenSettingsTest {
     }
 
     @Test
+    void appearanceSlidersExposeNewDefaultsAndPersistTheirExtendedRanges() {
+        SettingsSlider blur = SettingsCatalog.sliders(SettingsSection.APPEARANCE).stream()
+                .filter(slider -> slider.id().equals("blur_strength")).findFirst().orElseThrow();
+        SettingsSlider outline = SettingsCatalog.sliders(SettingsSection.APPEARANCE).stream()
+                .filter(slider -> slider.id().equals("outline_width")).findFirst().orElseThrow();
+        assertEquals("200%", blur.displayValue());
+        assertEquals("4.00 px", outline.displayValue());
+        assertEquals(.25F, blur.min());
+        assertEquals(0F, outline.min());
+        assertEquals(3F, blur.denormalize(1F));
+        assertEquals(6F, outline.denormalizeContinuous(1F));
+        assertEquals(1F, blur.normalize(3F));
+        assertEquals(1F, outline.normalize(6F));
+        blur.set(2.75F);
+        outline.set(5.5F);
+        AtomChatConfig.reload();
+        assertEquals(2.75F, blur.value());
+        assertEquals(5.5F, outline.value());
+        blur.set(100F);
+        outline.set(100F);
+        AtomChatConfig.reload();
+        assertEquals("300%", blur.displayValue());
+        assertEquals("6.00 px", outline.displayValue());
+        blur.set(-1F);
+        outline.set(-1F);
+        AtomChatConfig.reload();
+        assertEquals("25%", blur.displayValue());
+        assertEquals(0F, outline.value());
+        assertFalse(AtomChatConfig.get().panelOutline);
+    }
+
+    @Test
     void widthSliderReadsAndWritesCurrentModeAndPersistsEachWidth() {
         SettingsSlider width = widthSlider();
         assertEquals(480F, width.value());

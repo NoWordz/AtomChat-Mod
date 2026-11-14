@@ -17,7 +17,7 @@ class TutorialSessionTest {
     @Test void everyStepIsReachableAndCompletionDoesNotResume() {
         var session=new TutorialSession(); session.start();
         int count=TutorialSession.Step.values().length;
-        assertEquals(16,count,"main chat actions must not be omitted");
+        assertEquals(18,count,"main chat actions must not be omitted");
         for(int i=0;i<count;i++) {assertTrue(session.active());assertEquals(i,session.index());session.next();}
         assertFalse(session.active());
         session.start(); assertEquals(0,session.index());
