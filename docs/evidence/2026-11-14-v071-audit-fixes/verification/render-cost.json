@@ -1,0 +1,25 @@
+{
+  "target": "1.21.1-fabric",
+  "ATOMCHAT_BENCH": "1",
+  "scope": "Raster production page CPU and isolated real Kawase shader GPU; no Minecraft capture/composition or world/frame FPS",
+  "results": [
+    {
+      "class": "com.atom.chat.nav.PageTransitionCompositeTest",
+      "tests": 1,
+      "skipped": 0,
+      "output": "[20:41:58] [Test worker/INFO]: [AtomChat][resource] Loaded bundled bold font /com/atom/lib/fonts/bundled-default-bold.otf\n[20:41:59] [Test worker/INFO]: [AtomChat][resource] Loaded bundled font /com/atom/lib/fonts/bundled-default.otf\nPAGE_RECORDING_CPU composite=false p50=1.6867ms p95=2.1730ms p99=3.1163ms\nPAGE_RECORDING_CPU composite=true p50=1.5067ms p95=1.8713ms p99=2.3923ms\nPAGE_RECORDING_CPU composite=false p50=1.5404ms p95=1.9596ms p99=2.0892ms\nPAGE_RECORDING_CPU composite=true p50=1.5398ms p95=1.9421ms p99=2.2004ms\n"
+    },
+    {
+      "class": "com.atom.chat.render.PanelBlurGpuCostTest",
+      "tests": 1,
+      "skipped": 0,
+      "output": "BLUR_GPU_RENDERER NVIDIA GeForce RTX 5060 Laptop GPU/PCIe/SSE2\nBLUR_GPU_5PASS width=480 height=860 p50=0.0622ms p95=0.0629ms p99=0.0630ms\nBLUR_GPU_5PASS width=900 height=1500 p50=0.1790ms p95=0.1812ms p99=0.1815ms\nBLUR_GPU_5PASS width=1440 height=2160 p50=0.3932ms p95=0.3994ms p99=0.4046ms\n"
+    },
+    {
+      "class": "com.atom.chat.diagnostics.PageGpuDiagnosticsTest",
+      "tests": 6,
+      "skipped": 0,
+      "output": ""
+    }
+  ]
+}

@@ -11,6 +11,15 @@ import org.junit.jupiter.api.io.TempDir;
 import static org.junit.jupiter.api.Assertions.*;
 
 class ThemeHoverWorkTest {
+    @Test void warmPresetSnapshotNeverConsultsTheFilesystem(@TempDir Path dir) throws Exception {
+        var store=new AppearancePresetStore(dir);
+        var expected=store.list();
+        var path=AppearancePresetStore.class.getDeclaredField("dir");path.setAccessible(true);
+        Path forbidden=(Path)java.lang.reflect.Proxy.newProxyInstance(Path.class.getClassLoader(),new Class<?>[]{Path.class},
+                (proxy,method,args)->{throw new AssertionError("warm theme repaint touched the preset path: "+method.getName());});
+        path.set(store,forbidden);
+        for(int frame=0;frame<30;frame++)assertSame(expected,store.list());
+    }
     @Test void themeRowComputesHoverOncePerFrame(@TempDir Path dir) throws Exception {
         var provider=Platform.class.getDeclaredField("provider"); provider.setAccessible(true);
         Object old=provider.get(null);

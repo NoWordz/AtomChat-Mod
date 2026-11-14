@@ -1,0 +1,439 @@
+{
+  "date": "2026-11-14",
+  "archive": "D:\\AtomChat-Backups\\2026-11-14-v071-accepted\\20261114-223312\\temporary-evidence.zip",
+  "archive_sha256": "51907fa95a83453d9722971b5a01031d44a5886531a40013ac1e85911ca31021",
+  "targets": 61,
+  "files": 79,
+  "bytes": 3528938,
+  "recycled": true,
+  "items": [
+    {
+      "path": "D:\\AtomChat-Main\\build\\audit-gpu-probe",
+      "relative": "build/audit-gpu-probe",
+      "kind": "directory",
+      "files": 4,
+      "bytes": 7263
+    },
+    {
+      "path": "D:\\AtomChat-Main\\build\\audit-upload-cancel-probe",
+      "relative": "build/audit-upload-cancel-probe",
+      "kind": "directory",
+      "files": 15,
+      "bytes": 37622
+    },
+    {
+      "path": "D:\\AtomChat-Main\\tools\\__pycache__",
+      "relative": "tools/__pycache__",
+      "kind": "directory",
+      "files": 2,
+      "bytes": 11984
+    },
+    {
+      "path": "D:\\AtomChat-Main\\build\\audit-behaviour-green.log",
+      "relative": "build/audit-behaviour-green.log",
+      "kind": "file",
+      "files": 1,
+      "bytes": 3780
+    },
+    {
+      "path": "D:\\AtomChat-Main\\build\\audit-behaviour-green2.log",
+      "relative": "build/audit-behaviour-green2.log",
+      "kind": "file",
+      "files": 1,
+      "bytes": 2749
+    },
+    {
+      "path": "D:\\AtomChat-Main\\build\\audit-behaviour-green3.log",
+      "relative": "build/audit-behaviour-green3.log",
+      "kind": "file",
+      "files": 1,
+      "bytes": 2916
+    },
+    {
+      "path": "D:\\AtomChat-Main\\build\\audit-config-probe.log",
+      "relative": "build/audit-config-probe.log",
+      "kind": "file",
+      "files": 1,
+      "bytes": 2731
+    },
+    {
+      "path": "D:\\AtomChat-Main\\build\\audit-config-probe2.log",
+      "relative": "build/audit-config-probe2.log",
+      "kind": "file",
+      "files": 1,
+      "bytes": 2216
+    },
+    {
+      "path": "D:\\AtomChat-Main\\build\\audit-config-probe3.log",
+      "relative": "build/audit-config-probe3.log",
+      "kind": "file",
+      "files": 1,
+      "bytes": 2217
+    },
+    {
+      "path": "D:\\AtomChat-Main\\build\\audit-delivery-1.20.1-forge.log",
+      "relative": "build/audit-delivery-1.20.1-forge.log",
+      "kind": "file",
+      "files": 1,
+      "bytes": 17470
+    },
+    {
+      "path": "D:\\AtomChat-Main\\build\\audit-delivery-1.21.1-fabric.log",
+      "relative": "build/audit-delivery-1.21.1-fabric.log",
+      "kind": "file",
+      "files": 1,
+      "bytes": 2495
+    },
+    {
+      "path": "D:\\AtomChat-Main\\build\\audit-delivery-1.21.1-neoforge.log",
+      "relative": "build/audit-delivery-1.21.1-neoforge.log",
+      "kind": "file",
+      "files": 1,
+      "bytes": 1640
+    },
+    {
+      "path": "D:\\AtomChat-Main\\build\\audit-delivery-command-error.log",
+      "relative": "build/audit-delivery-command-error.log",
+      "kind": "file",
+      "files": 1,
+      "bytes": 1176
+    },
+    {
+      "path": "D:\\AtomChat-Main\\build\\audit-final-1.20.1-forge.log",
+      "relative": "build/audit-final-1.20.1-forge.log",
+      "kind": "file",
+      "files": 1,
+      "bytes": 484054
+    },
+    {
+      "path": "D:\\AtomChat-Main\\build\\audit-final-1.21.1-fabric.log",
+      "relative": "build/audit-final-1.21.1-fabric.log",
+      "kind": "file",
+      "files": 1,
+      "bytes": 2142
+    },
+    {
+      "path": "D:\\AtomChat-Main\\build\\audit-final-1.21.1-neoforge.log",
+      "relative": "build/audit-final-1.21.1-neoforge.log",
+      "kind": "file",
+      "files": 1,
+      "bytes": 1632
+    },
+    {
+      "path": "D:\\AtomChat-Main\\build\\audit-full-1.20.1-forge.log",
+      "relative": "build/audit-full-1.20.1-forge.log",
+      "kind": "file",
+      "files": 1,
+      "bytes": 483901
+    },
+    {
+      "path": "D:\\AtomChat-Main\\build\\audit-full-1.21.1-fabric.log",
+      "relative": "build/audit-full-1.21.1-fabric.log",
+      "kind": "file",
+      "files": 1,
+      "bytes": 2142
+    },
+    {
+      "path": "D:\\AtomChat-Main\\build\\audit-integration.log",
+      "relative": "build/audit-integration.log",
+      "kind": "file",
+      "files": 1,
+      "bytes": 1655
+    },
+    {
+      "path": "D:\\AtomChat-Main\\build\\audit-io-red-upload-green.log",
+      "relative": "build/audit-io-red-upload-green.log",
+      "kind": "file",
+      "files": 1,
+      "bytes": 3668
+    },
+    {
+      "path": "D:\\AtomChat-Main\\build\\audit-jars.log",
+      "relative": "build/audit-jars.log",
+      "kind": "file",
+      "files": 1,
+      "bytes": 3995
+    },
+    {
+      "path": "D:\\AtomChat-Main\\build\\audit-render-cost.log",
+      "relative": "build/audit-render-cost.log",
+      "kind": "file",
+      "files": 1,
+      "bytes": 1112
+    },
+    {
+      "path": "D:\\AtomChat-Main\\build\\audit-review-fixes.log",
+      "relative": "build/audit-review-fixes.log",
+      "kind": "file",
+      "files": 1,
+      "bytes": 1478
+    },
+    {
+      "path": "D:\\AtomChat-Main\\build\\audit-upload-red.log",
+      "relative": "build/audit-upload-red.log",
+      "kind": "file",
+      "files": 1,
+      "bytes": 3190
+    },
+    {
+      "path": "D:\\AtomChat-Main\\build\\audit-verified-1.20.1-forge.log",
+      "relative": "build/audit-verified-1.20.1-forge.log",
+      "kind": "file",
+      "files": 1,
+      "bytes": 484308
+    },
+    {
+      "path": "D:\\AtomChat-Main\\build\\audit-verified-1.21.1-fabric.log",
+      "relative": "build/audit-verified-1.21.1-fabric.log",
+      "kind": "file",
+      "files": 1,
+      "bytes": 2498
+    },
+    {
+      "path": "D:\\AtomChat-Main\\build\\audit-verified-1.21.1-neoforge.log",
+      "relative": "build/audit-verified-1.21.1-neoforge.log",
+      "kind": "file",
+      "files": 1,
+      "bytes": 2547
+    },
+    {
+      "path": "D:\\AtomChat-Main\\build\\v071-assets.log",
+      "relative": "build/v071-assets.log",
+      "kind": "file",
+      "files": 1,
+      "bytes": 392
+    },
+    {
+      "path": "D:\\AtomChat-Main\\build\\v071-bare-final.log",
+      "relative": "build/v071-bare-final.log",
+      "kind": "file",
+      "files": 1,
+      "bytes": 583
+    },
+    {
+      "path": "D:\\AtomChat-Main\\build\\v071-baseline.log",
+      "relative": "build/v071-baseline.log",
+      "kind": "file",
+      "files": 1,
+      "bytes": 1112
+    },
+    {
+      "path": "D:\\AtomChat-Main\\build\\v071-feedback-red.log",
+      "relative": "build/v071-feedback-red.log",
+      "kind": "file",
+      "files": 1,
+      "bytes": 2324
+    },
+    {
+      "path": "D:\\AtomChat-Main\\build\\v071-final-fabric.log",
+      "relative": "build/v071-final-fabric.log",
+      "kind": "file",
+      "files": 1,
+      "bytes": 2165
+    },
+    {
+      "path": "D:\\AtomChat-Main\\build\\v071-final-forge.log",
+      "relative": "build/v071-final-forge.log",
+      "kind": "file",
+      "files": 1,
+      "bytes": 469730
+    },
+    {
+      "path": "D:\\AtomChat-Main\\build\\v071-final-neoforge.log",
+      "relative": "build/v071-final-neoforge.log",
+      "kind": "file",
+      "files": 1,
+      "bytes": 2042
+    },
+    {
+      "path": "D:\\AtomChat-Main\\build\\v071-followup-1.20.1-forge.log",
+      "relative": "build/v071-followup-1.20.1-forge.log",
+      "kind": "file",
+      "files": 1,
+      "bytes": 472107
+    },
+    {
+      "path": "D:\\AtomChat-Main\\build\\v071-followup-1.21.1-fabric.log",
+      "relative": "build/v071-followup-1.21.1-fabric.log",
+      "kind": "file",
+      "files": 1,
+      "bytes": 2353
+    },
+    {
+      "path": "D:\\AtomChat-Main\\build\\v071-followup-1.21.1-neoforge.log",
+      "relative": "build/v071-followup-1.21.1-neoforge.log",
+      "kind": "file",
+      "files": 1,
+      "bytes": 2633
+    },
+    {
+      "path": "D:\\AtomChat-Main\\build\\v071-followup-green.log",
+      "relative": "build/v071-followup-green.log",
+      "kind": "file",
+      "files": 1,
+      "bytes": 1278
+    },
+    {
+      "path": "D:\\AtomChat-Main\\build\\v071-followup-red.log",
+      "relative": "build/v071-followup-red.log",
+      "kind": "file",
+      "files": 1,
+      "bytes": 2558
+    },
+    {
+      "path": "D:\\AtomChat-Main\\build\\v071-full-fabric-2.log",
+      "relative": "build/v071-full-fabric-2.log",
+      "kind": "file",
+      "files": 1,
+      "bytes": 2897
+    },
+    {
+      "path": "D:\\AtomChat-Main\\build\\v071-full-fabric.log",
+      "relative": "build/v071-full-fabric.log",
+      "kind": "file",
+      "files": 1,
+      "bytes": 3772
+    },
+    {
+      "path": "D:\\AtomChat-Main\\build\\v071-full-forge.log",
+      "relative": "build/v071-full-forge.log",
+      "kind": "file",
+      "files": 1,
+      "bytes": 471561
+    },
+    {
+      "path": "D:\\AtomChat-Main\\build\\v071-full-neoforge.log",
+      "relative": "build/v071-full-neoforge.log",
+      "kind": "file",
+      "files": 1,
+      "bytes": 3763
+    },
+    {
+      "path": "D:\\AtomChat-Main\\build\\v071-half-preset-green.log",
+      "relative": "build/v071-half-preset-green.log",
+      "kind": "file",
+      "files": 1,
+      "bytes": 1655
+    },
+    {
+      "path": "D:\\AtomChat-Main\\build\\v071-half-preset-red.log",
+      "relative": "build/v071-half-preset-red.log",
+      "kind": "file",
+      "files": 1,
+      "bytes": 2347
+    },
+    {
+      "path": "D:\\AtomChat-Main\\build\\v071-integration-2.log",
+      "relative": "build/v071-integration-2.log",
+      "kind": "file",
+      "files": 1,
+      "bytes": 1644
+    },
+    {
+      "path": "D:\\AtomChat-Main\\build\\v071-integration.log",
+      "relative": "build/v071-integration.log",
+      "kind": "file",
+      "files": 1,
+      "bytes": 5433
+    },
+    {
+      "path": "D:\\AtomChat-Main\\build\\v071-jars.log",
+      "relative": "build/v071-jars.log",
+      "kind": "file",
+      "files": 1,
+      "bytes": 3995
+    },
+    {
+      "path": "D:\\AtomChat-Main\\build\\v071-reference-green.log",
+      "relative": "build/v071-reference-green.log",
+      "kind": "file",
+      "files": 1,
+      "bytes": 1336
+    },
+    {
+      "path": "D:\\AtomChat-Main\\build\\v071-shadow-red.log",
+      "relative": "build/v071-shadow-red.log",
+      "kind": "file",
+      "files": 1,
+      "bytes": 2454
+    },
+    {
+      "path": "D:\\AtomChat-Main\\build\\v071-sizing-red.log",
+      "relative": "build/v071-sizing-red.log",
+      "kind": "file",
+      "files": 1,
+      "bytes": 4036
+    },
+    {
+      "path": "D:\\AtomChat-Main\\build\\v071-surface-green.log",
+      "relative": "build/v071-surface-green.log",
+      "kind": "file",
+      "files": 1,
+      "bytes": 1500
+    },
+    {
+      "path": "D:\\AtomChat-Main\\build\\v071-surface-red.log",
+      "relative": "build/v071-surface-red.log",
+      "kind": "file",
+      "files": 1,
+      "bytes": 4181
+    },
+    {
+      "path": "D:\\AtomChat-Main\\build\\v071-tab-red.log",
+      "relative": "build/v071-tab-red.log",
+      "kind": "file",
+      "files": 1,
+      "bytes": 3176
+    },
+    {
+      "path": "D:\\AtomChat-Main\\build\\v071-targets-final.log",
+      "relative": "build/v071-targets-final.log",
+      "kind": "file",
+      "files": 1,
+      "bytes": 730
+    },
+    {
+      "path": "D:\\AtomChat-Main\\build\\v071-twin-diff.log",
+      "relative": "build/v071-twin-diff.log",
+      "kind": "file",
+      "files": 1,
+      "bytes": 162
+    },
+    {
+      "path": "D:\\AtomChat-Main\\build\\v071-twins-final.log",
+      "relative": "build/v071-twins-final.log",
+      "kind": "file",
+      "files": 1,
+      "bytes": 2058
+    },
+    {
+      "path": "D:\\AtomChat-Main\\build\\v071-twins.log",
+      "relative": "build/v071-twins.log",
+      "kind": "file",
+      "files": 1,
+      "bytes": 2058
+    },
+    {
+      "path": "D:\\AtomChat-Main\\build\\v071-verified-1.20.1-forge.log",
+      "relative": "build/v071-verified-1.20.1-forge.log",
+      "kind": "file",
+      "files": 1,
+      "bytes": 472119
+    },
+    {
+      "path": "D:\\AtomChat-Main\\build\\v071-verified-1.21.1-fabric.log",
+      "relative": "build/v071-verified-1.21.1-fabric.log",
+      "kind": "file",
+      "files": 1,
+      "bytes": 2142
+    },
+    {
+      "path": "D:\\AtomChat-Main\\build\\v071-verified-1.21.1-neoforge.log",
+      "relative": "build/v071-verified-1.21.1-neoforge.log",
+      "kind": "file",
+      "files": 1,
+      "bytes": 2061
+    }
+  ],
+  "completed_at": "2026-11-14T22:33:57+08:00"
+}

@@ -89,10 +89,12 @@ public final class MenuPopup {
 
     private static void drawSurface(Canvas canvas, float x, float y, float w, float h, float radius) {
         ClickRipples.block(new UiLayout.Rect(x, y, w, h));
-        com.atom.chat.render.SoftShadow.drawFloating(canvas, x, y, w, h, UiTokens.radius(radius));
-        // Preserve the accepted inset-light gradient shared with the emoji panel.
+        // The post-fill shadow also shades the interior, leaving the upper edge lit.
+        // An outside-only shadow loses this accepted material on every popup consumer.
         com.atom.lib.design.atomchat.SkiaDraw.drawRoundedRect(canvas, x, y, w, h,
                 UiTokens.radius(radius), SURFACE_COLOR);
+        com.atom.lib.design.atomchat.SkiaDraw.drawRoundedShadow(canvas, x, y, w, h,
+                UiTokens.radius(radius), UiTokens.s(SURFACE_SHADOW_BLUR), UiTokens.CHROME_SHADOW);
     }
 
     /**

@@ -13,6 +13,8 @@ import io.github.humbleui.types.Rect;
 public final class PageTransitionComposite implements AutoCloseable {
     public interface Host {
         NavPage topNav();
+        /** A local tab changes the body even when the navigation destination is unchanged. */
+        default int bodyVariant() { return 0; }
         void drawArrivingBody(Canvas canvas, UiLayout layout, int mouseX, int mouseY);
         void drawArrivingHeader(Canvas canvas, UiLayout layout, int mouseX, int mouseY, float vmx, float vmy);
         /** Reports item motion; the envelope still owns entry and exit for the entire body. */
@@ -24,6 +26,7 @@ public final class PageTransitionComposite implements AutoCloseable {
     private final UiStagger.Entrance entrance = new UiStagger.Entrance();
     private Paint alphaPaint = new Paint();
     private NavPage stamped;
+    private int stampedBodyVariant;
     private Picture lastFrame, departing;
     private UiLayout.Rect bounds;
     private boolean arrivalEvent, arrivalFromPushedToRoot, backwards;
@@ -41,8 +44,15 @@ public final class PageTransitionComposite implements AutoCloseable {
         frameTime = nowMs;
         NavPage top = host.topNav();
         if (top == null) return;
-        if (stamped == null) { stamped = top; return; }
-        if (!top.equals(stamped)) {
+        int variant = host.bodyVariant();
+        if (stamped == null) {
+            stamped = top; stampedBodyVariant = variant;
+            com.atom.chat.diagnostics.FrameProfile.pageMotion(false);
+            return;
+        }
+        if (!top.equals(stamped) || variant != stampedBodyVariant) {
+            if (top.equals(stamped)) com.atom.chat.diagnostics.FrameSegments.navigation("chip",
+                    top.page().name()+":"+top.param()+":"+variant);
             boolean interrupted = !motion.sample(nowMs).settled();
             arrivalFromPushedToRoot = !stamped.isRoot() && top.isRoot();
             if (departing != null) departing.close();
@@ -55,9 +65,11 @@ public final class PageTransitionComposite implements AutoCloseable {
             backwards = false;
             entrance.markEntered(nowMs);
             stamped = top;
+            stampedBodyVariant = variant;
             arrivalEvent = true;
         }
         if (!Animations.enabled()) motion.finish();
+        com.atom.chat.diagnostics.FrameProfile.pageMotion(!overlaySettled(nowMs));
     }
     public boolean arrivalFromPushedToRoot() { return arrivalFromPushedToRoot; }
     public boolean consumeArrivalEvent() { boolean e = arrivalEvent; arrivalEvent = false; return e; }

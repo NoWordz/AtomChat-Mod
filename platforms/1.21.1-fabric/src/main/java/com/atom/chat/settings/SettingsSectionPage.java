@@ -1455,8 +1455,8 @@ public final class SettingsSectionPage {
         try {
             // The chip band owns the top of the list: rows clip below it, so a
             // scrolled list never draws through the pills.
-            SkiaDraw.clip(canvas, layout.list.x(), layout.list.y() + barH,
-                    layout.list.w() + driftClipPad, layout.list.h() - barH, 0.0F);
+            SkiaDraw.clip(canvas, layout.list.x() - CardShadowReach.PAD, layout.list.y() + barH,
+                    layout.list.w() + driftClipPad + CardShadowReach.PAD * 2, layout.list.h() - barH, 0.0F);
             // One draw of one row set: a chip switch re-armed the entrance, so
             // the new rows rise in per row rather than crossfading against the
             // old set (the crossfade's two layers were the "slight jump + very
@@ -1842,7 +1842,7 @@ public final class SettingsSectionPage {
                                 Font buttonFont, int accent, float dtMs) {
         switch (row.kind()) {
             case HERO -> drawHero(canvas, rect);
-            case AUTHORS -> drawAuthors(canvas, rect);
+            case AUTHORS -> drawAuthors(canvas, rect, dtMs);
             case SWITCH -> drawSwitch(canvas, row, rect, accent, dtMs);
             case SLIDER -> drawSlider(canvas, row, rect, accent);
             case COLOR -> drawColor(canvas, row, rect, dtMs);
@@ -2244,7 +2244,8 @@ public final class SettingsSectionPage {
             AtomChatConfig config = AtomChatConfig.get();
             ThemeService.apply(config, card == 0
                     ? ThemeService.FROSTED : ThemeService.presets()[card - 1].id());
-            AtomChatConfig.save(config);
+            boolean saved=AtomChatConfig.saveChecked(config);
+            com.atom.chat.diagnostics.FaultTrace.theme(config.themeName,saved);
             } else if (card >= builtins && card < customEnd && actionHandler != null) {
                 actionHandler.onAction(ACTION_THEME_PRESET_APPLY
                         + AppearancePresetStore.get().list().get(card - builtins).id());
@@ -2809,7 +2810,10 @@ public final class SettingsSectionPage {
         return AUTHOR_IMAGES[index];
     }
 
-    private static void drawAuthors(Canvas canvas, UiLayout.Rect rect) {
+    private final PressScale[] authorScale = {PressScale.bounce(), PressScale.bounce()};
+    private final float[] authorHover = new float[2];
+
+    private void drawAuthors(Canvas canvas, UiLayout.Rect rect, float dt) {
         float gap = UiTokens.SETTINGS_TILE_GAP;
         float width = Math.max(0.0F, (rect.w() - gap) / 2.0F);
         float avatarSize = Math.min(s(40), Math.max(0.0F, width - s(20)));
@@ -2821,8 +2825,14 @@ public final class SettingsSectionPage {
             float x = rect.x() + i * (width + gap);
             float cx = x + width / 2.0F;
             float top = rect.y() + (rect.h() - groupHeight) / 2.0F;
+            boolean over = pointerX >= x && pointerX <= x + width
+                    && pointerY >= rect.y() && pointerY <= rect.bottom();
+            authorHover[i] = UiMotion.approach(authorHover[i], over ? 1F : 0F, dt, UiMotion.HOVER_MS);
+            authorScale[i].update(over, false, dt, Animations.enabled(), width);
+            authorScale[i].begin(canvas, cx, rect.y() + rect.h() / 2F);
+            try {
             UiCards.drawCard(canvas, x, rect.y(), width, rect.h(),
-                    UiTokens.settingsTileRadius(), 0.0F);
+                    UiTokens.settingsTileRadius(), authorHover[i]);
             Image image = authorImage(i);
             if (image != null) {
                 float scale = Math.min(avatarSize / image.getWidth(), avatarSize / image.getHeight());
@@ -2836,6 +2846,7 @@ public final class SettingsSectionPage {
                     Math.max(0.0F, width - s(16)));
             SkiaFontRenderer.drawTextCentered(canvas, font, name, cx,
                     top + avatarSize + innerGap + textHeight / 2.0F, textPrimary());
+            } finally { canvas.restore(); }
         }
     }
 

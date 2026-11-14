@@ -29,9 +29,18 @@ public final class PanelBackground {
         float width = outlineInset();
         if (width <= 0) return;
         float half = width / 2;
-        try (var paint = new io.github.humbleui.skija.Paint()
+        int base = config.panelOutlineColor;
+        int alpha = base & 0xFF000000;
+        try (var light = io.github.humbleui.skija.Shader.makeLinearGradient(
+                panel.x(), panel.y(), panel.x(), panel.bottom(),
+                // The outline is a coloured frame, so reflection must not bleach a dark choice grey.
+                new int[]{com.atom.lib.design.atomchat.SkiaDraw.lerpColor(base, alpha | 0x00FFFFFF, .045F),
+                        com.atom.lib.design.atomchat.SkiaDraw.lerpColor(base, alpha | 0x00FFFFFF, .015F),
+                        base, com.atom.lib.design.atomchat.SkiaDraw.lerpColor(base, alpha, .06F)},
+                new float[]{0F, .16F, .48F, 1F});
+             var paint = new io.github.humbleui.skija.Paint()
                 .setMode(io.github.humbleui.skija.PaintMode.STROKE).setStrokeWidth(width)
-                .setAntiAlias(true).setColor(config.panelOutlineColor)) {
+                .setAntiAlias(true).setShader(light)) {
             canvas.drawRRect(io.github.humbleui.types.RRect.makeXYWH(
                     panel.x() + half, panel.y() + half,
                     Math.max(0, panel.w() - width), Math.max(0, panel.h() - width),

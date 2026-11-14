@@ -225,7 +225,7 @@ class AppearancePresetStoreTest {
         String id = store.saveCurrent(appearance(), null).preset().id();
         Path manifest = tmp.resolve("appearance-presets").resolve(id).resolve("preset.json");
         Files.writeString(manifest, "{\"number\":2,\"appearance\":{\"accentColor\":1}}");
-        assertTrue(store.list().isEmpty());
+        assertTrue(store.refresh().isEmpty(), "out-of-band edits are read at the explicit refresh boundary");
         AtomChatConfig target = new AtomChatConfig();
         target.accentColor = 0xFFABCDEF;
         assertFalse(store.apply(id, target).ok());

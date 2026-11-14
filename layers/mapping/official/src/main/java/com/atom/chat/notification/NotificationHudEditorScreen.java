@@ -38,6 +38,8 @@ public final class NotificationHudEditorScreen extends Screen {
     @Override public boolean mouseReleased(double x,double y,int button) { editor.release(); return true; }
     @Override public boolean keyPressed(int key,int scan,int modifiers) {
         if(editor.closing())return true;
+        if(key==GLFW.GLFW_KEY_ESCAPE || key==GLFW.GLFW_KEY_ENTER || key==GLFW.GLFW_KEY_KP_ENTER)
+            com.atom.chat.audio.FeedbackSoundController.play(com.atom.chat.audio.FeedbackCue.BUTTON);
         if(key==GLFW.GLFW_KEY_ESCAPE) onClose();
         else if(key==GLFW.GLFW_KEY_ENTER || key==GLFW.GLFW_KEY_KP_ENTER) { editor.save(); onClose(); }
         else {

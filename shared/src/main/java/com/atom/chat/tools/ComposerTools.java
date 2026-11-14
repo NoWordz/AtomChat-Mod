@@ -34,6 +34,9 @@ public final class ComposerTools implements InputHandler {
     public UiLayout.Rect tutorialActionBounds(int row) { return menu.paintedRow(host.layout(), row); }
     public boolean active() { return menu.isOpen() || searching(); }
     public boolean searching() { return search.active(); }
+    public com.atom.chat.chat.DraftStore.ComposerTextPort draftPort(com.atom.chat.chat.DraftStore.ComposerTextPort live) {
+        return search.draftPort(live);
+    }
     public boolean appendToParkedDraft(String text) { return search.appendToParkedDraft(text); }
     public void close() { menu.close(); search.close(); }
     public void toggle() {

@@ -22,6 +22,8 @@ public class AtomChatConfig {
      * before they moved out.
      */
     static {
+        DEFAULT.panelHeightAutomatic = true;
+        DEFAULT.panelWidthAutomatic = true;
         Design.host(new DesignHost() {
             @Override
             public float cornerRadius() {
@@ -84,6 +86,9 @@ public class AtomChatConfig {
      */
     public boolean halfScreenWidthCustomized = false;
     public float panelHeight = 860.0F;
+    /** Missing in legacy JSON means manual. Fresh installs and tab defaults explicitly opt in. */
+    public boolean panelHeightAutomatic = false;
+    public boolean panelWidthAutomatic = false;
     /** Relative position inside the available viewport; old configurations keep their docked anchor. */
     public boolean panelPositionCustom = false;
     public float panelPositionX = 0F;
@@ -552,6 +557,7 @@ public class AtomChatConfig {
             halfScreenWidthCustomized = true;
         } else {
             panelWidth = width;
+            panelWidthAutomatic = false;
         }
     }
 
@@ -729,6 +735,8 @@ public class AtomChatConfig {
             }
         }
         AtomChatConfig config = new AtomChatConfig();
+        config.panelHeightAutomatic = true;
+        config.panelWidthAutomatic = true;
         // A brand-new config is already on the 1080p-basis scale, so it must be
         // stamped as migrated before it is written — otherwise the field's own
         // "unset means legacy" default would make the next load() divide the
@@ -752,6 +760,8 @@ public class AtomChatConfig {
         Path staged = null;
         try {
             com.google.gson.JsonObject settings = PersonalDataStore.saveAndStrip(config, path);
+            if (Files.isRegularFile(path) && com.google.gson.JsonParser.parseString(GSON.toJson(settings)).equals(com.google.gson.JsonParser.parseString(
+                    Files.readString(path, StandardCharsets.UTF_8)))) return true;
             Files.createDirectories(path.getParent());
             staged = Files.createTempFile(path.getParent(), "atomchat-config-", ".tmp");
             Files.writeString(staged, GSON.toJson(settings), StandardCharsets.UTF_8);

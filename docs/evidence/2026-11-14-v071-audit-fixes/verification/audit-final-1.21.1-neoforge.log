@@ -1,0 +1,38 @@
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/9.2.1/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build
+Reusing configuration cache.
+> Task :jarJar UP-TO-DATE
+> Task :createMinecraftArtifacts UP-TO-DATE
+> Task :generateModMetadata UP-TO-DATE
+> Task :processTestResources UP-TO-DATE
+> Task :writeNeoForgeTestClasspath UP-TO-DATE
+> Task :generateAtomLibRequirement UP-TO-DATE
+> Task :downloadAssets UP-TO-DATE
+> Task :prepareNeoForgeTestFiles UP-TO-DATE
+> Task :verifyAtomLibInput
+> Task :generateAtomchatBuildStamp
+
+> Task :bareValueCheck
+
+裸值：基线 441 处 / 实测 433 处（21 个文件）
+✓ 通过；实测低于基线，可以跑 --update 收紧棘轮
+注意：以下文件的基线还有余量（文件被删/搬走或裸值已清）—— 不拦构建，但该跑 --update 收紧，别让余量变成以后新增裸值的空间：
+   layers/mapping/official/src/main/java/com/atom/chat/page/MessageListView.java: 29 → 28
+   layers/mapping/official/src/main/java/com/atom/chat/settings/SettingsSectionPage.java: 120 → 118
+   shared/src/main/java/com/atom/chat/ui/ScrollSyncService.java: 20 → 15
+
+> Task :processResources
+> Task :sourcesJar
+> Task :compileJava
+> Task :classes
+> Task :jar
+> Task :assemble
+> Task :compileTestJava
+> Task :testClasses
+> Task :test
+> Task :check
+> Task :build
+
+BUILD SUCCESSFUL in 1m 29s
+17 actionable tasks: 9 executed, 8 up-to-date
+Configuration cache entry reused.

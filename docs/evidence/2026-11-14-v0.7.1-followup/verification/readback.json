@@ -1,0 +1,30 @@
+{
+  "checked_at": "2026-11-14T18:54:07.515679+08:00",
+  "separate_python_process": true,
+  "targets": [
+    {
+      "target": "1.20.1-forge",
+      "installed_matches_candidate": true,
+      "backup_hash_matches": true,
+      "one_enabled_atomchat": true,
+      "subtle_bezel_constants_present": true,
+      "class_major": 61
+    },
+    {
+      "target": "1.21.1-fabric",
+      "installed_matches_candidate": true,
+      "backup_hash_matches": true,
+      "one_enabled_atomchat": true,
+      "subtle_bezel_constants_present": true,
+      "class_major": 65
+    },
+    {
+      "target": "1.21.1-neoforge",
+      "installed_matches_candidate": true,
+      "backup_hash_matches": true,
+      "one_enabled_atomchat": true,
+      "subtle_bezel_constants_present": true,
+      "class_major": 65
+    }
+  ]
+}

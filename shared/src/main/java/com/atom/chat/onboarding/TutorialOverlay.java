@@ -26,6 +26,7 @@ public final class TutorialOverlay {
     public void shape(TutorialAnchor target){customTarget=target==null?null:target.bounds();customShape=target;}
     public void viewport(UiLayout.Rect rect){viewport=rect;}
     public TutorialLayout geometry(){return geometry;}
+    public void press(int index){buttons[index].press();}
     public void reset(){geometry=null;bodyScroll=0;progress=0;}
     public void close(){reset();focus.clear();}
     public long textLayoutBuildCount(){return textLayoutBuilds;}

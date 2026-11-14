@@ -56,6 +56,7 @@ public final class PanelEditorInput implements InputHandler {
 
     @Override public boolean onKey(int key, int scan, int modifiers) {
         if (active() == null || key != 256) return false;
+        com.atom.chat.audio.FeedbackSoundController.play(com.atom.chat.audio.FeedbackCue.BUTTON);
         finish.accept(false);
         return true;
     }

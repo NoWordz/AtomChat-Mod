@@ -46,10 +46,16 @@ class FeedbackVisualTest {
                 wallpapers.invoke(page,canvas,wall,16F);
                 save(surface,"theme-wallpaper-shared-shell.png");
             }
+            // The preserved 0.6 reference used radius 20; 0.7 keeps the user's newer radius policy.
+            cfg.cornerRadius=20F;
             try(var expected=Surface.makeRasterN32Premul(450,260);var actual=Surface.makeRasterN32Premul(450,260)) {
                 for(var surface:new Surface[]{expected,actual})surface.getCanvas().clear(0xFF454B55);
-                SkiaDraw.drawRoundedRect(expected.getCanvas(),45,45,340,160,UiTokens.radius(MenuPopup.SURFACE_RADIUS),MenuPopup.SURFACE_COLOR);
-                SoftShadow.drawFloating(expected.getCanvas(),45,45,340,160,UiTokens.radius(MenuPopup.SURFACE_RADIUS));
+                Path reference=Path.of(System.getProperty("atomchat.repoRoot","../.."),
+                        "docs/evidence/2026-11-11-v070-user-regressions/menu-old-head-reference.png");
+                try(var image=Image.makeFromEncoded(Files.readAllBytes(reference))) {
+                    assertEquals(450,image.getWidth());assertEquals(260,image.getHeight());
+                    expected.getCanvas().drawImage(image,0,0);
+                }
                 MenuPopup.drawSurface(actual.getCanvas(),45,45,340,160);
                 save(expected,"menu-old-head-reference.png");save(actual,"menu-restored.png");
                 try(var a=new Bitmap();var b=new Bitmap()) {
@@ -57,7 +63,7 @@ class FeedbackVisualTest {
                     assertTrue(expected.readPixels(a,0,0));assertTrue(actual.readPixels(b,0,0));
                     byte[] expectedPixels=a.readPixels(),actualPixels=b.readPixels();int max=0;
                     for(int i=0;i<expectedPixels.length;i++)max=Math.max(max,Math.abs((expectedPixels[i]&255)-(actualPixels[i]&255)));
-                    assertTrue(max<=7,"menu surface must keep the approved soft-shadow envelope, max="+max);
+                    assertTrue(max<=7,"menu surface must match the independently preserved old material, max="+max);
                 }
             }
         } finally {WallpaperPresets.cancelPending();instance.set(null,previous);provider.set(null,oldProvider);}

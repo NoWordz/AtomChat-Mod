@@ -1,0 +1,25 @@
+{
+  "at": "2026-11-14T21:55:57.074477+08:00",
+  "scope": "Final late-picker/file-inspection/client-admission fixes plus related R1-R4 cases; current candidates rebuilt after these checks",
+  "serial": true,
+  "targets": {
+    "1.21.1-fabric": {
+      "tests": 63,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "1.20.1-forge": {
+      "tests": 63,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "1.21.1-neoforge": {
+      "tests": 63,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    }
+  }
+}

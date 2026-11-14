@@ -1,5 +1,39 @@
 # Release Notes
 
+## v0.7.1
+
+**更改**
+
+- 新安装或恢复布局默认后，面板按参考比例适配屏幕；已有布局保留，宽高统一显示 px，高度调节不再超过实际可见上限。
+- 面板描边增加柔和反光，深色边框保持自然。
+
+**修复**
+
+- 图片上传不再跨连接或串入其他会话，失败会提示，草稿满时保留上传结果。
+- 限制图片任务排队和集中发包，减少主题重绘、配置重载及历史处理的同步磁盘工作。
+- 优化图片磁盘缓存复用与后台容量统计，补充故障诊断且不记录输入内容。
+- 恢复表情与右键菜单等浮层的边缘层次和柔和阴影。
+- 设置 tab 切换平滑衔接，浮窗按钮补齐反馈音。
+- 修复卡片右侧阴影截断和面板编辑器文案方框。
+- 补齐作者与 UUID 卡片的悬停弹跳及 UUID 复制按压反馈。
+
+----
+
+**Changed**
+
+- Fresh and reset layouts fit the reference panel proportions to the screen while preserving existing layouts; width and height use px labels, and height adjustment stops at the visible limit.
+- Added subtle reflections to panel outlines while keeping dark borders natural.
+
+**Fixed**
+
+- Kept uploads within their original connection and conversation, reported failures, and retained results when drafts are full.
+- Bounded image queues and packet bursts, and reduced synchronous disk work in theme repainting, config reloads and history handling.
+- Improved disk-image cache reuse and background sizing, with additional diagnostics that exclude typed content.
+- Restored inset lighting and soft shadows for emoji panels and context menus.
+- Smoothed settings tab switches and added floating control feedback sounds.
+- Fixed clipped card shadows and the missing glyph in the panel editor description.
+- Added author and UUID card hover bounce and UUID copy press feedback.
+
 ## v0.7.0
 
 **更改**

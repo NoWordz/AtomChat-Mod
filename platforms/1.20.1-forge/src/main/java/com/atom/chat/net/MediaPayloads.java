@@ -97,45 +97,52 @@ public final class MediaPayloads {
         CHANNEL.messageBuilder(MediaState.class, ID_MEDIA_STATE)
                 .encoder(MediaState::encode)
                 .decoder(MediaState::decode)
-                .consumerMainThread((payload, ctx) -> {
+                .consumerNetworkThread((payload, ctx) -> {
+                    var context = ctx.get();
                     if (FMLEnvironment.dist == Dist.CLIENT) {
-                        ctx.get().enqueueWork(() ->
-                                MediaCompanionClient.onState(payload.enabled(), payload.maxBytes()));
+                        MediaCompanionClient.receive(context.getNetworkManager(), context::enqueueWork,
+                                () -> MediaCompanionClient.onState(payload.enabled(), payload.maxBytes()));
                     }
-                    ctx.get().setPacketHandled(true);
+                    context.setPacketHandled(true);
                 })
                 .add();
 
         CHANNEL.messageBuilder(UploadResult.class, ID_UPLOAD_RESULT)
                 .encoder(UploadResult::encode)
                 .decoder(UploadResult::decode)
-                .consumerMainThread((payload, ctx) -> {
+                .consumerNetworkThread((payload, ctx) -> {
+                    var context = ctx.get();
                     if (FMLEnvironment.dist == Dist.CLIENT) {
-                        ctx.get().enqueueWork(() -> MediaCompanionClient.onUploadResult(payload));
+                        MediaCompanionClient.receive(context.getNetworkManager(), context::enqueueWork,
+                                () -> MediaCompanionClient.onUploadResult(payload));
                     }
-                    ctx.get().setPacketHandled(true);
+                    context.setPacketHandled(true);
                 })
                 .add();
 
         CHANNEL.messageBuilder(Data.class, ID_DATA)
                 .encoder(Data::encode)
                 .decoder(Data::decode)
-                .consumerMainThread((payload, ctx) -> {
+                .consumerNetworkThread((payload, ctx) -> {
+                    var context = ctx.get();
                     if (FMLEnvironment.dist == Dist.CLIENT) {
-                        ctx.get().enqueueWork(() -> MediaCompanionClient.onData(payload));
+                        MediaCompanionClient.receive(context.getNetworkManager(), context::enqueueWork,
+                                () -> MediaCompanionClient.onData(payload));
                     }
-                    ctx.get().setPacketHandled(true);
+                    context.setPacketHandled(true);
                 })
                 .add();
 
         CHANNEL.messageBuilder(Missing.class, ID_MISSING)
                 .encoder(Missing::encode)
                 .decoder(Missing::decode)
-                .consumerMainThread((payload, ctx) -> {
+                .consumerNetworkThread((payload, ctx) -> {
+                    var context = ctx.get();
                     if (FMLEnvironment.dist == Dist.CLIENT) {
-                        ctx.get().enqueueWork(() -> MediaCompanionClient.onMissing(payload));
+                        MediaCompanionClient.receive(context.getNetworkManager(), context::enqueueWork,
+                                () -> MediaCompanionClient.onMissing(payload));
                     }
-                    ctx.get().setPacketHandled(true);
+                    context.setPacketHandled(true);
                 })
                 .add();
     }

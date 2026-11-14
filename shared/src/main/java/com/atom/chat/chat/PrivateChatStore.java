@@ -145,6 +145,16 @@ public final class PrivateChatStore {
         }
     }
 
+    /** Prepend a late history load while retaining live unread counts and the active partner. */
+    public static synchronized void prependLoaded(PlayerRef partner, List<ChatMessage> loaded) {
+        if (partner == null || loaded == null || loaded.isEmpty()) return;
+        Conversation conversation = conversation(partner);
+        int room = MAX_MESSAGES_PER_CONVERSATION - conversation.messages.size();
+        if (room <= 0) return;
+        conversation.messages.addAll(0, loaded.subList(Math.max(0, loaded.size() - room), loaded.size()));
+        conversation.changed();
+    }
+
     /** Mutation counter across every conversation; see {@link Conversation#changed()}. */
     public static long generation() {
         return generation;

@@ -1,5 +1,51 @@
 # Changelog
 
+## v0.7.1
+
+**更改**
+
+- 新安装及恢复布局默认时保持面板的参考宽高比并适配可用屏幕，已有布局保留。
+- 宽高统一显示 px，高度滑条根据视口收紧范围并在实际可见高度处结束。
+- 面板描边加入柔和顶部反光与轻微下沿暗部，避免深色边框被提亮成灰色，保留自定义颜色与粗细。
+
+**修复**
+
+- 图片上传绑定连接与原始会话，断线取消不再触发外部回退，草稿空间不足时保留结果并提示。
+- 上传与下载任务增加排队上限，服务器图片分片按 tick 限量发送。
+- 主题预设稳定重绘不再查询路径属性，未变更配置与个人数据不再重复写盘。
+- 历史记录改为后台有界读写，换服与清空使旧任务失效，载入期间实时消息保留。
+- 已处理图片的磁盘缓存命中不再重复编码，容量统计与写后修剪合并到后台。
+- 调试信息补齐事件消费、焦点、上传阶段及 AtomLib 来源，输入日志不再记录字符内容。
+- 恢复表情、常用语与各类右键菜单的边缘明暗层次和原有柔和阴影。
+- 设置页内部 tab 接入页面切换动画，连续切换可从当前画面平滑衔接。
+- 补齐警告、颜色选择器、教程及 HUD／面板编辑器浮窗按钮的反馈音，并统一键盘操作去重。
+- 修复列表水平裁剪截断卡片右侧软阴影的问题。
+- 修复面板编辑器副文案中换行被显示为方框的问题。
+- 作者卡片与 UUID 卡片补齐悬停弹跳，UUID 复制保留原点击范围并增加按压反馈。
+
+----
+
+**Changed**
+
+- Fresh installations and layout resets fit the panel's reference aspect ratio to the available screen while preserving existing layouts.
+- Width and height use px labels, and the height slider ends at the actual visible limit of the viewport.
+- Panel outlines gain a subtle top reflection and lower shade without washing dark outlines grey, retaining custom colors and thickness.
+
+**Fixed**
+
+- Bound image uploads to their original connection and conversation, cancelled disconnects without external fallback, and retained results when drafts lack room.
+- Bounded upload and download queues and limited server image chunks per tick.
+- Removed path checks from warm theme repaints and redundant writes of unchanged settings and personal data.
+- Moved bounded history I/O to the background, invalidated stale work on server switches and clears, and preserved messages received during loading.
+- Avoided re-encoding processed disk-cache hits and moved coalesced cache sizing and trimming to the background.
+- Added bounded input-consumer, focus, upload-stage and AtomLib-source diagnostics without logging typed characters.
+- Restored inset lighting and the original soft shadows for emoji, quick phrases, and context menus.
+- Settings tabs now use the page transition and smoothly continue through repeated switches.
+- Added feedback sounds to floating warning, color picker, tutorial, HUD editor, and panel editor controls, including keyboard action deduplication.
+- Fixed horizontal list clipping cutting off card shadows on the right.
+- Fixed a line break appearing as a missing glyph in the panel editor description.
+- Added hover bounce to author and UUID cards, with press feedback for UUID copying within the existing click target.
+
 ## v0.7.0
 
 **更改**

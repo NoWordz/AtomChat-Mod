@@ -15,48 +15,7 @@ import net.minecraft.client.MinecraftClient;
 import java.nio.file.Path;
 import java.util.function.Consumer;
 
-/**
- * Outgoing images (D12): the upload chain, the two destinations behind it, the
- * CICode it drops into the draft, and the save path that starts from a received
- * one.
- *
- * <p>{@link #uploadAndAppend} is the single entry point for "turn this file
- * into a message". The server hosts media when it says so, anything else (or
- * any failure) falls back to the external host, and whichever answers appends
- * the CICode. Both callbacks arrive off the render thread, so the draft is only
- * touched after a hop back.</p>
- *
- * <p>Four things in here are order, not style:</p>
- * <ul>
- *   <li>{@code imageUploading} is raised <em>before</em> the upload starts and
- *       lowered inside the hop that appends the code. D21's placeholder reads
- *       the flag every frame, so raising it later or clearing it earlier turns
- *       the "uploading" hint into a flicker (or a stuck hint);</li>
- *   <li>the fallback decision itself: server upload first, then the external
- *       host on error, or straight to the external host when the server does
- *       not host media — the branch conditions and both log lines are the
- *       original ones, word for word;</li>
- *   <li>inside the hop, clear the flag and <em>then</em> append. Whether the
- *       code needs a leading space is decided by the composer's own text, and
- *       that read has to happen on the render thread, next to the write;</li>
- *   <li>the save path reports failure on two surfaces (hint + toast), because
- *       the hint is only visible with an empty draft.</li>
- * </ul>
- *
- * <p>Everything it touches is shared ({@link ImageUploader}, {@link ImageSaver},
- * {@link ImageFiles}, {@link ImageFileNames}, {@link Cicodes},
- * {@link MediaCompanionClient}) or a port on {@link Host}: the hop back to the
- * render thread — through the screen's own client handle, never
- * {@code MinecraftClient.getInstance()} (D3's precedent) — D21's composer, D7's
- * action feedback and D14's save dialog. The hint's state stays here: it is
- * D12's, and D21 reads it back through {@link #uploading()},
- * {@link #transientHint()} and {@link #transientHintSetAt()}.</p>
- *
- * <p>Both mappings: this file is the official-name copy and
- * {@code platforms/1.21.1-fabric/…/ImageUploadPipeline.java} is its yarn twin —
- * the two bodies differ only in Minecraft names (the client type and its
- * {@code getInstance()}), never in what they do.</p>
- */
+/** Outgoing image transport with connection-scoped requests and captured draft destinations. */
 public final class ImageUploadPipeline {
     /**
      * What the screen hands over: one fact it owns (the client handle), D21's
@@ -80,6 +39,17 @@ public final class ImageUploadPipeline {
         /** D21: the one write entry into the draft. */
         void appendToComposer(String text);
 
+        /** A late native picker/clipboard result cannot start work for a screen that was replaced. */
+        default boolean active() { return true; }
+
+        /** Captures the destination before async work starts. */
+        default DraftTarget captureDraft() {
+            return code -> {
+                appendToComposer(composerEmpty() ? code : " " + code);
+                return AppendResult.DELIVERED;
+            };
+        }
+
         /** D7: the action-feedback toast, by key. */
         void toast(String key, boolean success);
 
@@ -100,8 +70,19 @@ public final class ImageUploadPipeline {
      */
     public interface Uploader {
         void upload(Path file, Consumer<String> onSuccess, Consumer<String> onError);
+        default void upload(Path file, Consumer<String> onSuccess, Consumer<String> onError, BooleanSupplier valid) {
+            if (valid.getAsBoolean()) upload(file,onSuccess,onError);
+            else onError.accept("cancelled");
+        }
     }
 
+    public enum AppendResult { DELIVERED, DEFERRED, STALE }
+    public interface DraftTarget {
+        AppendResult append(String code);
+        default void cancel() { }
+    }
+
+    private static final java.util.concurrent.atomic.AtomicLong IDS = new java.util.concurrent.atomic.AtomicLong();
     private final Host host;
     private final ActionToast.Translator translator;
     private final Uploader imageUploader;
@@ -116,13 +97,25 @@ public final class ImageUploadPipeline {
     private final Consumer<Runnable> renderHop;
 
     /** Set while an upload is in flight; the input placeholder reads it. */
-    private volatile boolean imageUploading;
+    private final java.util.Set<UploadRequest> requests = java.util.concurrent.ConcurrentHashMap.newKeySet();
+    private final java.util.function.LongSupplier connectionEpoch;
+    @FunctionalInterface interface Inspector { ImageBounds.Inspection inspect(Path file) throws IOException; }
+    private final Inspector inspector;
     /** Short-lived hint shown in the empty input placeholder (save errors etc). */
     private volatile String transientHint;
     private long transientHintSetAt;
 
     public ImageUploadPipeline(Host host, ActionToast.Translator translator) {
-        this(host, translator, ImageUploader.shared()::upload, task -> host.client().execute(task));
+        this(host, translator, externalUploader(), task -> host.client().execute(task));
+    }
+
+    private static Uploader externalUploader() {
+        return new Uploader() {
+            public void upload(Path file, Consumer<String> ok, Consumer<String> error) { ImageUploader.shared().upload(file,ok,error); }
+            public void upload(Path file, Consumer<String> ok, Consumer<String> error, BooleanSupplier valid) {
+                ImageUploader.shared().upload(file,ok,error,valid);
+            }
+        };
     }
 
     /**
@@ -137,7 +130,21 @@ public final class ImageUploadPipeline {
 
     ImageUploadPipeline(Host host, ActionToast.Translator translator, Uploader imageUploader,
                         Consumer<Runnable> renderHop, BooleanSupplier hostingEnabled, Uploader hostedUploader) {
+        this(host, translator, imageUploader, renderHop, hostingEnabled, hostedUploader, MediaCompanionClient::connectionEpoch);
+    }
+
+    ImageUploadPipeline(Host host, ActionToast.Translator translator, Uploader imageUploader,
+                        Consumer<Runnable> renderHop, BooleanSupplier hostingEnabled, Uploader hostedUploader,
+                        java.util.function.LongSupplier connectionEpoch) {
+        this(host,translator,imageUploader,renderHop,hostingEnabled,hostedUploader,connectionEpoch,ImageBounds::inspect);
+    }
+
+    ImageUploadPipeline(Host host, ActionToast.Translator translator, Uploader imageUploader,
+                        Consumer<Runnable> renderHop, BooleanSupplier hostingEnabled, Uploader hostedUploader,
+                        java.util.function.LongSupplier connectionEpoch, Inspector inspector) {
         this.host = host;
+        this.inspector = inspector;
+        this.connectionEpoch = connectionEpoch;
         this.translator = translator;
         this.imageUploader = imageUploader;
         this.renderHop = renderHop;
@@ -151,9 +158,11 @@ public final class ImageUploadPipeline {
      */
     public void uploadAndAppend(Path file) {
         if(com.atom.chat.onboarding.TutorialSandbox.active()){com.atom.chat.onboarding.TutorialSandbox.action();return;}
+        long originEpoch = connectionEpoch.getAsLong();
+        if (!host.active()) { rejectImage("atomchat.input.image_cancelled"); return; }
         ImageBounds.Inspection inspection;
         try {
-            inspection = ImageBounds.inspect(file);
+            inspection = inspector.inspect(file);
         } catch (IOException | SecurityException error) {
             rejectImage("atomchat.input.image_invalid");
             return;
@@ -168,63 +177,100 @@ public final class ImageUploadPipeline {
             return;
         }
         int[] size = inspection.dimensions();
-        imageUploading = true;
-        // The server decides: when it hosts media, upload there first; any
-        // failure (or a server without the companion) falls back to uguu.
-        if (hostingEnabled.getAsBoolean()) {
-            hostedUploader.upload(file,
-                    url -> appendImageCode(url, file, size),
-                    error -> {
-                        AtomChat.LOGGER.warn(com.atom.chat.diagnostics.AtomChatLog.message("resource", "Server media upload failed ({}), falling back to uguu"), error);
-                        uploadToUguu(file, size);
-                    });
-        } else {
-            if (AtomChatConfig.get().debug) {
-                AtomChat.LOGGER.info(com.atom.chat.diagnostics.AtomChatLog.message("media", "[media] server media hosting unavailable; using the external host"));
-            }
-            uploadToUguu(file, size);
+        renderHop.accept(() -> admitUpload(file,size,originEpoch));
+    }
+
+    /** Screen/nav state and the connection identity are checked together on the client thread. */
+    private void admitUpload(Path file, int[] size, long originEpoch) {
+        if (!host.active() || originEpoch != connectionEpoch.getAsLong()) {
+            rejectImage("atomchat.input.image_cancelled"); return;
         }
+        DraftTarget destination = host.captureDraft();
+        if (destination == null) { rejectImage("atomchat.input.image_busy"); return; }
+        UploadRequest request = new UploadRequest(destination, originEpoch);
+        requests.add(request);
+        com.atom.chat.diagnostics.FaultTrace.upload(request.id,"start",request.epoch);
+        if (hostingEnabled.getAsBoolean()) {
+            hostedUploader.upload(file, url -> appendImageCode(request, url, file, size), error -> {
+                if (cancelled(error) || !request.current()) fail(request, "atomchat.input.image_cancelled");
+                else if (request.fallback.compareAndSet(false, true)) uploadToUguu(request, file, size);
+            });
+        } else uploadToUguu(request, file, size);
+    }
+
+    private static boolean cancelled(String error) {
+        return "disconnected".equals(error) || "cancelled".equals(error);
     }
 
     private void rejectImage(String key) {
         renderHop.accept(() -> {
-            imageUploading = false;
             showTransientHint(translator.text(key));
             host.toast(key, false);
         });
     }
 
-    private void uploadToUguu(Path file, int[] size) {
-        imageUploader.upload(file,
-                url -> {
-                    // Keep the choice auditable: server-hosted uploads already
-                    // log "Stored hosted media", so the external path logs too.
-                    AtomChat.LOGGER.info(com.atom.chat.diagnostics.AtomChatLog.message("resource", "Uploaded chat image to the external host: {}"), url);
-                    appendImageCode(url, file, size);
-                },
-                error -> {
-                    AtomChat.LOGGER.warn(com.atom.chat.diagnostics.AtomChatLog.message("resource", "Image upload failed: {}"), error);
-                    renderHop.accept(() -> imageUploading = false);
-                });
+    private void fail(UploadRequest request, String key) {
+        renderHop.accept(() -> {
+            if (!request.finish()) return;
+            request.destination.cancel();
+            com.atom.chat.diagnostics.FaultTrace.upload(request.id,"failed",request.epoch);
+            if (request.epoch == connectionEpoch.getAsLong()) {
+                showTransientHint(translator.text(key));
+                host.toast(key, false);
+            }
+        });
     }
 
-    private void appendImageCode(String url, Path file, int[] size) {
+    private void uploadToUguu(UploadRequest request, Path file, int[] size) {
+        if (!request.current()) { fail(request, "atomchat.input.image_cancelled"); return; }
+        com.atom.chat.diagnostics.FaultTrace.upload(request.id,"external",request.epoch);
+        imageUploader.upload(file,
+                url -> appendImageCode(request, url, file, size),
+                error -> {
+                    AtomChat.LOGGER.warn(com.atom.chat.diagnostics.AtomChatLog.message("resource", "Image upload failed: {}"), error);
+                    fail(request, "busy".equals(error) ? "atomchat.input.image_busy" : "atomchat.input.image_failed");
+                }, request::current);
+    }
+
+    private void appendImageCode(UploadRequest request, String url, Path file, int[] size) {
         StringBuilder code = new StringBuilder("[[CICode,url=").append(url)
                 .append(",name=").append(file.getFileName());
-        // Carry the intrinsic size so any client receiving this can lay the
-        // bubble out at the right aspect ratio before the download lands —
-        // that is what keeps the height from jumping when it arrives.
-        if (size != null) {
-            code.append(",w=").append(size[0]).append(",h=").append(size[1]);
-        }
+        if (size != null) code.append(",w=").append(size[0]).append(",h=").append(size[1]);
         code.append("]]");
+        // Filename is optional metadata; drop it before asking the draft to fit a complete code.
+        if (code.length() > 256) {
+            code = new StringBuilder("[[CICode,url=").append(url);
+            if (size != null) code.append(",w=").append(size[0]).append(",h=").append(size[1]);
+            code.append("]]");
+        }
+        if (code.length() > 256) code = new StringBuilder("[[CICode,url=").append(url).append("]]");
+        if (code.length() > 256) { fail(request, "atomchat.input.image_code_too_long"); return; }
         String text = code.toString();
-        // The upload callbacks run off the render thread; the chat field is
-        // only safe to touch from the render thread.
         renderHop.accept(() -> {
-            imageUploading = false;
-            host.appendToComposer(host.composerEmpty() ? text : " " + text);
+            if (!request.finish()) return;
+            if (request.epoch != connectionEpoch.getAsLong()) { request.destination.cancel(); return; }
+            AppendResult result = request.destination.append(text);
+            com.atom.chat.diagnostics.FaultTrace.upload(request.id,result.name(),request.epoch);
+            if (result == AppendResult.DEFERRED) {
+                showTransientHint(translator.text("atomchat.input.image_pending"));
+                host.toast("atomchat.input.image_pending", false);
+            }
         });
+    }
+
+    private final class UploadRequest {
+        final long id = IDS.incrementAndGet();
+        final DraftTarget destination;
+        final long epoch;
+        final java.util.concurrent.atomic.AtomicBoolean done = new java.util.concurrent.atomic.AtomicBoolean();
+        final java.util.concurrent.atomic.AtomicBoolean fallback = new java.util.concurrent.atomic.AtomicBoolean();
+        UploadRequest(DraftTarget destination, long epoch) { this.destination = destination; this.epoch = epoch; }
+        boolean current() { return !done.get() && epoch == connectionEpoch.getAsLong(); }
+        boolean finish() {
+            if (!done.compareAndSet(false, true)) return false;
+            requests.remove(this);
+            return true;
+        }
     }
 
     /**
@@ -275,7 +321,11 @@ public final class ImageUploadPipeline {
 
     /** D21's read side: the placeholder picks its hint from these three. */
     public boolean uploading() {
-        return imageUploading;
+        for (UploadRequest request : requests) {
+            if (!request.current()) fail(request, "atomchat.input.image_cancelled");
+            else return true;
+        }
+        return false;
     }
 
     public String transientHint() {

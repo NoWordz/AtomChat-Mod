@@ -60,18 +60,22 @@ public final class InputRouter {
     public boolean key(int keyCode, int scanCode, int modifiers) {
         for (InputHandler handler : handlers) {
             if (handler.onKey(keyCode, scanCode, modifiers)) {
+                com.atom.chat.diagnostics.FaultTrace.input(false,handler.getClass().getName());
                 return true;
             }
         }
+        com.atom.chat.diagnostics.FaultTrace.input(false,"vanilla");
         return false;
     }
 
     public boolean charTyped(char chr, int modifiers) {
         for (InputHandler handler : handlers) {
             if (handler.onChar(chr, modifiers)) {
+                com.atom.chat.diagnostics.FaultTrace.input(true,handler.getClass().getName());
                 return true;
             }
         }
+        com.atom.chat.diagnostics.FaultTrace.input(true,"vanilla");
         return false;
     }
 }

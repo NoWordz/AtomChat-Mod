@@ -130,6 +130,7 @@ class HalfScreenSettingsTest {
         SettingsSlider width = widthSlider();
         AtomChatConfig config = AtomChatConfig.get();
         config.panelWidth = 410F;
+        config.panelWidthAutomatic = false;
         var mode = assertDoesNotThrow(() -> AtomChatConfig.class.getField("halfScreenMode"));
         var halfWidth = assertDoesNotThrow(() -> AtomChatConfig.class.getField("halfScreenWidth"));
         halfWidth.setFloat(config, 580F);

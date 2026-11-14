@@ -10,6 +10,7 @@ import com.atom.chat.nav.AppPage;
 public final class DraftSessionStore {
     private static DraftStore current = new DraftStore();
     private static long generation;
+    private static final PendingAttachments attachments = new PendingAttachments();
 
     private DraftSessionStore() {
     }
@@ -23,7 +24,10 @@ public final class DraftSessionStore {
         return generation;
     }
 
+    public static PendingAttachments attachments() { return attachments; }
+
     public static synchronized void reset() {
+        attachments.clear();
         current = new DraftStore();
         generation++;
     }
@@ -46,7 +50,9 @@ public final class DraftSessionStore {
             return -1L;
         }
         if (!retainAcrossScreens) {
-            reset();
+            // Discard text retention, but a user-initiated upload still needs its result on this connection.
+            current = new DraftStore();
+            generation++;
             return generation;
         }
         DraftStore session = current();

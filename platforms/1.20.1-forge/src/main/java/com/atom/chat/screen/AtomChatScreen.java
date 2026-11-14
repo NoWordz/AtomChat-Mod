@@ -1360,6 +1360,23 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
                     if (!composerTools.appendToParkedDraft(text)) composer.append(text);
                 }
 
+                @Override public boolean active() { return client != null && client.screen == AtomChatScreen.this; }
+
+                @Override
+                public ImageUploadPipeline.DraftTarget captureDraft() {
+                    var ticket = DraftSessionStore.attachments().reserve(topNav());
+                    if (ticket == null) return null;
+                    return new ImageUploadPipeline.DraftTarget() {
+                        public ImageUploadPipeline.AppendResult append(String code) {
+                            if (!ticket.complete(code)) return ImageUploadPipeline.AppendResult.STALE;
+                            flushUploadedAttachments();
+                            return ticket.pending() ? ImageUploadPipeline.AppendResult.DEFERRED
+                                    : ImageUploadPipeline.AppendResult.DELIVERED;
+                        }
+                        public void cancel() { ticket.cancel(); }
+                    };
+                }
+
                 @Override
                 public void toast(String key, boolean success) {
                     feedback(key, success);
@@ -1974,6 +1991,10 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
                 @Override
                 public boolean arrivalStaggersSurfaces() {
                     return false;
+                }
+                @Override public int bodyVariant() {
+                    return topPage() == AppPage.SETTINGS_SECTION
+                            ? settingsSectionPage.activeChipIndex(topNav().section()) : 0;
                 }
             });
     private UiLayout.Rect filterButton() {
@@ -2740,7 +2761,18 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         super.removed();
     }
 
+    private void flushUploadedAttachments() {
+        if (client == null || client.screen != this || quickPhrasePanel.isEditing() || profilePage.isSignatureEditing()) return;
+        if (!isWorldChatPage() && topPage() != AppPage.PRIVATE_CHAT) return;
+        int added = DraftSessionStore.attachments().drain(topNav(), composerTools.draftPort(composerText));
+        if (added > 0 && !composerTools.searching()) composer.focus();
+    }
+
     private void drawPanel(Canvas canvas, float x, float y, Image worldSnapshot, int mouseX, int mouseY, float delta) {
+        flushUploadedAttachments();
+        if (com.atom.chat.diagnostics.FrameProfile.enabled()) com.atom.chat.diagnostics.FaultTrace.focus(
+                topPage().name(),composer.focused(),composer.fieldFocused(),isPrivateReadOnly(),
+                imagePreview.isActive() || imageCropper.isActive() || colorPicker.isActive() || settingsSectionPage.confirmation().isActive(),tutorial.active());
         composer.syncFocusedFromField();
         composer.blurOnReadOnlyPage(isPrivateReadOnly() && !composerTools.searching());
         chatEffects.session();
@@ -3494,6 +3526,12 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
 
     @Override
     public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
+        com.atom.chat.audio.FeedbackSoundController.beginAction();
+        try { return handleKeyPressed(keyCode, scanCode, modifiers); }
+        finally { com.atom.chat.audio.FeedbackSoundController.endAction(); }
+    }
+
+    private boolean handleKeyPressed(int keyCode, int scanCode, int modifiers) {
         // Truth3 诊断热键（仅 debug=on 生效）：裸 F6 循环 A→B→C→D→A；备用 Ctrl+Shift+F6；
         // Shift+F6（E0）翻转运行时 measureOnly（全仪表 ↔ 仅帧探针），不写配置。
         // Alt / Super 组合留给第三方 mod，避免抢键。
@@ -4048,6 +4086,8 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
                     if (chip >= 0) {
                         // Same press-bounce arming the bottom tab bar uses.
                         settingsSectionPage.setPressedChip(chip);
+                        if (chip != settingsSectionPage.activeChipIndex(topNav().section()))
+                            composite.navigationDirection(chip < settingsSectionPage.activeChipIndex(topNav().section()));
                         settingsSectionPage.selectChip(topNav().section(), chip);
                 com.atom.chat.audio.FeedbackSoundController.play(com.atom.chat.audio.FeedbackCue.BUTTON);
                         return true;
@@ -4772,9 +4812,6 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
                     return true;
                 }
             }
-            if (composer.focused() && AtomChatConfig.get().debug) {
-                AtomChat.LOGGER.info(com.atom.chat.diagnostics.AtomChatLog.message("ui", "keyPressed: {} (sc {}) mod {}"), keyCode, scanCode, modifiers);
-            }
             // Falls through to super (ChatScreen): the focused input consumes
             // backspace/ctrl+v/arrows/IME input; up/down drive vanilla chat history.
             return false;
@@ -4784,10 +4821,6 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         public boolean onChar(char chr, int modifiers) {
             if (!isWorldChatPage()) {
                 return false;
-            }
-            if (AtomChatConfig.get().debug) {
-                AtomChat.LOGGER.info(com.atom.chat.diagnostics.AtomChatLog.message("ui", "charTyped: '{}' (U+{}) focused={} field={}"),
-                        chr, Integer.toHexString(chr), composer.focused(), composer.fieldFocused());
             }
             return false;
         }

@@ -7,6 +7,7 @@ import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.resources.ResourceLocation;
 import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
 import net.neoforged.neoforge.network.registration.PayloadRegistrar;
+import net.neoforged.neoforge.network.registration.HandlerThread;
 
 import java.util.UUID;
 
@@ -212,24 +213,29 @@ public final class MediaPayloads {
                 MediaCompanionServer::handleFetch);
         // The S2C receivers touch client-only classes; keep them in dist-guarded
         // lambdas so a dedicated server never loads them.
-        registrar.playToClient(MediaState.TYPE, MediaState.STREAM_CODEC, (payload, ctx) -> {
+        PayloadRegistrar receivers = registrar.executesOn(HandlerThread.NETWORK);
+        receivers.playToClient(MediaState.TYPE, MediaState.STREAM_CODEC, (payload, ctx) -> {
             if (net.neoforged.fml.loading.FMLEnvironment.dist == net.neoforged.api.distmarker.Dist.CLIENT) {
-                ctx.enqueueWork(() -> MediaCompanionClient.onState(payload.enabled(), payload.maxBytes()));
+                MediaCompanionClient.receive(ctx.connection(), ctx::enqueueWork,
+                        () -> MediaCompanionClient.onState(payload.enabled(), payload.maxBytes()));
             }
         });
-        registrar.playToClient(UploadResult.TYPE, UploadResult.STREAM_CODEC, (payload, ctx) -> {
+        receivers.playToClient(UploadResult.TYPE, UploadResult.STREAM_CODEC, (payload, ctx) -> {
             if (net.neoforged.fml.loading.FMLEnvironment.dist == net.neoforged.api.distmarker.Dist.CLIENT) {
-                ctx.enqueueWork(() -> MediaCompanionClient.onUploadResult(payload));
+                MediaCompanionClient.receive(ctx.connection(), ctx::enqueueWork,
+                        () -> MediaCompanionClient.onUploadResult(payload));
             }
         });
-        registrar.playToClient(Data.TYPE, Data.STREAM_CODEC, (payload, ctx) -> {
+        receivers.playToClient(Data.TYPE, Data.STREAM_CODEC, (payload, ctx) -> {
             if (net.neoforged.fml.loading.FMLEnvironment.dist == net.neoforged.api.distmarker.Dist.CLIENT) {
-                ctx.enqueueWork(() -> MediaCompanionClient.onData(payload));
+                MediaCompanionClient.receive(ctx.connection(), ctx::enqueueWork,
+                        () -> MediaCompanionClient.onData(payload));
             }
         });
-        registrar.playToClient(Missing.TYPE, Missing.STREAM_CODEC, (payload, ctx) -> {
+        receivers.playToClient(Missing.TYPE, Missing.STREAM_CODEC, (payload, ctx) -> {
             if (net.neoforged.fml.loading.FMLEnvironment.dist == net.neoforged.api.distmarker.Dist.CLIENT) {
-                ctx.enqueueWork(() -> MediaCompanionClient.onMissing(payload));
+                MediaCompanionClient.receive(ctx.connection(), ctx::enqueueWork,
+                        () -> MediaCompanionClient.onMissing(payload));
             }
         });
     }

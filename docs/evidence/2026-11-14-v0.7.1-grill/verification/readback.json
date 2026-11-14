@@ -1,0 +1,32 @@
+{
+  "checked_at": "2026-11-14T17:35:13.219714+08:00",
+  "targets": [
+    {
+      "target": "1.20.1-forge",
+      "installed_matches_candidate": true,
+      "old_backup_matches_receipt": true,
+      "one_enabled_atomchat_jar": true,
+      "latest_axis_flags_and_tab_transition_present": true,
+      "class_major": 61,
+      "sha256": "fb915b130c4515fe58e41056806dd80759f76ad33aab253c460bbcb3c4f82737"
+    },
+    {
+      "target": "1.21.1-fabric",
+      "installed_matches_candidate": true,
+      "old_backup_matches_receipt": true,
+      "one_enabled_atomchat_jar": true,
+      "latest_axis_flags_and_tab_transition_present": true,
+      "class_major": 65,
+      "sha256": "41700a8013732ba82b1dc9b9d0ecf9abd4536b0ff2190eb91de9ad58fb49656a"
+    },
+    {
+      "target": "1.21.1-neoforge",
+      "installed_matches_candidate": true,
+      "old_backup_matches_receipt": true,
+      "one_enabled_atomchat_jar": true,
+      "latest_axis_flags_and_tab_transition_present": true,
+      "class_major": 65,
+      "sha256": "1c7dda5a744a1ef0554a947c9672c6c07452f032336f447cd3f00b85496c9992"
+    }
+  ]
+}

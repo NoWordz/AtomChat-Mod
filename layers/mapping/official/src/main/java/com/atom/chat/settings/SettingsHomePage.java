@@ -139,8 +139,8 @@ public final class SettingsHomePage {
             // drops back to the viewport once every slot has landed.
             float driftClipPad = axis == UiStagger.Axis.HORIZONTAL && !UiStagger.itemsSettled(entrance, now)
                     ? UiStagger.ITEM_STYLE_SLIDE_PX : 0.0F;
-            SkiaDraw.clip(canvas, layout.list.x(), layout.list.y(),
-                    layout.list.w() + driftClipPad, layout.list.h(), 0.0F);
+            SkiaDraw.clip(canvas, layout.list.x() - CardShadowReach.PAD, layout.list.y(),
+                    layout.list.w() + driftClipPad + CardShadowReach.PAD * 2, layout.list.h(), 0.0F);
             for (int i = 0; i < sections.length; i++) {
                 UiLayout.Rect tile = tileRect(layout, i, scrollY);
                 if (tile.bottom() < layout.list.y() || tile.y() > layout.list.bottom()) {

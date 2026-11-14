@@ -112,9 +112,15 @@ public final class ImageLoader {
         byte[] fetch(String url) throws Exception;
     }
 
+    private static final Executor MAINTENANCE = Executors.newSingleThreadExecutor(r -> {
+        Thread thread = new Thread(r, "AtomChat-ImageCache");thread.setDaemon(true);return thread;
+    });
     private static final ImageLoader INSTANCE = new ImageLoader(
             ImageLoader::httpFetch, System::currentTimeMillis,
-            Executors.newFixedThreadPool(3));
+            new java.util.concurrent.ThreadPoolExecutor(3, 3, 0L, java.util.concurrent.TimeUnit.MILLISECONDS,
+                    new java.util.concurrent.ArrayBlockingQueue<>(32), r -> {
+                        Thread thread=new Thread(r,"AtomChat-ImageLoad");thread.setDaemon(true);return thread;
+                    }), MAINTENANCE);
 
     /** Companion-backed byte source for {@link #MEDIA_URL_PREFIX} URLs. */
     private static volatile Fetcher mediaFetcher;
@@ -122,6 +128,15 @@ public final class ImageLoader {
     private final Fetcher fetcher;
     private final LongSupplier clock;
     private final Executor executor;
+    private final Executor maintenance;
+    private final java.util.concurrent.atomic.AtomicBoolean maintenanceQueued = new java.util.concurrent.atomic.AtomicBoolean();
+    private static final int MAX_PENDING_LOADS = 32;
+    private final class LoadTask {
+        final String url;
+        volatile long lastSeen;
+        LoadTask(String url) { this.url=url;this.lastSeen=clock.getAsLong(); }
+        boolean current() { return pending.get(url)==this; }
+    }
 
     private final LinkedHashMap<String, Image> cache = new LinkedHashMap<>(64, 0.75F, true) {
         @Override
@@ -138,20 +153,32 @@ public final class ImageLoader {
      */
     private final LinkedHashMap<String, AnimatedImage> animatedCache =
             new LinkedHashMap<>(16, 0.75F, true);
-    private final ConcurrentHashMap<String, Boolean> pending = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, LoadTask> pending = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, Long> failedUntil = new ConcurrentHashMap<>();
     private volatile Path diskDir;
     private volatile long diskBytes = -1L;
     private volatile long diskBytesAt = Long.MIN_VALUE / 2L;
 
     private ImageLoader(Fetcher fetcher, LongSupplier clock, Executor executor) {
+        this(fetcher, clock, executor, executor);
+    }
+    private ImageLoader(Fetcher fetcher, LongSupplier clock, Executor executor, Executor maintenance) {
         this.fetcher = fetcher;
         this.clock = clock;
         this.executor = executor;
+        this.maintenance = maintenance;
     }
 
     public static ImageLoader get() {
         return INSTANCE;
+    }
+
+    /** A server's queued media must not publish into the next connection. */
+    public void invalidateMedia() {
+        pending.keySet().removeIf(url -> url.startsWith(MEDIA_URL_PREFIX));
+        failedUntil.keySet().removeIf(url -> url.startsWith(MEDIA_URL_PREFIX));
+        synchronized (cache) { cache.keySet().removeIf(url -> url.startsWith(MEDIA_URL_PREFIX)); }
+        synchronized (animatedCache) { animatedCache.keySet().removeIf(url -> url.startsWith(MEDIA_URL_PREFIX)); }
     }
 
     /** Enables the disk layer and trims any over-limit leftovers; called once
@@ -284,9 +311,29 @@ public final class ImageLoader {
         }
         if (failed != null) failedUntil.remove(url, failed);
         Path disk = diskFile(url);
-        if (visible && (disk != null || isFetchable(url))
-                && pending.putIfAbsent(url, Boolean.TRUE) == null) {
-            executor.execute(() -> load(url, disk));
+        LoadTask task;
+        synchronized (pending) {
+            task=pending.get(url);
+            if(task!=null) {
+                if(visible) task.lastSeen=clock.getAsLong();
+                else pending.remove(url,task);
+                return null;
+            }
+            if(!visible || (disk==null && !isFetchable(url)) || pending.size()>=MAX_PENDING_LOADS) return null;
+            task=new LoadTask(url);pending.put(url,task);
+        }
+        final LoadTask scheduled=task;
+        try {
+            executor.execute(() -> {
+                if(!scheduled.current() || clock.getAsLong()-scheduled.lastSeen>2_000L) {
+                    pending.remove(url,scheduled);return;
+                }
+                load(url,disk,scheduled);
+            });
+        } catch(java.util.concurrent.RejectedExecutionException full) {
+            pending.remove(url,scheduled);return null;
+        }
+        {
             // The executor may be direct (tests) and complete synchronously;
             // re-check before reporting a miss so the first visible call can
             // already serve the image.
@@ -312,12 +359,13 @@ public final class ImageLoader {
         }
     }
 
-    private void load(String url, Path disk) {
+    private void load(String url, Path disk, LoadTask task) {
         try {
             boolean fromDisk = disk != null && com.atom.chat.util.DataMigration.allowPersonalPath(disk) && Files.exists(disk);
             byte[] bytes;
             if(fromDisk) { try(java.io.InputStream input=Files.newInputStream(disk)) { bytes=readSource(input); } }
             else bytes=fetcher.fetch(url);
+            if (!task.current()) return;
             validateSource(bytes);
             if (fromDisk) {
                 // The stamp means "last used", not "first downloaded": a picture
@@ -338,30 +386,34 @@ public final class ImageLoader {
                     // the next load detects them by magic again.
                     writeDiskCache(disk, bytes);
                 }
-                putAnimated(url, animated);
+                synchronized (animatedCache) {
+                    if (!task.current()) return;
+                    putAnimated(url, animated);
+                }
                 failedUntil.remove(url);
                 return;
             }
             Image image = decodeStatic(bytes, MAX_DIM);
             if (image != null) {
-                if (disk != null) {
+                if (disk != null && task.current() && (!fromDisk || !displaySized(bytes))) {
                     // Store only the small display version, never the original
                     // download. Existing raw-format entries are converted to
                     // the processed format on their next load.
                     writeDiskCache(disk, encodeForDisk(image));
                 }
                 synchronized (cache) {
+                    if (!task.current()) { image.close();return; }
                     cache.put(url, image);
                 }
                 failedUntil.remove(url);
-            } else {
+            } else if (task.current()) {
                 fail(url);
             }
         } catch (Exception e) {
             AtomChat.LOGGER.warn(com.atom.chat.diagnostics.AtomChatLog.message("resource", "Failed to load chat image {}"), url, e);
-            fail(url);
+            if (task.current()) fail(url);
         } finally {
-            pending.remove(url);
+            pending.remove(url,task);
         }
     }
 
@@ -390,6 +442,13 @@ public final class ImageLoader {
             pixels += image.pixelCount();
         }
         return pixels;
+    }
+
+    private static boolean displaySized(byte[] bytes) {
+        try(Data data=Data.makeFromBytes(bytes);var codec=io.github.humbleui.skija.Codec.makeFromData(data)) {
+            var info=codec.getImageInfo();
+            return info.getWidth()<=MAX_DIM && info.getHeight()<=MAX_DIM;
+        }
     }
 
     /** Re-encodes a decoded image for disk at display size (WebP, PNG fallback). */
@@ -436,7 +495,7 @@ public final class ImageLoader {
                 }
             }
         }
-        trimDiskCache();
+        requestDiskMaintenance();
     }
 
     private void fail(String url) {
@@ -526,31 +585,19 @@ public final class ImageLoader {
 
     /** Total bytes currently stored in the disk cache (0 when not initialised). */
     public long diskCacheBytes() {
-        long now = clock.getAsLong();
-        long cached = diskBytes;
-        if (cached >= 0L && now >= diskBytesAt && now - diskBytesAt < DISK_BYTES_TTL_MS) {
-            return cached;
-        }
-        Path dir = diskDir;
-        if (!com.atom.chat.util.DataMigration.allowPersonalPath(dir) || !Files.isDirectory(dir)) {
-            diskBytes = 0L;
-            diskBytesAt = now;
-            return 0L;
-        }
-        long total = 0L;
-        try (var stream = Files.list(dir)) {
-            for (Path p : (Iterable<Path>) stream::iterator) {
-                if (p.getFileName().toString().endsWith(".bin")) {
-                    total += sizeOrZero(p);
-                }
-            }
-        } catch (IOException e) {
-            diskBytes = -1L;
-            AtomChat.LOGGER.warn(com.atom.chat.diagnostics.AtomChatLog.message("resource", "Failed to size image cache directory {}"), dir, e);
-        }
-        diskBytes = total;
-        diskBytesAt = now;
-        return total;
+        long now=clock.getAsLong();
+        if(diskBytes<0 || now<diskBytesAt || now-diskBytesAt>=DISK_BYTES_TTL_MS) requestDiskMaintenance();
+        return Math.max(0L,diskBytes);
+    }
+
+    private void requestDiskMaintenance() {
+        if(!maintenanceQueued.compareAndSet(false,true)) return;
+        try {
+            maintenance.execute(() -> {
+                try { trimDiskCache(); }
+                finally { maintenanceQueued.set(false); }
+            });
+        } catch(java.util.concurrent.RejectedExecutionException full) { maintenanceQueued.set(false); }
     }
 
     /**
@@ -626,9 +673,7 @@ public final class ImageLoader {
 
     private Path diskFile(String url) {
         Path dir = diskDir;
-        if (!com.atom.chat.util.DataMigration.allowPersonalPath(dir)) return null;
-        Path candidate = dir.resolve(sha256Hex(url) + ".bin");
-        return com.atom.chat.util.DataMigration.allowPersonalPath(candidate) ? candidate : null;
+        return dir == null ? null : dir.resolve(sha256Hex(url) + ".bin");
     }
 
     /** Fits the image inside {@link #MAX_DIM} without ever upscaling it. */

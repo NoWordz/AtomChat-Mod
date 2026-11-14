@@ -1,0 +1,67 @@
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/8.8/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build
+
+> Configure project :
+Fabric Loom: 1.7.4
+
+> Task :compileJava
+ע: ĳЩ�����ļ�ʹ�û򸲸����ѹ�ʱ�� API��
+ע: �й���ϸ��Ϣ, ��ʹ�� -Xlint:deprecation ���±��롣
+ע: D:\AtomChat-Main\shared\src\main\java\com\atom\chat\notification\GnetumHudCompat.javaʹ����δ�����򲻰�ȫ�Ĳ�����
+ע: �й���ϸ��Ϣ, ��ʹ�� -Xlint:unchecked ���±��롣
+
+> Task :generateAtomLibRequirement UP-TO-DATE
+> Task :generateAtomchatBuildStamp
+> Task :processResources
+> Task :classes
+
+> Task :compileTestJava
+ע: ĳЩ�����ļ�ʹ�û򸲸����ѹ�ʱ�� API��
+ע: �й���ϸ��Ϣ, ��ʹ�� -Xlint:deprecation ���±��롣
+
+> Task :processTestResources UP-TO-DATE
+> Task :testClasses
+> Task :fabricTestAgent UP-TO-DATE
+
+> Task :test
+
+ConfigReloadIoTest > unchangedReloadDoesNotRewriteSettingsOrPersonalData(Path) FAILED
+    org.opentest4j.AssertionFailedError: expected: <2023-03-28T10:40:00Z> but was: <2026-11-14T12:03:21.8432212Z>
+        at app//org.junit.jupiter.api.AssertionFailureBuilder.build(AssertionFailureBuilder.java:151)
+        at app//org.junit.jupiter.api.AssertionFailureBuilder.buildAndThrow(AssertionFailureBuilder.java:132)
+        at app//org.junit.jupiter.api.AssertEquals.failNotEqual(AssertEquals.java:197)
+        at app//org.junit.jupiter.api.AssertEquals.assertEquals(AssertEquals.java:182)
+        at app//org.junit.jupiter.api.AssertEquals.assertEquals(AssertEquals.java:177)
+        at app//org.junit.jupiter.api.Assertions.assertEquals(Assertions.java:1145)
+        at app//com.atom.chat.config.ConfigReloadIoTest.unchangedReloadDoesNotRewriteSettingsOrPersonalData(ConfigReloadIoTest.java:22)
+
+ThemeHoverWorkTest > warmPresetSnapshotNeverConsultsTheFilesystem(Path) FAILED
+    java.lang.AssertionError: warm theme repaint touched the preset path: toAbsolutePath
+        at com.atom.chat.settings.ThemeHoverWorkTest.lambda$warmPresetSnapshotNeverConsultsTheFilesystem$0(ThemeHoverWorkTest.java:19)
+        at jdk.proxy2/jdk.proxy2.$Proxy27.toAbsolutePath(Unknown Source)
+        at com.atom.chat.util.DataMigration.noLinks(DataMigration.java:138)
+        at com.atom.chat.util.DataMigration.allowPersonalPath(DataMigration.java:112)
+        at com.atom.chat.theme.AppearancePresetStore.list(AppearancePresetStore.java:139)
+        at com.atom.chat.settings.ThemeHoverWorkTest.warmPresetSnapshotNeverConsultsTheFilesystem(ThemeHoverWorkTest.java:21)
+
+17 tests completed, 2 failed
+
+> Task :test FAILED
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':test'.
+> There were failing tests. See the report at: file:///D:/AtomChat-Main/platforms/1.21.1-fabric/build/atomlib-consumer/reports/tests/test/index.html
+
+* Try:
+> Run with --scan to get full insights.
+
+Deprecated Gradle features were used in this build, making it incompatible with Gradle 9.0.
+
+You can use '--warning-mode all' to show the individual deprecation warnings and determine if they come from your own scripts or plugins.
+
+For more on this, please refer to https://docs.gradle.org/8.8/userguide/command_line_interface.html#sec:command_line_warnings in the Gradle documentation.
+
+BUILD FAILED in 30s
+8 actionable tasks: 5 executed, 3 up-to-date

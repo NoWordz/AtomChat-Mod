@@ -49,16 +49,23 @@ final class PersonalDataStore {
     /** Personal data must commit before its fields may be stripped from the old config. */
     static JsonObject saveAndStrip(AtomChatConfig config, Path legacyConfig) throws IOException {
         DataMigration.noLinks(path());
-        if (Files.exists(path())) GSON.fromJson(read(path()), AtomChatConfig.class);
+        JsonObject existing = Files.exists(path()) ? read(path()) : null;
+        if (existing != null) GSON.fromJson(existing, AtomChatConfig.class);
         JsonObject settings = GSON.toJsonTree(config).getAsJsonObject();
         JsonObject personal = new JsonObject();
-        for (String name : FIELDS) personal.add(name, settings.remove(name));
+        for (String name : FIELDS) {
+            JsonElement value = settings.remove(name);
+            if (value != null && !value.isJsonNull()) personal.add(name, value);
+        }
         if (Files.isRegularFile(legacyConfig)) {
             JsonObject old = read(legacyConfig);
             if (FIELDS.stream().anyMatch(old::has)) {
                 DataMigration.backupConfig(legacyConfig, CacheDirs.migrationBackupDir());
             }
         }
+        // JsonPrimitive(Float) compares differently from the same decimal parsed from disk.
+        personal = JsonParser.parseString(GSON.toJson(personal)).getAsJsonObject();
+        if (personal.equals(existing)) return settings;
         Files.createDirectories(path().getParent());
         Path staged = Files.createTempFile(path().getParent(), "client-data-", ".tmp");
         try {

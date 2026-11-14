@@ -19,7 +19,7 @@ public final class PanelEditor {
     private final AtomChatConfig config;
     private final Function<String, String> translate;
     private final float oldWidth, oldHeight, oldX, oldY;
-    private final boolean oldCustom, oldHalf;
+    private final boolean oldCustom, oldHalf, oldAutomatic, oldWidthAutomatic;
     private final UiLayout.Rect initial;
     private final ConfirmationSurface.Button[] buttons = new ConfirmationSurface.Button[2];
     private PanelEditorModel model;
@@ -41,6 +41,8 @@ public final class PanelEditor {
         oldY = config.panelPositionY;
         oldCustom = config.panelPositionCustom;
         oldHalf = config.halfScreenMode;
+        oldAutomatic = config.panelHeightAutomatic;
+        oldWidthAutomatic = config.panelWidthAutomatic;
         float zoom = zoom();
         initial = new UiLayout.Rect(x * zoom, y * zoom, w * zoom, h * zoom);
         model = new PanelEditorModel(initial.x(), initial.y(), initial.w(), initial.h(), vw * zoom, vh * zoom);
@@ -75,6 +77,8 @@ public final class PanelEditor {
         config.halfScreenMode = false;
         config.panelWidth = model.width() / UiTokens.SCALE;
         config.panelHeight = model.height() / UiTokens.SCALE;
+        config.panelHeightAutomatic = false;
+        config.panelWidthAutomatic = false;
         config.panelPositionCustom = true;
         config.panelPositionX = width > model.width() ? model.x() / (width - model.width()) : 0;
         config.panelPositionY = height > model.height() ? model.y() / (height - model.height()) : 0;
@@ -88,6 +92,8 @@ public final class PanelEditor {
         config.panelPositionY = oldY;
         config.panelPositionCustom = oldCustom;
         config.halfScreenMode = oldHalf;
+        config.panelHeightAutomatic = oldAutomatic;
+        config.panelWidthAutomatic = oldWidthAutomatic;
         AtomChatConfig.save(config);
     }
 

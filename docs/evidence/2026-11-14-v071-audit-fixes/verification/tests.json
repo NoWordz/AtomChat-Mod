@@ -1,0 +1,60 @@
+{
+  "at": "2026-11-14T21:38:05.046524+08:00",
+  "command": "gradlew.bat test build --offline --no-daemon -PatomlibMavenRepo=D:/AtomChat-Main/build/atomlib-slim-20261107/atomlib-maven-v040-final",
+  "java_home": "C:/Program Files/Microsoft/jdk-21.0.8.9-hotspot",
+  "serial": true,
+  "scope": "Full suite after R1-R4 body repairs; subsequent late-picker, file-inspection and client-admission fixes were verified by the focused per-target runs in incremental-tests.json and current candidates rebuilt.",
+  "targets": {
+    "1.21.1-fabric": {
+      "tests": 1978,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 9,
+      "skipped_cases": [
+        "com.atom.chat.compat.AtomLibApiPreflightTest.alternateLibraryJarPassesTheSameClientPreflight()",
+        "com.atom.chat.nav.PageTransitionCompositeTest.measureProductionPageRecordingCost()",
+        "com.atom.chat.render.AboutGpuBenchmark.shadowAndAboutStaticLayers()",
+        "com.atom.chat.render.GoldenFrameTest.goldenFrames()",
+        "com.atom.chat.render.PageEntranceGpuBenchmark.layeredEntranceAgainstSettledDraw()",
+        "com.atom.chat.render.PanelBlurGpuCostTest.measureFiveProductionKawasePasses()",
+        "com.atom.chat.render.SkiaDrawBenchmark.primitiveCostPerFrame()",
+        "com.atom.chat.ui.EmojiPanelPerformanceTest.measureSteadyEmojiRendering(Path)",
+        "com.atom.chat.ui.EmojiPanelPerformanceTest.measureGlEmojiRendering(Path)"
+      ]
+    },
+    "1.20.1-forge": {
+      "tests": 1963,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 9,
+      "skipped_cases": [
+        "com.atom.chat.compat.AtomLibApiPreflightTest.alternateLibraryJarPassesTheSameClientPreflight()",
+        "com.atom.chat.nav.PageTransitionCompositeTest.measureProductionPageRecordingCost()",
+        "com.atom.chat.render.AboutGpuBenchmark.shadowAndAboutStaticLayers()",
+        "com.atom.chat.render.GoldenFrameTest.goldenFrames()",
+        "com.atom.chat.render.PageEntranceGpuBenchmark.layeredEntranceAgainstSettledDraw()",
+        "com.atom.chat.render.PanelBlurGpuCostTest.measureFiveProductionKawasePasses()",
+        "com.atom.chat.render.SkiaDrawBenchmark.primitiveCostPerFrame()",
+        "com.atom.chat.ui.EmojiPanelPerformanceTest.measureSteadyEmojiRendering(Path)",
+        "com.atom.chat.ui.EmojiPanelPerformanceTest.measureGlEmojiRendering(Path)"
+      ]
+    },
+    "1.21.1-neoforge": {
+      "tests": 1963,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 9,
+      "skipped_cases": [
+        "com.atom.chat.compat.AtomLibApiPreflightTest.alternateLibraryJarPassesTheSameClientPreflight()",
+        "com.atom.chat.nav.PageTransitionCompositeTest.measureProductionPageRecordingCost()",
+        "com.atom.chat.render.AboutGpuBenchmark.shadowAndAboutStaticLayers()",
+        "com.atom.chat.render.GoldenFrameTest.goldenFrames()",
+        "com.atom.chat.render.PageEntranceGpuBenchmark.layeredEntranceAgainstSettledDraw()",
+        "com.atom.chat.render.PanelBlurGpuCostTest.measureFiveProductionKawasePasses()",
+        "com.atom.chat.render.SkiaDrawBenchmark.primitiveCostPerFrame()",
+        "com.atom.chat.ui.EmojiPanelPerformanceTest.measureSteadyEmojiRendering(Path)",
+        "com.atom.chat.ui.EmojiPanelPerformanceTest.measureGlEmojiRendering(Path)"
+      ]
+    }
+  }
+}

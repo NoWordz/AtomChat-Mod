@@ -59,6 +59,31 @@ class SecondaryDotSurfacesTest {
         }
     }
 
+    @Test void settingsGroupTitlesReuseTheSharedDotCacheOnWarmFrames() {
+        var cfg=AtomChatConfig.get();var saved=AppearancePresetStore.Snapshot.capture(cfg);
+        boolean cached=DotTexture.dotsCached();
+        try(var surface=Surface.makeRasterN32Premul(640,960)) {
+            DotTexture.setDotsCached(true);DotTexture.clearCache();
+            var page=new SettingsSectionPage();
+            page.selectChip(com.atom.chat.settings.SettingsSection.APPEARANCE,2);
+            var layout=UiLayout.ofDetail(20,20,600,900);
+            long settled=System.currentTimeMillis()+2000;
+            com.atom.chat.ui.UiStagger.atFrame(settled,()->page.render(surface.getCanvas(),layout,
+                    com.atom.chat.settings.SettingsSection.APPEARANCE,-1,-1,0,cfg.accentColor));
+            assertTrue(DotTexture.cacheSize()>0,"real settings group titles must reach the shared dot renderer");
+            long builds=DotTexture.cacheBuildCount(),hits=DotTexture.cacheHitCount();
+            for(int frame=1;frame<=30;frame++) {
+                long now=settled+frame*16;
+                com.atom.chat.ui.UiStagger.atFrame(now,()->page.render(surface.getCanvas(),layout,
+                        com.atom.chat.settings.SettingsSection.APPEARANCE,-1,-1,0,cfg.accentColor));
+            }
+            assertEquals(builds,DotTexture.cacheBuildCount(),"stable title geometry must not rebuild the dot cache each frame");
+            assertTrue(DotTexture.cacheHitCount()>hits,"warm title frames reuse cached dots");
+        } finally {
+            DotTexture.clearCache();DotTexture.setDotsCached(cached);saved.applyTo(cfg);
+        }
+    }
+
     @Test void popupConnectorStaysBetweenThePopupAndComposer() throws Exception {
         var popup=new QuickPhrasePanel(text->{},()->0xFFFF0000);
         var anim=QuickPhrasePanel.class.getDeclaredField("anim");anim.setAccessible(true);anim.setFloat(popup,1F);

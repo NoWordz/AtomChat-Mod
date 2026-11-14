@@ -73,6 +73,15 @@ public final class ChatStore {
         changed();
     }
 
+    /** Late disk history precedes live rows without clearing unread, active-page state, or effects. */
+    public synchronized void prependLoaded(List<ChatMessage> loaded) {
+        if (loaded == null || loaded.isEmpty()) return;
+        int room = 500 - messages.size();
+        if (room <= 0) return;
+        messages.addAll(0, loaded.subList(Math.max(0, loaded.size() - room), loaded.size()));
+        changed();
+    }
+
     /** Whether any message is currently held (used by the clear-history action). */
     public synchronized boolean isEmpty() {
         return messages.isEmpty();

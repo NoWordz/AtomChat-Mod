@@ -4,6 +4,7 @@ import com.atom.chat.config.AtomChatConfig;
 import com.atom.chat.platform.Platform;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -36,6 +37,14 @@ class ScreenMetricsTest {
     /** The values the probe recorded for the default config (panel 480x860, uiScale 1, contentScale 1). */
     private static final float DEFAULT_CS = 1.0F;
     private static final float DEFAULT_UI = 1.0F;
+    private boolean oldAutomatic;
+    private boolean oldWidthAutomatic;
+    @BeforeEach void useTheLegacyManualGeometryPinnedByThisSuite() {
+        oldAutomatic = AtomChatConfig.get().panelHeightAutomatic;
+        oldWidthAutomatic = AtomChatConfig.get().panelWidthAutomatic;
+        AtomChatConfig.get().panelHeightAutomatic = false;
+        AtomChatConfig.get().panelWidthAutomatic = false;
+    }
 
     @TempDir
     static Path platformRoot;
@@ -63,6 +72,8 @@ class ScreenMetricsTest {
     /** The config is a process-wide singleton; every case puts back what it borrowed. */
     @AfterEach
     void restoreConfig() {
+        AtomChatConfig.get().panelHeightAutomatic = oldAutomatic;
+        AtomChatConfig.get().panelWidthAutomatic = oldWidthAutomatic;
         AtomChatConfig.get().contentScale = DEFAULT_CS;
         AtomChatConfig.get().uiScale = DEFAULT_UI;
         AtomChatConfig.get().panelPositionCustom = false;

@@ -19,6 +19,30 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ImageLoaderTest {
+    @Test void queuedLoadsAreBoundedAndOldConnectionMediaNeverFetches() throws Exception {
+        var tasks=new java.util.ArrayList<Runnable>();var fetched=new AtomicInteger();
+        var loader=ImageLoader.forTest(url->{fetched.incrementAndGet();return png(2,2);},()->1000L,tasks::add);
+        for(int i=0;i<80;i++)loader.get("http://test/"+i,true);
+        assertEquals(32,tasks.size());
+        var mediaTasks=new java.util.ArrayList<Runnable>();
+        var media=ImageLoader.forTest(url->{fetched.incrementAndGet();return png(2,2);},()->1000L,mediaTasks::add);
+        media.get(ImageLoader.MEDIA_URL_PREFIX+"old",true);media.invalidateMedia();
+        mediaTasks.forEach(Runnable::run);
+        assertEquals(0,fetched.get(),"invalidated media must not start against a new connection");
+    }
+
+    @Test void processedDiskHitOnlyTouchesItsUsageStamp() throws Exception {
+        long stamp=System.currentTimeMillis()+1000;
+        String url="http://test/stable";
+        var first=ImageLoader.forTest(u->png(2,2),()->stamp,Runnable::run);first.init(tempDir);
+        assertNotNull(first.get(url,true));
+        Path file=tempDir.resolve(ImageLoader.sha256Hex(url)+".bin");
+        byte[] bytes=Files.readAllBytes(file);
+        var second=ImageLoader.forTest(u->{throw new AssertionError("disk hit downloaded");},()->stamp,Runnable::run);
+        second.init(tempDir);assertNotNull(second.get(url,true));
+        assertEquals(stamp,Files.getLastModifiedTime(file).toMillis(),"no re-encoding write may replace the usage stamp");
+        org.junit.jupiter.api.Assertions.assertArrayEquals(bytes,Files.readAllBytes(file));
+    }
     @Test void linkedCacheCannotReadWriteTrimOrClearFilesInsideConfig() throws Exception {
         Path target = Files.createDirectories(tempDir.resolve("config/images"));
         Path original = target.resolve("existing.bin"); Files.writeString(original,"private cache");

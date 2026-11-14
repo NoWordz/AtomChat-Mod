@@ -83,6 +83,8 @@ public final class ColorPickerOverlay {
     }
 
     public void cancel() {
+        if (!active || closing) return;
+        com.atom.chat.audio.FeedbackSoundController.play(com.atom.chat.audio.FeedbackCue.BUTTON);
         // Symmetric fade-out (0.1.10 audit): keep active so the overlay keeps
         // swallowing input until the fade has fully played.
         closing = true;
@@ -92,6 +94,7 @@ public final class ColorPickerOverlay {
         if (closing) {
             return;
         }
+        com.atom.chat.audio.FeedbackSoundController.play(com.atom.chat.audio.FeedbackCue.BUTTON);
         if (target != null) {
             // The picker edits RGB only. Rows whose current colour carries an
             // alpha (e.g. translucent capsule backgrounds) keep that alpha, so a
@@ -312,6 +315,7 @@ public final class ColorPickerOverlay {
                 && vmy >= hexHitY && vmy <= hexHitY + hexHitH) {
             if (clipboard != null && target != null) {
                 clipboard.accept(ColorUtil.formatHex(ColorUtil.hsvToRgb(hue, sat, bri)));
+                com.atom.chat.audio.FeedbackSoundController.play(com.atom.chat.audio.FeedbackCue.BUTTON);
                 copiedUntil = System.currentTimeMillis() + 1000L;
             }
             return;

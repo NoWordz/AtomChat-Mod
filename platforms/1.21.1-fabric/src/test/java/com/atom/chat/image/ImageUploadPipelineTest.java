@@ -66,7 +66,7 @@ class ImageUploadPipelineTest {
     Path tmp;
 
     /** Records what the pipeline asked of the screen, in order. */
-    private static final class StubHost implements ImageUploadPipeline.Host {
+    private static class StubHost implements ImageUploadPipeline.Host {
         final List<String> calls = new ArrayList<>();
         final CountDownLatch pickerCalled = new CountDownLatch(1);
         boolean composerEmpty = true;
@@ -197,7 +197,7 @@ class ImageUploadPipelineTest {
 
         pipeline.uploadAndAppend(png(1, 1));
 
-        assertEquals(List.of("upload:shot.png"), host.calls);
+        assertEquals(List.of("upload:shot.png", "toast:atomchat.input.image_failed:false"), host.calls);
         assertFalse(pipeline.uploading(), "a failed upload must not pin the placeholder on 'uploading'");
     }
 
@@ -248,6 +248,91 @@ class ImageUploadPipelineTest {
         assertTrue(pipeline.transientHintSetAt() >= before, "the stamp is taken when the hint is raised");
         assertTrue(pipeline.transientHintSetAt() <= after);
         assertFalse(pipeline.uploading());
+    }
+
+    @Test void disconnectCancelsWithoutStartingTheExternalUploader() throws Exception {
+        StubHost host=new StubHost();
+        ImageUploadPipeline.Uploader forbidden=(file,ok,error)->{throw new AssertionError("disconnect started an external upload");};
+        var pipeline=new ImageUploadPipeline(host,KEYS,forbidden,Runnable::run,()->true,
+                (file,ok,error)->error.accept("disconnected"));
+        pipeline.uploadAndAppend(png(1,1));
+        assertFalse(pipeline.uploading());
+        assertTrue(host.calls.stream().noneMatch(c->c.startsWith("append:")));
+    }
+
+    @Test void oneCompletedUploadCannotClearAnotherUploadsPlaceholder() throws Exception {
+        StubHost host=new StubHost();
+        List<Consumer<String>> complete=new ArrayList<>();
+        var pipeline=new ImageUploadPipeline(host,KEYS,(file,ok,error)->complete.add(ok),Runnable::run,()->false,
+                (file,ok,error)->{throw new AssertionError();});
+        pipeline.uploadAndAppend(png(1,1));pipeline.uploadAndAppend(png(1,1));
+        complete.get(0).accept("https://uguu.se/a.png");
+        assertTrue(pipeline.uploading(),"the second request is still in flight");
+        complete.get(1).accept("https://uguu.se/b.png");
+        assertFalse(pipeline.uploading());
+    }
+    @Test void oldConnectionResultCannotAppendAndDuplicateCompletionIsIgnored() throws Exception {
+        StubHost host=new StubHost();var epoch=new java.util.concurrent.atomic.AtomicLong(1);
+        List<Consumer<String>> complete=new ArrayList<>();
+        var pipeline=new ImageUploadPipeline(host,KEYS,(file,ok,error)->complete.add(ok),Runnable::run,
+                ()->false,(file,ok,error)->{throw new AssertionError();},epoch::get);
+        pipeline.uploadAndAppend(png(1,1));epoch.incrementAndGet();
+        complete.get(0).accept("https://uguu.se/old.png");complete.get(0).accept("https://uguu.se/duplicate.png");
+        assertFalse(pipeline.uploading());
+        assertTrue(host.calls.stream().noneMatch(c->c.startsWith("append:")));
+    }
+    @Test void longOptionalFilenameCannotMakeAnOtherwiseSendableImageCodeTooLong() throws Exception {
+        Path file=tmp.resolve("n".repeat(160)+".png");
+        ImageIO.write(new BufferedImage(1,1,BufferedImage.TYPE_INT_RGB),"png",file.toFile());
+        StubHost host=new StubHost();String url="https://uguu.se/"+"u".repeat(55)+".png";
+        var pipeline=pipeline(host,new StubUploader(host.calls,url,null));
+        pipeline.uploadAndAppend(file);
+        String code=host.calls.stream().filter(c->c.startsWith("append:")).findFirst().orElseThrow().substring(7);
+        assertTrue(code.length()<=256,"optional filename cannot strand the completed upload forever");
+        assertEquals(url,com.atom.chat.chat.Cicodes.extractImageUrl(code));
+        assertTrue(code.endsWith(",w=1,h=1]]"));
+    }
+    @Test void impossibleUrlReportsFailureInsteadOfPermanentlyWaitingForDraftSpace() throws Exception {
+        StubHost host=new StubHost();
+        var pipeline=pipeline(host,new StubUploader(host.calls,"https://example.test/"+"u".repeat(300),null));
+        pipeline.uploadAndAppend(png(1,1));
+        assertTrue(host.calls.contains("toast:atomchat.input.image_code_too_long:false"));
+        assertTrue(host.calls.stream().noneMatch(c->c.startsWith("append:")));assertFalse(pipeline.uploading());
+    }
+    @Test void latePickerResultCannotStartAnUploadForAReplacedScreen() {
+        StubHost host=new StubHost(){@Override public boolean active(){return false;}};
+        var uploader=new StubUploader(host.calls,"https://example.test/new-server.png",null);
+        var pipeline=pipeline(host,uploader);
+        pipeline.uploadAndAppend(tmp.resolve("not-even-read.png"));
+        assertEquals(List.of("toast:atomchat.input.image_cancelled:false"),host.calls);
+        assertFalse(pipeline.uploading());
+    }
+    @Test void switchDuringFileInspectionCannotReserveOrUploadAgainstTheNewDestination() throws Exception {
+        for(boolean changeConnection:new boolean[]{false,true}) {
+            var active=new java.util.concurrent.atomic.AtomicBoolean(true);
+            var epoch=new java.util.concurrent.atomic.AtomicLong(1);var captures=new java.util.concurrent.atomic.AtomicInteger();
+            StubHost host=new StubHost(){
+                @Override public boolean active(){return active.get();}
+                @Override public ImageUploadPipeline.DraftTarget captureDraft(){captures.incrementAndGet();return super.captureDraft();}
+            };
+            ImageUploadPipeline.Uploader forbidden=(file,ok,error)->{throw new AssertionError("stale file inspection started transport");};
+            var pipeline=new ImageUploadPipeline(host,KEYS,forbidden,Runnable::run,()->true,forbidden,epoch::get,file->{
+                var inspected=ImageBounds.inspect(file);
+                if(changeConnection)epoch.incrementAndGet();else active.set(false);
+                return inspected;
+            });
+            pipeline.uploadAndAppend(png(1,1));
+            assertEquals(0,captures.get());assertFalse(pipeline.uploading());
+        }
+    }
+    @Test void switchWhileClientAdmissionIsQueuedDoesNotRecaptureTheNewEpoch() throws Exception {
+        StubHost host=new StubHost();var epoch=new java.util.concurrent.atomic.AtomicLong(1);
+        var main=new java.util.ArrayDeque<Runnable>();
+        ImageUploadPipeline.Uploader forbidden=(file,ok,error)->{throw new AssertionError("queued old admission started transport");};
+        var pipeline=new ImageUploadPipeline(host,KEYS,forbidden,main::add,()->true,forbidden,epoch::get);
+        pipeline.uploadAndAppend(png(1,1));epoch.incrementAndGet();
+        while(!main.isEmpty())main.remove().run();
+        assertEquals(List.of("toast:atomchat.input.image_cancelled:false"),host.calls);assertFalse(pipeline.uploading());
     }
 
     @Test

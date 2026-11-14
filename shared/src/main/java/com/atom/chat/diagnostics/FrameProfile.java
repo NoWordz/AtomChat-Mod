@@ -85,6 +85,14 @@ public final class FrameProfile {
     private static final java.util.Set<String> seenPages =
             java.util.Collections.synchronizedSet(new java.util.HashSet<>());
     private static final java.util.Map<String, Bucket> PAGE_RENDER = new java.util.TreeMap<>();
+    private static final java.util.Map<String, Bucket> PAGE_PHASE_RENDER = new java.util.TreeMap<>();
+    private static boolean motionKnown;
+
+    public static void pageMotion(boolean transitioning) {
+        if (!enabled) return;
+        motionKnown = true;
+        phase = transitioning ? Phase.TRANSITION : Phase.STEADY;
+    }
 
     /** Labels the actual state before drawing; no query, message or player data is recorded. */
     public static void surface(Surface value) { if (enabled) surface = value; }
@@ -105,6 +113,7 @@ public final class FrameProfile {
         String key = rawNavigationPage == null ? "OTHER" : rawNavigationPage;
         firstOpen = seenPages.add(key);
         phase = Phase.TRANSITION;
+        motionKnown = false;
         framesSinceNavigation = 0;
     }
 
@@ -208,10 +217,15 @@ public final class FrameProfile {
         PANEL_BUCKET.add(elapsed, allocated);
         SURFACE_CPU.computeIfAbsent(surface, ignored -> new Bucket(true)).add(elapsed, allocated);
         // Additive page attribution: separate buckets, surface semantics untouched.
-        if (framesSinceNavigation < TRANSITION_FRAMES) framesSinceNavigation++;
-        else phase = Phase.STEADY;
+        if (!motionKnown) {
+            if (framesSinceNavigation < TRANSITION_FRAMES) framesSinceNavigation++;
+            else phase = Phase.STEADY;
+        }
         PAGE_RENDER.computeIfAbsent(
                 page.name().toLowerCase(java.util.Locale.ROOT) + (firstOpen ? "_first" : "_repeat"),
+                ignored -> new Bucket(true)).add(elapsed, allocated);
+        PAGE_PHASE_RENDER.computeIfAbsent(page.name().toLowerCase(java.util.Locale.ROOT)
+                + (firstOpen ? "_first_" : "_repeat_") + phase.name().toLowerCase(java.util.Locale.ROOT),
                 ignored -> new Bucket(true)).add(elapsed, allocated);
         long interval = previousSurface == surface && previousFrameStart != 0 ? startedAt - previousFrameStart : 0;
         if (interval > 0 && interval < 1_000_000_000L)
@@ -296,6 +310,7 @@ public final class FrameProfile {
         sb.append("\n  page_phase=").append(phase.name().toLowerCase(java.util.Locale.ROOT))
           .append(" page_firstopen=").append(firstOpen ? 1 : 0)
           .append(" page_current=").append(page.name().toLowerCase(java.util.Locale.ROOT));
+        PAGE_PHASE_RENDER.forEach((key,bucket) -> sb.append('\n').append(bucket.row("page_motion="+key)));
         return sb.toString();
     }
 
@@ -307,6 +322,7 @@ public final class FrameProfile {
         framesSinceReport = 0;
         SURFACE_CPU.clear(); SURFACE_INTERVAL.clear(); previousFrameStart = 0; previousSurface = null; surface = Surface.OTHER;
         PAGE_RENDER.clear();
+        PAGE_PHASE_RENDER.clear();motionKnown = false;
         page = Page.OTHER; phase = Phase.STEADY; firstOpen = false;
         framesSinceNavigation = TRANSITION_FRAMES;
         seenPages.clear();

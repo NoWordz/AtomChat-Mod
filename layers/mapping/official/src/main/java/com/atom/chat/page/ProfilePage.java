@@ -267,6 +267,8 @@ public final class ProfilePage {
      * hit tests keep the unscaled geometry.
      */
     private final PressScale infoCardScale = PressScale.bounce();
+    private final PressScale identityCardScale = PressScale.bounce();
+    private float identityHover, identityPulse;
 
     private static int accentColor() {
         return com.atom.chat.config.AtomChatConfig.get().accentColor;
@@ -454,6 +456,7 @@ public final class ProfilePage {
     /** True when the point sits on the identity card's UUID copy button. */
     private boolean onCopyButton(UiLayout layout, float scrollY, float vmx, float vmy) {
         if (copyButtonRect(layout, scrollY).contains(vmx, vmy)) {
+            identityPulse = UiMotion.POPUP_MS;
             String uuid = subjectUuid() != null ? subjectUuid().toString() : "-";
             // Only confirm when the write actually happened: a failed copy used
             // to still show the success tick.
@@ -1067,8 +1070,8 @@ public final class ProfilePage {
                 ? UiStagger.ITEM_STYLE_SLIDE_PX : 0.0F;
         canvas.save();
         try {
-            SkiaDraw.clip(canvas, layout.list.x(), layout.list.y(),
-                    layout.list.w() + driftClipPad, layout.list.h(), 0.0F);
+            SkiaDraw.clip(canvas, layout.list.x() - CardShadowReach.PAD, layout.list.y(),
+                    layout.list.w() + driftClipPad + CardShadowReach.PAD * 2, layout.list.h(), 0.0F);
             // Page-entrance stagger over the page's blocks in reading order:
             // banner, avatar row, stat tiles, info card, identity card. Each
             // block fades and lifts from ONE progress value, so nothing is
@@ -1125,6 +1128,11 @@ public final class ProfilePage {
         UiLayout.Rect infoCard = infoCardRect(layout, rows.size(), scrollY);
         infoCardScale.update(infoCard.contains(vmx, vmy), false, dt,
                 Animations.enabled(), infoCard.w());
+        UiLayout.Rect identity = idCardRect(layout, scrollY);
+        boolean overIdentity = layout.list.contains(vmx, vmy) && identity.contains(vmx, vmy);
+        identityHover = UiMotion.approach(identityHover, overIdentity ? 1F : 0F, dt, UiMotion.HOVER_MS);
+        identityCardScale.update(overIdentity, identityPulse > 0F, dt, Animations.enabled(), identity.w());
+        identityPulse = Math.max(0F, identityPulse - dt);
         for (int i = 0; i < menuItemHover.length; i++) {
             boolean enabled = i == 0 || customAvatarActive();
             boolean over = avatarMenuOpen && enabled
@@ -1609,8 +1617,10 @@ public final class ProfilePage {
         if (card.bottom() < layout.list.y() || card.y() > layout.list.bottom()) {
             return;
         }
+        identityCardScale.begin(canvas, card.x() + card.w()/2F, card.y() + card.h()/2F);
+        try {
         UiCards.drawCard(canvas, card.x(), card.y(), card.w(), card.h(),
-                UiTokens.profileRowRadius(), 0.0F);
+                UiTokens.profileRowRadius(), identityHover);
         float pad = UiTokens.PROFILE_ROW_PAD;
         Font labelFont = FontManager.font(UiTokens.PROFILE_ROW_FONT);
         Font valueFont = FontManager.font(UiTokens.PROFILE_ROW_VALUE_FONT);
@@ -1640,6 +1650,7 @@ public final class ProfilePage {
             SkiaFontRenderer.drawTextRight(canvas, valueFont, tr("atomchat.profile.blocked.yes"),
                     card.right() - pad, cy2, Color.makeARGB(255, 235, 64, 52));
         }
+        } finally { canvas.restore(); }
     }
 
     private void drawAvatarMenu(Canvas canvas, UiLayout layout, float vmx, float vmy, float scrollY) {

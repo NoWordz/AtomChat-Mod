@@ -24,6 +24,7 @@ class PageTransitionCompositeTest {
     private final SettingsHomePage home=new SettingsHomePage();
     private final SettingsSectionPage detail=new SettingsSectionPage();
     private PageTransitionComposite composite;
+    private PageTransitionComposite.Host drawHost;
     private final List<NavPage> headers=new ArrayList<>();
     private boolean oldAnimations;
     private AtomChatConfig.PageNavStyle oldStyle;
@@ -34,8 +35,9 @@ class PageTransitionCompositeTest {
             public boolean isModLoaded(String id){return false;}
         });
         var cfg=AtomChatConfig.get();oldAnimations=cfg.animationEnabled;oldStyle=cfg.pageNavStyle;cfg.animationEnabled=true;
-        composite=new PageTransitionComposite(new PageTransitionComposite.Host() {
+        drawHost=new PageTransitionComposite.Host() {
             public NavPage topNav(){return top;}
+            public int bodyVariant(){return top.page()==AppPage.SETTINGS_SECTION?detail.activeChipIndex(top.section()):0;}
             public boolean arrivalStaggersSurfaces(){return false;}
             public void drawArrivingBody(Canvas c,UiLayout l,int mx,int my) {
                 draws.add(top);
@@ -49,7 +51,8 @@ class PageTransitionCompositeTest {
                 com.atom.chat.ui.ShellHeader.render(c,l.header,top.page().name()+":"+top.param(),!top.isRoot(),
                         new UiLayout.Rect(l.header.x()+10,l.header.y()+10,32,32),0,AtomChatConfig.get().textPrimaryColor);
             }
-        });
+        };
+        composite=new PageTransitionComposite(drawHost);
     }
     @AfterEach void teardown(){composite.close();var c=AtomChatConfig.get();c.animationEnabled=oldAnimations;c.pageNavStyle=oldStyle;}
     private byte[] frame(Surface s,long now) {
@@ -63,6 +66,18 @@ class PageTransitionCompositeTest {
         composite.beginFrame(1000);assertTrue(composite.overlaySettled(1000));assertFalse(composite.consumeArrivalEvent());
         top=NavPage.settingsSection(SettingsSection.CHAT);composite.beginFrame(1010);
         assertTrue(composite.consumeArrivalEvent());assertFalse(composite.consumeArrivalEvent());
+    }
+    @Test void aLocalSettingsTabGetsTheSameInterruptibleTransitionAsANavigation() {
+        top=NavPage.settingsSection(SettingsSection.APPEARANCE);
+        try(var surface=Surface.makeRasterN32Premul(W,H)) {
+            byte[] old=frame(surface,1000);
+            detail.selectChip(SettingsSection.APPEARANCE,1);
+            assertBodyEquals(old,frame(surface,1010),"a local tab must start from its departing pixels");
+            assertFalse(composite.overlaySettled(1010),"the unchanged navigation page must not hide its local tab transition");
+            byte[] middle=frame(surface,1100);
+            detail.selectChip(SettingsSection.APPEARANCE,2);
+            assertBodyEquals(middle,frame(surface,1100),"a second tab can interrupt without a visual jump");
+        }
     }
     @Test void realProductionPagesRemainPixelContinuousAcrossTwoInterrupts() throws Exception {
         Path out=Path.of(System.getProperty("atomchat.repoRoot","../.."),".work/v0.7.0/animation-frames");Files.createDirectories(out);
@@ -102,4 +117,29 @@ class PageTransitionCompositeTest {
         assertArrayEquals(Arrays.copyOfRange(before,from,before.length),Arrays.copyOfRange(after,from,after.length),reason);
     }
     private static void write(Surface s,Path p)throws Exception{try(Image i=s.makeImageSnapshot();Data d=i.encodeToData()){Files.write(p,d.getBytes());}}
+    @Test void measureProductionPageRecordingCost() {
+        Assumptions.assumeTrue("1".equals(System.getenv("ATOMCHAT_BENCH")));
+        try(var surface=Surface.makeRasterN32Premul(W,H)) {
+            for(boolean throughComposite:new boolean[]{false,true,false,true}) {
+                long[] samples=new long[100];
+                for(int i=0;i<125;i++) {
+                    long now=System.currentTimeMillis()+10_000L+i*16;
+                    var c=surface.getCanvas();c.clear(BG);
+                    long start=System.nanoTime();
+                    if(throughComposite) {
+                        composite.beginFrame(now);
+                        composite.drawArrivingFrame(c,layout,-100,-100,-100,-100,now);
+                    } else {
+                        com.atom.chat.ui.UiStagger.atFrame(now,()->drawHost.drawArrivingBody(c,layout,-100,-100));
+                        drawHost.drawArrivingHeader(c,layout,-100,-100,-100,-100);
+                    }
+                    if(i>=25)samples[i-25]=System.nanoTime()-start;
+                    draws.clear();headers.clear();
+                }
+                Arrays.sort(samples);
+                System.out.printf(Locale.ROOT,"PAGE_RECORDING_CPU composite=%s p50=%.4fms p95=%.4fms p99=%.4fms%n",
+                        throughComposite,samples[50]/1e6,samples[95]/1e6,samples[99]/1e6);
+            }
+        }
+    }
 }

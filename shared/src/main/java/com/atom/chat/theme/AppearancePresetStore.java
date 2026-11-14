@@ -52,7 +52,7 @@ public final class AppearancePresetStore {
                            int panelBgColor, int textPrimaryColor, int textSecondaryColor,
                            int cardColor, int panelOutlineColor,
                            int secondaryCapsuleBg, int secondaryCapsuleText,
-                           float panelOpacity, float panelWidth, float panelHeight,
+                           float panelOpacity, float panelWidth, float panelHeight, boolean panelWidthAutomatic, boolean panelHeightAutomatic,
                            float uiScale, float contentScale, float cardTint,
                            float cornerRadius, boolean blurEnabled, boolean panelOutline, float panelOutlineWidth,
                            boolean animationEnabled, String pageNavStyle, String themeName,
@@ -63,7 +63,7 @@ public final class AppearancePresetStore {
                     config.panelBgColor, config.textPrimaryColor, config.textSecondaryColor,
                     config.cardColor, config.panelOutlineColor,
                     config.secondaryCapsuleBg, config.secondaryCapsuleText,
-                    config.panelOpacity, config.panelWidth, config.panelHeight,
+                    config.panelOpacity, config.panelWidth, config.panelHeight, config.panelWidthAutomatic, config.panelHeightAutomatic,
                     config.uiScale, config.contentScale, config.cardTint, config.cornerRadius,
                     config.blurEnabled, config.panelOutline, config.effectivePanelOutlineWidth(), config.animationEnabled,
                     config.pageNavStyle.name(), config.themeName == null ? "" : config.themeName,
@@ -84,8 +84,12 @@ public final class AppearancePresetStore {
             config.secondaryCapsuleBg = secondaryCapsuleBg;
             config.secondaryCapsuleText = secondaryCapsuleText;
             config.panelOpacity = panelOpacity;
-            if (!config.halfScreenMode) config.panelWidth = panelWidth;
+            if (!config.halfScreenMode) {
+                config.panelWidth = panelWidth;
+                config.panelWidthAutomatic = panelWidthAutomatic;
+            }
             config.panelHeight = panelHeight;
+            config.panelHeightAutomatic = panelHeightAutomatic;
             config.uiScale = uiScale;
             config.contentScale = contentScale;
             config.cardTint = cardTint;
@@ -123,6 +127,7 @@ public final class AppearancePresetStore {
 
     public static synchronized AppearancePresetStore init(Path dir) {
         shared = new AppearancePresetStore(dir);
+        shared.refresh();
         return shared;
     }
 
@@ -132,12 +137,12 @@ public final class AppearancePresetStore {
     }
 
     public synchronized List<Preset> list() {
-        if (!com.atom.chat.util.DataMigration.allowPersonalPath(dir)) {
-            return List.of();
-        }
-        if (cache == null) {
-            cache = loadAll();
-        }
+        return cache == null ? refresh() : cache;
+    }
+
+    /** Disk validation belongs to refresh/write boundaries, never a warm paint. */
+    public synchronized List<Preset> refresh() {
+        cache = com.atom.chat.util.DataMigration.allowPersonalPath(dir) ? List.copyOf(loadAll()) : List.of();
         return cache;
     }
 
@@ -204,10 +209,10 @@ public final class AppearancePresetStore {
         }
         try {
             deleteTree(dir.resolve(id));
-            cache = null;
+            refresh();
             return Result.success(existing);
         } catch (IOException e) {
-            cache = null;
+            refresh();
             return Result.failure("io");
         }
     }
@@ -239,12 +244,12 @@ public final class AppearancePresetStore {
                 throw e;
             }
             deleteTree(backup);
-            cache = null;
+            refresh();
             Preset preset = new Preset(id, order, number, extension != null, extension, snapshot);
             return Result.success(preset);
         } catch (IOException e) {
             deleteTreeQuietly(stage);
-            cache = null;
+            refresh();
             return Result.failure("io");
         }
     }
@@ -304,6 +309,8 @@ public final class AppearancePresetStore {
                     color(a, "cardColor"), color(a, "panelOutlineColor"),
                     color(a, "secondaryCapsuleBg"), color(a, "secondaryCapsuleText"),
                     number(a, "panelOpacity"), number(a, "panelWidth"), number(a, "panelHeight"),
+                    a.has("panelWidthAutomatic") && bool(a, "panelWidthAutomatic"),
+                    a.has("panelHeightAutomatic") && bool(a, "panelHeightAutomatic"),
                     number(a, "uiScale"), number(a, "contentScale"), number(a, "cardTint"),
                     number(a, "cornerRadius"), bool(a, "blurEnabled"), bool(a, "panelOutline"),
                     a.has("panelOutlineWidth") ? number(a, "panelOutlineWidth") : (bool(a, "panelOutline") ? 2F : 0F),
@@ -330,8 +337,8 @@ public final class AppearancePresetStore {
     private static boolean validSnapshot(Snapshot s) {
         if (s == null) return false;
         if (!finite(s.panelOpacity(), 0F, 1F)
-                || !finite(s.panelWidth(), 400F, 600F)
-                || !finite(s.panelHeight(), 600F, 1200F)
+                || !finite(s.panelWidth(), 1F, 16384F)
+                || !finite(s.panelHeight(), 1F, 16384F)
                 || !finite(s.uiScale(), 0.75F, 1.5F)
                 || !finite(s.contentScale(), 0.8F, 1.5F)
                 || !finite(s.cardTint(), 0F, 1F)
@@ -452,6 +459,8 @@ public final class AppearancePresetStore {
         a.addProperty("panelOpacity", s.panelOpacity());
         a.addProperty("panelWidth", s.panelWidth());
         a.addProperty("panelHeight", s.panelHeight());
+        a.addProperty("panelHeightAutomatic", s.panelHeightAutomatic());
+        a.addProperty("panelWidthAutomatic", s.panelWidthAutomatic());
         a.addProperty("uiScale", s.uiScale());
         a.addProperty("contentScale", s.contentScale());
         a.addProperty("cardTint", s.cardTint());

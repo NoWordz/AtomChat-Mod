@@ -12,52 +12,52 @@ import net.minecraft.registry.RegistryWrapper;
 import net.minecraft.text.Text;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.function.BooleanSupplier;
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-/**
- * Orchestrates chat-history persistence: when to adopt a world key, when to
- * write, and how loaded lines are funnelled back into the public/private
- * stores. The file format itself lives in {@link HistoryStore}.
- *
- * <p>Off by default ({@code chatHistoryEnabled}): with the switch off nothing is
- * ever written and leaving a server still clears memory, so the shipped
- * behaviour is unchanged.
- *
- * <p>Model: memory is still cleared on disconnect (no cross-server residue);
- * persistence only decides whether a world's history is <em>loaded</em> when
- * you join it. Saving happens on disconnect, on world change and at most every
- * {@value #AUTO_SAVE_MS} ms while chatting.
- */
+/** Client-thread snapshots and publication; bounded JSONL and cleanup run on one background worker. */
 public final class ChatHistory {
     private static final long AUTO_SAVE_MS = 30_000L;
-    /** Mirrors the in-memory cap: no point persisting more than the store keeps. */
-    private static final int MAX_LINES = 500;
-
-    private static final ExecutorService SAVE = Executors.newSingleThreadExecutor(r -> {
-        Thread t = new Thread(r, "atomchat-history-save");
+    private static final ExecutorService IO = Executors.newSingleThreadExecutor(r -> {
+        Thread t = new Thread(r, "atomchat-history-io");
         t.setDaemon(true);
         return t;
     });
-
     private static volatile String currentKey;
     private static volatile boolean dirty;
     private static volatile long lastAutoSave;
-    /**
-     * Bumped whenever the history is cleared. A save snapshot taken before the
-     * bump is skipped when its write task comes back, so an auto-save can never
-     * resurrect a history the user just deleted.
-     */
-    private static volatile int generation;
+    private static final HistoryLifecycle HISTORY = new HistoryLifecycle(IO,
+            runnable -> MinecraftClient.getInstance().execute(runnable), new HistoryLifecycle.Storage() {
+        public HistoryFiles.Loaded read(String key) throws IOException {
+            Path file = HistoryStore.file(key);
+            com.atom.chat.util.DataMigration.noLinks(file);
+            return HistoryFiles.read(file);
+        }
+        public void cleanup(String key, int days, HistoryLifecycle.CleanupPermit permit) throws Exception {
+            cleanupOldHistory(key, days, permit);
+        }
+        public boolean write(String key, List<Entry> entries, BooleanSupplier valid) throws IOException {
+            Path file = HistoryStore.file(key);
+            com.atom.chat.util.DataMigration.noLinks(file);
+            return HistoryFiles.write(file, entries, valid);
+        }
+        public void delete(String key) throws IOException {
+            Path file = HistoryStore.file(key);
+            com.atom.chat.util.DataMigration.noLinks(file);
+            Files.deleteIfExists(file);
+        }
+    }, ChatHistory::enabled, () -> keyFor(MinecraftClient.getInstance()), error ->
+            AtomChat.LOGGER.warn(com.atom.chat.diagnostics.AtomChatLog.message("history", "Chat history background operation failed"), error));
 
-    private ChatHistory() {
-    }
+    private ChatHistory() {}
 
     public static void init(Path dir) {
         HistoryStore.init(dir);
@@ -75,198 +75,98 @@ public final class ChatHistory {
         dirty = true;
     }
 
-    /** Adopts the world key for the connection that just started. */
     public static void onJoin(MinecraftClient client) {
-        if (enabled() && HistoryStore.isWorldSpecific(currentKey)) {
-            saveNow(client);
-        }
+        if (enabled() && HistoryStore.isWorldSpecific(currentKey)) saveNow(client);
         currentKey = keyFor(client);
-        if (!enabled() || !HistoryStore.isWorldSpecific(currentKey)) {
-            return;
-        }
-        cleanupOldHistory();
-        loadInto(client, currentKey);
+        String key = currentKey;
+        HISTORY.join(key, AtomChatConfig.get().historyRetentionDays, entries -> publish(client, key, entries));
     }
 
-    /** Writes the world that is being left; the caller clears memory afterwards. */
+    /** Take the departing world's bounded DTO snapshot before the caller clears its stores. */
     public static void onDisconnect(MinecraftClient client) {
-        if (enabled() && HistoryStore.isWorldSpecific(currentKey)) {
-            saveNow(client);
-        }
+        if (enabled() && HistoryStore.isWorldSpecific(currentKey)) saveNow(client);
+        HISTORY.disconnect();
         currentKey = null;
         dirty = false;
     }
 
     public static void tick(MinecraftClient client) {
-        if (!enabled() || !dirty || !HistoryStore.isWorldSpecific(currentKey)) {
-            return;
-        }
+        if (!enabled() || !dirty || !HistoryStore.isWorldSpecific(currentKey)) return;
         long now = System.currentTimeMillis();
-        if (now - lastAutoSave < AUTO_SAVE_MS) {
-            return;
-        }
+        if (now - lastAutoSave < AUTO_SAVE_MS) return;
         lastAutoSave = now;
-        dirty = false;
         saveNow(client);
     }
 
-    /** Whether the current world has a saved history file on disk. */
+    /** Cached by background load/save/clear; opening settings never stats a file. */
     public static boolean hasSavedHistory() {
-        if (!enabled() || !HistoryStore.isWorldSpecific(currentKey)) {
-            return false;
-        }
-        return Files.exists(HistoryStore.file(currentKey));
+        return enabled() && HistoryStore.isWorldSpecific(currentKey) && HISTORY.hasSavedHistory();
     }
 
-    /** Clears memory for the current world and deletes its history file. */
     public static void clearCurrent() {
-        // Any in-flight save must be invalidated before it writes.
-        generation++;
+        HISTORY.clear();
         dirty = false;
         ChatStore.get().reset();
         PrivateChatStore.reset();
-        String key = currentKey;
-        if (!enabled() || !HistoryStore.isWorldSpecific(key)) {
-            return;
-        }
-        final int gen = generation;
-        Path file = HistoryStore.file(key);
-        SAVE.execute(() -> {
-            if (gen != generation) {
-                return;
-            }
-            try {
-                com.atom.chat.util.DataMigration.noLinks(file);
-                Files.deleteIfExists(file);
-            } catch (IOException e) {
-                AtomChat.LOGGER.warn(com.atom.chat.diagnostics.AtomChatLog.message("history", "Failed to delete chat history {}"), file, e);
-            }
-        });
     }
 
     private static void saveNow(MinecraftClient client) {
-        String key = currentKey;
-        if (key == null) {
-            return;
-        }
+        if (!HistoryStore.isWorldSpecific(currentKey)) return;
         RegistryWrapper.WrapperLookup lookup = lookup(client);
-        List<String> lines = new ArrayList<>();
-        for (ChatMessage m : ChatStore.get().snapshot()) {
-            String line = HistoryStore.toLine(toEntry(m, lookup, null));
-            if (line != null) {
-                lines.add(line);
-            }
-        }
-        for (PlayerRef partner : PrivateChatStore.knownPartners()) {
-            String peer = peerKey(partner);
-            for (ChatMessage m : PrivateChatStore.messages(partner)) {
-                String line = HistoryStore.toLine(toEntry(m, lookup, peer));
-                if (line != null) {
-                    lines.add(line);
-                }
-            }
-        }
-        List<String> out = lines;
-        if (out.size() > MAX_LINES) {
-            out = new ArrayList<>(out.subList(out.size() - MAX_LINES, out.size()));
-        }
-        final List<String> finalLines = out;
-        dirty = false;
-        final int gen = generation;
-        Path file = HistoryStore.file(key);
-        SAVE.execute(() -> {
-            if (gen != generation) {
-                return;
-            }
-            try {
-                com.atom.chat.util.DataMigration.noLinks(file);
-                Files.createDirectories(file.getParent());
-                Files.write(file, finalLines, StandardCharsets.UTF_8);
-            } catch (IOException e) {
-                AtomChat.LOGGER.warn(com.atom.chat.diagnostics.AtomChatLog.message("history", "Failed to write chat history {}"), file, e);
-            }
-        });
+        // Only these selected <=500 messages touch Minecraft component/registry serialization.
+        List<Entry> entries = HistorySnapshot.capture(ChatStore.get().snapshot(), PrivateChatStore.knownPartners(),
+                PrivateChatStore::messages, (partner, message) -> {
+                    String peer = partner == null ? null : peerKey(partner);
+                    return toEntry(message, lookup, peer);
+                });
+        dirty = !HISTORY.save(entries);
     }
 
-    private static void loadInto(MinecraftClient client, String key) {
-        Path file = HistoryStore.file(key);
-        if (!Files.exists(file)) {
-            return;
-        }
-        List<String> raw;
-        try {
-            raw = Files.readAllLines(file, StandardCharsets.UTF_8);
-        } catch (IOException e) {
-            AtomChat.LOGGER.warn(com.atom.chat.diagnostics.AtomChatLog.message("history", "Failed to read chat history {}"), file, e);
-            return;
-        }
+    /** Invoked by HistoryLifecycle only on the MC thread after epoch/clear/world/enabled checks. */
+    private static void publish(MinecraftClient client, String key, List<Entry> entries) {
+        if (!enabled() || !key.equals(currentKey) || !key.equals(keyFor(client))) return;
         RegistryWrapper.WrapperLookup lookup = lookup(client);
-        List<ChatMessage> loadedPublic = new ArrayList<>();
-        List<Loaded> loadedPrivate = new ArrayList<>();
-        for (String line : raw) {
-            Entry e = HistoryStore.fromLine(line);
-            if (e == null) {
-                continue;
-            }
-            ChatMessage m = fromEntry(e, lookup);
-            if (m == null) {
-                continue;
-            }
-            if (e.priv) {
-                loadedPrivate.add(new Loaded(m, e.peer));
+        List<ChatMessage> publicMessages = new ArrayList<>();
+        Map<PlayerRef, List<ChatMessage>> privateMessages = new LinkedHashMap<>();
+        for (Entry entry : entries) {
+            ChatMessage message = fromEntry(entry, lookup);
+            if (message == null) continue;
+            if (!entry.priv) {
+                publicMessages.add(message);
             } else {
-                loadedPublic.add(m);
+                PlayerRef partner = partnerOf(entry.peer, message);
+                if (partner != null) privateMessages.computeIfAbsent(partner, ignored -> new ArrayList<>()).add(message);
             }
         }
-        if (loadedPublic.size() > MAX_LINES) {
-            loadedPublic = new ArrayList<>(loadedPublic.subList(loadedPublic.size() - MAX_LINES, loadedPublic.size()));
-        }
-        // Messages that arrived before the key was known (MOTD, join notices)
-        // must stay newest, so they are re-appended under the loaded history.
-        List<ChatMessage> early = new ArrayList<>(ChatStore.get().snapshot());
-        ChatStore.get().reset();
-        ChatStore.get().addLoaded(loadedPublic);
-        ChatStore.get().addLoaded(early);
-        for (Loaded l : loadedPrivate) {
-            PlayerRef partner = partnerOf(l.peer(), l.message());
-            if (partner != null) {
-                PrivateChatStore.addLoaded(partner, List.of(l.message()));
-            }
-        }
+        // Prepend without resetting unread counts, active conversations, or newer live messages.
+        ChatStore.get().prependLoaded(publicMessages);
+        for (var conversation : privateMessages.entrySet())
+            PrivateChatStore.prependLoaded(conversation.getKey(), conversation.getValue());
     }
 
-    /** A loaded private message plus the partner key it was filed under. */
-    private record Loaded(ChatMessage message, String peer) {
-    }
-
-    private static void cleanupOldHistory() {
-        int days = AtomChatConfig.get().historyRetentionDays;
-        if (days <= 0) {
-            return;
-        }
+    /** Retention scan stays on IO; the lifecycle permit guards each final unlink on the MC thread. */
+    private static void cleanupOldHistory(String key, int days, HistoryLifecycle.CleanupPermit permit) throws Exception {
+        if (days <= 0 || !permit.active()) return;
         Path dir = HistoryStore.baseDir();
-        if (!com.atom.chat.util.DataMigration.allowPersonalPath(dir) || !Files.isDirectory(dir)) {
-            return;
-        }
+        if (!com.atom.chat.util.DataMigration.allowPersonalPath(dir) || !Files.isDirectory(dir)) return;
         long now = System.currentTimeMillis();
         long limit = days * 86_400_000L;
-        Path current = HistoryStore.file(currentKey);
+        Path current = HistoryStore.file(key);
         try (var stream = Files.list(dir)) {
-            for (Path f : (Iterable<Path>) stream::iterator) {
-                if (f.equals(current)) {
-                    continue;
-                }
+            for (Path file : (Iterable<Path>) stream::iterator) {
+                if (!permit.active()) return;
+                if (file.equals(current)) continue;
                 try {
-                    if (now - Files.getLastModifiedTime(f).toMillis() > limit) {
-                        com.atom.chat.util.DataMigration.noLinks(f);
-                        Files.deleteIfExists(f);
+                    if (now - Files.getLastModifiedTime(file).toMillis() > limit) {
+                        com.atom.chat.util.DataMigration.noLinks(file);
+                        if (!permit.delete(file, () -> Files.deleteIfExists(file))) return;
                     }
                 } catch (IOException ignored) {
-                    // A locked or racing file is not worth failing the join over.
+                    // A locked or racing file must not fail the current world's load.
                 }
             }
         } catch (IOException ignored) {
-            // ignore
+            // Best effort, as before.
         }
     }
 

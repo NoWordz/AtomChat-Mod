@@ -1,0 +1,59 @@
+{
+  "checked_at": "2026-11-14T17:25:47.647932+08:00",
+  "jdk": "Microsoft JDK 21.0.8.9",
+  "command": ".\\gradlew.bat test build --offline --no-daemon -PatomlibMavenRepo=D:/AtomChat-Main/build/atomlib-slim-20261107/atomlib-maven-v040-final",
+  "execution": "sequential",
+  "targets": [
+    {
+      "target": "1.21.1-fabric",
+      "suites": 325,
+      "tests": 1905,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 7,
+      "skipped_cases": [
+        "com.atom.chat.compat.AtomLibApiPreflightTest.alternateLibraryJarPassesTheSameClientPreflight()",
+        "com.atom.chat.render.AboutGpuBenchmark.shadowAndAboutStaticLayers()",
+        "com.atom.chat.render.GoldenFrameTest.goldenFrames()",
+        "com.atom.chat.render.PageEntranceGpuBenchmark.layeredEntranceAgainstSettledDraw()",
+        "com.atom.chat.render.SkiaDrawBenchmark.primitiveCostPerFrame()",
+        "com.atom.chat.ui.EmojiPanelPerformanceTest.measureSteadyEmojiRendering(Path)",
+        "com.atom.chat.ui.EmojiPanelPerformanceTest.measureGlEmojiRendering(Path)"
+      ]
+    },
+    {
+      "target": "1.20.1-forge",
+      "suites": 321,
+      "tests": 1890,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 7,
+      "skipped_cases": [
+        "com.atom.chat.compat.AtomLibApiPreflightTest.alternateLibraryJarPassesTheSameClientPreflight()",
+        "com.atom.chat.render.AboutGpuBenchmark.shadowAndAboutStaticLayers()",
+        "com.atom.chat.render.GoldenFrameTest.goldenFrames()",
+        "com.atom.chat.render.PageEntranceGpuBenchmark.layeredEntranceAgainstSettledDraw()",
+        "com.atom.chat.render.SkiaDrawBenchmark.primitiveCostPerFrame()",
+        "com.atom.chat.ui.EmojiPanelPerformanceTest.measureSteadyEmojiRendering(Path)",
+        "com.atom.chat.ui.EmojiPanelPerformanceTest.measureGlEmojiRendering(Path)"
+      ]
+    },
+    {
+      "target": "1.21.1-neoforge",
+      "suites": 321,
+      "tests": 1890,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 7,
+      "skipped_cases": [
+        "com.atom.chat.compat.AtomLibApiPreflightTest.alternateLibraryJarPassesTheSameClientPreflight()",
+        "com.atom.chat.render.AboutGpuBenchmark.shadowAndAboutStaticLayers()",
+        "com.atom.chat.render.GoldenFrameTest.goldenFrames()",
+        "com.atom.chat.render.PageEntranceGpuBenchmark.layeredEntranceAgainstSettledDraw()",
+        "com.atom.chat.render.SkiaDrawBenchmark.primitiveCostPerFrame()",
+        "com.atom.chat.ui.EmojiPanelPerformanceTest.measureSteadyEmojiRendering(Path)",
+        "com.atom.chat.ui.EmojiPanelPerformanceTest.measureGlEmojiRendering(Path)"
+      ]
+    }
+  ]
+}

@@ -16,9 +16,12 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.UUID;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.Executor;
+import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.Semaphore;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
 /**
@@ -34,58 +37,101 @@ public final class ImageUploader {
      * pool) and its own executor; the screen is rebuilt on every open and every
      * resize, so the old instances' threads were never released.
      */
-    private static final ImageUploader SHARED = new ImageUploader();
+    private static volatile ImageUploader shared;
 
-    public static ImageUploader shared() {
-        return SHARED;
+    public static synchronized ImageUploader shared() {
+        if (shared == null) shared = new ImageUploader();
+        return shared;
+    }
+
+    public static void cancelInvalidShared() {
+        ImageUploader uploader = shared;
+        if (uploader != null) uploader.cancelInvalid();
     }
 
     private final HttpClient client;
-    private final ExecutorService executor = Executors.newSingleThreadExecutor(r -> {
-        Thread t = new Thread(r, "AtomChat-Upload");
-        t.setDaemon(true);
-        return t;
-    });
+    private final Executor executor;
+    private final Semaphore slots = new Semaphore(8);
+    private final java.util.Set<UploadJob> pending = java.util.concurrent.ConcurrentHashMap.newKeySet();
 
     public ImageUploader() {
-        this.client = HttpClient.newBuilder()
+        this(HttpClient.newBuilder()
                 .connectTimeout(Duration.ofSeconds(15))
                 .followRedirects(HttpClient.Redirect.NORMAL)
-                .build();
+                .build(), new ThreadPoolExecutor(1, 1, 0L, TimeUnit.MILLISECONDS,
+                new ArrayBlockingQueue<>(7), r -> {
+                    Thread t = new Thread(r, "AtomChat-Upload");
+                    t.setDaemon(true);
+                    return t;
+                }, new ThreadPoolExecutor.AbortPolicy()));
+    }
+
+    ImageUploader(HttpClient client, Executor executor) {
+        this.client = client;
+        this.executor = executor;
     }
 
     public void upload(Path file, Consumer<String> onSuccess, Consumer<String> onError) {
-        CompletableFuture.supplyAsync(() -> {
+        upload(file,onSuccess,onError,()->true);
+    }
+
+    public void upload(Path file, Consumer<String> onSuccess, Consumer<String> onError,
+                       java.util.function.BooleanSupplier valid) {
+        if (!valid.getAsBoolean()) { onError.accept("cancelled"); return; }
+        if (!slots.tryAcquire()) { onError.accept("busy"); return; }
+        UploadJob job=new UploadJob(file,onSuccess,onError,valid);
+        pending.add(job);
+        try { executor.execute(job); }
+        catch (RejectedExecutionException rejected) { job.finish(null,"busy"); }
+    }
+
+    /** Drops obsolete queued work and interrupts its blocking HTTP call, if already running. */
+    public void cancelInvalid() {
+        for(UploadJob job:pending) if(!job.valid.getAsBoolean()) job.cancel();
+    }
+
+    private final class UploadJob implements Runnable {
+        final Path file;
+        final Consumer<String> success,error;
+        final java.util.function.BooleanSupplier valid;
+        final java.util.concurrent.atomic.AtomicBoolean done=new java.util.concurrent.atomic.AtomicBoolean();
+        private Thread running;
+        UploadJob(Path file,Consumer<String> success,Consumer<String> error,java.util.function.BooleanSupplier valid) {
+            this.file=file;this.success=success;this.error=error;this.valid=valid;
+        }
+        @Override public void run() {
+            synchronized(this) { if(done.get())return;running=Thread.currentThread(); }
             try {
-                byte[] body = buildMultipart(file);
-                HttpRequest request = HttpRequest.newBuilder()
-                        .uri(URI.create(UGUU_ENDPOINT))
+                if(!valid.getAsBoolean()) {finish(null,"cancelled");return;}
+                byte[] body=buildMultipart(file);
+                if(!valid.getAsBoolean()) {finish(null,"cancelled");return;}
+                HttpRequest request=HttpRequest.newBuilder().uri(URI.create(UGUU_ENDPOINT))
                         .timeout(Duration.ofSeconds(60))
-                        .header("Content-Type", "multipart/form-data; boundary=" + BOUNDARY)
-                        .POST(HttpRequest.BodyPublishers.ofByteArray(body))
-                        .build();
-                HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
-                if (response.statusCode() == 200) {
-                    String url = parseUrl(response.body());
-                    if (url != null) {
-                        return url;
-                    }
-                    return "ERROR: unexpected response";
+                        .header("Content-Type","multipart/form-data; boundary="+BOUNDARY)
+                        .POST(HttpRequest.BodyPublishers.ofByteArray(body)).build();
+                HttpResponse<String> response=client.send(request,HttpResponse.BodyHandlers.ofString());
+                if(!valid.getAsBoolean()) {finish(null,"cancelled");return;}
+                String url=response.statusCode()==200 ? parseUrl(response.body()) : null;
+                finish(url,url!=null ? null : "ERROR: "+(response.statusCode()==200?"unexpected response":"HTTP "+response.statusCode()));
+            } catch(Exception failure) {
+                if(done.get() || !valid.getAsBoolean() || failure instanceof InterruptedException) finish(null,"cancelled");
+                else {
+                    AtomChat.LOGGER.error(com.atom.chat.diagnostics.AtomChatLog.message("resource","Failed to upload image"),failure);
+                    finish(null,"ERROR: "+failure.getMessage());
                 }
-                return "ERROR: HTTP " + response.statusCode();
-            } catch (Exception e) {
-                AtomChat.LOGGER.error(com.atom.chat.diagnostics.AtomChatLog.message("resource", "Failed to upload image"), e);
-                return "ERROR: " + e.getMessage();
-            }
-        }, executor).whenComplete((url, throwable) -> {
-            if (throwable != null) {
-                onError.accept("上传失败: " + throwable.getMessage());
-            } else if (url.startsWith("ERROR")) {
-                onError.accept(url);
-            } else {
-                onSuccess.accept(url);
-            }
-        });
+            } finally { synchronized(this) {running=null;} }
+        }
+        synchronized void cancel() {
+            if(done.get())return;
+            if(executor instanceof ThreadPoolExecutor pool) pool.remove(this);
+            if(running!=null && running!=Thread.currentThread()) running.interrupt();
+            finish(null,"cancelled");
+        }
+        void finish(String url,String reason) {
+            if(!done.compareAndSet(false,true))return;
+            pending.remove(this);slots.release();
+            if(reason==null)success.accept(url);else error.accept(reason);
+        }
     }
 
     private byte[] buildMultipart(Path file) throws IOException {

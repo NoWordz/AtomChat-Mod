@@ -22,7 +22,7 @@ public final class SettingsTabDefaults {
                 "panelOutlineWidth", "animationEnabled", "pageNavStyle")),
             Map.entry("APPEARANCE/adjust", List.of(
                 "halfScreenMode", "halfScreenWidth", "halfScreenWidthCustomized",
-                "panelWidth", "panelHeight", "panelPositionCustom",
+                "panelWidth", "panelHeight", "panelWidthAutomatic", "panelHeightAutomatic", "panelPositionCustom",
                 "panelPositionX", "panelPositionY", "uiScale",
                 "contentScale", "panelOpacity", "cardTint")),
             Map.entry("CHAT/messages", List.of(

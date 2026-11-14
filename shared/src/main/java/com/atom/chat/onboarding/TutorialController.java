@@ -98,6 +98,9 @@ public final class TutorialController implements InputHandler {
         if(g==null)return true;
         int control=g.buttonAt(px,py);
         if(button==0&&control>=0) {
+            if(control==0&&session.index()==0)return true;
+            if(control==1&&session.entry().section()==null&&session.step().requiresAction()&&!session.demoPerformed())return true;
+            overlay.press(control);
             switch(control) {case 0->previous();case 1->advance(false);case 2->{if(session.index()==session.count()-1){if(host.keepPreview())advance(true);}else advance(true);}case 3->exit();}
             return true;
         }
@@ -137,8 +140,9 @@ public final class TutorialController implements InputHandler {
         if(host.liveModalActive()||host.liveKeyboardActive())return false;
         if(key==256){if(!host.returnFromDetail())exit();return true;}
         if(session.step()==TutorialSession.Step.APPEARANCE)return true;
-        if(key==263)previous();
-        if(key==262||key==257||key==335)advance(false);
+        if(key==263&&session.index()>0){overlay.press(0);previous();}
+        if((key==262||key==257||key==335)
+                &&(session.entry().section()!=null||!session.step().requiresAction()||session.demoPerformed())){overlay.press(1);advance(false);}
         return true;
     }
     @Override public boolean onChar(char chr,int modifiers) {

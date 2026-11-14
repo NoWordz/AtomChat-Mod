@@ -22,14 +22,19 @@ public final class SettingsSlider {
 
     private final String id;
     private final String titleKey;
-    private final float min;
-    private final float max;
+    private final FloatGetter min;
+    private final FloatGetter max;
     private final float step;
     private final FloatGetter getter;
     private final FloatSetter setter;
     private final Formatter formatter;
 
     public SettingsSlider(String id, String titleKey, float min, float max, float step,
+                          FloatGetter getter, FloatSetter setter, Formatter formatter) {
+        this(id, titleKey, () -> min, () -> max, step, getter, setter, formatter);
+    }
+
+    public SettingsSlider(String id, String titleKey, FloatGetter min, FloatGetter max, float step,
                           FloatGetter getter, FloatSetter setter, Formatter formatter) {
         this.id = id;
         this.titleKey = titleKey;
@@ -50,11 +55,11 @@ public final class SettingsSlider {
     }
 
     public float min() {
-        return min;
+        return min.get();
     }
 
     public float max() {
-        return max;
+        return max.get();
     }
 
     public float step() {
@@ -96,17 +101,20 @@ public final class SettingsSlider {
     }
 
     public float clamp(float value) {
-        return Math.max(min, Math.min(max, value));
+        return Math.max(min(), Math.min(max(), value));
     }
 
     /** 0..1 position of {@code value} within the range. */
     public float normalize(float value) {
-        return (clamp(value) - min) / (max - min);
+        float low = min(), high = max();
+        return high > low ? (clamp(value) - low) / (high - low) : 0F;
     }
 
     /** Value at normalised position {@code t} (0..1), snapped to the step grid. */
     public float denormalize(float t) {
-        float raw = min + Math.max(0.0F, Math.min(1.0F, t)) * (max - min);
+        if (t >= 1F) return max();
+        if (t <= 0F) return min();
+        float raw = min() + t * (max() - min());
         return clamp(Math.round(raw / step) * step);
     }
 
@@ -117,6 +125,6 @@ public final class SettingsSlider {
      * itself would only make it lag behind the finger.
      */
     public float denormalizeContinuous(float t) {
-        return clamp(min + Math.max(0.0F, Math.min(1.0F, t)) * (max - min));
+        return clamp(min() + Math.max(0.0F, Math.min(1.0F, t)) * (max() - min()));
     }
 }

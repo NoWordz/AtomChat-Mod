@@ -89,7 +89,8 @@ The server's own config and data live under the server's game directory; see the
 
 | Key | Default | Notes |
 |---|---|---|
-| `panelWidth` / `panelHeight` | `440.0` / `780.0` | Panel size in design pixels, multiplied by UI scale internally |
+| `panelWidth` / `panelHeight` | `480.0` / `860.0` | Manual panel size in design pixels; the UI's px labels use these units before UI scaling, while automatic axes are fitted to the viewport |
+| `panelWidthAutomatic` / `panelHeightAutomatic` | Both `true` for fresh installations | Fresh or reset layouts fit the reference proportions to the screen; missing flags in old configurations default to `false` and preserve existing layouts, with automatic state stored separately per axis |
 | `panelOpacity` | `0.93` | Panel background opacity, 0–1 |
 | `blurEnabled` | `true` | Background blur (mutually exclusive with a wallpaper) |
 | `uiScale` | `1.0` | UI scale, x0.75–x1.50 |

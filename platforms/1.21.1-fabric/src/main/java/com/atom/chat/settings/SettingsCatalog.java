@@ -20,6 +20,39 @@ public final class SettingsCatalog {
     private SettingsCatalog() {
     }
 
+    private static com.atom.chat.screen.PanelSizing.Size panelViewport() {
+        var client = net.minecraft.client.MinecraftClient.getInstance();
+        var window = client == null ? null : client.getWindow();
+        return new com.atom.chat.screen.PanelSizing.Size(window == null ? 1920 : window.getFramebufferWidth(),
+                window == null ? 1080 : window.getFramebufferHeight());
+    }
+    private static com.atom.chat.screen.PanelSizing.Size automaticPanelSize() {
+        var view = panelViewport();
+        return com.atom.chat.screen.PanelSizing.automaticSize((int)view.width(), (int)view.height(), AtomChatConfig.get());
+    }
+    private static float panelHeightMaximum() {
+        return com.atom.chat.screen.PanelSizing.maximumHeight((int)panelViewport().height(), AtomChatConfig.get());
+    }
+    private static float panelWidthMaximum() {
+        var view = panelViewport();
+        return Math.min(Math.max(600F, automaticPanelSize().width()),
+                com.atom.chat.screen.PanelSizing.maximumWidth((int)view.width(), (int)view.height(), AtomChatConfig.get()));
+    }
+    private static float panelWidthValue() {
+        var config = AtomChatConfig.get();
+        var view = panelViewport();
+        return config.panelWidthAutomatic && !config.halfScreenMode ? automaticPanelSize().width()
+                : Math.min(config.activePanelWidth(), com.atom.chat.screen.PanelSizing.maximumWidth((int)view.width(), (int)view.height(), config));
+    }
+    private static float panelHeightValue() {
+        return AtomChatConfig.get().panelHeightAutomatic ? automaticPanelSize().height()
+                : Math.min(AtomChatConfig.get().panelHeight, panelHeightMaximum());
+    }
+    private static void materializePanelSize() {
+        var view = panelViewport();
+        com.atom.chat.screen.PanelSizing.materialize(AtomChatConfig.get(), (int)view.width(), (int)view.height());
+    }
+
     /**
      * The catalog is static configuration, but the UI asks for it several
      * times per frame (render, measure, hit-test, drag). The entries themselves
@@ -183,16 +216,16 @@ public final class SettingsCatalog {
                             v -> Math.round(v * 100.0F) + "%"),
                     new SettingsSlider("width",
                             "atomchat.settings.appearance.width",
-                            400.0F, 600.0F, 10.0F,
-                            () -> AtomChatConfig.get().activePanelWidth(),
-                            v -> AtomChatConfig.get().setActivePanelWidth(v),
-                            v -> String.valueOf(Math.round(v))),
+                            () -> Math.min(400F, automaticPanelSize().width()), SettingsCatalog::panelWidthMaximum, 10.0F,
+                            SettingsCatalog::panelWidthValue,
+                            v -> { if (!AtomChatConfig.get().halfScreenMode) materializePanelSize(); AtomChatConfig.get().setActivePanelWidth(v); },
+                            v -> Math.round(panelWidthValue()) + " px"),
                     new SettingsSlider("height",
                             "atomchat.settings.appearance.height",
-                            600.0F, 1200.0F, 10.0F,
-                            () -> AtomChatConfig.get().panelHeight,
-                            v -> AtomChatConfig.get().panelHeight = v,
-                            v -> String.valueOf(Math.round(v))),
+                            () -> automaticPanelSize().height() * .7F, SettingsCatalog::panelHeightMaximum, 10.0F,
+                            SettingsCatalog::panelHeightValue,
+                            v -> { materializePanelSize(); AtomChatConfig.get().panelHeight = v; },
+                            v -> Math.round(panelHeightValue()) + " px"),
                     new SettingsSlider("scale",
                             "atomchat.settings.appearance.scale",
                             0.75F, 1.50F, 0.05F,

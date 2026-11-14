@@ -368,8 +368,8 @@ public final class ConversationListPage {
             // the clip is the plain viewport again.
             float driftClipPad = axis == UiStagger.Axis.HORIZONTAL && !UiStagger.itemsSettled(entrance, now)
                     ? UiStagger.ITEM_STYLE_SLIDE_PX : 0.0F;
-            SkiaDraw.clip(canvas, layout.list.x(), layout.list.y(),
-                    layout.list.w() + driftClipPad, layout.list.h(), 0.0F);
+            SkiaDraw.clip(canvas, layout.list.x() - CardShadowReach.PAD, layout.list.y(),
+                    layout.list.w() + driftClipPad + CardShadowReach.PAD * 2, layout.list.h(), 0.0F);
             float y = contentTop(layout, scrollY);
             // Stagger position = the row's slot inside the VISIBLE viewport, so
             // scrolling never re-plays an entrance for rows already on screen
@@ -449,8 +449,8 @@ public final class ConversationListPage {
                             try {
                                 // The clip runs to the row's sunk position so the
                                 // entrance's rise is not shaved off at the slot edge.
-                                SkiaDraw.clip(canvas, layout.list.x(), y,
-                                        layout.list.w() + styleDx, h + rowRise, 0.0F);
+                                SkiaDraw.clip(canvas, layout.list.x() - CardShadowReach.PAD, y,
+                                        layout.list.w() + styleDx + CardShadowReach.PAD * 2, h + rowRise, 0.0F);
                                 // The fold's own fade multiplies the entrance's:
                                 // one layer, so the row cannot be opaque under a
                                 // fold that is still opening.

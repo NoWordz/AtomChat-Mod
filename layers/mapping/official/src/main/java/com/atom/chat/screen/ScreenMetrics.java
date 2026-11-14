@@ -41,7 +41,7 @@ public final class ScreenMetrics {
     }
 
     public static float panelHeight(Window window) {
-        return panelHeight(window.getHeight());
+        return panelHeight(window.getWidth(), window.getHeight());
     }
 
     /**
@@ -87,7 +87,7 @@ public final class ScreenMetrics {
     }
 
     public static float panelY(Window window) {
-        return panelY(window.getHeight());
+        return panelY(window.getWidth(), window.getHeight());
     }
 
     /** GUI-space pointer x → panel space. The event domains' one coordinate entry. */
@@ -124,6 +124,10 @@ public final class ScreenMetrics {
     // window measurements, and nothing else needs them.
 
     static float panelWidth(int width, int height) {
+        var config = AtomChatConfig.get();
+        if (!config.halfScreenMode && config.panelWidthAutomatic) {
+            return UiTokens.s(PanelSizing.automaticSize(width, height, config).width()) / contentScaleValue();
+        }
         return panelWidthForViewport(vw(width, height));
     }
 
@@ -133,7 +137,14 @@ public final class ScreenMetrics {
     }
 
     static float panelHeight(int height) {
+        return panelHeight(Integer.MAX_VALUE, height);
+    }
+
+    static float panelHeight(int width, int height) {
         if (AtomChatConfig.get().halfScreenMode) return vh(height);
+        if (AtomChatConfig.get().panelHeightAutomatic) {
+            return UiTokens.s(PanelSizing.automaticSize(width, height, AtomChatConfig.get()).height()) / contentScaleValue();
+        }
         return Math.min(UiTokens.s(AtomChatConfig.get().panelHeight) / contentScaleValue(),
                 Math.max(1F, vh(height) - (AtomChatConfig.get().panelPositionCustom ? 0F : 32.0F)));
     }
@@ -169,8 +180,12 @@ public final class ScreenMetrics {
     }
 
     static float panelY(int height) {
+        return panelY(Integer.MAX_VALUE, height);
+    }
+
+    static float panelY(int width, int height) {
         if (AtomChatConfig.get().halfScreenMode) return 0F;
-        float available = Math.max(0F, vh(height) - panelHeight(height));
+        float available = Math.max(0F, vh(height) - panelHeight(width, height));
         return AtomChatConfig.get().panelPositionCustom
                 ? available * Math.max(0F,Math.min(1F,AtomChatConfig.get().panelPositionY)) : available / 2.0F;
     }

@@ -25,6 +25,14 @@ public final class ComposerSearch {
     private List<ChatMessage> source = List.of(), matches = List.of();
     public ComposerSearch(Host host) { this.host = host; }
     public boolean active() { return active; }
+    public com.atom.chat.chat.DraftStore.ComposerTextPort draftPort(com.atom.chat.chat.DraftStore.ComposerTextPort live) {
+        if (!active) return live;
+        return new com.atom.chat.chat.DraftStore.ComposerTextPort() {
+            public String get() { return parked; }
+            public void set(String text) { parked = text; }
+            public void moveCursorToStart() { parkedCaret = 0; }
+        };
+    }
     public int count() { return matches.size(); }
     public int position() { return index + 1; }
     /** An upload started before the borrow completes against the parked draft, never the query. */

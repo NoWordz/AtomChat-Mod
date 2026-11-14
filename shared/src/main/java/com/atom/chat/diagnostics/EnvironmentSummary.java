@@ -135,6 +135,12 @@ public final class EnvironmentSummary {
         rows.put("runtime", runtimeLine());
         rows.put("laf", lafLine(loader));
         rows.put("skija", skijaLine(loader, artifact));
+        try {
+            Class<?> bridge=Class.forName("com.atom.lib.client.render.MinecraftRenderBridge",false,loader);
+            rows.put("atomlib",originOf(bridge)+" | version="+bridge.getPackage().getImplementationVersion());
+        } catch (Throwable unavailable) {
+            rows.put("atomlib", "bridge unavailable ("+unavailable.getClass().getSimpleName()+")");
+        }
         rows.put("gpu", gpu.get());
         rows.put("switches", switchesLine(config));
 

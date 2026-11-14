@@ -8,6 +8,16 @@ import static org.junit.jupiter.api.Assertions.*;
 
 /** P1 failing-first coverage: page attribution, GPU degradation, red/green mutation. */
 class PageGpuDiagnosticsTest {
+    @Test void actualMotionSeparatesSteadyAndTransitionSamplesWithoutAFixedFrameWindow() {
+        FrameSegments.navigation("chip","SETTINGS_SECTION:appearance:2");
+        FrameProfile.pageMotion(true);frames(100);
+        assertTrue(FrameProfile.pageSummary().contains("page_phase=transition"));
+        FrameProfile.pageMotion(false);frames(1);
+        String summary=FrameProfile.pageSummary();
+        assertTrue(summary.contains("page_motion=settings_first_transition"),summary);
+        assertTrue(summary.contains("page_motion=settings_first_steady"),summary);
+        assertTrue(summary.contains("page_phase=steady"),summary);
+    }
 
     @BeforeEach
     void setup() {
