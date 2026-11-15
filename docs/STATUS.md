@@ -1,5 +1,14 @@
 # AtomChat 当前状态
 
+## 2026-11-15 0.8.0 GitHub 正式版已发布
+
+- [AtomChat 0.8.0](https://github.com/NoWordz/AtomChat-Mod/releases/tag/v0.8.0)已公开并标为Latest，标签 `v0.8.0` 指向已验收提交 `1267625a`；没有移动标签。GitHub正文为对应双语版本说明，反应同步须两端升级。
+- 6份公开JAR已下载回读：三端AC0.8.0与配套Lib0.4.0，GitHub SHA-256/长度/ZIP CRC均一致；AC版本、clean构建戳及Mixin引用类正确，Lib与锁定依赖一致。
+- [发布工作流](https://github.com/NoWordz/AtomChat-Mod/actions/runs/43700002313)首轮Neo字体全局计数用例一次失败，仅重跑失败任务后构建与创建Release通过。没有跳过测试，也未宣称已修复该计数用例的Cleaner时序问题。
+- 第二次尝试最终全部任务success；三端商店任务日志均确认两家上传SKIPPED，商店未上架。完整工作流与上传状态已入发布证据。
+- 仓库无商店密钥，本地无对应token，Modrinth项目为UNSET；商店上传未完成，不能将商店任务的构建成功视为上架。
+- [发布验证](verification/2026-11-15-v080-release.md)、[附件回读](evidence/2026-11-15-v080-release/release-readback.json)。原UI调研文档仍保留在提交之外，实例及AtomLib源码未改。
+
 ## 2026-11-15 0.8.0 验收通过
 
 - 用户已验收当前候选，授权提交、推送、更新状态及将本轮临时文件移入回收站。功能范围包括独立消息反应、Toast/FAB、主题材质、固定设置标题栏、缩小 HUD、精确撤销公共限宽及关闭即恢复控制。

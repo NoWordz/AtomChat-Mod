@@ -1,0 +1,17 @@
+[
+  {
+    "job": "发布到商店 1.21.1-fabric",
+    "curseforge_skipped": true,
+    "modrinth_skipped": true
+  },
+  {
+    "job": "发布到商店 1.20.1-forge",
+    "curseforge_skipped": true,
+    "modrinth_skipped": true
+  },
+  {
+    "job": "发布到商店 1.21.1-neoforge",
+    "curseforge_skipped": true,
+    "modrinth_skipped": true
+  }
+]

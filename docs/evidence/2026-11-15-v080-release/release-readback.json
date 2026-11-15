@@ -1,0 +1,48 @@
+{
+  "release": "https://github.com/NoWordz/AtomChat-Mod/releases/tag/v0.8.0",
+  "tag": "v0.8.0",
+  "tag_commit": "1267625add42cbbfef2f259346282e955da8416f",
+  "published": "2026-11-15T09:51:39Z",
+  "bilingual_body_matches": true,
+  "assets": [
+    {
+      "name": "atomchat-Fabric-1.21.1-v0.8.0.jar",
+      "size": 3067369,
+      "sha256": "b5593420696291f030678e0a59b162ca9a3db166fe45f3468b828b23832e680a",
+      "url": "https://github.com/NoWordz/AtomChat-Mod/releases/download/v0.8.0/atomchat-Fabric-1.21.1-v0.8.0.jar",
+      "build_stamp": "# Generated at build time by gradle/atomchat-layers.gradle (section 3c).\n# Do not edit, do not commit. ASCII only: Properties.load() reads the\n# stream as ISO-8859-1, so a non-ASCII value would arrive mangled.\nversion=0.8.0\ntarget=1.21.1-fabric\nminecraft=1.21.1\nloader=Fabric\nloader_version=0.16.9\ngit_commit=1267625\ngit_dirty=false\n"
+    },
+    {
+      "name": "atomchat-Forge-1.20.1-v0.8.0.jar",
+      "size": 3040272,
+      "sha256": "9af328f23179eb580da7813a6f75db7035431455b24dad2380091e40107d124b",
+      "url": "https://github.com/NoWordz/AtomChat-Mod/releases/download/v0.8.0/atomchat-Forge-1.20.1-v0.8.0.jar",
+      "build_stamp": "# Generated at build time by gradle/atomchat-layers.gradle (section 3c).\n# Do not edit, do not commit. ASCII only: Properties.load() reads the\n# stream as ISO-8859-1, so a non-ASCII value would arrive mangled.\nversion=0.8.0\ntarget=1.20.1-forge\nminecraft=1.20.1\nloader=Forge\nloader_version=47.4.10\ngit_commit=1267625\ngit_dirty=false\n"
+    },
+    {
+      "name": "atomchat-NeoForge-1.21.1-v0.8.0.jar",
+      "size": 3052309,
+      "sha256": "b348f239685d84f2e485511e9b59996184987a9a60cc1c72de4ab103eef31a63",
+      "url": "https://github.com/NoWordz/AtomChat-Mod/releases/download/v0.8.0/atomchat-NeoForge-1.21.1-v0.8.0.jar",
+      "build_stamp": "# Generated at build time by gradle/atomchat-layers.gradle (section 3c).\n# Do not edit, do not commit. ASCII only: Properties.load() reads the\n# stream as ISO-8859-1, so a non-ASCII value would arrive mangled.\nversion=0.8.0\ntarget=1.21.1-neoforge\nminecraft=1.21.1\nloader=NeoForge\nloader_version=21.1.235\ngit_commit=1267625\ngit_dirty=false\n"
+    },
+    {
+      "name": "atomlib-1.20.1-forge-0.4.0.jar",
+      "size": 27263510,
+      "sha256": "d685fb88d1906c8a25ecac0adeb0c81b6f4be3383617f1f3d096a92dbc5c9692",
+      "url": "https://github.com/NoWordz/AtomChat-Mod/releases/download/v0.8.0/atomlib-1.20.1-forge-0.4.0.jar"
+    },
+    {
+      "name": "atomlib-1.21.1-fabric-0.4.0.jar",
+      "size": 27276141,
+      "sha256": "13ff83bb080fc33bf35e5362242a07a752a331d36eeab763ad1a604bbcd9c069",
+      "url": "https://github.com/NoWordz/AtomChat-Mod/releases/download/v0.8.0/atomlib-1.21.1-fabric-0.4.0.jar"
+    },
+    {
+      "name": "atomlib-1.21.1-neoforge-0.4.0.jar",
+      "size": 27270464,
+      "sha256": "ba58073f3d091b2ab3f5cc2e521f8a49e4cbb2217f4476824bf3dc365dfb7688",
+      "url": "https://github.com/NoWordz/AtomChat-Mod/releases/download/v0.8.0/atomlib-1.21.1-neoforge-0.4.0.jar"
+    }
+  ]
+}
