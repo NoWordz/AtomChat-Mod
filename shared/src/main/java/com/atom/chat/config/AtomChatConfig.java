@@ -129,7 +129,7 @@ public class AtomChatConfig {
      * by name; the retired boolean toggle's key is simply dropped by the
      * next save, no migration needed.
      */
-    public PageNavStyle pageNavStyle = PageNavStyle.ZOOM;
+    public PageNavStyle pageNavStyle = PageNavStyle.SLIDE;
 
     /** Nav transition styles, read by {@link #pageNavStyle}. */
     public enum PageNavStyle { SLIDE, ZOOM }

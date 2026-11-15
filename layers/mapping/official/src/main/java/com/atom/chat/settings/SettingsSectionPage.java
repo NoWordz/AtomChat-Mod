@@ -592,6 +592,7 @@ public final class SettingsSectionPage {
     private long settleStart;
     private int hoveredIndex = -1;
     private long lastFrameMs = System.currentTimeMillis();
+    private long lastChipFrameMs = System.currentTimeMillis();
 
     /** Title/value/verb/icon colour — follows the interface text colour setting. */
     private static int textPrimary() {
@@ -1422,6 +1423,16 @@ public final class SettingsSectionPage {
 
     public void render(Canvas canvas, UiLayout layout, SettingsSection section,
                        float vmx, float vmy, float scrollY, int accent) {
+        render(canvas,layout,section,vmx,vmy,scrollY,accent,true);
+    }
+
+    public void renderBody(Canvas canvas, UiLayout layout, SettingsSection section,
+                           float vmx, float vmy, float scrollY, int accent) {
+        render(canvas,layout,section,vmx,vmy,scrollY,accent,false);
+    }
+
+    private void render(Canvas canvas, UiLayout layout, SettingsSection section,
+                        float vmx, float vmy, float scrollY, int accent, boolean includeChipBar) {
         staggerHits.clear();
         long now = UiStagger.frameTimeMillis();
         float dt = Math.min(50.0F, Math.max(1.0F, now - lastFrameMs));
@@ -1466,10 +1477,7 @@ public final class SettingsSectionPage {
             canvas.restore();
         }
 
-        if (barH > 0.0F) {
-            updateChipMotion(layout, section, dt);
-            drawChipBar(canvas, layout, section, accent, dt);
-        }
+        if (includeChipBar) renderFixedChipBar(canvas,layout,section,vmx,vmy,accent);
 
         int hovered = lastInteractiveHover;
         hoveredIndex = hovered;
@@ -1689,6 +1697,17 @@ public final class SettingsSectionPage {
      *  the whole chip cell. Like {@code BottomTabBar}, the per-cell spring
      *  wraps the entire cell (wash plus label) while the shared capsule rides
      *  the selected cell's spring: a capsule of its own would fight the slide. */
+    public void renderFixedChipBar(Canvas canvas, UiLayout layout, SettingsSection section,
+                                   float vmx, float vmy, int accent) {
+        if (chipBarHeight(section) <= 0) return;
+        long now=UiStagger.frameTimeMillis();
+        float dt=Math.min(50F,Math.max(1F,now-lastChipFrameMs));
+        lastChipFrameMs=now;
+        pointerX=vmx;pointerY=vmy;
+        updateChipMotion(layout,section,dt);
+        drawChipBar(canvas,layout,section,accent,dt);
+    }
+
     private void drawChipBar(Canvas canvas, UiLayout layout, SettingsSection section,
                              int accent, float dtMs) {
         List<SectionChip> chips = chips(section);

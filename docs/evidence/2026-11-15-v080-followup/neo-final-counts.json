@@ -1,0 +1,130 @@
+{
+  "counts": {
+    "tests": 70,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "suites": [
+    {
+      "name": "com.atom.chat.diagnostics.FrameProfileTest",
+      "tests": "10",
+      "skipped": "0",
+      "failures": "0",
+      "errors": "0",
+      "timestamp": "2026-11-15T07:23:23.805Z",
+      "hostname": "E33EPUS",
+      "time": "0.126"
+    },
+    {
+      "name": "com.atom.chat.diagnostics.ProfileWiringIntegrationTest",
+      "tests": "2",
+      "skipped": "0",
+      "failures": "0",
+      "errors": "0",
+      "timestamp": "2026-11-15T07:23:23.936Z",
+      "hostname": "E33EPUS",
+      "time": "7.371"
+    },
+    {
+      "name": "com.atom.chat.render.DotTextureBoundedRendererTest",
+      "tests": "10",
+      "skipped": "0",
+      "failures": "0",
+      "errors": "0",
+      "timestamp": "2026-11-15T07:23:31.541Z",
+      "hostname": "E33EPUS",
+      "time": "0.542"
+    },
+    {
+      "name": "com.atom.chat.render.DotTextureCacheTest",
+      "tests": "11",
+      "skipped": "0",
+      "failures": "0",
+      "errors": "0",
+      "timestamp": "2026-11-15T07:23:32.085Z",
+      "hostname": "E33EPUS",
+      "time": "0.3"
+    },
+    {
+      "name": "com.atom.chat.render.DotTextureTest",
+      "tests": "2",
+      "skipped": "0",
+      "failures": "0",
+      "errors": "0",
+      "timestamp": "2026-11-15T07:23:32.387Z",
+      "hostname": "E33EPUS",
+      "time": "0.009"
+    },
+    {
+      "name": "com.atom.chat.render.DotTextureTintContrastTest",
+      "tests": "1",
+      "skipped": "0",
+      "failures": "0",
+      "errors": "0",
+      "timestamp": "2026-11-15T07:23:32.397Z",
+      "hostname": "E33EPUS",
+      "time": "0.043"
+    },
+    {
+      "name": "com.atom.chat.screen.HalfScreenMetricsTest",
+      "tests": "6",
+      "skipped": "0",
+      "failures": "0",
+      "errors": "0",
+      "timestamp": "2026-11-15T07:23:32.444Z",
+      "hostname": "E33EPUS",
+      "time": "0.387"
+    },
+    {
+      "name": "com.atom.chat.ui.ChatShortcutHintRenderTest",
+      "tests": "1",
+      "skipped": "0",
+      "failures": "0",
+      "errors": "0",
+      "timestamp": "2026-11-15T07:23:32.833Z",
+      "hostname": "E33EPUS",
+      "time": "0.165"
+    },
+    {
+      "name": "com.atom.chat.ui.PanelCloseOverlayTest",
+      "tests": "3",
+      "skipped": "0",
+      "failures": "0",
+      "errors": "0",
+      "timestamp": "2026-11-15T07:23:33.004Z",
+      "hostname": "E33EPUS",
+      "time": "0.014"
+    },
+    {
+      "name": "com.atom.chat.ui.PanelShellWiringSourceTest",
+      "tests": "4",
+      "skipped": "0",
+      "failures": "0",
+      "errors": "0",
+      "timestamp": "2026-11-15T07:23:33.019Z",
+      "hostname": "E33EPUS",
+      "time": "0.087"
+    },
+    {
+      "name": "com.atom.chat.ui.PanelTimelineTest",
+      "tests": "3",
+      "skipped": "0",
+      "failures": "0",
+      "errors": "0",
+      "timestamp": "2026-11-15T07:23:33.107Z",
+      "hostname": "E33EPUS",
+      "time": "0.002"
+    },
+    {
+      "name": "com.atom.chat.ui.UiLayoutTest",
+      "tests": "17",
+      "skipped": "0",
+      "failures": "0",
+      "errors": "0",
+      "timestamp": "2026-11-15T07:23:33.111Z",
+      "hostname": "E33EPUS",
+      "time": "0.013"
+    }
+  ]
+}

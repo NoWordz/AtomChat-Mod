@@ -461,6 +461,12 @@ public final class SkiaFontRenderer {
         drawTextPass(canvas, font, text, x, y, color, null);
     }
 
+    public static void drawTextWithShadow(Canvas canvas,Font font,String text,float x,float y,int color,
+                                          io.github.humbleui.skija.ImageFilter shadow) {
+        drawTextPass(canvas,font,text,x,y,0xFF000000,shadow);
+        drawTextPass(canvas,font,text,x,y,color,null);
+    }
+
     /**
      * As above, but the shadow's polarity comes from {@code shadowSurfaceArgb}
      * — the tint the text sits on (a capsule background), not the panel's.

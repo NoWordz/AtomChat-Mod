@@ -17,7 +17,7 @@ public final class ReactionPayloads {
 
     
     public static final ResourceLocation CHANNEL_NAME =
-            ResourceLocation.fromNamespaceAndPath(AtomChat.MOD_ID, "reaction_action");
+            ResourceLocation.fromNamespaceAndPath(AtomChat.MOD_ID, "reaction_action_v2");
     public static final int ID_POKE = 0;
     public static final int ID_POKED = 1;
 
@@ -62,7 +62,7 @@ public final class ReactionPayloads {
                 .consumerMainThread((payload, ctx) -> {
                     if (net.minecraftforge.fml.loading.FMLEnvironment.dist
                             == net.minecraftforge.api.distmarker.Dist.CLIENT) {
-                        ctx.get().enqueueWork(() -> ReactionCompanionClient.onData(payload));
+                        ReactionCompanionClient.onData(payload,ctx.get().getNetworkManager());
                     }
                     ctx.get().setPacketHandled(true);
                 })

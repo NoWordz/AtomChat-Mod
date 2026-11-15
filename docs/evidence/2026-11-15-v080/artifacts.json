@@ -1,0 +1,17 @@
+{
+  "1.20.1-forge": {
+    "path": "D:\\AtomChat-Main\\platforms\\1.20.1-forge\\build\\atomlib-consumer\\libs\\atomchat-Forge-1.20.1-v0.8.0.jar",
+    "sha256": "aa2e5b9fd836b728bcc25f4c84e7ee3940523a972a2f22ffa962bad1f6095b79",
+    "size": 3033169
+  },
+  "1.21.1-fabric": {
+    "path": "D:\\AtomChat-Main\\platforms\\1.21.1-fabric\\build\\atomlib-consumer\\libs\\atomchat-Fabric-1.21.1-v0.8.0.jar",
+    "sha256": "b23b8f684b9578f42e391708dcebd6e0f5c8a9b72c186c72f228e7b0e8d3bb35",
+    "size": 3060137
+  },
+  "1.21.1-neoforge": {
+    "path": "D:\\AtomChat-Main\\platforms\\1.21.1-neoforge\\build\\atomlib-consumer\\libs\\atomchat-NeoForge-1.21.1-v0.8.0.jar",
+    "sha256": "bf3ef34ff1cd1e5d3a6b5bb4db920f6aae9b3bc3c0407476e21029b285917342",
+    "size": 3045223
+  }
+}

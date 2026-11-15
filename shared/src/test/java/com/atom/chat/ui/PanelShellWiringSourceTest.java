@@ -61,13 +61,10 @@ class PanelShellWiringSourceTest {
     private static final Map<String, Integer> REQUIRED = new LinkedHashMap<>();
 
     static {
-        REQUIRED.put("PanelOpenMotion.frameDtMs(nowNanos, lastFrameNanos)", 1);
+        REQUIRED.put("PanelOpenMotion.frameDtMs(nowNanos, lastFrameNanos)", 0);
         REQUIRED.put("PanelOpenMotion.domainFrameDtMs(nowMs, lastFrameMs)", 1);
-        // Unit E2: the open/close rides the panel motion spring (UiSpring's
-        // tokens), replacing the retired stepProgress exponential.
-        REQUIRED.put("panelMotion.setTarget(closing ? 0.0F : 1.0F)", 1);
-        REQUIRED.put("panelMotion.update(frameDtMs, Animations.enabled())", 1);
-        REQUIRED.put("panelProgress = panelMotion.value()", 1);
+        REQUIRED.put("panelMotion.target(closing ? 0.0F : 1.0F, nowNanos, Animations.enabled())", 1);
+        REQUIRED.put("panelProgress = panelMotion.value(nowNanos)", 1);
         REQUIRED.put("PanelOpenMotion.settled(panelProgress, closing)", 1);
         REQUIRED.put("PanelOpenMotion.closeDue(panelProgress, closing)", 1);
         REQUIRED.put("PanelOpenMotion.blurCapture(", 1);

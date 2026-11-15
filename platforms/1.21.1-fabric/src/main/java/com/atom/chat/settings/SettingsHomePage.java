@@ -74,8 +74,8 @@ public final class SettingsHomePage {
         // (4px budget + spring overshoot per side) and the card-shadow tail
         // spill past the edge.
         float gridW = layout.list.w() - UiTokens.ROW_CLIP_INSET * 2.0F;
-        return (gridW - (UiTokens.SETTINGS_TILE_COLS - 1) * UiTokens.SETTINGS_TILE_GAP)
-                / (float) UiTokens.SETTINGS_TILE_COLS;
+        return Math.min(com.atom.chat.ui.LayoutTokens.SETTINGS_TILE_MAX, (gridW - (UiTokens.SETTINGS_TILE_COLS - 1) * UiTokens.SETTINGS_TILE_GAP)
+                / (float) UiTokens.SETTINGS_TILE_COLS);
     }
 
     public static UiLayout.Rect tileRect(UiLayout layout, int index, float scrollY) {
@@ -83,7 +83,9 @@ public final class SettingsHomePage {
         int col = index % UiTokens.SETTINGS_TILE_COLS;
         int row = index / UiTokens.SETTINGS_TILE_COLS;
         return new UiLayout.Rect(
-                layout.list.x() + UiTokens.ROW_CLIP_INSET + col * (side + UiTokens.SETTINGS_TILE_GAP),
+                layout.list.x() + (layout.list.w() - side * UiTokens.SETTINGS_TILE_COLS
+                        - (UiTokens.SETTINGS_TILE_COLS - 1) * UiTokens.SETTINGS_TILE_GAP) / 2F
+                        + col * (side + UiTokens.SETTINGS_TILE_GAP),
                 layout.list.y() + UiTokens.ROOT_CONTENT_GAP
                         + row * (side + UiTokens.SETTINGS_TILE_GAP) - scrollY,
                 side, side);

@@ -10,6 +10,7 @@ import io.github.humbleui.skija.ImageInfo;
 import io.github.humbleui.skija.MaskFilter;
 import io.github.humbleui.skija.Paint;
 import io.github.humbleui.skija.PaintMode;
+import io.github.humbleui.skija.PaintStrokeCap;
 import io.github.humbleui.skija.Picture;
 import io.github.humbleui.skija.PictureRecorder;
 import io.github.humbleui.skija.SamplingMode;
@@ -24,6 +25,7 @@ import java.util.function.Consumer;
 /** Small, static decorations; paints and the fixed blur filter live on the render thread. */
 public final class DotTexture {
     private static final Paint DOT = new Paint().setAntiAlias(true);
+    private static final Paint POINTS = new Paint().setAntiAlias(true).setStrokeCap(PaintStrokeCap.ROUND);
     private static final MaskFilter BLUR = MaskFilter.makeBlur(FilterBlurMode.NORMAL, UiTokens.DOT_GLOW_BLUR);
     private static final Paint GLOW = new Paint().setAntiAlias(true).setMaskFilter(BLUR);
     private static final int[] ALPHAS = {19, 26, 32, 38, 45, 50, 54, 59, 64};
@@ -163,6 +165,10 @@ public final class DotTexture {
         float depth = UiTokens.MESSAGE_DOT_DEPTH;
         canvas.drawRRect(outline, GLOW.setMode(PaintMode.STROKE)
                 .setStrokeWidth(UiTokens.DOT_GLOW_STROKE).setColor(tinted(tint, UiTokens.DOT_GLOW_ALPHA)));
+        if (cached) {
+            edgePoints(canvas, bar, r, above, tint);
+            return;
+        }
         int columns = Math.min(512, (int) Math.ceil(bar.w() / UiTokens.MESSAGE_DOT_GAP));
         for (int i = 0; i < columns; i++) {
             float cx = UiTokens.MESSAGE_DOT_INSET + i * UiTokens.MESSAGE_DOT_GAP;
@@ -176,6 +182,29 @@ public final class DotTexture {
                 circle(canvas, bar.x() + cx, edge + (above ? -distance : distance),
                         UiTokens.MESSAGE_DOT_RADII[row], tint, ALPHAS[row] * sideFade);
             }
+        }
+    }
+
+    /** Round points use the same circle primitive; one submission per full-opacity row. */
+    private static void edgePoints(Canvas canvas, UiLayout.Rect bar, float r, boolean above, int tint) {
+        int columns=Math.min(512,(int)Math.ceil(bar.w()/UiTokens.MESSAGE_DOT_GAP));
+        float[] points=new float[columns*2];
+        for(int row=0;row<ALPHAS.length;row++) {
+            int count=0;
+            float radius=UiTokens.MESSAGE_DOT_RADII[row];
+            float distance=UiTokens.MESSAGE_DOT_DEPTH-row*UiTokens.MESSAGE_DOT_GAP;
+            for(int col=0;col<columns;col++) {
+                float cx=UiTokens.MESSAGE_DOT_INSET+col*UiTokens.MESSAGE_DOT_GAP;
+                float dx=Math.max(0F,Math.max(r-cx,cx-(bar.w()-r)));
+                float corner=r-(float)Math.sqrt(Math.max(0F,r*r-dx*dx));
+                float edge=above ? bar.y()+corner : bar.bottom()-corner;
+                float fade=Math.max(0F,Math.min(1F,Math.min(cx,bar.w()-cx)/UiTokens.MESSAGE_DOT_EDGE_FADE));
+                float x=bar.x()+cx,y=edge+(above ? -distance : distance);
+                if(fade==1F) {points[count++]=x;points[count++]=y;}
+                else circle(canvas,x,y,radius,tint,ALPHAS[row]*fade);
+            }
+            if(count>0) canvas.drawPoints(java.util.Arrays.copyOf(points,count),
+                    POINTS.setStrokeWidth(radius*2F).setColor(tinted(tint,ALPHAS[row])));
         }
     }
 

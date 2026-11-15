@@ -27,8 +27,8 @@ class SoftShadowTest {
         });
     }
 
-    // Catches both a too-small fade layer and drawing a solid shadow over the fill.
-    @Test void actualJumpButtonHasAContinuousOuterTailAndAnUnshadedFace() throws Exception {
+    // Covers the actual FAB and its shared popup material, including the lit upper rim.
+    @Test void actualJumpButtonHasAContinuousOuterTailAndThePopupMaterial() throws Exception {
         var primitives = new DrawPrimitives(new DrawPrimitives.Host() {
             public float frameDt() { return 0; }
             public boolean emojiPanelOpen() { return false; }
@@ -48,8 +48,8 @@ class SoftShadowTest {
         fade.setFloat(service,1F);
         UiLayout layout = UiLayout.of(70,50,420,600);
         float size = UiTokens.s(38);
-        int left = Math.round(layout.list.right()-size-UiTokens.s(12));
-        int top = Math.round(layout.list.bottom()-size-UiTokens.s(12));
+        int left = Math.round(layout.jumpLatest().x());
+        int top = Math.round(layout.jumpLatest().y());
         int cy = Math.round(top+size/2);
         String mode = System.getProperty("atomchat.shadow.evidence", "current");
         try(var surface=Surface.makeRasterN32Premul(650,760);var pixels=new Bitmap()) {
@@ -69,7 +69,18 @@ class SoftShadowTest {
             }
             System.out.printf("jump: left=%d top=%d outer-alpha(-4,-9)=%d,%d face=%08x%n",left,top,aNear,aFar,face);
             assertTrue(aFar>0,"shadow must extend beyond the old 5px fade boundary; near="+aNear+" far="+aFar);
-            assertTrue((face>>>24)<=236,"shadow must not paint a dark mask over the translucent button face: "+Integer.toHexString(face));
+            int upper=pixels.getColor(left+Math.round(size/2),top+3)&255;
+            int lower=pixels.getColor(left+Math.round(size/2),top+Math.round(size)-4)&255;
+            assertTrue(upper>lower+4,"the shared material must retain a lit upper rim");
+            try (var reference=Surface.makeRasterN32Premul(650,760);var expected=new Bitmap()) {
+                reference.getCanvas().clear(0);
+                com.atom.chat.ui.MenuPopup.drawMaterial(reference.getCanvas(), left, top, size, size,
+                        UiTokens.radius(size/(2F*UiTokens.SCALE)), com.atom.chat.ui.MenuPopup.SURFACE_COLOR);
+                expected.allocN32Pixels(650,760);
+                assertTrue(reference.readPixels(expected,0,0));
+                assertEquals(expected.getColor(left+Math.round(size/2),top+8),face,
+                        "FAB must retain the popup's interior shading and upper rim");
+            }
         }
     }
 

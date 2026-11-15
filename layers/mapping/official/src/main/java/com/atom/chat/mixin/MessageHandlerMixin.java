@@ -31,6 +31,11 @@ import java.util.UUID;
  */
 @Mixin(value = ChatListener.class, priority = 500)
 public class MessageHandlerMixin {
+    @org.spongepowered.asm.mixin.injection.ModifyVariable(method="handleMessage(Lnet/minecraft/network/chat/MessageSignature;Ljava/util/function/BooleanSupplier;)V",at=@At("HEAD"),argsOnly=true)
+    private java.util.function.BooleanSupplier atomchat$reactionDelivery(java.util.function.BooleanSupplier original) {
+        return com.atom.chat.reaction.ReactionClient.defer(original);
+    }
+
     /** Capture only when the native listener actually delivers a visible message. */
     @Inject(method = "showMessageToPlayer", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/gui/components/ChatComponent;addMessage(Lnet/minecraft/network/chat/Component;Lnet/minecraft/network/chat/MessageSignature;Lnet/minecraft/client/GuiMessageTag;)V"))
     private void atomchat$capturePlayerChat(ChatType.Bound bound, PlayerChatMessage message, Component decorated,

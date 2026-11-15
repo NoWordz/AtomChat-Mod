@@ -9,13 +9,17 @@ public final class ReactionCompanionClient {
         ReactionClient.self = () -> { var client = MinecraftClient.getInstance(); return client.player == null ? null : client.player.getUuid(); };
         net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking.registerGlobalReceiver(ReactionPayloads.DataPayload.ID,
                 (payload, context) -> {
-                    long generation = ReactionClient.generation();
-                    context.client().execute(() -> { if (generation == ReactionClient.generation()) ReactionClient.accept(payload.bytes()); });
+                    var origin=context.responseSender();
+                    context.client().execute(()->onData(payload,origin));
                 });
     }
     public static boolean supported() {
         var client = MinecraftClient.getInstance();
         return client.player != null && client.getNetworkHandler() != null && (net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking.canSend(ReactionPayloads.ActionPayload.ID));
     }
-    public static void onData(ReactionPayloads.DataPayload payload) { ReactionClient.accept(payload.bytes()); }
+    public static void onData(ReactionPayloads.DataPayload payload,Object origin) {
+        var client=MinecraftClient.getInstance();
+        Object current=client.getNetworkHandler()==null ? null : net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking.getSender();
+        ReactionClient.acceptFrom(origin,current,payload.bytes());
+    }
 }

@@ -57,18 +57,21 @@ class ProfileWiringIntegrationTest {
         var command = new ArrayList<>(python);
         command.add(root.resolve("tools/probes/verify_profile_wiring.py").toString());
         command.add(root.toString());
-        ProcessBuilder builder = new ProcessBuilder(command).directory(root.toFile()).redirectErrorStream(true);
+        Path outputFile=Files.createTempFile("atomchat-profile-wiring-", ".log");
+        ProcessBuilder builder = new ProcessBuilder(command).directory(root.toFile())
+                .redirectErrorStream(true).redirectOutput(outputFile.toFile());
         builder.environment().put("JAVA_HOME", System.getProperty("java.home"));
         Process process = builder.start();
         try {
             assertTrue(process.waitFor(45, TimeUnit.SECONDS), "profile wiring probe timed out");
-            String output = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+            String output = new String(Files.readAllBytes(outputFile), StandardCharsets.UTF_8);
             assertEquals(0, process.exitValue(), output);
             assertTrue(output.contains("official passed") && output.contains("fabric passed"), output);
             assertTrue(output.contains("JDK_HOME=" + System.getProperty("java.home")), output);
             System.out.println("Profile wiring Python: " + String.join(" ", python) + "; " + "JDK_HOME=" + System.getProperty("java.home"));
         } finally {
-            if (process.isAlive()) process.destroyForcibly();
+            if (process.isAlive()) process.destroyForcibly().waitFor(5, TimeUnit.SECONDS);
+            Files.deleteIfExists(outputFile);
         }
     }
 }

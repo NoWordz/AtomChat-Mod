@@ -4,9 +4,15 @@
   "package": "com.atom.chat.mixin",
   "compatibilityLevel": "JAVA_21",
   "client": [
-    "ChatInputSuggestorAccessor"
+    "ChatInputSuggestorAccessor",
+    "ReactionClientPacketMixin"
   ],
   "injectors": {
     "defaultRequire": 1
-  }
+  },
+  "mixins": [
+    "ReactionServerSendMixin",
+    "ReactionSystemBroadcastMixin",
+    "ReactionPrivateMessageMixin"
+  ]
 }

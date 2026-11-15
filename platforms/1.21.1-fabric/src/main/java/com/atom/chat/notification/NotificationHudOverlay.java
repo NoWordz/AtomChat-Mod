@@ -16,7 +16,7 @@ public final class NotificationHudOverlay {
     private static boolean failed;
     private NotificationHudOverlay() { }
     public static void render(DrawContext gui) {
-        if (!com.atom.chat.config.AtomChatConfig.get().enabled) return;
+        if (!com.atom.chat.config.AtomChatConfig.get().enabled) { com.atom.chat.ui.PanelCloseOverlay.INSTANCE.clear(); return; }
         NotificationBanner.INSTANCE.tick();
         // Under Gnetum the HUD layer pipeline is re-routed into its own
         // multi-pass cache; keep this layer on its uncached path so the
@@ -25,13 +25,26 @@ public final class NotificationHudOverlay {
         // NeoForge-only, so this is a cheap no-op probe on Fabric — the twin
         // is kept mirrored in case a Fabric build appears.
         GnetumHudCompat.keepOutOfHudCache();
-        if (failed || !NotificationHudVisibility.visible() || !NotificationBanner.INSTANCE.hasActive()) return;
+        if (failed) { com.atom.chat.ui.PanelCloseOverlay.INSTANCE.clear(); return; }
         MinecraftClient client = MinecraftClient.getInstance();
+        var exit = com.atom.chat.ui.PanelCloseOverlay.INSTANCE;
+        long now = System.nanoTime();
+        float density = ScreenMetrics.uiDensity(client.getWindow());
+        float width = ScreenMetrics.vw(client.getWindow());
+        float height = ScreenMetrics.vh(client.getWindow());
+        if (client.currentScreen != null || client.world == null || client.player == null) exit.clear();
+        boolean exiting = exit.active(client.world, density, width, height, now, com.atom.chat.ui.Animations.enabled());
+        boolean paintExit = exiting && !client.options.hudHidden;
+        boolean banner = !exiting && NotificationHudVisibility.visible() && NotificationBanner.INSTANCE.hasActive();
+        float hint = client.currentScreen == null ? 1F - exit.progress(now)
+                : client.currentScreen instanceof net.minecraft.client.gui.screen.AtomChatScreen panel ? panel.shortcutVisibility() : 0F;
+        if (client.world == null || client.player == null || client.options.hudHidden) hint = 0F;
+        if (!banner && hint <= 0F && !paintExit) return;
+        float hintVisibility = hint;
+        long hudStart = com.atom.chat.diagnostics.FrameProfile.startHud();
         try {
             gui.draw();
-            float density = ScreenMetrics.uiDensity(client.getWindow());
-            float width = client.getFramebuffer().textureWidth / density;
-            float height = client.getFramebuffer().textureHeight / density;
+            float guiScale=(float)client.getWindow().getScaleFactor();
             // The frosted backdrop is pre-drawn with raw GL (panel-blur style)
             // before the Skia pass: a Skia backdrop filter would read the
             // framebuffer as premul, and shader packs leave undefined per-frame
@@ -42,17 +55,35 @@ public final class NotificationHudOverlay {
             var rect = NotificationBanner.hudPlacement(width, height).rect();
             GRAPHICS.checkFrameBufferId();
             GRAPHICS.draw(() -> {
-                if (PanelBlurRenderer.isAvailable()) {
+                if (paintExit && exit.blur() && PanelBlurRenderer.isAvailable()) {
+                    var bounds = exit.bounds();
+                    var capture = com.atom.chat.ui.PanelOpenMotion.blurCapture(exit.progress(now), exit.style(),
+                            bounds.x(), bounds.y(), bounds.w(), bounds.h(),
+                            com.atom.chat.ui.PanelBackground.outlineInset(), density, guiScale);
+                    PanelBlurRenderer.render(new Matrix4f(), capture.x(), capture.y(), capture.w(), capture.h(),
+                            capture.radius(), exit.progress(now), com.atom.chat.config.AtomChatConfig.get().effectiveBlurStrength());
+                }
+                if (banner && PanelBlurRenderer.isAvailable()) {
                     boolean drew = PanelBlurRenderer.render(new Matrix4f(), rect.x(), rect.y(),
                             rect.w(), rect.h(), UiTokens.cardRadius(), NotificationBanner.hudBackdropAlpha());
                     if (drew) NotificationBanner.hudBackdropPreDrawn();
                 }
-                ItemIconRenderer.prepare(gui, GRAPHICS);
+                if (banner) ItemIconRenderer.prepare(gui, GRAPHICS);
             }, density,
-                    (canvas, snapshot) -> NotificationBanner.INSTANCE.renderInHud(canvas, width, height));
+                    (canvas, snapshot) -> {
+                        if (paintExit) exit.draw(canvas, GRAPHICS.contextIdentity(), now);
+                        if (banner) NotificationBanner.INSTANCE.renderInHud(canvas, width, height);
+                        com.atom.chat.ui.ChatShortcutHint.renderGuiScaled(canvas, width, height, density, guiScale,
+                                com.atom.chat.AtomChatClient.OPEN_ATOMCHAT_KEY.getBoundKeyLocalizedText().getString(), hintVisibility);
+                    });
         } catch (RuntimeException | LinkageError e) {
+            com.atom.chat.ui.PanelCloseOverlay.INSTANCE.clear();
             failed = true;
             AtomChat.LOGGER.warn(com.atom.chat.diagnostics.AtomChatLog.message("notify", "HUD notification renderer disabled after failure; panel notifications remain available"), e);
+        } finally {
+            if (com.atom.chat.diagnostics.FrameProfile.hudFrame(hudStart))
+                AtomChat.LOGGER.info(com.atom.chat.diagnostics.AtomChatLog.message(
+                        "render", com.atom.chat.diagnostics.FrameProfile.hudSummary()));
         }
     }
 }

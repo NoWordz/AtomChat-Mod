@@ -118,7 +118,7 @@ public final class ThemeService {
             0xFFB9CDE6, 0xFF1A1D21,
             0xFFF7F8FA, 0xFF151A22, 0xFF596273,
             0xFFFFFFFF, 0xFF4A6285,
-            0xFFECEEF2, 0xFF6B7280,
+            0xFFECEEF2, 0xFF626976,
             null, null, "small");
     /** 青柠 (id "summer", shown as 夏日 before) — lime accent with soft olive incoming bubbles. */
     public static final Preset SUMMER = new Preset("summer",
@@ -127,16 +127,16 @@ public final class ThemeService {
             0xFFC3D38D, 0xFF1F2937,
             0xFFFAFCF3, 0xFF192521, 0xFF56634C,
             0xFFFFFFFF, 0xFF5A732A,
-            0xFFEBF2DC, 0xFF4D7C0F,
+            0xFFEBF2DC, 0xFF49730E,
             null, null, "medium");
     /** 典雅 — warm paper, clay-sand incoming bubbles and a terracotta accent. */
     public static final Preset ELEGANT = new Preset("elegant",
-            0xFFBD6043,
-            0xFFBD6043, 0xFFFFFFFF,
+            0xFFB45639,
+            0xFFB45639, 0xFFFFFFFF,
             0xFFD0B294, 0xFF3D3929,
-            0xFFF5F0E8, 0xFF332E23, 0xFF71685C,
+            0xFFF5F0E8, 0xFF332E23, 0xFF685F53,
             0xFFE8DDD0, 0xFF806445,
-            0xFFEAE1D3, 0xFF7A7264,
+            0xFFEAE1D3, 0xFF6B6255,
             null, null, "medium");
     /** 黑鸦 — deep black-blue night, gold accent, GitHub-dark surfaces. */
     public static final Preset RAVEN = new Preset("raven",
@@ -145,7 +145,7 @@ public final class ThemeService {
             0xFF27323F, 0xFFF0F4F8,
             0xFF0D1117, 0xFFF0F4F8, 0xFFA4AFBD,
             0xFF161B27, 0xFFAAB5C4,
-            0xFF2A313C, 0xFF8B949E,
+            0xFF2A313C, 0xFF99A3AF,
             null, null, "medium");
     /** 枢纽 — pure black terminal with the orange accent; sharp corners, no softness. */
     public static final Preset HUB = new Preset("hub",
@@ -163,7 +163,7 @@ public final class ThemeService {
             0xFFDEA6BE, 0xFF3D2C35,
             0xFFFDF0F4, 0xFF36212B, 0xFF785666,
             0xFFFFFFFF, 0xFF8C526B,
-            0xFFF9DCE7, 0xFFB04A70,
+            0xFFF9DCE7, 0xFFA13D63,
             null, null, "medium");
     /** 薄暮 — grey-blue dusk with a violet cast: translucent smoky panel over
      *  the blurred world, lavender accent and bubbles, near-white text. */
@@ -189,19 +189,19 @@ public final class ThemeService {
     /** Deep blue glass, light blue glass, plum glass and warm paper glass keep the world visible. */
     public static final Preset AZURE_GLASS = new Preset("azure_glass",
             0xFF82BEFF, 0xFF82BEFF, 0xFF10263E, 0xFF253E5A, 0xFFF0F6FF,
-            0xFF12263B, 0xFFF5F8FF, 0xFFBCCDE1, 0xFF29425D, 0xFFA9C6E8,
+            0xFF12263B, 0xFFF5F8FF, 0xFFD2E5FB, 0xFF29425D, 0xFFA9C6E8,
             0xD9233B56, 0xFFE0ECFB, .70F, true, "large");
     public static final Preset PLUM_GLASS = new Preset("plum_glass",
             0xFFE1AFF1, 0xFFE1AFF1, 0xFF35143D, 0xFF50334F, 0xFFFFF0FC,
-            0xFF2D1C31, 0xFFFFF4FD, 0xFFD5BDDA, 0xFF49304E, 0xFFD9B6E0,
+            0xFF2D1C31, 0xFFFFF4FD, 0xFFECD2F2, 0xFF49304E, 0xFFD9B6E0,
             0xD9452B4C, 0xFFF4DDF7, .72F, true, "large");
     public static final Preset ICE_GLASS = new Preset("ice_glass",
             0xFF246889, 0xFF246889, 0xFFFFFFFF, 0xFFC4DBE5, 0xFF173243,
-            0xFFE4F0F5, 0xFF152D3B, 0xFF425F70, 0xFFF2F8FB, 0xFF536E7D,
+            0xFFE4F0F5, 0xFF152D3B, 0xFF314653, 0xFFF2F8FB, 0xFF536E7D,
             0xD9C4DCE7, 0xFF294D63, .74F, true, "large");
     public static final Preset SAND_GLASS = new Preset("sand_glass",
             0xFF926027, 0xFF926027, 0xFFFFFFFF, 0xFFE1CCAC, 0xFF3C2D1B,
-            0xFFF2E7D6, 0xFF352819, 0xFF69543B, 0xFFFFF8EB, 0xFF826C50,
+            0xFFF2E7D6, 0xFF352819, 0xFF51412E, 0xFFFFF8EB, 0xFF826C50,
             0xD9DFCCAF, 0xFF584025, .76F, true, "large");
 
     private static final Preset[] COLOR_PRESETS =
@@ -328,7 +328,7 @@ public final class ThemeService {
                         ? preset.panelOpacity() : 1.0F;
                 config.blurEnabled = Boolean.TRUE.equals(preset.blurEnabled());
                 config.setPanelOutlineWidth(AtomChatConfig.DEFAULT.panelOutlineWidth);
-                config.cardTint = 1.0F;
+                config.cardTint = config.blurEnabled ? AtomChatConfig.DEFAULT.cardTint : 1.0F;
                 preset.applyTo(config);
             }
         }

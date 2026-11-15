@@ -36,6 +36,7 @@ public final class ChatStore {
         if (message == null) {
             return false;
         }
+        com.atom.chat.reaction.ReactionClient.bind(message);
         if (MessageMerge.antiSpamEnabled() && !messages.isEmpty()) {
             ChatMessage last = messages.get(messages.size() - 1);
             if (MessageMerge.canMerge(last, message)) {

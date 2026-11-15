@@ -189,6 +189,7 @@ public class AtomChatClient {
         com.atom.chat.net.PackSyncClient.onDisconnect();
         com.atom.chat.net.ConfigScreenClient.onDisconnect();
         com.atom.chat.render.FirstOpenWarmup.onDisconnect();
+        com.atom.chat.ui.PanelCloseOverlay.INSTANCE.clear();
     }
 
     private static void onClientTick(ClientTickEvent.Post event) {

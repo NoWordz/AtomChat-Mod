@@ -14,6 +14,18 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class UiLayoutTest {
     private static final float EPS = 0.01F;
 
+    @Test void widePanelChromeAndContentFollowThePanelWidth() {
+        UiLayout normal = UiLayout.of(30, 20, 760, 900);
+        UiLayout wide = UiLayout.of(30, 20, 1500, 900);
+        assertEquals(740, wide.header.w() - normal.header.w(), EPS);
+        assertEquals(740, wide.inputBar.w() - normal.inputBar.w(), EPS);
+        assertEquals(740, wide.list.w() - normal.list.w(), EPS);
+        assertEquals(780, wide.header.x() + wide.header.w() / 2, EPS);
+        assertEquals(780, wide.list.x() + wide.list.w() / 2, EPS);
+        assertTrue(wide.rect().contains(wide.header));
+        assertTrue(wide.inputBar.contains(wide.sendBtn));
+    }
+
     private static void assertSane(UiLayout l) {
         UiLayout.Rect panel = l.rect();
 

@@ -288,7 +288,7 @@ public final class NotificationBanner {
     public void renderInPanel(Canvas canvas, float panelX, float panelY, float panelW, float panelH,
                               float vmx, float vmy) {
         lastHudOriginY = Float.NaN;
-        renderStack(canvas, bannerX(panelX),
+        renderStack(canvas, UiLayout.cardColumnX(panelX),
                 panelY + UiTokens.PANEL_BOTTOM_PAD + UiTokens.HEADER_HEIGHT + UiTokens.PANEL_TOP_GAP,
                 bannerWidth(panelW), panelY + panelH - UiTokens.s(4), vmx, vmy, true, false);
     }

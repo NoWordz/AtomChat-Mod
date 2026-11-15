@@ -12,6 +12,45 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ThemeServiceTest {
+    @Test void glassPresetTextReadsAfterActualAlphaCompositing() {
+        for(var preset:ThemeService.presets()) {
+            if(!Boolean.TRUE.equals(preset.blurEnabled())) continue;
+            var config=new AtomChatConfig();ThemeService.apply(config,preset.id());
+            for(int world:new int[]{0xFF000000,0xFFFFFFFF}) {
+                try(var surface=io.github.humbleui.skija.Surface.makeRasterN32Premul(100,100);
+                    var pixels=new io.github.humbleui.skija.Bitmap();var paint=new io.github.humbleui.skija.Paint()) {
+                    var canvas=surface.getCanvas();canvas.clear(world);
+                    canvas.drawRect(io.github.humbleui.types.Rect.makeWH(100,100),paint.setColor(
+                            (Math.round(255*config.panelOpacity)<<24)|(config.panelBgColor&0xFFFFFF)));
+                    canvas.drawRect(io.github.humbleui.types.Rect.makeXYWH(20,20,60,60),paint.setColor(
+                            (Math.round(255*config.cardTint)<<24)|(config.cardColor&0xFFFFFF)));
+                    pixels.allocN32Pixels(100,100);assertTrue(surface.readPixels(pixels,0,0));
+                    for(int background:new int[]{pixels.getColor(5,5),pixels.getColor(50,50)}) {
+                        assertTrue(com.atom.chat.avatar.ColorUtil.contrastRatio(config.textPrimaryColor,background)>=4.5F,preset.id());
+                        assertTrue(com.atom.chat.avatar.ColorUtil.contrastRatio(config.textSecondaryColor,background)>=4.5F,preset.id());
+                    }
+                }
+            }
+        }
+    }
+    @Test void presetTextPairsRemainReadable() {
+        for (var p : ThemeService.presets()) {
+            int[][] pairs = {{p.bubbleText(), p.ownBubble()}, {p.otherBubbleText(), p.otherBubble()},
+                    {p.textPrimary(), p.panelBg()}, {p.textSecondary(), p.panelBg()},
+                    {p.textSecondary(), p.card()}, {p.capsuleText(), p.capsuleBg()}};
+            for (var pair : pairs) assertTrue(com.atom.chat.avatar.ColorUtil.contrastRatio(pair[0], pair[1]) >= 4.5F,
+                    p.id() + ": " + Integer.toHexString(pair[0]) + "/" + Integer.toHexString(pair[1]));
+        }
+    }
+
+    @Test void translucentPresetsUseTranslucentCards() {
+        for (var preset : ThemeService.presets()) {
+            if (!Boolean.TRUE.equals(preset.blurEnabled())) continue;
+            var config = new AtomChatConfig();
+            ThemeService.apply(config, preset.id());
+            assertTrue(config.cardTint > 0 && config.cardTint < 1, preset.id());
+        }
+    }
 
     @Test
     void cornerFactorMapsTheThreeStyles() {
@@ -125,7 +164,7 @@ class ThemeServiceTest {
 
         c = new AtomChatConfig();
         ThemeService.apply(c, "elegant");
-        assertEquals(0xFFBD6043, c.accentColor);
+        assertEquals(0xFFB45639, c.accentColor);
         assertEquals(0xFFF5F0E8, c.panelBgColor);
         assertEquals(0xFFE8DDD0, c.cardColor);
         assertEquals(0xFF332E23, c.textPrimaryColor);
@@ -197,7 +236,7 @@ class ThemeServiceTest {
                     c.panelOpacity, 1e-6F, preset.id());
             assertEquals(Boolean.TRUE.equals(preset.blurEnabled()), c.blurEnabled, preset.id());
             assertTrue(c.panelOutline, preset.id());
-            assertEquals(1.0F, c.cardTint, 1e-6F, preset.id());
+            assertEquals(c.blurEnabled ? defaults.cardTint : 1.0F, c.cardTint, 1e-6F, preset.id());
             assertEquals(preset.id(), c.themeName);
         }
     }
@@ -288,7 +327,7 @@ class ThemeServiceTest {
         assertEquals(0xFF112233, c.accentColor);
         // Re-picking the preset is the user asking for the snapshot back.
         ThemeService.apply(c, "elegant");
-        assertEquals(0xFFBD6043, c.accentColor);
+        assertEquals(0xFFB45639, c.accentColor);
     }
 
     /** An old config file (themeName empty) survives a Gson round trip with

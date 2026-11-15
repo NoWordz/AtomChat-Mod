@@ -39,13 +39,15 @@ class PageTransitionCompositeTest {
             public NavPage topNav(){return top;}
             public int bodyVariant(){return top.page()==AppPage.SETTINGS_SECTION?detail.activeChipIndex(top.section()):0;}
             public boolean arrivalStaggersSurfaces(){return false;}
+            public float bodyClipTop(UiLayout l){return top.isRoot()?l.header.bottom():l.chipBar.bottom();}
             public void drawArrivingBody(Canvas c,UiLayout l,int mx,int my) {
                 draws.add(top);
                 if(top.isRoot())home.render(c,l,-100,-100,0);
-                else detail.render(c,l,top.section(),-100,-100,0,AtomChatConfig.get().accentColor);
+                else detail.renderBody(c,l,top.section(),-100,-100,0,AtomChatConfig.get().accentColor);
             }
             public void drawArrivingHeader(Canvas c,UiLayout l,int mx,int my,float x,float y) {
                 headers.add(top);
+                if(!top.isRoot()) detail.renderFixedChipBar(c,l,top.section(),-100,-100,AtomChatConfig.get().accentColor);
                 float[] matrix=c.getLocalToDeviceAsMatrix33().getMat();
                 assertEquals(1,matrix[0],.0001);assertEquals(0,matrix[2],.0001);assertEquals(0,matrix[5],.0001);
                 com.atom.chat.ui.ShellHeader.render(c,l.header,top.page().name()+":"+top.param(),!top.isRoot(),
@@ -61,6 +63,24 @@ class PageTransitionCompositeTest {
         composite.drawArrivingFrame(c,layout,-100,-100,-100,-100,now);
         assertEquals(save,c.getSaveCount(),"snapshot rendering is canvas neutral");
         try(Bitmap b=new Bitmap()){b.allocN32Pixels(W,H);assertTrue(s.readPixels(b,0,0));return b.readPixels();}
+    }
+    @Test void settingsTabLabelsStayStillWhileOnlyTheirContentMoves() {
+        for(var style:AtomChatConfig.PageNavStyle.values()) {
+            AtomChatConfig.get().pageNavStyle=style;
+            top=NavPage.settingsSection(SettingsSection.APPEARANCE);composite.reset();
+            detail.selectChip(SettingsSection.APPEARANCE,0);
+            try(var surface=Surface.makeRasterN32Premul(W,H)) {
+                byte[] before=frame(surface,1000);
+                detail.selectChip(SettingsSection.APPEARANCE,1);
+                frame(surface,1010);
+                byte[] moving=frame(surface,1090);
+                var label=layout.chipRect(2,detail.chips(SettingsSection.APPEARANCE).size());
+                for(int y=(int)label.y()+4;y<(int)label.bottom()-4;y++) {
+                    int from=(y*W+(int)label.x()+5)*4,to=(y*W+(int)label.right()-5)*4;
+                    assertArrayEquals(Arrays.copyOfRange(before,from,to),Arrays.copyOfRange(moving,from,to),style+": fixed tab label moved");
+                }
+            }
+        }
     }
     @Test void firstFrameIsSettledAndKeyChangeIsOneShot(){
         composite.beginFrame(1000);assertTrue(composite.overlaySettled(1000));assertFalse(composite.consumeArrivalEvent());
@@ -113,7 +133,7 @@ class PageTransitionCompositeTest {
     }
     @Test void pureModelsCoverDirectionInverseHitsAndTenThousandRetargets(){InterruptiblePageMotionProbe.main(new String[0]);com.atom.chat.ui.BottomChromeMotionProbe.main(new String[0]);}
     private void assertBodyEquals(byte[] before,byte[] after,String reason) {
-        int from=((int)Math.ceil(layout.header.bottom())+1)*W*4;
+        int from=((int)Math.ceil(top.isRoot()?layout.header.bottom():layout.chipBar.bottom())+1)*W*4;
         assertArrayEquals(Arrays.copyOfRange(before,from,before.length),Arrays.copyOfRange(after,from,after.length),reason);
     }
     private static void write(Surface s,Path p)throws Exception{try(Image i=s.makeImageSnapshot();Data d=i.encodeToData()){Files.write(p,d.getBytes());}}

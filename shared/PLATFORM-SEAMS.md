@@ -13,7 +13,7 @@
 分组是编译期事实：甲组少一个类型，那个目标当场编不过。判据用简单名的词边界匹配
 （覆盖 import 全限定名与同包简单名两种写法），偏保守 —— 注释里的提及也算，宁可多列。
 
-当前：甲组 **145** 个，乙组 **72** 个。
+当前：甲组 **146** 个，乙组 **90** 个。
 
 ## 甲：共用代码引用了的（接缝）
 
@@ -88,6 +88,7 @@
 | `com.atom.chat.page.MessageResponsiveLayoutTest` | 1.21.1-fabric |
 | `com.atom.chat.page.ProfilePage` | 1.21.1-fabric |
 | `com.atom.chat.platform.NeoForgePlatform` | 1.21.1-neoforge |
+| `com.atom.chat.reaction.ReactionClientIdentityTest` | 1.21.1-fabric |
 | `com.atom.chat.render.BlockedCardShadowTest` | 1.21.1-fabric |
 | `com.atom.chat.render.ClickableSpan` | 1.21.1-fabric |
 | `com.atom.chat.render.GoldenFrameTest` | 1.21.1-fabric |
@@ -127,6 +128,10 @@
 | 目标 | 类型 |
 |---|---|
 | 1.20.1-forge | `com.atom.chat.mixin.AtomChatMixinPlugin` |
+| 1.20.1-forge | `com.atom.chat.mixin.ReactionClientPacketMixin` |
+| 1.20.1-forge | `com.atom.chat.mixin.ReactionPrivateMessageMixin` |
+| 1.20.1-forge | `com.atom.chat.mixin.ReactionServerSendMixin` |
+| 1.20.1-forge | `com.atom.chat.mixin.ReactionSystemBroadcastMixin` |
 | 1.20.1-forge | `com.atom.chat.net.AvatarPayloads` |
 | 1.20.1-forge | `com.atom.chat.net.ConfigScreenServer` |
 | 1.20.1-forge | `com.atom.chat.net.ForgeWireIo` |
@@ -137,8 +142,10 @@
 | 1.20.1-forge | `com.atom.chat.net.ProfileCompanionClient` |
 | 1.20.1-forge | `com.atom.chat.net.ProfileCompanionServer` |
 | 1.20.1-forge | `com.atom.chat.net.ProfilePayloads` |
+| 1.20.1-forge | `com.atom.chat.net.ReactionBroadcastMessage` |
 | 1.20.1-forge | `com.atom.chat.net.ReactionCompanionClient` |
 | 1.20.1-forge | `com.atom.chat.net.ReactionCompanionServer` |
+| 1.20.1-forge | `com.atom.chat.net.ReactionPacketIdentity` |
 | 1.20.1-forge | `com.atom.chat.net.ReactionPayloads` |
 | 1.20.1-forge | `com.atom.chat.net.TestCompanionClient` |
 | 1.20.1-forge | `com.atom.chat.net.TestCompanionServer` |
@@ -151,6 +158,10 @@
 | 1.20.1-forge | `com.atom.chat.testing.ForgeEventBusAgent` |
 | 1.20.1-forge | `com.atom.chat.testing.ForgeEventBusAgentProbe` |
 | 1.21.1-fabric | `com.atom.chat.mixin.AtomChatMixinPlugin` |
+| 1.21.1-fabric | `com.atom.chat.mixin.ReactionClientPacketMixin` |
+| 1.21.1-fabric | `com.atom.chat.mixin.ReactionPrivateMessageMixin` |
+| 1.21.1-fabric | `com.atom.chat.mixin.ReactionServerSendMixin` |
+| 1.21.1-fabric | `com.atom.chat.mixin.ReactionSystemBroadcastMixin` |
 | 1.21.1-fabric | `com.atom.chat.net.AvatarPayloads` |
 | 1.21.1-fabric | `com.atom.chat.net.ConfigScreenServer` |
 | 1.21.1-fabric | `com.atom.chat.net.FabricWireIo` |
@@ -161,8 +172,10 @@
 | 1.21.1-fabric | `com.atom.chat.net.ProfileCompanionClient` |
 | 1.21.1-fabric | `com.atom.chat.net.ProfileCompanionServer` |
 | 1.21.1-fabric | `com.atom.chat.net.ProfilePayloads` |
+| 1.21.1-fabric | `com.atom.chat.net.ReactionBroadcastMessage` |
 | 1.21.1-fabric | `com.atom.chat.net.ReactionCompanionClient` |
 | 1.21.1-fabric | `com.atom.chat.net.ReactionCompanionServer` |
+| 1.21.1-fabric | `com.atom.chat.net.ReactionPacketIdentity` |
 | 1.21.1-fabric | `com.atom.chat.net.ReactionPayloads` |
 | 1.21.1-fabric | `com.atom.chat.net.TestCompanionClient` |
 | 1.21.1-fabric | `com.atom.chat.net.TestCompanionServer` |
@@ -178,6 +191,10 @@
 | 1.21.1-fabric | `com.atom.chat.ui.QuickPhrasePanelHitZoneTest` |
 | 1.21.1-fabric | `net.minecraft.client.gui.screen.AtomChatScreenMessageLookupTest` |
 | 1.21.1-neoforge | `com.atom.chat.mixin.AtomChatMixinPlugin` |
+| 1.21.1-neoforge | `com.atom.chat.mixin.ReactionClientPacketMixin` |
+| 1.21.1-neoforge | `com.atom.chat.mixin.ReactionPrivateMessageMixin` |
+| 1.21.1-neoforge | `com.atom.chat.mixin.ReactionServerSendMixin` |
+| 1.21.1-neoforge | `com.atom.chat.mixin.ReactionSystemBroadcastMixin` |
 | 1.21.1-neoforge | `com.atom.chat.net.AvatarPayloads` |
 | 1.21.1-neoforge | `com.atom.chat.net.ConfigScreenServer` |
 | 1.21.1-neoforge | `com.atom.chat.net.MediaPayloads` |
@@ -188,8 +205,10 @@
 | 1.21.1-neoforge | `com.atom.chat.net.ProfileCompanionClient` |
 | 1.21.1-neoforge | `com.atom.chat.net.ProfileCompanionServer` |
 | 1.21.1-neoforge | `com.atom.chat.net.ProfilePayloads` |
+| 1.21.1-neoforge | `com.atom.chat.net.ReactionBroadcastMessage` |
 | 1.21.1-neoforge | `com.atom.chat.net.ReactionCompanionClient` |
 | 1.21.1-neoforge | `com.atom.chat.net.ReactionCompanionServer` |
+| 1.21.1-neoforge | `com.atom.chat.net.ReactionPacketIdentity` |
 | 1.21.1-neoforge | `com.atom.chat.net.ReactionPayloads` |
 | 1.21.1-neoforge | `com.atom.chat.net.TestCompanionClient` |
 | 1.21.1-neoforge | `com.atom.chat.net.TestCompanionServer` |

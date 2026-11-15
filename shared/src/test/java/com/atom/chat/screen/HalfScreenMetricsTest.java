@@ -65,17 +65,18 @@ class HalfScreenMetricsTest {
         assertEquals(500F, ScreenMetrics.panelWidth(1920, 1080), 0.001F);
     }
 
-    @Test void dockedChatHeaderAndComposerActuallyTouchAllThreeScreenEdges() throws Exception {
+    @Test void dockedWideChromeFillsItsWidthWithTopAndBottomFlush() throws Exception {
         dock();
         UiLayout chat = UiLayout.of(0, 0, 750, 1080, 26, 42, true);
-        assertEquals(0F, chat.header.x()); assertEquals(0F, chat.header.y());
-        assertEquals(750F, chat.header.w());
-        assertEquals(0F, chat.inputBar.x()); assertEquals(750F, chat.inputBar.w());
+        float width=750, left=0;
+        assertEquals(left, chat.header.x()); assertEquals(0F, chat.header.y());
+        assertEquals(width, chat.header.w());
+        assertEquals(left, chat.inputBar.x()); assertEquals(width, chat.inputBar.w());
         assertEquals(1080F, chat.inputBar.bottom());
         assertTrue(chat.list.bottom() <= chat.inputBar.y());
         assertEquals(chat.inputBar.y(), chat.replyBar.bottom());
         UiLayout root = UiLayout.ofRoot(0, 0, 750, 1080, true);
-        assertEquals(0F, root.tabBar.x()); assertEquals(750F, root.tabBar.w());
+        assertEquals(left, root.tabBar.x()); assertEquals(width, root.tabBar.w());
         assertEquals(1080F, root.tabBar.bottom());
     }
 

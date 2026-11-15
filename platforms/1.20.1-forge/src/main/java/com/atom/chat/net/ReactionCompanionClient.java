@@ -13,5 +13,9 @@ public final class ReactionCompanionClient {
         var client = Minecraft.getInstance();
         return client.player != null && client.getConnection() != null && (ReactionPayloads.CHANNEL != null && ReactionPayloads.CHANNEL.isRemotePresent(client.getConnection().getConnection()));
     }
-    public static void onData(ReactionPayloads.DataPayload payload) { ReactionClient.accept(payload.bytes()); }
+    public static void onData(ReactionPayloads.DataPayload payload,Object origin) {
+        var client=Minecraft.getInstance();
+        Object current=client.getConnection()==null ? null : client.getConnection().getConnection();
+        ReactionClient.acceptFrom(origin,current,payload.bytes());
+    }
 }

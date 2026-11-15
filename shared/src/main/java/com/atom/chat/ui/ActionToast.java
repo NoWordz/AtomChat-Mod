@@ -64,9 +64,13 @@ public final class ActionToast {
         if (entries.isEmpty()) {
             return;
         }
+        float boundedWidth = Math.min(panelW, LayoutTokens.TOAST_MAX_WIDTH);
+        panelX += (panelW - boundedWidth) / 2F;
+        panelW = boundedWidth;
         boolean motion = Animations.enabled();
         Font font = FontManager.font(UiTokens.FONT_NAME);
-        float stackBottom = bottom - UiTokens.s(8);
+        float pad = UiTokens.floatSurfaceShadowPad();
+        float stackBottom = bottom - pad;
         float gap = UiTokens.s(8);
         canvas.save();
         try {
@@ -78,7 +82,9 @@ public final class ActionToast {
                     continue;
                 }
                 String label = entry.label() != null ? entry.label() : translator.text(entry.key());
-                RowLayout row = layout(font, label, panelW);
+                float room = stackBottom - clipTop - pad;
+                if (room < 2F * LINE_HEIGHT) break;
+                RowLayout row = layout(font, label, panelW, room);
                 float w = row.width();
                 float rowH = row.height();
                 float x = panelX + (panelW - w) / 2.0F;
@@ -104,7 +110,6 @@ public final class ActionToast {
                         // The layer is padded to the shadow's measured reach, not
                         // to the blur radius: with both at s(8) the shadow's tail
                         // was cut into a hard rectangle along the layer edge.
-                        float pad = UiTokens.floatSurfaceShadowPad();
                         canvas.saveLayer(Rect.makeXYWH(x - pad, y - pad,
                                 w + pad * 2.0F, rowH + pad * 2.0F), layer);
                         try {
@@ -125,10 +130,38 @@ public final class ActionToast {
     record RowLayout(float width, float height, float textWidth, List<String> lines) {}
 
     static RowLayout layout(Font font, String label, float panelWidth) {
+        return layout(font, label, panelWidth, Float.MAX_VALUE);
+    }
+
+    static RowLayout layout(Font font, String label, float panelWidth, float maxHeight) {
         float extra = PAD_X * 2.0F + ICON + UiTokens.s(8);
-        float maxWidth = Math.max(1.0F, panelWidth - UiTokens.s(32));
+        float maxWidth = Math.max(1.0F, panelWidth - 2F * UiTokens.floatSurfaceShadowPad());
         float textWidth = Math.max(1.0F, maxWidth - extra);
-        List<String> lines = SkiaFontRenderer.wrapWords(font, label, textWidth);
+        List<String> lines = new java.util.ArrayList<>();
+        for (String wrapped : SkiaFontRenderer.wrapWords(font, label, textWidth)) {
+            StringBuilder line = new StringBuilder();
+            for (int at = 0; at < wrapped.length();) {
+                int end = wrapped.offsetByCodePoints(at, 1);
+                String glyph = wrapped.substring(at, end);
+                if (SkiaFontRenderer.getStringWidth(font, line + glyph) > textWidth && line.length() > 0) {
+                    lines.add(line.toString());
+                    line.setLength(0);
+                }
+                if (SkiaFontRenderer.getStringWidth(font, glyph) <= textWidth) line.append(glyph);
+                at = end;
+            }
+            lines.add(line.toString());
+        }
+        int maxLines = Math.max(1, (int) Math.min(Integer.MAX_VALUE - 1L,
+                Math.floor(maxHeight / LINE_HEIGHT) - 1));
+        if (lines.size() > maxLines) {
+            lines = new java.util.ArrayList<>(lines.subList(0, maxLines));
+            String last = lines.get(maxLines - 1);
+            while (!last.isEmpty() && SkiaFontRenderer.getStringWidth(font, last + "…") > textWidth) {
+                last = last.substring(0, last.offsetByCodePoints(last.length(), -1));
+            }
+            lines.set(maxLines - 1, last + "…");
+        }
         float measured = 0.0F;
         for (String line : lines) measured = Math.max(measured, SkiaFontRenderer.getStringWidth(font, line));
         float height = Math.max(2.0F * LINE_HEIGHT, (lines.size() + 1) * LINE_HEIGHT);

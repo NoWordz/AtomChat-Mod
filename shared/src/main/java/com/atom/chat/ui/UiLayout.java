@@ -216,6 +216,13 @@ public final class UiLayout {
         return listColumnX(panelX) + UiTokens.ROW_CLIP_INSET;
     }
 
+    public Rect jumpLatest() {
+        float size = LayoutTokens.JUMP_SIZE;
+        float clearance = com.atom.chat.render.SoftShadow.jumpPad();
+        return new Rect(list.right() - size - clearance,
+                list.bottom() - size - clearance, size, size);
+    }
+
     /** Width of a card inside the list content column; see {@link #cardColumnX}. */
     public static float cardColumnW(float panelW) {
         return listColumnW(panelW) - UiTokens.ROW_CLIP_INSET * 2.0F;

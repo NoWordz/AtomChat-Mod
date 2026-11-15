@@ -36,6 +36,10 @@ public final class MessageMerge {
 
     /** Whether {@code next} can be folded into the last stored message. */
     public static boolean canMerge(ChatMessage last, ChatMessage next) {
+        var aKey = com.atom.chat.reaction.ReactionClient.key(last);
+        var bKey = com.atom.chat.reaction.ReactionClient.key(next);
+        if ((aKey != null || bKey != null) && !java.util.Objects.equals(aKey, bKey)) return false;
+
         if (last == null || next == null) {
             return false;
         }

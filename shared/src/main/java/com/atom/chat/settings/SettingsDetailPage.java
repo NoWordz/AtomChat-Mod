@@ -123,7 +123,7 @@ public final class SettingsDetailPage {
         host.scrollSync().detailScroll().setContent(host.sectionPage().measureContent(layout, section), layout.list.h());
         syncChipScroll(section);
         host.scrollSync().detailScroll().updateAnimation(System.currentTimeMillis());
-        host.sectionPage().render(canvas, layout, section, vmx, vmy, host.scrollSync().detailScroll().getScrollY(),
+        host.sectionPage().renderBody(canvas, layout, section, vmx, vmy, host.scrollSync().detailScroll().getScrollY(),
                 host.accent());
         host.scrollSync().drawScrollbar(canvas, layout, vmx, vmy, host.scrollSync().detailScroll());
         // Modal overlays on top of the whole panel: the cropper must render on

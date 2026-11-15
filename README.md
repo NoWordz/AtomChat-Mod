@@ -24,10 +24,12 @@ A client-side mod that replaces the vanilla chat screen with a vector-drawn phon
 
 - **Phone panel** — frosted-glass or wallpaper background, three bottom tabs (chat / profile / settings), interruptible slide and zoom transitions, including settings tabs. Animations can be disabled globally.
 - **Layout editor** — move the panel, resize from any edge or corner, and snap to nine anchors. New installations and layout resets fit the reference proportions to the available viewport; saved layouts are preserved. Width and height use design pixels, with limits that adapt to the window and UI scale.
+- **HUD shortcut** — a solid white chat bubble with three cutout dots shows the actual panel key, follows vanilla GUI scale, hides with F1, and slides/fades away when the panel opens.
+- **Reactions** — per-message emoji synchronization requires AtomChat 0.8.0 on both client and server; identical messages keep separate bubbles while reaction IDs are active.
 - **Bubbles and identity** — own messages right, others left; real player names with round skin avatars, quote capsules, @ highlights, flood grouping, history folding at 100 messages per batch.
 - **Image messages** — upload via picker, drag-and-drop or Ctrl+V; GIFs loop inside the bubble; left-click for a fullscreen preview, right-click to save the original. Uploads stay with their original conversation; when a draft is full, results wait for space. Failures and queue limits have visible feedback.
 - **Private chat and notifications** — a foldable conversation list; per-session drafts and scroll positions; banners for mentions, quotes and DMs with click-to-jump; double-click an avatar to poke.
-- **Appearance** — frosted glass and multiple color presets, including translucent palettes; per-color adjustment with live preview, custom wallpaper / header, selectable AtomChat or E33Chat player-avatar style, separate panel and content scaling.
+- **Appearance** — frosted glass and multiple color presets, including translucent palettes; per-color adjustment with live preview, custom wallpaper / header, selectable AtomChat or E33Chat player-avatar style, separate panel and content scaling. Wide layouts cap and center their chrome and content; settings tiles keep a readable maximum size.
 - **Feedback sounds** — button, send and panel-open feedback share a soft CC0 bubble source; notification and feedback sounds have separate switches and volumes.
 - **Experimental chat effects** — hearts, birthday cakes and fireworks appear inside the open chat panel for matching Chinese or English phrases, controlled in Chat and notifications → Advanced.
 - **Player profiles** — the server synchronizes signatures and cropped headers; hosted profile images are preserved per world, with later joins and reconnects supported.
@@ -63,7 +65,7 @@ Use the in-game settings for live changes. Client configuration lives at `config
 | Settings | Common keys |
 | --- | --- |
 | Layout | `panelWidth`, `panelHeight`, `uiScale`, `contentScale` |
-| Appearance and motion | `avatarStyle` (`ATOMCHAT` or `E33CHAT`), `pageNavStyle` (slide or zoom), `animationEnabled`, `blurEnabled` |
+| Appearance and motion | `avatarStyle` (`ATOMCHAT` or `E33CHAT`), `pageNavStyle` (slide by default, or zoom), `animationEnabled`, `blurEnabled` |
 | Sound | `notificationSoundEnabled`, `notifyVolume`, `feedbackSoundEnabled`, `feedbackVolume` |
 | Other | `funEffectsEnabled`, `debug` |
 

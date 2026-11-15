@@ -14,7 +14,7 @@ public final class ReactionPayloads {
 
     public record ActionPayload(byte[] bytes) implements CustomPacketPayload {
         public static final Type<ActionPayload> TYPE =
-                new Type<>(ResourceLocation.fromNamespaceAndPath(AtomChat.MOD_ID, "reaction_action"));
+                new Type<>(ResourceLocation.fromNamespaceAndPath(AtomChat.MOD_ID, "reaction_action_v2"));
         public static final StreamCodec<RegistryFriendlyByteBuf, ActionPayload> STREAM_CODEC =
                 new StreamCodec<>() {
                     @Override
@@ -36,7 +36,7 @@ public final class ReactionPayloads {
 
     public record DataPayload(byte[] bytes) implements CustomPacketPayload {
         public static final Type<DataPayload> TYPE =
-                new Type<>(ResourceLocation.fromNamespaceAndPath(AtomChat.MOD_ID, "reaction_data"));
+                new Type<>(ResourceLocation.fromNamespaceAndPath(AtomChat.MOD_ID, "reaction_data_v2"));
         public static final StreamCodec<RegistryFriendlyByteBuf, DataPayload> STREAM_CODEC =
                 new StreamCodec<>() {
                     @Override
@@ -63,7 +63,7 @@ public final class ReactionPayloads {
         registrar.playToClient(DataPayload.TYPE, DataPayload.STREAM_CODEC,
                 (payload, ctx) -> {
                     if (net.neoforged.fml.loading.FMLEnvironment.dist == net.neoforged.api.distmarker.Dist.CLIENT) {
-                        ctx.enqueueWork(() -> ReactionCompanionClient.onData(payload));
+                        ctx.enqueueWork(() -> ReactionCompanionClient.onData(payload,ctx.connection()));
                     }
                 });
     }

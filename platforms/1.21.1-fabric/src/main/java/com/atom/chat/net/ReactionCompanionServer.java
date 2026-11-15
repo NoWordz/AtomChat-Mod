@@ -4,19 +4,31 @@ import java.util.*;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.MinecraftServer;
 
-/**
- * Server side of the reaction transport.
- *
- * <p>It no longer observes native chat delivery: the reacting client supplies
- * the content key it computed for the row, and the server stores and broadcasts
- * state under that key. Delivery is a plain broadcast to every connection that
- * negotiated the channel; a client with no row for a key renders nothing, which
- * is what keeps private-message reactions scoped without any per-message
- * authorization. Only the emoji allowlist, rate limit and caps are enforced
- * here (in {@link ReactionLedger}).</p>
- */
+/** Server-issued delivery IDs and audience-scoped reaction transport. */
 public final class ReactionCompanionServer {
     private ReactionCompanionServer() {}
+    private static final Map<MinecraftServer,ReactionDeliveryRegistry> DELIVERIES=Collections.synchronizedMap(new WeakHashMap<>());
+    private static ReactionDeliveryRegistry deliveries(MinecraftServer server) { return DELIVERIES.computeIfAbsent(server,ignored->new ReactionDeliveryRegistry()); }
+    public static ReactionDeliveryRegistry.Scope broadcastDelivery(ServerPlayerEntity receiver,Object component,UUID id) {
+        return broadcastDelivery(receiver,component,id,false);
+    }
+    public static ReactionDeliveryRegistry.Scope broadcastDelivery(ServerPlayerEntity receiver,Object component,UUID id,boolean overlay) {
+        return deliveries(receiver.getServer()).scope(receiver,component,id,overlay);
+    }
+    public static void onOutbound(ServerPlayerEntity receiver,net.minecraft.network.packet.Packet<?> packet) {
+        MinecraftServer server=receiver.getServer();
+        if(server==null || !com.atom.chat.config.AtomChatServerConfig.get().hostingEnabled) return;
+        UUID fingerprint=ReactionPacketIdentity.of(packet,server.getRegistryManager());
+        if(fingerprint==null) return;
+        ReactionDeliveryRegistry registry=deliveries(server);
+        Object source=ReactionPacketIdentity.source(packet);
+        UUID id=registry.take(receiver,source);
+        if(id==null && source==null) id=registry.nativeId(fingerprint,receiver.getUuid());
+        if(id==null) id=UUID.randomUUID();
+        if(!available(receiver)) return;
+        registry.register(id,receiver.getUuid());
+        send(receiver,ReactionWire.receipt(new ReactionWire.Receipt(id,fingerprint)));
+    }
     private static final Map<MinecraftServer, ReactionLedger> LEDGERS = new WeakHashMap<>();
     private static ReactionLedger ledger(MinecraftServer server) { return LEDGERS.computeIfAbsent(server, ignored -> new ReactionLedger()); }
     private static boolean available(ServerPlayerEntity receiver) { return net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking.canSend(receiver, ReactionPayloads.DataPayload.ID); }
@@ -27,6 +39,7 @@ public final class ReactionCompanionServer {
         ReactionWire.Action action;
         try { action = ReactionWire.readAction(bytes); }
         catch (IllegalArgumentException e) { return; }
+        if(!deliveries(server).received(action.id(),sender.getUuid())) { send(sender,ReactionWire.rejection("unknown_message")); return; }
         ReactionLedger ledger = ledger(server);
         long before=ledger.revision(action.id());
         String reason = ledger.apply(sender.getUuid(), sender, sender.getGameProfile().getName(), action, System.nanoTime()/1_000_000L);
@@ -39,7 +52,7 @@ public final class ReactionCompanionServer {
         // appear. A repeat that changed nothing goes to the sender alone.
         if (before==snapshot.revision()) { send(sender,response); return; }
         for (ServerPlayerEntity receiver : server.getPlayerManager().getPlayerList()) {
-            send(receiver, response);
+            if(deliveries(server).received(action.id(),receiver.getUuid())) send(receiver, response);
         }
     }
     public static void register() {

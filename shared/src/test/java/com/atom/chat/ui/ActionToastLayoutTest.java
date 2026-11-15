@@ -12,6 +12,23 @@ import org.junit.jupiter.api.io.TempDir;
 import static org.junit.jupiter.api.Assertions.*;
 
 class ActionToastLayoutTest {
+    @Test void excessiveTextStaysWithinTheAvailableHeight() {
+        var font = FontManager.font(UiTokens.FONT_NAME);
+        var row = ActionToast.layout(font, "很长的反馈文字".repeat(150), 220, 140);
+        assertTrue(row.height() <= 140);
+        assertTrue(row.lines().get(row.lines().size() - 1).endsWith("…"));
+    }
+    @Test void longUnbrokenTextFitsTheActualCardTextSlot() {
+        var font = FontManager.font(UiTokens.FONT_NAME);
+        for (String label : new String[]{"WWWWWWWWWWWWWWWWWWWWWWWWWWWWWW", "路径：C:/非常长的文件目录/截图截图截图截图截图截图.png"}) {
+            for (float width : new float[]{160, 220, 400}) {
+                var row = ActionToast.layout(font, label, width);
+                for (String line : row.lines()) {
+                    assertTrue(SkiaFontRenderer.getStringWidth(font, line) <= row.textWidth() + 0.01F, line);
+                }
+            }
+        }
+    }
     @Test void longTextWrapsAndRowsStackWithoutOverlap() {
         var font = FontManager.font(UiTokens.FONT_NAME);
         var longRow = ActionToast.layout(font, "教程预览：此入口只讲解用途，不上传、删除或修改真实文件", 220);

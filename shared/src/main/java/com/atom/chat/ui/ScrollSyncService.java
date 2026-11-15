@@ -221,9 +221,10 @@ public final class ScrollSyncService {
     public void drawJumpLatest(Canvas canvas, UiLayout layout, float vmx, float vmy,
                                ScrollController scroll, boolean advance) {
         boolean show = scroll.getMaxScroll() > 0.0F && !scroll.isAtBottom();
-        float size = UiTokens.s(38);
-        float x = layout.list.right() - size - UiTokens.s(12);
-        float y = layout.list.bottom() - size - UiTokens.s(12);
+        UiLayout.Rect button = layout.jumpLatest();
+        float size = button.w();
+        float x = button.x();
+        float y = button.y();
         boolean hover = vmx >= x && vmx <= x + size && vmy >= y && vmy <= y + size;
         // Same interaction language as every other control: the hover grey is
         // eased rather than switched, and the pill rides the shared bounce spring
@@ -256,7 +257,7 @@ public final class ScrollSyncService {
                 // Fixed dark floating pill (the jump FAB floats over arbitrary
                 // message content, whose polarity no theme token knows), same fixed
                 // polarity family as the popups; hover lifts the grey a notch.
-                int bg = DrawPrimitives.lerpArgb(Color.makeARGB(235, 52, 58, 70),
+                int bg = DrawPrimitives.lerpArgb(MenuPopup.SURFACE_COLOR,
                         Color.makeARGB(245, 70, 76, 90), jumpLatestHover);
                 float fabRadius = UiTokens.radius(size / (2.0F * UiTokens.SCALE));
                 com.atom.chat.render.SoftShadow.drawJumpSurface(canvas, x, y, size, fabRadius, bg);
@@ -283,9 +284,10 @@ public final class ScrollSyncService {
         if (jumpLatestAnim < 0.01F || scroll.getMaxScroll() <= 0.0F || scroll.isAtBottom()) {
             return false;
         }
-        float size = UiTokens.s(38);
-        float x = layout.list.right() - size - UiTokens.s(12);
-        float y = layout.list.bottom() - size - UiTokens.s(12);
+        UiLayout.Rect button = layout.jumpLatest();
+        float size = button.w();
+        float x = button.x();
+        float y = button.y();
         return vmx >= x && vmx <= x + size && vmy >= y && vmy <= y + size;
     }
 

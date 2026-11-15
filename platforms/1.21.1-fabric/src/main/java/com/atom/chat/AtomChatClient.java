@@ -161,6 +161,7 @@ public class AtomChatClient implements ClientModInitializer {
         com.atom.chat.net.PackSyncClient.onDisconnect();
         com.atom.chat.net.ConfigScreenClient.onDisconnect();
         com.atom.chat.render.FirstOpenWarmup.onDisconnect();
+        com.atom.chat.ui.PanelCloseOverlay.INSTANCE.clear();
         });
         NotificationController.registerSound();
         com.atom.chat.audio.FeedbackSoundController.registerSound();

@@ -40,6 +40,18 @@ class FrameProfileTest {
         String summary = FrameProfile.summary();
         assertFalse(summary.contains("n="), summary);
         assertTrue(summary.contains("no samples"), summary);
+        assertEquals(0L, FrameProfile.startHud());
+        assertFalse(FrameProfile.hudFrame(System.nanoTime()));
+        assertTrue(FrameProfile.hudSummary().contains("no samples"));
+    }
+
+    @Test void hudHasItsOwnWindowAndReportCadence() {
+        for (int i = 1; i <= 600; i++) {
+            assertEquals(i == 600, FrameProfile.hudFrame(System.nanoTime() - 1_000_000L));
+        }
+        assertTrue(FrameProfile.hudSummary().contains("n=600"));
+        assertTrue(FrameProfile.summary().contains("panel  no samples"));
+        assertFalse(FrameProfile.frame(System.nanoTime() - 1_000_000L, -1L));
     }
     @Test void popupMeasurementsNeverMixWithChatOrSettingsSamples() {
         FrameProfile.surface(FrameProfile.Surface.CHAT); FrameProfile.frame(System.nanoTime() - 1_000_000L, -1);

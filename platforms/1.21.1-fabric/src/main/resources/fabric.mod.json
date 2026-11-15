@@ -31,11 +31,18 @@
     {
       "config": "atomchat.client.mixins.json",
       "environment": "client"
+    },
+    {
+      "config": "atomchat.reactions.mixins.json"
     }
   ],
   "accessWidener": "atomchat.accesswidener",
-  "suggests": {"atomlib": "*"},
-  "custom": {"atomlib:client-required": "*"},
+  "suggests": {
+    "atomlib": "*"
+  },
+  "custom": {
+    "atomlib:client-required": "*"
+  },
   "depends": {
     "fabricloader": ">=0.16.0",
     "minecraft": "~1.21.1",

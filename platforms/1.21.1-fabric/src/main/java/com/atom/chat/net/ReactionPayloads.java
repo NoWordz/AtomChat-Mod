@@ -16,7 +16,7 @@ public final class ReactionPayloads {
     
     public record ActionPayload(byte[] bytes) implements CustomPayload {
         public static final CustomPayload.Id<ActionPayload> ID =
-                new CustomPayload.Id<>(Identifier.of(AtomChat.MOD_ID, "reaction_action"));
+                new CustomPayload.Id<>(Identifier.of(AtomChat.MOD_ID, "reaction_action_v2"));
         public static final PacketCodec<RegistryByteBuf, ActionPayload> CODEC =
                 PacketCodec.of(ActionPayload::write, ActionPayload::read);
 
@@ -37,7 +37,7 @@ public final class ReactionPayloads {
     
     public record DataPayload(byte[] bytes) implements CustomPayload {
         public static final CustomPayload.Id<DataPayload> ID =
-                new CustomPayload.Id<>(Identifier.of(AtomChat.MOD_ID, "reaction_data"));
+                new CustomPayload.Id<>(Identifier.of(AtomChat.MOD_ID, "reaction_data_v2"));
         public static final PacketCodec<RegistryByteBuf, DataPayload> CODEC =
                 PacketCodec.of(DataPayload::write, DataPayload::read);
 

@@ -15,6 +15,7 @@ public final class PageTransitionComposite implements AutoCloseable {
         NavPage topNav();
         /** A local tab changes the body even when the navigation destination is unchanged. */
         default int bodyVariant() { return 0; }
+        default float bodyClipTop(UiLayout layout) { return layout.header.bottom(); }
         void drawArrivingBody(Canvas canvas, UiLayout layout, int mouseX, int mouseY);
         void drawArrivingHeader(Canvas canvas, UiLayout layout, int mouseX, int mouseY, float vmx, float vmy);
         /** Reports item motion; the envelope still owns entry and exit for the entire body. */
@@ -118,13 +119,14 @@ public final class PageTransitionComposite implements AutoCloseable {
             } else {
                 try (PictureRecorder recorder = new PictureRecorder()) {
                     Canvas recording = recorder.beginRecording(cull);
+                    recording.clipRect(Rect.makeLTRB(panel.x(), host.bodyClipTop(layout), panel.right(), panel.bottom()));
                     if (frame.alpha() == 0 && departing != null) {
                         // Replaying the exact command stream avoids an extra AA clip/layer
                         // rounding the same interrupted pixels a second time.
                         departing.playback(recording);
                     } else {
                     SkiaDraw.clip(recording, panel.x(), panel.y(), panel.w(), panel.h(), UiTokens.panelRadius());
-                    recording.clipRect(Rect.makeLTRB(panel.x(), layout.header.bottom(), panel.right(), panel.bottom()));
+                    recording.clipRect(Rect.makeLTRB(panel.x(), host.bodyClipTop(layout), panel.right(), panel.bottom()));
                     if (departing != null) drawLayer(recording, departing, panel,
                             1 - frame.alpha(), frame.exitDx(), frame.exitScale());
                     drawLayer(recording, target, panel, frame.alpha(), frame.dx(), frame.scale());
@@ -137,7 +139,7 @@ public final class PageTransitionComposite implements AutoCloseable {
             // Expand commands instead of retaining a nested transition Picture chain.
             lastFrame.playback(canvas);
         } finally { if (target != null) target.close(); }
-        host.drawArrivingHeader(canvas, layout, mouseX, mouseY, vmx, vmy);
+        UiStagger.atFrame(nowMs, () -> host.drawArrivingHeader(canvas, layout, mouseX, mouseY, vmx, vmy));
     }
     private void drawLayer(Canvas canvas, Picture picture, UiLayout.Rect panel,
                            float alpha, float dx, float scale) {

@@ -1,0 +1,26 @@
+{
+  "date": "2026-11-15T13:23:24.305816+08:00",
+  "targets": {
+    "1.20.1-forge": {
+      "sha256": "aa2e5b9fd836b728bcc25f4c84e7ee3940523a972a2f22ffa962bad1f6095b79",
+      "backup_verified": true,
+      "unique_enabled_jar": true,
+      "all_mixin_classes_resolve": true,
+      "atomlib_unchanged": true
+    },
+    "1.21.1-fabric": {
+      "sha256": "b23b8f684b9578f42e391708dcebd6e0f5c8a9b72c186c72f228e7b0e8d3bb35",
+      "backup_verified": true,
+      "unique_enabled_jar": true,
+      "all_mixin_classes_resolve": true,
+      "atomlib_unchanged": true
+    },
+    "1.21.1-neoforge": {
+      "sha256": "bf3ef34ff1cd1e5d3a6b5bb4db920f6aae9b3bc3c0407476e21029b285917342",
+      "backup_verified": true,
+      "unique_enabled_jar": true,
+      "all_mixin_classes_resolve": true,
+      "atomlib_unchanged": true
+    }
+  }
+}

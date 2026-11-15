@@ -1,0 +1,36 @@
+{
+  "1.20.1-forge": {
+    "installed_sha256": "1a3fa4d5bda80fb7258e3e512771b209174525a4c1a5309da8b498a5fcbeaaec",
+    "candidate_matches": true,
+    "backup_matches": true,
+    "unique_atomchat": true,
+    "atomlib_unchanged": true,
+    "mixin_classes_present": [
+      "atomchat.client.mixins.json",
+      "atomchat.screen.mixins.json"
+    ]
+  },
+  "1.21.1-fabric": {
+    "installed_sha256": "34352728204d1a13c1caefd75eb0c9dd3f5d40f2d9640e307543fdf3fec821f6",
+    "candidate_matches": true,
+    "backup_matches": true,
+    "unique_atomchat": true,
+    "atomlib_unchanged": true,
+    "mixin_classes_present": [
+      "atomchat.client.mixins.json",
+      "atomchat.reactions.mixins.json",
+      "atomchat.screen.mixins.json"
+    ]
+  },
+  "1.21.1-neoforge": {
+    "installed_sha256": "e6618fda62a172f4080b3527731437a8fa4ad7a32c1201b7eef382bb9185ff26",
+    "candidate_matches": true,
+    "backup_matches": true,
+    "unique_atomchat": true,
+    "atomlib_unchanged": true,
+    "mixin_classes_present": [
+      "atomchat.client.mixins.json",
+      "atomchat.screen.mixins.json"
+    ]
+  }
+}

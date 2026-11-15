@@ -2,19 +2,7 @@ package com.atom.chat.reaction;
 
 import java.util.*;
 
-/**
- * Server-thread reaction ledger, keyed by the content key the reacting client
- * supplied.
- *
- * <p>It self-registers on the first action for a key: with client-computed
- * content keys there is no per-message delivery handshake to wait for, so a key
- * that has never been seen simply starts an empty entry. The server keeps no
- * audience and verifies no message identity — that is the deliberate
- * "transport, not arbiter" model that lets reactions work on servers whose chat
- * reaches the client as an unsigned system line. It still enforces the emoji
- * allowlist, the per-connection rate limit and the per-player / per-message /
- * per-emoji caps.</p>
- */
+/** Server-thread reaction state; the transport validates delivery IDs and audience before applying actions. */
 public final class ReactionLedger {
     private static final int MAX_MESSAGES = 4096;
     private record Window(long started, int count) {}

@@ -78,6 +78,7 @@ public final class PrivateChatStore {
         if (partner == null || message == null) {
             return false;
         }
+        com.atom.chat.reaction.ReactionClient.bind(message);
         Conversation c = conversation(partner);
         if (MessageMerge.antiSpamEnabled() && !c.messages.isEmpty()) {
             ChatMessage last = c.messages.get(c.messages.size() - 1);
@@ -109,6 +110,7 @@ public final class PrivateChatStore {
         if (partner == null || message == null) {
             return false;
         }
+        com.atom.chat.reaction.ReactionClient.bind(message);
         Conversation c = conversation(partner);
         if (MessageMerge.antiSpamEnabled() && !c.messages.isEmpty()) {
             ChatMessage last = c.messages.get(c.messages.size() - 1);

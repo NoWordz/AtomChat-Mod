@@ -1,7 +1,5 @@
 package com.atom.chat.render;
 
-import com.atom.lib.design.atomchat.SkiaDraw;
-import com.atom.lib.design.atomchat.UiTokens;
 import io.github.humbleui.skija.Canvas;
 import io.github.humbleui.skija.ClipMode;
 import io.github.humbleui.skija.FilterBlurMode;
@@ -17,7 +15,7 @@ import io.github.humbleui.types.Rect;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
-/** Outside-only Gaussian shadows. Render-thread confined; cached images own CPU pixels. */
+/** Panel/dialog Gaussian shadows and popup material for the jump button. Render-thread confined. */
 public final class SoftShadow {
     private static final float PANEL_SIGMA = ShadowTokens.PANEL_SIGMA;
     private static final float PANEL_DROP = ShadowTokens.PANEL_DROP;
@@ -76,18 +74,11 @@ public final class SoftShadow {
         }
     }
 
-    /** Production FAB face: its shadow cannot overpaint either the face or the glyph. */
+    /** Shares the accepted popup material, including its lit rim and shaded interior. */
     public static void drawJumpSurface(Canvas canvas, float x, float y, float size, float radius, int fillArgb) {
         if (size <= 0) return;
         float r = Math.max(0F, Math.min(radius, size / 2F));
-        canvas.save();
-        try {
-            canvas.clipRRect(RRect.makeXYWH(x, y, size, size, r), ClipMode.DIFFERENCE, true);
-            SkiaDraw.drawRoundedShadow(canvas, x, y, size, size, r, ShadowTokens.FAB_BLUR, UiTokens.CHROME_SHADOW);
-        } finally {
-            canvas.restore();
-        }
-        SkiaDraw.drawRoundedRect(canvas, x, y, size, size, r, fillArgb);
+        com.atom.chat.ui.MenuPopup.drawMaterial(canvas, x, y, size, size, r, fillArgb);
     }
 
     /**

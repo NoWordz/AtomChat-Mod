@@ -1663,11 +1663,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
     private float settingsResetHover;
     /** Hover washes for the emoji panel tab strip (owned by {@link EmojiPanel}). */
 
-    // Animation state — durations live in UiMotion so every transition is tuned
-    // in one place and none of them can drift back to a sluggish value. The
-    // panel open/close rides the same exponential clock (PANEL_OPEN_TAU_MS on
-    // the way in, the shorter PANEL_CLOSE_TAU_MS on the way out), so its shape
-    // and fade resolve on one timeline per direction.
+    // Panel and HUD share a bounded timeline; page transitions remain independent.
     private static final int GLFW_KEY_V = 86;
     /** Truth3 诊断热键：F6（GLFW 295）；备用 Ctrl+Shift+F6，见交付报告。 */
     private static final int TRUTH3_KEY_F6 = 295;
@@ -1675,19 +1671,12 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
     private static final float LAYER_CHROME = 32.0F;
     private final long openStart = System.currentTimeMillis();
     private boolean closing;
-    /**
-     * Panel open/close progress (0 hidden, 1 open). Rides
-     * {@link UiMotion#expApproach} at {@link UiMotion#PANEL_OPEN_TAU_MS}
-     * opening and the shorter {@link UiMotion#PANEL_CLOSE_TAU_MS} closing —
-     * the same exponential family as the page nav, not the old spring:
-     * full-speed start, decaying tail, exact snap at the target, never
-     * overshoots.
-     */
+    /** Last painted progress, shared by panel geometry, blur and HUD. */
     private float panelProgress = 0.0F;
-    /** The open/close spring; see UiSpring.newPanelMotionSpring for the tune. */
-    private final com.atom.chat.ui.SpringAnim panelMotion = com.atom.chat.ui.UiSpring.newPanelMotionSpring();
-    /** Wall-clock timestamp of the previous frame — the progress clock consumes real dt. */
-    private long lastFrameNanos = System.nanoTime();
+
+    public float shortcutVisibility() { return Animations.enabled() ? 1F - PanelOpenMotion.fade(panelMotion.value(System.nanoTime())) : 0F; }
+    /** Monotonic open/close timeline; page transitions keep their own clock. */
+    private final com.atom.chat.ui.PanelTimeline panelMotion = new com.atom.chat.ui.PanelTimeline();
     private boolean blurDrawnThisFrame;
 
     // Per-frame animation state (smooth hover/popup transitions)
@@ -1842,6 +1831,8 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         // resize), so this is the right hook for picking up hand-edited config
         // — chat/whisper templates take effect without a game restart.
         AtomChatConfig.reload();
+        panelProgress = com.atom.chat.ui.PanelCloseOverlay.INSTANCE.takeProgress(Minecraft.getInstance().level, System.nanoTime());
+        panelMotion.snapTo(panelProgress);
         this.draftGeneration = DraftSessionStore.generation();
         this.draftStore = AtomChatConfig.get().retainDraftOnClose
                 ? DraftSessionStore.current() : new DraftStore();
@@ -1970,8 +1961,11 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
                         // The settings/profile pushed header draws through the
                         // detail header rect; the chat pages' header carries the
                         // back button, the online status and the feed filter.
-                        case SETTINGS_SECTION, PROFILE_DETAIL ->
-                                headerChrome.drawPushedHeader(canvas, vmx, vmy, topNav(), headerActionFor(topNav()));
+                        case SETTINGS_SECTION, PROFILE_DETAIL -> {
+                            headerChrome.drawPushedHeader(canvas, vmx, vmy, topNav(), headerActionFor(topNav()));
+                            if (topPage() == AppPage.SETTINGS_SECTION) settingsSectionPage.renderFixedChipBar(
+                                    canvas, detailLayout(), topNav().section(), vmx, vmy, accent());
+                        }
                         default -> ShellHeader.render(canvas, layout.header,
                                 headerChrome.shellTitleFor(topNav()), true,
                                 headerChrome.backButton(), headerChrome.backButtonHover(),
@@ -1992,6 +1986,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
                 public boolean arrivalStaggersSurfaces() {
                     return false;
                 }
+                @Override public float bodyClipTop(UiLayout layout) { return stationaryChromeBottom(); }
                 @Override public int bodyVariant() {
                     return topPage() == AppPage.SETTINGS_SECTION
                             ? settingsSectionPage.activeChipIndex(topNav().section()) : 0;
@@ -2250,13 +2245,8 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
                 return null;
             });
         }
-        // Panel progress on the exponential clock (same family as the page
-        // nav): expApproach clamps dt to 50ms internally and snaps exactly to
-        // the target, so the equality below is the settle test — with
-        // decorative motion off tau=0 lands this frame, closing included.
+        // One monotonic clock drives the panel and its complementary HUD hint.
         long nowNanos = System.nanoTime();
-        float frameDtMs = PanelOpenMotion.frameDtMs(nowNanos, lastFrameNanos);
-        lastFrameNanos = nowNanos;
         // Truth3: 独立帧间隔采样器 + 配置灌入。放在 drawPanel 之前、与其完全解耦，
         // 因此 C 档（不调用 drawPanel）仍出数。复用入口已取的 nowNanos，不额外取时钟。
         com.atom.chat.diagnostics.Truth3Probe probe = com.atom.chat.diagnostics.Truth3Probe.get();
@@ -2271,12 +2261,9 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
             String cadence = probe.cadenceLine();
             if (cadence != null) AtomChat.LOGGER.info(cadence);
         }
-        // The open/close rides a spring (unit E2): quicker than the retired
-        // tau-70 exponential with a restrained settle, same exact-landing
-        // snap so the equality settle test and the 6% close cut keep working.
-        panelMotion.setTarget(closing ? 0.0F : 1.0F);
-        panelMotion.update(frameDtMs, Animations.enabled());
-        panelProgress = panelMotion.value();
+        // Sample elapsed time directly: hitches do not change the motion duration.
+        panelMotion.target(closing ? 0.0F : 1.0F, nowNanos, Animations.enabled());
+        panelProgress = panelMotion.value(nowNanos);
         boolean panelSettled = PanelOpenMotion.settled(panelProgress, closing);
         // Closing is cut at 6% left: past that the panel is a subpixel sliver
         // and the exponential tail would only delay setScreen(null) (see
@@ -2702,7 +2689,41 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
     }
 
     private void requestClose() {
+        if (closing) return;
         closing = true;
+        // Freeze draw commands once; teardown and game input resume in this event.
+        // No live Screen or mutable page state is retained by the HUD exit.
+        var exit = com.atom.chat.ui.PanelCloseOverlay.INSTANCE;
+        long captureStart = com.atom.chat.diagnostics.FrameProfile.screenStage("PANEL_EXIT_CAPTURE");
+        boolean captured = false;
+        try {
+            if (Animations.enabled() && panelProgress > 0F && minecraft.level != null) {
+                graphics.draw(null, uiDensity(), (canvas, snapshot) -> {
+                    float previous = panelProgress;
+                    long previousDt = frameDt;
+                    panelProgress = 1F;
+                    frameDt = 0;
+                    float viewportW = ScreenMetrics.vw(minecraft.getWindow());
+                    float viewportH = ScreenMetrics.vh(minecraft.getWindow());
+                    try (var recorder = new io.github.humbleui.skija.PictureRecorder()) {
+                        Canvas recording = recorder.beginRecording(Rect.makeWH(viewportW, viewportH));
+                        drawPhone(recording, null, (int) pointerGuiX, (int) pointerGuiY, 0);
+                        exit.begin(recorder.finishRecordingAsPicture(), layout().rect(), AtomChatConfig.get().pageNavStyle,
+                                new com.atom.chat.ui.PanelCloseOverlay.Environment(minecraft.level, graphics.contextIdentity(),
+                                        (float) uiDensity(), viewportW, viewportH), previous,
+                                blurDrawnThisFrame, System.nanoTime());
+                    } finally { panelProgress = previous; frameDt = previousDt; }
+                });
+                captured = true;
+            } else exit.clear();
+        } catch (RuntimeException | LinkageError failure) {
+            exit.clear();
+            AtomChat.LOGGER.warn(com.atom.chat.diagnostics.AtomChatLog.message("render", "Panel exit capture failed"), failure);
+        } finally {
+            com.atom.chat.diagnostics.FrameProfile.screenStageEnd("PANEL_EXIT_CAPTURE", captureStart, captured);
+            FirstOpenBudget.abort();
+            this.minecraft.setScreen(null);
+        }
     }
 
     /**
@@ -3783,12 +3804,17 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         return hits == null ? new com.atom.chat.ui.StaggerHitMap.Point(bx, by) : hits.inverse(bx, by);
     }
 
+    private float stationaryChromeBottom() {
+        return topPage() == AppPage.SETTINGS_SECTION && settingsSectionPage.chipBarHeight(topNav().section()) > 0
+                ? detailLayout().chipBar.bottom() : layout().header.bottom();
+    }
+
     private float toVirtualX(double guiX) {
         float x = ScreenMetrics.toVirtualX(client.getWindow(), guiX);
         float y = ScreenMetrics.toVirtualY(client.getWindow(), pointerGuiY);
         if (motionPointerExcluded()) return x;
         if (pointerInBottom(y)) return bottomChrome.inverseX(x);
-        return y > layout().header.bottom() ? bodyPointer(x, y).x() : x;
+        return y > stationaryChromeBottom() ? bodyPointer(x, y).x() : x;
     }
 
     private float toVirtualY(double guiY) {
@@ -3796,7 +3822,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         float y = ScreenMetrics.toVirtualY(client.getWindow(), guiY);
         if (motionPointerExcluded()) return y;
         if (pointerInBottom(y)) return bottomChrome.inverseY(y);
-        return y > layout().header.bottom() ? bodyPointer(x, y).y() : y;
+        return y > stationaryChromeBottom() ? bodyPointer(x, y).y() : y;
     }
 
     @Override

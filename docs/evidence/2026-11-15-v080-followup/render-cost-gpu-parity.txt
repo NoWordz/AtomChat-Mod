@@ -1,0 +1,10 @@
+V080 GL renderer=NVIDIA GeForce RTX 5060 Laptop GPU/PCIe/SSE2
+V080 cost=bridge cpu_p50=0.8650 cpu_p95=1.7393 gpu_p50=0.0002 gpu_p95=0.0004 ms
+[14:52:00] [Test worker/INFO]: [AtomChat][resource] Loaded bundled font /com/atom/lib/fonts/bundled-default.otf
+V080 cost=hud cpu_p50=1.5057 cpu_p95=2.0454 gpu_p50=0.2929 gpu_p95=0.5200 ms
+V080 cost=dots-picture-reference cpu_p50=3.3062 cpu_p95=3.8915 gpu_p50=0.1350 gpu_p95=1.2422 ms
+V080 cost=dots-batched cpu_p50=3.1297 cpu_p95=3.8718 gpu_p50=0.1093 gpu_p95=0.9127 ms
+V080 cost=bridge cpu_p50=0.4555 cpu_p95=0.6511 gpu_p50=0.0002 gpu_p95=0.0002 ms
+V080 cost=hud cpu_p50=1.2525 cpu_p95=1.7133 gpu_p50=0.2512 gpu_p95=0.4522 ms
+V080 cost=dots-batched cpu_p50=3.4180 cpu_p95=4.2747 gpu_p50=0.1268 gpu_p95=0.8825 ms
+V080 cost=dots-picture-reference cpu_p50=3.6407 cpu_p95=4.4045 gpu_p50=0.1316 gpu_p95=0.8147 ms

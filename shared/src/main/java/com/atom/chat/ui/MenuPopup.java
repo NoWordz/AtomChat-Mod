@@ -89,12 +89,17 @@ public final class MenuPopup {
 
     private static void drawSurface(Canvas canvas, float x, float y, float w, float h, float radius) {
         ClickRipples.block(new UiLayout.Rect(x, y, w, h));
+        drawMaterial(canvas, x, y, w, h, UiTokens.radius(radius), SURFACE_COLOR);
+    }
+
+    /** Shared material; radius is already scaled, including circular floating controls. */
+    public static void drawMaterial(Canvas canvas, float x, float y, float w, float h, float radius, int fill) {
         // The post-fill shadow also shades the interior, leaving the upper edge lit.
         // An outside-only shadow loses this accepted material on every popup consumer.
         com.atom.lib.design.atomchat.SkiaDraw.drawRoundedRect(canvas, x, y, w, h,
-                UiTokens.radius(radius), SURFACE_COLOR);
+                radius, fill);
         com.atom.lib.design.atomchat.SkiaDraw.drawRoundedShadow(canvas, x, y, w, h,
-                UiTokens.radius(radius), UiTokens.s(SURFACE_SHADOW_BLUR), UiTokens.CHROME_SHADOW);
+                radius, UiTokens.s(SURFACE_SHADOW_BLUR), UiTokens.CHROME_SHADOW);
     }
 
     /**

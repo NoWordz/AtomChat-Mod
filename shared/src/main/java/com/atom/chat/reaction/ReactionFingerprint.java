@@ -6,18 +6,10 @@ import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
 import java.util.Base64;
 import java.util.UUID;
-/** Only fields preserved by the packet codec participate; unsigned collisions are revoked by the ledger. */
+/** Fingerprints use only fields preserved by the packet codec. */
 public final class ReactionFingerprint {
     private ReactionFingerprint() {}
-    /**
-     * Content key both endpoints can compute from what they actually see:
-     * the sender's visible name plus the visible body. A server that rewrites
-     * chat into a system/game line (offline mode, LAN, plugins) drops the signed
-     * body entirely, so the signature-based {@link #of} key can never be rebuilt
-     * on the client. This is deliberately weaker (no signature, no timestamp):
-     * it trades per-message cryptographic identity for "works on every server",
-     * which is the same trade the plain-text quote prefix already makes.
-     */
+    /** Wire-content matching fingerprint, never a message identity. */
     public static UUID contentKey(String author,String body) {
         String canonical="content|"+(author==null?"":author.trim())+"|"+(body==null?"":body);
         try {

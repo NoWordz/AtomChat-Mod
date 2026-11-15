@@ -1,0 +1,10 @@
+{
+  "scope": "final reaction identity, native filled HUD/GUI scale, shadow, profiling follow-up",
+  "counts": {
+    "tests": 21,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "failures": []
+}

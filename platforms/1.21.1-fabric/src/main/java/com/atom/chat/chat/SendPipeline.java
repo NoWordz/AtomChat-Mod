@@ -139,14 +139,14 @@ public final class SendPipeline {
             client.player.networkHandler.sendChatMessage(normalized);
             // Arm echo suppression: the server relays this line back through the
             // identity-less path on NCR-style servers (e33chat parity).
-            PublicEchoTracker.markSent(normalized);
+            if (!com.atom.chat.reaction.ReactionClient.enabled()) PublicEchoTracker.markSent(normalized);
         }
         client.inGameHud.getChatHud().addToMessageHistory(normalized);
         // Vanilla never echoes commands back into the chat feed as your own
         // message, so do not manufacture a local bubble for them either.
         // Non-command chat still gets an immediate local echo so the UI feels
         // like a phone messenger even before the server relays the message.
-        if (!command) {
+        if (!command && !com.atom.chat.reaction.ReactionClient.enabled()) {
             UUID ownUuid = client.player.getUuid();
             String ownProfile = client.player.getName().getString();
             // Own bubbles show the decorated self name (titles/team prefix),
@@ -177,7 +177,7 @@ public final class SendPipeline {
                 ? sendText.substring(1) : sendText);
         client.inGameHud.getChatHud().addToMessageHistory(historyText);
 
-        if (!command) {
+        if (!command && !com.atom.chat.reaction.ReactionClient.enabled()) {
             UUID ownUuid = client.player.getUuid();
             String ownProfile = client.player.getName().getString();
             // Decorated self name on the outgoing bubble, e33chat parity.

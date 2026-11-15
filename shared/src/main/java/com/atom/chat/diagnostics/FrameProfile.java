@@ -61,6 +61,8 @@ public final class FrameProfile {
     private static final Bucket PANEL_BUCKET = new Bucket(true);
     private static final Bucket DECODE_BUCKET = new Bucket(false);
     private static final Bucket LAYOUT_BUCKET = new Bucket(false);
+    private static final Bucket HUD_BUCKET = new Bucket(false);
+    private static int hudFramesSinceReport;
 
     private static int framesSinceReport;
     public enum Surface { CHAT, EMOJI, KAOMOJI, EMOTES, PHRASES, TOOLS, SEARCH, CONFIRMATION, OTHER }
@@ -177,6 +179,23 @@ public final class FrameProfile {
     }
 
     private FrameProfile() {
+    }
+
+    /** HUD wall time stays separate from panel samples and the panel GPU query. */
+    public static long startHud() {
+        return enabled ? System.nanoTime() : 0L;
+    }
+
+    public static boolean hudFrame(long token) {
+        if (token == 0L || !enabled) return false;
+        HUD_BUCKET.add(Math.max(0L, System.nanoTime() - token), -1L);
+        if (++hudFramesSinceReport < REPORT_EVERY_FRAMES) return false;
+        hudFramesSinceReport = 0;
+        return true;
+    }
+
+    public static String hudSummary() {
+        return "AtomChat HUD render profile (debug) - CPU wall time in ms\n" + HUD_BUCKET.row("hud");
     }
 
     /** 客户端每 tick 跟着 debug 开关同步一次。 */
@@ -319,6 +338,8 @@ public final class FrameProfile {
         PANEL_BUCKET.clear();
         DECODE_BUCKET.clear();
         LAYOUT_BUCKET.clear();
+        HUD_BUCKET.clear();
+        hudFramesSinceReport = 0;
         framesSinceReport = 0;
         SURFACE_CPU.clear(); SURFACE_INTERVAL.clear(); previousFrameStart = 0; previousSurface = null; surface = Surface.OTHER;
         PAGE_RENDER.clear();

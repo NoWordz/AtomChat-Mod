@@ -5,24 +5,7 @@ import com.atom.chat.chat.ChatMessage;
 import java.util.*;
 import java.util.function.*;
 
-/**
- * Content-keyed reactions.
- *
- * <p>The message identity is derived from what every client can see for itself
- * — the sender's name and the visible body — instead of from a server-issued
- * per-message receipt. That is the same trade the plain-text quote prefix
- * already makes: it works on any server, including offline/LAN/plugin servers
- * that hand player chat to the client as a system line with no signature and no
- * {@code MessageBody}, where a signed fingerprint can never be rebuilt client
- * side. The cost is that two identical messages by the same author share one
- * reaction set, which is accepted.</p>
- *
- * <p>The server never recomputes the key: the reacting client sends the key it
- * derived, and the server stores and broadcasts state under it. A client that
- * never received the message has no row for that key and simply renders nothing
- * — so private-message reactions stay invisible to outsiders exactly the way a
- * quote capsule does.</p>
- */
+/** Reactions bind to server delivery IDs; identical display text never defines identity. */
 public final class ReactionClient {
     private ReactionClient() {}
     public static BooleanSupplier supported=()->false;
@@ -40,7 +23,7 @@ public final class ReactionClient {
      */
     private static final LinkedHashMap<UUID,LinkedHashMap<String,Long>> arrivals=new LinkedHashMap<>();
     private static String lastError;
-    private static long generation;
+    private static volatile long generation;
     /**
      * Bumped on every accepted snapshot. Readers that cache geometry derived
      * from chip counts (the message list's content height) watch this instead
@@ -58,7 +41,9 @@ public final class ReactionClient {
         snapshots.clear();
         arrivals.clear();
         KEYS.clear();
-        KEY_MISSES.clear();
+        receipts.clear();
+        pendingReceipts=0;
+        activeDelivery.remove();
         revision++;
     }
 
@@ -66,44 +51,50 @@ public final class ReactionClient {
         while(map.size()>4096) { var it=map.keySet().iterator(); it.next(); it.remove(); }
     }
 
-    /**
-     * Row id -> derived key. A message's id is allocated once and its text and
-     * author are immutable afterwards (merge copies share the id), so the
-     * SHA-256 only has to run on first sight. Without this the chip layer hashed
-     * every measured row twice per frame — three FPS-visible digests per row
-     * per frame on a full backlog. Bounded like the other session maps.
-     */
     private static final LinkedHashMap<Long,UUID> KEYS=new LinkedHashMap<>();
-    /** Rows whose key is null (system line / no author), so they are not re-probed either. */
-    private static final LinkedHashMap<Long,Boolean> KEY_MISSES=new LinkedHashMap<>();
-    private static final int KEY_CACHE_MAX=8192;
+    private static final LinkedHashMap<UUID,ArrayDeque<UUID>> receipts=new LinkedHashMap<>();
+    private static int pendingReceipts;
+    private static final ThreadLocal<UUID> activeDelivery=new ThreadLocal<>();
 
-    /**
-     * The identity every client computes for a row, or null when the row cannot
-     * carry reactions (system line, or missing author/body).
-     */
     public static UUID key(ChatMessage row) {
-        if(row==null) return null;
-        long id=row.getId();
-        UUID cached=KEYS.get(id);
-        if(cached!=null) return cached;
-        if(KEY_MISSES.containsKey(id)) return null;
-        UUID computed=computeKey(row);
-        if(computed==null) { KEY_MISSES.put(id,Boolean.TRUE); capMisses(); }
-        else { KEYS.put(id,computed); cap(KEYS); }
-        return computed;
+        return row==null || row.isSystem() ? null : KEYS.get(row.getId());
     }
 
-    private static void capMisses() {
-        while(KEY_MISSES.size()>KEY_CACHE_MAX) { var it=KEY_MISSES.keySet().iterator(); it.next(); it.remove(); }
+    public static void bind(ChatMessage row) {
+        UUID id=activeDelivery.get();
+        if(id!=null && row!=null && !row.isSystem()) { KEYS.put(row.getId(),id); cap(KEYS); }
     }
 
-    private static UUID computeKey(ChatMessage row) {
-        if(row.isSystem()) return null;
-        String author = row.getProfileName()!=null ? row.getProfileName() : row.getSenderName();
-        String body = row.getContentText();
-        if(author==null || author.isBlank() || body==null) return null;
-        return ReactionFingerprint.contentKey(author, body);
+    public static Delivery incoming(UUID fingerprint) {
+        ArrayDeque<UUID> pending=receipts.get(fingerprint);
+        UUID id=pending==null ? null : pending.pollFirst();
+        if(id!=null) pendingReceipts--;
+        if(pending!=null && pending.isEmpty()) receipts.remove(fingerprint);
+        return new Delivery(id);
+    }
+
+    public static final class Delivery implements AutoCloseable {
+        private final UUID previous=activeDelivery.get();
+        private final long epoch=generation;
+        private Delivery(UUID id) { if(id==null) activeDelivery.remove(); else activeDelivery.set(id); }
+        @Override public void close() {
+            if(epoch!=generation || previous==null) activeDelivery.remove(); else activeDelivery.set(previous);
+        }
+    }
+
+    public static BooleanSupplier defer(BooleanSupplier callback) {
+        UUID id=activeDelivery.get(); long epoch=generation;
+        return ()->{ try(var ignored=new Delivery(epoch==generation ? id : null)) { return callback.getAsBoolean(); } };
+    }
+
+    private static void receipt(ReactionWire.Receipt receipt) {
+        receipts.computeIfAbsent(receipt.fingerprint(),ignored->new ArrayDeque<>()).addLast(receipt.id());
+        pendingReceipts++;
+        while(pendingReceipts>4096) {
+            var first=receipts.entrySet().iterator(); var entry=first.next();
+            entry.getValue().removeFirst(); pendingReceipts--;
+            if(entry.getValue().isEmpty()) first.remove();
+        }
     }
 
     /**
@@ -152,7 +143,9 @@ public final class ReactionClient {
     public static void accept(byte[] bytes) {
         Object value;
         try { value=ReactionWire.readServer(bytes); } catch(IllegalArgumentException e) { return; }
-        if(value instanceof ReactionWire.Snapshot s) {
+        if(value instanceof ReactionWire.Receipt r) {
+            receipt(r);
+        } else if(value instanceof ReactionWire.Snapshot s) {
             ReactionWire.Snapshot old=snapshots.get(s.id());
             if(old==null || s.revision()>old.revision()) {
                 snapshots.put(s.id(),s); cap(snapshots);
@@ -162,6 +155,10 @@ public final class ReactionClient {
         } else if(value instanceof ReactionWire.Rejection r) {
             lastError=r.reason();
         }
+    }
+
+    public static void acceptFrom(Object origin,Object current,byte[] bytes) {
+        if(origin!=null && origin==current) accept(bytes);
     }
 
     private static void recordArrivals(ReactionWire.Snapshot snapshot,long now) {

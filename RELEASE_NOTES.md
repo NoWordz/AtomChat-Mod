@@ -1,5 +1,59 @@
 # Release Notes
 
+## v0.8.0
+
+> 反应同步需客户端与服务端一起更新至 0.8.0；已保存的自定义配色保留，重选预设即可应用新版材质。
+
+**新增**
+
+- HUD 左下角显示白色实心三点镂空气泡及实际面板按键，跟随原版 GUI 缩放，随 F1 隐藏并随面板开合对称淡出和移入。
+
+**更改**
+
+- 栏位与内容列恢复随面板伸展，设置首页方卡保留大小上限。
+- 提高部分预设的小字和气泡对比度，半透明主题的卡片沿用默认透明材质。
+- HUD 图标和键名缩小约 20%，保留软阴影及原版 GUI 缩放。
+- 面板开合与 HUD 使用平顺缓动，关闭立即恢复键盘和鼠标操作，切页手感保留。
+- 新配置及恢复默认使用滑动动画，保留已有动画选择。
+
+**修复**
+
+- 反应绑定独立消息编号，同步启用时保留独立气泡，重复文本不再一起出现表情。
+- 为 Toast 与返回底部按钮预留阴影空间，长反馈在面板内换行并限制高度。
+- 返回底部按钮复用表情和右键菜单的面内明暗与上沿高亮。
+- 设置 tab 标题栏保持固定，仅下方内容参与页面缩放和滑动。
+
+**性能**
+
+- 批量提交边缘点阵，保持原有像素，减少重复绘制命令。
+
+----
+
+> Reaction synchronization requires AtomChat 0.8.0 on both client and server. Saved custom colors stay intact; reselect a preset to apply its updated material.
+
+**Added**
+
+- Added a solid white HUD chat icon with three cutout dots and the actual panel key, following vanilla GUI scale, hidden by F1 and animated symmetrically with the panel.
+
+**Changed**
+
+- Restored panel-width chrome and content while keeping settings home tiles bounded.
+- Improved preset text and bubble contrast and restored translucent cards for glass themes.
+- Reduced the HUD icon and key label by about 20%, retaining soft shadows and vanilla GUI scaling.
+- Smoothed panel and HUD motion; closing immediately restores keyboard and mouse control while page transitions keep their existing behavior.
+- Made slide the default for new configurations and resets, preserving saved animation choices.
+
+**Fixed**
+
+- Bound synchronized reactions to individual message IDs and kept their bubbles separate so identical text no longer shares reactions.
+- Reserved shadow clearance for toasts and the jump button, and kept long feedback within the panel.
+- Matched the jump button to popup inset shading and upper-edge lighting.
+- Kept settings tab headings stationary while their content slides or zooms.
+
+**Performance**
+
+- Batched edge dots to reduce drawing commands while preserving their pixels.
+
 ## v0.7.1
 
 **更改**
