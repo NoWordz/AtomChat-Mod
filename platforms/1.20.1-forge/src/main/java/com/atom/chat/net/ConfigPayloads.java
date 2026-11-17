@@ -45,6 +45,9 @@ public final class ConfigPayloads {
 
     public static SimpleChannel CHANNEL;
 
+    public static void sendSave(Save payload) { CHANNEL.sendToServer(payload); }
+    public static void sendRefresh() { var payload = new Refresh(); CHANNEL.sendToServer(payload); }
+
     private ConfigPayloads() {
     }
 
@@ -151,6 +154,7 @@ public final class ConfigPayloads {
 
     /** Builds the config channel and registers every packet id. Common setup. */
     public static void register() {
+        ConfigAdminPayloads.register();
         CHANNEL = NetworkRegistry.newSimpleChannel(CHANNEL_NAME, () -> PROTOCOL,
                 NetworkRegistry.acceptMissingOr(PROTOCOL),
                 NetworkRegistry.acceptMissingOr(PROTOCOL));

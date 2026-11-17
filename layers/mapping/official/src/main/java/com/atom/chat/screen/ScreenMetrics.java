@@ -114,7 +114,7 @@ public final class ScreenMetrics {
 
     /** Layout of whatever list the top page is showing (D24 supplies the page). */
     public static UiLayout listLayout(Window window, AppPage topPage) {
-        return topPage == AppPage.SETTINGS_SECTION || topPage == AppPage.PROFILE_DETAIL
+        return topPage == AppPage.SERVER_CONFIG || topPage == AppPage.SETTINGS_SECTION || topPage == AppPage.PROFILE_DETAIL
                 ? detailLayout(window) : rootLayout(window);
     }
 

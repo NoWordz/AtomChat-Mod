@@ -1,0 +1,61 @@
+{
+  "archive": "D:\\AtomChat-Backups\\2026-11-17-closeout\\final-candidate-evidence.zip",
+  "archive_bytes": 192211164,
+  "archive_sha256": "229db03e75049dea8ebad666fe16ed23d675d4cbf21572907dda070633cf2349",
+  "archive_entries": 1714,
+  "verification": "Main agent re-read final archived XML totals and JAR SHA/CRC; full tests reused, not rerun",
+  "results": [
+    {
+      "platform": "1.21.1-fabric",
+      "test_scope": "full build",
+      "tests": {
+        "tests": 2098,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 12
+      },
+      "test_classes": 369,
+      "artifact": "D:\\AtomChat-Main\\build\\v090-shared-frontend\\artifacts\\atomchat-Fabric-1.21.1-v0.8.0.jar",
+      "bytes": 3242545,
+      "sha256": "a0d035a08d7d72a122a60074f60739f0cfe03f668e561c8732e7071ceea8f8b5",
+      "previews": 548,
+      "deployed": true,
+      "deployment_batch": "20261117-163726"
+    },
+    {
+      "platform": "1.20.1-forge",
+      "test_scope": "full build",
+      "tests": {
+        "tests": 2081,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 10
+      },
+      "test_classes": 363,
+      "artifact": "D:\\AtomChat-Main\\build\\v090-shared-frontend\\artifacts\\atomchat-Forge-1.20.1-v0.8.0.jar",
+      "bytes": 3213080,
+      "sha256": "63675827e781388c397de55b5102254874363a33ffa50620fcb6b32227e88ce8",
+      "previews": 548,
+      "deployed": true,
+      "deployment_batch": "20261117-163726"
+    },
+    {
+      "platform": "1.21.1-neoforge",
+      "test_scope": "full build",
+      "tests": {
+        "tests": 2081,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 10
+      },
+      "test_classes": 363,
+      "artifact": "D:\\AtomChat-Main\\build\\v090-shared-frontend\\artifacts\\atomchat-NeoForge-1.21.1-v0.8.0.jar",
+      "bytes": 3224752,
+      "sha256": "57ce89258d8df9a392a9bed39490d9b41d7f30049cc559a7f67bef9c87292ca8",
+      "previews": 548,
+      "deployed": true,
+      "deployment_batch": "20261117-163726"
+    }
+  ],
+  "images": "Software offscreen production components/composite, not Minecraft runtime screenshots"
+}

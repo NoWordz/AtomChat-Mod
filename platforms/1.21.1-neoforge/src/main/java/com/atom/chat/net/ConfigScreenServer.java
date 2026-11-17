@@ -25,14 +25,14 @@ import java.util.concurrent.atomic.AtomicInteger;
  * all. All this side does is decide whether that player may edit, hand out a
  * snapshot, and re-check everything they send back.
  *
- * <p>{@link #VERSION} is the concurrency guard: two operators can open the screen,
+ * <p>{@link ConfigRevision} is the concurrency guard: two operators can open the screen,
  * and the second save carries a stale version, so it is refused with "reopen the
  * screen" instead of silently overwriting the first.
  */
 public final class ConfigScreenServer {
     /** Vanilla permission level for "can run most commands". */
     private static final int REQUIRED_LEVEL = 2;
-    private static final AtomicInteger VERSION = new AtomicInteger(1);
+
 
     private ConfigScreenServer() {
     }
@@ -53,7 +53,8 @@ public final class ConfigScreenServer {
      */
     private static boolean mayEdit(CommandSourceStack source) {
         if (source.getServer() != null && source.getServer().isSingleplayer()) {
-            return true;
+            var player = source.getPlayer();
+            if (player != null && source.getServer().isSingleplayerOwner(player.getGameProfile())) return true;
         }
         return source.hasPermission(REQUIRED_LEVEL);
     }
@@ -75,24 +76,21 @@ public final class ConfigScreenServer {
         if (player == null) {
             return;
         }
-        if (payload.configVersion() != VERSION.get()) {
+        if (!mayEdit(player.createCommandSourceStack())) { deny(player, "permission"); return; }
+        if (payload.configVersion() != ConfigRevision.get()) {
             deny(player, "conflict");
             return;
         }
-        ServerConfigValues values = payload.values().sanitize();
+        ServerConfigValues values = payload.values().withExtras(AtomChatServerConfig.get().maxProfileTotalMb, AtomChatServerConfig.get().templates).sanitize();
         String error = values.validate();
         if (error != null) {
             deny(player, error);
             return;
         }
-        AtomChatServerConfig config = AtomChatServerConfig.get();
-        values.applyTo(config);
-        AtomChatServerConfig.save(config);
-        // The running instance is the cache; reloading keeps get() and the file
-        // in step without waiting for the next join.
-        AtomChatServerConfig.reload();
+        if (!AtomChatServerConfig.saveValues(values)) { deny(player, "failed"); return; }
         PackSyncServer.invalidate();
-        int version = VERSION.incrementAndGet();
+        int version = ConfigRevision.incrementAndGet();
+        ConfigAdminServer.broadcast(player.getServer());PackSyncServer.pushUpdate(player.getServer());
         PacketDistributor.sendToPlayer(player, new ConfigPayloads.Result(true, ""));
         player.sendSystemMessage(Component.translatable("atomchat.server.saved"));
         AtomChat.LOGGER.info(com.atom.chat.diagnostics.AtomChatLog.message("config", "Server config saved by {} (version {}, hosting {}, packs {})"),
@@ -105,6 +103,7 @@ public final class ConfigScreenServer {
         if (player == null) {
             return;
         }
+        if (!mayEdit(player.createCommandSourceStack())) { deny(player, "permission"); return; }
         // Drop the cached pack so the folders are scanned again, then report the
         // new summary. The values are deliberately not resent: the screen may be
         // holding edits the operator has not saved yet.
@@ -114,7 +113,7 @@ public final class ConfigScreenServer {
 
     private static void sendSnapshot(ServerPlayer player) {
         PacketDistributor.sendToPlayer(player, new ConfigPayloads.Snapshot(
-                VERSION.get(), ServerConfigValues.of(AtomChatServerConfig.get()), packStatus(player)));
+                ConfigRevision.get(), ServerConfigValues.of(AtomChatServerConfig.get()), packStatus(player)));
     }
 
     private static ConfigPayloads.PackStatus packStatus(ServerPlayer player) {
@@ -127,5 +126,9 @@ public final class ConfigScreenServer {
         PacketDistributor.sendToPlayer(player, new ConfigPayloads.Result(false, error));
         AtomChat.LOGGER.info(com.atom.chat.diagnostics.AtomChatLog.message("config", "Refused a server config save from {}: {}"),
                 player.getName().getString(), error);
+    }
+
+    public static void onAdmin(ServerPlayer player, com.atom.chat.config.AdminProtocol.Chunk chunk) {
+        if(player!=null)ConfigAdminServer.receive(player,chunk,mayEdit(player.createCommandSourceStack()));
     }
 }

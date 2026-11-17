@@ -37,6 +37,8 @@ public final class SkinResolver {
         }
     };
 
+    public static void clear() { skinCache.clear(); skinNameCache.clear(); }
+
     private static String skinNameKey(String name) {
         return SkinNameCacheKey.of(name);
     }
@@ -65,6 +67,10 @@ public final class SkinResolver {
         if (client != null && client.getNetworkHandler() != null && uuid != null && !uuid.equals(NIL_UUID)) {
             PlayerListEntry info = client.getNetworkHandler().getPlayerListEntry(uuid);
             if (info != null) {
+                GameProfile observed = info.getProfile();
+                for (var property : observed.getProperties().get("textures"))
+                    com.atom.chat.chat.ConfirmedSkinProfiles.remember(observed.getId(), observed.getName(),
+                            property.value(), property.signature());
                 Identifier tex = info.getSkinTextures().texture();
                 rememberSkin(uuid, name, tex);
                 return tex;
@@ -77,23 +83,25 @@ public final class SkinResolver {
             }
         }
         String nameKey = skinNameKey(name);
-        if (nameKey != null) {
+        if ((uuid == null || uuid.equals(NIL_UUID)) && nameKey != null) {
             Identifier cachedByName = skinNameCache.get(nameKey);
             if (cachedByName != null) {
                 return cachedByName;
             }
         }
         Identifier resolved = resolveSkin(uuid, name);
-        rememberSkin(uuid, name, resolved);
         return resolved;
     }
 
     private static Identifier resolveSkin(UUID uuid, String name) {
         MinecraftClient client = MinecraftClient.getInstance();
-        if (name != null && !name.isEmpty()) {
+        if (client != null && uuid != null && !uuid.equals(NIL_UUID) && name != null && !name.isEmpty()) {
             try {
                 GameProfile profile = new GameProfile(
                         uuid != null && !uuid.equals(NIL_UUID) ? uuid : NIL_UUID, name);
+                var saved = com.atom.chat.chat.ConfirmedSkinProfiles.find(uuid);
+                if (saved != null) profile.getProperties().put("textures", new com.mojang.authlib.properties.Property(
+                        "textures", saved.value(), saved.signature()));
                 return client.getSkinProvider().getSkinTextures(profile).texture();
             } catch (Exception ignored) {
             }

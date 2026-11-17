@@ -72,8 +72,7 @@ public final class PackManifestFile {
             deleteTree(temp);
             throw e;
         }
-        deleteTree(target);
-        Files.move(temp, target);
+        com.atom.chat.util.DirectorySwap.replace(temp,target);
     }
 
     /**

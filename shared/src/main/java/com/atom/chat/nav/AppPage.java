@@ -15,7 +15,8 @@ public enum AppPage {
      * Another player's profile pushed as a detail page (avatar click / menu):
      * full-width push/pop animation, back returns to the page underneath.
      */
-    PROFILE_DETAIL("profile_detail", false);
+    PROFILE_DETAIL("profile_detail", false),
+    SERVER_CONFIG("server_config", false);
 
     private final String id;
     private final boolean root;

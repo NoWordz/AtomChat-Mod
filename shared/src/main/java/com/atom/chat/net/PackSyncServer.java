@@ -11,6 +11,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayDeque;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -44,6 +45,12 @@ public final class PackSyncServer {
     private static final Map<UUID, Download> DOWNLOADS = new ConcurrentHashMap<>();
     /** The pack each player was shown last, so a rebuild cannot change what we send mid-sync. */
     private static final Map<UUID, ServerPack> OFFERED = new ConcurrentHashMap<>();
+    private static final Map<UUID,Object> RECIPIENTS = new ConcurrentHashMap<>();
+    private static final Map<UUID,String> SYNC_STATES=new HashMap<>();
+    private static final Map<UUID,Long> SYNC_PENDING=new HashMap<>();
+    private static final Map<UUID,String> EXPECTED_HASH=new HashMap<>();
+    private static final java.util.Set<UUID> PUSHED=new java.util.HashSet<>();
+    private static long nextCleanup;
     private static volatile Cached cached;
     /** The legacy emote carry-over runs once per JVM, on the first pack build. */
     private static final AtomicBoolean LEGACY_CHECKED = new AtomicBoolean();
@@ -76,14 +83,18 @@ public final class PackSyncServer {
             return;
         }
         DOWNLOADS.remove(id);
+        if(RECIPIENTS.put(id,player)!=player)PUSHED.remove(id);
+        SYNC_STATES.put(id,"pending");SYNC_PENDING.put(id,System.currentTimeMillis()+45_000);
         AtomChatServerConfig config = AtomChatServerConfig.get();
         if (!config.packEnabled) {
+            EXPECTED_HASH.put(id,"");
             // Answering beats staying silent: the client shows "this server does
             // not offer a pack" instead of waiting for a timeout.
             Net.sendToPlayer(player, PackMessage.disabledManifest());
             return;
         }
         ServerPack pack = pack(serverOf(player));
+        EXPECTED_HASH.put(id,pack.packHash());
         OFFERED.put(id, pack);
         Net.sendToPlayer(player, PackMessage.manifestOf(pack));
     }
@@ -120,7 +131,7 @@ public final class PackSyncServer {
             }
             byte[] bytes;
             try {
-                bytes = Files.readAllBytes(dir.resolve(entry.name()));
+                bytes = com.atom.chat.config.ServerResources.read(dir,new com.atom.chat.config.AdminAsset(entry.name(),entry.sha256Hex(),entry.size(),null));
             } catch (IOException e) {
                 AtomChat.LOGGER.warn(com.atom.chat.diagnostics.AtomChatLog.message("pack", "Server pack file {} vanished before it could be sent"), name);
                 continue;
@@ -146,6 +157,9 @@ public final class PackSyncServer {
             return;
         }
         OFFERED.remove(id);
+        if(!PUSHED.contains(id)&&!ConfigAdminServer.isTemplatePeer(player)){
+            SYNC_STATES.put(id,ack.ok()?"ok":"failed");SYNC_PENDING.remove(id);
+        }
         Cached current = cached;
         String hash = current == null ? "-" : current.pack().packHash().substring(0, 8);
         String name = Host.playerName(player);
@@ -160,6 +174,9 @@ public final class PackSyncServer {
 
     /** Server tick (hooked from the common entrypoint): drains the queues. */
     public static void tick(Object server) {
+        ConfigAdminServer.tick(server);
+        long now=System.currentTimeMillis();
+        if(server!=null&&now>nextCleanup){nextCleanup=now+30_000;for(var entry:new ArrayList<>(RECIPIENTS.entrySet()))if(Host.playerById(server,entry.getKey())!=entry.getValue()){UUID id=entry.getKey();RECIPIENTS.remove(id);SYNC_STATES.remove(id);SYNC_PENDING.remove(id);EXPECTED_HASH.remove(id);PUSHED.remove(id);}}
         if (server == null || DOWNLOADS.isEmpty()) {
             return;
         }
@@ -193,6 +210,21 @@ public final class PackSyncServer {
     /** Drops the cached pack so the next request re-scans the emote folder. */
     public static void invalidate() {
         cached = null;
+    }
+    public static void pushUpdate(Object server) {
+        for(var entry:new ArrayList<>(RECIPIENTS.entrySet())) {
+            var player=Host.playerById(server,entry.getKey());
+            if(player!=entry.getValue()){RECIPIENTS.remove(entry.getKey());continue;}
+            onHello(player);
+            PUSHED.add(entry.getKey());
+        }
+    }
+    public static void verifiedAck(Object player,String hash,boolean ok){UUID id=Host.playerId(player);if(RECIPIENTS.get(id)==player&&java.util.Objects.equals(EXPECTED_HASH.get(id),hash)){SYNC_STATES.put(id,ok?"ok":"failed");SYNC_PENDING.remove(id);}}
+    public static Map<UUID,String> syncStates(Object server){
+        var result=new HashMap<UUID,String>();long now=System.currentTimeMillis();
+        for(var entry:RECIPIENTS.entrySet())if(Host.playerById(server,entry.getKey())==entry.getValue()){
+            Long deadline=SYNC_PENDING.get(entry.getKey());result.put(entry.getKey(),deadline!=null&&deadline<now?"failed":SYNC_STATES.getOrDefault(entry.getKey(),"ok"));
+        }return result;
     }
 
     /**

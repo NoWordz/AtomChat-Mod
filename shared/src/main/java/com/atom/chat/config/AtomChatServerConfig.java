@@ -51,6 +51,7 @@ public class AtomChatServerConfig {
     public String packName = "";
     /** Phrases offered to clients (at most 20, each at most 200 characters). */
     public List<String> phrases = new ArrayList<>();
+    public List<com.atom.chat.chat.MessageTemplate> templates = new ArrayList<>();
 
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
     private static volatile AtomChatServerConfig instance;
@@ -81,6 +82,9 @@ public class AtomChatServerConfig {
     /** Normalize legacy file settings before persisting and advertising them to the UI. */
     void normalizeFileLimit() {
         maxFileKb = maxFileBytes() / 1024;
+        packMaxMb=Math.min(ServerConfigValues.MAX_PACK_MB_LIMIT,Math.max(1,packMaxMb));
+        if(templates==null)templates=new ArrayList<>();
+        else templates.removeIf(java.util.Objects::isNull);
     }
 
     public long maxTotalBytes() {
@@ -97,7 +101,7 @@ public class AtomChatServerConfig {
     }
 
     public long packMaxBytes() {
-        return Math.max(1L, packMaxMb) * 1024L * 1024L;
+        return Math.min(ServerConfigValues.MAX_PACK_MB_LIMIT,Math.max(1L, packMaxMb)) * 1024L * 1024L;
     }
 
     private static Path path() {
@@ -132,12 +136,37 @@ public class AtomChatServerConfig {
     }
 
     public static void save(AtomChatServerConfig config) {
+        saveChecked(config);
+    }
+
+    /** Publish the new live config only after its durable write succeeds. */
+    public static synchronized boolean saveValues(ServerConfigValues values) {
+        AtomChatServerConfig candidate = GSON.fromJson(GSON.toJson(get()), AtomChatServerConfig.class);
+        values.applyTo(candidate);
+        if (!saveChecked(candidate)) return false;
+        instance = candidate;
+        return true;
+    }
+
+    private static boolean saveChecked(AtomChatServerConfig config) {
         Path path = path();
+        Path staged = null;
         try {
             Files.createDirectories(path.getParent());
-            Files.writeString(path, GSON.toJson(config), StandardCharsets.UTF_8);
+            staged = Files.createTempFile(path.getParent(), "server-config-", ".tmp");
+            Files.writeString(staged, GSON.toJson(config), StandardCharsets.UTF_8);
+            try {
+                Files.move(staged, path, java.nio.file.StandardCopyOption.ATOMIC_MOVE,
+                        java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            } catch (java.nio.file.AtomicMoveNotSupportedException unsupported) {
+                Files.move(staged, path, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            }
+            return true;
         } catch (IOException e) {
             AtomChat.LOGGER.error(com.atom.chat.diagnostics.AtomChatLog.message("config", "Failed to save AtomChat server config"), e);
+            return false;
+        } finally {
+            if (staged != null) try { Files.deleteIfExists(staged); } catch (IOException ignored) {}
         }
     }
 }

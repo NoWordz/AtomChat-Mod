@@ -253,7 +253,7 @@ public final class BottomTabBar {
             case CHAT_LIST -> 0;
             case PROFILE -> 1;
             case SETTINGS -> 2;
-            case WORLD_CHAT, PRIVATE_CHAT, SETTINGS_SECTION, PROFILE_DETAIL ->
+            case WORLD_CHAT, PRIVATE_CHAT, SETTINGS_SECTION, PROFILE_DETAIL, SERVER_CONFIG ->
                     throw new IllegalStateException("Pushed pages have no bottom tab index");
         };
     }

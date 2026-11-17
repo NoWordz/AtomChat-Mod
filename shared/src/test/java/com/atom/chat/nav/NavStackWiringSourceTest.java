@@ -103,6 +103,7 @@ class NavStackWiringSourceTest {
     private static final Map<String, String> PORT_WORK = new LinkedHashMap<>();
 
     static {
+        PORT_WORK.put("allowBackNavigation", "serverConfigPage.leave(settingsSectionPage.confirmation())");
         PORT_WORK.put("signatureEditLive", "profilePage.isSignatureEditing()");
         PORT_WORK.put("abortSignatureEdit", "profilePage.endSignatureEdit(false)");
         PORT_WORK.put("persistCurrentDraft", "saveCurrentDraft()");

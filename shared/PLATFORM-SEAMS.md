@@ -13,7 +13,7 @@
 分组是编译期事实：甲组少一个类型，那个目标当场编不过。判据用简单名的词边界匹配
 （覆盖 import 全限定名与同包简单名两种写法），偏保守 —— 注释里的提及也算，宁可多列。
 
-当前：甲组 **146** 个，乙组 **90** 个。
+当前：甲组 **156** 个，乙组 **90** 个。
 
 ## 甲：共用代码引用了的（接缝）
 
@@ -30,24 +30,30 @@
 | `com.atom.chat.chat.ChatMessageTest` | 1.21.1-fabric |
 | `com.atom.chat.chat.ChatPipeline` | 1.21.1-fabric |
 | `com.atom.chat.chat.Cicodes` | 1.21.1-fabric |
+| `com.atom.chat.chat.ComponentIdentity` | 1.21.1-fabric |
+| `com.atom.chat.chat.ComponentIdentityTest` | 1.21.1-fabric |
 | `com.atom.chat.chat.EasyBotParser` | 1.21.1-fabric |
 | `com.atom.chat.chat.LocalEcho` | 1.21.1-fabric |
 | `com.atom.chat.chat.MentionHighlighterTest` | 1.21.1-fabric |
 | `com.atom.chat.chat.MessageFilterTest` | 1.21.1-fabric |
 | `com.atom.chat.chat.MessageGroupingTest` | 1.21.1-fabric |
 | `com.atom.chat.chat.MessageMergeTest` | 1.21.1-fabric |
+| `com.atom.chat.chat.OutgoingMessagesTest` | 1.21.1-fabric |
 | `com.atom.chat.chat.OwnIdentity` | 1.20.1-forge, 1.21.1-fabric, 1.21.1-neoforge |
 | `com.atom.chat.chat.PrivateChatParser` | 1.21.1-fabric |
 | `com.atom.chat.chat.PrivateChatStoreTest` | 1.21.1-fabric |
+| `com.atom.chat.chat.PrivateMessageRecognition` | 1.21.1-fabric |
+| `com.atom.chat.chat.PrivateMessageRecognitionTest` | 1.21.1-fabric |
 | `com.atom.chat.chat.RichChatPartsTest` | 1.21.1-fabric |
 | `com.atom.chat.chat.SendPipeline` | 1.21.1-fabric |
 | `com.atom.chat.chat.SendPipelineTest` | 1.21.1-fabric |
 | `com.atom.chat.chat.SenderMeta` | 1.21.1-fabric |
 | `com.atom.chat.chat.SenderMetaTest` | 1.21.1-fabric |
+| `com.atom.chat.chat.ServerTemplateRecognition` | 1.21.1-fabric |
+| `com.atom.chat.chat.ServerTemplateRecognitionTest` | 1.21.1-fabric |
 | `com.atom.chat.chat.StructuredPlayerMessageTest` | 1.21.1-fabric |
 | `com.atom.chat.chat.TeleportCommands` | 1.21.1-fabric |
 | `com.atom.chat.chat.TellClickDetector` | 1.21.1-fabric |
-| `com.atom.chat.config.ServerConfigScreen` | 1.20.1-forge, 1.21.1-fabric, 1.21.1-neoforge |
 | `com.atom.chat.fun.ChatEffectEventsTest` | 1.21.1-fabric |
 | `com.atom.chat.history.ChatHistory` | 1.20.1-forge, 1.21.1-fabric, 1.21.1-neoforge |
 | `com.atom.chat.image.AvatarRenderer` | 1.21.1-fabric |
@@ -67,6 +73,8 @@
 | `com.atom.chat.mixin.SuggestionWindowAccessor` | 1.21.1-fabric |
 | `com.atom.chat.net.AvatarCompanionClient` | 1.20.1-forge, 1.21.1-fabric, 1.21.1-neoforge |
 | `com.atom.chat.net.AvatarCompanionServer` | 1.20.1-forge, 1.21.1-fabric, 1.21.1-neoforge |
+| `com.atom.chat.net.ConfigAdminClientTransport` | 1.20.1-forge, 1.21.1-fabric, 1.21.1-neoforge |
+| `com.atom.chat.net.ConfigAdminPayloads` | 1.20.1-forge, 1.21.1-fabric, 1.21.1-neoforge |
 | `com.atom.chat.net.ConfigPayloads` | 1.20.1-forge, 1.21.1-fabric, 1.21.1-neoforge |
 | `com.atom.chat.net.ConfigPayloadsCodecTest` | 1.20.1-forge, 1.21.1-fabric, 1.21.1-neoforge |
 | `com.atom.chat.net.ConfigScreenClient` | 1.21.1-fabric |

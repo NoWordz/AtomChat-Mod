@@ -141,6 +141,20 @@ class PageTransitionCompositeWiringSourceTest {
         }
     }
 
+    /** Complements the native composite/pixel behavior tests with the actual three Minecraft host bindings. */
+    @Test void serverBodiesAndFixedChromeUseTheSameCompositeOnAllThreeHosts() throws IOException {
+        for(String screen:SCREENS){
+            String src=source(screen);
+            assertTrue(body(src,"public void openServerConfig(").contains("page.bindNavigationDirection(composite::navigationDirection)"),screen);
+            assertTrue(body(src,"public int bodyVariant()").contains("serverConfigPage.bodyVariant()"),screen);
+            assertTrue(body(src,"public void drawArrivingBody(Canvas canvas, UiLayout layout").contains("serverConfigPage.renderBody("),screen);
+            assertTrue(body(src,"public void drawArrivingHeader(Canvas canvas, UiLayout layout").contains("serverConfigPage.renderFixedChrome("),screen);
+            assertTrue(src.contains("serverConfigPage.markEntered(composite.entrance().enteredAtMs())"),screen);
+            assertTrue(body(src,"private float toVirtualX(double guiX)").contains("serverConfigPage.stationaryPointer(detailLayout(),y)"),screen);
+            assertTrue(body(src,"private float toVirtualY(double guiY)").contains("serverConfigPage.stationaryPointer(detailLayout(),y)"),screen);
+        }
+    }
+
     /**
      * One composite, built once, with exactly the four-method port. The port is
      * what makes the arriving frame assertable offline, so a port that lost a

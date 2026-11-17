@@ -72,10 +72,7 @@ public final class ChatClassifier {
             if (isSystemKey(key)) {
                 return Route.SYSTEM;
             }
-            // An unknown translated root describes a notice, not evidence of
-            // player chat. Known player/private wrappers have already claimed
-            // their messages above, including translated text in their body.
-            if (root) return Route.SYSTEM;
+            // Unknown keys remain undetermined until component or format evidence exists.
         }
         // FTB wraps its notifications in a literal team/sender prefix. Inspect
         // siblings only after known player/private keys have claimed the line:
@@ -152,24 +149,55 @@ public final class ChatClassifier {
             return null;
         }
         var online = player.connection.getOnlinePlayers();
-        for (var info : online) {
-            for (String cand : nameCandidates(info)) {
-                if (cand.equals(displayName)) {
-                    return info;
-                }
-            }
+        PlayerInfo exact = null;
+        for (var info : online) if (info.getProfile().getName().equalsIgnoreCase(displayName)) {
+            if (exact != null && !exact.getProfile().getId().equals(info.getProfile().getId())) return null;
+            exact = info;
         }
+        if (exact != null) return exact;
+        for (var info : online) for (String cand : nameCandidates(info)) if (cand.equals(displayName)) {
+            if (exact != null && !exact.getProfile().getId().equals(info.getProfile().getId())) return null;
+            exact = info;
+        }
+        if (exact != null) return exact;
         PlayerInfo best = null;
         int bestLen = 0;
+        boolean ambiguous = false;
         for (var info : online) {
             for (String cand : nameCandidates(info)) {
-                if (cand.length() >= 3 && cand.length() > bestLen && displayName.contains(cand)) {
+                int at = displayName.indexOf(cand);
+                boolean bounded = at >= 0 && (at == 0 || !Character.isLetterOrDigit(displayName.charAt(at - 1)) && displayName.charAt(at - 1) != '_')
+                        && (at + cand.length() == displayName.length() || !Character.isLetterOrDigit(displayName.charAt(at + cand.length())) && displayName.charAt(at + cand.length()) != '_');
+                if (cand.length() >= 3 && cand.length() > bestLen && bounded) {
                     best = info;
                     bestLen = cand.length();
+                    ambiguous = false;
+                } else if (bounded && cand.length() == bestLen && best != null
+                        && !best.getProfile().getId().equals(info.getProfile().getId())) {
+                    ambiguous = true;
                 }
             }
         }
-        return best;
+        return ambiguous ? null : best;
+    }
+
+    public static UUID resolveAccountUuid(String account) {
+        if (account == null) return null;
+        var client = Minecraft.getInstance(); var network = client == null ? null : client.getConnection();
+        UUID found = null;
+        if (network != null) for (var info : network.getOnlinePlayers()) if (info.getProfile().getName().equalsIgnoreCase(account)) {
+            if (found != null && !found.equals(info.getProfile().getId())) return null;
+            found = info.getProfile().getId();
+        }
+        return found != null ? found : SeenPlayers.findAccountUuid(account);
+    }
+
+    public static String profileName(UUID uuid) {
+        if (uuid == null) return null;
+        var client = Minecraft.getInstance();
+        var network = client == null ? null : client.getConnection();
+        var info = network == null ? null : network.getPlayerInfo(uuid);
+        return info == null ? SeenPlayers.profileName(uuid) : info.getProfile().getName();
     }
 
     public static UUID resolveUuid(String displayName) {

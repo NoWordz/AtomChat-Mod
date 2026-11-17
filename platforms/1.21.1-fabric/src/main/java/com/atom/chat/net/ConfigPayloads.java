@@ -175,6 +175,7 @@ public final class ConfigPayloads {
 
     /** Registers every codec; must run on both logical sides (common init). */
     public static void register() {
+        ConfigAdminPayloads.register();
         PayloadTypeRegistry.playC2S().register(Save.ID, Save.CODEC);
         PayloadTypeRegistry.playC2S().register(Refresh.ID, Refresh.CODEC);
         PayloadTypeRegistry.playS2C().register(Snapshot.ID, Snapshot.CODEC);

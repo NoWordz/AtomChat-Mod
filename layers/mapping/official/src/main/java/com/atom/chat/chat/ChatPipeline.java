@@ -44,8 +44,79 @@ public final class ChatPipeline {
         return rich.linkifyUrls();
     }
 
+    public static boolean hasUnmappedTranslation(Component message) {
+        return message.getContents() instanceof net.minecraft.network.chat.contents.TranslatableContents
+                && ChatClassifier.classifyByKey(message) == ChatClassifier.Route.UNKNOWN;
+    }
+
+    /** A name-only renderer slot (Paper RAW) can contain the entire visible line. */
+    public static SenderMeta nativePublicLine(Component visible, Component sender, Component body, UUID uuid, String account) {
+        if (sender == null || !visible.getString().equals(sender.getString())) {
+            Component label = sender;
+            String full = visible.getString(), name = sender == null ? "" : sender.getString(), content = body.getString();
+            int nameAt = name.isEmpty() ? -1 : full.indexOf(name);
+            int bodyAt = content.isEmpty() ? -1 : full.indexOf(content, Math.max(0, nameAt + name.length()));
+            int otherName = nameAt < 0 ? -1 : full.indexOf(name, nameAt + name.length());
+            if (nameAt > 0 && nameAt <= 256 && bodyAt >= nameAt + name.length()
+                    && (otherName < 0 || otherName >= bodyAt)) {
+                // Prefixes outside the sender argument still belong to the received envelope.
+                int prefixEnd = full.charAt(nameAt - 1) == '<' ? nameAt - 1 : nameAt;
+                label = ComponentIdentity.slice(visible,0,prefixEnd).copy().append(sender);
+            }
+            return new SenderMeta(uuid, sender == null ? account : sender.getString(), account, body.getString(), false, label, body)
+                    .withEvidence(IdentityEvidence.NATIVE);
+        }
+        String text = visible.getString(), content = body.getString();
+        int at = content.isEmpty() ? -1 : text.indexOf(content);
+        if (at > 0 && text.indexOf(content, at+1) < 0) {
+            var parsed = MessagePresentation.parseDecoratedPlayerLine(text, List.of(account));
+            int labelEnd = parsed.isPresent() && parsed.get().contentStart() == at ? parsed.get().labelEnd() : at;
+            Component label = ComponentIdentity.slice(visible,0,labelEnd);
+            Component renderedBody = ComponentIdentity.slice(visible,at,text.length());
+            return new SenderMeta(uuid,label.getString(),account,renderedBody.getString(),false,label,renderedBody)
+                    .withEvidence(IdentityEvidence.NATIVE);
+        }
+        // Do not reveal a native body the renderer omitted, or pretend a complete line is a nickname.
+        return new SenderMeta(uuid,account,account,text,false,Component.literal(account),visible)
+                .withEvidence(IdentityEvidence.NATIVE);
+    }
+
     /** Direct HUD producers (including Quark) retain structured sender/body arguments. */
     public static SenderMeta structuredPlayerLine(Component message) {
+        if (message == null || ChatClassifier.classifyByKey(message) == ChatClassifier.Route.SYSTEM) return null;
+        java.util.List<Component> candidates = new java.util.ArrayList<>();
+        collectPlayerWrappers(message, candidates, 0, net.minecraft.network.chat.Style.EMPTY);
+        if (candidates.size() != 1) return null;
+        Component wrapper = candidates.get(0);
+        SenderMeta parsed = directPlayerLine(wrapper);
+        if (parsed == null || parsed.system() || wrapper == message) return parsed;
+        // Only a unique structural envelope may contribute leading decorations.
+        String whole = message.getString();
+        String nested = wrapper.getString();
+        int offset = whole.indexOf(nested);
+        if (offset < 0 || whole.indexOf(nested, offset + 1) >= 0) return null;
+        Component label = ComponentIdentity.slice(message, 0, offset).copy().append(parsed.senderComponent());
+        Component body = offset + nested.length() == whole.length() ? parsed.contentComponent()
+                : parsed.contentComponent().copy().append(ComponentIdentity.slice(message, offset + nested.length(), whole.length()));
+        return new SenderMeta(parsed.senderUuid(), label.getString(), parsed.profileName(),
+                body.getString(), false, label, body).withEvidence(parsed.evidence());
+    }
+
+    private static void collectPlayerWrappers(Component node, java.util.List<Component> out, int depth, net.minecraft.network.chat.Style parent) {
+        var effective = node.getStyle().applyTo(parent);
+        if (depth > 32 || out.size() > 1) return;
+        if (node.getContents() instanceof net.minecraft.network.chat.contents.TranslatableContents translated) {
+            String key = translated.getKey();
+            if (key.equals("chat.type.text") || key.equals("chat.type.team.text") || key.equals("chat.type.team.sent")) {
+                out.add(effective.equals(node.getStyle()) ? node : node.copy().setStyle(effective));
+                return; // A translated chat body may quote any other component.
+            }
+            return; // Unknown argument positions are not a chat schema.
+        }
+        for (Component child : node.getSiblings()) collectPlayerWrappers(child, out, depth + 1, effective);
+    }
+
+    private static SenderMeta directPlayerLine(Component message) {
         if (!(message.getContents() instanceof net.minecraft.network.chat.contents.TranslatableContents translated)) return null;
         String key = translated.getKey();
         int sender = key.equals("chat.type.text") ? 0
@@ -54,12 +125,37 @@ public final class ChatPipeline {
         if (sender < 0 || args.length <= sender + 1) return null;
         Component name = args[sender] instanceof Component c ? c : Component.literal(String.valueOf(args[sender]));
         Component body = args[sender + 1] instanceof Component c ? c : Component.literal(String.valueOf(args[sender + 1]));
+        if (!message.getStyle().equals(net.minecraft.network.chat.Style.EMPTY)) {
+            name = name.copy().setStyle(name.getStyle().applyTo(message.getStyle()));
+            body = body.copy().setStyle(body.getStyle().applyTo(message.getStyle()));
+        }
+        if (!message.getSiblings().isEmpty()) {
+            var extended = Component.literal("").setStyle(message.getStyle()).append(body);
+            for (Component sibling : message.getSiblings()) extended.append(sibling);
+            body = extended;
+        }
         String display = name.getString().replaceAll("§.", "").trim();
         if (display.isBlank()) return null;
-        var info = ChatClassifier.resolveOnlinePlayer(display);
-        String profile = info != null ? info.getProfile().getName() : display;
-        UUID uuid = info != null ? info.getProfile().getId() : SeenPlayers.findUuid(display);
-        return new SenderMeta(uuid, display, profile, body.getString(), false, name, body);
+        var identity = ComponentIdentity.resolveSender(name);
+        if (identity.conflict()) return SenderMeta.systemMeta().withEvidence(IdentityEvidence.CONFLICT);
+        var info = identity.uuid() == null && identity.account() == null ? ChatClassifier.resolveOnlinePlayer(display) : null;
+        String profile = identity.account() != null ? identity.account()
+                : identity.uuid() != null ? ChatClassifier.profileName(identity.uuid()) : info != null ? info.getProfile().getName() : display;
+        UUID uuid = identity.account() != null || identity.uuid() != null ? identity.uuid()
+                : info != null ? info.getProfile().getId() : SeenPlayers.findUuid(display);
+        return new SenderMeta(uuid, display, profile, body.getString(), false, name, body)
+                .withEvidence(identity.uuid() != null ? IdentityEvidence.ENTITY : IdentityEvidence.TRANSLATION);
+    }
+
+    public static SenderMeta learnedPlayerLine(Component message) {
+        var match = LearnedChatFormats.match(message.getString());
+        if (match.isEmpty()) return null;
+        var parts = match.get();
+        UUID uuid = SeenPlayers.findUuid(parts.account());
+        if (uuid == null) return null;
+        return new SenderMeta(uuid, parts.display(), parts.account(), parts.content(), false, parts.whisper(),
+                parts.whisper() ? parts.account() : null, ComponentIdentity.slice(message, 0, parts.labelEnd()),
+                ComponentIdentity.slice(message, parts.bodyStart(), parts.bodyEnd())).withEvidence(IdentityEvidence.LEARNED);
     }
 
     /** All online names (profile + tab display + §-stripped variants), then
@@ -77,6 +173,7 @@ public final class ChatPipeline {
             }
         });
         names.addAll(SeenPlayers.profileNames());
+        for (var seen : SeenPlayers.snapshot()) if (seen.displayName() != null) names.add(seen.displayName());
         return new ArrayList<>(names);
     }
 

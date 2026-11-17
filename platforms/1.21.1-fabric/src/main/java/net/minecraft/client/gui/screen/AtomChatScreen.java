@@ -919,7 +919,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
 
     /**
      * Ordered input routing (D23a). Priority (first registered wins): closing
-     * guard, tutorial, confirmation, panel editing handles, completion, foreign chat UI, outside-panel close, modals (cropper/colour picker), composer tools, pushed-subpage Esc, screen Esc,
+     * guard, tutorial, confirmation, server config, panel editing handles, completion, foreign chat UI, outside-panel close, modals (cropper/colour picker), composer tools, pushed-subpage Esc, screen Esc,
      * root pages, world chat. New interactive features register a handler
      * instead of inserting branches into the former if-else chains.
      *
@@ -952,6 +952,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
             .add(tutorial)
             .add(new com.atom.chat.ui.ConfirmationInput(settingsSectionPage::confirmation,
                     this::toVirtualX, this::toVirtualY))
+            .add(serverConfigInput())
             .add(panelEditorInput())
             .add(completionInput)
             .add(foreignChatUiInput())
@@ -1704,6 +1705,12 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
      * borrowed one of them would capture the guard's anchor.
      */
     private final NavStackController.Host navHost = new NavStackController.Host() {
+        @Override public boolean allowBackNavigation() {
+            if (topPage() != AppPage.SERVER_CONFIG || serverConfigPage == null) return true;
+            serverConfigPage.leave(settingsSectionPage.confirmation());
+            return false;
+        }
+
         @Override
         public boolean signatureEditLive() {
             return profilePage.isSignatureEditing();
@@ -1824,6 +1831,46 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
      * existing call site (this screen's own, and the pages handed {@code this})
      * is untouched.
      */
+    private com.atom.chat.config.ServerConfigPage serverConfigPage;
+    public com.atom.chat.config.ServerConfigPage serverConfigPage() { return serverConfigPage; }
+    private com.atom.chat.ui.input.InputHandler serverConfigInput() {
+        return new com.atom.chat.ui.input.InputHandler() {
+            private boolean active() { return topPage() == AppPage.SERVER_CONFIG && serverConfigPage != null; }
+            public boolean onClick(double x, double y, int button) {
+                if (!active()) return false;
+                if (button == 0 && headerChrome.isBackButtonHit(toVirtualX(x), toVirtualY(y))) popPage();
+                else serverConfigPage.click(toVirtualX(x), toVirtualY(y), button);
+                return true;
+            }
+            public boolean onKey(int key, int scan, int modifiers) {
+                if (!active()) return false;
+                if (key == 256) popPage(); else serverConfigPage.key(key, modifiers);
+                return true;
+            }
+            public boolean onChar(char chr, int modifiers) { return active() && serverConfigPage.character(chr); }
+            public boolean onScroll(double x, double y, double horizontal, double vertical) {
+                return active() && serverConfigPage.scroll(toVirtualX(x), toVirtualY(y), vertical);
+            }
+            public boolean onRelease(double x, double y, int button) { if (!active()) return false; serverConfigPage.release(); return true; }
+            public boolean onDrag(double x,double y,int button,double dx,double dy){return active() && serverConfigPage.drag(toVirtualX(x),toVirtualY(y));}
+        };
+    }
+    public void closeServerConfig() {
+        if (topPage() != AppPage.SERVER_CONFIG) return;
+        serverConfigPage = null;
+        composite.navigationDirection(true);
+        navStack.popPage();
+    }
+    public void openServerConfig(com.atom.chat.config.ServerConfigPage page) {
+        closing = false;
+        serverConfigPage = page;
+        page.bindConfirmation(settingsSectionPage.confirmation());
+        page.bindNavigationDirection(composite::navigationDirection);
+        if (topPage() == AppPage.SERVER_CONFIG) return;
+        if (topPage() != AppPage.WORLD_CHAT && topPage() != AppPage.PRIVATE_CHAT) openWorldChat();
+        pushPage(AppPage.SERVER_CONFIG);
+    }
+
     private final NavStackController navStack;
 
     public AtomChatScreen(String originalChatText) {
@@ -1910,7 +1957,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
     private final HeaderChrome headerChrome = new HeaderChrome(new HeaderChrome.Host() {
         @Override
         public String label(String key) {
-            return tr(key);
+            return "atomchat.config.title".equals(key)&&serverConfigPage!=null?serverConfigPage.title():tr(key);
         }
 
         @Override
@@ -1955,6 +2002,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
                 public void drawArrivingBody(Canvas canvas, UiLayout layout, int mouseX, int mouseY) {
                     switch (topPage()) {
                         case CHAT_LIST, PROFILE, SETTINGS -> drawRootBody(canvas, mouseX, mouseY, topPage());
+                        case SERVER_CONFIG -> { if (serverConfigPage != null) serverConfigPage.renderBody(canvas, detailLayout(), toVirtualX(mouseX), toVirtualY(mouseY), frameDt); }
                         case SETTINGS_SECTION -> drawSettingsSection(canvas, mouseX, mouseY, topNav().section());
                         case PROFILE_DETAIL -> drawProfileDetail(canvas, mouseX, mouseY);
                         default -> drawChatPageBody(canvas, layout, mouseX, mouseY, chatPageViewFor(topNav()));
@@ -1970,10 +2018,11 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
                         // The settings/profile pushed header draws through the
                         // detail header rect; the chat pages' header carries the
                         // back button, the online status and the feed filter.
-                        case SETTINGS_SECTION, PROFILE_DETAIL -> {
+                        case SETTINGS_SECTION, PROFILE_DETAIL, SERVER_CONFIG -> {
                             headerChrome.drawPushedHeader(canvas, vmx, vmy, topNav(), headerActionFor(topNav()));
                             if (topPage() == AppPage.SETTINGS_SECTION) settingsSectionPage.renderFixedChipBar(
                                     canvas, detailLayout(), topNav().section(), vmx, vmy, accent());
+                            if(topPage()==AppPage.SERVER_CONFIG&&serverConfigPage!=null)serverConfigPage.renderFixedChrome(canvas,detailLayout(),vmx,vmy,frameDt);
                         }
                         default -> ShellHeader.render(canvas, layout.header,
                                 headerChrome.shellTitleFor(topNav()), true,
@@ -1998,7 +2047,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
                 @Override public float bodyClipTop(UiLayout layout) { return stationaryChromeBottom(); }
                 @Override public int bodyVariant() {
                     return topPage() == AppPage.SETTINGS_SECTION
-                            ? settingsSectionPage.activeChipIndex(topNav().section()) : 0;
+                            ? settingsSectionPage.activeChipIndex(topNav().section()) : topPage()==AppPage.SERVER_CONFIG&&serverConfigPage!=null?serverConfigPage.bodyVariant():0;
                 }
             });
     private UiLayout.Rect filterButton() {
@@ -2909,6 +2958,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
                 case SETTINGS -> settingsHomePage.markEntered(composite.entrance().enteredAtMs());
                 case PROFILE, PROFILE_DETAIL -> profilePage.markEntered(composite.entrance().enteredAtMs());
                 case SETTINGS_SECTION -> settingsSectionPage.markEntered(composite.entrance().enteredAtMs());
+                case SERVER_CONFIG -> {if(serverConfigPage!=null)serverConfigPage.markEntered(composite.entrance().enteredAtMs());}
                 default -> { }
             }
         }
@@ -3600,6 +3650,22 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
     }
 
 
+
+    public void pickServerConfigImage(java.util.function.Consumer<java.nio.file.Path> receive) {
+        // The native AWT dialog grabs OS input; release MC's held keys/button so
+        // the UI does not think the image button is still pressed when it returns.
+        KeyBinding.unpressAll();
+        if (this.client.mouse != null) {
+            ((MouseHandlerAccessor) this.client.mouse).atomchat$setActiveButton(0);
+        }
+        Thread picker=new Thread(()->{
+            var file=FilePicker.pickImage(this::suppressAutoIconify,this::restoreAutoIconify,
+                name->name.toLowerCase(java.util.Locale.ROOT).matches(".*\\.(png|jpg|jpeg|gif)"));
+            refocusWindow();receive.accept(file);
+        },"AtomChat-ServerImagePicker");
+        picker.setDaemon(true);picker.start();
+    }
+
     private void pickAndUploadImage() {
         // The native AWT dialog grabs OS input; release MC's held keys/button so
         // the UI does not think the image button is still pressed when it returns.
@@ -3818,13 +3884,14 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
 
     private float stationaryChromeBottom() {
         return topPage() == AppPage.SETTINGS_SECTION && settingsSectionPage.chipBarHeight(topNav().section()) > 0
-                ? detailLayout().chipBar.bottom() : layout().header.bottom();
+                ? detailLayout().chipBar.bottom() : topPage()==AppPage.SERVER_CONFIG&&serverConfigPage!=null?serverConfigPage.chromeBottom(detailLayout()):layout().header.bottom();
     }
 
     private float toVirtualX(double guiX) {
         float x = ScreenMetrics.toVirtualX(client.getWindow(), guiX);
         float y = ScreenMetrics.toVirtualY(client.getWindow(), pointerGuiY);
         if (motionPointerExcluded()) return x;
+        if(topPage()==AppPage.SERVER_CONFIG&&serverConfigPage!=null&&serverConfigPage.stationaryPointer(detailLayout(),y))return x;
         if (pointerInBottom(y)) return bottomChrome.inverseX(x);
         return y > stationaryChromeBottom() ? bodyPointer(x, y).x() : x;
     }
@@ -3833,6 +3900,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         float x = ScreenMetrics.toVirtualX(client.getWindow(), pointerGuiX);
         float y = ScreenMetrics.toVirtualY(client.getWindow(), guiY);
         if (motionPointerExcluded()) return y;
+        if(topPage()==AppPage.SERVER_CONFIG&&serverConfigPage!=null&&serverConfigPage.stationaryPointer(detailLayout(),y))return y;
         if (pointerInBottom(y)) return bottomChrome.inverseY(y);
         return y > stationaryChromeBottom() ? bodyPointer(x, y).y() : y;
     }

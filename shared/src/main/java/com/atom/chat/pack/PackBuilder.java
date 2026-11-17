@@ -134,7 +134,7 @@ public final class PackBuilder {
                 continue;
             }
             phrases.add(trimmed.length() > ServerPack.MAX_PHRASE_CHARS
-                    ? trimmed.substring(0, ServerPack.MAX_PHRASE_CHARS)
+                    ? com.atom.chat.util.TextLimits.limit(trimmed,ServerPack.MAX_PHRASE_CHARS)
                     : trimmed);
         }
         if (overCap) {

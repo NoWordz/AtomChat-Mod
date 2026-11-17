@@ -59,6 +59,7 @@ public final class NavStackController {
      * screen method's name would capture the guard's anchor.
      */
     public interface Host {
+        default boolean allowBackNavigation() { return true; }
         /** D18: a live signature edit never survives navigation. */
         boolean signatureEditLive();
 
@@ -209,7 +210,7 @@ public final class NavStackController {
 
     /** The whole stack, for the session snapshot taken when the screen goes away. */
     public List<NavPage> snapshot() {
-        return navigation.snapshot();
+        return navigation.snapshot().stream().filter(page -> page.page() != AppPage.SERVER_CONFIG).toList();
     }
 
     // --------------------------------------------------------------- doors
@@ -293,6 +294,7 @@ public final class NavStackController {
      * its entrance overlay announces the change.
      */
     public void popPage() {
+        if (!host.allowBackNavigation()) return;
         // Same rule as pushNav: a live signature edit never survives
         // navigation, and it aborts (no commit) when the page goes away.
         if (host.signatureEditLive()) {
@@ -313,12 +315,13 @@ public final class NavStackController {
         // The leaving page's live reply is captured while it still owns the
         // field (same capture the old transition's start step ran at click time).
         host.syncReplySlot();
+        boolean leavingServerConfig = topPage() == AppPage.SERVER_CONFIG;
         boolean leavingProfile = topPage() == AppPage.PROFILE_DETAIL;
         if (topPage() == AppPage.PRIVATE_CHAT) {
             host.persistPrivateDraft(activePrivateTarget(), host.composerTextNow());
             PrivateChatStore.clearActive();
         }
-        host.clearTransientWorldUi();
+        if (!leavingServerConfig) host.clearTransientWorldUi();
         host.clearSettingsPageState();
         if (navigation.pop()) com.atom.chat.diagnostics.FrameSegments.navigation("pop", topPage().name());
         // Falling back to the local player only once the page is off the stack,
@@ -331,7 +334,7 @@ public final class NavStackController {
             PrivateChatStore.setActive(activePrivateTarget());
             host.adoptDraft(activePrivateTarget());
         } else if (topPage() == AppPage.WORLD_CHAT) {
-            host.clearWorldScroll();
+            if (!leavingServerConfig) host.clearWorldScroll();
             host.adoptWorldDraft();
         }
         // clearTransientWorldUi() above dropped every armed reply, so this only

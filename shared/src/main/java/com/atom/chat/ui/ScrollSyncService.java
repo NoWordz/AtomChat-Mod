@@ -158,51 +158,10 @@ public final class ScrollSyncService {
      */
     public void drawScrollbar(Canvas canvas, UiLayout layout, float vmx, float vmy,
                               ScrollController controller) {
-        long now = System.currentTimeMillis();
-
-        UiLayout.Rect list = layout.list;
-        float trackW = UiTokens.s(6);
-        float trackH = list.h();
-        float visibleRatio = Math.min(1.0F, trackH / (trackH + controller.getMaxScroll()));
-        float thumbH = Math.max(UiTokens.s(30), trackH * visibleRatio);
-        // Deliberately computed before drag updates below, matching the original
-        // frame ordering: the thumb is drawn from the offset captured at frame start.
-        float thumbY = list.y() + (trackH - thumbH) * (controller.getScrollY() / controller.getMaxScroll());
-
-        if (controller.updateScrollbarFade(now, vmx, vmy, list, controller.isDragging(), trackW,
-                host.frameDt()) <= 0.0F) {
-            return;
-        }
-
-        if (controller.isDragging()) {
-            controller.dragTo(vmy, trackH);
-        }
-
-        float w = trackW + controller.getScrollEmphasis() * UiTokens.s(3);
-        // The thumb rides the accent channel the whole way — a static white
-        // thumb vanishes on light panels, so the idle low-alpha state reads
-        // accent too, same emphasis language as the docked bar's active tab.
-        int accent = AtomChatConfig.get().accentColor;
-        int r = (accent >> 16) & 0xFF;
-        int g = (accent >> 8) & 0xFF;
-        int bch = accent & 0xFF;
-        // Mth.clamp(x, 0, 255), written out: shared code cannot see net.minecraft,
-        // and this is that method's own definition (Math.min(Math.max(v, min), max)).
-        int alpha = Math.min(Math.max((int) ((170 + 60 * controller.getScrollEmphasis())
-                * controller.getScrollBarAlpha()), 0), 255);
-        int color = (alpha << 24) | (r << 16) | (g << 8) | bch;
-        float trackX = list.right() - trackW - UiTokens.s(2);
-        SkiaDraw.drawRoundedRect(canvas, trackX - (w - trackW) / 2.0F, thumbY, w, thumbH,
-                UiTokens.radius(w / (2.0F * UiTokens.SCALE)), color);
+        SettingsScrollbar.draw(canvas,layout.list,controller,vmx,vmy,AtomChatConfig.get().accentColor,host.frameDt());
     }
-
-    public boolean overScrollbarTrack(UiLayout layout, float vmx, float vmy,
-                                      ScrollController controller) {
-        float trackW = UiTokens.s(6);
-        float trackX = layout.list.right() - trackW - UiTokens.s(2);
-        return controller.getMaxScroll() > 0.0F
-                && vmx >= trackX - UiTokens.s(8) && vmx <= trackX + trackW + UiTokens.s(8)
-                && vmy >= layout.list.y() && vmy <= layout.list.bottom();
+    public boolean overScrollbarTrack(UiLayout layout,float vmx,float vmy,ScrollController controller) {
+        return SettingsScrollbar.over(layout.list,controller,vmx,vmy);
     }
 
     // ------------------------------------------------------------ the FAB

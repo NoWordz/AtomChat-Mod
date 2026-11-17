@@ -32,6 +32,9 @@ import net.neoforged.neoforge.network.registration.PayloadRegistrar;
  * {@link Wire}; this file keeps the payload types and the channel wiring.
  */
 public final class ConfigPayloads {
+    public static void sendSave(Save payload) { net.neoforged.neoforge.network.PacketDistributor.sendToServer(payload); }
+    public static void sendRefresh() { var payload = new Refresh(); net.neoforged.neoforge.network.PacketDistributor.sendToServer(payload); }
+
     private ConfigPayloads() {
     }
 
@@ -178,6 +181,7 @@ public final class ConfigPayloads {
 
     /** Registers every payload on the NeoForge payload bus (common entry). */
     public static void register(RegisterPayloadHandlersEvent event) {
+        ConfigAdminPayloads.register(event);
         PayloadRegistrar registrar = event.registrar("1").optional();
         registrar.playToServer(Save.TYPE, Save.STREAM_CODEC,
                 (payload, ctx) -> ctx.enqueueWork(() -> ConfigScreenServer.onSave(ctx.player(), payload)));

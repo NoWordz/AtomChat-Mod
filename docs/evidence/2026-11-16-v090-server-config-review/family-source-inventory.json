@@ -1,0 +1,1599 @@
+{
+  "scope": "Static direct-use inventory, not visual acceptance or a gate. Shared, official mapping and all three platform main Java roots. Delegated implementations and nested primitives require source review.",
+  "files": [
+    {
+      "file": "shared/src/main/java/com/atom/chat/config/ServerConfigPage.java",
+      "matches": {
+        "card": [
+          {
+            "line": 112,
+            "call": "UiCards.drawCard("
+          },
+          {
+            "line": 134,
+            "call": "UiCards.drawCard("
+          }
+        ],
+        "settings_field": [
+          {
+            "line": 167,
+            "call": "SettingsFieldPaint.surface("
+          }
+        ],
+        "confirmation_button": [
+          {
+            "line": 38,
+            "call": "ConfirmationSurface.Button"
+          },
+          {
+            "line": 38,
+            "call": "ConfirmationSurface.Button"
+          },
+          {
+            "line": 39,
+            "call": "ConfirmationSurface.Button"
+          },
+          {
+            "line": 39,
+            "call": "ConfirmationSurface.Button"
+          }
+        ]
+      }
+    },
+    {
+      "file": "shared/src/main/java/com/atom/chat/image/ImagePreviewOverlay.java",
+      "matches": {
+        "hover_motion": [
+          {
+            "line": 312,
+            "call": "UiMotion.approach("
+          }
+        ],
+        "press_scale": [
+          {
+            "line": 72,
+            "call": "PressScale.bounce("
+          }
+        ]
+      }
+    },
+    {
+      "file": "shared/src/main/java/com/atom/chat/notification/NotificationHudEditor.java",
+      "matches": {
+        "hover_motion": [
+          {
+            "line": 49,
+            "call": "UiMotion.approach("
+          }
+        ],
+        "confirmation_button": [
+          {
+            "line": 29,
+            "call": "ConfirmationSurface.Button"
+          },
+          {
+            "line": 29,
+            "call": "ConfirmationSurface.Button"
+          },
+          {
+            "line": 29,
+            "call": "ConfirmationSurface.Button"
+          },
+          {
+            "line": 29,
+            "call": "ConfirmationSurface.Button"
+          }
+        ]
+      }
+    },
+    {
+      "file": "shared/src/main/java/com/atom/chat/onboarding/TutorialOverlay.java",
+      "matches": {
+        "hover_motion": [
+          {
+            "line": 39,
+            "call": "UiMotion.approach("
+          }
+        ],
+        "confirmation_button": [
+          {
+            "line": 24,
+            "call": "ConfirmationSurface.Button"
+          },
+          {
+            "line": 24,
+            "call": "ConfirmationSurface.Button"
+          },
+          {
+            "line": 24,
+            "call": "ConfirmationSurface.Button"
+          },
+          {
+            "line": 24,
+            "call": "ConfirmationSurface.Button"
+          },
+          {
+            "line": 24,
+            "call": "ConfirmationSurface.Button"
+          }
+        ]
+      }
+    },
+    {
+      "file": "shared/src/main/java/com/atom/chat/render/DrawPrimitives.java",
+      "matches": {
+        "hover_motion": [
+          {
+            "line": 223,
+            "call": "UiMotion.approach("
+          },
+          {
+            "line": 286,
+            "call": "UiMotion.approach("
+          }
+        ],
+        "press_scale": [
+          {
+            "line": 65,
+            "call": "PressScale.bounce("
+          },
+          {
+            "line": 65,
+            "call": "PressScale.bounce("
+          },
+          {
+            "line": 66,
+            "call": "PressScale.bounce("
+          },
+          {
+            "line": 66,
+            "call": "PressScale.bounce("
+          }
+        ],
+        "ripple_region": [
+          {
+            "line": 216,
+            "call": "ClickRipples.region("
+          },
+          {
+            "line": 280,
+            "call": "ClickRipples.region("
+          }
+        ]
+      }
+    },
+    {
+      "file": "shared/src/main/java/com/atom/chat/settings/SettingsChipBar.java",
+      "matches": {
+        "hover_motion": [
+          {
+            "line": 37,
+            "call": "UiMotion.approach("
+          }
+        ],
+        "press_scale": [
+          {
+            "line": 17,
+            "call": "PressScale.bounce("
+          },
+          {
+            "line": 17,
+            "call": "PressScale.bounce("
+          },
+          {
+            "line": 17,
+            "call": "PressScale.bounce("
+          }
+        ],
+        "ripple_region": [
+          {
+            "line": 58,
+            "call": "ClickRipples.region("
+          }
+        ]
+      }
+    },
+    {
+      "file": "shared/src/main/java/com/atom/chat/tools/ToolMenu.java",
+      "matches": {
+        "hover_motion": [
+          {
+            "line": 59,
+            "call": "UiMotion.approach("
+          },
+          {
+            "line": 87,
+            "call": "UiMotion.approach("
+          }
+        ],
+        "press_scale": [
+          {
+            "line": 89,
+            "call": "PressScale.bounce("
+          }
+        ]
+      }
+    },
+    {
+      "file": "shared/src/main/java/com/atom/chat/ui/ActionToast.java",
+      "matches": {
+        "float_surface": [
+          {
+            "line": 178,
+            "call": "UiCards.drawFloatSurface("
+          }
+        ]
+      }
+    },
+    {
+      "file": "shared/src/main/java/com/atom/chat/ui/BottomTabBar.java",
+      "matches": {
+        "hover_motion": [
+          {
+            "line": 109,
+            "call": "UiMotion.approach("
+          }
+        ],
+        "press_scale": [
+          {
+            "line": 42,
+            "call": "PressScale.bounce("
+          },
+          {
+            "line": 42,
+            "call": "PressScale.bounce("
+          },
+          {
+            "line": 42,
+            "call": "PressScale.bounce("
+          }
+        ],
+        "ripple_region": [
+          {
+            "line": 192,
+            "call": "ClickRipples.region("
+          }
+        ]
+      }
+    },
+    {
+      "file": "shared/src/main/java/com/atom/chat/ui/ConfirmationDialog.java",
+      "matches": {
+        "hover_motion": [
+          {
+            "line": 75,
+            "call": "UiMotion.approach("
+          }
+        ],
+        "confirmation_button": [
+          {
+            "line": 21,
+            "call": "ConfirmationSurface.Button"
+          },
+          {
+            "line": 21,
+            "call": "ConfirmationSurface.Button"
+          },
+          {
+            "line": 21,
+            "call": "ConfirmationSurface.Button"
+          }
+        ]
+      }
+    },
+    {
+      "file": "shared/src/main/java/com/atom/chat/ui/ConfirmationSurface.java",
+      "matches": {
+        "hover_motion": [
+          {
+            "line": 26,
+            "call": "UiMotion.approach("
+          }
+        ],
+        "press_scale": [
+          {
+            "line": 19,
+            "call": "PressScale.bounce("
+          }
+        ],
+        "ripple_region": [
+          {
+            "line": 33,
+            "call": "ClickRipples.region("
+          }
+        ]
+      }
+    },
+    {
+      "file": "shared/src/main/java/com/atom/chat/ui/ContextMenuController.java",
+      "matches": {
+        "hover_motion": [
+          {
+            "line": 322,
+            "call": "UiMotion.approach("
+          },
+          {
+            "line": 347,
+            "call": "UiMotion.approach("
+          }
+        ],
+        "press_scale": [
+          {
+            "line": 128,
+            "call": "PressScale.bounce("
+          },
+          {
+            "line": 128,
+            "call": "PressScale.bounce("
+          },
+          {
+            "line": 129,
+            "call": "PressScale.bounce("
+          },
+          {
+            "line": 129,
+            "call": "PressScale.bounce("
+          }
+        ]
+      }
+    },
+    {
+      "file": "shared/src/main/java/com/atom/chat/ui/HeaderChrome.java",
+      "matches": {
+        "hover_motion": [
+          {
+            "line": 109,
+            "call": "UiMotion.approach("
+          }
+        ]
+      }
+    },
+    {
+      "file": "shared/src/main/java/com/atom/chat/ui/MenuPopup.java",
+      "matches": {
+        "ripple_region": [
+          {
+            "line": 178,
+            "call": "ClickRipples.region("
+          }
+        ]
+      }
+    },
+    {
+      "file": "shared/src/main/java/com/atom/chat/ui/PanelEditor.java",
+      "matches": {
+        "hover_motion": [
+          {
+            "line": 139,
+            "call": "UiMotion.approach("
+          },
+          {
+            "line": 175,
+            "call": "UiMotion.approach("
+          }
+        ],
+        "press_scale": [
+          {
+            "line": 26,
+            "call": "PressScale.bounce("
+          },
+          {
+            "line": 50,
+            "call": "PressScale.bounce("
+          }
+        ],
+        "confirmation_button": [
+          {
+            "line": 24,
+            "call": "ConfirmationSurface.Button"
+          },
+          {
+            "line": 24,
+            "call": "ConfirmationSurface.Button"
+          },
+          {
+            "line": 49,
+            "call": "ConfirmationSurface.Button"
+          }
+        ]
+      }
+    },
+    {
+      "file": "shared/src/main/java/com/atom/chat/ui/ReactionChips.java",
+      "matches": {
+        "hover_motion": [
+          {
+            "line": 260,
+            "call": "UiMotion.approach("
+          }
+        ]
+      }
+    },
+    {
+      "file": "shared/src/main/java/com/atom/chat/ui/ScrollController.java",
+      "matches": {
+        "hover_motion": [
+          {
+            "line": 276,
+            "call": "UiMotion.approach("
+          },
+          {
+            "line": 285,
+            "call": "UiMotion.approach("
+          },
+          {
+            "line": 287,
+            "call": "UiMotion.approach("
+          }
+        ]
+      }
+    },
+    {
+      "file": "shared/src/main/java/com/atom/chat/ui/ScrollSyncService.java",
+      "matches": {
+        "hover_motion": [
+          {
+            "line": 237,
+            "call": "UiMotion.approach("
+          },
+          {
+            "line": 238,
+            "call": "UiMotion.approach("
+          }
+        ],
+        "press_scale": [
+          {
+            "line": 79,
+            "call": "PressScale.bounce("
+          }
+        ]
+      }
+    },
+    {
+      "file": "shared/src/main/java/com/atom/chat/ui/ShellHeader.java",
+      "matches": {
+        "press_scale": [
+          {
+            "line": 40,
+            "call": "PressScale.bounce("
+          },
+          {
+            "line": 41,
+            "call": "PressScale.bounce("
+          }
+        ],
+        "ripple_region": [
+          {
+            "line": 163,
+            "call": "ClickRipples.region("
+          }
+        ]
+      }
+    },
+    {
+      "file": "shared/src/main/java/com/atom/chat/ui/SuggestionPopup.java",
+      "matches": {
+        "hover_motion": [
+          {
+            "line": 55,
+            "call": "UiMotion.approach("
+          },
+          {
+            "line": 73,
+            "call": "UiMotion.approach("
+          }
+        ],
+        "press_scale": [
+          {
+            "line": 24,
+            "call": "PressScale.bounce("
+          },
+          {
+            "line": 29,
+            "call": "PressScale.bounce("
+          }
+        ]
+      }
+    },
+    {
+      "file": "shared/src/main/java/com/atom/chat/ui/ToggleSwitch.java",
+      "matches": {
+        "press_scale": [
+          {
+            "line": 66,
+            "call": "PressScale.bounce("
+          }
+        ]
+      }
+    },
+    {
+      "file": "layers/mapping/official/src/main/java/com/atom/chat/avatar/ColorPickerOverlay.java",
+      "matches": {
+        "hover_motion": [
+          {
+            "line": 381,
+            "call": "UiMotion.approach("
+          },
+          {
+            "line": 571,
+            "call": "UiMotion.approach("
+          },
+          {
+            "line": 573,
+            "call": "UiMotion.approach("
+          }
+        ],
+        "press_scale": [
+          {
+            "line": 52,
+            "call": "PressScale.bounce("
+          },
+          {
+            "line": 53,
+            "call": "PressScale.bounce("
+          },
+          {
+            "line": 54,
+            "call": "PressScale.bounce("
+          },
+          {
+            "line": 55,
+            "call": "PressScale.bounce("
+          }
+        ]
+      }
+    },
+    {
+      "file": "layers/mapping/official/src/main/java/com/atom/chat/avatar/ImageCropper.java",
+      "matches": {
+        "hover_motion": [
+          {
+            "line": 354,
+            "call": "UiMotion.approach("
+          },
+          {
+            "line": 458,
+            "call": "UiMotion.approach("
+          },
+          {
+            "line": 460,
+            "call": "UiMotion.approach("
+          }
+        ],
+        "press_scale": [
+          {
+            "line": 84,
+            "call": "PressScale.bounce("
+          },
+          {
+            "line": 85,
+            "call": "PressScale.bounce("
+          }
+        ]
+      }
+    },
+    {
+      "file": "layers/mapping/official/src/main/java/com/atom/chat/notification/NotificationBanner.java",
+      "matches": {
+        "card": [
+          {
+            "line": 597,
+            "call": "UiCards.drawCard("
+          }
+        ],
+        "hover_motion": [
+          {
+            "line": 461,
+            "call": "UiMotion.approach("
+          }
+        ],
+        "press_scale": [
+          {
+            "line": 399,
+            "call": "PressScale.bounce("
+          }
+        ]
+      }
+    },
+    {
+      "file": "layers/mapping/official/src/main/java/com/atom/chat/page/ConversationListPage.java",
+      "matches": {
+        "card": [
+          {
+            "line": 690,
+            "call": "UiCards.drawCard("
+          },
+          {
+            "line": 703,
+            "call": "UiCards.drawCard("
+          }
+        ],
+        "hover_motion": [
+          {
+            "line": 520,
+            "call": "UiMotion.approach("
+          }
+        ],
+        "press_scale": [
+          {
+            "line": 387,
+            "call": "PressScale.bounce("
+          },
+          {
+            "line": 663,
+            "call": "PressScale.bounce("
+          }
+        ],
+        "entrance": [
+          {
+            "line": 392,
+            "call": "UiStagger.itemAlpha("
+          },
+          {
+            "line": 393,
+            "call": "UiStagger.itemRise("
+          },
+          {
+            "line": 396,
+            "call": "UiStagger.itemStyleZoomScale("
+          },
+          {
+            "line": 436,
+            "call": "UiStagger.itemAlpha("
+          },
+          {
+            "line": 437,
+            "call": "UiStagger.itemRise("
+          },
+          {
+            "line": 446,
+            "call": "UiStagger.itemStyleZoomScale("
+          },
+          {
+            "line": 548,
+            "call": "UiStagger.itemStyleZoomScale("
+          }
+        ]
+      }
+    },
+    {
+      "file": "layers/mapping/official/src/main/java/com/atom/chat/page/MessageListView.java",
+      "matches": {
+        "hover_motion": [
+          {
+            "line": 472,
+            "call": "UiMotion.approach("
+          }
+        ],
+        "press_scale": [
+          {
+            "line": 180,
+            "call": "PressScale.bounce("
+          }
+        ]
+      }
+    },
+    {
+      "file": "layers/mapping/official/src/main/java/com/atom/chat/page/ProfilePage.java",
+      "matches": {
+        "card": [
+          {
+            "line": 1506,
+            "call": "UiCards.drawCard("
+          },
+          {
+            "line": 1558,
+            "call": "UiCards.drawCard("
+          },
+          {
+            "line": 1622,
+            "call": "UiCards.drawCard("
+          }
+        ],
+        "hover_motion": [
+          {
+            "line": 386,
+            "call": "UiMotion.approach("
+          },
+          {
+            "line": 1101,
+            "call": "UiMotion.approach("
+          },
+          {
+            "line": 1102,
+            "call": "UiMotion.approach("
+          },
+          {
+            "line": 1105,
+            "call": "UiMotion.approach("
+          },
+          {
+            "line": 1109,
+            "call": "UiMotion.approach("
+          },
+          {
+            "line": 1121,
+            "call": "UiMotion.approach("
+          },
+          {
+            "line": 1133,
+            "call": "UiMotion.approach("
+          },
+          {
+            "line": 1140,
+            "call": "UiMotion.approach("
+          },
+          {
+            "line": 1147,
+            "call": "UiMotion.approach("
+          },
+          {
+            "line": 1497,
+            "call": "UiMotion.approach("
+          }
+        ],
+        "press_scale": [
+          {
+            "line": 125,
+            "call": "PressScale.bounce("
+          },
+          {
+            "line": 126,
+            "call": "PressScale.bounce("
+          },
+          {
+            "line": 128,
+            "call": "PressScale.bounce("
+          },
+          {
+            "line": 128,
+            "call": "PressScale.bounce("
+          },
+          {
+            "line": 269,
+            "call": "PressScale.bounce("
+          },
+          {
+            "line": 270,
+            "call": "PressScale.bounce("
+          },
+          {
+            "line": 388,
+            "call": "PressScale.bounce("
+          },
+          {
+            "line": 1502,
+            "call": "PressScale.bounce("
+          }
+        ],
+        "entrance": [
+          {
+            "line": 196,
+            "call": "UiStagger.itemAlpha("
+          },
+          {
+            "line": 207,
+            "call": "UiStagger.itemRise("
+          },
+          {
+            "line": 208,
+            "call": "UiStagger.itemStyleZoomScale("
+          },
+          {
+            "line": 219,
+            "call": "UiStagger.itemRise("
+          },
+          {
+            "line": 237,
+            "call": "UiStagger.itemStyleZoomScale("
+          }
+        ]
+      }
+    },
+    {
+      "file": "layers/mapping/official/src/main/java/com/atom/chat/settings/SettingsHomePage.java",
+      "matches": {
+        "card": [
+          {
+            "line": 214,
+            "call": "UiCards.drawCard("
+          }
+        ],
+        "hover_motion": [
+          {
+            "line": 121,
+            "call": "UiMotion.approach("
+          }
+        ],
+        "press_scale": [
+          {
+            "line": 128,
+            "call": "PressScale.bounce("
+          }
+        ],
+        "entrance": [
+          {
+            "line": 155,
+            "call": "UiStagger.itemAlpha("
+          },
+          {
+            "line": 156,
+            "call": "UiStagger.itemRise("
+          },
+          {
+            "line": 159,
+            "call": "UiStagger.itemStyleZoomScale("
+          },
+          {
+            "line": 176,
+            "call": "UiStagger.itemStyleZoomScale("
+          }
+        ]
+      }
+    },
+    {
+      "file": "layers/mapping/official/src/main/java/com/atom/chat/settings/SettingsSectionPage.java",
+      "matches": {
+        "card": [
+          {
+            "line": 1850,
+            "call": "UiCards.drawCard("
+          },
+          {
+            "line": 1955,
+            "call": "UiCards.drawCard("
+          },
+          {
+            "line": 2853,
+            "call": "UiCards.drawCard("
+          }
+        ],
+        "hover_motion": [
+          {
+            "line": 1489,
+            "call": "UiMotion.approach("
+          },
+          {
+            "line": 1798,
+            "call": "UiMotion.approach("
+          },
+          {
+            "line": 2573,
+            "call": "UiMotion.approach("
+          },
+          {
+            "line": 2849,
+            "call": "UiMotion.approach("
+          }
+        ],
+        "press_scale": [
+          {
+            "line": 1628,
+            "call": "PressScale.bounce("
+          },
+          {
+            "line": 1807,
+            "call": "PressScale.bounce("
+          },
+          {
+            "line": 1929,
+            "call": "PressScale.bounce("
+          },
+          {
+            "line": 2524,
+            "call": "PressScale.bounce("
+          },
+          {
+            "line": 2602,
+            "call": "PressScale.bounce("
+          },
+          {
+            "line": 2660,
+            "call": "PressScale.bounce("
+          },
+          {
+            "line": 2693,
+            "call": "PressScale.bounce("
+          },
+          {
+            "line": 2832,
+            "call": "PressScale.bounce("
+          },
+          {
+            "line": 2832,
+            "call": "PressScale.bounce("
+          }
+        ],
+        "entrance": [
+          {
+            "line": 1539,
+            "call": "UiStagger.itemAlpha("
+          },
+          {
+            "line": 1540,
+            "call": "UiStagger.itemRise("
+          },
+          {
+            "line": 1550,
+            "call": "UiStagger.itemStyleZoomScale("
+          },
+          {
+            "line": 1639,
+            "call": "UiStagger.itemAlpha("
+          },
+          {
+            "line": 1640,
+            "call": "UiStagger.itemRise("
+          },
+          {
+            "line": 1649,
+            "call": "UiStagger.itemStyleZoomScale("
+          },
+          {
+            "line": 1825,
+            "call": "UiStagger.itemStyleZoomScale("
+          }
+        ],
+        "settings_field": [
+          {
+            "line": 3247,
+            "call": "SettingsFieldPaint.surface("
+          }
+        ],
+        "group_icon": [
+          {
+            "line": 3057,
+            "call": "SettingsGroupIcons.forLabel("
+          }
+        ]
+      }
+    },
+    {
+      "file": "layers/mapping/official/src/main/java/com/atom/chat/ui/EmojiPanel.java",
+      "matches": {
+        "hover_motion": [
+          {
+            "line": 234,
+            "call": "UiMotion.approach("
+          },
+          {
+            "line": 618,
+            "call": "UiMotion.approach("
+          },
+          {
+            "line": 653,
+            "call": "UiMotion.approach("
+          }
+        ],
+        "press_scale": [
+          {
+            "line": 137,
+            "call": "PressScale.bounce("
+          },
+          {
+            "line": 137,
+            "call": "PressScale.bounce("
+          },
+          {
+            "line": 137,
+            "call": "PressScale.bounce("
+          },
+          {
+            "line": 516,
+            "call": "PressScale.bounce("
+          },
+          {
+            "line": 687,
+            "call": "PressScale.bounce("
+          }
+        ],
+        "entrance": [
+          {
+            "line": 873,
+            "call": "UiStagger.itemAlpha("
+          },
+          {
+            "line": 878,
+            "call": "UiStagger.itemRise("
+          }
+        ]
+      }
+    },
+    {
+      "file": "layers/mapping/official/src/main/java/com/atom/chat/ui/QuickPhrasePanel.java",
+      "matches": {
+        "hover_motion": [
+          {
+            "line": 355,
+            "call": "UiMotion.approach("
+          },
+          {
+            "line": 360,
+            "call": "UiMotion.approach("
+          },
+          {
+            "line": 362,
+            "call": "UiMotion.approach("
+          },
+          {
+            "line": 366,
+            "call": "UiMotion.approach("
+          }
+        ],
+        "press_scale": [
+          {
+            "line": 303,
+            "call": "PressScale.bounce("
+          }
+        ]
+      }
+    },
+    {
+      "file": "platforms/1.20.1-forge/src/main/java/com/atom/chat/screen/AtomChatScreen.java",
+      "matches": {
+        "hover_motion": [
+          {
+            "line": 2955,
+            "call": "UiMotion.approach("
+          },
+          {
+            "line": 2958,
+            "call": "UiMotion.approach("
+          }
+        ]
+      }
+    },
+    {
+      "file": "platforms/1.21.1-fabric/src/main/java/com/atom/chat/avatar/ColorPickerOverlay.java",
+      "matches": {
+        "hover_motion": [
+          {
+            "line": 381,
+            "call": "UiMotion.approach("
+          },
+          {
+            "line": 571,
+            "call": "UiMotion.approach("
+          },
+          {
+            "line": 573,
+            "call": "UiMotion.approach("
+          }
+        ],
+        "press_scale": [
+          {
+            "line": 52,
+            "call": "PressScale.bounce("
+          },
+          {
+            "line": 53,
+            "call": "PressScale.bounce("
+          },
+          {
+            "line": 54,
+            "call": "PressScale.bounce("
+          },
+          {
+            "line": 55,
+            "call": "PressScale.bounce("
+          }
+        ]
+      }
+    },
+    {
+      "file": "platforms/1.21.1-fabric/src/main/java/com/atom/chat/avatar/ImageCropper.java",
+      "matches": {
+        "hover_motion": [
+          {
+            "line": 354,
+            "call": "UiMotion.approach("
+          },
+          {
+            "line": 458,
+            "call": "UiMotion.approach("
+          },
+          {
+            "line": 460,
+            "call": "UiMotion.approach("
+          }
+        ],
+        "press_scale": [
+          {
+            "line": 84,
+            "call": "PressScale.bounce("
+          },
+          {
+            "line": 85,
+            "call": "PressScale.bounce("
+          }
+        ]
+      }
+    },
+    {
+      "file": "platforms/1.21.1-fabric/src/main/java/com/atom/chat/notification/NotificationBanner.java",
+      "matches": {
+        "card": [
+          {
+            "line": 597,
+            "call": "UiCards.drawCard("
+          }
+        ],
+        "hover_motion": [
+          {
+            "line": 461,
+            "call": "UiMotion.approach("
+          }
+        ],
+        "press_scale": [
+          {
+            "line": 399,
+            "call": "PressScale.bounce("
+          }
+        ]
+      }
+    },
+    {
+      "file": "platforms/1.21.1-fabric/src/main/java/com/atom/chat/page/ConversationListPage.java",
+      "matches": {
+        "card": [
+          {
+            "line": 690,
+            "call": "UiCards.drawCard("
+          },
+          {
+            "line": 703,
+            "call": "UiCards.drawCard("
+          }
+        ],
+        "hover_motion": [
+          {
+            "line": 520,
+            "call": "UiMotion.approach("
+          }
+        ],
+        "press_scale": [
+          {
+            "line": 387,
+            "call": "PressScale.bounce("
+          },
+          {
+            "line": 663,
+            "call": "PressScale.bounce("
+          }
+        ],
+        "entrance": [
+          {
+            "line": 392,
+            "call": "UiStagger.itemAlpha("
+          },
+          {
+            "line": 393,
+            "call": "UiStagger.itemRise("
+          },
+          {
+            "line": 396,
+            "call": "UiStagger.itemStyleZoomScale("
+          },
+          {
+            "line": 436,
+            "call": "UiStagger.itemAlpha("
+          },
+          {
+            "line": 437,
+            "call": "UiStagger.itemRise("
+          },
+          {
+            "line": 446,
+            "call": "UiStagger.itemStyleZoomScale("
+          },
+          {
+            "line": 548,
+            "call": "UiStagger.itemStyleZoomScale("
+          }
+        ]
+      }
+    },
+    {
+      "file": "platforms/1.21.1-fabric/src/main/java/com/atom/chat/page/MessageListView.java",
+      "matches": {
+        "hover_motion": [
+          {
+            "line": 472,
+            "call": "UiMotion.approach("
+          }
+        ],
+        "press_scale": [
+          {
+            "line": 180,
+            "call": "PressScale.bounce("
+          }
+        ]
+      }
+    },
+    {
+      "file": "platforms/1.21.1-fabric/src/main/java/com/atom/chat/page/ProfilePage.java",
+      "matches": {
+        "card": [
+          {
+            "line": 1506,
+            "call": "UiCards.drawCard("
+          },
+          {
+            "line": 1558,
+            "call": "UiCards.drawCard("
+          },
+          {
+            "line": 1622,
+            "call": "UiCards.drawCard("
+          }
+        ],
+        "hover_motion": [
+          {
+            "line": 386,
+            "call": "UiMotion.approach("
+          },
+          {
+            "line": 1101,
+            "call": "UiMotion.approach("
+          },
+          {
+            "line": 1102,
+            "call": "UiMotion.approach("
+          },
+          {
+            "line": 1105,
+            "call": "UiMotion.approach("
+          },
+          {
+            "line": 1109,
+            "call": "UiMotion.approach("
+          },
+          {
+            "line": 1121,
+            "call": "UiMotion.approach("
+          },
+          {
+            "line": 1133,
+            "call": "UiMotion.approach("
+          },
+          {
+            "line": 1140,
+            "call": "UiMotion.approach("
+          },
+          {
+            "line": 1147,
+            "call": "UiMotion.approach("
+          },
+          {
+            "line": 1497,
+            "call": "UiMotion.approach("
+          }
+        ],
+        "press_scale": [
+          {
+            "line": 125,
+            "call": "PressScale.bounce("
+          },
+          {
+            "line": 126,
+            "call": "PressScale.bounce("
+          },
+          {
+            "line": 128,
+            "call": "PressScale.bounce("
+          },
+          {
+            "line": 128,
+            "call": "PressScale.bounce("
+          },
+          {
+            "line": 269,
+            "call": "PressScale.bounce("
+          },
+          {
+            "line": 270,
+            "call": "PressScale.bounce("
+          },
+          {
+            "line": 388,
+            "call": "PressScale.bounce("
+          },
+          {
+            "line": 1502,
+            "call": "PressScale.bounce("
+          }
+        ],
+        "entrance": [
+          {
+            "line": 196,
+            "call": "UiStagger.itemAlpha("
+          },
+          {
+            "line": 207,
+            "call": "UiStagger.itemRise("
+          },
+          {
+            "line": 208,
+            "call": "UiStagger.itemStyleZoomScale("
+          },
+          {
+            "line": 219,
+            "call": "UiStagger.itemRise("
+          },
+          {
+            "line": 237,
+            "call": "UiStagger.itemStyleZoomScale("
+          }
+        ]
+      }
+    },
+    {
+      "file": "platforms/1.21.1-fabric/src/main/java/com/atom/chat/settings/SettingsHomePage.java",
+      "matches": {
+        "card": [
+          {
+            "line": 208,
+            "call": "UiCards.drawCard("
+          }
+        ],
+        "hover_motion": [
+          {
+            "line": 115,
+            "call": "UiMotion.approach("
+          }
+        ],
+        "press_scale": [
+          {
+            "line": 122,
+            "call": "PressScale.bounce("
+          }
+        ],
+        "entrance": [
+          {
+            "line": 149,
+            "call": "UiStagger.itemAlpha("
+          },
+          {
+            "line": 150,
+            "call": "UiStagger.itemRise("
+          },
+          {
+            "line": 153,
+            "call": "UiStagger.itemStyleZoomScale("
+          },
+          {
+            "line": 170,
+            "call": "UiStagger.itemStyleZoomScale("
+          }
+        ]
+      }
+    },
+    {
+      "file": "platforms/1.21.1-fabric/src/main/java/com/atom/chat/settings/SettingsSectionPage.java",
+      "matches": {
+        "card": [
+          {
+            "line": 1850,
+            "call": "UiCards.drawCard("
+          },
+          {
+            "line": 1955,
+            "call": "UiCards.drawCard("
+          },
+          {
+            "line": 2853,
+            "call": "UiCards.drawCard("
+          }
+        ],
+        "hover_motion": [
+          {
+            "line": 1489,
+            "call": "UiMotion.approach("
+          },
+          {
+            "line": 1798,
+            "call": "UiMotion.approach("
+          },
+          {
+            "line": 2573,
+            "call": "UiMotion.approach("
+          },
+          {
+            "line": 2849,
+            "call": "UiMotion.approach("
+          }
+        ],
+        "press_scale": [
+          {
+            "line": 1628,
+            "call": "PressScale.bounce("
+          },
+          {
+            "line": 1807,
+            "call": "PressScale.bounce("
+          },
+          {
+            "line": 1929,
+            "call": "PressScale.bounce("
+          },
+          {
+            "line": 2524,
+            "call": "PressScale.bounce("
+          },
+          {
+            "line": 2602,
+            "call": "PressScale.bounce("
+          },
+          {
+            "line": 2660,
+            "call": "PressScale.bounce("
+          },
+          {
+            "line": 2693,
+            "call": "PressScale.bounce("
+          },
+          {
+            "line": 2832,
+            "call": "PressScale.bounce("
+          },
+          {
+            "line": 2832,
+            "call": "PressScale.bounce("
+          }
+        ],
+        "entrance": [
+          {
+            "line": 1539,
+            "call": "UiStagger.itemAlpha("
+          },
+          {
+            "line": 1540,
+            "call": "UiStagger.itemRise("
+          },
+          {
+            "line": 1550,
+            "call": "UiStagger.itemStyleZoomScale("
+          },
+          {
+            "line": 1639,
+            "call": "UiStagger.itemAlpha("
+          },
+          {
+            "line": 1640,
+            "call": "UiStagger.itemRise("
+          },
+          {
+            "line": 1649,
+            "call": "UiStagger.itemStyleZoomScale("
+          },
+          {
+            "line": 1825,
+            "call": "UiStagger.itemStyleZoomScale("
+          }
+        ],
+        "settings_field": [
+          {
+            "line": 3247,
+            "call": "SettingsFieldPaint.surface("
+          }
+        ],
+        "group_icon": [
+          {
+            "line": 3057,
+            "call": "SettingsGroupIcons.forLabel("
+          }
+        ]
+      }
+    },
+    {
+      "file": "platforms/1.21.1-fabric/src/main/java/com/atom/chat/ui/EmojiPanel.java",
+      "matches": {
+        "hover_motion": [
+          {
+            "line": 234,
+            "call": "UiMotion.approach("
+          },
+          {
+            "line": 618,
+            "call": "UiMotion.approach("
+          },
+          {
+            "line": 653,
+            "call": "UiMotion.approach("
+          }
+        ],
+        "press_scale": [
+          {
+            "line": 137,
+            "call": "PressScale.bounce("
+          },
+          {
+            "line": 137,
+            "call": "PressScale.bounce("
+          },
+          {
+            "line": 137,
+            "call": "PressScale.bounce("
+          },
+          {
+            "line": 516,
+            "call": "PressScale.bounce("
+          },
+          {
+            "line": 687,
+            "call": "PressScale.bounce("
+          }
+        ],
+        "entrance": [
+          {
+            "line": 873,
+            "call": "UiStagger.itemAlpha("
+          },
+          {
+            "line": 878,
+            "call": "UiStagger.itemRise("
+          }
+        ]
+      }
+    },
+    {
+      "file": "platforms/1.21.1-fabric/src/main/java/com/atom/chat/ui/QuickPhrasePanel.java",
+      "matches": {
+        "hover_motion": [
+          {
+            "line": 355,
+            "call": "UiMotion.approach("
+          },
+          {
+            "line": 360,
+            "call": "UiMotion.approach("
+          },
+          {
+            "line": 362,
+            "call": "UiMotion.approach("
+          },
+          {
+            "line": 366,
+            "call": "UiMotion.approach("
+          }
+        ],
+        "press_scale": [
+          {
+            "line": 303,
+            "call": "PressScale.bounce("
+          }
+        ]
+      }
+    },
+    {
+      "file": "platforms/1.21.1-fabric/src/main/java/net/minecraft/client/gui/screen/AtomChatScreen.java",
+      "matches": {
+        "hover_motion": [
+          {
+            "line": 2967,
+            "call": "UiMotion.approach("
+          },
+          {
+            "line": 2970,
+            "call": "UiMotion.approach("
+          }
+        ]
+      }
+    },
+    {
+      "file": "platforms/1.21.1-neoforge/src/main/java/com/atom/chat/screen/AtomChatScreen.java",
+      "matches": {
+        "hover_motion": [
+          {
+            "line": 2955,
+            "call": "UiMotion.approach("
+          },
+          {
+            "line": 2958,
+            "call": "UiMotion.approach("
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -332,11 +332,8 @@ public final class SettingsSectionPage {
     // wraps the label only, because the capsule is one shared shape that
     // slides between cells and a per-cell hover spring on it would fight the
     // slide.
-    private final Animator chipIndicator = new Animator(Easing::easeInOutCubic);
-    private final Map<Integer, Float> chipHover = new HashMap<>();
-    private final Map<Integer, PressScale> chipScale = new HashMap<>();
+    private final SettingsChipBar sharedChipBar = new SettingsChipBar();
     private int pressedChip = -1;
-    private int lastChipIndex = -1;
     /** Hover row of the interactive (incoming) layer, fed to rowHover decay. */
     private int lastInteractiveHover = -1;
 
@@ -389,28 +386,13 @@ public final class SettingsSectionPage {
 
     /** The chip bar's height, from the same tokens {@link UiLayout} uses. */
     private static float chipBarHeight() {
-        return UiTokens.CHIP_PILL_H + UiTokens.TAB_EDGE_PAD * 2.0F;
+        return SettingsGroupFrontend.chipBand();
     }
 
 
     /** Chip index under the pointer, or -1 (equal cells, like the tab bar). */
-    public int chipAt(SettingsSection section, float vmx, float vmy, UiLayout layout) {
-        List<SectionChip> sectionChips = chips(section);
-        if (sectionChips.isEmpty() || layout.chipBar.w() <= 0.0F) {
-            return -1;
-        }
-        float cellW = layout.chipBar.w() / sectionChips.size();
-        float inset = UiTokens.TAB_EDGE_PAD;
-        for (int i = 0; i < sectionChips.size(); i++) {
-            UiLayout.Rect cell = layout.chipRect(i, sectionChips.size());
-            float cx = layout.chipBar.x() + cellW * (i + 0.5F);
-            float cy = layout.chipBar.y() + layout.chipBar.h() / 2.0F;
-            if (Math.abs(vmx - cx) <= cell.w() / 2.0F + inset
-                    && Math.abs(vmy - cy) <= cell.h() / 2.0F + inset) {
-                return i;
-            }
-        }
-        return -1;
+    public int chipAt(SettingsSection section,float vmx,float vmy,UiLayout layout){
+        return SettingsChipBar.hit(layout,chips(section).size(),vmx,vmy);
     }
 
     /**
@@ -468,7 +450,7 @@ public final class SettingsSectionPage {
      * the same 50ms tau the ZOOM page-nav phases use (~170ms to visually
      * land), so folding reads as one continuous motion of the same family.
      */
-    public static final float GROUP_FOLD_TAU_MS = 50.0F;
+    public static final float GROUP_FOLD_TAU_MS = SettingsGroupFrontend.FOLD_TAU_MS;
     /** Live expansion of each fold group, group id → 0..1 (1 = fully
      *  expanded). Stepped every frame toward the target the collapsed set
      *  names; rows of a group scale their height, alpha and hit bounds by
@@ -538,6 +520,8 @@ public final class SettingsSectionPage {
 
     private final Map<String, ToggleSwitch> switches = new HashMap<>();
     private final Map<Integer, Float> rowHover = new HashMap<>();
+    private float numberFieldHover;
+    private long lastNumberFieldHover;
     private final SettingsStepper.HoverState stepperHover = new SettingsStepper.HoverState();
     /** Per-row press bounce: compact(), so a row lifts 1.04 on hover and
      *  dips 0.95 while pressed. */
@@ -707,8 +691,8 @@ public final class SettingsSectionPage {
                 controlH = UiTokens.SETTINGS_VALUE_BAND;
                 if (isInlineNumberSlider(row.slider().id())) {
                     desc = tr("atomchat.settings.chat.history.retention.desc");
-                    reserved = width * 0.45F;
-                    controlH = UiTokens.ACTION_BUTTON_SIZE;
+                    reserved = SettingsRowText.NUMBER_W+SettingsRowText.UNIT_W+UiTokens.SETTINGS_COMPACT_GAP;
+                    controlH = SettingsFormField.BASE_H;
                 }
             }
             case COLOR -> {
@@ -719,17 +703,14 @@ public final class SettingsSectionPage {
             }
             default -> { return null; }
         }
-        if (SkiaFontRenderer.getStringWidth(titleFont, title) <= inner - reserved) return null;
-        List<String> titles = SkiaFontRenderer.wrap(titleFont, title, inner);
-        List<String> descriptions = desc.isEmpty() ? List.of()
-                : SkiaFontRenderer.wrapWords(subFont, desc, inner);
-        float titleH = SkiaFontRenderer.getHeight(titleFont);
-        float descriptionH = SkiaFontRenderer.getHeight(subFont);
-        float h = UiTokens.SETTINGS_ROW_PAD * 2.0F + titles.size() * titleH
-                + descriptions.size() * descriptionH + controlH + UiTokens.SETTINGS_COMPACT_GAP * 2.0F;
-        if (row.kind() == RowKind.SLIDER || row.kind() == RowKind.COLOR) h += UiTokens.SETTINGS_VALUE_BAND;
-        return new CompactText(titles, descriptions, titleH, descriptionH, controlH,
-                Math.max(rowHeight(row.kind()), h));
+        boolean number=row.kind()==RowKind.SLIDER&&isInlineNumberSlider(row.slider().id());
+        var flow=SettingsRowText.measure(title,desc,width,reserved,controlH,number);
+        if(!flow.stacked())return null;
+        float h=UiTokens.SETTINGS_ROW_PAD*2+flow.titles().size()*flow.titleH()
+                +flow.descriptions().size()*flow.descriptionH()+controlH+UiTokens.SETTINGS_COMPACT_GAP*2;
+        // Ordinary sliders/colors retain the original separate track/swatch value band.
+        if((row.kind()==RowKind.SLIDER&&!number)||row.kind()==RowKind.COLOR)h+=UiTokens.SETTINGS_VALUE_BAND;
+        return new CompactText(flow.titles(),flow.descriptions(),flow.titleH(),flow.descriptionH(),controlH,Math.max(rowHeight(row.kind()),h));
     }
 
     private static int swatchColumns(UiLayout.Rect rect) {
@@ -737,22 +718,8 @@ public final class SettingsSectionPage {
                 / UiTokens.SETTINGS_SWATCH_STEP));
     }
 
-    private void drawCompactText(Canvas canvas, UiLayout.Rect rect, CompactText flow, int descColor) {
-        float y = rect.y() + UiTokens.SETTINGS_ROW_PAD;
-        float x = rect.x() + UiTokens.SETTINGS_ROW_PAD;
-        Font title = FontManager.font(UiTokens.SETTINGS_TILE_TITLE);
-        Font desc = FontManager.font(UiTokens.SETTINGS_TILE_SUB);
-        for (String line : flow.title()) {
-            SkiaFontRenderer.drawText(canvas, title, line, x,
-                    SkiaFontRenderer.centerBaselineY(title, y + flow.titleH() / 2.0F), textPrimary());
-            y += flow.titleH();
-        }
-        y += UiTokens.SETTINGS_COMPACT_GAP;
-        for (String line : flow.description()) {
-            SkiaFontRenderer.drawText(canvas, desc, line, x,
-                    SkiaFontRenderer.centerBaselineY(desc, y + flow.descriptionH() / 2.0F), descColor);
-            y += flow.descriptionH();
-        }
+    private void drawCompactText(Canvas canvas,UiLayout.Rect rect,CompactText flow,int descColor){
+        SettingsRowText.draw(canvas,rect,new SettingsRowText.Text(flow.title(),flow.description(),true,flow.titleH(),flow.descriptionH(),flow.height()),textPrimary(),descColor);
     }
 
     public float rowHeight(Row row, UiLayout layout) {
@@ -1189,24 +1156,11 @@ public final class SettingsSectionPage {
      * collapsed set is the single source of truth for the direction.
      */
     private void stepGroupExpansions(List<Row> rows, float dtMs) {
-        for (Row row : rows) {
-            if (row.kind() == RowKind.LABEL) {
-                String id = foldableGroup(row.labelKey());
-                if (id != null) {
-                    groupExpansion.putIfAbsent(id,
-                            collapsedColorGroups.contains(id) ? 0.0F : 1.0F);
-                }
-            }
+        for (Row row : rows) if (row.kind() == RowKind.LABEL) {
+            String id=foldableGroup(row.labelKey());
+            if(id!=null)groupExpansion.putIfAbsent(id,collapsedColorGroups.contains(id)?0f:1f);
         }
-        for (Map.Entry<String, Float> entry : groupExpansion.entrySet()) {
-            float target = collapsedColorGroups.contains(entry.getKey()) ? 0.0F : 1.0F;
-            float next = UiMotion.expApproach(entry.getValue(), target, dtMs,
-                    GROUP_FOLD_TAU_MS);
-            if (Float.compare(next, entry.getValue()) != 0) {
-                rowGeometry = null;
-            }
-            entry.setValue(next);
-        }
+        if(SettingsGroupFrontend.stepFolds(groupExpansion,collapsedColorGroups,dtMs))rowGeometry=null;
     }
 
     /**
@@ -1260,25 +1214,13 @@ public final class SettingsSectionPage {
         float[] tops = new float[rows.size()];
         float[] heights = new float[rows.size()];
         IdentityHashMap<Row, CompactText> compactTexts = new IdentityHashMap<>();
-        float y = 0.0F;
-        for (int i = 0; i < rows.size(); i++) {
-            Row row = rows.get(i);
-            CompactText compact = compactText(row, width);
-            compactTexts.put(row, compact);
-            float expansion = groups[i] == null ? 1.0F : expansionOf(groups[i]);
-            float height = rowHeight(row, layout, compact) * expansion;
-            tops[i] = y;
-            heights[i] = height;
-            y += height;
-            if (i + 1 < rows.size()) {
-                String nextGroup = groups[i + 1];
-                float nextExpansion = nextGroup == null ? 1.0F : expansionOf(nextGroup);
-                float gap = UiTokens.SETTINGS_ROW_GAP * nextExpansion;
-                if (groups[i] != null && groups[i].equals(nextGroup)) gap = 0.0F;
-                y += gap;
-            }
+        float[] full = new float[rows.size()];
+        for(int i=0;i<rows.size();i++){
+            Row row=rows.get(i);CompactText compact=compactText(row,width);compactTexts.put(row,compact);
+            full[i]=rowHeight(row,layout,compact);
         }
-        float contentHeight = rows.isEmpty() ? 0.0F : tops[rows.size() - 1] + heights[rows.size() - 1];
+        var slots=SettingsGroupFrontend.layout(full,groups,this::expansionOf);
+        tops=slots.tops();heights=slots.heights();float contentHeight=slots.contentHeight();
         RowGeometry geometry = new RowGeometry(rows, section, layout.list.x(), layout.list.y(),
                 layout.list.w(), width, tops, heights, contentHeight, compactTexts);
         rowGeometry = geometry;
@@ -1312,7 +1254,7 @@ public final class SettingsSectionPage {
 
     /** Top edge of the scrollable rows: content gap plus the chip band. */
     private float contentTop(UiLayout layout, SettingsSection section) {
-        return layout.list.y() + UiTokens.ROOT_CONTENT_GAP + chipBarHeight(section);
+        return SettingsGroupFrontend.contentTop(layout,chipBarHeight(section));
     }
 
     /**
@@ -1481,13 +1423,7 @@ public final class SettingsSectionPage {
 
         int hovered = lastInteractiveHover;
         hoveredIndex = hovered;
-        if (hovered >= 0) {
-            rowHover.putIfAbsent(hovered, 0.0F);
-        }
-        for (Integer key : new ArrayList<>(rowHover.keySet())) {
-            float target = key == hovered ? 1.0F : 0.0F;
-            rowHover.put(key, UiMotion.approach(rowHover.get(key), target, dt, UiMotion.HOVER_MS));
-        }
+        SettingsGroupFrontend.stepHover(rowHover,hovered>=0?hovered:null,dt);
 
         if (section == SettingsSection.PRIVACY && blockedPlayers().isEmpty()) {
             drawEmptyBlocked(canvas, layout, section, rows, scrollY);
@@ -1536,9 +1472,6 @@ public final class SettingsSectionPage {
                     }
                     // The card is one entry in the stagger: it fades and rises
                     // as a whole (its rows are already folded into one surface).
-                    float cardAlpha = UiStagger.itemAlpha(entrance, staggerIndex, now);
-                    float cardRise = UiStagger.itemRise(entrance, staggerIndex, now, axis);
-                    float cardDx = styleDriftDx(axis, staggerIndex, now);
                     // The card's own bounds, derived exactly as drawAboutCard does
                     // (the union of its first and last row) — the ZOOM channel
                     // scales around it, not around the whole viewport.
@@ -1546,33 +1479,13 @@ public final class SettingsSectionPage {
                     UiLayout.Rect cardLast = rowRect(section, rows, end - 1, scrollY, layout);
                     UiLayout.Rect cardBounds = new UiLayout.Rect(cardFirst.x(), cardFirst.y(),
                             cardFirst.w(), cardLast.bottom() - cardFirst.y());
-                    staggerHits.add(cardBounds, cardDx, cardRise,
-                            UiStagger.itemStyleZoomScale(entrance, staggerIndex, now, axis));
-                    canvas.save();
-                    Paint cardLayer = null;
-                    try {
-                        if (cardAlpha < 0.995F) {
-                            cardLayer = new Paint().setAlphaf(cardAlpha);
-                            // The CARD's own rect, not the whole viewport: a card
-                            // flush with the viewport's top or bottom edge had
-                            // its shadow cut there. The reach pad and the travel
-                            // are added around the card, so both follow it.
-                            canvas.saveLayer(CardShadowReach.layerRect(
-                                    cardBounds.x(), cardBounds.y(), cardBounds.w(), cardBounds.h(),
-                                    cardRise, cardDx), cardLayer);
-                        }
-                        canvas.translate(0.0F, cardRise);
-                        applyStyleMotion(canvas, axis, cardBounds, cardDx, staggerIndex, now);
-                        hovered = drawAboutCard(canvas, layout, section, rows,
-                                i, end, scrollY, vmx, vmy, buttonFont, accent, dt,
-                                interactive, hovered);
-                    } finally {
-                        if (cardLayer != null) {
-                            cardLayer.close();
-                            canvas.restore();
-                        }
-                        canvas.restore();
-                    }
+                    var cardMotion=SettingsGroupFrontend.motion(cardBounds,entrance,staggerIndex,now,axis);
+                    staggerHits.add(cardBounds,cardMotion.dx(),cardMotion.dy(),cardMotion.scale());
+                    final int previousHovered=hovered;
+                    final int cardStart=i,cardEnd=end;
+                    hovered=SettingsGroupFrontend.stagger(canvas,cardBounds,
+                            cardMotion,
+                            ()->drawAboutCard(canvas,layout,section,rows,cardStart,cardEnd,scrollY,vmx,vmy,buttonFont,accent,dt,interactive,previousHovered));
                     staggerIndex++;
                     i = end - 1; // the loop's own i++ lands past the card
                     continue;
@@ -1708,106 +1621,14 @@ public final class SettingsSectionPage {
         drawChipBar(canvas,layout,section,accent,dt);
     }
 
-    private void drawChipBar(Canvas canvas, UiLayout layout, SettingsSection section,
-                             int accent, float dtMs) {
-        List<SectionChip> chips = chips(section);
-        if (chips.isEmpty() || layout.chipBar.w() <= 0.0F) {
-            return;
-        }
-        Font font = FontManager.font(UiTokens.SETTINGS_TILE_SUB);
-        int activeIndex = activeChipIndex(section);
-        int count = chips.size();
-        float inset = UiTokens.TAB_EDGE_PAD;
-        float cellW = layout.chipBar.w() / count;
-
-        // Selection capsule: the accent at full strength, sliding between cells
-        // on the same clock the bottom tab bar uses. Translucent white used to
-        // sit here and disappeared on the light themes. The capsule rides the
-        // selected cell's spring (BottomTabBar's pattern), so hovering the
-        // active chip lifts the capsule with it.
-        UiLayout.Rect first = layout.chipRect(0, count);
-        float capsuleX = layout.chipBar.x() + chipIndicator.getValue() * cellW + inset;
-        PressScale activeScale = chipScale.get(activeIndex);
-        if (activeScale != null) {
-            activeScale.begin(canvas, capsuleX + first.w() / 2.0F, first.y() + first.h() / 2.0F);
-        }
-        try {
-            SkiaDraw.drawRoundedRect(canvas, capsuleX, first.y(), first.w(), first.h(),
-                    UiTokens.insetRadius(UiTokens.chromeRadius(), inset, first.w(), first.h()), UiTokens.accentFill());
-        } finally {
-            if (activeScale != null) {
-                canvas.restore();
-            }
-        }
-
-        // One pass per cell: the bounce scales the whole chip cell — hover
-        // wash and label together — around the cell's centre, like the tab
-        // bar's cells. Scaling the 15px label alone moved its edge 0.6px and
-        // read as nothing at all. The selected cell draws no wash: an active
-        // chip already answers the pointer with the capsule's bounce alone,
-        // and a hover wash stacked on the capsule would only muddy the accent
-        // (user-decided language: hover on a selected cell is bounce-only).
-        for (int i = 0; i < count; i++) {
-            UiLayout.Rect cell = layout.chipRect(i, count);
-            boolean selected = i == activeIndex;
-            Font labelFont = selected
-                    ? FontManager.boldFont(UiTokens.SETTINGS_TILE_SUB) : font;
-            float cx = cell.x() + cell.w() / 2.0F;
-            float cy = cell.y() + cell.h() / 2.0F;
-            PressScale scale = chipScale.get(i);
-            if (scale != null) {
-                scale.begin(canvas, cx, cy);
-            }
-            try {
-                Float hov = chipHover.get(i);
-                if (!selected && hov != null && hov > 0.01F) {
-                    SkiaDraw.drawRoundedRect(canvas, cell.x(), cell.y(), cell.w(), cell.h(),
-                            UiTokens.insetRadius(UiTokens.chromeRadius(), inset, cell.w(), cell.h()), UiTokens.cardHover(hov));
-                }
-                SkiaFontRenderer.drawTextCentered(canvas, labelFont,
-                        SkiaFontRenderer.truncate(labelFont, tr(chips.get(i).labelKey()),
-                                Math.max(0.0F, cell.w() - s(10))), cx, cy,
-                        selected ? UiTokens.onAccent(UiTokens.accentFill()) : sec(200));
-            } finally {
-                if (scale != null) {
-                    canvas.restore();
-                }
-            }
-        }
+    private void drawChipBar(Canvas canvas,UiLayout layout,SettingsSection section,int accent,float dtMs){
+        sharedChipBar.draw(canvas,layout,chips(section).stream().map(chip->tr(chip.labelKey())).toList(),activeChipIndex(section),sec(200));
     }
 
     /** Advances the chip hover washes, press springs and the selection slide.
      *  Same cadence as {@code BottomTabBar.update}: once per frame. */
-    public void updateChipMotion(UiLayout layout, SettingsSection section, float dtMs) {
-        List<SectionChip> chips = chips(section);
-        if (chips.isEmpty() || layout.chipBar.w() <= 0.0F) {
-            return;
-        }
-        int activeIndex = activeChipIndex(section);
-        if (lastChipIndex < 0) {
-            chipIndicator.setValue(activeIndex);
-        } else if (activeIndex != lastChipIndex) {
-            chipIndicator.animateTo(UiMotion.TAB_MS, activeIndex);
-        }
-        lastChipIndex = activeIndex;
-        chipIndicator.update(dtMs);
-
-        int hovered = chipAt(section, pointerX, pointerY, layout);
-        for (int i = 0; i < chips.size(); i++) {
-            boolean over = i == hovered;
-            float next = UiMotion.approach(chipHover.getOrDefault(i, 0.0F),
-                    over ? 1.0F : 0.0F, dtMs, UiMotion.HOVER_MS);
-            if (next < 0.01F && !over) {
-                chipHover.remove(i);
-            } else {
-                chipHover.put(i, next);
-            }
-            // The chip row is a set of adjacent equal cells; the width budget
-            // keeps each chip's lift inside its own slot.
-            chipScale.computeIfAbsent(i, key -> PressScale.bounce())
-                    .update(over, over && pressedChip == i, dtMs, Animations.enabled(),
-                            layout.chipRect(i, chips.size()).w());
-        }
+    public void updateChipMotion(UiLayout layout,SettingsSection section,float dtMs){
+        sharedChipBar.update(layout,chips(section).size(),activeChipIndex(section),pressedChip,pointerX,pointerY,dtMs);
     }
 
 
@@ -1932,35 +1753,10 @@ public final class SettingsSectionPage {
             press.update(cardOver, pressedRow >= start && pressedRow < end,
                     dt, Animations.enabled(), Math.max(card.w(), card.h()));
         }
-        canvas.save();
-        Paint foldFade = null;
-        try {
-            if (expansion < 0.995F) {
-                // Same fold settle the per-row path rides: the card rises
-                // from up to s(4) below its slot while fading with the group
-                // expansion; the padded saveLayer keeps press overshoot and
-                // shadow tail inside the fade.
-                canvas.translate(0.0F, UiTokens.SETTINGS_FOLD_LIFT * (1.0F - expansion));
-                float fadePad = UiTokens.s(12);
-                foldFade = new Paint().setAlphaf(expansion);
-                canvas.saveLayer(io.github.humbleui.types.Rect.makeXYWH(
-                        card.x() - fadePad, card.y() - fadePad,
-                        card.w() + fadePad * 2.0F, card.h() + fadePad * 2.0F), foldFade);
-            }
-            if (press != null) {
-                press.begin(canvas, card.x() + card.w() / 2.0F,
-                        card.y() + card.h() / 2.0F);
-            }
-            try {
-                UiCards.drawCard(canvas, card.x(), card.y(), card.w(), card.h(),
-                        UiTokens.settingsRowRadius(), 0.0F);
-                canvas.save();
-                try {
-                    // Washes and dividers clip to the card's rounding, so the
-                    // first and last rows' bands never bleed past the corners.
-                    SkiaDraw.clip(canvas, card.x(), card.y(), card.w(), card.h(),
-                            UiTokens.settingsRowRadius());
-                    float pad = UiTokens.SETTINGS_ROW_PAD;
+        final int initialHovered=hovered;
+        return SettingsGroupFrontend.merged(canvas,card,expansion,press,()->{
+            int selected=initialHovered;
+            float pad=UiTokens.SETTINGS_ROW_PAD;
                     for (int j = start; j < end; j++) {
                         Row row = rows.get(j);
                         UiLayout.Rect rect = rowRect(section, rows, j, scrollY, layout);
@@ -1968,7 +1764,7 @@ public final class SettingsSectionPage {
                                 && vmx >= rect.x() && vmx <= rect.right()
                                 && vmy >= rect.y() && vmy <= rect.bottom();
                         if (over) {
-                            hovered = j;
+                            selected = j;
                         }
                         if (interactive) {
                             drawnRowIndex = j;
@@ -1996,22 +1792,8 @@ public final class SettingsSectionPage {
                         }
                         drawRowContent(canvas, row, rect, rowAlpha, buttonFont, accent, dt);
                     }
-                } finally {
-                    canvas.restore();
-                }
-            } finally {
-                if (press != null) {
-                    canvas.restore();
-                }
-            }
-        } finally {
-            if (foldFade != null) {
-                foldFade.close();
-                canvas.restore();
-            }
-            canvas.restore();
-        }
-        return hovered;
+            return selected;
+        });
     }
 
     /** Map key for a per-swatch bounce spring: row index << 32 | swatch. */
@@ -2912,19 +2694,8 @@ public final class SettingsSectionPage {
      * the existing baseline; otherwise it wraps and sits bottom-aligned inside
      * the (already grown) row so long English text is never lost to an ellipsis.
      */
-    private void drawWrappedDescription(Canvas canvas, UiLayout.Rect rect, Font font,
-                                        String text, float x, float maxWidth, int color) {
-        if (text == null || text.isEmpty() || maxWidth <= 0.0F
-                || SkiaFontRenderer.getStringWidth(font, text) <= maxWidth) {
-            SkiaFontRenderer.drawText(canvas, font, text == null ? "" : text, x,
-                    SkiaFontRenderer.centerBaselineY(font, rect.y() + s(37)), color);
-            return;
-        }
-        List<String> lines = SkiaFontRenderer.wrap(font, text, maxWidth);
-        float lineH = descriptionLineHeight(font);
-        float blockH = lines.size() * lineH;
-        float centerY = rect.y() + Math.max(s(37), rect.h() - s(8) - blockH / 2.0F);
-        SkiaFontRenderer.drawLines(canvas, font, lines, x, centerY, lineH, color);
+    private void drawWrappedDescription(Canvas canvas,UiLayout.Rect rect,Font font,String text,float x,float maxWidth,int color){
+        SettingsRowText.description(canvas,rect,font,text,x,maxWidth,color);
     }
 
     /** One geometry consumed by both selector rendering and pointer resolution. */
@@ -3040,41 +2811,8 @@ public final class SettingsSectionPage {
      * caption. A foldable group's chevron sits at the right edge.
      */
     private void drawLabel(Canvas canvas, Row row, UiLayout.Rect rect) {
-        // Plan A: left-aligned bold group title with a faint full-width rule
-        // underneath. The chevron lives at the right edge for foldable groups.
-        Font font = FontManager.boldFont(UiTokens.SETTINGS_TILE_TITLE);
-        int textColor = textPrimary();
-        int lineColor = sec(120);
-        String group = foldableGroup(row.labelKey());
-        String text = tr(row.labelKey());
-        float padX = UiTokens.SETTINGS_ROW_PAD;
-        float iconSize = UiTokens.COMPOSER_ICON_SIZE;
-        float textX = rect.x() + padX + (group == null ? 0 : iconSize + UiTokens.SETTINGS_TILE_TEXT_GAP);
-        float rightX = rect.right() - padX;
-        float cy = rect.y() + rect.h() / 2.0F;
-
-        if (group != null) {
-            com.atom.chat.render.DrawPrimitives.drawIconCentered(canvas,SettingsGroupIcons.forLabel(row.labelKey()),
-                    rect.x()+padX+iconSize/2,cy,iconSize,textColor);
-            float trailW = Math.max(0F, rightX - textX - UiTokens.SETTINGS_FOLD_CHEVRON_SIZE - UiTokens.SETTINGS_ROW_PAD);
-            com.atom.chat.render.DotTexture.drawTrail(canvas,
-                    new UiLayout.Rect(textX, cy - UiTokens.DOT_TRAIL_HEIGHT / 2F, trailW, UiTokens.DOT_TRAIL_HEIGHT),
-                    AtomChatConfig.get().textSecondaryColor);
-        }
-        SkiaFontRenderer.drawText(canvas, font,
-                SkiaFontRenderer.truncate(font, text,
-                        Math.max(0.0F, rightX - textX - UiTokens.SETTINGS_FOLD_CHEVRON_SIZE - s(16))),
-                textX, SkiaFontRenderer.centerBaselineY(font, cy), textColor);
-
-        if (group != null) {
-            float chevron = UiTokens.SETTINGS_FOLD_CHEVRON_SIZE;
-            drawChevron(canvas, rightX - chevron / 2.0F, cy, chevron,
-                    expansionOf(group), textColor);
-        }
-
-        float lineY = rect.bottom() - s(5);
-        SkiaDraw.drawRoundedRect(canvas, textX, lineY,
-                Math.max(0.0F, rightX - textX), s(1), s(0.5F), lineColor);
+        String group=foldableGroup(row.labelKey());
+        SettingsGroupPaint.draw(canvas,rect,tr(row.labelKey()),SettingsGroupIcons.forLabel(row.labelKey()),group!=null,group==null?1:expansionOf(group));
     }
 
     /** Small fold indicator: one right-pointing triangle — the collapsed
@@ -3220,12 +2958,9 @@ public final class SettingsSectionPage {
         inlineNumberRowRect = rect;
         float padX = UiTokens.SETTINGS_ROW_PAD;
         float textX = rect.x() + padX;
-        float fieldW = Math.min(s(170), rect.w() * 0.45F);
-        float fieldX = rect.right() - padX - fieldW;
-        float fieldH = s(36);
         CompactText compact = compactText(row, rect.w());
-        float fieldY = compact == null ? rect.y() + (rect.h() - fieldH) / 2.0F
-                : rect.bottom() - UiTokens.SETTINGS_ROW_PAD - fieldH;
+        var numberBox=SettingsRowText.number(rect,compact!=null);
+        float fieldW=numberBox.w(),fieldX=numberBox.x(),fieldH=numberBox.h(),fieldY=numberBox.y();
         float fieldCY = fieldY + fieldH / 2.0F;
         float descMaxW = Math.max(0.0F, fieldX - textX - s(12));
 
@@ -3244,23 +2979,20 @@ public final class SettingsSectionPage {
                 SkiaFontRenderer.centerBaselineY(subFont, rect.y() + s(37)),
                 sec(200));
 
-        float radius = UiTokens.radius(8);
-        SkiaDraw.drawRoundedRect(canvas, fieldX, fieldY, fieldW, fieldH, radius,
-                UiTokens.trackRest());
-        try (Paint border = new Paint().setMode(PaintMode.STROKE)
-                .setAntiAlias(true).setStrokeWidth(s(1.5F))
-                .setColor(editing ? accent : UiTokens.rim())) {
-            canvas.drawRRect(io.github.humbleui.types.RRect.makeXYWH(
-                    fieldX, fieldY, fieldW, fieldH, radius), border);
-        }
+        var numberField=new UiLayout.Rect(fieldX,fieldY,fieldW,fieldH);
+        long fieldNow=UiStagger.frameTimeMillis();float fieldDt=lastNumberFieldHover==0?0:Math.max(0,Math.min(50,fieldNow-lastNumberFieldHover));lastNumberFieldHover=fieldNow;
+        numberFieldHover=UiMotion.approach(numberFieldHover,numberField.contains(pointerX,pointerY)?1:0,fieldDt,UiMotion.HOVER_MS);
+        SettingsFieldPaint.surface(canvas,numberField,numberFieldHover,editing,false,true,accent);
 
         Font inputFont = FontManager.font(UiTokens.FONT_INPUT);
-        String text = editing ? (editBuffer.isEmpty() ? "0" : editBuffer) : slider.displayValue();
+        String text = editing ? (editBuffer.isEmpty() ? "0" : editBuffer) : Integer.toString(Math.round(slider.value()));
         String shown = SkiaFontRenderer.truncate(inputFont, text, fieldW - s(20));
         SkiaFontRenderer.drawText(canvas, inputFont, shown,
                 fieldX + s(10),
                 SkiaFontRenderer.centerBaselineY(inputFont, fieldCY),
                 editing ? accent : textPrimary());
+        SkiaFontRenderer.drawText(canvas,subFont,tr("atomchat.admin.days"),numberBox.right()+UiTokens.SETTINGS_ROW_GAP,
+                SkiaFontRenderer.centerBaselineY(subFont,fieldCY),sec(200));
         // Blinking caret while the inline editor owns the keyboard. Same accent
         // as the text it blinks inside: a fixed white caret would vanish on a
         // light theme, and the caret is part of the editing text, not chrome.

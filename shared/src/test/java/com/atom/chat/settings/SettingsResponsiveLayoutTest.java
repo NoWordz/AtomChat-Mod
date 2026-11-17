@@ -11,6 +11,25 @@ import java.nio.file.Path;
 import static org.junit.jupiter.api.Assertions.*;
 
 class SettingsResponsiveLayoutTest {
+    @Test void crowdedOrdinarySlidersAndColorsKeepTheOriginalValueBand() {
+        var page=new SettingsSectionPage();
+        String title="Crowded ordinary control title";
+        var slider=new SettingsSlider("ordinary",title,0,100,1,()->50,v->{},v->"50%");
+        var color=new SettingsColor("ordinary",title,"ui",new int[]{0xff334455},()->0xff334455,v->{});
+        for(float width:new float[]{240,280}){
+            var layout=UiLayout.ofDetail(0,0,width,600);
+            float inner=layout.list.w()-UiTokens.ROW_CLIP_INSET*2-UiTokens.SETTINGS_ROW_PAD*2;
+            var main=com.atom.chat.font.FontManager.font(UiTokens.SETTINGS_TILE_TITLE);
+            var sub=com.atom.chat.font.FontManager.font(UiTokens.SETTINGS_TILE_SUB);
+            var titles=com.atom.chat.render.SkiaFontRenderer.wrap(main,title,inner);
+            assertTrue(titles.size()>1,"fixture must really trigger compact title flow");
+            float original=UiTokens.SETTINGS_ROW_PAD*2+titles.size()*com.atom.chat.render.SkiaFontRenderer.getHeight(main)
+                    +UiTokens.SETTINGS_VALUE_BAND*2+UiTokens.SETTINGS_COMPACT_GAP*2;
+            original=Math.max(SettingsSectionPage.rowHeight(SettingsSectionPage.RowKind.SLIDER),original);
+            assertEquals(original,page.rowHeight(SettingsSectionPage.Row.ofSlider(slider),layout),.001f,"ordinary slider lost its lower value/track band");
+            assertEquals(original,page.rowHeight(SettingsSectionPage.Row.ofColor(color),layout),.001f,"color lost its lower value/swatch band");
+        }
+    }
     @BeforeAll static void setup(@TempDir Path dir) {
         Platform.install(new Platform.Provider() {
             public Path configDir() { return dir; }
@@ -26,6 +45,17 @@ class SettingsResponsiveLayoutTest {
         float narrow = page.rowHeight(row, UiLayout.ofDetail(0, 0, 240, 600));
         float wide = page.rowHeight(row, UiLayout.ofDetail(0, 0, 1000, 600));
         assertTrue(narrow > wide, "the title must wrap and move the switch below it");
+    }
+
+    @Test void approvedNumericTitleUsesWordBoundariesWithoutChangingOrdinaryTitles()throws Exception{
+        var page=new SettingsSectionPage();var layout=UiLayout.ofDetail(0,0,240,600);String title="Keep chat history days";
+        var slider=new SettingsSlider("history_retention",title,0,100,1,()->7,v->{},v->"7 days");
+        var method=SettingsSectionPage.class.getDeclaredMethod("compactText",SettingsSectionPage.Row.class,float.class);method.setAccessible(true);
+        float width=layout.list.w()-UiTokens.ROW_CLIP_INSET*2;
+        Object compact=method.invoke(page,SettingsSectionPage.Row.ofSlider(slider),width);assertNotNull(compact);
+        var titles=compact.getClass().getDeclaredMethod("title");titles.setAccessible(true);
+        @SuppressWarnings("unchecked") var lines=(java.util.List<String>)titles.invoke(compact);
+        for(String word:title.split(" "))assertTrue(lines.stream().anyMatch(line->line.contains(word)),word+" split in "+lines);
     }
 
     @Test void narrowSettingsRenderMultipleFramesAndStayScrollable() {

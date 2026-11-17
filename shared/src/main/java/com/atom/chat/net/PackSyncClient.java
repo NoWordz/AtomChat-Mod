@@ -70,6 +70,7 @@ public final class PackSyncClient {
     private static final Map<String, byte[]> ready = new LinkedHashMap<>();
     private static long deadline;
     private static boolean active;
+    private static volatile long epoch;
     /** Last thing that happened, for the panel. */
     private static volatile String detail = "";
 
@@ -109,7 +110,12 @@ public final class PackSyncClient {
      * once a fresh manifest has been fetched.
      */
     public static void resync() {
-        onJoin();
+        if(!AtomChatConfig.get().serverPacksEnabled){ServerPackStore.clear();detail="disabled";return;}
+        if(!Net.canSendToServer(new PackMessage.Hello()))return;
+        String current=worldKey();if(current==null)return;
+        epoch++;key=current;expected=null;wanted=Set.of();buffers.clear();ready.clear();
+        active=true;deadline=System.currentTimeMillis()+HELLO_TIMEOUT_MS;detail="fetching";
+        Net.sendToServer(new PackMessage.Hello());
     }
 
     /** Disconnect hook: nothing carries over between worlds. */
@@ -118,6 +124,7 @@ public final class PackSyncClient {
     }
 
     private static void reset() {
+        epoch++;
         ServerPackStore.clear();
         key = null;
         expected = null;
@@ -137,13 +144,16 @@ public final class PackSyncClient {
 
     /** S2C: the manifest (or "this server does not offer a pack"). */
     public static void onManifest(PackMessage.Manifest manifest) {
-        if (!active) {
-            return;
-        }
+        if(!AtomChatConfig.get().serverPacksEnabled)return;
+        if(key==null||!key.equals(worldKey()))return;
+        epoch++;long token=epoch;active=true;buffers.clear();ready.clear();wanted=Set.of();
+        deadline=System.currentTimeMillis()+TIMEOUT_MS;
         if (!manifest.enabled()) {
             detail = "server_disabled";
             active = false;
             ServerPackStore.clear();
+            send(new PackMessage.Ack(true,"disabled"));
+            ConfigAdminClient.packAck("",true);
             return;
         }
         ServerPack expectedPack;
@@ -164,7 +174,7 @@ public final class PackSyncClient {
             Map<String, String> hashes = PackManifestFile.localHashes(dir);
             PackDiff.Plan plan = PackDiff.plan(expectedPack, hashes);
             Host.execute(() -> {
-                if (!active) {
+                if (!active || token!=epoch) {
                     return;
                 }
                 if (stored != null && stored.packHash().equals(expectedPack.packHash())
@@ -173,6 +183,7 @@ public final class PackSyncClient {
                     active = false;
                     ServerPackStore.refresh(CacheDirs.packsRoot(), key);
                     send(new PackMessage.Ack(true, "up_to_date"));
+                    ConfigAdminClient.packAck(expectedPack.packHash(),true);
                 } else {
                     request(plan);
                 }
@@ -182,7 +193,7 @@ public final class PackSyncClient {
 
     /** Asks for the diff, or installs straight away when there is nothing to fetch. */
     private static void request(PackDiff.Plan plan) {
-        PackManifestFile.deleteStale(CacheDirs.packDir(key), plan.remove());
+        // Stale files leave only when the complete new pack atomically replaces the old directory.
         if (plan.fetch().isEmpty()) {
             installExisting();
             return;
@@ -201,28 +212,33 @@ public final class PackSyncClient {
     /** Nothing to download: the files on disk are already right, so store the metadata. */
     private static void installExisting() {
         Path dir = CacheDirs.packDir(key);
+        ServerPack installPack=expected;String installKey=key;long token=epoch;
         IO.execute(() -> {
+            if(token!=epoch)return;
             Map<String, byte[]> contents = new LinkedHashMap<>();
-            for (ServerPack.FileEntry entry : expected.files()) {
+            for (ServerPack.FileEntry entry : installPack.files()) {
                 try {
                     contents.put(entry.name(), Files.readAllBytes(
                             dir.resolve(PackManifestFile.EMOTES_DIR).resolve(entry.name())));
                 } catch (IOException e) {
-                    Host.execute(() -> abort("read_failed"));
+                    Host.execute(() -> abort(token,"read_failed"));
                     return;
                 }
             }
             try {
-                PackManifestFile.install(CacheDirs.packsRoot(), key, expected, contents);
+                if(token!=epoch)return;
+                PackManifestFile.install(CacheDirs.packsRoot(), installKey, installPack, contents);
             } catch (IOException e) {
-                Host.execute(() -> abort("write_failed"));
+                Host.execute(() -> abort(token,"write_failed"));
                 return;
             }
             Host.execute(() -> {
+                if(token!=epoch)return;
                 detail = "up_to_date";
                 active = false;
-                ServerPackStore.refresh(CacheDirs.packsRoot(), key);
+                ServerPackStore.refresh(CacheDirs.packsRoot(), installKey);
                 send(new PackMessage.Ack(true, "metadata"));
+                ConfigAdminClient.packAck(installPack.packHash(),true);
             });
         });
     }
@@ -281,23 +297,28 @@ public final class PackSyncClient {
         Path dir = CacheDirs.packDir(key);
         String hash = pack.packHash().substring(0, 8);
         int count = downloaded.size();
+        long token=epoch;
         IO.execute(() -> {
+            if(token!=epoch)return;
             Map<String, byte[]> contents;
             try {
                 // An incremental sync only fetched the files that differed, so the
                 // ones we kept have to be folded back in before installing.
                 contents = PackManifestFile.completeWithExisting(dir, pack, downloaded);
+                if(token!=epoch)return;
                 PackManifestFile.install(CacheDirs.packsRoot(), installKey, pack, contents);
             } catch (IOException e) {
                 AtomChat.LOGGER.warn(com.atom.chat.diagnostics.AtomChatLog.message("pack", "Failed to store the server pack"), e);
-                Host.execute(() -> abort("write_failed"));
+                Host.execute(() -> abort(token,"write_failed"));
                 return;
             }
             Host.execute(() -> {
+                if(token!=epoch)return;
                 detail = "synced";
                 active = false;
                 ServerPackStore.refresh(CacheDirs.packsRoot(), installKey);
                 send(new PackMessage.Ack(true, count + " file(s) " + hash));
+                ConfigAdminClient.packAck(pack.packHash(),true);
                 AtomChat.LOGGER.info(com.atom.chat.diagnostics.AtomChatLog.message("pack", "Server pack {} synced ({} file(s), {} KB)"), hash, count,
                         pack.totalBytes() / 1024);
             });
@@ -309,7 +330,9 @@ public final class PackSyncClient {
         detail = reason;
         active = false;
         send(new PackMessage.Ack(false, reason));
+        if(expected!=null)ConfigAdminClient.packAck(expected.packHash(),false);
     }
+    private static void abort(long token,String reason){if(token==epoch)abort(reason);}
 
     private static void send(PackMessage.Ack ack) {
         if (Net.canSendToServer(ACK_PROBE)) {

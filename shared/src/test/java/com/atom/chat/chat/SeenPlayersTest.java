@@ -56,12 +56,12 @@ class SeenPlayersTest {
     }
 
     @Test
-    void overwritesStaleUuidForSameName() {
+    void conflictingUuidInvalidatesNameRatherThanBindingTheWrongPlayer() {
         UUID first = UUID.randomUUID();
         UUID second = UUID.randomUUID();
         SeenPlayers.remember(first, "Steve", null);
         SeenPlayers.remember(second, "Steve", null);
-        assertEquals(second, SeenPlayers.findUuid("Steve"));
+        assertNull(SeenPlayers.findUuid("Steve"));
     }
 
     @Test

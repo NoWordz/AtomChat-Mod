@@ -164,144 +164,46 @@ public class ChatHudMixin {
             addSystemMessage(message);
             return;
         }
+        if (meta != null && meta.system()) { addSystemMessage(message); return; }
         if (meta != null && meta.whisper()) {
             atomchat$routePrivate(message, meta, client);
             return;
         }
         if (meta == null) {
-            // No channel-level identity. Private /msg lines are deterministic by
-            // translation key even when the MessageHandler capture missed them.
-            SenderMeta fallbackPrivate = PrivateChatParser.tryParse(message);
-            if (fallbackPrivate != null) {
-                atomchat$routePrivate(message, fallbackPrivate, client);
+            meta = PrivateChatParser.tryParse(message);
+            if (meta != null) {
+                if (meta.system()) addSystemMessage(message); else atomchat$routePrivate(message, meta, client);
                 return;
             }
-            // No channel-level identity: translation-key system lines are
-            // authoritative and must stay system even if their rendered text
-            // happens to look like a player line. Other routes may only claim
-            // a player when the text parser resolves the line to an online
-            // player; otherwise they are system messages.
-            if (ChatClassifier.classifyByKey(message) == ChatClassifier.Route.SYSTEM) {
-                addSystemMessage(message);
-                return;
-            }
-            // Component-layer whisper fallback (plugin-reformatted /msg, bot relays).
-            // Must run BEFORE the player-line guard: its separator skipping
-            // would mis-claim "[Steve -> me] hi" as a public bubble from Steve.
-            if (atomchat$tryTextWhisper(raw, message, client)) {
-                return;
-            }
-            // Layer 2 (e33chat parity): tell-click attribution. A SUGGEST_COMMAND
-            // "/tell <name>" on the sender's display name carries the real
-            // profile name — deterministic on nickname servers.
-            SenderMeta parsed = TellClickDetector.detectByTellClick(message, raw);
-            if (parsed == null) {
-                parsed = ChatPipeline.tryParsePlayerLine(raw);
-            }
-            if (parsed == null) {
-                // EasyBot QQ-relay shapes ("<nick(123)> hi", "[群] <nick> hi")
-                // with no locally known player name behind them.
-                parsed = EasyBotParser.tryParse(raw);
-            }
-            if (parsed == null) {
-                // Guard failed: user-configured templates get the last claim
-                // before the line degrades to a gray system bubble.
-                parsed = atomchat$tryChatTemplate(raw);
-            }
-            if (parsed == null) {
-                atomchat$logParseMiss(raw);
-                addSystemMessage(message);
-                return;
-            }
-            // A mod can send as the local player without creating our local bubble.
-            // Suppress only a matching pending send, never identity alone.
-            String displayName = parsed.senderName() != null ? parsed.senderName() : parsed.profileName();
-            if (AtomChatConfig.get().hideBlockedMessages
-                    && displayName != null && BlockList.isBlocked(displayName)) {
-                return;
-            }
-            String parsedContent = parsed.contentText() != null ? parsed.contentText() : raw;
-            QuoteParser.Quote quote = atomchat$quoteOf(parsedContent);
-            String body = quote != null ? quote.body() : parsedContent;
-            var sliced = ChatPipeline.sliceRichText(message, parsed);
-            RichText senderRichParsed = sliced.isPresent()
-                    ? atomchat$ensureSenderColor(sliced.get().sender(), parsed.profileName())
-                    : atomchat$ensureSenderColor(
-                            displayName != null ? RichText.literal(displayName) : RichText.empty(),
-                            parsed.profileName());
-            // Identity controls bubble alignment; a matching pending local send
-            // is the independent proof that an incoming line is a duplicate.
-            boolean ownIdentity = atomchat$isOwnIdentity(parsed, client);
-            boolean ownEchoText = false;
-            if (ownIdentity || !atomchat$otherPlayerNamed(raw, client)) {
-                ownEchoText = PublicEchoTracker.consumeIfEcho(body, raw);
-            }
-            if (ownEchoText) {
-                // The local bubble already exists; only keep the server-decorated
-                // label as the self-name cache source (e33chat parity).
-                if (AtomChatConfig.get().debug) {
-                    AtomChat.LOGGER.info(com.atom.chat.diagnostics.AtomChatLog.message("echo", "[echo] own line dropped (identity={} text={}) name={} line={}"),
-                            ownIdentity, ownEchoText, displayName, raw);
-                }
-                OwnIdentity.cache(senderRichParsed);
-                return;
-            }
-            if (sliced.isPresent()) {
-                RichText richContent = quote != null
-                        ? ChatPipeline.quoteBodyRich(sliced.get().content(), body)
-                        : sliced.get().content().linkifyUrls();
-                atomchat$addPublic(new ChatMessage(message, ownIdentity, parsed.system(),
-                        quote != null ? quote.quoteName() : null,
-                        quote != null ? quote.quoteText() : null,
-                        parsed.senderUuid(), displayName, parsed.profileName(), body,
-                        senderRichParsed, richContent), body, parsed.system());
-            } else {
-                RichText richContent = quote != null
-                        ? ChatPipeline.quoteBodyRich(RichText.of(message), body)
-                        : ChatPipeline.preserveRichBody(message, body);
-                atomchat$addPublic(new ChatMessage(message, ownIdentity, parsed.system(),
-                        quote != null ? quote.quoteName() : null,
-                        quote != null ? quote.quoteText() : null,
-                        parsed.senderUuid(), displayName, parsed.profileName(), body,
-                        senderRichParsed, richContent), body, parsed.system());
-            }
-            SeenPlayers.remember(parsed.senderUuid(), parsed.profileName(), displayName);
-            return;
+            if (ChatClassifier.classifyByKey(message) == ChatClassifier.Route.SYSTEM) { addSystemMessage(message); return; }
+            var inspected = com.atom.chat.chat.ComponentIdentity.inspect(message);
+            if (inspected.conflict()) { addSystemMessage(message); return; }
+            meta = com.atom.chat.chat.ServerTemplateRecognition.parse(message, inspected.meta());
+            if(meta!=null && meta.system()){addSystemMessage(message);return;}
+            if(meta==null)meta = inspected.meta();
+            if (meta == null) meta = ChatPipeline.learnedPlayerLine(message);
+            if (meta == null) meta = atomchat$tryChatTemplate(raw);
+            if (meta == null && ChatPipeline.hasUnmappedTranslation(message)) { addSystemMessage(message); return; }
+            if (meta == null && atomchat$tryTextWhisper(raw, message, client)) return;
+            if (meta == null) meta = TellClickDetector.detectByTellClick(message, raw);
+            if (meta == null) meta = ChatPipeline.tryParsePlayerLine(raw);
+            if (meta == null) meta = EasyBotParser.tryParse(raw);
+            if (meta == null) { atomchat$logParseMiss(raw); addSystemMessage(message); return; }
         }
 
+        if (meta.whisper()) { atomchat$routePrivate(message, meta, client); return; }
+        // A click/hover attributes a name, but does not declare a public channel.
+        if ((meta.evidence() == com.atom.chat.chat.IdentityEvidence.ENTITY
+                || meta.evidence() == com.atom.chat.chat.IdentityEvidence.CLICK)
+                && atomchat$tryTextWhisper(raw, message, client, meta)) return;
         String content = ChatPipeline.extractContent(raw, meta);
         boolean own = isOwn(meta, raw, client);
-        boolean ownEchoText = false;
-        if (own || !atomchat$otherPlayerNamed(raw, client)) {
-            // Identity-less relay of our own line: the decorated wire name is not
-            // proof, the text we just sent is (e33chat parity).
-            ownEchoText = PublicEchoTracker.consumeIfEcho(content, raw);
-            own |= ownEchoText;
-        }
-        if (AtomChatConfig.get().debug) {
-            // Why a line was routed to the own-echo branch vs the public feed:
-            // the only way to tell an echo bug from a real duplicate after the
-            // fact (see the 2026-09-11 team-prefix echo).
-            AtomChat.LOGGER.info(com.atom.chat.diagnostics.AtomChatLog.message("route", "[route] own={} textEcho={} uuid={} sender={} profile={} text={}"),
-                    own, ownEchoText, meta.senderUuid(), meta.senderName(), meta.profileName(), raw);
-        }
-        if (ownEchoText) {
-            // Own message echo: already added locally by AtomChatScreen. The
-            // server-decorated component is the best self-name source — cache
-            // it so the local echo bubbles can show "[Title]Name" too. NCR-style
-            // relays arrive as system-channel lines parsed from text only, so
-            // meta has no sender component: slice the styled label off the
-            // final HUD line exactly like the meta==null branch above.
-            RichText decorated = meta.senderComponent() != null
-                    ? RichText.of(meta.senderComponent()) : null;
-            if (decorated == null) {
-                var sliced = ChatPipeline.sliceRichText(message, meta);
-                if (sliced.isPresent()) {
-                    decorated = sliced.get().sender();
-                }
-            }
-            OwnIdentity.cache(decorated != null ? decorated.stripInteractions() : null);
-            return;
+        if (meta.evidence().confirmsIdentity() && meta.senderUuid() != null) {
+            String confirmedLabel = meta.evidence() == com.atom.chat.chat.IdentityEvidence.NATIVE ? meta.senderName()
+                    : meta.senderComponent() != null ? meta.senderComponent().getString() : meta.senderName();
+            SeenPlayers.remember(meta.senderUuid(), meta.profileName(), confirmedLabel);
+            if (confirmedLabel != null && meta.contentComponent() != null)
+                com.atom.chat.chat.LearnedChatFormats.observe(raw, confirmedLabel, meta.contentComponent().getString());
         }
         String blockName = meta.profileName() != null ? meta.profileName() : meta.senderName();
         if (AtomChatConfig.get().hideBlockedMessages
@@ -309,7 +211,7 @@ public class ChatHudMixin {
             return;
         }
 
-        String displayName = ChatPipeline.decoratedDisplayName(raw, meta);
+        String displayName = meta.senderComponent() != null ? meta.senderComponent().getString() : ChatPipeline.decoratedDisplayName(raw, meta);
         if (displayName == null) {
             displayName = meta.senderName();
         }
@@ -321,11 +223,9 @@ public class ChatHudMixin {
                 senderRich = sliced.get().sender();
                 contentRich = sliced.get().content().linkifyUrls();
             } else {
-                senderRich = RichText.empty();
+                senderRich = RichText.literal(displayName != null ? displayName : "");
                 contentRich = ChatPipeline.preserveRichBody(message, content);
             }
-            SeenPlayers.remember(meta.senderUuid(),
-                    meta.profileName() != null ? meta.profileName() : displayName, displayName);
         } else {
             senderRich = meta.senderComponent() != null
                     ? RichText.of(meta.senderComponent())
@@ -344,7 +244,8 @@ public class ChatHudMixin {
                 quote != null ? quote.quoteName() : null,
                 quote != null ? quote.quoteText() : null,
                 meta.senderUuid(), displayName, meta.profileName(), body,
-                senderRich, contentRich), body, meta.system());
+                senderRich, contentRich), body, meta.system(), meta.evidence() != com.atom.chat.chat.IdentityEvidence.TEXT && meta.evidence() != com.atom.chat.chat.IdentityEvidence.SERVER_TEMPLATE
+                && meta.evidence() != com.atom.chat.chat.IdentityEvidence.TEMPLATE, meta.originalContent());
     }
 
     /**
@@ -353,7 +254,9 @@ public class ChatHudMixin {
      * live in ChatStore. System capsules never count as mentions.
      */
     @Unique
-    private static void atomchat$addPublic(ChatMessage message, String body, boolean system) {
+    private static void atomchat$addPublic(ChatMessage message, String body, boolean system, boolean provenSender, String originalBody) {
+        if (message.isOwn() && provenSender) OwnIdentity.cache(message.getSenderRich().stripInteractions());
+        if (com.atom.chat.chat.OutgoingMessages.reconcile(message, null, provenSender, originalBody)) return;
         boolean merged = ChatStore.get().add(message);
         if (system || merged || message.isOwn()) {
             return;
@@ -491,51 +394,16 @@ public class ChatHudMixin {
      */
     @Unique
     private static boolean atomchat$tryTextWhisper(String raw, Component message, Minecraft client) {
-        String ownName = client.player != null ? client.player.getName().getString() : null;
-        WhisperTextParser.WhisperHit hit = WhisperTextParser.tryParse(raw, ownName);
-        if (hit == null) {
-            // Anchored family (e33chat WhisperDetector port): a known player
-            // name near the line start + whisper keyword before the colon.
-            hit = WhisperTextParser.tryParseAnchored(raw, ChatPipeline.onlineNameCandidates());
-        }
-        if (hit == null) {
-            var cfg = AtomChatConfig.get();
-            if (cfg.whisperTemplates.isEmpty()) {
-                return false;
-            }
-            var match = ChatTemplates.matchWhisper(
-                    raw, cfg.whisperTemplates, ChatPipeline.onlineNameCandidates());
-            if (match.isEmpty()) {
-                return false;
-            }
-            var tm = match.get();
-            hit = new WhisperTextParser.WhisperHit(true, tm.displayLabel(), tm.content());
-        }
-        PlayerInfo info = ChatClassifier.resolveOnlinePlayer(hit.partnerDisplay());
-        String profile = info != null ? info.getProfile().getName() : hit.partnerDisplay();
-        UUID uuid = info != null ? info.getProfile().getId()
-                : ChatClassifier.resolveUuid(hit.partnerDisplay());
-        SenderMeta whisperMeta;
-        if (hit.incoming()) {
-            whisperMeta = new SenderMeta(uuid, hit.partnerDisplay(), profile,
-                    hit.content(), false, true, profile, null, null);
-        } else {
-            // Outgoing echo: for sends made from the panel the local bubble
-            // already exists — drop only when the tracker confirms, otherwise
-            // store the line as our outgoing message (same semantics as the
-            // vanilla-key outgoing branch in PrivateChatParser).
-            PlayerRef partner = PlayerRef.of(uuid, profile);
-            if (PrivateEchoTracker.consumeIfMatch(partner)) {
-                return true;
-            }
-            if (client.player == null) {
-                return false;
-            }
-            String own = client.player.getName().getString();
-            whisperMeta = new SenderMeta(client.player.getUUID(), own, own,
-                    hit.content(), false, true, profile, null, null);
-        }
-        atomchat$routePrivate(message, whisperMeta, client);
+        return atomchat$tryTextWhisper(raw, message, client, null);
+    }
+    @Unique
+    private static boolean atomchat$tryTextWhisper(String raw, Component message, Minecraft client, SenderMeta identity) {
+        String ownName=client.player!=null?client.player.getName().getString():null;
+        SenderMeta parsed=com.atom.chat.chat.PrivateMessageRecognition.parse(message,
+                client.player!=null?client.player.getUUID():null,ownName,
+                ChatPipeline.onlineNameCandidates(),AtomChatConfig.get().whisperTemplates,identity);
+        if(parsed==null)return false;
+        atomchat$routePrivate(message,parsed,client);
         return true;
     }
 
@@ -613,7 +481,7 @@ public class ChatHudMixin {
         } else if (meta.contentComponent() != null) {
             contentRich = RichText.of(meta.contentComponent()).linkifyUrls();
         } else {
-            contentRich = RichText.literal(body != null ? body : message.getString()).linkifyUrls();
+            contentRich = ChatPipeline.preserveRichBody(message, body != null ? body : message.getString());
         }
         ChatMessage privateMessage = new ChatMessage(message, own, false,
                 quote != null ? quote.quoteName() : null,
@@ -621,10 +489,17 @@ public class ChatHudMixin {
                 own ? meta.senderUuid() : meta.senderUuid(), displayName,
                 own ? meta.profileName() : meta.profileName(), body, senderRich, contentRich);
         if (own) {
-            PrivateChatStore.addOutgoing(partner, privateMessage);
+            if (!com.atom.chat.chat.OutgoingMessages.reconcile(privateMessage, partner,
+                    meta.evidence() != com.atom.chat.chat.IdentityEvidence.TEXT && meta.evidence() != com.atom.chat.chat.IdentityEvidence.SERVER_TEMPLATE, meta.originalContent()))
+                PrivateChatStore.addOutgoing(partner, privateMessage);
         } else if (!BlockList.isBlocked(partner)) {
             boolean merged = PrivateChatStore.addIncoming(partner, privateMessage);
-            SeenPlayers.remember(partnerUuid, meta.profileName(), displayName);
+            if (meta.evidence().confirmsIdentity() && partnerUuid != null) {
+                SeenPlayers.remember(partnerUuid, meta.profileName(), meta.senderName());
+                if (meta.senderComponent() != null && meta.contentComponent() != null)
+                    com.atom.chat.chat.LearnedChatFormats.observe(message.getString(), meta.senderComponent().getString(),
+                            meta.contentComponent().getString(), true);
+            }
             if (!merged) {
                 NotificationController.onWhisper(privateMessage);
             }

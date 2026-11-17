@@ -43,6 +43,7 @@ public final class MessageMerge {
         if (last == null || next == null) {
             return false;
         }
+        if (unsettled(last) || unsettled(next)) return false;
         if (last.isSystem() || next.isSystem()) {
             return false;
         }
@@ -63,6 +64,12 @@ public final class MessageMerge {
             return false;
         }
         return sameSpeaker(last, next);
+    }
+
+    private static boolean unsettled(ChatMessage message) {
+        var state = message.deliveryState();
+        return state == OutgoingMessages.State.PENDING || state == OutgoingMessages.State.UNCONFIRMED
+                || state == OutgoingMessages.State.FAILED;
     }
 
     /** Merges {@code next} into {@code last}, preserving the newer timestamp. */

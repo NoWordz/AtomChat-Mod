@@ -31,6 +31,11 @@ public class MessageHandlerMixin {
         return com.atom.chat.reaction.ReactionClient.defer(original);
     }
 
+    @Inject(method = "processChatMessageInternal", at = @At("RETURN"))
+    private void atomchat$clearDeliveredCapture(CallbackInfoReturnable<Boolean> ci) {
+        MessageCapture.consume();
+    }
+
     /** Capture only when the native listener actually delivers a visible message. */
     @Inject(method = "processChatMessageInternal", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/gui/hud/ChatHud;addMessage(Lnet/minecraft/text/Text;Lnet/minecraft/network/message/MessageSignatureData;Lnet/minecraft/client/gui/hud/MessageIndicator;)V"))
     private void atomchat$captureSignedBeforeAdd(MessageType.Parameters bound, SignedMessage message, Text decorated,
@@ -52,11 +57,10 @@ public class MessageHandlerMixin {
             // Incoming identity comes from the native message, not the nickname lookup.
             String partner = outgoing ? privateMeta.whisperPartner() : profile;
             MessageCapture.set(new SenderMeta(uuid, privateMeta.senderName(), profile, content, false, true,
-                    partner, privateMeta.senderComponent(), contentComponent));
+                    partner, privateMeta.senderComponent(), contentComponent).withEvidence(com.atom.chat.chat.IdentityEvidence.NATIVE).withOriginalContent(message.getSignedContent()));
             return;
         }
-        MessageCapture.set(new SenderMeta(uuid, profile, profile, content, false,
-                senderComponent, contentComponent));
+        MessageCapture.set(ChatPipeline.nativePublicLine(visible, senderComponent, contentComponent, uuid, profile).withOriginalContent(message.getSignedContent()));
     }
 
     /**
@@ -71,8 +75,10 @@ public class MessageHandlerMixin {
         Text decorated = bound.applyChatDecoration(message);
         SenderMeta privateMeta = PrivateChatParser.tryParse(decorated);
         if (privateMeta != null) { MessageCapture.set(privateMeta); return; }
+        if (ChatClassifier.isVanillaBroadcast(decorated)) return;
         String decoratedStr = decorated.getString();
         Text senderComponent = bound.name();
+        if (senderComponent != null && decorated.getString().equals(senderComponent.getString())) return;
         if (senderComponent != null && !senderComponent.getString().isBlank()) {
             String display = senderComponent.getString();
             String profile = display;
@@ -84,13 +90,10 @@ public class MessageHandlerMixin {
                 }
             }
             MessageCapture.set(new SenderMeta(uuid, display, profile, null, false,
-                    senderComponent, message));
+                    senderComponent, message).withEvidence(com.atom.chat.chat.IdentityEvidence.TRANSLATION));
             return;
         }
-        SenderMeta parsed = ChatPipeline.tryParsePlayerLine(decoratedStr);
-        if (parsed != null) {
-            MessageCapture.set(parsed);
-        }
+        // Identity-less delivery is classified once, at the final HUD component.
     }
 
     /**
@@ -98,24 +101,7 @@ public class MessageHandlerMixin {
      * actually calls {@code ChatHud.addMessage}, after vanilla's
      * hide-matched-names and blocked-sender early returns.
      */
-    @Inject(method = "onGameMessage", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/gui/hud/ChatHud;addMessage(Lnet/minecraft/text/Text;)V"))
-    private void atomchat$captureGameBeforeAdd(Text message, boolean overlay, CallbackInfo ci) {
-        if (overlay) {
-            return;
-        }
-        SenderMeta privateMeta = PrivateChatParser.tryParse(message);
-        if (privateMeta != null) {
-            MessageCapture.set(privateMeta);
-            return;
-        }
-        if (ChatClassifier.isVanillaBroadcast(message)) {
-            return;
-        }
-        SenderMeta parsed = ChatPipeline.tryParsePlayerLine(message.getString());
-        if (parsed != null) {
-            MessageCapture.set(parsed);
-        }
-    }
+
 
 
 }

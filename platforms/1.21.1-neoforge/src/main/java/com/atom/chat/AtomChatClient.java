@@ -165,6 +165,7 @@ public class AtomChatClient {
         com.atom.chat.net.MediaCompanionClient.onJoin();
             com.atom.chat.net.ProfileCompanionClient.onJoin();
         com.atom.chat.net.PackSyncClient.onJoin();
+        com.atom.chat.net.ConfigAdminClient.onJoin();
         com.atom.chat.chat.OwnIdentity.reset();
         com.atom.chat.chat.TeleportCommands.reset();
         com.atom.chat.render.FirstOpenWarmup.requestGlWarmup();
@@ -179,6 +180,7 @@ public class AtomChatClient {
         PrivateChatStore.reset();
         PrivateEchoTracker.clear();
         com.atom.chat.chat.PublicEchoTracker.clear();
+            com.atom.chat.chat.OutgoingMessages.clear();
         ChatStore.reset();
         com.atom.chat.chat.SeenPlayers.clear();
         com.atom.chat.chat.OwnIdentity.reset();
@@ -188,6 +190,7 @@ public class AtomChatClient {
         com.atom.chat.net.PokeCompanionClient.setHandler(null);
         com.atom.chat.net.PackSyncClient.onDisconnect();
         com.atom.chat.net.ConfigScreenClient.onDisconnect();
+        com.atom.chat.net.ConfigAdminClient.onDisconnect();
         com.atom.chat.render.FirstOpenWarmup.onDisconnect();
         com.atom.chat.ui.PanelCloseOverlay.INSTANCE.clear();
     }
@@ -216,6 +219,7 @@ public class AtomChatClient {
         com.atom.chat.net.MediaCompanionClient.tick();
         com.atom.chat.net.ProfileCompanionClient.tick();
         com.atom.chat.net.PackSyncClient.tick();
+        com.atom.chat.net.ConfigAdminClient.tick();
         // Expires banners regardless of whether the panel is open: their 4s
         // lifetime starts at enqueue, so a banner queued while the panel was
         // closed is already gone if you open the panel later than that.

@@ -1311,6 +1311,15 @@ public final class MessageListView {
         if (sender.isEmpty()) {
             sender = RichText.literal(host.senderName(msg));
         }
+        if (msg.isOwn()) {
+            String status = switch (msg.deliveryState()) {
+                case PENDING -> "atomchat.message.pending";
+                case UNCONFIRMED -> "atomchat.message.unconfirmed";
+                case FAILED -> "atomchat.message.failed";
+                default -> null;
+            };
+            if (status != null) sender = RichText.concat(sender, RichText.literal(" · " + tr(status)));
+        }
         List<RichLine> lines = RichTextRenderer.wrapFor(sender, nameFont, Float.MAX_VALUE);
         if (lines.isEmpty()) {
             return;

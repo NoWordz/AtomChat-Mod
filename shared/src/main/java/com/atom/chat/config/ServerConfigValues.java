@@ -19,13 +19,19 @@ public record ServerConfigValues(boolean hostingEnabled, boolean packEnabled,
                                  int maxFileKb, int maxTotalMb, int maxAvatarTotalMb,
                                  int retentionDays, int uploadCooldownMs,
                                  int packMaxFiles, int packMaxMb,
-                                 String packName, List<String> phrases) {
+                                 String packName, List<String> phrases, int maxProfileTotalMb,
+                                 List<com.atom.chat.chat.MessageTemplate> templates) {
+    /** Legacy wire keeps its exact layout. Extended fields travel on the optional admin channel. */
+    public ServerConfigValues(boolean hosting,boolean pack,int file,int total,int avatar,int days,int cooldown,
+                              int files,int mb,String name,List<String> phrases) {
+        this(hosting,pack,file,total,avatar,days,cooldown,files,mb,name,phrases,64,List.of());
+    }
     public static final int MAX_FILE_KB_LIMIT = 16384;
     public static final int MAX_STORE_MB_LIMIT = 65536;
     public static final int MAX_RETENTION_DAYS = 3650;
     public static final int MAX_COOLDOWN_MS = 600_000;
     public static final int MAX_PACK_FILES_LIMIT = 200;
-    public static final int MAX_PACK_MB_LIMIT = 64;
+    public static final int MAX_PACK_MB_LIMIT = 16;
     public static final int MAX_NAME_CHARS = 48;
     public static final int MAX_PHRASES = 20;
     public static final int MAX_PHRASE_CHARS = 200;
@@ -36,6 +42,7 @@ public record ServerConfigValues(boolean hostingEnabled, boolean packEnabled,
     public static final String ERR_NAME = "bad_name";
 
     public ServerConfigValues {
+        templates=templates==null?List.of():List.copyOf(templates);
         // A hand-edited config file can contain null entries, so this copy
         // tolerates them; sanitize() is what drops them.
         phrases = phrases == null
@@ -49,7 +56,7 @@ public record ServerConfigValues(boolean hostingEnabled, boolean packEnabled,
                 config.retentionDays, config.uploadCooldownMs,
                 config.packMaxFiles, config.packMaxMb,
                 config.packName == null ? "" : config.packName,
-                config.phrases == null ? List.of() : config.phrases);
+                config.phrases == null ? List.of() : config.phrases,config.maxProfileTotalMb,config.templates);
     }
 
     /** Copies these values onto the live config object (the caller persists it). */
@@ -65,6 +72,7 @@ public record ServerConfigValues(boolean hostingEnabled, boolean packEnabled,
         config.packMaxMb = packMaxMb;
         config.packName = packName;
         config.phrases = new ArrayList<>(phrases);
+        config.maxProfileTotalMb=maxProfileTotalMb;config.templates=new ArrayList<>(templates);
         return config;
     }
 
@@ -76,13 +84,17 @@ public record ServerConfigValues(boolean hostingEnabled, boolean packEnabled,
                 || retentionDays < 0 || retentionDays > MAX_RETENTION_DAYS
                 || uploadCooldownMs < 0 || uploadCooldownMs > MAX_COOLDOWN_MS
                 || packMaxFiles < 1 || packMaxFiles > MAX_PACK_FILES_LIMIT
-                || packMaxMb < 1 || packMaxMb > MAX_PACK_MB_LIMIT) {
+                || packMaxMb < 1 || packMaxMb > MAX_PACK_MB_LIMIT
+                || maxProfileTotalMb<1 || maxProfileTotalMb>MAX_STORE_MB_LIMIT) {
             return ERR_RANGE;
         }
         if (phrases.size() > MAX_PHRASES) {
             return ERR_PHRASES;
         }
-        if (packName != null && packName.strip().length() > MAX_NAME_CHARS) {
+        if(templates.size()>64||templates.stream().anyMatch(t->t==null||t.validate()!=null)
+                ||templates.stream().map(com.atom.chat.chat.MessageTemplate::id).distinct().count()!=templates.size())return "bad_template";
+        if(phrases.stream().anyMatch(p->p==null||p.isBlank()||p.length()>MAX_PHRASE_CHARS||!com.atom.chat.util.TextLimits.wellFormed(p)))return ERR_PHRASES;
+        if (packName != null && (packName.strip().length() > MAX_NAME_CHARS||!com.atom.chat.util.TextLimits.wellFormed(packName))) {
             return ERR_NAME;
         }
         return null;
@@ -100,12 +112,16 @@ public record ServerConfigValues(boolean hostingEnabled, boolean packEnabled,
                 continue;
             }
             cleaned.add(trimmed.length() > MAX_PHRASE_CHARS
-                    ? trimmed.substring(0, MAX_PHRASE_CHARS)
+                    ? com.atom.chat.util.TextLimits.limit(trimmed,MAX_PHRASE_CHARS)
                     : trimmed);
         }
         return new ServerConfigValues(hostingEnabled, packEnabled,
                 maxFileKb, maxTotalMb, maxAvatarTotalMb, retentionDays, uploadCooldownMs,
                 packMaxFiles, packMaxMb,
-                packName == null ? "" : packName.strip(), cleaned);
+                packName == null ? "" : packName.strip(), cleaned,maxProfileTotalMb,templates);
+    }
+    public ServerConfigValues withExtras(int profile,List<com.atom.chat.chat.MessageTemplate> rules) {
+        return new ServerConfigValues(hostingEnabled,packEnabled,maxFileKb,maxTotalMb,maxAvatarTotalMb,retentionDays,
+                uploadCooldownMs,packMaxFiles,packMaxMb,packName,phrases,profile,rules);
     }
 }

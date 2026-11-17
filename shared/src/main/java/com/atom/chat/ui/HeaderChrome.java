@@ -154,6 +154,7 @@ public final class HeaderChrome {
             case PRIVATE_CHAT -> host.activePrivateName() != null
                     ? host.activePrivateName() : host.label("atomchat.channel.private");
             case SETTINGS_SECTION -> host.label("atomchat.tab.settings");
+            case SERVER_CONFIG -> host.label("atomchat.config.title");
             case PROFILE_DETAIL -> host.label("atomchat.page.profile.title");
         };
     }

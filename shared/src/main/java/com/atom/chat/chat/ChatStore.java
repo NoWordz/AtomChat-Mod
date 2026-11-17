@@ -37,7 +37,7 @@ public final class ChatStore {
             return false;
         }
         com.atom.chat.reaction.ReactionClient.bind(message);
-        if (MessageMerge.antiSpamEnabled() && !messages.isEmpty()) {
+        if (message.deliveryState() != OutgoingMessages.State.PENDING && MessageMerge.antiSpamEnabled() && !messages.isEmpty()) {
             ChatMessage last = messages.get(messages.size() - 1);
             if (MessageMerge.canMerge(last, message)) {
                 messages.set(messages.size() - 1, MessageMerge.merge(last, message));
@@ -95,6 +95,13 @@ public final class ChatStore {
 
     public static synchronized int mentionUnread() {
         return mentionUnread;
+    }
+
+    public synchronized boolean replace(long id, ChatMessage corrected) {
+        for (int i = 0; i < messages.size(); i++) if (messages.get(i).getId() == id) {
+            messages.set(i, corrected); changed(); com.atom.chat.history.ChatHistory.markDirty(); return true;
+        }
+        return false;
     }
 
     public synchronized List<ChatMessage> snapshot() {

@@ -35,6 +35,20 @@ public class ChatMessage {
      * carry this id over.
      */
     private final long id;
+    private volatile OutgoingMessages.State delivery = OutgoingMessages.State.RECEIVED;
+    public OutgoingMessages.State deliveryState() {
+        return delivery == OutgoingMessages.State.PENDING && System.currentTimeMillis() - timestamp > OutgoingMessages.TIMEOUT_MS
+                ? OutgoingMessages.State.UNCONFIRMED : delivery;
+    }
+    public void delivery(OutgoingMessages.State state) { delivery = state; }
+    public ChatMessage withServerEcho(ChatMessage server) {
+        ChatMessage corrected = new ChatMessage(server.component, own, server.system, server.quoteName, server.quoteText,
+                server.senderUuid, server.senderName, server.profileName, server.contentText, server.senderRich,
+                server.contentRich, timestamp, duplicateCount, id);
+        corrected.delivery = OutgoingMessages.State.CONFIRMED;
+        return corrected;
+    }
+
 
     private static final java.util.concurrent.atomic.AtomicLong ID_SEQUENCE =
             new java.util.concurrent.atomic.AtomicLong();

@@ -26,11 +26,15 @@ public final class PrivateChatParser {
             Text name = asText(args[0]);
             Text content = asText(args[1]);
             String display = clean(name.getString());
-            PlayerListEntry info = display == null ? null : ChatClassifier.resolveOnlinePlayer(display);
-            String profile = info != null ? info.getProfile().getName() : display;
-            UUID uuid = info != null ? info.getProfile().getId() : null;
+            var identity = ComponentIdentity.resolveSender(name);
+            if (identity.conflict()) return SenderMeta.systemMeta().withEvidence(IdentityEvidence.CONFLICT);
+            PlayerListEntry info = identity.uuid() == null && identity.account() == null && display != null ? ChatClassifier.resolveOnlinePlayer(display) : null;
+            String profile = identity.account() != null ? identity.account() : info != null ? info.getProfile().getName()
+                    : identity.uuid() != null ? ChatClassifier.profileName(identity.uuid()) : display;
+            UUID uuid = identity.account() != null || identity.uuid() != null ? identity.uuid()
+                    : info != null ? info.getProfile().getId() : SeenPlayers.findUuid(display);
             return new SenderMeta(uuid, display, profile, content.getString(), false, true,
-                    profile, name, content);
+                    profile, name, content).withEvidence(IdentityEvidence.TRANSLATION);
         }
         if (key.equals("commands.message.display.outgoing") && args.length >= 2) {
             Text partnerText = asText(args[0]);
@@ -41,11 +45,6 @@ public final class PrivateChatParser {
             }
             PlayerListEntry info = ChatClassifier.resolveOnlinePlayer(display);
             String partner = info != null ? info.getProfile().getName() : display;
-            if (PrivateEchoTracker.consumeIfMatch(PlayerRef.of(null, partner))) {
-                // Local bubble already exists; tell ChatHudMixin to drop it.
-                return new SenderMeta(null, null, null, null, true, true, partner,
-                        null, null);
-            }
             MinecraftClient client = MinecraftClient.getInstance();
             if (client.player == null) {
                 return null;
@@ -53,7 +52,7 @@ public final class PrivateChatParser {
             String own = client.player.getName().getString();
             UUID ownUuid = client.player.getUuid();
             return new SenderMeta(ownUuid, own, own, content.getString(), false, true,
-                    partner, Text.literal(own), content);
+                    partner, Text.literal(own), content).withEvidence(IdentityEvidence.TRANSLATION);
         }
         return null;
     }

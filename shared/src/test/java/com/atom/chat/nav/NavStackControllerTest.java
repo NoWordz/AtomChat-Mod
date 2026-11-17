@@ -122,6 +122,8 @@ class NavStackControllerTest {
         NavStackController controller;
         boolean signatureEditing;
         boolean partnerOnline = true;
+        boolean allowBack = true;
+        @Override public boolean allowBackNavigation() { return allowBack; }
         String composer = "";
 
         private void note(String step) {
@@ -284,6 +286,20 @@ class NavStackControllerTest {
                 "syncReplySlot@CHAT_LIST",
                 "clearDetailScroll@CHAT_LIST",
                 "armReplyFor@PROFILE_DETAIL"), profile.calls);
+    }
+
+    @Test void commandOnlyServerPageReturnsToChatWithoutResettingItsScrollAndIsNotRememberedAsAnEntry() {
+        Recorder host = new Recorder();
+        NavStackController controller = onStack(host,List.of(NavPage.of(AppPage.CHAT_LIST),
+                NavPage.of(AppPage.WORLD_CHAT),NavPage.of(AppPage.SERVER_CONFIG)));
+        assertFalse(controller.snapshot().stream().anyMatch(page->page.page()==AppPage.SERVER_CONFIG));
+        host.allowBack=false;controller.popPage();
+        assertEquals(AppPage.SERVER_CONFIG,controller.topPage());assertTrue(host.calls.isEmpty());
+        host.allowBack=true;controller.popPage();
+        assertEquals(AppPage.WORLD_CHAT,controller.topPage());
+        assertFalse(host.calls.stream().anyMatch(call->call.startsWith("clearWorldScroll")));
+        assertFalse(host.calls.stream().anyMatch(call->call.startsWith("clearTransientWorldUi")));
+        assertTrue(host.calls.contains("adoptWorldDraft@WORLD_CHAT"));
     }
 
     /** A live signature edit is aborted, without committing, before anything else runs. */

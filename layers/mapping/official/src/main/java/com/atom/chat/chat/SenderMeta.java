@@ -30,8 +30,21 @@ import java.util.UUID;
 public record SenderMeta(UUID senderUuid, String senderName, String profileName,
                          String contentText, boolean system, boolean whisper,
                          String whisperPartner, Component senderComponent,
-                         Component contentComponent) {
+                         Component contentComponent, IdentityEvidence evidence, String originalContent) {
+    public SenderMeta(UUID uuid, String sender, String profile, String content, boolean system,
+                      boolean whisper, String partner, Component senderComponent, Component contentComponent) {
+        this(uuid, sender, profile, content, system, whisper, partner, senderComponent, contentComponent, IdentityEvidence.TEXT, null);
+    }
+    public SenderMeta withOriginalContent(String original) {
+        return new SenderMeta(senderUuid, senderName, profileName, contentText, system, whisper,
+                whisperPartner, senderComponent, contentComponent, evidence, original);
+    }
+    public SenderMeta withEvidence(IdentityEvidence source) {
+        return new SenderMeta(senderUuid, senderName, profileName, contentText, system, whisper,
+                whisperPartner, senderComponent, contentComponent, source, originalContent);
+    }
     public SenderMeta {
+        evidence = evidence == null ? IdentityEvidence.TEXT : evidence;
         senderUuid = senderUuid != null && senderUuid.equals(NIL_UUID) ? null : senderUuid;
         senderName = clean(senderName);
         profileName = clean(profileName);

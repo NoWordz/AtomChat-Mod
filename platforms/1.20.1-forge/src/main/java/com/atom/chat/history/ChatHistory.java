@@ -77,6 +77,8 @@ public final class ChatHistory {
     public static void onJoin(Minecraft client) {
         if (enabled() && HistoryStore.isWorldSpecific(currentKey)) saveNow(client);
         currentKey = keyFor(client);
+        com.atom.chat.image.SkinResolver.clear();
+        com.atom.chat.chat.RecognitionMemory.join(recognitionKeyFor(client), client::execute);
         String key = currentKey;
         HISTORY.join(key, AtomChatConfig.get().historyRetentionDays, entries -> publish(client, key, entries));
     }
@@ -84,12 +86,15 @@ public final class ChatHistory {
     /** Take the departing world's bounded DTO snapshot before the caller clears its stores. */
     public static void onDisconnect(Minecraft client) {
         if (enabled() && HistoryStore.isWorldSpecific(currentKey)) saveNow(client);
+        com.atom.chat.chat.RecognitionMemory.disconnect();
+        com.atom.chat.image.SkinResolver.clear();
         HISTORY.disconnect();
         currentKey = null;
         dirty = false;
     }
 
     public static void tick(Minecraft client) {
+        com.atom.chat.chat.RecognitionMemory.tick();
         if (!enabled() || !dirty || !HistoryStore.isWorldSpecific(currentKey)) return;
         long now = System.currentTimeMillis();
         if (now - lastAutoSave < AUTO_SAVE_MS) return;
@@ -235,6 +240,12 @@ public final class ChatHistory {
 
     private static String peerKey(PlayerRef partner) {
         return partner.uuid() != null ? partner.uuid().toString() : partner.realName();
+    }
+
+    private static String recognitionKeyFor(Minecraft client) {
+        if (client.getSingleplayerServer() != null) return com.atom.chat.chat.RecognitionServerKey.singleplayer(client.getSingleplayerServer().getWorldPath(net.minecraft.world.level.storage.LevelResource.ROOT));
+        return client.getCurrentServer() == null ? null
+                : com.atom.chat.chat.RecognitionServerKey.multiplayer(client.getCurrentServer().ip);
     }
 
     private static String keyFor(Minecraft client) {

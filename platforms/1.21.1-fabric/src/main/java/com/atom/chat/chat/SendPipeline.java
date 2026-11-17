@@ -139,7 +139,7 @@ public final class SendPipeline {
             client.player.networkHandler.sendChatMessage(normalized);
             // Arm echo suppression: the server relays this line back through the
             // identity-less path on NCR-style servers (e33chat parity).
-            if (!com.atom.chat.reaction.ReactionClient.enabled()) PublicEchoTracker.markSent(normalized);
+
         }
         client.inGameHud.getChatHud().addToMessageHistory(normalized);
         // Vanilla never echoes commands back into the chat feed as your own
@@ -151,8 +151,10 @@ public final class SendPipeline {
             String ownProfile = client.player.getName().getString();
             // Own bubbles show the decorated self name (titles/team prefix),
             // e33chat parity — the bare profile name stays for identity fields.
-            ChatStore.get().add(LocalEcho.build(normalized, body, quoteName, quoteText,
-                    ownUuid, ownProfile, OwnIdentity.displayNameRich()));
+            ChatMessage local = LocalEcho.build(normalized, body, quoteName, quoteText,
+                    ownUuid, ownProfile, OwnIdentity.displayNameRich());
+            OutgoingMessages.sent(local, null, normalized);
+            ChatStore.get().add(local);
         }
         com.atom.chat.audio.FeedbackSoundController.play(com.atom.chat.audio.FeedbackCue.SEND);
         finishSuccessfulSend();
@@ -181,12 +183,12 @@ public final class SendPipeline {
             UUID ownUuid = client.player.getUuid();
             String ownProfile = client.player.getName().getString();
             // Decorated self name on the outgoing bubble, e33chat parity.
-            PrivateChatStore.addOutgoing(target,
-                    LocalEcho.build(historyText, body,
-                            reply != null ? messageSenderName(reply) : null,
-                            reply != null ? quoteTextFor(reply) : null,
-                            ownUuid, ownProfile, OwnIdentity.displayNameRich()));
-            PrivateEchoTracker.markOutgoing(target);
+            ChatMessage local = LocalEcho.build(historyText, body,
+                    reply != null ? messageSenderName(reply) : null,
+                    reply != null ? quoteTextFor(reply) : null,
+                    ownUuid, ownProfile, OwnIdentity.displayNameRich());
+            OutgoingMessages.sent(local, target, normalized);
+            PrivateChatStore.addOutgoing(target, local);
         }
         com.atom.chat.audio.FeedbackSoundController.play(com.atom.chat.audio.FeedbackCue.SEND);
         finishSuccessfulSend();

@@ -49,6 +49,15 @@ public final class PrivateChatStore {
      */
     private static volatile long generation;
 
+    public static synchronized boolean replace(PlayerRef partner, long id, ChatMessage corrected) {
+        var c = CONVERSATIONS.get(partner.key());
+        if (c == null) return false;
+        for (int i = 0; i < c.messages.size(); i++) if (c.messages.get(i).getId() == id) {
+            c.messages.set(i, corrected); c.changed(); com.atom.chat.history.ChatHistory.markDirty(); return true;
+        }
+        return false;
+    }
+
     public static synchronized void reset() {
         CONVERSATIONS.clear();
         activePartner = null;
@@ -80,7 +89,7 @@ public final class PrivateChatStore {
         }
         com.atom.chat.reaction.ReactionClient.bind(message);
         Conversation c = conversation(partner);
-        if (MessageMerge.antiSpamEnabled() && !c.messages.isEmpty()) {
+        if (message.deliveryState() != OutgoingMessages.State.PENDING && MessageMerge.antiSpamEnabled() && !c.messages.isEmpty()) {
             ChatMessage last = c.messages.get(c.messages.size() - 1);
             if (MessageMerge.canMerge(last, message)) {
                 c.messages.set(c.messages.size() - 1, MessageMerge.merge(last, message));
@@ -112,7 +121,7 @@ public final class PrivateChatStore {
         }
         com.atom.chat.reaction.ReactionClient.bind(message);
         Conversation c = conversation(partner);
-        if (MessageMerge.antiSpamEnabled() && !c.messages.isEmpty()) {
+        if (message.deliveryState() != OutgoingMessages.State.PENDING && MessageMerge.antiSpamEnabled() && !c.messages.isEmpty()) {
             ChatMessage last = c.messages.get(c.messages.size() - 1);
             if (MessageMerge.canMerge(last, message)) {
                 c.messages.set(c.messages.size() - 1, MessageMerge.merge(last, message));
