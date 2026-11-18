@@ -259,7 +259,7 @@ class PanelOpenMotionTest {
             assertEquals(23.0F, settled.y(), 1.0e-4F);
             assertEquals(194.0F, settled.w(), 1.0e-4F);
             assertEquals(394.0F, settled.h(), 1.0e-4F);
-            assertEquals(UiTokens.panelRadius() - 3.0F, settled.radius(), 1.0e-4F);
+            assertEquals(UiTokens.panelRadius(AtomChatAppearance.theme()) - 3.0F, settled.radius(), 1.0e-4F);
         }
     }
 

@@ -19,15 +19,35 @@ public final class SettingsYogaLayout implements AutoCloseable {
             if(!Float.isFinite(full[row])||full[row]<0)throw new IllegalArgumentException("Invalid settings row measurement");
             if(groups[row]!=null)folds.computeIfAbsent(groups[row],id->{double value=expansion.applyAsDouble(id);if(!Double.isFinite(value)||value<0||value>1)throw new IllegalArgumentException("Invalid settings fold state "+id);return (float)value;});
         }
-        var children=new ArrayList<LayoutNode>();double total=0;
+        var children=new ArrayList<LayoutNode>();
+        List<LayoutNode> cardRows=null;
+        int firstCardRow=-1;
+        double total=0;
         for(int row=0;row<full.length;row++){
-            float height=full[row]*(groups[row]==null?1:folds.get(groups[row]));total+=height;
-            children.add(LayoutNode.leaf("settings-contract/row/"+row,leaf(width,height),null,0));
+            String group=groups[row];
+            float height=full[row]*(group==null?1:folds.get(group));total+=height;
+            var node=LayoutNode.leaf("settings-contract/row/"+row,leaf(width,height),null,0);
+            if(group==null){
+                children.add(node);
+            }else{
+                if(cardRows==null){
+                    firstCardRow=row;
+                    cardRows=new ArrayList<>();
+                }
+                cardRows.add(node);
+                if(row+1==full.length||!group.equals(groups[row+1])){
+                    var box=LayoutStyle.column().size(Length.points(width),Length.auto()).flex(0,0,Length.auto());
+                    children.add(new LayoutNode(new NodeId("settings-contract/group/"+firstCardRow),box,cardRows,null,0));
+                    cardRows=null;
+                }
+            }
             if(row+1<full.length){
                 float next=groups[row+1]==null?1:folds.get(groups[row+1]);
-                float gap=groups[row]!=null&&groups[row].equals(groups[row+1])?0:UiTokens.SETTINGS_ROW_GAP*next;total+=gap;
-                // Explicit gap nodes retain the original two-step float accumulation during folding.
-                children.add(LayoutNode.leaf("settings-contract/gap/"+row,leaf(width,gap),null,0));
+                if(cardRows==null){
+                    float gap=UiTokens.SETTINGS_ROW_GAP*next;total+=gap;
+                    // Keep the original separate inter-card gap as the next section unfolds.
+                    children.add(LayoutNode.leaf("settings-contract/gap/"+row,leaf(width,gap),null,0));
+                }
             }
         }
         if(total>Float.MAX_VALUE)throw new IllegalArgumentException("Settings measurements overflow logical coordinates");

@@ -1,5 +1,6 @@
 package com.atom.chat.notification;
 
+import com.atom.chat.ui.AtomChatAppearance;
 import com.atom.chat.chat.ChatMessage;
 import com.atom.chat.config.AtomChatConfig;
 import com.atom.chat.font.FontManager;
@@ -575,8 +576,8 @@ public final class NotificationBanner {
     private void drawBanner(Canvas canvas, Active b, float x, float y, float w, float h,
                             float alpha, float hover, float buttonHover, PressScale sendScale, boolean interactive,
                             boolean backdropPreDrawn) {
-        float radius = UiTokens.cardRadius();
-        int fill = UiTokens.notificationFill();
+        float radius = UiTokens.cardRadius(AtomChatAppearance.theme());
+        int fill = UiTokens.notificationFill(AtomChatAppearance.theme());
         // The HUD pre-pass draws the frosted backdrop with raw GL (panel-blur
         // style): a Skia backdrop filter here would read the framebuffer as
         // premul, and shader packs leave undefined alpha there. The panel path
@@ -594,7 +595,7 @@ public final class NotificationBanner {
             // old 10px pad clipped the shadow into a visible rectangle edge.
             canvas.saveLayer(shadowLayer(x, y, w, h), layer);
             try {
-                UiCards.drawCard(canvas, x, y, w, h, radius, hover,
+                AtomChatAppearance.drawCard(canvas, x, y, w, h, radius, hover,
                         UiTokens.CARD_SHADOW, UiTokens.NOTIFICATION_BLUR, fill);
 
                 float padX = UiTokens.s(14);
@@ -686,7 +687,7 @@ public final class NotificationBanner {
      *  like the composer's send button (drawSendButton). */
     private void drawRoundButton(Canvas canvas, float x, float y, float size, float hover) {
         AtomChatConfig config = AtomChatConfig.get();
-        float radius = UiTokens.radius(size / (2.0F * UiTokens.SCALE));
+        float radius = UiTokens.radius(size / (2.0F * UiTokens.SCALE), AtomChatAppearance.theme());
         SkiaDraw.drawRoundedRect(canvas, x, y, size, size, radius, config.accentColor);
         float wash = hover * 55.0F;
         if (wash > 0.5F) {

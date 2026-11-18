@@ -171,8 +171,10 @@ class PageTransitionCompositeWiringSourceTest {
             String src = source(screen);
             assertEquals(1, occurrences(src, "new PageTransitionComposite("),
                     screen + ": expected exactly one composite construction");
-            assertEquals(1, occurrences(src, "new PageTransitionComposite.Host()"),
-                    screen + ": expected exactly one port implementation");
+            assertEquals(1, occurrences(src, "new PageTransitionComposite(new ScreenTransitionHost())"),
+                    screen + ": expected one bound transition host");
+            assertEquals(1, occurrences(src, "implements PageTransitionComposite.Host"),
+                    screen + ": expected one named port implementation");
             for (Map.Entry<String, String> work : portWork.entrySet()) {
                 String method = body(src, "public " + methodSignature(work.getKey()));
                 assertTrue(method.contains(work.getValue()),

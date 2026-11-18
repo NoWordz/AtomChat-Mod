@@ -36,8 +36,6 @@ public final class AtomLibDependencyCheck {
             symbol = crop + ".visibleRect(FFFFFFFFF)[F"; resolveMethod(loader, crop, "visibleRect", "(FFFFFFFFF)[F", true);
 
             String design = "com.atom.lib.design.atomchat.Design";
-            symbol = design + ".host(DesignHost)"; resolveMethod(loader, design, "host", "(Lcom/atom/lib/design/atomchat/DesignHost;)V", true);
-            symbol = design + ".rippleSink(RippleSink)"; resolveMethod(loader, design, "rippleSink", "(Lcom/atom/lib/design/atomchat/Design$RippleSink;)V", true);
             String host = "com.atom.lib.design.atomchat.DesignHost";
             symbol = host + ".cornerRadius()"; resolveMethod(loader, host, "cornerRadius", "()F", false);
             symbol = host + ".accentColor()"; resolveMethod(loader, host, "accentColor", "()I", false);
@@ -50,13 +48,16 @@ public final class AtomLibDependencyCheck {
             resolveMethod(loader, "com.atom.lib.design.atomchat.Design$RippleSink", "region", "(FFFFFI)V", false);
             String tokens = "com.atom.lib.design.atomchat.UiTokens";
             symbol = tokens + ".s(F)F"; resolveMethod(loader, tokens, "s", "(F)F", true);
+            symbol = tokens + ".radius(float,DesignHost)"; resolveMethod(loader, tokens, "radius", "(FLcom/atom/lib/design/atomchat/DesignHost;)F", true);
 
             String draw = "com.atom.lib.design.atomchat.SkiaDraw";
             symbol = draw + ".drawRoundedRect(Canvas,FFFFFI)V"; resolveMethod(loader, draw, "drawRoundedRect", "(Lio/github/humbleui/skija/Canvas;FFFFFI)V", true);
             symbol = draw + ".drawRoundedImage(Canvas,Image,FFFFF,SamplingMode)V"; resolveMethod(loader, draw, "drawRoundedImage", "(Lio/github/humbleui/skija/Canvas;Lio/github/humbleui/skija/Image;FFFFFLio/github/humbleui/skija/SamplingMode;)V", true);
             symbol = draw + ".clip(Canvas,FFFFF)V"; resolveMethod(loader, draw, "clip", "(Lio/github/humbleui/skija/Canvas;FFFFF)V", true);
             String cards = "com.atom.lib.design.atomchat.UiCards";
-            symbol = cards + ".drawCard(Canvas,FFFFFF)V"; resolveMethod(loader, cards, "drawCard", "(Lio/github/humbleui/skija/Canvas;FFFFFF)V", true);
+            symbol = cards + ".drawCard(Canvas,FFFFFFIFI,DesignHost,RippleSink)";
+            resolveMethod(loader, cards, "drawCard",
+                    "(Lio/github/humbleui/skija/Canvas;FFFFFFIFILcom/atom/lib/design/atomchat/DesignHost;Lcom/atom/lib/design/atomchat/Design$RippleSink;)V", true);
             String icons = "com.atom.lib.design.atomchat.AppIcons";
             symbol = icons + ".ICON_CHECK_PATH";
             MethodHandles.publicLookup().findStaticGetter(Class.forName(icons, false, loader), "ICON_CHECK_PATH",

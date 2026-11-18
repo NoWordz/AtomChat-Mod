@@ -1,6 +1,7 @@
 package com.atom.chat.render;
 
 
+import com.atom.chat.ui.AtomChatAppearance;
 import com.atom.lib.design.atomchat.SkiaDraw;
 import com.atom.chat.ui.UiLayout;
 import com.atom.lib.design.atomchat.UiTokens;
@@ -25,7 +26,7 @@ public final class ChromeMaterial {
 
     public static void drawDetails(Canvas canvas, UiLayout.Rect bar, float radius) {
         if (bar == null || bar.w() <= 0F || bar.h() <= 0F) return;
-        float opacity = (UiTokens.cardFill() >>> 24) / 255F;
+        float opacity = (UiTokens.cardFill(AtomChatAppearance.theme()) >>> 24) / 255F;
         if (opacity <= 0F) return;
         canvas.save();
         try {

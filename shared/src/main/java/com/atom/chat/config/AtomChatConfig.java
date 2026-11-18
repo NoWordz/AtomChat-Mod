@@ -2,9 +2,6 @@ package com.atom.chat.config;
 
 import com.atom.chat.AtomChat;
 import com.atom.chat.chat.MessageFilter;
-import com.atom.chat.ui.ClickRipples;
-import com.atom.lib.design.atomchat.Design;
-import com.atom.lib.design.atomchat.DesignHost;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 
@@ -16,51 +13,9 @@ import java.nio.file.Path;
 public class AtomChatConfig {
     public static final AtomChatConfig DEFAULT = new AtomChatConfig();
 
-    /**
-     * Feeds this mod's live appearance settings to the shared AtomChat design
-     * package, so the extracted tokens keep painting exactly what they did
-     * before they moved out.
-     */
     static {
         DEFAULT.panelHeightAutomatic = true;
         DEFAULT.panelWidthAutomatic = true;
-        Design.host(new DesignHost() {
-            @Override
-            public float cornerRadius() {
-                return AtomChatConfig.get().cornerRadius;
-            }
-
-            @Override
-            public boolean halfScreenMode() {
-                return AtomChatConfig.get().halfScreenMode;
-            }
-
-            @Override
-            public int accentColor() {
-                return AtomChatConfig.get().accentColor;
-            }
-
-            @Override
-            public int textSecondaryColor() {
-                return AtomChatConfig.get().textSecondaryColor;
-            }
-
-            @Override
-            public float cardTint() {
-                return AtomChatConfig.get().cardTint;
-            }
-
-            @Override
-            public int cardColor() {
-                return AtomChatConfig.get().cardColor;
-            }
-
-            @Override
-            public int panelBackgroundColor() {
-                return AtomChatConfig.get().panelBgColor;
-            }
-        });
-        Design.rippleSink(ClickRipples::region);
     }
 
     /** Whether AtomChat replaces the vanilla chat screen. */

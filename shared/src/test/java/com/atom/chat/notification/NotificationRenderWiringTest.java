@@ -2,8 +2,6 @@ package com.atom.chat.notification;
 
 
 
-import com.atom.lib.design.atomchat.UiCards;
-import com.atom.lib.design.atomchat.UiTokens;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
@@ -55,8 +53,8 @@ class NotificationRenderWiringTest {
                 "platforms/1.21.1-fabric/src/main/java/com/atom/chat/notification/NotificationBanner.java")) {
             String banner = Files.readString(root.resolve(path));
             assertFalse(banner.contains("NotificationBackdropBlur"), path);
-            assertTrue(banner.contains("UiTokens.notificationFill()"), path);
-            assertTrue(banner.contains("UiCards.drawCard("), path);
+            assertTrue(banner.contains("UiTokens.notificationFill(AtomChatAppearance.theme())"), path);
+            assertTrue(banner.contains("AtomChatAppearance.drawCard("), path);
             assertTrue(banner.contains("UiCards.drawNotificationBackdrop("), path);
             assertTrue(banner.contains("UiTokens.onAccent(config.accentColor)"), path);
             assertTrue(banner.contains("PanelOpenMotion.openScale(progress, style)"), path);

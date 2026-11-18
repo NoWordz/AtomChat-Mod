@@ -35,11 +35,12 @@ class BottomChromeDotsTest {
                 // Old HEAD layering: chat shadow + dots -> body -> plate/details;
                 // nav dots -> body -> nav shadow + plate/details.
                 Canvas expected=reference.getCanvas();expected.clear(0xFF414851);
-                if(mode==BottomChromeTransition.Mode.CHAT)shadow(expected,bar,UiTokens.shellChromeRadius());
-                DotTexture.drawEdge(expected,bar,UiTokens.shellChromeRadius(),true,AtomChatConfig.get().textSecondaryColor);
+                float radius=UiTokens.shellChromeRadius(AtomChatAppearance.theme());
+                if(mode==BottomChromeTransition.Mode.CHAT)shadow(expected,bar,radius);
+                DotTexture.drawEdge(expected,bar,radius,true,AtomChatConfig.get().textSecondaryColor);
                 realBody(expected,bar);
-                if(mode==BottomChromeTransition.Mode.NAV)shadow(expected,bar,UiTokens.shellChromeRadius());
-                face(expected,bar,UiTokens.shellChromeRadius());
+                if(mode==BottomChromeTransition.Mode.NAV)shadow(expected,bar,radius);
+                face(expected,bar,radius);
                 actual.getCanvas().clear(0xFF414851);
                 backdrop(chrome,actual.getCanvas());realBody(actual.getCanvas(),bar);chrome.draw(actual.getCanvas(),c->{});
                 save(actual,mode+"-dots-restored.png");save(reference,mode+"-dots-old-reference.png");
@@ -64,7 +65,7 @@ class BottomChromeDotsTest {
             for(long now:new long[]{1310,1370,1450,1550}) {
                 chrome.beginFrame(BottomChromeTransition.Mode.HIDDEN,CHAT,NAV,now,true);
                 var shape=chrome.paintedShape();var bar=chrome.paintedRect();
-                float radius=Math.min(UiTokens.shellChromeRadius(),Math.min(bar.w(),bar.h())/2);
+                float radius=Math.min(UiTokens.shellChromeRadius(AtomChatAppearance.theme()),Math.min(bar.w(),bar.h())/2);
                 actual.getCanvas().clear(0xFF414851);backdrop(chrome,actual.getCanvas());chrome.draw(actual.getCanvas(),c->updates.incrementAndGet());
                 expected.getCanvas().clear(0xFF414851);
                 // Unbounded DOT layer catches clipping. Keep the shadow's device
@@ -97,12 +98,13 @@ class BottomChromeDotsTest {
         catch(NoSuchMethodException missingInDeployedVersion) { }
     }
     private static void realBody(Canvas canvas,UiLayout.Rect bar) {
-        com.atom.lib.design.atomchat.UiCards.drawCard(canvas,65,bar.y()-UiTokens.MESSAGE_DOT_DEPTH,170,30,UiTokens.settingsRowRadius(),0);
+        AtomChatAppearance.drawCard(canvas,65,bar.y()-UiTokens.MESSAGE_DOT_DEPTH,170,30,
+                UiTokens.settingsRowRadius(AtomChatAppearance.theme()),0);
         // A production chat bubble occupies part of the dot band too.
         com.atom.chat.render.ChatBubble.draw(canvas,270,bar.y()-30,180,22,AtomChatConfig.BubbleStyle.CORNER,false,0xFF67758A);
     }
     private static void shadow(Canvas canvas,UiLayout.Rect bar,float radius){SkiaDraw.drawChromeShadow(canvas,bar.x(),bar.y(),bar.w(),bar.h(),radius);}
-    private static void face(Canvas canvas,UiLayout.Rect bar,float radius){SkiaDraw.drawRoundedRect(canvas,bar.x(),bar.y(),bar.w(),bar.h(),radius,UiTokens.cardFill());ChromeMaterial.drawDetails(canvas,bar,radius);}
+    private static void face(Canvas canvas,UiLayout.Rect bar,float radius){SkiaDraw.drawRoundedRect(canvas,bar.x(),bar.y(),bar.w(),bar.h(),radius,UiTokens.cardFill(AtomChatAppearance.theme()));ChromeMaterial.drawDetails(canvas,bar,radius);}
     private static byte[] pixels(Surface surface){try(var bitmap=new Bitmap()){bitmap.allocN32Pixels(560,620);assertTrue(surface.readPixels(bitmap,0,0));return bitmap.readPixels();}}
     private static void save(Surface surface,String name)throws Exception{
         Path dir=Path.of(System.getProperty("atomchat.repoRoot","../.."),".work/v0.7.0-feedback/screenshots");Files.createDirectories(dir);

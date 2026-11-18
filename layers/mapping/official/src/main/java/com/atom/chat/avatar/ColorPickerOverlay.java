@@ -1,5 +1,6 @@
 package com.atom.chat.avatar;
 
+import com.atom.chat.ui.AtomChatAppearance;
 import com.atom.chat.font.FontManager;
 import com.atom.chat.settings.SettingsColor;
 import com.atom.lib.design.atomchat.SkiaDraw;
@@ -445,7 +446,7 @@ public final class ColorPickerOverlay {
             Rect sv = svRect(panel);
             canvas.save();
             SkiaDraw.clip(canvas, sv.getLeft(), sv.getTop(), sv.getWidth(), sv.getHeight(),
-                    UiTokens.radius(8));
+                    UiTokens.radius(8, AtomChatAppearance.theme()));
             int base = ColorUtil.hsvToRgb(hue, 1.0F, 1.0F);
             try (Paint p = new Paint().setColor(base).setAntiAlias(true)) {
                 canvas.drawRect(sv, p);
@@ -481,7 +482,7 @@ public final class ColorPickerOverlay {
             Rect hueBar = hueRect(panel);
             canvas.save();
             SkiaDraw.clip(canvas, hueBar.getLeft(), hueBar.getTop(), hueBar.getWidth(), hueBar.getHeight(),
-                    UiTokens.radius(7));
+                    UiTokens.radius(7, AtomChatAppearance.theme()));
             try (Paint p = new Paint().setAntiAlias(true);
                  var sh = Shader.makeLinearGradient(hueBar.getLeft(), 0, hueBar.getRight(), 0, rainbow())) {
                 p.setShader(sh);
@@ -506,7 +507,7 @@ public final class ColorPickerOverlay {
             float iw = inputW(panel);
             float icy = btnCy(panel);
             float ih = s(30);
-            float inputRadius = UiTokens.radius(ih / (2.0F * UiTokens.SCALE));
+            float inputRadius = UiTokens.radius(ih / (2.0F * UiTokens.SCALE), AtomChatAppearance.theme());
             SkiaDraw.drawRoundedRect(canvas, ix, icy - ih / 2.0F, iw, ih, inputRadius,
                     Color.makeARGB((int) (0.5F * alpha), 255, 255, 255));
             if (inputFocused) {

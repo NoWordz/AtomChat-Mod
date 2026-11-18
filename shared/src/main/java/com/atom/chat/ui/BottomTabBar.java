@@ -151,10 +151,10 @@ public final class BottomTabBar {
 
     private void renderBar(Canvas canvas, UiLayout.Rect bar, int selectedIndex,
                            int textPrimary, int accent) {
-        SkiaDraw.drawChromeShadow(canvas, bar.x(), bar.y(), bar.w(), bar.h(), UiTokens.shellChromeRadius());
+        SkiaDraw.drawChromeShadow(canvas, bar.x(), bar.y(), bar.w(), bar.h(), UiTokens.shellChromeRadius(AtomChatAppearance.theme()));
         SkiaDraw.drawRoundedRect(canvas, bar.x(), bar.y(), bar.w(), bar.h(),
-                UiTokens.shellChromeRadius(), UiTokens.cardFill());
-        com.atom.chat.render.ChromeMaterial.drawDetails(canvas, bar, UiTokens.shellChromeRadius());
+                UiTokens.shellChromeRadius(AtomChatAppearance.theme()), UiTokens.cardFill(AtomChatAppearance.theme()));
+        com.atom.chat.render.ChromeMaterial.drawDetails(canvas, bar, UiTokens.shellChromeRadius(AtomChatAppearance.theme()));
 
         renderContents(canvas, bar, selectedIndex, textPrimary, accent);
     }
@@ -169,7 +169,7 @@ public final class BottomTabBar {
         float inset = UiTokens.TAB_EDGE_PAD;
         float capsuleH = bar.h() - inset * 2.0F;
         float capsuleW = cellWidth - inset * 2.0F;
-        float radius = UiTokens.insetRadius(UiTokens.shellChromeRadius(), inset, capsuleW, capsuleH);
+        float radius = UiTokens.insetRadius(UiTokens.shellChromeRadius(AtomChatAppearance.theme()), inset, capsuleW, capsuleH);
 
         // The indicator IS the selected cell index, animated: it carries the
         // fractional slide between cells, so the pill is placed from it directly
@@ -185,12 +185,12 @@ public final class BottomTabBar {
         canvas.save();
         applyBounce(canvas, tabScale[selectedIndex].scale(), capsuleCenterX, barCenterY);
         SkiaDraw.drawRoundedRect(canvas, capsuleX, bar.y() + inset, capsuleW, capsuleH, radius,
-                UiTokens.accentFill());
+                UiTokens.accentFill(AtomChatAppearance.theme()));
         canvas.restore();
 
         for (int i = 0; i < 3; i++) {
             ClickRipples.region(bar.x() + cellWidth * i + inset, bar.y() + inset, capsuleW, capsuleH,
-                    radius, i == selectedIndex ? UiTokens.accentFill() : UiTokens.cardFill());
+                    radius, i == selectedIndex ? UiTokens.accentFill(AtomChatAppearance.theme()) : UiTokens.cardFill(AtomChatAppearance.theme()));
             float cellCenterX = bar.x() + cellWidth * (i + 0.5F);
             float cellCenterY = bar.y() + bar.h() / 2.0F;
             float scale = tabScale[i].scale();
@@ -204,13 +204,13 @@ public final class BottomTabBar {
             if (i != selectedIndex && tabHover[i] > 0.01F) {
                 float x = bar.x() + cellWidth * i + inset;
                 SkiaDraw.drawRoundedRect(canvas, x, bar.y() + inset, capsuleW, capsuleH, radius,
-                        UiTokens.cardHover(tabHover[i]));
+                        UiTokens.cardHover(tabHover[i], AtomChatAppearance.theme()));
             }
 
             // The selected glyph sits on the accent capsule, so it takes what
             // reads against the accent rather than the panel's text colour.
             int iconColor = i == selectedIndex
-                    ? UiTokens.onAccent(UiTokens.accentFill()) : textPrimary;
+                    ? UiTokens.onAccent(UiTokens.accentFill(AtomChatAppearance.theme())) : textPrimary;
             drawIconCentered(canvas, ICONS[i], cellCenterX, cellCenterY,
                     UiTokens.TAB_ICON_SIZE, iconColor);
 

@@ -218,7 +218,7 @@ public final class ScrollSyncService {
                 // polarity family as the popups; hover lifts the grey a notch.
                 int bg = DrawPrimitives.lerpArgb(MenuPopup.SURFACE_COLOR,
                         Color.makeARGB(245, 70, 76, 90), jumpLatestHover);
-                float fabRadius = UiTokens.radius(size / (2.0F * UiTokens.SCALE));
+                float fabRadius = UiTokens.radius(size / (2.0F * UiTokens.SCALE), AtomChatAppearance.theme());
                 com.atom.chat.render.SoftShadow.drawJumpSurface(canvas, x, y, size, fabRadius, bg);
                 // Glyph pinned white like the pill itself: the pill is fixed dark,
                 // so a themed text colour would go dark-on-dark on light themes.

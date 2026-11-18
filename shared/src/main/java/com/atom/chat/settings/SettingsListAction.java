@@ -15,7 +15,7 @@ import io.github.humbleui.skija.Path;
 public final class SettingsListAction {
     public static final float HEIGHT=UiTokens.s(28); // bare-value: SettingsSectionPage.drawBlocked action height
     private static final float PAD=UiTokens.s(18); // bare-value: drawBlocked text-width padding
-    public static final float RADIUS=UiTokens.radius(8); // bare-value: drawBlocked action radius
+    public static final float RADIUS=UiTokens.radius(8, AtomChatAppearance.theme()); // bare-value: drawBlocked action radius
     private final PressScale scale=PressScale.bounce();
     private float hover,pulse;
     public static float width(String label){return SkiaFontRenderer.getStringWidth(FontManager.font(UiTokens.FONT_QUOTE),label)+PAD;}
@@ -30,8 +30,8 @@ public final class SettingsListAction {
         scale.begin(canvas,rect.x()+rect.w()/2,rect.y()+rect.h()/2);
         try{
             SkiaDraw.drawRoundedRect(canvas,rect.x(),rect.y(),rect.w(),rect.h(),RADIUS,
-                    UiTokens.withAlpha(selected?c.accentColor:UiTokens.cardCutout(),255*opacity));
-            if(hover>.01f)SkiaDraw.drawRoundedRect(canvas,rect.x(),rect.y(),rect.w(),rect.h(),RADIUS,UiTokens.cardHover(hover));
+                    UiTokens.withAlpha(selected?c.accentColor:UiTokens.cardCutout(AtomChatAppearance.theme()),255*opacity));
+            if(hover>.01f)SkiaDraw.drawRoundedRect(canvas,rect.x(),rect.y(),rect.w(),rect.h(),RADIUS,UiTokens.cardHover(hover, AtomChatAppearance.theme()));
             int color=UiTokens.withAlpha(textColor(selected,danger,enabled),255*opacity);
             if(icon==null&&rotation!=0){
                 // Sorting uses the existing filled settings fold chevron, not a rotated back/navigation icon.

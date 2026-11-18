@@ -38,7 +38,7 @@ class HostingToggleComponentTest {
         byte[] b=ContractCodec.encode(d);return ContractRegistry.load(b,ContractRegistry.manifest(b,b),Set.of(d.profile())).page("hosting");
     }
     static StrictPage.Content content(AtomicBoolean backend){return new StrictPage.Content(Map.of("title",new StrictPage.Text("Hosting"),"description",new StrictPage.Text("Keep the existing settings language"),"value",new StrictPage.BooleanInput(backend.get(),value->{backend.set(value);return true;})),true);}
-    static Map<String,Boolean> states(){return Map.of("decorativeMotion",true,"lightCard",ThemeService.colorIsLight(UiTokens.cardCutout()),"feedbackEnabled",true);}
+    static Map<String,Boolean> states(){return Map.of("decorativeMotion",true,"lightCard",ThemeService.colorIsLight(UiTokens.cardCutout(AtomChatAppearance.theme())),"feedbackEnabled",true);}
     @Test void originalPressCommitReachesControlledSoundAndDisabledOrMutedActionsDoNotPlay(){
         var page=definition();var backend=new AtomicBoolean();var data=content(backend);var descriptor=StrictPage.builder(page).component("hosting",page.recipe("toggle"),data).build();var output=new ArrayList<UiSoundIntent>();
         var sink=new UiSoundSink(){public boolean supports(String channel){return channel.equals("MASTER")&&(hostOutput==null||hostOutput.supports(channel));}public boolean available(String resource){return resource.equals("atomchat:feedback_button")&&(hostOutput==null||hostOutput.available(resource));}public void play(UiSoundIntent event){output.add(event);if(hostOutput!=null)hostOutput.play(event);}};

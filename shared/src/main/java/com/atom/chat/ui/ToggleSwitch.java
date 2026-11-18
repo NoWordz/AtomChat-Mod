@@ -145,7 +145,7 @@ public final class ToggleSwitch {
      *                {@link #DISABLED_OPACITY}; input is handled upstream
      */
     public void render(Canvas canvas, float x, float y, int accent, boolean enabled) {
-        paint(canvas,x,y,accent,enabled,trackOff(),UiTokens.radius(UiTokens.SWITCH_H/(2*UiTokens.SCALE)),UiTokens.handleRadius(UiTokens.SWITCH_KNOB));
+        paint(canvas,x,y,accent,enabled,trackOff(),UiTokens.radius(UiTokens.SWITCH_H/(2*UiTokens.SCALE), AtomChatAppearance.theme()),UiTokens.handleRadius(UiTokens.SWITCH_KNOB, AtomChatAppearance.theme()));
     }
     /** Immutable per-view appearance; the contracted path never reads a process-wide current palette. */
     public void render(Canvas canvas,float x,float y,Appearance appearance){
@@ -181,7 +181,7 @@ public final class ToggleSwitch {
      * Pending in-game visual acceptance, tuned blind.
      */
     private static int trackOff() {
-        return trackOff(ThemeService.colorIsLight(UiTokens.cardCutout()));
+        return trackOff(ThemeService.colorIsLight(UiTokens.cardCutout(AtomChatAppearance.theme())));
     }
 
     /**

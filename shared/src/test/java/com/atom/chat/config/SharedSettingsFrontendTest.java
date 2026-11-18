@@ -105,9 +105,10 @@ class SharedSettingsFrontendTest {
             dt=now>0?Math.max(1,Math.min(50,time-now)):16;now=time;Canvas canvas=surface.getCanvas();int saved=canvas.getSaveCount();
             // A shared nonuniform fixture exposes the actual translucent surfaces; it is not a game background.
             try(var shader=Shader.makeLinearGradient(0,0,600,900,new int[]{0xff687f94,0xff64767b,0xff253947});var paint=new Paint().setShader(shader)){canvas.drawRect(io.github.humbleui.types.Rect.makeXYWH(0,0,layout.panelW+40,900),paint);}
-            SoftShadow.drawPanel(canvas,layout.panelX,layout.panelY,layout.panelW,layout.panelH,UiTokens.panelRadius());
+            float panelRadius=UiTokens.panelRadius(AtomChatAppearance.theme());
+            SoftShadow.drawPanel(canvas,layout.panelX,layout.panelY,layout.panelW,layout.panelH,panelRadius);
             var cfg=AtomChatConfig.get();int tint=PanelBackground.tintFor(cfg.blurEnabled,false,cfg.panelBgColor,cfg.panelOpacity);
-            SkiaDraw.drawRoundedRect(canvas,layout.panelX,layout.panelY,layout.panelW,layout.panelH,UiTokens.panelRadius(),tint);ShellHeader.drawBackdrop(canvas,layout.header);
+            SkiaDraw.drawRoundedRect(canvas,layout.panelX,layout.panelY,layout.panelW,layout.panelH,panelRadius,tint);ShellHeader.drawBackdrop(canvas,layout.header);
             composite.beginFrame(time);if(composite.consumeArrivalEvent()){if(admin)server.markEntered(composite.entrance().enteredAtMs());else settings.markEntered(composite.entrance().enteredAtMs());}
             ripples.begin(this);composite.drawArrivingFrame(canvas,layout,(int)mx,(int)my,mx,my,time);ripples.end(canvas,dt);PanelBackground.drawBezel(canvas,layout.rect());
             assertEquals(saved,canvas.getSaveCount());try(var bitmap=new Bitmap()){bitmap.allocN32Pixels((int)layout.panelW+40,900);assertTrue(surface.readPixels(bitmap,0,0));return bitmap.readPixels();}

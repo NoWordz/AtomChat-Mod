@@ -203,13 +203,13 @@ public final class ReactionChips {
             float symbolScale = lerp(SYMBOL_SCALE_START, 1.0F, UiSpring.messageEase(chip.symbolEnter()));
             float symbolAlpha = Easing.easeOutQuad(chip.symbolEnter()) * (1.0F - exitFade);
 
-            int fill = mine ? UiTokens.accentFill() : UiTokens.SKIN_PANEL;
+            int fill = mine ? UiTokens.accentFill(AtomChatAppearance.theme()) : UiTokens.SKIN_PANEL;
             float bx = cx + cell.w() / 2.0F;
             canvas.save();
             try {
                 scaleAbout(canvas, capsuleScale, bx, cyMid);
                 SkiaDraw.drawRoundedRect(canvas, cx, cy, cell.w(), height(),
-                        UiTokens.radius(UiTokens.REACTION_RADIUS), fade(fill, alpha));
+                        UiTokens.radius(UiTokens.REACTION_RADIUS, AtomChatAppearance.theme()), fade(fill, alpha));
             } finally { canvas.restore(); }
 
             float ex = cx + UiTokens.REACTION_EMOJI_CENTER;
@@ -304,7 +304,7 @@ public final class ReactionChips {
             MenuPopup.drawSurface(canvas, left, top, w, height());
             canvas.save();
             try {
-                SkiaDraw.clip(canvas, left, top, w, height(), UiTokens.radius(UiTokens.REACTION_RADIUS));
+                SkiaDraw.clip(canvas, left, top, w, height(), UiTokens.radius(UiTokens.REACTION_RADIUS, AtomChatAppearance.theme()));
                 SkiaFontRenderer.drawText(canvas, font, label, left + UiTokens.REACTION_TOOLTIP_INSET,
                         SkiaFontRenderer.centerBaselineY(font, top + height() / 2.0F), 0xFFFFFFFF);
             } finally { canvas.restore(); }

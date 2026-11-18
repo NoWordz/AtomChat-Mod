@@ -1,5 +1,6 @@
 package com.atom.chat.settings;
 
+import com.atom.chat.ui.AtomChatAppearance;
 import com.atom.chat.config.AtomChatConfig;
 import com.atom.chat.font.FontManager;
 import com.atom.chat.render.PreviewLanguage;
@@ -8,7 +9,6 @@ import com.atom.chat.ui.UiLayout;
 import com.atom.lib.AtomLibRuntime;
 import com.atom.lib.design.atomchat.AppIcons;
 import com.atom.lib.design.atomchat.SkiaDraw;
-import com.atom.lib.design.atomchat.UiCards;
 import com.atom.lib.design.atomchat.UiTokens;
 import com.atom.lib.font.FontId;
 import com.atom.lib.font.FontRegistry;
@@ -343,7 +343,7 @@ class SettingsHomeReplicationTest {
         float y = border.y();
         float w = border.width();
         float h = border.height();
-        UiCards.drawCard(canvas, x, y, w, h, UiTokens.settingsTileRadius(), 0F);
+        AtomChatAppearance.drawCard(canvas, x, y, w, h, UiTokens.settingsTileRadius(AtomChatAppearance.theme()), 0F);
 
         // The centred group: glyph above, single label below — the same
         // arithmetic SettingsHomePage.drawTile runs, so only the stack differs.

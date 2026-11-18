@@ -1,6 +1,7 @@
 package com.atom.chat.render;
 
 
+import com.atom.chat.ui.AtomChatAppearance;
 import com.atom.lib.design.atomchat.SkiaDraw;
 import com.atom.chat.config.AtomChatConfig;
 import com.atom.chat.ui.Animations;
@@ -214,7 +215,7 @@ public final class DrawPrimitives {
      */
     public void drawIconButton(Canvas canvas, float bx, float by, int id, float vmx, float vmy) {
         com.atom.chat.ui.ClickRipples.region(bx, by, UiTokens.ACTION_BUTTON_SIZE, UiTokens.ACTION_BUTTON_SIZE,
-                UiTokens.radius(8), UiTokens.cardFill());
+                UiTokens.radius(8, AtomChatAppearance.theme()), UiTokens.cardFill(AtomChatAppearance.theme()));
         float frameDt = host.frameDt();
         boolean hover = inputButtonHovered(bx, by, UiTokens.ACTION_BUTTON_SIZE,
                 UiTokens.ACTION_BUTTON_SIZE, vmx, vmy);
@@ -246,7 +247,7 @@ public final class DrawPrimitives {
             SkiaDraw.drawRoundedRect(canvas, bx + inset, by + inset,
                     UiTokens.ACTION_BUTTON_SIZE - inset * 2.0F,
                     UiTokens.ACTION_BUTTON_SIZE - inset * 2.0F,
-                    UiTokens.radius(8), UiTokens.cardHover(wash));
+                    UiTokens.radius(8, AtomChatAppearance.theme()), UiTokens.cardHover(wash, AtomChatAppearance.theme()));
         }
         // Active states take the accent colour: the emoji button while its
         // panel is open (a toggle), any button for a moment after a press.
@@ -272,13 +273,13 @@ public final class DrawPrimitives {
         if (!enabled) {
             com.atom.chat.ui.ClickRipples.block(new com.atom.chat.ui.UiLayout.Rect(bx, by, UiTokens.BUTTON_W, UiTokens.BUTTON_H));
             int dimAccent = (accent() & 0xFFFFFF) | 0x55000000;
-            SkiaDraw.drawRoundedRect(canvas, bx, by, UiTokens.BUTTON_W, UiTokens.BUTTON_H, UiTokens.radius(9), dimAccent);
+            SkiaDraw.drawRoundedRect(canvas, bx, by, UiTokens.BUTTON_W, UiTokens.BUTTON_H, UiTokens.radius(9, AtomChatAppearance.theme()), dimAccent);
             drawIcon(canvas, ICON_SEND_PATH, bx, by, UiTokens.BUTTON_W, UiTokens.BUTTON_H,
                     (UiTokens.onAccent(accent()) & 0xFFFFFF) | 0x66000000);
             return;
         }
         com.atom.chat.ui.ClickRipples.region(bx, by, UiTokens.BUTTON_W, UiTokens.BUTTON_H,
-                UiTokens.radius(8), UiTokens.accentFill());
+                UiTokens.radius(8, AtomChatAppearance.theme()), UiTokens.accentFill(AtomChatAppearance.theme()));
         float frameDt = host.frameDt();
         boolean hover = inputButtonHovered(bx, by, UiTokens.BUTTON_W, UiTokens.BUTTON_H, vmx, vmy);
         boolean pressed = buttonPressed(2);
@@ -294,7 +295,7 @@ public final class DrawPrimitives {
             canvas.scale(scale.scale(), scale.scale());
             canvas.translate(-(bx + UiTokens.BUTTON_W / 2.0F), -(by + UiTokens.BUTTON_H / 2.0F));
         }
-        float buttonRadius = UiTokens.radius(9);
+        float buttonRadius = UiTokens.radius(9, AtomChatAppearance.theme());
         SkiaDraw.drawRoundedRect(canvas, bx, by, UiTokens.BUTTON_W, UiTokens.BUTTON_H, buttonRadius, accent());
         float overlay = buttonHover[2] * 55.0F + (pressed ? 90.0F : 0.0F);
         if (overlay > 0.5F) {

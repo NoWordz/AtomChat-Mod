@@ -1,10 +1,10 @@
 package com.atom.chat.notification;
 
+import com.atom.chat.ui.AtomChatAppearance;
 import com.atom.chat.config.AtomChatConfig;
 import com.atom.chat.font.FontManager;
 import com.atom.lib.design.atomchat.SkiaDraw;
 import com.atom.chat.render.SkiaFontRenderer;
-import com.atom.lib.design.atomchat.UiCards;
 import com.atom.chat.ui.UiLayout;
 import com.atom.lib.design.atomchat.UiTokens;
 import io.github.humbleui.skija.Canvas;
@@ -74,7 +74,7 @@ public final class NotificationHudEditor {
         var handle=layout.handle();
         SkiaDraw.drawRoundedRect(canvas,handle.x(),handle.y(),handle.w(),handle.h(),UiTokens.EDGE_CONTROL_INSET,accent);
         var toolbar=layout.toolbar();
-        int fill=UiTokens.floatSurfaceFill(), ink=UiTokens.onFloatSurface(fill);
+        int fill=UiTokens.floatSurfaceFill(AtomChatAppearance.theme()), ink=UiTokens.onFloatSurface(fill);
         com.atom.chat.ui.ConfirmationSurface.surface(canvas,toolbar,progress);
         fill=0xFF20242E;ink=0xFFFFFFFF;
         String title=text("title")+" · "+translate.apply(model.anchor().key())+" · "+Math.round(model.scale()*100)+"%";

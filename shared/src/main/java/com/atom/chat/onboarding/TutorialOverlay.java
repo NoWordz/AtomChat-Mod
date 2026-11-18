@@ -1,5 +1,6 @@
 package com.atom.chat.onboarding;
 
+import com.atom.chat.ui.AtomChatAppearance;
 import com.atom.chat.config.AtomChatConfig;
 import com.atom.chat.font.FontManager;
 import com.atom.chat.render.SkiaFontRenderer;
@@ -47,7 +48,7 @@ public final class TutorialOverlay {
             default->layout.list;
         };
         var screen=viewport==null?panel:viewport;
-        var contour=customShape==null?RRect.makeXYWH(target.x(),target.y(),target.w(),target.h(),UiTokens.settingsRowRadius()):customShape.contour();
+        var contour=customShape==null?RRect.makeXYWH(target.x(),target.y(),target.w(),target.h(),UiTokens.settingsRowRadius(AtomChatAppearance.theme())):customShape.contour();
         var moving = focus.update(new TutorialAnchor(target, contour), dt, Animations.enabled());
         contour = moving.contour();
         float pad=UiTokens.SETTINGS_ROW_PAD,line=UiTokens.DIALOG_LINE_HEIGHT;
@@ -63,7 +64,7 @@ public final class TutorialOverlay {
         try {
             try(var shade=new Paint().setColor(0x8808090E).setAlphaf(progress*.53f)) {
                 int mask=canvas.save();
-                canvas.clipRRect(RRect.makeXYWH(panel.x(),panel.y(),panel.w(),panel.h(),UiTokens.panelRadius()),ClipMode.INTERSECT,true);
+                canvas.clipRRect(RRect.makeXYWH(panel.x(),panel.y(),panel.w(),panel.h(),UiTokens.panelRadius(AtomChatAppearance.theme())),ClipMode.INTERSECT,true);
                 canvas.clipRRect(contour,ClipMode.DIFFERENCE,true);
                 canvas.drawRect(io.github.humbleui.types.Rect.makeXYWH(panel.x(),panel.y(),panel.w(),panel.h()),shade);canvas.restoreToCount(mask);
             }

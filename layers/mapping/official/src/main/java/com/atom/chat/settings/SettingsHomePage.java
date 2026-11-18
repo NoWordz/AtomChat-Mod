@@ -1,5 +1,6 @@
 package com.atom.chat.settings;
 
+import com.atom.chat.ui.AtomChatAppearance;
 import com.atom.chat.font.FontManager;
 import com.atom.lib.design.atomchat.SkiaDraw;
 import com.atom.chat.nav.PageNavAxis;
@@ -8,7 +9,6 @@ import com.atom.chat.render.CardShadowReach;
 import com.atom.chat.ui.Animations;
 import com.atom.lib.design.atomchat.AppIcons;
 import com.atom.chat.ui.UiLayout;
-import com.atom.lib.design.atomchat.UiCards;
 import com.atom.chat.ui.PressScale;
 import com.atom.chat.ui.UiMotion;
 import com.atom.chat.ui.UiStagger;
@@ -211,8 +211,8 @@ public final class SettingsHomePage {
             scale.begin(canvas, tile.x() + tile.w() / 2.0F, tile.y() + tile.h() / 2.0F);
         }
         try {
-            UiCards.drawCard(canvas, tile.x(), tile.y(), tile.w(), tile.h(),
-                    UiTokens.settingsTileRadius(), hover);
+            AtomChatAppearance.drawCard(canvas, tile.x(), tile.y(), tile.w(), tile.h(),
+                    UiTokens.settingsTileRadius(AtomChatAppearance.theme()), hover);
 
             // One vertically centred group: glyph above, single label below. Both
             // are horizontally centred, so nothing in the tile depends on text

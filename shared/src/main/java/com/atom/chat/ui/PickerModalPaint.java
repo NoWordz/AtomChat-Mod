@@ -14,9 +14,9 @@ public final class PickerModalPaint {
     private static final float RADIUS = 14, SHADOW_BLUR = 8;
     private PickerModalPaint() { }
     public static int secondaryButtonColor() { return 0xFF4B4F58; }
-    public static float radius() { return UiTokens.radius(RADIUS); }
+    public static float radius() { return UiTokens.radius(RADIUS, AtomChatAppearance.theme()); }
     public static void backdrop(Canvas canvas, UiLayout.Rect panel, float progress) {
-        SkiaDraw.drawRoundedRect(canvas,panel.x(),panel.y(),panel.w(),panel.h(),UiTokens.modalBackdropRadius(),
+        SkiaDraw.drawRoundedRect(canvas,panel.x(),panel.y(),panel.w(),panel.h(),UiTokens.modalBackdropRadius(AtomChatAppearance.theme()),
                 Color.makeARGB((int)(200*progress),8,9,14));
     }
     public static void surface(Canvas canvas, UiLayout.Rect box, float progress) {
@@ -39,7 +39,7 @@ public final class PickerModalPaint {
         SkiaDraw.drawRoundedRect(canvas,box.x(),box.y(),box.w(),box.h(),radius(),
                 Color.makeARGB((int)(.96F*alpha),32,36,46));
     }
-    public static float buttonRadius(UiLayout.Rect rect) { return UiTokens.radius(rect.h()/(2*UiTokens.SCALE)); }
+    public static float buttonRadius(UiLayout.Rect rect) { return UiTokens.radius(rect.h()/(2*UiTokens.SCALE), AtomChatAppearance.theme()); }
     public static void buttonFace(Canvas canvas,UiLayout.Rect rect,float hover,int alpha,boolean destructive) {
         int fill=destructive?UiTokens.dangerColor():secondaryButtonColor();
         SkiaDraw.drawRoundedRect(canvas,rect.x(),rect.y(),rect.w(),rect.h(),buttonRadius(rect),

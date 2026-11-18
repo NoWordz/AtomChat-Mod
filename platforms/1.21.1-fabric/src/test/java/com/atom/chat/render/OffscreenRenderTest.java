@@ -2,6 +2,7 @@ package com.atom.chat.render;
 
 
 
+import com.atom.chat.ui.AtomChatAppearance;
 import com.atom.lib.design.atomchat.SkiaDraw;
 import com.atom.lib.design.atomchat.AppIcons;
 import com.atom.chat.chat.ChatMessage;
@@ -497,18 +498,18 @@ class OffscreenRenderTest {
                             SkiaFontRenderer.drawTextCentered(canvas,FontManager.font(UiTokens.FONT_NAME),
                                     width+" · "+(row==0?"浅色":"深色"),width/2F,-18,0xFFFFFFFF);
                             var layout=UiLayout.of(0,0,width,750);
-                            SkiaDraw.drawRoundedRect(canvas,0,0,width,750,UiTokens.panelRadius(),cfg.panelBgColor);
-                            SkiaDraw.clip(canvas,0,0,width,750,UiTokens.panelRadius());
+                            SkiaDraw.drawRoundedRect(canvas,0,0,width,750,UiTokens.panelRadius(AtomChatAppearance.theme()),cfg.panelBgColor);
+                            SkiaDraw.clip(canvas,0,0,width,750,UiTokens.panelRadius(AtomChatAppearance.theme()));
                             com.atom.chat.ui.ShellHeader.drawBackdrop(canvas,layout.header);
                             var bar=layout.inputBar;
-                            DotTexture.drawEdge(canvas,bar,UiTokens.chromeRadius(),true,cfg.textSecondaryColor);
+                            DotTexture.drawEdge(canvas,bar,UiTokens.chromeRadius(AtomChatAppearance.theme()),true,cfg.textSecondaryColor);
                             var ctor=MessageListView.class.getDeclaredConstructor(MessageListView.Host.class,MessageListView.ImageLookup.class);
                             ctor.setAccessible(true);
                             var view=ctor.newInstance(new OffscreenHost(openedAfter(history)),(MessageListView.ImageLookup)(url,visible)->image);
                             try {draw(view,layout,history,new ScrollController()).accept(canvas);}finally{view.dispose();}
                             com.atom.chat.ui.ShellHeader.render(canvas,layout.header,"世界聊天",false,null,0F,cfg.textPrimaryColor);
-                            SkiaDraw.drawRoundedRect(canvas,bar.x(),bar.y(),bar.w(),bar.h(),UiTokens.chromeRadius(),UiTokens.cardFill());
-                            ChromeMaterial.drawDetails(canvas,bar,UiTokens.chromeRadius());
+                            SkiaDraw.drawRoundedRect(canvas,bar.x(),bar.y(),bar.w(),bar.h(),UiTokens.chromeRadius(AtomChatAppearance.theme()),UiTokens.cardFill(AtomChatAppearance.theme()));
+                            ChromeMaterial.drawDetails(canvas,bar,UiTokens.chromeRadius(AtomChatAppearance.theme()));
                             SkiaFontRenderer.drawTextCentered(canvas,FontManager.font(UiTokens.FONT_NAME),"输入消息…",bar.x()+bar.w()/2,bar.y()+bar.h()/2,cfg.textSecondaryColor);
                         } finally {canvas.restore();}
                         x+=width+20;
@@ -535,17 +536,17 @@ class OffscreenRenderTest {
                     String label=col==0?"空会话":col==1?"表情浮层":"快捷短语浮层";
                     SkiaFontRenderer.drawTextCentered(c,FontManager.font(UiTokens.FONT_NAME),label,250,-20,0xFFFFFFFF);
                     var layout=UiLayout.of(0,0,500,800);
-                    SkiaDraw.drawRoundedRect(c,0,0,500,800,UiTokens.panelRadius(),cfg.panelBgColor);
-                    SkiaDraw.clip(c,0,0,500,800,UiTokens.panelRadius());
+                    SkiaDraw.drawRoundedRect(c,0,0,500,800,UiTokens.panelRadius(AtomChatAppearance.theme()),cfg.panelBgColor);
+                    SkiaDraw.clip(c,0,0,500,800,UiTokens.panelRadius(AtomChatAppearance.theme()));
                     com.atom.chat.ui.ShellHeader.drawBackdrop(c,layout.header);
                     if(col==0) {
                         var view=new MessageListView(new OffscreenHost(0));
                         try{draw(view,layout,List.of(),new ScrollController()).accept(c);}finally{view.dispose();}
                     }
                     var bar=layout.inputBar;
-                    DotTexture.drawEdge(c,bar,UiTokens.chromeRadius(),true,cfg.textSecondaryColor);
-                    SkiaDraw.drawRoundedRect(c,bar.x(),bar.y(),bar.w(),bar.h(),UiTokens.chromeRadius(),UiTokens.cardFill());
-                    ChromeMaterial.drawDetails(c,bar,UiTokens.chromeRadius());
+                    DotTexture.drawEdge(c,bar,UiTokens.chromeRadius(AtomChatAppearance.theme()),true,cfg.textSecondaryColor);
+                    SkiaDraw.drawRoundedRect(c,bar.x(),bar.y(),bar.w(),bar.h(),UiTokens.chromeRadius(AtomChatAppearance.theme()),UiTokens.cardFill(AtomChatAppearance.theme()));
+                    ChromeMaterial.drawDetails(c,bar,UiTokens.chromeRadius(AtomChatAppearance.theme()));
                     com.atom.chat.ui.ShellHeader.render(c,layout.header,"世界聊天",false,null,0F,cfg.textPrimaryColor);
                     SkiaFontRenderer.drawTextCentered(c,FontManager.font(UiTokens.FONT_NAME),"输入消息…",bar.x()+bar.w()/2,bar.y()+bar.h()/2,cfg.textSecondaryColor);
                     if(col==1) {
@@ -587,19 +588,19 @@ class OffscreenRenderTest {
                     String label = names[col] + (row == 0 ? " · 调整前" : " · 调整后");
                     SkiaFontRenderer.drawTextCentered(canvas, FontManager.font(UiTokens.FONT_NAME),
                             label, 190, 24, 0xFFFFFFFF);
-                    SkiaDraw.drawRoundedRect(canvas, 10, 42, 360, 575, UiTokens.panelRadius(), cfg.panelBgColor);
-                    SkiaDraw.clip(canvas, 10, 42, 360, 575, UiTokens.panelRadius());
+                    SkiaDraw.drawRoundedRect(canvas, 10, 42, 360, 575, UiTokens.panelRadius(AtomChatAppearance.theme()), cfg.panelBgColor);
+                    SkiaDraw.clip(canvas, 10, 42, 360, 575, UiTokens.panelRadius(AtomChatAppearance.theme()));
                     UiLayout layout = UiLayout.of(10, 42, 360, 575);
                     com.atom.chat.ui.ShellHeader.drawBackdrop(canvas, layout.header);
                     com.atom.chat.ui.ShellHeader.render(canvas, layout.header, "世界聊天", false, null, 0F, cfg.textPrimaryColor);
                     var bar = layout.inputBar;
-                    SkiaDraw.drawChromeShadow(canvas, bar.x(), bar.y(), bar.w(), bar.h(), UiTokens.chromeRadius());
-                    DotTexture.drawEdge(canvas, bar, UiTokens.chromeRadius(), true, cfg.textSecondaryColor);
+                    SkiaDraw.drawChromeShadow(canvas, bar.x(), bar.y(), bar.w(), bar.h(), UiTokens.chromeRadius(AtomChatAppearance.theme()));
+                    DotTexture.drawEdge(canvas, bar, UiTokens.chromeRadius(AtomChatAppearance.theme()), true, cfg.textSecondaryColor);
                     MessageListView view = new MessageListView(new OffscreenHost(openedAfter(history)));
                     try { draw(view, layout, history, new ScrollController()).accept(canvas); }
                     finally { view.dispose(); }
-                    SkiaDraw.drawRoundedRect(canvas, bar.x(), bar.y(), bar.w(), bar.h(), UiTokens.chromeRadius(), UiTokens.cardFill());
-                    ChromeMaterial.drawDetails(canvas, bar, UiTokens.chromeRadius());
+                    SkiaDraw.drawRoundedRect(canvas, bar.x(), bar.y(), bar.w(), bar.h(), UiTokens.chromeRadius(AtomChatAppearance.theme()), UiTokens.cardFill(AtomChatAppearance.theme()));
+                    ChromeMaterial.drawDetails(canvas, bar, UiTokens.chromeRadius(AtomChatAppearance.theme()));
                     SkiaFontRenderer.drawTextCentered(canvas, FontManager.font(UiTokens.FONT_NAME), "输入消息…",
                             bar.x() + bar.w()/2F, bar.y() + bar.h()/2F, cfg.textSecondaryColor);
                 } finally { canvas.restore(); }
@@ -627,10 +628,10 @@ class OffscreenRenderTest {
                     Canvas canvas = surface.getCanvas();
                     canvas.clear(0xFF737B84);
                     int stack = canvas.getSaveCount();
-                    float inset = UiTokens.panelInset();
+                    float inset = UiTokens.panelInset(AtomChatAppearance.theme());
                     SkiaDraw.drawRoundedRect(canvas, layout.panelX + inset, layout.panelY + inset,
                             layout.panelW - inset * 2, layout.panelH - inset * 2,
-                            Math.max(0, UiTokens.panelRadius() - inset), cfg.panelBgColor);
+                            Math.max(0, UiTokens.panelRadius(AtomChatAppearance.theme()) - inset), cfg.panelBgColor);
                     canvas.save();
                     com.atom.chat.ui.PanelBackground.clipInterior(canvas, layout.rect());
                     com.atom.chat.ui.ShellHeader.drawBackdrop(canvas, layout.header);
@@ -640,8 +641,8 @@ class OffscreenRenderTest {
                     finally { view.dispose(); }
                     var bar = layout.inputBar;
                     SkiaDraw.drawRoundedRect(canvas, bar.x(), bar.y(), bar.w(), bar.h(),
-                            UiTokens.shellChromeRadius(), UiTokens.cardFill());
-                    ChromeMaterial.drawDetails(canvas, bar, UiTokens.shellChromeRadius());
+                            UiTokens.shellChromeRadius(AtomChatAppearance.theme()), UiTokens.cardFill(AtomChatAppearance.theme()));
+                    ChromeMaterial.drawDetails(canvas, bar, UiTokens.shellChromeRadius(AtomChatAppearance.theme()));
                     SkiaFontRenderer.drawTextCentered(canvas, FontManager.font(UiTokens.FONT_NAME), "输入聊天内容…",
                             bar.x() + bar.w()/2, bar.y() + bar.h()/2, cfg.textSecondaryColor);
                     canvas.restore();
@@ -680,19 +681,19 @@ class OffscreenRenderTest {
                         canvas.save();
                         try {
                             canvas.translate(column * 420F, 30F);
-                            SkiaDraw.drawRoundedRect(canvas, 10, 10, 400, 780, UiTokens.panelRadius(), cfg.panelBgColor);
-                            SkiaDraw.clip(canvas, 10, 10, 400, 780, UiTokens.panelRadius());
+                            SkiaDraw.drawRoundedRect(canvas, 10, 10, 400, 780, UiTokens.panelRadius(AtomChatAppearance.theme()), cfg.panelBgColor);
+                            SkiaDraw.clip(canvas, 10, 10, 400, 780, UiTokens.panelRadius(AtomChatAppearance.theme()));
                             UiLayout layout = UiLayout.of(10, 10, 400, 780);
                             com.atom.chat.ui.ShellHeader.drawBackdrop(canvas, layout.header);
                             com.atom.chat.ui.ShellHeader.render(canvas, layout.header, labels[column], false, null, 0F, cfg.textPrimaryColor);
                             UiLayout.Rect bar = layout.inputBar;
-                            SkiaDraw.drawChromeShadow(canvas, bar.x(), bar.y(), bar.w(), bar.h(), UiTokens.chromeRadius());
-                            DotTexture.drawEdge(canvas, bar, UiTokens.chromeRadius(), true, cfg.textSecondaryColor);
+                            SkiaDraw.drawChromeShadow(canvas, bar.x(), bar.y(), bar.w(), bar.h(), UiTokens.chromeRadius(AtomChatAppearance.theme()));
+                            DotTexture.drawEdge(canvas, bar, UiTokens.chromeRadius(AtomChatAppearance.theme()), true, cfg.textSecondaryColor);
                             MessageListView view = new MessageListView(new OffscreenHost(openedAfter(history)));
                             try { draw(view, layout, history, new ScrollController()).accept(canvas); }
                             finally { view.dispose(); }
-                            SkiaDraw.drawRoundedRect(canvas, bar.x(), bar.y(), bar.w(), bar.h(), UiTokens.chromeRadius(), UiTokens.cardFill());
-                            ChromeMaterial.drawDetails(canvas, bar, UiTokens.chromeRadius());
+                            SkiaDraw.drawRoundedRect(canvas, bar.x(), bar.y(), bar.w(), bar.h(), UiTokens.chromeRadius(AtomChatAppearance.theme()), UiTokens.cardFill(AtomChatAppearance.theme()));
+                            ChromeMaterial.drawDetails(canvas, bar, UiTokens.chromeRadius(AtomChatAppearance.theme()));
                             SkiaFontRenderer.drawTextCentered(canvas, FontManager.font(UiTokens.FONT_NAME), "输入消息…",
                                     bar.x() + bar.w() / 2F, bar.y() + bar.h() / 2F, cfg.textSecondaryColor);
                         } finally { canvas.restore(); }

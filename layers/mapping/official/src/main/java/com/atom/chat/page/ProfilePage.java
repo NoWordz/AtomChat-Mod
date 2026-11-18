@@ -1,5 +1,6 @@
 package com.atom.chat.page;
 
+import com.atom.chat.ui.AtomChatAppearance;
 import com.atom.chat.avatar.AvatarStore;
 import com.atom.chat.banner.BannerImage;
 import com.atom.chat.banner.BannerStore;
@@ -14,7 +15,6 @@ import com.atom.chat.render.SkiaFontRenderer;
 import com.atom.chat.render.CardShadowReach;
 import com.atom.chat.ui.Animations;
 import com.atom.lib.design.atomchat.AppIcons;
-import com.atom.lib.design.atomchat.UiCards;
 import com.atom.chat.ui.MenuPopup;
 import com.atom.chat.ui.UiLayout;
 import com.atom.chat.ui.PressScale;
@@ -396,13 +396,13 @@ public final class ProfilePage {
                 // white-90 wash was a light-theme-only habit that lost the theme
                 // colour on hover.
                 SkiaDraw.drawRoundedRect(canvas, button.x() + inset, button.y() + inset,
-                        button.w() - inset * 2.0F, button.h() - inset * 2.0F, UiTokens.radius(8),
-                        UiTokens.cardHover(alpha));
+                        button.w() - inset * 2.0F, button.h() - inset * 2.0F, UiTokens.radius(8, AtomChatAppearance.theme()),
+                        UiTokens.cardHover(alpha, AtomChatAppearance.theme()));
             }
             // The icon follows the secondary text ink (explicit user call): the
             // hue comes with the text colour setting, alpha only rebalances its
             // presence across the hover.
-            int iconColor = UiTokens.iconSecondary(210.0F + 45.0F * alpha);
+            int iconColor = UiTokens.iconSecondary(210.0F + 45.0F * alpha, AtomChatAppearance.theme());
             float cx = button.x() + button.w() / 2.0F;
             float cy = button.y() + button.h() / 2.0F;
             if (copied) {
@@ -1173,7 +1173,7 @@ public final class ProfilePage {
         if (banner.bottom() < layout.list.y() || banner.y() > layout.list.bottom()) {
             return;
         }
-        float radius = UiTokens.settingsTileRadius();
+        float radius = UiTokens.settingsTileRadius(AtomChatAppearance.theme());
         SkiaDraw.drawRoundedShadow(canvas, banner.x(), banner.y(), banner.w(), banner.h(),
                 radius, UiTokens.s(6), UiTokens.CARD_SHADOW);
         canvas.save();
@@ -1233,7 +1233,7 @@ public final class ProfilePage {
             canvas.restore();
         }
         SkiaDraw.drawEdgeHighlight(canvas, banner.x(), banner.y(), banner.w(), banner.h(),
-                radius, UiTokens.s(1.0F), UiTokens.hairline());
+                radius, UiTokens.s(1.0F), UiTokens.hairline(AtomChatAppearance.theme()));
     }
 
     /**
@@ -1243,7 +1243,7 @@ public final class ProfilePage {
      */
     private void drawBannerBadge(Canvas canvas, UiLayout layout, float scrollY) {
         UiLayout.Rect chip = bannerBadgeRect(layout, scrollY);
-        float chipRadius = UiTokens.radius(chip.h() / (2.0F * UiTokens.SCALE));
+        float chipRadius = UiTokens.radius(chip.h() / (2.0F * UiTokens.SCALE), AtomChatAppearance.theme());
         SkiaDraw.drawRoundedRect(canvas, chip.x(), chip.y(), chip.w(), chip.h(),
                 chipRadius, Color.makeARGB(215, 20, 22, 30));
         if (bannerHover > 0.01F) {
@@ -1309,7 +1309,7 @@ public final class ProfilePage {
             // swatches.
             SkiaDraw.drawRing(canvas, avatar.x() + avatar.w() / 2.0F, avatar.y() + avatar.h() / 2.0F,
                     com.atom.chat.render.AvatarRing.rimRadius(avatar.w() / 2.0F),
-                    com.atom.chat.render.AvatarRing.RIM_STROKE_PX, UiTokens.rim());
+                    com.atom.chat.render.AvatarRing.RIM_STROKE_PX, UiTokens.rim(AtomChatAppearance.theme()));
         } finally {
             canvas.restore();
         }
@@ -1318,7 +1318,7 @@ public final class ProfilePage {
         // player's avatar is editable.
         if (avatarEditable()) {
             UiLayout.Rect badge = badgeRect(layout, scrollY);
-            float badgeRadius = UiTokens.radius(badge.w() / (2.0F * UiTokens.SCALE));
+            float badgeRadius = UiTokens.radius(badge.w() / (2.0F * UiTokens.SCALE), AtomChatAppearance.theme());
             badgeScale.begin(canvas, badge.x() + badge.w() / 2.0F, badge.y() + badge.h() / 2.0F);
             try {
                 // Badge is a fixed dark glass chip over an arbitrary avatar
@@ -1503,12 +1503,12 @@ public final class ProfilePage {
             bounce.update(over, false, lastDtMs, Animations.enabled(), tile.w());
             bounce.begin(canvas, tile.x() + tile.w() / 2.0F, tile.y() + tile.h() / 2.0F);
             try {
-                UiCards.drawCard(canvas, tile.x(), tile.y(), tile.w(), tile.h(),
-                        UiTokens.profileRowRadius(), hover);
+                AtomChatAppearance.drawCard(canvas, tile.x(), tile.y(), tile.w(), tile.h(),
+                        UiTokens.profileRowRadius(AtomChatAppearance.theme()), hover);
                 float cy = tile.y() + tile.h() / 2.0F;
                 drawIconCentered(canvas, tiles.get(i).icon(),
                         tile.x() + iconPad + iconSize / 2.0F, cy, iconSize,
-                        UiTokens.iconSecondary(180.0F + 45.0F * hover));
+                        UiTokens.iconSecondary(180.0F + 45.0F * hover, AtomChatAppearance.theme()));
                 float textX = tile.x() + iconPad + iconSize + s(8);
                 float valueMaxW = tile.right() - s(10) - textX;
                 String value = SkiaFontRenderer.truncate(valueFont, tiles.get(i).value(),
@@ -1555,14 +1555,14 @@ public final class ProfilePage {
         // the ~1.016 scale at this width keeps the text inside the pad.
         infoCardScale.begin(canvas, card.x() + card.w() / 2.0F, card.y() + card.h() / 2.0F);
         try {
-            UiCards.drawCard(canvas, card.x(), card.y(), card.w(), card.h(),
-                    UiTokens.profileRowRadius(), 0.0F);
+            AtomChatAppearance.drawCard(canvas, card.x(), card.y(), card.w(), card.h(),
+                    UiTokens.profileRowRadius(AtomChatAppearance.theme()), 0.0F);
             canvas.save();
             try {
                 // Hover washes and dividers clip to the card's rounding, so the
                 // first and last rows' bands never bleed past the corners.
                 SkiaDraw.clip(canvas, card.x(), card.y(), card.w(), card.h(),
-                        UiTokens.profileRowRadius());
+                        UiTokens.profileRowRadius(AtomChatAppearance.theme()));
                 float pad = UiTokens.PROFILE_ROW_PAD;
                 for (int i = 0; i < rows.size(); i++) {
                     UiLayout.Rect row = rowRect(layout, i, scrollY);
@@ -1573,13 +1573,13 @@ public final class ProfilePage {
                     if (rowAlpha > 0.01F) {
                         // Whole-row hover wash, the accent-dyed cardHover family.
                         SkiaDraw.drawRoundedRect(canvas, row.x(), row.y(), row.w(), row.h(),
-                                0.0F, UiTokens.cardHover(rowAlpha));
+                                0.0F, UiTokens.cardHover(rowAlpha, AtomChatAppearance.theme()));
                     }
                     if (i > 0) {
                         // Hairline divider, 1px at the card-edge alpha, indented
                         // to the row pad on both sides.
                         SkiaDraw.drawRoundedRect(canvas, card.x() + pad, row.y(),
-                                card.w() - pad * 2.0F, UiTokens.s(1.0F), 0.0F, UiTokens.hairline());
+                                card.w() - pad * 2.0F, UiTokens.s(1.0F), 0.0F, UiTokens.hairline(AtomChatAppearance.theme()));
                     }
                     float cy = row.y() + row.h() / 2.0F;
                     SkiaFontRenderer.drawText(canvas, labelFont, rows.get(i).label(),
@@ -1619,8 +1619,8 @@ public final class ProfilePage {
         }
         identityCardScale.begin(canvas, card.x() + card.w()/2F, card.y() + card.h()/2F);
         try {
-        UiCards.drawCard(canvas, card.x(), card.y(), card.w(), card.h(),
-                UiTokens.profileRowRadius(), identityHover);
+        AtomChatAppearance.drawCard(canvas, card.x(), card.y(), card.w(), card.h(),
+                UiTokens.profileRowRadius(AtomChatAppearance.theme()), identityHover);
         float pad = UiTokens.PROFILE_ROW_PAD;
         Font labelFont = FontManager.font(UiTokens.PROFILE_ROW_FONT);
         Font valueFont = FontManager.font(UiTokens.PROFILE_ROW_VALUE_FONT);

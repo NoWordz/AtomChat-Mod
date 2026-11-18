@@ -3,6 +3,7 @@ package com.atom.chat.settings;
 import com.atom.chat.font.FontManager;
 import com.atom.chat.render.SkiaFontRenderer;
 import com.atom.chat.ui.*;
+import com.atom.lib.design.atomchat.DesignHost;
 import com.atom.lib.design.atomchat.SkiaDraw;
 import com.atom.lib.design.atomchat.UiTokens;
 import io.github.humbleui.skija.Canvas;
@@ -28,6 +29,7 @@ public final class SettingsFormField {
     private long layoutBuilds;
     private int lastCaret=-1;private String visibleText;private float wheelRemainder;private long visibleShape=-1;
     public long layoutBuilds(){return layoutBuilds;}
+    public float hoverWeight(){return hover;}
     public void focus(boolean value){if(value&&!focused)lastCaret=-1;focused=value;if(!value)pendingHigh=0;}public boolean focused(){return focused;}
     public void configure(boolean number,boolean multiline,int max){this.number=number;this.multiline=multiline;this.wrap=multiline;this.max=max;}
     public void wrap(boolean value){wrap=value;}
@@ -59,10 +61,17 @@ public final class SettingsFormField {
         lines.add(new Line(start,text.length(),text.substring(start),Arrays.copyOf(advances,text.length()-start+1)));
     }
     public void paint(Canvas canvas,UiLayout.Rect bounds,String value,boolean enabled,boolean error,float mx,float my,float dt){
+        var config=com.atom.chat.config.AtomChatConfig.get();
+        paint(canvas,bounds,value,enabled,error,mx,my,dt,AtomChatAppearance.theme(),
+                config.textPrimaryColor,UiStagger.frameTimeMillis());
+    }
+    public void paint(Canvas canvas,UiLayout.Rect bounds,String value,boolean enabled,boolean error,float mx,float my,float dt,
+                      DesignHost appearance,int primary,long millis){
         rect=bounds;this.enabled=enabled;edit.set(value);shape(value,bounds.w());
         hover=UiMotion.approach(hover,enabled&&bounds.contains(mx,my)?1:0,dt,UiMotion.HOVER_MS);
-        var c=com.atom.chat.config.AtomChatConfig.get();var font=font();
-        SettingsFieldPaint.surface(canvas,bounds,hover,focused,error,enabled,c.accentColor);
+        int accent=appearance.accentColor(),secondary=appearance.textSecondaryColor();
+        var font=font();
+        SettingsFieldPaint.surface(canvas,bounds,hover,focused,error,enabled,accent,appearance);
         int caretLine=lineAt(edit.cursor());
         int visible=Math.max(1,(int)((bounds.h()-V_PAD*2+.01f)/LINE_H));
         if(focused&&(lastCaret!=edit.cursor()||!Objects.equals(visibleText,value)||visibleShape!=layoutBuilds)){firstLine=Math.max(0,Math.min(firstLine,caretLine));if(caretLine>=firstLine+visible)firstLine=caretLine-visible+1;}
@@ -76,9 +85,9 @@ public final class SettingsFormField {
             for(int i=firstLine;i<firstLine+count;i++){
                 var line=lines.get(i);float cy=textTop+LINE_H/2+(i-firstLine)*LINE_H;
                 int a=Math.max(line.start(),edit.start()),b=Math.min(line.end(),edit.end());
-                if(focused&&a<b)SkiaDraw.drawRoundedRect(canvas,bounds.x()+TEXT_INSET+line.x(a)-shift,cy-LINE_H/2,line.x(b)-line.x(a),LINE_H,0,(c.accentColor&0xffffff)|0x55000000);
-                SkiaFontRenderer.drawText(canvas,font,line.text(),bounds.x()+TEXT_INSET-shift,SkiaFontRenderer.centerBaselineY(font,cy),!enabled?c.textSecondaryColor:number&&focused?c.accentColor:c.textPrimaryColor);
-                if(focused&&i==caretLine&&(UiStagger.frameTimeMillis()/500)%2==0)SkiaDraw.drawRoundedRect(canvas,bounds.x()+TEXT_INSET+line.x(edit.cursor())-shift,cy-CARET_H/2,UiTokens.FOCUS_RING_WIDTH,CARET_H,0,c.accentColor);
+                if(focused&&a<b)SkiaDraw.drawRoundedRect(canvas,bounds.x()+TEXT_INSET+line.x(a)-shift,cy-LINE_H/2,line.x(b)-line.x(a),LINE_H,0,(accent&0xffffff)|0x55000000);
+                SkiaFontRenderer.drawText(canvas,font,line.text(),bounds.x()+TEXT_INSET-shift,SkiaFontRenderer.centerBaselineY(font,cy),!enabled?secondary:number&&focused?accent:primary);
+                if(focused&&i==caretLine&&(millis/500)%2==0)SkiaDraw.drawRoundedRect(canvas,bounds.x()+TEXT_INSET+line.x(edit.cursor())-shift,cy-CARET_H/2,UiTokens.FOCUS_RING_WIDTH,CARET_H,0,accent);
             }
         }finally{canvas.restore();}
     }

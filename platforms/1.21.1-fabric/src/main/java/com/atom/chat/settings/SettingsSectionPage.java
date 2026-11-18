@@ -1,5 +1,8 @@
 package com.atom.chat.settings;
 
+import com.atom.chat.settings.contract.HistoryFieldsPage;
+import com.atom.lib.frontend.StrictPage;
+import com.atom.chat.ui.AtomChatAppearance;
 import com.atom.chat.nav.PageNavAxis;
 import com.atom.chat.ui.UiStagger;
 import com.atom.chat.ui.WallpaperTokens;
@@ -28,7 +31,6 @@ import com.atom.chat.wallpaper.WallpaperStore;
 import java.nio.file.Path;
 import com.atom.chat.ui.UiLayout;
 import com.atom.chat.ui.UiMotion;
-import com.atom.lib.design.atomchat.UiCards;
 import com.atom.lib.design.atomchat.UiTokens;
 import static com.atom.lib.design.atomchat.UiTokens.s;
 import io.github.humbleui.skija.Canvas;
@@ -561,9 +563,7 @@ public final class SettingsSectionPage {
     private int activeSliderIndex = -1;
     private float dragValue;
     /** Inline numeric editor state (used by the retention days row). */
-    private String editingSliderId;
-    private SettingsSlider editingSlider;
-    private String editBuffer = "";
+    private final SettingsNumberEditor numberEditor = new SettingsNumberEditor();
     /** Last drawn geometry of the inline number row, for click-to-blur hit tests. */
     private UiLayout.Rect inlineNumberRowRect;
 
@@ -1671,8 +1671,8 @@ public final class SettingsSectionPage {
             return;
         }
         if (row.kind() != RowKind.HERO && row.kind() != RowKind.AUTHORS) {
-            UiCards.drawCard(canvas, rect.x(), rect.y(), rect.w(), rect.h(),
-                    UiTokens.settingsRowRadius(), hover);
+            AtomChatAppearance.drawCard(canvas, rect.x(), rect.y(), rect.w(), rect.h(),
+                    UiTokens.settingsRowRadius(AtomChatAppearance.theme()), hover);
         }
         drawRowContent(canvas, row, rect, hover, buttonFont, accent, dtMs);
     }
@@ -1783,7 +1783,7 @@ public final class SettingsSectionPage {
                         float rowAlpha = rowHover.getOrDefault(j, 0.0F);
                         if (rowAlpha > 0.01F) {
                             SkiaDraw.drawRoundedRect(canvas, rect.x(), rect.y(),
-                                    rect.w(), rect.h(), 0.0F, UiTokens.cardHover(rowAlpha));
+                                    rect.w(), rect.h(), 0.0F, UiTokens.cardHover(rowAlpha, AtomChatAppearance.theme()));
                         }
                         if (j > start) {
                             // Hairline divider, 1px at the card-edge alpha,
@@ -1791,7 +1791,7 @@ public final class SettingsSectionPage {
                             // the seam the inter-row gap gave up.
                             SkiaDraw.drawRoundedRect(canvas, card.x() + pad, rect.y(),
                                     card.w() - pad * 2.0F, UiTokens.s(1.0F), 0.0F,
-                                    UiTokens.hairline());
+                                    UiTokens.hairline(AtomChatAppearance.theme()));
                         }
                         drawRowContent(canvas, row, rect, rowAlpha, buttonFont, accent, dt);
                     }
@@ -2132,7 +2132,7 @@ public final class SettingsSectionPage {
         canvas.save();
         try {
             SkiaDraw.clip(canvas, row.x(), themeCardY(row) - WallpaperTokens.CLIP_PAD, row.w(),
-                    UiTokens.THEME_CARD_H + WallpaperTokens.CLIP_EXTRA, UiTokens.radius(6));
+                    UiTokens.THEME_CARD_H + WallpaperTokens.CLIP_EXTRA, UiTokens.radius(6, AtomChatAppearance.theme()));
             var presets = com.atom.chat.wallpaper.WallpaperPresets.presets();
             for (int i = 0; i < presets.length; i++) {
                 var preset = presets[i];
@@ -2168,7 +2168,7 @@ public final class SettingsSectionPage {
         canvas.save();
         try {
             SkiaDraw.clip(canvas, row.x(), themeCardY(row) - s(6), row.w(),
-                    UiTokens.THEME_CARD_H + s(30), UiTokens.radius(6));
+                    UiTokens.THEME_CARD_H + s(30), UiTokens.radius(6, AtomChatAppearance.theme()));
             var styles = AtomChatConfig.BubbleStyle.values();
             for (int i = 0; i < styles.length; i++) {
                 drawPreviewCard(canvas, bubbleStrip, row, i, preview, bubbleStyleName(styles[i]),
@@ -2231,7 +2231,7 @@ public final class SettingsSectionPage {
         canvas.save();
         try {
             SkiaDraw.clip(canvas, rect.x(), themeCardY(rect) - s(6), rect.w(),
-                    UiTokens.THEME_CARD_H + s(30), UiTokens.radius(6));
+                    UiTokens.THEME_CARD_H + s(30), UiTokens.radius(6, AtomChatAppearance.theme()));
             boolean frostedActive = matchingCustom == null
                     && (currentId.isEmpty() || ThemeService.FROSTED.equals(currentId));
             drawThemeCard(canvas, rect, 0, ThemeService.previewOf(ThemeService.FROSTED),
@@ -2300,7 +2300,7 @@ public final class SettingsSectionPage {
         float y = themeCardY(rect);
         float w = UiTokens.THEME_CARD_W;
         float h = UiTokens.THEME_CARD_H;
-        float radius = UiTokens.radius(10);
+        float radius = UiTokens.radius(10, AtomChatAppearance.theme());
         if(!stripCardVisible(rect,x,w))return;
 
         // The cards are separated by THEME_CARD_GAP and packed against the
@@ -2361,7 +2361,7 @@ public final class SettingsSectionPage {
                 if (fade > 0.01F) {
                     float rs = s(18);
                     SkiaDraw.drawRoundedRect(canvas, x + w - rs - s(2), y + s(2), rs, rs,
-                            UiTokens.radius(4), Color.makeARGB((int) (200.0F * fade), 214, 48, 48));
+                            UiTokens.radius(4, AtomChatAppearance.theme()), Color.makeARGB((int) (200.0F * fade), 214, 48, 48));
                     Font xFont = FontManager.font(UiTokens.FONT_QUOTE);
                     SkiaFontRenderer.drawTextCentered(canvas, xFont, "×",
                             x + w - rs / 2.0F - s(2), y + s(2) + rs / 2.0F,
@@ -2389,8 +2389,8 @@ public final class SettingsSectionPage {
                 themeStrip.pressed && themeStrip.pressedCard == index, dtMs, Animations.enabled(), w);
         press.begin(canvas, x + w / 2.0F, y + h / 2.0F);
         try {
-            SkiaDraw.drawRoundedRect(canvas, x, y, w, h, UiTokens.radius(10),
-                    UiTokens.trackRest());
+            SkiaDraw.drawRoundedRect(canvas, x, y, w, h, UiTokens.radius(10, AtomChatAppearance.theme()),
+                    UiTokens.trackRest(AtomChatAppearance.theme()));
             drawIconCentered(canvas, AppIcons.ICON_PLUS_PATH, x + w / 2.0F, y + h / 2.0F,
                     s(18), textPrimary());
         } finally {
@@ -2427,7 +2427,7 @@ public final class SettingsSectionPage {
         // Live element preview: the current value as one small square, same
         // shape for every colour row.
         float prevW = s(11);
-        float prevR = UiTokens.radius(3);
+        float prevR = UiTokens.radius(3, AtomChatAppearance.theme());
         float prevRight = rect.right() - UiTokens.SETTINGS_ROW_PAD - hexW - s(8);
         SkiaDraw.drawRoundedRect(canvas, prevRight - prevW, valueY - prevW / 2.0F,
                 prevW, prevW, prevR, color.value());
@@ -2451,12 +2451,12 @@ public final class SettingsSectionPage {
                 SkiaDraw.drawRoundedRect(canvas, scx - r, cy - r, 2.0F * r, 2.0F * r, r, swatch);
                 // Theme-adaptive hairline: pale swatches stay visible on light
                 // panels, dark ones on dark panels.
-                SkiaDraw.drawRing(canvas, scx + com.atom.chat.render.UiPixelSnap.halfDevicePx(), cy + com.atom.chat.render.UiPixelSnap.halfDevicePx(), r + s(0.75F), s(1.0F), UiTokens.hairline());
+                SkiaDraw.drawRing(canvas, scx + com.atom.chat.render.UiPixelSnap.halfDevicePx(), cy + com.atom.chat.render.UiPixelSnap.halfDevicePx(), r + s(0.75F), s(1.0F), UiTokens.hairline(AtomChatAppearance.theme()));
                 if (swatch == color.value()) {
                     // Selection ring: the functional rim stroke with a breathing
                     // gap — alpha 110, polarity-picked, so the ring survives pale
                     // swatches on light panels and dark ones on dark panels.
-                    try (Paint ring = new Paint().setColor(UiTokens.rim())
+                    try (Paint ring = new Paint().setColor(UiTokens.rim(AtomChatAppearance.theme()))
                             .setMode(PaintMode.STROKE).setStrokeWidth(s(2)).setAntiAlias(true)) {
                         canvas.drawOval(io.github.humbleui.types.Rect.makeXYWH(
                                 scx - r - s(3), cy - r - s(3), 2.0F * (r + s(3)), 2.0F * (r + s(3))), ring);
@@ -2482,8 +2482,8 @@ public final class SettingsSectionPage {
         plus.begin(canvas, px, cy);
         try {
             SkiaDraw.drawRoundedRect(canvas, px - r, cy - r, 2.0F * r, 2.0F * r, r,
-                    UiTokens.trackRest());
-            SkiaDraw.drawRing(canvas, px + com.atom.chat.render.UiPixelSnap.halfDevicePx(), cy + com.atom.chat.render.UiPixelSnap.halfDevicePx(), r + s(0.75F), s(1.0F), UiTokens.hairline());
+                    UiTokens.trackRest(AtomChatAppearance.theme()));
+            SkiaDraw.drawRing(canvas, px + com.atom.chat.render.UiPixelSnap.halfDevicePx(), cy + com.atom.chat.render.UiPixelSnap.halfDevicePx(), r + s(0.75F), s(1.0F), UiTokens.hairline(AtomChatAppearance.theme()));
             drawIconCentered(canvas, AppIcons.ICON_PLUS_PATH, px, cy, s(12),
                     textPrimary());
         } finally {
@@ -2569,7 +2569,7 @@ public final class SettingsSectionPage {
         float versionY = markY + UiTokens.SETTINGS_HERO_WORDMARK_MAX_H + UiTokens.SETTINGS_HERO_GAP;
         SkiaDraw.drawRoundedRect(canvas, versionX, versionY, versionW,
                 UiTokens.SETTINGS_HERO_VERSION_H,
-                UiTokens.radius(UiTokens.SETTINGS_HERO_VERSION_RADIUS / UiTokens.SCALE), sec(12));
+                UiTokens.radius(UiTokens.SETTINGS_HERO_VERSION_RADIUS / UiTokens.SCALE, AtomChatAppearance.theme()), sec(12));
         SkiaFontRenderer.drawTextCentered(canvas, versionFont, version,
                 rect.x() + rect.w() / 2.0F,
                 versionY + UiTokens.SETTINGS_HERO_VERSION_H / 2.0F, sec(255));
@@ -2635,8 +2635,8 @@ public final class SettingsSectionPage {
             authorScale[i].update(over, false, dt, Animations.enabled(), width);
             authorScale[i].begin(canvas, cx, rect.y() + rect.h() / 2F);
             try {
-            UiCards.drawCard(canvas, x, rect.y(), width, rect.h(),
-                    UiTokens.settingsTileRadius(), authorHover[i]);
+            AtomChatAppearance.drawCard(canvas, x, rect.y(), width, rect.h(),
+                    UiTokens.settingsTileRadius(AtomChatAppearance.theme()), authorHover[i]);
             Image image = authorImage(i);
             if (image != null) {
                 float scale = Math.min(avatarSize / image.getWidth(), avatarSize / image.getHeight());
@@ -2718,7 +2718,7 @@ public final class SettingsSectionPage {
                 UiLayout.Rect arrow = direction < 0 ? geometry.previous() : geometry.next();
                 float hover = stepperHover.weight(row.actionId(), direction);
                 if (hover > 0.0F) SkiaDraw.drawRoundedRect(canvas, arrow.x(), arrow.y(), arrow.w(), arrow.h(),
-                        UiTokens.settingsRowRadius(), UiTokens.cardHover(hover));
+                        UiTokens.settingsRowRadius(AtomChatAppearance.theme()), UiTokens.cardHover(hover, AtomChatAppearance.theme()));
                 float size = Math.min(UiTokens.SETTINGS_STEPPER_CHEVRON, arrow.w() / 4);
                 drawChevron(canvas, arrow.x() + arrow.w() / 2, arrow.y() + arrow.h() / 2,
                         size, direction < 0 ? 2 : 0, textPrimary());
@@ -2926,23 +2926,23 @@ public final class SettingsSectionPage {
 
         UiLayout.Rect track = sliderTrackRect(rect);
         float t = knobPosition(slider, dragging);
-        float radius = UiTokens.radius(UiTokens.SLIDER_TRACK_H / (2.0F * UiTokens.SCALE));
+        float radius = UiTokens.radius(UiTokens.SLIDER_TRACK_H / (2.0F * UiTokens.SCALE), AtomChatAppearance.theme());
         SkiaDraw.drawRoundedRect(canvas, track.x(), track.y(), track.w(), track.h(), radius,
-                UiTokens.trackRest());
+                UiTokens.trackRest(AtomChatAppearance.theme()));
         float fillW = Math.max(track.h(), track.w() * t);
         SkiaDraw.drawRoundedRect(canvas, track.x(), track.y(), fillW, track.h(), radius, accent);
 
         float knobX = track.x() + track.w() * t - UiTokens.SLIDER_KNOB / 2.0F;
         float knobY = track.y() + track.h() / 2.0F - UiTokens.SLIDER_KNOB / 2.0F;
         SkiaDraw.drawRoundedRect(canvas, knobX, knobY, UiTokens.SLIDER_KNOB, UiTokens.SLIDER_KNOB,
-                UiTokens.handleRadius(UiTokens.SLIDER_KNOB),
+                UiTokens.handleRadius(UiTokens.SLIDER_KNOB, AtomChatAppearance.theme()),
                 Color.makeARGB(255, 255, 255, 255)); // knob: mechanical white
         // The accent trace follows the same radius as the head. A circular
         // ring here would preserve the old circle after the fill itself had
         // gone square, which is exactly the leak this audit is closing.
         SkiaDraw.drawEdgeHighlight(canvas, knobX, knobY,
                 UiTokens.SLIDER_KNOB, UiTokens.SLIDER_KNOB,
-                UiTokens.handleRadius(UiTokens.SLIDER_KNOB), s(1.8F), accent);
+                UiTokens.handleRadius(UiTokens.SLIDER_KNOB, AtomChatAppearance.theme()), s(1.8F), accent);
     }
 
     /** Sliders rendered as a right-side input field instead of a drag track. */
@@ -2957,55 +2957,19 @@ public final class SettingsSectionPage {
      */
     private void drawInlineNumberSlider(Canvas canvas, Row row, UiLayout.Rect rect, int accent) {
         SettingsSlider slider = row.slider();
-        boolean editing = slider.id().equals(editingSliderId);
+        boolean editing = numberEditor.editing(slider.id());
         inlineNumberRowRect = rect;
-        float padX = UiTokens.SETTINGS_ROW_PAD;
-        float textX = rect.x() + padX;
         CompactText compact = compactText(row, rect.w());
-        var numberBox=SettingsRowText.number(rect,compact!=null);
-        float fieldW=numberBox.w(),fieldX=numberBox.x(),fieldH=numberBox.h(),fieldY=numberBox.y();
-        float fieldCY = fieldY + fieldH / 2.0F;
-        float descMaxW = Math.max(0.0F, fieldX - textX - s(12));
-
-        // Title plus a one-line description on the left, matching switch/action
-        // cards; the input field stays vertically centred on the right.
-        Font titleFont = FontManager.font(UiTokens.SETTINGS_TILE_TITLE);
-        if (compact != null) drawCompactText(canvas, rect, compact, sec(200));
-        else SkiaFontRenderer.drawText(canvas, titleFont,
-                SkiaFontRenderer.truncate(titleFont, tr(slider.titleKey()), descMaxW), textX,
-                SkiaFontRenderer.centerBaselineY(titleFont, rect.y() + s(20)),
-                textPrimary());
-        Font subFont = FontManager.font(UiTokens.SETTINGS_TILE_SUB);
-        if (compact == null) SkiaFontRenderer.drawText(canvas, subFont,
-                SkiaFontRenderer.truncate(subFont,
-                        tr("atomchat.settings.chat.history.retention.desc"), descMaxW), textX,
-                SkiaFontRenderer.centerBaselineY(subFont, rect.y() + s(37)),
-                sec(200));
-
-        var numberField=new UiLayout.Rect(fieldX,fieldY,fieldW,fieldH);
+        var numberField=SettingsRowText.number(rect,compact!=null);
         long fieldNow=UiStagger.frameTimeMillis();float fieldDt=lastNumberFieldHover==0?0:Math.max(0,Math.min(50,fieldNow-lastNumberFieldHover));lastNumberFieldHover=fieldNow;
         numberFieldHover=UiMotion.approach(numberFieldHover,numberField.contains(pointerX,pointerY)?1:0,fieldDt,UiMotion.HOVER_MS);
-        SettingsFieldPaint.surface(canvas,numberField,numberFieldHover,editing,false,true,accent);
-
-        Font inputFont = FontManager.font(UiTokens.FONT_INPUT);
-        String text = editing ? (editBuffer.isEmpty() ? "0" : editBuffer) : Integer.toString(Math.round(slider.value()));
-        String shown = SkiaFontRenderer.truncate(inputFont, text, fieldW - s(20));
-        SkiaFontRenderer.drawText(canvas, inputFont, shown,
-                fieldX + s(10),
-                SkiaFontRenderer.centerBaselineY(inputFont, fieldCY),
-                editing ? accent : textPrimary());
-        SkiaFontRenderer.drawText(canvas,subFont,tr("atomchat.admin.days"),numberBox.right()+UiTokens.SETTINGS_ROW_GAP,
-                SkiaFontRenderer.centerBaselineY(subFont,fieldCY),sec(200));
-        // Blinking caret while the inline editor owns the keyboard. Same accent
-        // as the text it blinks inside: a fixed white caret would vanish on a
-        // light theme, and the caret is part of the editing text, not chrome.
-        if (editing && (System.currentTimeMillis() / 500L) % 2L == 0L) {
-            float caretX = fieldX + s(10) + SkiaFontRenderer.getStringWidth(inputFont, shown) + s(2);
-            try (Paint caret = new Paint().setColor(accent)
-                    .setStrokeWidth(s(1.5F)).setAntiAlias(true)) {
-                canvas.drawLine(caretX, fieldCY - s(8), caretX, fieldCY + s(8), caret);
-            }
-        }
+        String draft = numberEditor.text();
+        String text = editing ? (draft.isEmpty() ? "0" : draft) : Integer.toString(Math.round(slider.value()));
+        var stacked=compact==null?null:new SettingsRowText.Text(compact.title(),compact.description(),true,
+                compact.titleH(),compact.descriptionH(),compact.height());
+        HistoryNumberRow.draw(canvas,rect,stacked,tr(slider.titleKey()),tr("atomchat.settings.chat.history.retention.desc"),
+                tr("atomchat.admin.days"),text,editing,numberFieldHover,AtomChatAppearance.theme(),
+                accent,textPrimary(),sec(200),editing?System.currentTimeMillis():0);
     }
 
     private void drawInfo(Canvas canvas, Row row, UiLayout.Rect rect) {
@@ -3109,7 +3073,7 @@ public final class SettingsSectionPage {
             // swatches.
             SkiaDraw.drawRing(canvas, rect.x() + UiTokens.SETTINGS_ROW_PAD + avatar / 2.0F, avatarY + avatar / 2.0F,
                     com.atom.chat.render.AvatarRing.rimRadius(avatar / 2.0F),
-                    com.atom.chat.render.AvatarRing.RIM_STROKE_PX, UiTokens.rim());
+                    com.atom.chat.render.AvatarRing.RIM_STROKE_PX, UiTokens.rim(AtomChatAppearance.theme()));
         }
 
         String name = row.player() != null ? row.player().realName() : "";
@@ -3126,8 +3090,8 @@ public final class SettingsSectionPage {
 
         float buttonH = s(28);
         float buttonY = rect.y() + (rect.h() - buttonH) / 2.0F;
-        SkiaDraw.drawRoundedRect(canvas, buttonX, buttonY, buttonW, buttonH, UiTokens.radius(8),
-                UiTokens.cardHover(hover));
+        SkiaDraw.drawRoundedRect(canvas, buttonX, buttonY, buttonW, buttonH, UiTokens.radius(8, AtomChatAppearance.theme()),
+                UiTokens.cardHover(hover, AtomChatAppearance.theme()));
         SkiaFontRenderer.drawTextCentered(canvas, buttonFont, label,
                 buttonX + buttonW / 2.0F, buttonY + buttonH / 2.0F,
                 textPrimary());
@@ -3274,11 +3238,11 @@ public final class SettingsSectionPage {
 
     /** Whether the inline numeric editor is open (keyboard owns the row). */
     public boolean isEditingNumber() {
-        return editingSliderId != null;
+        return numberEditor.active();
     }
 
     public String editingNumberText() {
-        return editBuffer;
+        return numberEditor.text();
     }
 
     /** Opens the inline editor with the slider's current rounded value. */
@@ -3286,46 +3250,24 @@ public final class SettingsSectionPage {
         if (slider == null) {
             return;
         }
-        editingSlider = slider;
-        editingSliderId = slider.id();
-        editBuffer = String.valueOf(Math.round(slider.value()));
+        numberEditor.open(slider.id(), Math.round(slider.value()), slider::set);
     }
 
     public void appendNumberChar(char c) {
-        if (editingSliderId == null || c < '0' || c > '9' || editBuffer.length() >= 6) {
-            return;
-        }
-        editBuffer += c;
+        numberEditor.append(c);
     }
 
     public void backspaceNumber() {
-        if (editingSliderId != null && !editBuffer.isEmpty()) {
-            editBuffer = editBuffer.substring(0, editBuffer.length() - 1);
-        }
+        numberEditor.backspace();
     }
 
     /** Parses and applies the typed value; empty buffer is treated as 0. */
     public void commitNumberEdit() {
-        if (editingSliderId == null) {
-            return;
-        }
-        try {
-            int value = editBuffer.isEmpty() ? 0 : Integer.parseInt(editBuffer);
-            if (editingSlider != null) {
-                editingSlider.apply(value);
-                editingSlider.persist();
-            }
-        } catch (NumberFormatException ignored) {
-            // Invalid input: keep the old value.
-        } finally {
-            cancelNumberEdit();
-        }
+        numberEditor.commit();
     }
 
     public void cancelNumberEdit() {
-        editingSliderId = null;
-        editingSlider = null;
-        editBuffer = "";
+        numberEditor.cancel();
     }
 
     /** Whether a virtual point lies inside the inline number row (focus stays). */
@@ -3432,28 +3374,7 @@ public final class SettingsSectionPage {
                     collapsedColorGroups.add(group);
                 }
             }
-            case ACTION -> {
-                if (hit.row().kind() == RowKind.ACTION
-                        && (hit.row().item() == null || !hit.row().item().available())) {
-                    return false;
-                }
-                if (actionHandler == null) {
-                    return false;
-                }
-                String actionId = hit.row().actionId();
-                if (needsConfirm(actionId)) {
-                    String bodyKey = "atomchat.confirm." + actionId;
-                    if (ACTION_HISTORY_CLEAR.equals(actionId) && !AtomChatConfig.get().chatHistoryEnabled) {
-                        bodyKey += ".memory";
-                    }
-                    cancelPointer(); // The modal will consume the mouse-up belonging to this card.
-                    confirmation.openDangerous(tr(hit.row().item().titleKey()), tr(bodyKey),
-                            tr("atomchat.confirm.cancel"), tr("atomchat.confirm.confirm"),
-                            () -> actionHandler.onAction(actionId));
-                    return true;
-                }
-                actionHandler.onAction(actionId);
-            }
+            case ACTION -> { return performAction(hit.row()); }
             case BLOCKED -> {
                 if (hit.row().player() != null) {
                     BlockList.setBlocked(hit.row().player(), false);
@@ -3462,6 +3383,55 @@ public final class SettingsSectionPage {
             default -> { return false; }
         }
         return true;
+    }
+
+    private boolean performAction(Row row) {
+        if (row.item() == null || !row.item().available() || actionHandler == null) return false;
+        String actionId = row.actionId();
+        if (needsConfirm(actionId)) {
+            String bodyKey = "atomchat.confirm." + actionId;
+            if (ACTION_HISTORY_CLEAR.equals(actionId) && !AtomChatConfig.get().chatHistoryEnabled) bodyKey += ".memory";
+            cancelPointer();
+            confirmation.openDangerous(tr(row.item().titleKey()), tr(bodyKey),
+                    tr("atomchat.confirm.cancel"), tr("atomchat.confirm.confirm"),
+                    () -> actionHandler.onAction(actionId));
+        } else {
+            actionHandler.onAction(actionId);
+        }
+        return true;
+    }
+
+    private boolean historyTabSelected() {
+        return "history".equals(activeChipId(SettingsSection.CHAT));
+    }
+
+    /** Binds the real settings data and the existing confirmation route for the history tab. */
+    public HistoryFieldsPage historyFields() {
+        if (!historyTabSelected()) throw new IllegalStateException("History settings tab is not selected");
+        List<Row> rows = rows(SettingsSection.CHAT);
+        Row toggle = rows.stream().filter(row -> row.kind() == RowKind.SWITCH).findFirst().orElseThrow();
+        Row retention = rows.stream().filter(row -> row.slider() != null && isInlineNumberSlider(row.slider().id()))
+                .findFirst().orElseThrow();
+        Row cleanup = rows.stream().filter(row -> ACTION_HISTORY_CLEAR.equals(row.actionId())).findFirst().orElseThrow();
+        SettingsItem item = toggle.item();
+        var enabled = new StrictPage.Content(Map.of(
+                "title", new StrictPage.Text(tr(item.titleKey())),
+                "description", new StrictPage.Text(descriptionText(toggle)),
+                "value", new StrictPage.BooleanInput(item.value(), next -> {
+                    if (!historyTabSelected() || !item.available() || next == item.value()) return false;
+                    item.set(next);
+                    return true;
+                })), item.available());
+        SettingsSlider slider = retention.slider();
+        var days = HistoryFieldsPage.days(tr(slider.titleKey()), tr("atomchat.settings.chat.history.retention.desc"),
+                tr("atomchat.admin.days"), new StrictPage.NumberInput(Math.round(slider.value()), next -> {
+                    if (!historyTabSelected()) return false;
+                    slider.set((float) next);
+                    return true;
+                }));
+        ActionCopy copy = actionCopy(cleanup);
+        return new HistoryFieldsPage(enabled, days, HistoryFieldsPage.cleanup(copy.title(), copy.subtitle(),
+                copy.verb(), copy.available(), new StrictPage.Action(() -> historyTabSelected() && performAction(cleanup))));
     }
 
     /** Shell callback for action cards; the screen owns the file picker. */

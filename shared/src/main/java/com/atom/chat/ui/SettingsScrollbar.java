@@ -18,6 +18,6 @@ public final class SettingsScrollbar {
         if(controller.isDragging())controller.dragTo(y,list.h());
         float width=TRACK+controller.getScrollEmphasis()*GROW;
         int alpha=Math.min(255,Math.max(0,(int)((170+60*controller.getScrollEmphasis())*controller.getScrollBarAlpha())));
-        SkiaDraw.drawRoundedRect(canvas,list.right()-TRACK-EDGE-(width-TRACK)/2,top,width,thumb,UiTokens.radius(width/(2*UiTokens.SCALE)),(accent&0xffffff)|(alpha<<24));
+        SkiaDraw.drawRoundedRect(canvas,list.right()-TRACK-EDGE-(width-TRACK)/2,top,width,thumb,UiTokens.radius(width/(2*UiTokens.SCALE), AtomChatAppearance.theme()),(accent&0xffffff)|(alpha<<24));
     }
 }

@@ -1,12 +1,15 @@
 package com.atom.chat.config;
 
+import com.atom.chat.ui.AtomChatAppearance;
 import com.atom.chat.chat.*;
 import com.atom.chat.font.FontManager;
 import com.atom.chat.nav.PageNavAxis;
 import com.atom.chat.render.*;
 import com.atom.chat.settings.*;
+import com.atom.chat.settings.contract.HostingFieldsPage;
 import com.atom.chat.ui.*;
 import com.atom.lib.design.atomchat.*;
+import com.atom.lib.frontend.StrictPage;
 import io.github.humbleui.skija.Canvas;
 import io.github.humbleui.skija.Image;
 import io.github.humbleui.skija.Paint;
@@ -79,6 +82,39 @@ public final class ServerConfigPage {
         this.host=host;draft=new ServerConfigDraft(version,values);entrance.markEntered();
     }
     public ServerConfigDraft draft(){return draft;}
+    private boolean hostingRouteActive(){return !closed&&host.administration()&&view==View.ROOT&&chip()==0;}
+    /** Supplies the hosting tab's real draft data to its bound component recipes. */
+    public HostingFieldsPage hostingFields(){
+        if(!hostingRouteActive()){
+            throw new IllegalStateException("Hosting fields require the active administration hosting tab");
+        }
+        var sections=new ArrayList<HostingFieldsPage.Section>();
+        for(var group:content()){
+            var fields=new ArrayList<HostingFieldsPage.Field>();
+            for(var row:group.rows()){
+                String id=row.id();
+                if(row.kind()==Kind.TOGGLE){
+                    var value=new StrictPage.BooleanInput(draft.enabled(id),next->{
+                        if(!hostingRouteActive()||draft.saving()||next==draft.enabled(id))return false;
+                        draft.toggle(id);
+                        feedback="";
+                        return true;
+                    });
+                    fields.add(HostingFieldsPage.toggle(id,row.title(),row.description(),value,!draft.saving()));
+                }else if(row.kind()==Kind.NUMBER){
+                    var value=new StrictPage.TextInput(value(id),next->{
+                        if(!hostingRouteActive()||draft.saving())return false;
+                        change(id,next);
+                        return true;
+                    });
+                    fields.add(HostingFieldsPage.number(id,row.title(),description(row),row.unit(),value,
+                            fieldError(row),!draft.saving()));
+                }
+            }
+            sections.add(new HostingFieldsPage.Section(group.id()+"Fields",fields));
+        }
+        return new HostingFieldsPage(sections);
+    }
     public int chip(){return chips.selected();}
     public int bodyVariant(){return view.ordinal()*3+chip();}
     public void markEntered(long at){entrance.markEntered(at);}
@@ -234,7 +270,7 @@ public final class ServerConfigPage {
         if(row.kind()==Kind.ACTION)return UiTokens.COMPOSER_ICON_SIZE+UiTokens.SETTINGS_ROW_GAP;
         if((row.kind()==Kind.PHRASE||row.kind()==Kind.TEMPLATE)&&inlineList(row,geometry.viewport().w()))return row.kind()==Kind.PHRASE?
                 SettingsListAction.HEIGHT*3+UiTokens.SETTINGS_ROW_GAP*3:UiTokens.SWITCH_W+SettingsListAction.HEIGHT+SettingsListAction.width(t("edit"))+UiTokens.SETTINGS_ROW_GAP*3;
-        return row.kind()==Kind.NUMBER?SettingsRowText.NUMBER_W+SettingsRowText.UNIT_W+UiTokens.SETTINGS_COMPACT_GAP:row.kind()==Kind.TOGGLE?UiTokens.SWITCH_W+UiTokens.SETTINGS_ROW_PAD:0;
+        return row.kind()==Kind.TOGGLE?UiTokens.SWITCH_W+UiTokens.SETTINGS_ROW_PAD:0;
     }
     private int columns(float width,List<String> labels,int preferred){
         float need=0;var font=FontManager.font(UiTokens.FONT_BUTTON);for(var label:labels)need=Math.max(need,SkiaFontRenderer.getStringWidth(font,label)+UiTokens.BUTTON_GAP);
@@ -259,7 +295,8 @@ public final class ServerConfigPage {
     }
     private float editorHeight(Row row){return form(row).preferredHeight(value(row.id()),geometry.viewport().w()-UiTokens.SETTINGS_ROW_PAD*2);}
     private SettingsRowText.Text rowText(Row row,float width){
-        return SettingsRowText.measure(row.title(),description(row),width,reserved(row),row.kind()==Kind.NUMBER?SettingsFormField.BASE_H:row.kind()==Kind.TOGGLE?UiTokens.SWITCH_H:0,true);
+        if(row.kind()==Kind.NUMBER)return SettingsRowText.measureNumber(row.title(),description(row),width);
+        return SettingsRowText.measure(row.title(),description(row),width,reserved(row),row.kind()==Kind.TOGGLE?UiTokens.SWITCH_H:0,true);
     }
     private float textHeight(Row row,float width){return rowText(row,width).height();}
     private String description(Row row){return (fieldError(row)?t("field_error")+" · ":"")+row.description();}
@@ -402,7 +439,7 @@ public final class ServerConfigPage {
                         var box=new UiLayout.Rect(card.x(),top+slots.tops()[at]-scroll.getScrollY(),card.w(),slots.heights()[at]);at++;
                         var painted=m.map(box);if(painted.bottom()<viewport.y()||painted.y()>viewport.bottom())continue;
                         String key=group.id()+":"+row.id();float hover=hovers.getOrDefault(key,0f);
-                        if(hover>.01f)SkiaDraw.drawRoundedRect(canvas,box.x(),box.y(),box.w(),box.h(),0,UiTokens.cardHover(hover));
+                        if(hover>.01f)SkiaDraw.drawRoundedRect(canvas,box.x(),box.y(),box.w(),box.h(),0,UiTokens.cardHover(hover, AtomChatAppearance.theme()));
                         if(at>start+1)SettingsGroupFrontend.divider(canvas,card,box.y());
                         drawRow(canvas,row,box,m,card,m.x(mx),m.y(my),dt);
                         if(!draft.saving()&&box.contains(m.x(mx),m.y(my)))hoveredRow[0]=key;
@@ -425,8 +462,8 @@ public final class ServerConfigPage {
         if(view==View.ROOT)chips.render(canvas,layout,List.of(host.label("atomchat.config.tab.hosting"),host.label("atomchat.config.tab.pack"),t("templates")),mx,my,dt);
         else{var breadcrumb=FontManager.font(UiTokens.SETTINGS_TILE_SUB);SkiaFontRenderer.drawText(canvas,breadcrumb,t(view==View.TEMPLATE?"breadcrumb.templates":"breadcrumb.pack"),layout.chipBar.x()+UiTokens.SETTINGS_ROW_PAD,SkiaFontRenderer.centerBaselineY(breadcrumb,layout.chipBar.y()+layout.chipBar.h()/2),config.textSecondaryColor);}
         var bar=geometry.bar();
-        SkiaDraw.drawChromeShadow(canvas,bar.x(),bar.y(),bar.w(),bar.h(),UiTokens.shellChromeRadius());
-        SkiaDraw.drawRoundedRect(canvas,bar.x(),bar.y(),bar.w(),bar.h(),UiTokens.shellChromeRadius(),UiTokens.cardFill());
+        SkiaDraw.drawChromeShadow(canvas,bar.x(),bar.y(),bar.w(),bar.h(),UiTokens.shellChromeRadius(AtomChatAppearance.theme()));
+        SkiaDraw.drawRoundedRect(canvas,bar.x(),bar.y(),bar.w(),bar.h(),UiTokens.shellChromeRadius(AtomChatAppearance.theme()),UiTokens.cardFill(AtomChatAppearance.theme()));
         boolean root=view==View.ROOT;
         boolean enabled=!draft.saving()&&!importing&&(!root||draft.dirty()&&draft.validation()==null);
         String action=view==View.PHRASE||view==View.TEMPLATE?t("done"):view==View.PHRASES||view==View.EMOTES?t("back_pack"):!root?t("back"):host.label(draft.saving()?"atomchat.config.saving":"atomchat.config.save");
@@ -466,7 +503,7 @@ public final class ServerConfigPage {
             var mapped=motion.map(box);var boundary=motion.map(clip);var viewport=geometry.viewport();
             float x=Math.max(mapped.x(),Math.max(boundary.x(),viewport.x())),y=Math.max(mapped.y(),Math.max(boundary.y(),viewport.y()));
             float right=Math.min(mapped.right(),Math.min(boundary.right(),viewport.right())),bottom=Math.min(mapped.bottom(),Math.min(boundary.bottom(),viewport.bottom()));
-            ClickRipples.region(x,y,right-x,bottom-y,SettingsListAction.RADIUS*motion.scale(),primary?AtomChatConfig.get().accentColor:UiTokens.cardCutout());
+            ClickRipples.region(x,y,right-x,bottom-y,SettingsListAction.RADIUS*motion.scale(),primary?AtomChatConfig.get().accentColor:UiTokens.cardCutout(AtomChatAppearance.theme()));
         }
     }
     private void drawRow(Canvas canvas,Row row,UiLayout.Rect rect,Motion motion,UiLayout.Rect clip,float mx,float my,float dt){
@@ -491,8 +528,7 @@ public final class ServerConfigPage {
                     new UiLayout.Rect(left,top+UiTokens.SETTINGS_ROW_GAP,width,editorHeight(row));
             var field=form(row);
             field.focus(row.id().equals(focused));field.paint(canvas,box,value(row.id()),enabled,fieldError(row),mx,my,dt);
-            if(number)SkiaFontRenderer.drawText(canvas,FontManager.font(UiTokens.SETTINGS_TILE_SUB),row.unit(),box.right()+UiTokens.SETTINGS_ROW_GAP,
-                    SkiaFontRenderer.centerBaselineY(FontManager.font(UiTokens.SETTINGS_TILE_SUB),box.y()+box.h()/2),c.textSecondaryColor);
+            if(number)SettingsRowText.drawNumberUnit(canvas,box,row.unit(),c.textSecondaryColor);
             if(row.id().equals("phrase.value")){
                 var font=FontManager.font(UiTokens.SETTINGS_TILE_SUB);String count=value(row.id()).length()+" / 200";
                 SkiaFontRenderer.drawText(canvas,font,count,rect.right()-pad-SkiaFontRenderer.getStringWidth(font,count),SkiaFontRenderer.centerBaselineY(font,box.bottom()+UiTokens.SETTINGS_ROW_GAP+TITLE_HALF_LINE),c.textSecondaryColor);
@@ -639,7 +675,7 @@ public final class ServerConfigPage {
             return;
         }
         float scale=Math.min(box.w()/image.getWidth(),box.h()/image.getHeight()),w=image.getWidth()*scale,h=image.getHeight()*scale;
-        SkiaImages.drawRoundedImage(canvas,image,box.x()+(box.w()-w)/2,box.y()+(box.h()-h)/2,w,h,UiTokens.buttonRadius());
+        SkiaImages.drawRoundedImage(canvas,image,box.x()+(box.w()-w)/2,box.y()+(box.h()-h)/2,w,h,UiTokens.buttonRadius(AtomChatAppearance.theme()));
     }
     private void importImage(Path path){
         if(path==null){importing=false;return;}

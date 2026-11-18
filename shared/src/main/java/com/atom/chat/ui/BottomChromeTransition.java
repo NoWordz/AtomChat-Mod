@@ -59,7 +59,7 @@ public final class BottomChromeTransition implements AutoCloseable {
         if (shape.w() < .01f || shape.h() < .01f || shape.alpha() <= 0) return;
         int save = beginShapeLayer(canvas, shape);
         try {
-            float radius = Math.min(UiTokens.shellChromeRadius(), Math.min(shape.w(), shape.h()) / 2);
+            float radius = Math.min(UiTokens.shellChromeRadius(AtomChatAppearance.theme()), Math.min(shape.w(), shape.h()) / 2);
             // HEAD chat drew its shadow before the message list; nav drew it after the body.
             if (mode == Mode.CHAT)
                 SkiaDraw.drawChromeShadow(canvas, shape.x(), shape.y(), shape.w(), shape.h(), radius);
@@ -100,10 +100,10 @@ public final class BottomChromeTransition implements AutoCloseable {
         if (shape.w() < .01f || shape.h() < .01f || shape.alpha() <= 0) return;
         int save = beginShapeLayer(canvas, shape);
         try {
-            float radius = Math.min(UiTokens.shellChromeRadius(), Math.min(shape.w(), shape.h()) / 2);
+            float radius = Math.min(UiTokens.shellChromeRadius(AtomChatAppearance.theme()), Math.min(shape.w(), shape.h()) / 2);
             if (mode != Mode.CHAT)
                 SkiaDraw.drawChromeShadow(canvas, shape.x(), shape.y(), shape.w(), shape.h(), radius);
-            SkiaDraw.drawRoundedRect(canvas, shape.x(), shape.y(), shape.w(), shape.h(), radius, UiTokens.cardFill());
+            SkiaDraw.drawRoundedRect(canvas, shape.x(), shape.y(), shape.w(), shape.h(), radius, UiTokens.cardFill(AtomChatAppearance.theme()));
             com.atom.chat.render.ChromeMaterial.drawDetails(canvas, paintedRect(), radius);
             canvas.translate(shape.x(), shape.y());
             canvas.scale(shape.w(), shape.h());

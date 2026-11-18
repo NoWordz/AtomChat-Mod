@@ -248,7 +248,7 @@ class AvatarRingTest {
                 }
                 String call = src.substring(at, Math.min(src.length(), at + 320));
                 boolean avatarRim = call.contains("AvatarRing.rimRadius(");
-                assertTrue(avatarRim || call.contains("UiTokens.hairline()"),
+                assertTrue(avatarRim || call.contains("UiTokens.hairline(AtomChatAppearance.theme())"),
                         site + ": a hand-derived ring radius came back: "
                                 + call.lines().findFirst().orElse(""));
                 if (avatarRim) {

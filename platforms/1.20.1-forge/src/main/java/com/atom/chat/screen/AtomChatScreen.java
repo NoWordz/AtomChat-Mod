@@ -1,4 +1,5 @@
 package com.atom.chat.screen;
+import com.atom.chat.ui.AtomChatAppearance;
 import com.atom.chat.AtomChat;
 import com.atom.chat.diagnostics.FirstOpenBudget;
 
@@ -489,13 +490,13 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         }
         public com.atom.chat.onboarding.TutorialAnchor anchorShape(com.atom.chat.onboarding.TutorialSession.Step step) {
             var rect=anchor(step);if(rect==null)return null;
-            float radius=UiTokens.settingsRowRadius()*composite.paintedBodyScale();
+            float radius=UiTokens.settingsRowRadius(AtomChatAppearance.theme())*composite.paintedBodyScale();
             if(tutorialDetailNeedsBack()||step==com.atom.chat.onboarding.TutorialSession.Step.FILTER)return new com.atom.chat.onboarding.TutorialAnchor(rect,rect.h()/2);
             if(tutorial.entry()!=null&&tutorial.entry().section()!=null)return new com.atom.chat.onboarding.TutorialAnchor(rect,radius);
             if(step==com.atom.chat.onboarding.TutorialSession.Step.EXPRESSIONS&&emojiPanel.isOpen())radius=emojiPanel.paintedRadius(layout());
             else if(step==com.atom.chat.onboarding.TutorialSession.Step.QUICK_PHRASES&&quickPhrasePanel.isOpen())radius=quickPhrasePanel.paintedRadius(layout());
             else if(contextMenu.hasMessageMenu()||contextMenu.hasPlayerCardMenu())radius=contextMenu.surfaceRadius();
-            else if(step==com.atom.chat.onboarding.TutorialSession.Step.NAVIGATION||step==com.atom.chat.onboarding.TutorialSession.Step.COMPOSE)radius=UiTokens.shellChromeRadius();
+            else if(step==com.atom.chat.onboarding.TutorialSession.Step.NAVIGATION||step==com.atom.chat.onboarding.TutorialSession.Step.COMPOSE)radius=UiTokens.shellChromeRadius(AtomChatAppearance.theme());
             else if(step==com.atom.chat.onboarding.TutorialSession.Step.PLAYERS_BLOCK||step==com.atom.chat.onboarding.TutorialSession.Step.AVATAR_PROFILE)radius=rect.w()/2;
             else if(step==com.atom.chat.onboarding.TutorialSession.Step.MESSAGE_ACTIONS||step==com.atom.chat.onboarding.TutorialSession.Step.IMAGES) {
                 for(var hit:messageListView.hits())if(step==com.atom.chat.onboarding.TutorialSession.Step.MESSAGE_ACTIONS||hit.imageUrl()!=null)
@@ -1982,65 +1983,66 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
      * page identity and the arriving page's two draws — the same body dispatch
      * and header the settled frame had, now the only draws there are.
      */
-    private final PageTransitionComposite composite = new PageTransitionComposite(
-            new PageTransitionComposite.Host() {
-                @Override
-                public NavPage topNav() {
-                    return navStack.topNav();
-                }
+    private final PageTransitionComposite composite = new PageTransitionComposite(new ScreenTransitionHost());
 
-                @Override
-                public void drawArrivingBody(Canvas canvas, UiLayout layout, int mouseX, int mouseY) {
-                    switch (topPage()) {
-                        case CHAT_LIST, PROFILE, SETTINGS -> drawRootBody(canvas, mouseX, mouseY, topPage());
-                        case SERVER_CONFIG -> { if (serverConfigPage != null) serverConfigPage.renderBody(canvas, detailLayout(), toVirtualX(mouseX), toVirtualY(mouseY), frameDt); }
-                        case SETTINGS_SECTION -> drawSettingsSection(canvas, mouseX, mouseY, topNav().section());
-                        case PROFILE_DETAIL -> drawProfileDetail(canvas, mouseX, mouseY);
-                        default -> drawChatPageBody(canvas, layout, mouseX, mouseY, chatPageViewFor(topNav()));
-                    }
-                }
+    private final class ScreenTransitionHost implements PageTransitionComposite.Host {
+        @Override
+        public NavPage topNav() {
+            return navStack.topNav();
+        }
 
-                @Override
-                public void drawArrivingHeader(Canvas canvas, UiLayout layout, int mouseX, int mouseY,
-                                               float vmx, float vmy) {
-                    switch (topPage()) {
-                        case CHAT_LIST, PROFILE, SETTINGS -> ShellHeader.render(canvas, rootLayout().header,
-                                headerChrome.shellTitleFor(topPage()), false, null, 0, textPrimary());
-                        // The settings/profile pushed header draws through the
-                        // detail header rect; the chat pages' header carries the
-                        // back button, the online status and the feed filter.
-                        case SETTINGS_SECTION, PROFILE_DETAIL, SERVER_CONFIG -> {
-                            headerChrome.drawPushedHeader(canvas, vmx, vmy, topNav(), headerActionFor(topNav()));
-                            if (topPage() == AppPage.SETTINGS_SECTION) settingsSectionPage.renderFixedChipBar(
-                                    canvas, detailLayout(), topNav().section(), vmx, vmy, accent());
-                            if(topPage()==AppPage.SERVER_CONFIG&&serverConfigPage!=null)serverConfigPage.renderFixedChrome(canvas,detailLayout(),vmx,vmy,frameDt);
-                        }
-                        default -> ShellHeader.render(canvas, layout.header,
-                                headerChrome.shellTitleFor(topNav()), true,
-                                headerChrome.backButton(), headerChrome.backButtonHover(),
-                                textPrimary(),
-                                topPage() == AppPage.PRIVATE_CHAT
-                                        ? contextActions.isOnlinePlayer(topNav().target()) : null,
-                                headerActionFor(topNav()));
-                    }
-                }
+        @Override
+        public void drawArrivingBody(Canvas canvas, UiLayout layout, int mouseX, int mouseY) {
+            switch (topPage()) {
+                case CHAT_LIST, PROFILE, SETTINGS -> drawRootBody(canvas, mouseX, mouseY, topPage());
+                case SERVER_CONFIG -> { if (serverConfigPage != null) serverConfigPage.renderBody(canvas, detailLayout(), toVirtualX(mouseX), toVirtualY(mouseY), frameDt); }
+                case SETTINGS_SECTION -> drawSettingsSection(canvas, mouseX, mouseY, topNav().section());
+                case PROFILE_DETAIL -> drawProfileDetail(canvas, mouseX, mouseY);
+                default -> drawChatPageBody(canvas, layout, mouseX, mouseY, chatPageViewFor(topNav()));
+            }
+        }
 
-                /**
-                 * The settings section and the profile detail are card lists:
-                 * they run the per-item stagger themselves, so the whole-page
-                 * envelope is skipped. The chat pages keep the envelope — their
-                 * message stack is not an item list to stagger.
-                 */
-                @Override
-                public boolean arrivalStaggersSurfaces() {
-                    return false;
+        @Override
+        public void drawArrivingHeader(Canvas canvas, UiLayout layout, int mouseX, int mouseY,
+                                       float vmx, float vmy) {
+            switch (topPage()) {
+                case CHAT_LIST, PROFILE, SETTINGS -> ShellHeader.render(canvas, rootLayout().header,
+                        headerChrome.shellTitleFor(topPage()), false, null, 0, textPrimary());
+                // The settings/profile pushed header draws through the
+                // detail header rect; the chat pages' header carries the
+                // back button, the online status and the feed filter.
+                case SETTINGS_SECTION, PROFILE_DETAIL, SERVER_CONFIG -> {
+                    headerChrome.drawPushedHeader(canvas, vmx, vmy, topNav(), headerActionFor(topNav()));
+                    if (topPage() == AppPage.SETTINGS_SECTION) settingsSectionPage.renderFixedChipBar(
+                            canvas, detailLayout(), topNav().section(), vmx, vmy, accent());
+                    if(topPage()==AppPage.SERVER_CONFIG&&serverConfigPage!=null)serverConfigPage.renderFixedChrome(canvas,detailLayout(),vmx,vmy,frameDt);
                 }
-                @Override public float bodyClipTop(UiLayout layout) { return stationaryChromeBottom(); }
-                @Override public int bodyVariant() {
-                    return topPage() == AppPage.SETTINGS_SECTION
-                            ? settingsSectionPage.activeChipIndex(topNav().section()) : topPage()==AppPage.SERVER_CONFIG&&serverConfigPage!=null?serverConfigPage.bodyVariant():0;
-                }
-            });
+                default -> ShellHeader.render(canvas, layout.header,
+                        headerChrome.shellTitleFor(topNav()), true,
+                        headerChrome.backButton(), headerChrome.backButtonHover(),
+                        textPrimary(),
+                        topPage() == AppPage.PRIVATE_CHAT
+                                ? contextActions.isOnlinePlayer(topNav().target()) : null,
+                        headerActionFor(topNav()));
+            }
+        }
+
+        /**
+         * The settings section and the profile detail are card lists:
+         * they run the per-item stagger themselves, so the whole-page
+         * envelope is skipped. The chat pages keep the envelope — their
+         * message stack is not an item list to stagger.
+         */
+        @Override
+        public boolean arrivalStaggersSurfaces() {
+            return false;
+        }
+        @Override public float bodyClipTop(UiLayout layout) { return stationaryChromeBottom(); }
+        @Override public int bodyVariant() {
+            return topPage() == AppPage.SETTINGS_SECTION
+                    ? settingsSectionPage.activeChipIndex(topNav().section()) : topPage()==AppPage.SERVER_CONFIG&&serverConfigPage!=null?serverConfigPage.bodyVariant():0;
+        }
+    }
     private UiLayout.Rect filterButton() {
         return headerChrome.adjacentButton();
     }
@@ -2877,7 +2879,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         quickPhrasePanel.update(frameDt);
         UiLayout layout = layout();
         UiLayout.Rect panel = layout.rect();
-        com.atom.chat.render.SoftShadow.drawPanel(canvas, panel.x(), panel.y(), panel.w(), panel.h(), UiTokens.panelRadius());
+        com.atom.chat.render.SoftShadow.drawPanel(canvas, panel.x(), panel.y(), panel.w(), panel.h(), UiTokens.panelRadius(AtomChatAppearance.theme()));
         // Background covers the outer contour beneath the final bezel; adjacent AA edges must overlap.
         // A custom wallpaper owns the panel background and beats the blur: one
         // shows the world through, the other covers it, so they never stack.
@@ -2886,7 +2888,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         float innerY = panel.y();
         float innerW = panel.w();
         float innerH = panel.h();
-        float innerRadius = UiTokens.panelRadius();
+        float innerRadius = UiTokens.panelRadius(AtomChatAppearance.theme());
 
         if (wallpaper != null) {
             // Solid base first, then the image on top at the configured
@@ -3063,7 +3065,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
             UiLayout.Rect replyRect = layout.replyBar;
             float replyH = s(26);
             SkiaDraw.drawRoundedRect(canvas, replyRect.x(), replyRect.y(), replyRect.w(), replyH,
-                    UiTokens.radius(8), UiTokens.quoteAccent(accent()));
+                    UiTokens.radius(8, AtomChatAppearance.theme()), UiTokens.quoteAccent(accent()));
             Font replyFont = FontManager.font(UiTokens.FONT_NAME);
             String replyLabel = tr("atomchat.reply.to", messageSenderName(reply),
                     abbreviate(reply.getContentText(), 26));
@@ -3089,7 +3091,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
             try (Paint border = new Paint().setMode(PaintMode.STROKE).setAntiAlias(true)
                     .setColor(accent()).setStrokeWidth(s(1.5F))) {
                 canvas.drawRRect(io.github.humbleui.types.RRect.makeXYWH(
-                        bar.x(), bar.y(), bar.w(), bar.h(), UiTokens.shellChromeRadius()), border);
+                        bar.x(), bar.y(), bar.w(), bar.h(), UiTokens.shellChromeRadius(AtomChatAppearance.theme())), border);
             }
         }
         if (!readOnly) {
@@ -3202,7 +3204,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
                     float cy = layout.inputTextCenterY + (i - from) * lineH;
                     var visibleLine=ownComposer && canUseCompletions()
                             ? suggestorWiring.formattedInputLine(lines.get(i),lineOffset) : com.atom.chat.render.FormattedLine.plain(lines.get(i));
-                    visibleLine.drawOnSurface(canvas,inputFont,textX,SkiaFontRenderer.centerBaselineY(inputFont,cy),textPrimary(),UiTokens.cardCutout());
+                    visibleLine.drawOnSurface(canvas,inputFont,textX,SkiaFontRenderer.centerBaselineY(inputFont,cy),textPrimary(),UiTokens.cardCutout(AtomChatAppearance.theme()));
                     lineOffset+=lines.get(i).length();
                 }
             }
@@ -3319,7 +3321,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         rootMouseY = vmy;
         scrollSync.rootScroll().setContent(measureRootContent(root, rootPage), root.list.h());
         scrollSync.rootScroll().updateAnimation(System.currentTimeMillis());
-        com.atom.chat.render.DotTexture.drawEdge(canvas, root.tabBar, UiTokens.shellChromeRadius(), true,
+        com.atom.chat.render.DotTexture.drawEdge(canvas, root.tabBar, UiTokens.shellChromeRadius(AtomChatAppearance.theme()), true,
                 AtomChatConfig.get().textSecondaryColor);
         drawRootPage(canvas, root, rootPage);
         drawScrollbar(canvas, root, vmx, vmy, scrollSync.rootScroll());

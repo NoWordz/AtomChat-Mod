@@ -89,7 +89,7 @@ public final class MenuPopup {
 
     private static void drawSurface(Canvas canvas, float x, float y, float w, float h, float radius) {
         ClickRipples.block(new UiLayout.Rect(x, y, w, h));
-        drawMaterial(canvas, x, y, w, h, UiTokens.radius(radius), SURFACE_COLOR);
+        drawMaterial(canvas, x, y, w, h, UiTokens.radius(radius, AtomChatAppearance.theme()), SURFACE_COLOR);
     }
 
     /** Shared material; radius is already scaled, including circular floating controls. */
@@ -176,14 +176,14 @@ public final class MenuPopup {
     public static void drawRowWash(Canvas canvas, float rowX, float rowY, float rowW, float rowH, float hoverAlpha) {
         float rippleInset = rowInset(rowW);
         ClickRipples.region(rowX + rippleInset, rowY + WASH_VERTICAL_INSET,
-                rowW - rippleInset * 2, rowH - WASH_VERTICAL_INSET * 2, UiTokens.radius(WASH_RADIUS), SURFACE_COLOR);
+                rowW - rippleInset * 2, rowH - WASH_VERTICAL_INSET * 2, UiTokens.radius(WASH_RADIUS, AtomChatAppearance.theme()), SURFACE_COLOR);
         if (hoverAlpha <= 0.01F) {
             return;
         }
         float a = Math.max(0.0F, Math.min(1.0F, hoverAlpha));
         float inset = rowInset(rowW);
         com.atom.lib.design.atomchat.SkiaDraw.drawRoundedRect(canvas, rowX + inset, rowY + WASH_VERTICAL_INSET,
-                rowW - inset * 2.0F, rowH - WASH_VERTICAL_INSET * 2.0F, UiTokens.radius(WASH_RADIUS),
+                rowW - inset * 2.0F, rowH - WASH_VERTICAL_INSET * 2.0F, UiTokens.radius(WASH_RADIUS, AtomChatAppearance.theme()),
                 io.github.humbleui.skija.Color.makeARGB(Math.round(WASH_ALPHA * a), 255, 255, 255));
     }
 }

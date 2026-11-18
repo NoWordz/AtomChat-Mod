@@ -2,6 +2,7 @@ package com.atom.chat.tools;
 
 
 
+import com.atom.chat.ui.AtomChatAppearance;
 import com.atom.lib.design.atomchat.AppIcons;
 import com.atom.lib.design.atomchat.UiTokens;
 import com.atom.chat.chat.PlayerRef;
@@ -70,7 +71,7 @@ public final class ToolMenu {
             float cx = box.x() + box.w() / 2, cy = box.y() + box.h() / 2;
             ComposerPopupTransform.of(box,anim).apply(canvas);
             MenuPopup.drawSurface(canvas, box.x(), box.y(), box.w(), box.h());
-            com.atom.chat.render.DotTexture.drawConnector(canvas, box, UiTokens.radius(MenuPopup.SURFACE_RADIUS),
+            com.atom.chat.render.DotTexture.drawConnector(canvas, box, UiTokens.radius(MenuPopup.SURFACE_RADIUS, AtomChatAppearance.theme()),
                     source.inputBar, source.imageBtn, com.atom.chat.config.AtomChatConfig.get().accentColor);
             int hovered = hit(source, mx, my);
             canvas.save();
@@ -78,7 +79,7 @@ public final class ToolMenu {
                 // Like context menus, complete rows fit by their bounce budget, without a contour clip.
                 // Only a scrolling player viewport needs to cut partially visible rows.
                 if (rows() * ToolLayout.MENU_ROW_H > box.h())
-                    SkiaDraw.clip(canvas, box.x(), box.y(), box.w(), box.h(), UiTokens.radius(MenuPopup.SURFACE_RADIUS));
+                    SkiaDraw.clip(canvas, box.x(), box.y(), box.w(), box.h(), UiTokens.radius(MenuPopup.SURFACE_RADIUS, AtomChatAppearance.theme()));
                 var font = FontManager.font(UiTokens.FONT_BUTTON);
                 int first = Math.max(0, (int) (scroll / ToolLayout.MENU_ROW_H));
                 int end = Math.min(rows(), first + (int) Math.ceil(box.h() / ToolLayout.MENU_ROW_H) + 1);

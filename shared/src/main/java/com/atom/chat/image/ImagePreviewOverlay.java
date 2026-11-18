@@ -1,5 +1,6 @@
 package com.atom.chat.image;
 
+import com.atom.chat.ui.AtomChatAppearance;
 import com.atom.chat.render.SkiaImages;
 import com.atom.lib.design.atomchat.SkiaDraw;
 import com.atom.chat.ui.Animations;
@@ -274,7 +275,7 @@ public final class ImagePreviewOverlay {
             // The dim backdrop: the panel-wide plate the other two modals use, so
             // a modal always reads as the same layer.
             SkiaDraw.drawRoundedRect(canvas, panel.x(), panel.y(), panel.w(), panel.h(),
-                    UiTokens.modalBackdropRadius(), Color.makeARGB((int) (200.0F * anim), 8, 9, 14));
+                    UiTokens.modalBackdropRadius(AtomChatAppearance.theme()), Color.makeARGB((int) (200.0F * anim), 8, 9, 14));
 
             Image current = image;
             if (current != null) {
@@ -285,7 +286,7 @@ public final class ImagePreviewOverlay {
                     if (opacity != null) canvas.saveLayer(Rect.makeXYWH(box.x(), box.y(), box.w(), box.h()), opacity);
                     try {
                         SkiaImages.drawRoundedImage(canvas, current, rect.x(), rect.y(),
-                                rect.w(), rect.h(), UiTokens.radius(8));
+                                rect.w(), rect.h(), UiTokens.radius(8, AtomChatAppearance.theme()));
                     } finally {
                         if (opacity != null) canvas.restore();
                     }
@@ -316,7 +317,7 @@ public final class ImagePreviewOverlay {
     /** The round close key: the same dark plate and white glyph as the modals'. */
     private void drawCloseKey(Canvas canvas, float cx, float cy, int alpha) {
         float r = s(CLOSE_RADIUS);
-        float closeRadius = UiTokens.radius(CLOSE_RADIUS);
+        float closeRadius = UiTokens.radius(CLOSE_RADIUS, AtomChatAppearance.theme());
         SkiaDraw.drawRoundedRect(canvas, cx - r, cy - r, 2.0F * r, 2.0F * r, closeRadius,
                 Color.makeARGB((int) (0.92F * alpha), 35, 39, 47));
         if (closeHover > 0.01F) {

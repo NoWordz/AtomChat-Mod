@@ -56,4 +56,12 @@ public final class SettingsRowText {
         float h=SettingsFormField.BASE_H;
         return new UiLayout.Rect(row.right()-UiTokens.SETTINGS_ROW_PAD-NUMBER_W-UNIT_W,stacked?row.bottom()-UiTokens.SETTINGS_ROW_PAD-h:row.y()+(row.h()-h)/2,NUMBER_W,h);
     }
+    public static Text measureNumber(String title,String description,float width){
+        return measure(title,description,width,NUMBER_W+UNIT_W+UiTokens.SETTINGS_COMPACT_GAP,SettingsFormField.BASE_H,true);
+    }
+    public static void drawNumberUnit(Canvas canvas,UiLayout.Rect field,String unit,int color){
+        var font=FontManager.font(UiTokens.SETTINGS_TILE_SUB);
+        SkiaFontRenderer.drawText(canvas,font,unit,field.right()+UiTokens.SETTINGS_ROW_GAP,
+                SkiaFontRenderer.centerBaselineY(font,field.y()+field.h()/2),color);
+    }
 }

@@ -1,5 +1,6 @@
 package com.atom.chat.avatar;
 
+import com.atom.chat.ui.AtomChatAppearance;
 import com.atom.chat.font.FontManager;
 import com.atom.lib.design.atomchat.SkiaDraw;
 import com.atom.chat.render.SkiaFontRenderer;
@@ -372,7 +373,7 @@ public final class ImageCropper {
         try {
             com.atom.chat.ui.PanelBackground.clipInterior(canvas, panel);
             SkiaDraw.drawRoundedRect(canvas, panel.x(), panel.y(), panelW, panelH,
-                    UiTokens.modalBackdropRadius(), Color.makeARGB((int) (200.0F * anim), 8, 9, 14));
+                    UiTokens.modalBackdropRadius(AtomChatAppearance.theme()), Color.makeARGB((int) (200.0F * anim), 8, 9, 14));
 
             Image image = decoded;
             if (image != null && !transformReady) {
@@ -384,7 +385,7 @@ public final class ImageCropper {
                 float left = offX - decodeW * scale / 2.0F;
                 float top = offY - decodeH * scale / 2.0F;
                 canvas.save();
-                SkiaDraw.clip(canvas, panel.x(), panel.y(), panelW, panelH, UiTokens.modalBackdropRadius());
+                SkiaDraw.clip(canvas, panel.x(), panel.y(), panelW, panelH, UiTokens.modalBackdropRadius(AtomChatAppearance.theme()));
                 try (Paint paint = new Paint().setAntiAlias(true)) {
                     canvas.drawImageRect(image,
                             Rect.makeXYWH(0, 0, decodeW, decodeH),
@@ -463,7 +464,7 @@ public final class ImageCropper {
 
     private void drawRoundButton(Canvas canvas, float cx, float cy, Path icon, float hover, int alpha) {
         float r = s(24);
-        float radius = UiTokens.radius(24);
+        float radius = UiTokens.radius(24, AtomChatAppearance.theme());
         SkiaDraw.drawRoundedShadow(canvas, cx - r, cy - r, 2.0F * r, 2.0F * r, radius, s(6),
                 // The button fades itself (no alpha layer above it),
                 // so the shadow rides the same fade instead of

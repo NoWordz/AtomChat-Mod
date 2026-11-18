@@ -1,5 +1,6 @@
 package com.atom.chat.onboarding;
 
+import com.atom.chat.ui.AtomChatAppearance;
 import com.atom.chat.ui.*;
 import com.atom.chat.ui.input.InputHandler;
 import io.github.humbleui.skija.Canvas;
@@ -31,7 +32,7 @@ public final class TutorialController implements InputHandler {
         default UiLayout.Rect anchor(TutorialSession.Step step) { return null; }
         default TutorialAnchor anchorShape(TutorialSession.Step step) {
             var bounds=anchor(step);
-            return bounds==null?null:new TutorialAnchor(bounds,com.atom.lib.design.atomchat.UiTokens.settingsRowRadius());
+            return bounds==null?null:new TutorialAnchor(bounds,com.atom.lib.design.atomchat.UiTokens.settingsRowRadius(AtomChatAppearance.theme()));
         }
     }
     private final Host host;

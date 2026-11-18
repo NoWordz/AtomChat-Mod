@@ -80,10 +80,10 @@ public final class ShellHeader {
         // shadow behind an opaque-ish surface), unlike the edge-highlighted
         // content cards.
         SkiaDraw.drawChromeShadow(canvas, header.x(), header.y(), header.w(), header.h(),
-                UiTokens.headerRadius());
+                UiTokens.headerRadius(AtomChatAppearance.theme()));
         SkiaDraw.drawRoundedRect(canvas, header.x(), header.y(), header.w(), header.h(),
-                UiTokens.headerRadius(), UiTokens.cardFill());
-        com.atom.chat.render.ChromeMaterial.drawDetails(canvas, header, UiTokens.headerRadius());
+                UiTokens.headerRadius(AtomChatAppearance.theme()), UiTokens.cardFill(AtomChatAppearance.theme()));
+        com.atom.chat.render.ChromeMaterial.drawDetails(canvas, header, UiTokens.headerRadius(AtomChatAppearance.theme()));
 
         if (showBack && backButton != null) {
             boolean pressed = backPressedNow;
@@ -140,7 +140,7 @@ public final class ShellHeader {
 
     /** Page content must be drawn after this pass, even when the header itself is an overlay. */
     public static void drawBackdrop(Canvas canvas, UiLayout.Rect header) {
-        com.atom.chat.render.DotTexture.drawEdge(canvas, header, UiTokens.headerRadius(), false,
+        com.atom.chat.render.DotTexture.drawEdge(canvas, header, UiTokens.headerRadius(AtomChatAppearance.theme()), false,
                 com.atom.chat.config.AtomChatConfig.get().textSecondaryColor);
     }
 
@@ -160,7 +160,7 @@ public final class ShellHeader {
     private static void drawIconButton(Canvas canvas, UiLayout.Rect rect, float hover,
                                        boolean pressed, PressScale scale,
                                        io.github.humbleui.skija.Path icon, int color) {
-        ClickRipples.region(rect.x(), rect.y(), rect.w(), rect.h(), UiTokens.radius(8), UiTokens.cardFill());
+        ClickRipples.region(rect.x(), rect.y(), rect.w(), rect.h(), UiTokens.radius(8, AtomChatAppearance.theme()), UiTokens.cardFill(AtomChatAppearance.theme()));
         // The scaled shape is the inset wash, so the width budget is spent on
         // that surface (rect minus the inset on both sides), not on the outer
         // hit-test rect. Behaviour is unchanged at the default inset — this is
@@ -181,8 +181,8 @@ public final class ShellHeader {
             float y = rect.y() + inset;
             float w = rect.w() - inset * 2.0F;
             float h = rect.h() - inset * 2.0F;
-            SkiaDraw.drawRoundedRect(canvas, x, y, w, h, UiTokens.radius(8),
-                    UiTokens.cardHover(hover));
+            SkiaDraw.drawRoundedRect(canvas, x, y, w, h, UiTokens.radius(8, AtomChatAppearance.theme()),
+                    UiTokens.cardHover(hover, AtomChatAppearance.theme()));
         }
         drawIconCentered(canvas, icon,
                 rect.x() + rect.w() / 2.0F,

@@ -231,13 +231,13 @@ class UiTokensTest {
         try {
             AtomChatConfig.get().cornerRadius = 20.0F;
             assertEquals(UiTokens.SWITCH_KNOB / 2.0F,
-                    UiTokens.handleRadius(UiTokens.SWITCH_KNOB), 0.01F,
+                    UiTokens.handleRadius(UiTokens.SWITCH_KNOB, AtomChatAppearance.theme()), 0.01F,
                     "the shipped radius keeps switch and slider handles round");
             AtomChatConfig.get().cornerRadius = 0.0F;
-            assertEquals(0.0F, UiTokens.handleRadius(UiTokens.SWITCH_KNOB), 0.0F);
-            assertEquals(0.0F, UiTokens.handleRadius(UiTokens.SLIDER_KNOB), 0.0F);
+            assertEquals(0.0F, UiTokens.handleRadius(UiTokens.SWITCH_KNOB, AtomChatAppearance.theme()), 0.0F);
+            assertEquals(0.0F, UiTokens.handleRadius(UiTokens.SLIDER_KNOB, AtomChatAppearance.theme()), 0.0F);
             AtomChatConfig.get().cornerRadius = 8.0F;
-            float middle = UiTokens.handleRadius(UiTokens.SLIDER_KNOB);
+            float middle = UiTokens.handleRadius(UiTokens.SLIDER_KNOB, AtomChatAppearance.theme());
             assertTrue(middle > 0.0F && middle < UiTokens.SLIDER_KNOB / 2.0F,
                     "middle radii follow the continuous knob instead of snapping");
         } finally {

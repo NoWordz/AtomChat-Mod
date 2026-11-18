@@ -44,7 +44,7 @@ public final class PanelBackground {
             canvas.drawRRect(io.github.humbleui.types.RRect.makeXYWH(
                     panel.x() + half, panel.y() + half,
                     Math.max(0, panel.w() - width), Math.max(0, panel.h() - width),
-                    Math.max(0, UiTokens.panelRadius() - half)), paint);
+                    Math.max(0, UiTokens.panelRadius(AtomChatAppearance.theme()) - half)), paint);
         }
     }
 
@@ -55,7 +55,7 @@ public final class PanelBackground {
         com.atom.lib.design.atomchat.SkiaDraw.clip(canvas,
                 panel.x() + inset, panel.y() + inset,
                 Math.max(0F, panel.w() - 2F * inset), Math.max(0F, panel.h() - 2F * inset),
-                Math.max(0F, UiTokens.panelRadius() - inset));
+                Math.max(0F, UiTokens.panelRadius(AtomChatAppearance.theme()) - inset));
     }
 
     /** Drops the colour's own alpha; the panel applies its configured opacity instead. */

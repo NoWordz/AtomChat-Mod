@@ -153,7 +153,7 @@ public final class PanelOpenMotion {
                 cy - insetH * scale / 2.0F,
                 insetW * scale,
                 insetH * scale,
-                Math.max(0F, UiTokens.panelRadius() - strokeWidth) * scale);
+                Math.max(0F, UiTokens.panelRadius(AtomChatAppearance.theme()) - strokeWidth) * scale);
     }
 
     /**

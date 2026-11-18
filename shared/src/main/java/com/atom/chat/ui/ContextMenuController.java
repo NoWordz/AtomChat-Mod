@@ -268,7 +268,7 @@ public final class ContextMenuController<M> {
         float scale=0.94F+0.06F*anim;
         return new UiLayout.Rect(b.x()+b.w()*(1-scale)/2,b.y(),b.w()*scale,b.h()*scale);
     }
-    public float surfaceRadius(){return UiTokens.radius(MenuPopup.SURFACE_RADIUS)*(0.94F+0.06F*anim);}
+    public float surfaceRadius(){return UiTokens.radius(MenuPopup.SURFACE_RADIUS, AtomChatAppearance.theme())*(0.94F+0.06F*anim);}
 
     /**
      * Whether the image row belongs to this menu: only the bubble menu has one,

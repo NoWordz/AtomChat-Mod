@@ -1,9 +1,11 @@
 package com.atom.chat.settings;
 
+import com.atom.chat.ui.AtomChatAppearance;
 import com.atom.chat.ui.UiLayout;
 import com.atom.lib.design.atomchat.SkiaDraw;
 import com.atom.lib.design.atomchat.UiTokens;
 import com.atom.lib.design.atomchat.Design;
+import com.atom.lib.design.atomchat.DesignHost;
 import io.github.humbleui.skija.*;
 import io.github.humbleui.types.RRect;
 
@@ -15,8 +17,11 @@ public final class SettingsFieldPaint {
         surface(canvas,field,0,editing,false,true,accent);
     }
     public static void surface(Canvas canvas,UiLayout.Rect field,float hover,boolean focused,boolean error,boolean enabled,int accent) {
-        float radius = UiTokens.radius(8);
-        int base=UiTokens.cardCutout();boolean light=Design.isLight(base);
+        surface(canvas,field,hover,focused,error,enabled,accent,AtomChatAppearance.theme());
+    }
+    public static void surface(Canvas canvas,UiLayout.Rect field,float hover,boolean focused,boolean error,boolean enabled,int accent,DesignHost appearance) {
+        float radius = UiTokens.radius(8, appearance);
+        int base=UiTokens.cardCutout(appearance);boolean light=Design.isLight(base);
         int fill=light?0x0C000000:0x0EFFFFFF;
         SkiaDraw.drawRoundedRect(canvas, field.x(), field.y(), field.w(), field.h(), radius,fill);
         if(enabled&&hover>0)SkiaDraw.drawRoundedRect(canvas,field.x(),field.y(),field.w(),field.h(),radius,((Math.round(18*hover))<<24)|(accent&0xffffff));

@@ -1,5 +1,6 @@
 package com.atom.chat.page;
 
+import com.atom.chat.ui.AtomChatAppearance;
 import com.atom.chat.nav.PageNavAxis;
 import com.atom.chat.ui.UiStagger;
 import com.atom.chat.config.AtomChatConfig;
@@ -20,7 +21,6 @@ import com.atom.chat.ui.Animations;
 import com.atom.lib.design.atomchat.AppIcons;
 import com.atom.chat.ui.PanelOpenMotion;
 import com.atom.chat.ui.PressScale;
-import com.atom.lib.design.atomchat.UiCards;
 import com.atom.chat.ui.UiLayout;
 import com.atom.chat.ui.UiMotion;
 import com.atom.lib.design.atomchat.UiTokens;
@@ -687,7 +687,7 @@ public final class ConversationListPage {
 
     private void drawNormalRow(Canvas canvas, Row row, float x, float y, float w, float hoverAlpha) {
         // Settings-page card stack: soft shadow, fill, polarity hairline, hover wash.
-        UiCards.drawCard(canvas, x, y, w, ROW_H, UiTokens.settingsRowRadius(), hoverAlpha);
+        AtomChatAppearance.drawCard(canvas, x, y, w, ROW_H, UiTokens.settingsRowRadius(AtomChatAppearance.theme()), hoverAlpha);
         drawRowContent(canvas, row, x, y, w);
     }
 
@@ -700,7 +700,7 @@ public final class ConversationListPage {
         canvas.save();
         try {
             canvas.saveLayer(CardShadowReach.layerRect(x, y, w, ROW_H, 0, 0), BLOCKED_LAYER);
-            UiCards.drawCard(canvas, x, y, w, ROW_H, UiTokens.settingsRowRadius(), hoverAlpha);
+            AtomChatAppearance.drawCard(canvas, x, y, w, ROW_H, UiTokens.settingsRowRadius(AtomChatAppearance.theme()), hoverAlpha);
             drawRowContent(canvas, row, x, y, w);
             canvas.restore();
         } finally {
@@ -792,7 +792,7 @@ public final class ConversationListPage {
             float by = y + ROW_H / 2.0F + s(12) - bh / 2.0F;
             int badgeColor = mentionBadge ? Color.makeARGB(255, 245, 158, 11) : Color.makeARGB(255, 244, 67, 54);
             SkiaDraw.drawRoundedRect(canvas, bx, by, badgeW, bh,
-                    UiTokens.radius(bh / (2.0F * UiTokens.SCALE)), badgeColor);
+                    UiTokens.radius(bh / (2.0F * UiTokens.SCALE), AtomChatAppearance.theme()), badgeColor);
             SkiaFontRenderer.drawTextCentered(canvas, badgeFont, badgeText,
                     bx + badgeW / 2.0F, by + bh / 2.0F, Color.makeARGB(255, 255, 255, 255));
         }
@@ -818,7 +818,7 @@ public final class ConversationListPage {
         // language as the swatches.
         SkiaDraw.drawRing(canvas, x + size / 2.0F, y + size / 2.0F,
                 com.atom.chat.render.AvatarRing.rimRadius(size / 2.0F),
-                com.atom.chat.render.AvatarRing.RIM_STROKE_PX, UiTokens.rim());
+                com.atom.chat.render.AvatarRing.RIM_STROKE_PX, UiTokens.rim(AtomChatAppearance.theme()));
     }
 
     private static String previewText(Row row) {

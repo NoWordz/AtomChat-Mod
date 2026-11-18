@@ -1,5 +1,6 @@
 package com.atom.chat.nav;
 
+import com.atom.chat.ui.AtomChatAppearance;
 import com.atom.chat.config.AtomChatConfig;
 import com.atom.chat.ui.Animations;
 import com.atom.chat.ui.UiLayout;
@@ -125,7 +126,7 @@ public final class PageTransitionComposite implements AutoCloseable {
                         // rounding the same interrupted pixels a second time.
                         departing.playback(recording);
                     } else {
-                    SkiaDraw.clip(recording, panel.x(), panel.y(), panel.w(), panel.h(), UiTokens.panelRadius());
+                    SkiaDraw.clip(recording, panel.x(), panel.y(), panel.w(), panel.h(), UiTokens.panelRadius(AtomChatAppearance.theme()));
                     recording.clipRect(Rect.makeLTRB(panel.x(), host.bodyClipTop(layout), panel.right(), panel.bottom()));
                     if (departing != null) drawLayer(recording, departing, panel,
                             1 - frame.alpha(), frame.exitDx(), frame.exitScale());

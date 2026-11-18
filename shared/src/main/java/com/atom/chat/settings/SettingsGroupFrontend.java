@@ -1,5 +1,6 @@
 package com.atom.chat.settings;
 
+import com.atom.chat.ui.AtomChatAppearance;
 import com.atom.chat.render.CardShadowReach;
 import com.atom.chat.ui.*;
 import com.atom.lib.design.atomchat.*;
@@ -65,12 +66,12 @@ public final class SettingsGroupFrontend {
             }
             if(press!=null)press.begin(canvas,card.x()+card.w()/2,card.y()+card.h()/2);
             try{
-                UiCards.drawCard(canvas,card.x(),card.y(),card.w(),card.h(),UiTokens.settingsRowRadius(),0);
-                canvas.save();try{SkiaDraw.clip(canvas,card.x(),card.y(),card.w(),card.h(),UiTokens.settingsRowRadius());return paintRows.getAsInt();}finally{canvas.restore();}
+                AtomChatAppearance.drawCard(canvas,card.x(),card.y(),card.w(),card.h(),UiTokens.settingsRowRadius(AtomChatAppearance.theme()),0);
+                canvas.save();try{SkiaDraw.clip(canvas,card.x(),card.y(),card.w(),card.h(),UiTokens.settingsRowRadius(AtomChatAppearance.theme()));return paintRows.getAsInt();}finally{canvas.restore();}
             }finally{if(press!=null)canvas.restore();}
         }finally{if(foldFade!=null){foldFade.close();canvas.restore();}canvas.restore();}
     }
     public static void divider(Canvas canvas,UiLayout.Rect card,float y){
-        SkiaDraw.drawRoundedRect(canvas,card.x()+UiTokens.SETTINGS_ROW_PAD,y,card.w()-UiTokens.SETTINGS_ROW_PAD*2,UiTokens.s(1),0,UiTokens.hairline()); // bare-value: extracted settings divider thickness
+        SkiaDraw.drawRoundedRect(canvas,card.x()+UiTokens.SETTINGS_ROW_PAD,y,card.w()-UiTokens.SETTINGS_ROW_PAD*2,UiTokens.s(1),0,UiTokens.hairline(AtomChatAppearance.theme())); // bare-value: extracted settings divider thickness
     }
 }

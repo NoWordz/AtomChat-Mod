@@ -1,5 +1,6 @@
 package com.atom.chat.settings;
 
+import com.atom.chat.ui.AtomChatAppearance;
 import com.atom.chat.font.FontManager;
 import com.atom.chat.render.*;
 import com.atom.chat.ui.*;
@@ -39,13 +40,13 @@ public final class SettingsChipBar {
         var first=layout.chipRect(0,count);float inset=UiTokens.TAB_EDGE_PAD;
         float x=layout.chipBar.x()+indicator.getValue()*layout.chipBar.w()/count+inset;
         var active=scales.get(selected);if(active!=null)active.begin(canvas,x+first.w()/2,first.y()+first.h()/2);
-        try{SkiaDraw.drawRoundedRect(canvas,x,first.y(),first.w(),first.h(),UiTokens.insetRadius(UiTokens.chromeRadius(),inset,first.w(),first.h()),UiTokens.accentFill());}finally{if(active!=null)canvas.restore();}
+        try{SkiaDraw.drawRoundedRect(canvas,x,first.y(),first.w(),first.h(),UiTokens.insetRadius(UiTokens.chromeRadius(AtomChatAppearance.theme()),inset,first.w(),first.h()),UiTokens.accentFill(AtomChatAppearance.theme()));}finally{if(active!=null)canvas.restore();}
         for(int i=0;i<count;i++){
             var cell=layout.chipRect(i,count);boolean on=i==selected;var font=on?FontManager.boldFont(UiTokens.SETTINGS_TILE_SUB):FontManager.font(UiTokens.SETTINGS_TILE_SUB);
             var scale=scales.get(i);if(scale!=null)scale.begin(canvas,cell.x()+cell.w()/2,cell.y()+cell.h()/2);
             try{
-                if(!on&&hover.getOrDefault(i,0f)>.01f)SkiaDraw.drawRoundedRect(canvas,cell.x(),cell.y(),cell.w(),cell.h(),UiTokens.insetRadius(UiTokens.chromeRadius(),inset,cell.w(),cell.h()),UiTokens.cardHover(hover.get(i)));
-                SkiaFontRenderer.drawTextCentered(canvas,font,SkiaFontRenderer.truncate(font,labels.get(i),Math.max(0,cell.w()-UiTokens.s(10))),cell.x()+cell.w()/2,cell.y()+cell.h()/2,on?UiTokens.onAccent(UiTokens.accentFill()):secondary); // bare-value: unchanged settings chip text inset
+                if(!on&&hover.getOrDefault(i,0f)>.01f)SkiaDraw.drawRoundedRect(canvas,cell.x(),cell.y(),cell.w(),cell.h(),UiTokens.insetRadius(UiTokens.chromeRadius(AtomChatAppearance.theme()),inset,cell.w(),cell.h()),UiTokens.cardHover(hover.get(i), AtomChatAppearance.theme()));
+                SkiaFontRenderer.drawTextCentered(canvas,font,SkiaFontRenderer.truncate(font,labels.get(i),Math.max(0,cell.w()-UiTokens.s(10))),cell.x()+cell.w()/2,cell.y()+cell.h()/2,on?UiTokens.onAccent(UiTokens.accentFill(AtomChatAppearance.theme())):secondary); // bare-value: unchanged settings chip text inset
             }finally{if(scale!=null)canvas.restore();}
         }
     }

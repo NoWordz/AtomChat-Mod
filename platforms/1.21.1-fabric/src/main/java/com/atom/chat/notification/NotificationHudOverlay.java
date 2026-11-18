@@ -1,5 +1,6 @@
 package com.atom.chat.notification;
 
+import com.atom.chat.ui.AtomChatAppearance;
 import com.atom.chat.AtomChat;
 import com.atom.chat.render.ItemIconRenderer;
 import com.atom.chat.render.PanelBlurRenderer;
@@ -65,7 +66,7 @@ public final class NotificationHudOverlay {
                 }
                 if (banner && PanelBlurRenderer.isAvailable()) {
                     boolean drew = PanelBlurRenderer.render(new Matrix4f(), rect.x(), rect.y(),
-                            rect.w(), rect.h(), UiTokens.cardRadius(), NotificationBanner.hudBackdropAlpha());
+                            rect.w(), rect.h(), UiTokens.cardRadius(AtomChatAppearance.theme()), NotificationBanner.hudBackdropAlpha());
                     if (drew) NotificationBanner.hudBackdropPreDrawn();
                 }
                 if (banner) ItemIconRenderer.prepare(gui, GRAPHICS);

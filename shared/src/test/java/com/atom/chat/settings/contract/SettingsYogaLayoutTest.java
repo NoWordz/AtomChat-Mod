@@ -16,6 +16,10 @@ class SettingsYogaLayoutTest {
                 assertNotNull(actual.frame(),"actual Yoga frame must own geometry, not a second coordinate walk");
                 assertArrayEquals(expected.tops(),actual.slots().tops(),.0001f);assertArrayEquals(expected.heights(),actual.slots().heights(),.0001f);assertEquals(expected.contentHeight(),actual.slots().contentHeight(),.0001f);
                 for(int row=0;row<full.length;row++){var box=actual.frame().box(new NodeId("settings-contract/row/"+row));assertEquals(actual.slots().tops()[row],box.border().y());assertEquals(actual.slots().heights()[row],box.border().height());assertEquals(box.border(),box.hit());}
+                var storageId=new NodeId("settings-contract/group/1");
+                assertEquals(storageId,actual.frame().box(new NodeId("settings-contract/row/1")).parent());
+                assertEquals(storageId,actual.frame().box(new NodeId("settings-contract/row/2")).parent());
+                assertEquals((full[1]+full[2])*fraction,actual.frame().box(storageId).border().height(),.0001f);
             }
             layout.close();assertNotNull(layout.layout(420,new float[]{12.25f},new String[]{null},id->1).frame(),"reopened page owns a fresh native layout");
         }

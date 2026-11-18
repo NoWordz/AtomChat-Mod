@@ -1,5 +1,6 @@
 package com.atom.chat.page;
 
+import com.atom.chat.ui.AtomChatAppearance;
 import com.atom.chat.AtomChat;
 import com.atom.chat.chat.ChatMessage;
 import com.atom.chat.chat.Cicodes;
@@ -323,7 +324,7 @@ public final class MessageListView {
         }
         float t = Math.min(1.0F, left / (float) HIGHLIGHT_MS);
         SkiaDraw.drawRoundedRect(canvas, x, y - UiTokens.s(2), w, h + UiTokens.s(4),
-                UiTokens.radius(8), Color.makeARGB((int) (60.0F * t), 255, 255, 255));
+                UiTokens.radius(8, AtomChatAppearance.theme()), Color.makeARGB((int) (60.0F * t), 255, 255, 255));
     }
 
     private final com.atom.chat.ui.ReactionChips reactionChips = new com.atom.chat.ui.ReactionChips();
@@ -522,11 +523,11 @@ public final class MessageListView {
                 Animations.enabled(), w);
         loadEarlierScale.begin(canvas, bx + w / 2.0F, by + h / 2.0F);
         try {
-            float pillRadius = UiTokens.radius(h / (2.0F * UiTokens.SCALE));
+            float pillRadius = UiTokens.radius(h / (2.0F * UiTokens.SCALE), AtomChatAppearance.theme());
             SkiaDraw.drawRoundedRect(canvas, bx, by, w, h, pillRadius, secondaryCapsuleBg());
             if (loadEarlierHover > 0.01F) {
                 SkiaDraw.drawRoundedRect(canvas, bx, by, w, h, pillRadius,
-                        UiTokens.cardHover(loadEarlierHover));
+                        UiTokens.cardHover(loadEarlierHover, AtomChatAppearance.theme()));
             }
             SkiaFontRenderer.drawTextCentered(canvas, font, label, bx + w / 2.0F, by + h / 2.0F,
                     secondaryCapsuleText(), true, secondaryCapsuleBg());
@@ -955,7 +956,7 @@ public final class MessageListView {
         // panel sits behind. Same ring language as the swatches.
         SkiaDraw.drawRing(canvas, avatarX + UiTokens.AVATAR_SIZE / 2.0F, avatarY + UiTokens.AVATAR_SIZE / 2.0F,
                 com.atom.chat.render.AvatarRing.rimRadius(UiTokens.AVATAR_SIZE / 2.0F),
-                com.atom.chat.render.AvatarRing.RIM_STROKE_PX, UiTokens.rim());
+                com.atom.chat.render.AvatarRing.RIM_STROKE_PX, UiTokens.rim(AtomChatAppearance.theme()));
     }
 
     /** Clock pill height between messages (see {@link #dividerBefore}). */
@@ -999,7 +1000,7 @@ public final class MessageListView {
         float pillH = TIME_DIVIDER_H - s(6);
         float pillX = x + (width - pillW) / 2.0F;
         float pillY = y + s(3);
-        SkiaDraw.drawRoundedRect(canvas, pillX, pillY, pillW, pillH, UiTokens.radius(10),
+        SkiaDraw.drawRoundedRect(canvas, pillX, pillY, pillW, pillH, UiTokens.radius(10, AtomChatAppearance.theme()),
                 secondaryCapsuleBg());
         SkiaFontRenderer.drawTextCentered(canvas, font, time, x + width / 2.0F, pillY + pillH / 2.0F,
                 secondaryCapsuleText(), TextSurface.CAPSULE.shadowed(), secondaryCapsuleBg());
@@ -1191,7 +1192,7 @@ public final class MessageListView {
         float bubbleX = x + (maxWidth - bubbleWidth) / 2.0F;
         float bubbleTop = y + s(2);
         // System capsules share the secondary capsule family (configurable).
-        SkiaDraw.drawRoundedRect(canvas, bubbleX, bubbleTop, bubbleWidth, bubbleHeight, UiTokens.radius(10),
+        SkiaDraw.drawRoundedRect(canvas, bubbleX, bubbleTop, bubbleWidth, bubbleHeight, UiTokens.radius(10, AtomChatAppearance.theme()),
                 secondaryCapsuleBg());
         drawMessageSelection(canvas, msg, richLines, bubbleX + UiTokens.BUBBLE_PAD, bubbleTop + bubbleHeight / 2.0F, lineHeight, font);
         // Capsule text takes a backing shadow (TextSurface.CAPSULE); the shadow
@@ -1254,7 +1255,7 @@ public final class MessageListView {
         // Quote pill shares the secondary capsule family (configurable), so it
         // reads as the same family as system messages and time dividers.
         SkiaDraw.drawRoundedRect(canvas, pillX, pillY, pillW, UiTokens.QUOTE_HEIGHT,
-                UiTokens.radius(6), secondaryCapsuleBg());
+                UiTokens.radius(6, AtomChatAppearance.theme()), secondaryCapsuleBg());
         SkiaDraw.drawRoundedRect(canvas, pillX + UiTokens.QUOTE_PAD_X, pillY + s(3), barW, UiTokens.QUOTE_HEIGHT - s(6), barW / 2.0F, accent());
         float textStartX = pillX + UiTokens.QUOTE_PAD_X + barW + s(4);
         float quoteCenterY = pillY + UiTokens.QUOTE_HEIGHT / 2.0F;

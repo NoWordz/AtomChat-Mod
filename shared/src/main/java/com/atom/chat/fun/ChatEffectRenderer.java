@@ -1,4 +1,5 @@
 package com.atom.chat.fun;
+import com.atom.chat.ui.AtomChatAppearance;
 import com.atom.chat.font.FontManager;
 import com.atom.lib.design.atomchat.SkiaDraw;
 import com.atom.chat.render.SkiaFontRenderer;
@@ -17,7 +18,7 @@ public final class ChatEffectRenderer {
         canvas.save();
         try {
             SkiaDraw.clip(canvas,area.x(),area.y(),area.w(),area.h(),
-                    type==ChatEffectType.STAR?0.0f:UiTokens.panelRadius());
+                    type==ChatEffectType.STAR?0.0f:UiTokens.panelRadius(AtomChatAppearance.theme()));
             for(var p:particles) {
                 canvas.save();
                 try {

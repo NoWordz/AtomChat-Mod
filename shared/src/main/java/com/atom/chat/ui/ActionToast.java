@@ -174,8 +174,8 @@ public final class ActionToast {
         // opaque fill that follows the theme's card colour, on the two-tier chrome
         // shadow, with its ink derived from that fill. The row's own fade rides the
         // caller's layer, so nothing here needs to know the current opacity.
-        int fill = UiTokens.floatSurfaceFill();
-        UiCards.drawFloatSurface(canvas, x, y, w, h, UiTokens.cardRadius(), 0.0F, fill);
+        int fill = UiTokens.floatSurfaceFill(AtomChatAppearance.theme());
+        UiCards.drawFloatSurface(canvas, x, y, w, h, UiTokens.cardRadius(AtomChatAppearance.theme()), 0.0F, fill, AtomChatAppearance.theme());
         float cy = y + h / 2.0F;
         float ix = x + PAD_X;
         drawGlyph(canvas, entry.outcome(), ix, cy, fill);
