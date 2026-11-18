@@ -252,9 +252,12 @@ def verify_consumer(project):
             if 'fabric.mod.json' in names:
                 meta = json.loads(archive.read('fabric.mod.json'))
                 registered = {j['file'] for j in meta.get('jars', [])}
+                # The Fabric hint uses its loader's predicate syntax and the
+                # compiled input version. The client preflight checks the API.
+                fabric_range = f'>={required}'
                 valid = (meta.get('environment') == '*' and
-                         meta.get('suggests', {}).get('atomlib') == expected_range and
-                         meta.get('custom', {}).get('atomlib:client-required') == expected_range and
+                         meta.get('suggests', {}).get('atomlib') == fabric_range and
+                         meta.get('custom', {}).get('atomlib:client-required') == fabric_range and
                          'atomlib' not in meta.get('depends', {}) and
                          'com/atom/chat/compat/AtomLibDependencyCheck.class' in names and
                          b'AtomLibDependencyCheck' in archive.read('com/atom/chat/AtomChatClient.class'))

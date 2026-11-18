@@ -31,6 +31,58 @@ class ImageLoaderTest {
         assertEquals(0,fetched.get(),"invalidated media must not start against a new connection");
     }
 
+    @Test void pendingVisibilityRefreshAndCancellationPreserveLoadSemantics() {
+        var tasks = new java.util.ArrayList<Runnable>();
+        var now = new AtomicLong(1_000L);
+        var calls = new AtomicInteger();
+        var loader = ImageLoader.forTest(url -> {
+            calls.incrementAndGet();
+            return png(2, 2);
+        }, now::get, tasks::add);
+        loader.init(tempDir);
+        String url = "http://test/pending";
+
+        loader.get(url, true);
+        now.set(2_500L);
+        loader.get(url, true);
+        assertEquals(1, tasks.size());
+        now.set(4_000L);
+        tasks.remove(0).run();
+        assertEquals(1, calls.get(), "visible repeat refreshes the queued task");
+        assertNotNull(loader.get(url));
+        while (!tasks.isEmpty()) tasks.remove(0).run();
+
+        String cancelled = "http://test/cancelled";
+        loader.get(cancelled, true);
+        loader.get(cancelled, false);
+        loader.get(cancelled, true);
+        assertEquals(2, tasks.size());
+        tasks.remove(0).run();
+        assertEquals(1, calls.get(), "a cancelled task cannot fetch after replacement");
+        tasks.remove(0).run();
+        assertEquals(2, calls.get());
+        assertNotNull(loader.get(cancelled));
+    }
+
+    @Test void staticDecoderRejectsInvalidTruncatedAndOversizedSources() {
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class,
+                () -> ImageLoader.decodeStatic(new byte[0], 32));
+        byte[] encoded = png(2, 2);
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class,
+                () -> ImageLoader.decodeStatic(java.util.Arrays.copyOf(encoded, 8), 32));
+        byte[] oversized = encoded.clone();
+        java.nio.ByteBuffer.wrap(oversized).putInt(16, 7_000).putInt(20, 7_000);
+        var crc = new java.util.zip.CRC32();
+        crc.update(oversized, 12, 17);
+        java.nio.ByteBuffer.wrap(oversized).putInt(29, (int) crc.getValue());
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class,
+                () -> ImageLoader.decodeStatic(oversized, 32));
+        try (Image valid = ImageLoader.decodeStatic(encoded, 32)) {
+            assertEquals(2, valid.getWidth());
+            assertEquals(2, valid.getHeight());
+        }
+    }
+
     @Test void processedDiskHitOnlyTouchesItsUsageStamp() throws Exception {
         long stamp=System.currentTimeMillis()+1000;
         String url="http://test/stable";

@@ -681,9 +681,10 @@ public class AtomChatConfig {
         return json;
     }
 
-    private static String sanitizeWorldFeedFilter(String json) {
+    static String sanitizeWorldFeedFilterAndTemplates(String json) {
         com.google.gson.JsonObject obj = GSON.fromJson(json, com.google.gson.JsonObject.class);
-        if (obj != null && obj.has("worldFeedFilter")) {
+        if (obj == null) return json;
+        if (obj.has("worldFeedFilter")) {
             try {
                 String raw = obj.get("worldFeedFilter").getAsJsonPrimitive().getAsString();
                 obj.addProperty("worldFeedFilter",
@@ -691,9 +692,28 @@ public class AtomChatConfig {
             } catch (RuntimeException ignored) {
                 obj.remove("worldFeedFilter");
             }
-            return obj.toString();
         }
-        return json;
+        for (String key : java.util.List.of("chatTemplates", "whisperTemplates")) {
+            var value = obj.get(key);
+            if (value == null) continue;
+            if (!value.isJsonArray()) {
+                warnTemplateType(key);
+                obj.remove(key);
+                continue;
+            }
+            var templates = value.getAsJsonArray();
+            for (int i = templates.size() - 1; i >= 0; i--) {
+                var item = templates.get(i);
+                if (item.isJsonPrimitive() && item.getAsJsonPrimitive().isString()) continue;
+                warnTemplateType(key + "[" + i + "]");
+                templates.remove(i);
+            }
+        }
+        return obj.toString();
+    }
+
+    private static void warnTemplateType(String path) {
+        AtomChat.LOGGER.warn(com.atom.chat.diagnostics.AtomChatLog.message("config", "Ignoring invalid template type at {}"), path);
     }
 
     private static AtomChatConfig load() {
@@ -704,7 +724,7 @@ public class AtomChatConfig {
                 String json = Files.readString(path, StandardCharsets.UTF_8);
                 boolean halfWidthKeyPresent = hasKey(json, "halfScreenWidthCustomized");
                 AtomChatConfig config = GSON.fromJson(sanitizePageNavStyle(sanitizeAvatarStyle(
-                        sanitizeBubbleStyle(sanitizeWorldFeedFilter(json)))), AtomChatConfig.class);
+                        sanitizeBubbleStyle(sanitizeWorldFeedFilterAndTemplates(json)))), AtomChatConfig.class);
                 if (config != null) {
                     boolean personalLoaded = PersonalDataStore.load(config);
                     if (config.blockedPlayers == null) {

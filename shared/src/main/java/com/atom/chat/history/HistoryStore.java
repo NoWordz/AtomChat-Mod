@@ -105,10 +105,20 @@ public final class HistoryStore {
         public final String profileName;
         public final String contentText;
         public final String componentJson;
+        public final String senderComponentJson;
+        public final String bodyComponentJson;
 
         public Entry(long timestamp, boolean priv, String peer, boolean own, boolean system,
                      String quoteName, String quoteText, String senderUuid, String senderName,
                      String profileName, String contentText, String componentJson) {
+            this(timestamp, priv, peer, own, system, quoteName, quoteText, senderUuid, senderName,
+                    profileName, contentText, componentJson, null, null);
+        }
+
+        public Entry(long timestamp, boolean priv, String peer, boolean own, boolean system,
+                     String quoteName, String quoteText, String senderUuid, String senderName,
+                     String profileName, String contentText, String componentJson,
+                     String senderComponentJson, String bodyComponentJson) {
             this.timestamp = timestamp;
             this.priv = priv;
             this.peer = peer;
@@ -121,10 +131,16 @@ public final class HistoryStore {
             this.profileName = profileName;
             this.contentText = contentText;
             this.componentJson = componentJson;
+            this.senderComponentJson = senderComponentJson;
+            this.bodyComponentJson = bodyComponentJson;
         }
     }
 
     public static String toLine(Entry e) {
+        return toLine(e, true);
+    }
+
+    static String toLine(Entry e, boolean includePresentation) {
         JsonObject o = new JsonObject();
         o.addProperty("v", FORMAT_VERSION);
         o.addProperty("ts", e.timestamp);
@@ -155,6 +171,12 @@ public final class HistoryStore {
         if (e.componentJson != null) {
             o.add("comp", JsonParser.parseString(e.componentJson));
         }
+        if (includePresentation && e.senderComponentJson != null) {
+            o.add("senderComp", JsonParser.parseString(e.senderComponentJson));
+        }
+        if (includePresentation && e.bodyComponentJson != null) {
+            o.add("bodyComp", JsonParser.parseString(e.bodyComponentJson));
+        }
         return GSON.toJson(o);
     }
 
@@ -180,7 +202,10 @@ public final class HistoryStore {
             String profile = o.has("profile") ? o.get("profile").getAsString() : null;
             String content = o.has("content") ? o.get("content").getAsString() : null;
             String comp = o.has("comp") ? o.get("comp").toString() : null;
-            return new Entry(ts, priv, peer, own, system, qn, qt, uuid, sender, profile, content, comp);
+            String senderComp = o.has("senderComp") ? o.get("senderComp").toString() : null;
+            String bodyComp = o.has("bodyComp") ? o.get("bodyComp").toString() : null;
+            return new Entry(ts, priv, peer, own, system, qn, qt, uuid, sender, profile, content, comp,
+                    senderComp, bodyComp);
         } catch (Exception e) {
             return null;
         }

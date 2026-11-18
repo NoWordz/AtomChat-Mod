@@ -154,7 +154,8 @@ public final class MessagePresentation {
         }
 
         int labelEnd = labelTailEnd(text, after);
-        int sep = skipSeparators(text, after);
+        int sep = colonBodyStart(text, labelEnd);
+        if (sep < 0) sep = skipSeparators(text, after);
         if (sep >= text.length()) {
             // Kaomoji guard: a bracket-only message like "<Steve> (￣▽￣)" is
             // shaped exactly like a name-suffix decoration, but a real label
@@ -195,6 +196,27 @@ public final class MessagePresentation {
         }
         return Optional.of(new PlayerLine(cleanName, displayLabel, text.substring(sep).strip(),
                 idx, after, labelEnd, sep));
+    }
+
+    private static int colonBodyStart(String text, int labelEnd) {
+        int colon = labelEnd;
+        while (colon < text.length() && Character.isWhitespace(text.charAt(colon))) colon++;
+        int body = colon + 1;
+        if (body >= text.length() || (text.charAt(colon) != ':' && text.charAt(colon) != '：')
+                || !Character.isWhitespace(text.charAt(body))) {
+            return -1;
+        }
+        while (body < text.length()) {
+            char next = text.charAt(body);
+            if (Character.isWhitespace(next)) {
+                body++;
+            } else if (next == '§' && body + 1 < text.length()) {
+                body += 2;
+            } else {
+                break;
+            }
+        }
+        return body;
     }
 
     /**

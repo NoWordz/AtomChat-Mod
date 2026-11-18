@@ -47,6 +47,50 @@ public final class WhisperTextParser {
     /** DeluxeChat style: "Steve -> You : hi" (unbracketed arrow requires a colon). */
     private static final Pattern ARROW_COLON = Pattern.compile(
             "^(.{1,32}?)\\s*" + ARROW + "\\s*(.{1,32}?)\\s*[:：]\\s*(.+)$");
+    private static final String ACCOUNT = "[A-Za-z0-9_.]{1,32}";
+    private static final Pattern THIRD_PARTY_COLON = Pattern.compile(
+            "^(?:\\[[^\\]\\r\\n]{1,64}\\]\\s*)?(" + ACCOUNT + ")\\s*(?:->|→|➦|➥)\\s*(" + ACCOUNT + ")\\s*[:：]");
+    private static final Pattern THIRD_PARTY_BRACKET = Pattern.compile(
+            "^\\[(" + ACCOUNT + ")\\s*(?:->|→|➦|➥)\\s*(" + ACCOUNT + ")\\]");
+    private static final Pattern SPY_PREFIX = Pattern.compile("^\\[(?:Spy|SocialSpy|监听)\\]", Pattern.CASE_INSENSITIVE);
+    private static final Pattern YOU_SENDER = Pattern.compile("^\\[?You\\s*(?:->|→)", Pattern.CASE_INSENSITIVE);
+    private static final Pattern DIRECT_RECIPIENT = Pattern.compile(
+            "^[^:：]{1,32}?(?:对你说|悄悄(?:地)?跟你说|whispers?\\s+to\\s+you)\\s*[:：]",
+            Pattern.CASE_INSENSITIVE);
+
+    public static boolean isSpyEnvelope(String line) {
+        return line != null && SPY_PREFIX.matcher(TemplateParser.visibleText(line).stripLeading()).find();
+    }
+
+    static boolean hasLiteralYouSender(String text) {
+        return YOU_SENDER.matcher(text.stripLeading()).find();
+    }
+
+    static boolean hasLocalRecipient(String line, String ownProfile) {
+        if (line == null || ownProfile == null || line.length() > 256) return false;
+        String text = TemplateParser.visibleText(line).strip();
+        if (DIRECT_RECIPIENT.matcher(text).find()) return true;
+        var parties = ARROW_BRACKETED.matcher(text);
+        if (!parties.matches()) {
+            parties = ARROW_COLON.matcher(text);
+            if (!parties.matches()) return false;
+        }
+        String from = cleanSide(parties.group(1));
+        String to = cleanSide(parties.group(2));
+        return from != null && to != null && !isOwnSide(from, ownProfile) && isOwnSide(to, ownProfile);
+    }
+
+    public static boolean isThirdPartyEnvelope(String line, String ownProfile) {
+        if (line == null) return false;
+        String text = TemplateParser.visibleText(line).stripLeading();
+        if (isSpyEnvelope(text)) return true;
+        var parties = THIRD_PARTY_COLON.matcher(text);
+        if (!parties.find()) {
+            parties = THIRD_PARTY_BRACKET.matcher(text);
+            if (!parties.find()) return false;
+        }
+        return !isOwnSide(parties.group(1), ownProfile) && !isOwnSide(parties.group(2), ownProfile);
+    }
     /**
      * "Steve 悄悄地对你说: hi" / "Steve whispers to you: hi".
      *

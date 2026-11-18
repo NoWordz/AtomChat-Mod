@@ -97,6 +97,20 @@ class HistoryStoreTest {
     }
 
     @Test
+    void optionalPresentationRetainsUnknownIdentityAndRepeatedBodyStyle() {
+        var row = new Entry(1, false, null, false, false, null, null, null,
+                "Alice · Unknown identity", "", "Alice", "{\"text\":\"Alice: Alice\"}",
+                "{\"text\":\"Alice · Unknown identity\"}", "{\"text\":\"Alice\",\"bold\":true}");
+        var loaded = HistoryStore.fromLine(HistoryStore.toLine(row));
+        assertEquals("", loaded.profileName);
+        assertEquals(row.senderComponentJson, loaded.senderComponentJson);
+        assertEquals(row.bodyComponentJson, loaded.bodyComponentJson);
+        var compact = HistoryStore.fromLine(HistoryStore.toLine(row, false));
+        assertEquals(row.componentJson, compact.componentJson);
+        assertNull(compact.bodyComponentJson);
+    }
+
+    @Test
     void unreadableLinesAreSkippedRatherThanFatal() {
         assertNull(HistoryStore.fromLine(null));
         assertNull(HistoryStore.fromLine("   "));

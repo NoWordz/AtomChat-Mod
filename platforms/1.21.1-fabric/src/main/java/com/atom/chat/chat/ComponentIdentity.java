@@ -11,7 +11,9 @@ import java.util.*;
 public final class ComponentIdentity {
     private ComponentIdentity() {}
     private record Span(int start, int end, String account, UUID uuid) {}
-    public record Inspection(SenderMeta meta, boolean conflict) {}
+    public record Inspection(SenderMeta meta, boolean conflict, int senderStart, int senderEnd) {
+        public Inspection(SenderMeta meta, boolean conflict) { this(meta, conflict, -1, -1); }
+    }
     public record Identity(UUID uuid, String account, boolean conflict, IdentityEvidence evidence) {}
     public static SenderMeta detect(Text message) { return inspect(message).meta(); }
     private static final Inspection NONE = new Inspection(null, false);
@@ -40,32 +42,44 @@ public final class ComponentIdentity {
         }, Style.EMPTY);
         if (spans.isEmpty()) return NONE;
         Span first = spans.get(0);
-        int end = first.end(); UUID id = first.uuid(); boolean entityProof = id != null; String account = first.account();
+        int end = first.end();
         for (int i = 1; i < spans.size(); i++) {
             Span next = spans.get(i);
             if (next.start() != end) break;
-            if (account != null && next.account() != null && !next.account().equalsIgnoreCase(account)
-                    || id != null && next.uuid() != null && !id.equals(next.uuid())) return new Inspection(null, true);
-            if (account == null) account = next.account();
-            if (id == null) id = next.uuid();
-            entityProof |= next.uuid() != null;
             end = next.end();
         }
-        String visible = text.substring(first.start(), end).trim();
+        String visible = text.substring(first.start(), end).stripTrailing();
+        if (visible.endsWith(":") || visible.endsWith("：")) {
+            visible = visible.substring(0, visible.length() - 1).stripTrailing();
+            if (visible.indexOf(':') >= 0 || visible.indexOf('：') >= 0) return NONE;
+        }
         if (visible.isEmpty() || visible.length() > 64) return NONE;
         // The ordinary parser validates the leading decoration and non-prose gap;
         // the account comes from interaction data, not the visible nickname.
         var parsed = MessagePresentation.parseDecoratedPlayerLine(text, List.of(visible));
         if (parsed.isEmpty()) return NONE;
         var line = parsed.get();
-        if (line.nameStart() != first.start() || line.nameEnd() != end
+        if (line.nameStart() != first.start() || line.nameEnd() != first.start() + visible.length()
+                || end > line.contentStart()
                 || MessagePresentation.isWhitespaceOnlyGap(text, line.nameEnd(), line.contentStart())) return NONE;
-        UUID known = ChatClassifier.resolveAccountUuid(account);
-        if (account == null && id != null) account = ChatClassifier.profileName(id);
-        if (id == null) id = known;
+        UUID id = null;
+        String account = null;
+        for (Span span : spans) {
+            if (span.start() >= line.nameEnd()) break;
+            if ((account != null && span.account() != null && !span.account().equalsIgnoreCase(account))
+                    || (id != null && span.uuid() != null && !id.equals(span.uuid()))) {
+                return new Inspection(null, true);
+            }
+            if (account == null) account = span.account();
+            if (id == null) id = span.uuid();
+        }
+        Identity identity = resolve(id, account, false);
+        if (identity.conflict()) return new Inspection(null, true);
+
         Text label = slice(message, 0, line.labelEnd());
         Text body = slice(message, line.contentStart(), text.length());
-        return new Inspection(new SenderMeta(id, label.getString(), account, body.getString(), false, label, body).withEvidence(entityProof ? IdentityEvidence.ENTITY : IdentityEvidence.CLICK), false);
+        return new Inspection(new SenderMeta(identity.uuid(), label.getString(), identity.account(), body.getString(),
+                false, label, body).withEvidence(identity.evidence()), false, line.nameStart(), line.nameEnd());
     }
 
     public static Identity resolveSender(Text label) {
@@ -85,9 +99,24 @@ public final class ComponentIdentity {
             }
             return Optional.<Object>empty();
         }, Style.EMPTY);
-        if (uuid[0] != null && account[0] == null) account[0] = ChatClassifier.profileName(uuid[0]);
-        if (uuid[0] == null && account[0] != null) uuid[0] = ChatClassifier.resolveAccountUuid(account[0]);
-        return new Identity(uuid[0], account[0], conflict[0], uuid[0] != null ? IdentityEvidence.ENTITY : IdentityEvidence.CLICK);
+        return resolve(uuid[0], account[0], conflict[0]);
+    }
+
+    private static Identity resolve(UUID wireUuid, String account, boolean conflict) {
+        if (conflict) return new Identity(null, null, true, IdentityEvidence.CONFLICT);
+        UUID knownUuid = ChatClassifier.resolveAccountUuid(account);
+        String knownAccount = ChatClassifier.observedProfileName(wireUuid);
+        // An exact historical lookup confirms the UUID despite older aliases.
+        // An observed profile still constrains the account attached to that UUID.
+        if (knownAccount == null && wireUuid != null && knownUuid == null) {
+            knownAccount = SeenPlayers.profileName(wireUuid);
+        }
+        if ((wireUuid != null && knownUuid != null && !wireUuid.equals(knownUuid))
+                || (account != null && knownAccount != null && !account.equalsIgnoreCase(knownAccount))) {
+            return new Identity(null, null, true, IdentityEvidence.CONFLICT);
+        }
+        return new Identity(wireUuid != null ? wireUuid : knownUuid, account != null ? account : knownAccount,
+                false, wireUuid != null ? IdentityEvidence.ENTITY : IdentityEvidence.CLICK);
     }
 
     private static String commandAccount(String command) {

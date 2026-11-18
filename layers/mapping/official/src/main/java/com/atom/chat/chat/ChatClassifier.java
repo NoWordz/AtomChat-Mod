@@ -194,10 +194,21 @@ public final class ChatClassifier {
 
     public static String profileName(UUID uuid) {
         if (uuid == null) return null;
+        String observed = observedProfileName(uuid);
+        return observed != null ? observed : SeenPlayers.profileName(uuid);
+    }
+
+    static String observedProfileName(UUID uuid) {
+        if (uuid == null) return null;
         var client = Minecraft.getInstance();
         var network = client == null ? null : client.getConnection();
         var info = network == null ? null : network.getPlayerInfo(uuid);
-        return info == null ? SeenPlayers.profileName(uuid) : info.getProfile().getName();
+        if (info != null) return info.getProfile().getName();
+        var observed = ConfirmedSkinProfiles.find(uuid);
+        if (observed != null && observed.account() != null && !observed.account().isBlank()) {
+            return observed.account();
+        }
+        return null;
     }
 
     public static UUID resolveUuid(String displayName) {

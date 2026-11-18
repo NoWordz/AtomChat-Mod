@@ -1,5 +1,47 @@
 # Release Notes
 
+## v0.9.1
+
+> 本地候选使用 AtomLib 0.6.0 候选包。
+
+**新增**
+
+- 通过 `/atomchat gui` 在聊天面板管理服务端托管、资源包和消息格式。
+- 在有可靠身份依据时，按服务器记住已确认的账号、消息格式和皮肤资料。
+
+**修复**
+
+- 优先使用协议和组件中的玩家身份，保留昵称装饰、正文样式和开头的括号及标点。
+- 服务端匹配回显更新原发送气泡，普通按键输入减少剪贴板访问。
+- 服务端模板和客户端配置共用匹配规则，预览指出冲突，并保留正文空白和样式。
+- 缺少身份依据的跨服消息显示为身份未知，只有能对应唯一一条待确认消息的回显才更新原气泡。
+
+**性能**
+
+- 降低引用卡片、发送者名称和图片加载的重复工作。
+- 减少表情反应和移动点阵绘制时的临时分配。
+
+----
+
+> This local candidate uses the AtomLib 0.6.0 candidate.
+
+**Added**
+
+- Use `/atomchat gui` to manage server hosting, resource packs, and message formats in the chat panel.
+- Remember confirmed accounts, message formats, and skin data per server when identity evidence is available.
+
+**Fixed**
+
+- Use protocol and component identity first, preserving nicknames, message styling, and leading brackets and punctuation.
+- Update the original outgoing bubble when an echo matches and reduce clipboard reads during ordinary typing.
+- Share matching rules between server templates and client settings, explain conflicts in preview, and preserve body whitespace and styling.
+- Mark cross-server messages with missing identity evidence as unknown and update an outgoing bubble only when its echo identifies a unique pending send.
+
+**Performance**
+
+- Reduce repeated work when laying out quotes and sender names or loading images.
+- Reduce temporary allocations when drawing reactions and moving dots.
+
 ## v0.8.0
 
 > 反应同步需客户端与服务端一起更新至 0.8.0；已保存的自定义配色保留，重选预设即可应用新版材质。

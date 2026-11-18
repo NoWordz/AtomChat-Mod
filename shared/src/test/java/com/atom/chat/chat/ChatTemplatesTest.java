@@ -16,6 +16,18 @@ class ChatTemplatesTest {
     }
 
     @Test
+    void overlappingRulesWithDifferentBodyBoundariesAreRejectedInEitherOrder() {
+        assertTrue(match("Steve: : hello", "{name}: {content}", "{name}: : {content}").isEmpty());
+        assertTrue(match("Steve: : hello", "{name}: : {content}", "{name}: {content}").isEmpty());
+    }
+
+    @Test
+    void literalBoundaryPreservesSpacesLineBreakAndRepeatedSenderInBody() {
+        var result = match("Steve:  Steve\n😀  ", "{name}: {content}").orElseThrow();
+        assertEquals(" Steve\n😀  ", result.content());
+    }
+
+    @Test
     void vanillaAngleTemplate() {
         var m = match("<Steve> hi", "<{name}> {content}");
         assertTrue(m.isPresent());
@@ -60,16 +72,21 @@ class ChatTemplatesTest {
 
     @Test
     void separatorPlaceholderSplitsCorrectly() {
-        // The lazy-name mis-split regression: {name} anchors to real names.
-        var m = match("Steve: hi", "{name}{sep}{content}");
+        var m = match("Steve: > hi", "{name}{sep}> {content}");
         assertTrue(m.isPresent());
         assertEquals("Steve", m.get().playerName());
         assertEquals("hi", m.get().content());
     }
 
     @Test
+    void variableSeparatorCannotConsumeBodyPunctuationOrLeadingSpaces() {
+        assertTrue(match("Steve:  !hello", "{name}{sep}{content}").isEmpty());
+        assertEquals(" !hello", match("Steve:  !hello", "{name}: {content}").orElseThrow().content());
+    }
+
+    @Test
     void colorCodesAreStrippedBeforeMatching() {
-        var m = match("§6Steve§r: hi", "{name}{sep}{content}");
+        var m = match("§6Steve§r: hi", "{name}: {content}");
         assertTrue(m.isPresent());
         assertEquals("Steve", m.get().playerName());
         assertEquals("hi", m.get().content());

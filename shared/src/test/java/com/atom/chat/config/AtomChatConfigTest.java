@@ -18,6 +18,19 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 class AtomChatConfigTest {
 
     @Test
+    void malformedTemplateEntriesDoNotResetOtherClientSettings() {
+        var json = """
+                {"notifyVolume": 0.37, "chatTemplates": ["{sender}: {message}", {}, null, 42],
+                  "whisperTemplates": "not an array"}
+                """;
+        var sanitized = new com.google.gson.Gson().fromJson(
+                AtomChatConfig.sanitizeWorldFeedFilterAndTemplates(json), AtomChatConfig.class);
+        assertEquals(0.37f, sanitized.notifyVolume, 1e-5f);
+        assertEquals(java.util.List.of("{sender}: {message}"), sanitized.chatTemplates);
+        assertEquals(java.util.List.of(), sanitized.whisperTemplates);
+    }
+
+    @Test
     void cornerStyleMigratesOnceIntoRadius() {
         AtomChatConfig config = new AtomChatConfig();
         config.cornerStyle = "large";

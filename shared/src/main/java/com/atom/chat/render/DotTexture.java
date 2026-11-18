@@ -29,6 +29,9 @@ public final class DotTexture {
     private static final MaskFilter BLUR = MaskFilter.makeBlur(FilterBlurMode.NORMAL, UiTokens.DOT_GLOW_BLUR);
     private static final Paint GLOW = new Paint().setAntiAlias(true).setMaskFilter(BLUR);
     private static final int[] ALPHAS = {19, 26, 32, 38, 45, 50, 54, 59, 64};
+    // The paints and these point buffers are used only on the render thread.
+    private static final float[] EDGE_POINTS = new float[512 * 2];
+    private static float[] edgeDrawPoints = new float[0];
 
     private static final int KIND_EDGE = 0, KIND_TRAIL = 1, KIND_HALO = 2;
     private static final int MAX_CACHED = 64;
@@ -188,7 +191,7 @@ public final class DotTexture {
     /** Round points use the same circle primitive; one submission per full-opacity row. */
     private static void edgePoints(Canvas canvas, UiLayout.Rect bar, float r, boolean above, int tint) {
         int columns=Math.min(512,(int)Math.ceil(bar.w()/UiTokens.MESSAGE_DOT_GAP));
-        float[] points=new float[columns*2];
+        float[] points = EDGE_POINTS;
         for(int row=0;row<ALPHAS.length;row++) {
             int count=0;
             float radius=UiTokens.MESSAGE_DOT_RADII[row];
@@ -203,8 +206,12 @@ public final class DotTexture {
                 if(fade==1F) {points[count++]=x;points[count++]=y;}
                 else circle(canvas,x,y,radius,tint,ALPHAS[row]*fade);
             }
-            if(count>0) canvas.drawPoints(java.util.Arrays.copyOf(points,count),
-                    POINTS.setStrokeWidth(radius*2F).setColor(tinted(tint,ALPHAS[row])));
+            if (count > 0) {
+                if (edgeDrawPoints.length != count) edgeDrawPoints = new float[count];
+                System.arraycopy(points, 0, edgeDrawPoints, 0, count);
+                canvas.drawPoints(edgeDrawPoints,
+                        POINTS.setStrokeWidth(radius*2F).setColor(tinted(tint,ALPHAS[row])));
+            }
         }
     }
 

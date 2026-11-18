@@ -7,36 +7,31 @@ import java.util.*;
 public final class PrivateMessageRecognition {
     private PrivateMessageRecognition() {}
     public static SenderMeta parse(Text message, UUID self, String ownName, List<String> knownNames,
-                                   List<String> templates, SenderMeta identity) {
-        String raw=message.getString();
-        var template=ChatTemplates.matchWhisper(raw,templates,knownNames);
-        WhisperTextParser.WhisperHit hit=template.isPresent()
-                ? new WhisperTextParser.WhisperHit(true,template.get().displayLabel(),template.get().content()) : null;
-        if(hit==null) hit=WhisperTextParser.tryParse(raw,ownName);
-        if(hit==null) hit=WhisperTextParser.tryParseAnchored(raw,knownNames);
-        if(hit==null) return null;
-        var info=ChatClassifier.resolveOnlinePlayer(hit.partnerDisplay());
-        String partner=info!=null?info.getProfile().getName():hit.partnerDisplay();
-        UUID peer=info!=null?info.getProfile().getId():ChatClassifier.resolveUuid(hit.partnerDisplay());
-        IdentityEvidence source=template.isPresent()?IdentityEvidence.TEMPLATE:IdentityEvidence.TEXT;
-        boolean incoming=hit.incoming();
-        UUID uuid=incoming?peer:self;
-        String display=incoming?hit.partnerDisplay():ownName;
-        String profile=incoming?partner:ownName;
-        Text label=null;
-        String original=null;
-        if(identity!=null && incoming && identity.senderName()!=null
-                && identity.senderName().contains(hit.partnerDisplay()) && identity.profileName()!=null) {
-            uuid=identity.senderUuid();display=identity.senderName();profile=identity.profileName();partner=profile;
-            source=identity.evidence();label=identity.senderComponent();original=identity.originalContent();
-        } else if(identity!=null && !incoming && self!=null && self.equals(identity.senderUuid())) {
-            uuid=self;display=identity.senderName();profile=identity.profileName();
-            source=identity.evidence();label=identity.senderComponent();original=identity.originalContent();
+                                   SenderMeta identity) {
+        String raw = message.getString();
+        var hit = WhisperTextParser.tryParse(raw, ownName);
+        if (hit == null) hit = WhisperTextParser.tryParseAnchored(raw, knownNames);
+        if (hit == null) return null;
+        if (!hit.incoming() || !WhisperTextParser.hasLocalRecipient(raw, ownName)
+                || identity == null || !identity.evidence().confirmsIdentity() || identity.senderUuid() == null) {
+            return SenderMeta.systemMeta();
         }
-        if(!incoming && self==null) return null;
+        String partner = identity.profileName();
+        if (partner == null || identity.senderUuid().equals(self)
+                || (!hit.partnerDisplay().equalsIgnoreCase(partner)
+                && !hit.partnerDisplay().equalsIgnoreCase(identity.senderName())
+                && !hit.partnerDisplay().equalsIgnoreCase(visibleSender(identity)))) {
+            return SenderMeta.systemMeta().withEvidence(IdentityEvidence.CONFLICT);
+        }
         int bodyAt=raw.lastIndexOf(hit.content());
         Text body=bodyAt<0?null:ComponentIdentity.slice(message,bodyAt,bodyAt+hit.content().length());
-        return new SenderMeta(uuid,display,profile,hit.content(),false,true,partner,label,body)
-                .withEvidence(source).withOriginalContent(original);
+        return new SenderMeta(identity.senderUuid(), identity.senderName(), identity.profileName(),
+                hit.content(), false, true, partner, identity.senderComponent(), body,
+                identity.evidence(), identity.originalContent());
+    }
+
+    private static String visibleSender(SenderMeta identity) {
+        if (identity.senderComponent() == null) return null;
+        return identity.senderComponent().getString().strip();
     }
 }

@@ -245,4 +245,11 @@ class MessagePresentationTest {
         assertTrue(line.isPresent());
         assertEquals("hi", line.get().content());
     }
+
+    @Test
+    void quoteMarkerStillParsesAfterAnInlineLegacyColorCode() {
+        var line = MessagePresentation.parseDecoratedPlayerLine(
+                "Steve: §a「引用 @Alex: quoted」reply", List.of("Steve")).orElseThrow();
+        assertEquals(new QuoteParser.Quote("Alex", "quoted", "reply"), QuoteParser.parse(line.content()));
+    }
 }

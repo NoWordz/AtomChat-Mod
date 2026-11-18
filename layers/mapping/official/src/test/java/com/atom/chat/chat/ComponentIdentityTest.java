@@ -6,7 +6,11 @@ import java.util.*;
 import static org.junit.jupiter.api.Assertions.*;
 class ComponentIdentityTest {
     @BeforeAll static void bootstrap() { net.minecraft.SharedConstants.tryDetectVersion(); net.minecraft.server.Bootstrap.bootStrap(); }
-    @AfterEach void clear() { SeenPlayers.clear(); LearnedChatFormats.clear(); }
+    @AfterEach void clear() {
+        SeenPlayers.clear();
+        LearnedChatFormats.clear();
+        ConfirmedSkinProfiles.clear();
+    }
     private HoverEvent.EntityTooltipInfo entity(UUID id, String account) {
         for (var constructor : HoverEvent.EntityTooltipInfo.class.getConstructors()) {
             if (constructor.getParameterCount() != 3) continue;
@@ -62,5 +66,149 @@ class ComponentIdentityTest {
         assertEquals("Remote_7",publicMeta.profileName());assertNull(publicMeta.senderUuid());
         var privateMeta=PrivateChatParser.tryParse(Component.translatable("commands.message.display.incoming",label,"hello"));
         assertEquals("Remote_7",privateMeta.profileName());assertNull(privateMeta.senderUuid());
+    }
+
+    @Test void senderActionCanIncludeTheSeparatorInTheSameComponent() {
+        var sender = Component.literal("Remote_7: ").setStyle(Style.EMPTY.withClickEvent(
+                new ClickEvent(ClickEvent.Action.SUGGEST_COMMAND, "/tell Remote_7 ")));
+        var body = Component.literal("hello").setStyle(Style.EMPTY.withBold(true));
+        var meta = ComponentIdentity.detect(Component.literal("[Lobby] ").append(sender).append(body));
+
+        assertNotNull(meta);
+        assertEquals("[Lobby] Remote_7", meta.senderName());
+        assertEquals("Remote_7", meta.profileName());
+        assertNull(meta.senderUuid());
+        assertEquals(IdentityEvidence.CLICK, meta.evidence());
+        assertEquals("hello", meta.contentText());
+        assertTrue(meta.contentComponent().getSiblings().get(0).getStyle().isBold());
+    }
+
+    @Test void leadingBracketsAndPunctuationAfterTheSeparatorBelongToTheBody() {
+        var sender = Component.literal("Remote_7").setStyle(Style.EMPTY.withClickEvent(
+                new ClickEvent(ClickEvent.Action.SUGGEST_COMMAND, "/tell Remote_7 ")));
+        var line = Component.literal("[Lobby] ").append(sender)
+                .append(Component.literal(": [Trade] - selling").setStyle(Style.EMPTY.withItalic(true)));
+        var meta = ComponentIdentity.detect(line);
+
+        assertNotNull(meta);
+        assertEquals("[Lobby] Remote_7", meta.senderName());
+        assertEquals("[Trade] - selling", meta.contentText());
+        assertTrue(meta.contentComponent().getSiblings().get(0).getStyle().isItalic());
+    }
+
+    @Test void knownAccountAndVisibleEntityUuidCannotDisagree() {
+        var known = UUID.randomUUID();
+        SeenPlayers.remember(known, "Remote_7", "Remote_7");
+        var other = UUID.randomUUID();
+        var label = nickname(other);
+        var ordinary = ComponentIdentity.inspect(Component.literal("[Lobby] ").append(label).append(Component.literal(": hi")));
+        var structured = ChatPipeline.structuredPlayerLine(Component.translatable("chat.type.text", label, "hi"));
+
+        assertTrue(ordinary.conflict());
+        assertNull(ordinary.meta());
+        assertTrue(structured.system());
+        assertEquals(IdentityEvidence.CONFLICT, structured.evidence());
+    }
+
+    @Test void wholeLineClickCannotUseAnEmbeddedSeparatorAsSenderEvidence() {
+        var line = Component.literal("Remote_7: hello: ").setStyle(Style.EMPTY.withClickEvent(
+                new ClickEvent(ClickEvent.Action.SUGGEST_COMMAND, "/tell Remote_7 ")))
+                .append(Component.literal("continue"));
+        assertNull(ComponentIdentity.detect(line));
+    }
+
+    @Test void defaultGlobalWithOnlyDisplayMetadataHasNoColdIdentity() {
+        var line = defaultGlobal("Remote_7");
+        assertNull(ComponentIdentity.detect(line));
+        assertNull(ChatPipeline.structuredPlayerLine(line));
+        assertNull(ChatPipeline.tryParsePlayerLine(line.getString()));
+    }
+
+    @Test void defaultGlobalWithKnownAccountPreservesItsDecoratedRichMessage() {
+        var id = UUID.randomUUID();
+        SeenPlayers.remember(id, "Remote_7", "Remote_7");
+        var line = defaultGlobal("Remote_7");
+        var meta = ChatPipeline.tryParsePlayerLine(line.getString());
+
+        assertNotNull(meta);
+        assertEquals(id, meta.senderUuid());
+        assertEquals("Remote_7", meta.profileName());
+        var rich = ChatPipeline.sliceRichText(line, meta).orElseThrow();
+        assertEquals("[Lobby] Remote_7", rich.sender().getString());
+        assertEquals("[Trade] - selling", rich.content().getString());
+    }
+
+    private static Component defaultGlobal(String account) {
+        // Mirrors the visible sections of Global.yml from TrChat 2.2.2 and 2.5.2.
+        var server = Component.literal("[Lobby] ").setStyle(Style.EMPTY.withHoverEvent(
+                new HoverEvent(HoverEvent.Action.SHOW_TEXT, Component.literal("Server Lobby"))));
+        var body = Component.literal("[Trade] - selling").setStyle(Style.EMPTY.withHoverEvent(
+                new HoverEvent(HoverEvent.Action.SHOW_TEXT, Component.literal("Date: 12:00:00"))));
+        return Component.literal("").append(server).append(Component.literal(account + ": ")).append(body);
+    }
+
+    @Test void entityOnlySenderCanReuseAnObservedProfileByUuid() {
+        var id = UUID.randomUUID();
+        ConfirmedSkinProfiles.remember(id, "Remote_7", "observed-texture-property", null);
+        var name = Component.literal("BlueFox").setStyle(Style.EMPTY.withHoverEvent(
+                new HoverEvent(HoverEvent.Action.SHOW_ENTITY,
+                        entity(id, "BlueFox"))));
+        var line = Component.literal("[Lobby] ").append(name).append(Component.literal(": hello"));
+        var meta = ComponentIdentity.detect(line);
+
+        assertNotNull(meta);
+        assertEquals(id, meta.senderUuid());
+        assertEquals("Remote_7", meta.profileName());
+        assertEquals("[Lobby] BlueFox", meta.senderName());
+    }
+
+    @Test void separatorClickDoesNotBecomeTheAccountOfAnEntityOnlySender() {
+        var id = UUID.randomUUID();
+        var sender = Component.literal("BlueFox").setStyle(Style.EMPTY.withHoverEvent(
+                new HoverEvent(HoverEvent.Action.SHOW_ENTITY, entity(id, "BlueFox"))));
+        var separator = Component.literal(": ").setStyle(Style.EMPTY.withClickEvent(
+                new ClickEvent(ClickEvent.Action.SUGGEST_COMMAND, "/tell OtherName ")));
+        var line = Component.literal("[Lobby] ").append(sender).append(separator).append(Component.literal("hello"));
+        var meta = ComponentIdentity.detect(line);
+
+        assertNotNull(meta);
+        assertEquals(id, meta.senderUuid());
+        assertNull(meta.profileName());
+        assertEquals("hello", meta.contentText());
+    }
+
+    @Test void accountConfirmedForTheSameUuidSurvivesAnOlderCachedName() {
+        var id = UUID.randomUUID();
+        SeenPlayers.remember(id, "OldName", "OldName");
+        SeenPlayers.remember(id, "NewName", "NewName");
+        var sender = Component.literal("BlueFox").setStyle(Style.EMPTY
+                .withHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_ENTITY, entity(id, "NewName")))
+                .withClickEvent(new ClickEvent(ClickEvent.Action.SUGGEST_COMMAND, "/tell NewName ")));
+        var line = Component.literal("[Lobby] ").append(sender).append(Component.literal(": hello"));
+        var publicMeta = ComponentIdentity.detect(line);
+        var translated = ChatPipeline.structuredPlayerLine(Component.translatable("chat.type.text", sender, "hello"));
+
+        assertNotNull(publicMeta);
+        assertEquals(id, publicMeta.senderUuid());
+        assertEquals("NewName", publicMeta.profileName());
+        assertEquals(id, translated.senderUuid());
+        assertEquals("NewName", translated.profileName());
+    }
+
+    @Test void currentObservedProfileWinsOverAHistoricalAccountMatch() {
+        var id = UUID.randomUUID();
+        SeenPlayers.remember(id, "OldName", "OldName");
+        ConfirmedSkinProfiles.remember(id, "NewName", "observed-texture-property", null);
+        var sender = Component.literal("BlueFox").setStyle(Style.EMPTY
+                .withHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_ENTITY, entity(id, "NewName")))
+                .withClickEvent(new ClickEvent(ClickEvent.Action.SUGGEST_COMMAND, "/tell OldName ")));
+        var line = Component.literal("[Lobby] ").append(sender).append(Component.literal(": hello"));
+        var ordinary = ComponentIdentity.inspect(line);
+        var structured = ChatPipeline.structuredPlayerLine(Component.translatable("chat.type.text", sender, "hello"));
+
+        assertTrue(ordinary.conflict());
+        assertNull(ordinary.meta());
+        assertTrue(structured.system());
+        assertEquals(IdentityEvidence.CONFLICT, structured.evidence());
     }
 }

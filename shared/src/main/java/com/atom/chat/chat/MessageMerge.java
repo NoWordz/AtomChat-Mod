@@ -47,6 +47,7 @@ public final class MessageMerge {
         if (last.isSystem() || next.isSystem()) {
             return false;
         }
+        if (last.deliveryState() != next.deliveryState()) return false;
         if (next.isOwn() != last.isOwn()) {
             return false;
         }
@@ -83,6 +84,7 @@ public final class MessageMerge {
         if (a == null || b == null) {
             return false;
         }
+        if (a.isIdentityUnknown() || b.isIdentityUnknown()) return false;
         UUID au = a.getSenderUuid();
         UUID bu = b.getSenderUuid();
         if (au != null && bu != null) {

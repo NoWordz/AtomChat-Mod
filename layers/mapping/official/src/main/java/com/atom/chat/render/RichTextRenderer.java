@@ -51,14 +51,20 @@ public final class RichTextRenderer {
         float ellipsis = SkiaFontRenderer.getStringWidth(font, "…");
         TextMeasurer measurer = value -> SkiaFontRenderer.getStringWidth(font, value);
         int end = 0;
+        float precedingWidth = 0.0F;
         outer: for (RichTextLayout.Part part : line.parts()) {
-            if (part.isItem()) continue;
+            if (part.isItem()) {
+                precedingWidth += part.itemWidth();
+                continue;
+            }
             for (int i = 0; i < part.text().length();) {
                 i += Character.charCount(part.text().codePointAt(i));
                 int next = part.textStart() + i;
-                if (RichTextLayout.advanceTo(line, measurer, next) + ellipsis > maxWidth) break outer;
+                float advance = precedingWidth + measurer.measure(part.text().substring(0, i));
+                if (advance + ellipsis > maxWidth) break outer;
                 end = next;
             }
+            precedingWidth += part.width(measurer);
         }
         return end <= 0 ? RichText.literal("…")
                 : RichText.concat(text.slice(0, end), RichText.literal("…"));

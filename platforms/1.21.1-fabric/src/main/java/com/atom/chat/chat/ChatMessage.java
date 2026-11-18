@@ -35,17 +35,28 @@ public class ChatMessage {
      * carry this id over.
      */
     private final long id;
+    private boolean capturedPresentation;
     private volatile OutgoingMessages.State delivery = OutgoingMessages.State.RECEIVED;
     public OutgoingMessages.State deliveryState() {
         return delivery == OutgoingMessages.State.PENDING && System.currentTimeMillis() - timestamp > OutgoingMessages.TIMEOUT_MS
                 ? OutgoingMessages.State.UNCONFIRMED : delivery;
     }
     public void delivery(OutgoingMessages.State state) { delivery = state; }
+    public boolean hasCapturedPresentation() {
+        return capturedPresentation;
+    }
+
+    public ChatMessage retainPresentation(boolean retain) {
+        capturedPresentation = retain;
+        return this;
+    }
+
     public ChatMessage withServerEcho(ChatMessage server) {
         ChatMessage corrected = new ChatMessage(server.component, own, server.system, server.quoteName, server.quoteText,
                 server.senderUuid, server.senderName, server.profileName, server.contentText, server.senderRich,
                 server.contentRich, timestamp, duplicateCount, id);
         corrected.delivery = OutgoingMessages.State.CONFIRMED;
+        corrected.capturedPresentation = server.capturedPresentation;
         return corrected;
     }
 
@@ -121,8 +132,8 @@ public class ChatMessage {
         this.quoteText = quoteText;
         this.senderUuid = senderUuid;
         this.senderName = clean(senderName);
-        this.profileName = clean(profileName);
-        this.contentText = contentText != null && !contentText.isBlank() ? clean(contentText) : null;
+        this.profileName = "".equals(profileName) ? "" : clean(profileName);
+        this.contentText = cleanContent(contentText);
         // One flattening of the original component serves both fallbacks (legacy
         // constructors and history reload) and the quote capsule: all three must
         // read the wire's runs, never just its plain text.
@@ -152,7 +163,7 @@ public class ChatMessage {
     }
 
     private static String cleanContent(String s) {
-        return s == null || s.isBlank() ? null : clean(s);
+        return s == null || s.isBlank() ? null : TemplateParser.visibleText(s);
     }
 
     /**
@@ -231,7 +242,7 @@ public class ChatMessage {
 
     /** Plain content string used by pre-rich constructors, matching {@link #getContentText()}. */
     private static String legacyContentText(String rawText, String contentText) {
-        String cleaned = cleanContent(contentText);
+        String cleaned = contentText;
         String text = cleaned != null ? cleaned : rawText;
         // The vanilla "<sender> " prefix only exists on the final HUD line.
         // contentText is captured before decoration, so a message that really
@@ -283,7 +294,12 @@ public class ChatMessage {
 
     /** Real profile name used for skin/identity lookups. */
     public String getProfileName() {
-        return profileName != null ? profileName : senderName;
+        return isIdentityUnknown() ? null : profileName != null ? profileName : senderName;
+    }
+
+    /** The displayed envelope has no independently verified player identity. */
+    public boolean isIdentityUnknown() {
+        return "".equals(profileName);
     }
 
     /**
@@ -328,14 +344,14 @@ public class ChatMessage {
     public ChatMessage withDuplicateCount(int count) {
         return new ChatMessage(component, own, system, quoteName, quoteText,
                 senderUuid, senderName, profileName, contentText,
-                senderRich, contentRich, timestamp, count, id);
+                senderRich, contentRich, timestamp, count, id).retainPresentation(capturedPresentation);
     }
 
     /** Copy with a different anti-spam merge count and an updated timestamp. */
     public ChatMessage withDuplicateCount(int count, long newTimestamp) {
         return new ChatMessage(component, own, system, quoteName, quoteText,
                 senderUuid, senderName, profileName, contentText,
-                senderRich, contentRich, newTimestamp, count, id);
+                senderRich, contentRich, newTimestamp, count, id).retainPresentation(capturedPresentation);
     }
 
     public long getId() {

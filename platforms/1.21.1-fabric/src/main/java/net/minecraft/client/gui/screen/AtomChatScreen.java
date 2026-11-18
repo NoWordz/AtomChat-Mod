@@ -1579,7 +1579,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
     private static ContextMenuController.Subject<ChatMessage> menuSubjectOf(ChatMessage msg) {
         return msg == null ? null
                 : ContextMenuController.Subject.of(
-                        PlayerRef.of(msg.getSenderUuid(), msg.getProfileName()),
+                        msg.isIdentityUnknown() ? null : PlayerRef.of(msg.getSenderUuid(), msg.getProfileName()),
                         Cicodes.extractImageUrl(msg.getRawText()) != null, msg);
     }
 
@@ -2146,7 +2146,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
      * shared layer never sees it — this screen converts, per click.
      */
     private static AvatarClickWiring.MessageFacts factsOf(ChatMessage msg) {
-        return msg == null ? null
+        return msg == null || msg.isIdentityUnknown() ? null
                 : AvatarClickWiring.MessageFacts.of(msg.getSenderUuid(), msg.getProfileName(),
                         msg.getSenderName(), msg.isOwn(), msg.isSystem());
     }
@@ -4706,7 +4706,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
                         com.atom.chat.audio.FeedbackSoundController.play(com.atom.chat.audio.FeedbackCue.BUTTON);
                         return true;
                     }
-                    contextMenu.openAvatar(menuSubjectOf(hit.message()), mx, my);
+                    if (hit.message() != null && !hit.message().isIdentityUnknown()) contextMenu.openAvatar(menuSubjectOf(hit.message()), mx, my);
                     com.atom.chat.audio.FeedbackSoundController.play(com.atom.chat.audio.FeedbackCue.BUTTON);
                     return true;
                 }

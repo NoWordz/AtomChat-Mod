@@ -208,8 +208,9 @@ def consumer_artifact(path, loader='Fabric', dependency=True, side='CLIENT', ext
     if loader == 'Fabric':
         meta = {'id':'atomchat', 'environment':'*', 'jars':[{'file':prefix+'flatlaf-private.jar'}]}
         if dependency:
-            meta['suggests'] = {'atomlib': LOCK_RANGE if range_override is None else range_override}
-            meta['custom'] = {'atomlib:client-required': LOCK_RANGE if range_override is None else range_override}
+            range_value = f'>={LOCK_VERSION}' if range_override is None else range_override
+            meta['suggests'] = {'atomlib': range_value}
+            meta['custom'] = {'atomlib:client-required': range_value}
         entries['fabric.mod.json'] = json.dumps(meta).encode()
     else:
         entries[prefix+'metadata.json'] = json.dumps({'jars':[{'path':prefix+'flatlaf-private.jar'}]}).encode()
@@ -278,6 +279,12 @@ class AtomLibConsumerTest(unittest.TestCase):
                 jar=Path(temp)/f'atomchat-{loader}-0.6.1.jar'
                 consumer_artifact(jar,loader,range_override='')
                 self.assertEqual(1,self.run_verifier(jar).returncode,loader)
+
+    def test_fabric_rejects_maven_range_syntax(self):
+        with tempfile.TemporaryDirectory() as temp:
+            jar = Path(temp) / 'atomchat-Fabric.jar'
+            consumer_artifact(jar, range_override=f'[{LOCK_VERSION},)')
+            self.assertEqual(1, self.run_verifier(jar).returncode)
 
     def test_old_architecture_specific_names_do_not_pass_as_consumers(self):
         with tempfile.TemporaryDirectory() as temp:

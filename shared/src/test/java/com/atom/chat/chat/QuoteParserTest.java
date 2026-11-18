@@ -23,6 +23,11 @@ class QuoteParserTest {
     }
 
     @Test
+    void preservesTheReplyWhitespaceAfterAQuote() {
+        assertEquals("  hello\n😀  ", QuoteParser.parse("「引用 @Alice: hi」  hello\n😀  ").body());
+    }
+
+    @Test
     void rejectsMessagesWithoutQuotePrefix() {
         assertNull(QuoteParser.parse("hello"));
         assertNull(QuoteParser.parse("「不是引用 @Alice: hi」"));

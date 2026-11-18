@@ -114,6 +114,53 @@ public final class MessageListView {
                 }
             };
 
+    private record QuoteKey(ChatMessage message, Font font, float width, float itemGap) {}
+    private record QuoteLayout(List<RichLine> lines, float width) {}
+    private final Map<QuoteKey, QuoteLayout> quoteCache = new LinkedHashMap<>(128, 0.75F, true) {
+        @Override
+        protected boolean removeEldestEntry(Map.Entry<QuoteKey, QuoteLayout> eldest) {
+            return size() > LAYOUT_CACHE_MAX;
+        }
+    };
+
+    private QuoteLayout quoteLayout(ChatMessage message, Font font, float width) {
+        QuoteKey key = new QuoteKey(message, font, width, UiTokens.INLINE_ITEM_GAP);
+        QuoteLayout cached = quoteCache.get(key);
+        if (cached != null) return cached;
+        RichText rich = quoteRichLine(message);
+        if (rich == null) return null;
+        List<RichLine> lines = RichTextRenderer.wrapFor(truncateRich(font, rich, width), font, Float.MAX_VALUE);
+        float textWidth = 0.0F;
+        for (RichLine line : lines) textWidth = Math.max(textWidth, RichTextRenderer.width(font, line));
+        QuoteLayout result = new QuoteLayout(lines, textWidth);
+        quoteCache.put(key, result);
+        return result;
+    }
+
+    private record NameKey(ChatMessage message, Font font, String fallback, String status, float itemGap) {}
+    private record NameLayout(List<RichLine> lines, float width) {}
+    private final Map<NameKey, NameLayout> nameCache = new LinkedHashMap<>(128, 0.75F, true) {
+        @Override
+        protected boolean removeEldestEntry(Map.Entry<NameKey, NameLayout> eldest) {
+            return size() > LAYOUT_CACHE_MAX;
+        }
+    };
+
+    private NameLayout nameLayout(ChatMessage message, Font font, String fallback, String status) {
+        NameKey key = new NameKey(message, font, fallback, status, UiTokens.INLINE_ITEM_GAP);
+        NameLayout cached = nameCache.get(key);
+        if (cached != null) return cached;
+        RichText sender = message.getSenderRich().stripInteractions();
+        if (sender.isEmpty()) sender = RichText.literal(fallback);
+        if (status != null) sender = RichText.concat(sender, RichText.literal(" · " + status));
+        List<RichLine> lines = RichTextRenderer.wrapFor(sender, font, Float.MAX_VALUE);
+        float width = 0.0F;
+        for (RichLine line : lines) width = Math.max(width, RichTextRenderer.width(font, line));
+        NameLayout result = new NameLayout(lines, width);
+        nameCache.put(key, result);
+        return result;
+    }
+
     /**
      * Bubble classification keyed by (message id, image-receive switch). The
      * kind runs ImageCode's regex over the raw text, and measure + draw used
@@ -884,13 +931,13 @@ public final class MessageListView {
     private void drawAvatar(Canvas canvas, ChatMessage msg, float avatarX, float avatarY) {
         UUID uuid = msg.isOwn() ? host.ownUuid() : msg.getSenderUuid();
         String name = msg.isOwn() ? host.ownName() : msg.getProfileName();
-        if (name == null || name.isBlank()) {
+        if (!msg.isIdentityUnknown() && (name == null || name.isBlank())) {
             name = host.senderName(msg);
         }
-        if (PlayerAvatar.drawE33Chat(canvas, uuid, name, avatarX, avatarY, UiTokens.AVATAR_SIZE)) {
+        if (!msg.isIdentityUnknown() && PlayerAvatar.drawE33Chat(canvas, uuid, name, avatarX, avatarY, UiTokens.AVATAR_SIZE)) {
             return;
         }
-        Image face = PlayerAvatar.face(uuid, name);
+        Image face = msg.isIdentityUnknown() ? null : PlayerAvatar.face(uuid, name);
         if (face != null) {
             SkiaImages.drawRoundedImage(canvas, face, avatarX, avatarY, UiTokens.AVATAR_SIZE, UiTokens.AVATAR_SIZE,
                     UiTokens.AVATAR_SIZE / 2.0F, SamplingMode.LINEAR);
@@ -1191,20 +1238,10 @@ public final class MessageListView {
         // colour here. This method owns the layout, the @/": " separators, the
         // truncation and the RichTextRenderer call — nothing else. The [图片]
         // placeholder keeps the plain path, which draws it in the status green.
-        RichText pillRich = imageQuote ? null : quoteRichLine(msg);
-        List<RichLine> pillLines = pillRich != null
-                ? RichTextRenderer.wrapFor(truncateRich(quoteFont, pillRich, textMaxW), quoteFont, Float.MAX_VALUE)
-                : null;
-        String display = pillRich != null ? null : Cicodes.truncateToWidth(quoteFont, quote, textMaxW);
-        float textW;
-        if (pillLines != null) {
-            textW = 0.0F;
-            for (RichLine line : pillLines) {
-                textW = Math.max(textW, RichTextRenderer.width(quoteFont, line));
-            }
-        } else {
-            textW = SkiaFontRenderer.getStringWidth(quoteFont, display);
-        }
+        QuoteLayout pillLayout = imageQuote ? null : quoteLayout(msg, quoteFont, textMaxW);
+        List<RichLine> pillLines = pillLayout == null ? null : pillLayout.lines();
+        String display = pillLayout != null ? null : Cicodes.truncateToWidth(quoteFont, quote, textMaxW);
+        float textW = pillLayout != null ? pillLayout.width() : SkiaFontRenderer.getStringWidth(quoteFont, display);
         float pillW = Math.min(capW, textW + UiTokens.QUOTE_PAD_X * 2.0F + barW + s(4));
         // Align the quote's outer edge with the bubble's outer edge, not with
         // the avatar. The bubble uses AVATAR_GAP as the horizontal gap to the
@@ -1305,30 +1342,24 @@ public final class MessageListView {
      */
     private void drawMessageName(Canvas canvas, ChatMessage msg, float rowY, float leftX, float rightX) {
         Font nameFont = FontManager.font(UiTokens.FONT_NAME);
-        // Name rows are UI chrome: server-attached click/hover events and
-        // underlines stay only on names rendered inside system capsules.
-        RichText sender = msg.getSenderRich().stripInteractions();
-        if (sender.isEmpty()) {
-            sender = RichText.literal(host.senderName(msg));
-        }
+        // Name chrome omits server-attached interactions, while delivery labels
+        // and fallback names can change independently of the message object.
+        String fallback = msg.getSenderRich().isEmpty() ? host.senderName(msg) : null;
+        String status = null;
         if (msg.isOwn()) {
-            String status = switch (msg.deliveryState()) {
+            String statusKey = switch (msg.deliveryState()) {
                 case PENDING -> "atomchat.message.pending";
                 case UNCONFIRMED -> "atomchat.message.unconfirmed";
                 case FAILED -> "atomchat.message.failed";
                 default -> null;
             };
-            if (status != null) sender = RichText.concat(sender, RichText.literal(" · " + tr(status)));
+            if (statusKey != null) status = tr(statusKey);
         }
-        List<RichLine> lines = RichTextRenderer.wrapFor(sender, nameFont, Float.MAX_VALUE);
-        if (lines.isEmpty()) {
-            return;
-        }
+        NameLayout name = nameLayout(msg, nameFont, fallback, status);
+        List<RichLine> lines = name.lines();
+        if (lines.isEmpty()) return;
         float lineHeight = SkiaFontRenderer.getHeight(nameFont);
-        float nameWidth = 0.0F;
-        for (RichLine line : lines) {
-            nameWidth = Math.max(nameWidth, RichTextRenderer.width(nameFont, line));
-        }
+        float nameWidth = name.width();
         float x = msg.isOwn() ? rightX - nameWidth : leftX;
         // RichTextRenderer.drawLines takes a centerY and internally converts
         // it to the cap-height baseline, matching the old drawText helper.

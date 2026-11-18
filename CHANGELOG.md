@@ -1,5 +1,55 @@
 # Changelog
 
+## v0.9.1
+
+> 本地候选使用 AtomLib 0.6.0 候选包。
+
+**新增**
+
+- `/atomchat gui` 在聊天面板打开服务端配置，统一编辑托管、资源包和消息格式，保存失败时保留草稿。
+- 按服务器记住已确认的账号、消息格式和皮肤资料，以便再次收到有身份依据的消息时复用。
+
+**修复**
+
+- 传入的玩家消息优先使用协议及组件身份，身份冲突时保留为系统消息。
+- 保留带点击的发送者名称和正文前的括号、标点及样式。
+- 带实体 UUID 的发送者可使用已观察到的同一账号资料。
+- 自己发出的消息可在收到匹配回显后更新原气泡，保留服务端实际显示的正文。
+- 服务端与客户端模板共用字段规则，重叠匹配发生冲突时保留原消息，预览会指出冲突原因。
+- 只带服标、昵称和正文的跨服消息显示为身份未知。回显只有在发送者、会话和待确认发送均可核对时才更新旧气泡。
+- 普通按键输入跳过剪贴板读取。
+
+**性能**
+
+- 复用引用卡片和发送者名称的富文本布局。
+- 重用排队中的图片加载任务，减少重复计算缓存路径和验证图片数据。
+- 复用未变化的表情反应数据和移动点阵的坐标缓冲，减少渲染中的 Java 分配。
+
+----
+
+> This local candidate uses the AtomLib 0.6.0 candidate.
+
+**Added**
+
+- Open server settings in the chat panel with `/atomchat gui` to edit hosting, resource packs, and message formats, with drafts preserved if saving fails.
+- Remember confirmed accounts, message formats, and skin data per server for later messages with supporting identity evidence.
+
+**Fixed**
+
+- Prioritize protocol and component identity for incoming player chat and keep conflicting messages in the system feed.
+- Preserve clickable sender names and the leading brackets, punctuation, and styling of message bodies.
+- Reuse previously observed account data for senders identified by entity UUID.
+- Update the original outgoing bubble when a matching echo arrives, using the body actually displayed by the server.
+- Use the same field rules for server and client templates, retain the original message on a conflict, and show the cause in template preview.
+- Mark cross-server labels without verified identity as unknown and reconcile echoes only when the sender, conversation, and pending send can all be identified.
+- Skip clipboard reads during ordinary typing.
+
+**Performance**
+
+- Reuse rich text layouts for quote pills and sender names.
+- Reuse pending image loads and reduce repeated cache-path computation and image validation.
+- Reduce Java allocations by reusing unchanged reaction data and moving-edge point buffers.
+
 ## v0.8.0
 
 > 反应同步需客户端与服务端一起更新至 0.8.0；已保存的自定义配色保留，重选预设即可应用新版材质。

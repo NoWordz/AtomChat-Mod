@@ -30,25 +30,32 @@ import java.util.UUID;
 public record SenderMeta(UUID senderUuid, String senderName, String profileName,
                          String contentText, boolean system, boolean whisper,
                          String whisperPartner, Text senderComponent,
-                         Text contentComponent, IdentityEvidence evidence, String originalContent) {
+                         Text contentComponent, IdentityEvidence evidence, String originalContent,
+                         UUID whisperPartnerUuid) {
+    public SenderMeta(UUID uuid, String sender, String profile, String content, boolean system,
+                      boolean whisper, String partner, Text senderComponent, Text contentComponent,
+                      IdentityEvidence evidence, String originalContent) {
+        this(uuid, sender, profile, content, system, whisper, partner, senderComponent, contentComponent,
+                evidence, originalContent, null);
+    }
     public SenderMeta(UUID uuid, String sender, String profile, String content, boolean system,
                       boolean whisper, String partner, Text senderComponent, Text contentComponent) {
         this(uuid, sender, profile, content, system, whisper, partner, senderComponent, contentComponent, IdentityEvidence.TEXT, null);
     }
     public SenderMeta withOriginalContent(String original) {
         return new SenderMeta(senderUuid, senderName, profileName, contentText, system, whisper,
-                whisperPartner, senderComponent, contentComponent, evidence, original);
+                whisperPartner, senderComponent, contentComponent, evidence, original, whisperPartnerUuid);
     }
     public SenderMeta withEvidence(IdentityEvidence source) {
         return new SenderMeta(senderUuid, senderName, profileName, contentText, system, whisper,
-                whisperPartner, senderComponent, contentComponent, source, originalContent);
+                whisperPartner, senderComponent, contentComponent, source, originalContent, whisperPartnerUuid);
     }
     public SenderMeta {
         evidence = evidence == null ? IdentityEvidence.TEXT : evidence;
         senderUuid = senderUuid != null && senderUuid.equals(NIL_UUID) ? null : senderUuid;
         senderName = clean(senderName);
         profileName = clean(profileName);
-        contentText = clean(contentText);
+        contentText = contentText == null || contentText.isBlank() ? null : TemplateParser.visibleText(contentText);
         whisperPartner = clean(whisperPartner);
     }
 

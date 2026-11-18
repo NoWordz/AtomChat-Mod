@@ -34,15 +34,34 @@ class OutgoingMessagesTest {
         assertEquals(OutgoingMessages.State.UNCONFIRMED,local.deliveryState());
         assertNotEquals(OutgoingMessages.State.FAILED,local.deliveryState());
     }
-    @Test void repeatedSameTextSendsAreMatchedInArrivalOrderWithoutMergingPendingRows() {
+    @Test void identicalOutstandingSendsDoNotIdentifyAUniqueBubble() {
         var one=msg(SELF,"Self","same");var two=msg(SELF,"Self","same");
         OutgoingMessages.sent(one,null,"same");ChatStore.get().add(one);
         OutgoingMessages.sent(two,null,"same");ChatStore.get().add(two);
         assertEquals(2,ChatStore.get().snapshot().size());
-        assertTrue(OutgoingMessages.reconcile(msg(SELF,"[A] Self","same"),null,true,null));
+        assertFalse(OutgoingMessages.reconcile(msg(SELF,"[A] Self","same"),null,true,null));
+        assertFalse(OutgoingMessages.reconcile(msg(SELF,"[A] Self","rewrite"),null,true,"same"));
         assertEquals(one.getId(),ChatStore.get().snapshot().get(0).getId());
-        assertEquals(OutgoingMessages.State.CONFIRMED,ChatStore.get().snapshot().get(0).deliveryState());
+        assertEquals(OutgoingMessages.State.PENDING,ChatStore.get().snapshot().get(0).deliveryState());
         assertEquals(OutgoingMessages.State.PENDING,ChatStore.get().snapshot().get(1).deliveryState());
+    }
+    @Test void sameConversationNameWithConflictingUuidsDoesNotAcknowledgeAPrivateSend() {
+        var original=PlayerRef.of(UUID.randomUUID(),"Alice");
+        var other=PlayerRef.of(UUID.randomUUID(),"Alice");
+        var local=msg(SELF,"Self","secret");
+        OutgoingMessages.sent(local,original,"secret");PrivateChatStore.addOutgoing(original,local);
+        assertFalse(OutgoingMessages.reconcile(msg(SELF,"Self","secret"),other,true,null));
+        assertEquals(OutgoingMessages.State.PENDING,local.deliveryState());
+    }
+    @Test void aSendLostToCapacityCanStillMakeACurrentMatchAmbiguous() {
+        var first=msg(SELF,"Self","same");
+        OutgoingMessages.sent(first,null,"same");ChatStore.get().add(first);
+        for(int i=0;i<31;i++) OutgoingMessages.sent(msg(SELF,"Self","other "+i),null,"other "+i);
+        var latest=msg(SELF,"Self","same");
+        OutgoingMessages.sent(latest,null,"same");ChatStore.get().add(latest);
+        assertEquals(OutgoingMessages.State.UNCONFIRMED,first.deliveryState());
+        assertFalse(OutgoingMessages.reconcile(msg(SELF,"Self","same"),null,true,"same"));
+        assertEquals(OutgoingMessages.State.PENDING,latest.deliveryState());
     }
     @Test void unmatchedIncomingCannotMergeAwayThePendingRow() {
         var local=msg(SELF,"Self","same");OutgoingMessages.sent(local,null,"same");

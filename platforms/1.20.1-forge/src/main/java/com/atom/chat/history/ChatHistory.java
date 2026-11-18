@@ -1,5 +1,6 @@
 package com.atom.chat.history;
 
+import com.atom.chat.text.RichText;
 import com.atom.chat.AtomChat;
 import com.atom.chat.chat.ChatMessage;
 import com.atom.chat.chat.ChatStore;
@@ -173,30 +174,23 @@ public final class ChatHistory {
     }
 
     private static Entry toEntry(ChatMessage m, String peer) {
-        String comp = null;
-        if (m.getComponent() != null) {
-            try {
-                comp = Component.Serializer.toJson(m.getComponent());
-            } catch (Exception e) {
-                comp = null;
-            }
-        }
+        String comp = encode(m.getComponent());
+        String sender = m.getSenderName();
+        String body = m.getContentText();
+        // Persist resolved runs when the original text cannot locate them uniquely.
+        boolean preserve = !m.isSystem() && (m.hasCapturedPresentation() || m.isIdentityUnknown()
+                || !uniqueWithin(m.getRawText(), sender) || !uniqueWithin(m.getRawText(), body));
+        String senderComp = preserve ? encode(m.getSenderRich().toText()) : null;
+        String bodyComp = preserve ? encode(m.getContentRich().toText()) : null;
         UUID uuid = m.getSenderUuid();
         return new Entry(m.getTimestamp(), peer != null, peer, m.isOwn(), m.isSystem(),
                 m.getQuoteName(), m.getQuoteText(),
                 uuid != null ? uuid.toString() : null,
-                m.getSenderName(), m.getProfileName(), m.getContentText(), comp);
+                sender, m.isIdentityUnknown() ? "" : m.getProfileName(), body, comp, senderComp, bodyComp);
     }
 
     private static ChatMessage fromEntry(Entry e) {
-        Component component = null;
-        if (e.componentJson != null) {
-            try {
-                component = Component.Serializer.fromJson(e.componentJson);
-            } catch (Exception ignored) {
-                component = null;
-            }
-        }
+        Component component = decode(e.componentJson);
         if (component == null) {
             // Plain-text fallback: the line is still worth showing.
             component = Component.literal(e.contentText != null ? e.contentText : "");
@@ -209,8 +203,35 @@ public final class ChatHistory {
                 uuid = null;
             }
         }
+        Component sender = decode(e.senderComponentJson);
+        Component body = decode(e.bodyComponentJson);
         return new ChatMessage(component, e.own, e.system, e.quoteName, e.quoteText,
-                uuid, e.senderName, e.profileName, e.contentText, e.timestamp);
+                uuid, e.senderName, e.profileName, e.contentText,
+                sender == null ? null : RichText.of(sender), body == null ? null : RichText.of(body), e.timestamp).retainPresentation(sender != null || body != null);
+    }
+
+    private static boolean uniqueWithin(String line, String part) {
+        if (part == null || part.isEmpty()) return true;
+        int first = line.indexOf(part);
+        return first >= 0 && line.indexOf(part, first + 1) < 0;
+    }
+
+    private static String encode(Component value) {
+        if (value == null) return null;
+        try {
+            return Component.Serializer.toJson(value);
+        } catch (RuntimeException invalid) {
+            return null;
+        }
+    }
+
+    private static Component decode(String json) {
+        if (json == null) return null;
+        try {
+            return Component.Serializer.fromJson(json);
+        } catch (RuntimeException invalid) {
+            return null;
+        }
     }
 
     /**

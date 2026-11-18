@@ -22,7 +22,18 @@ Search the log for `HeadlessException`, `java.awt.headless` or `Image picker`. O
 
 Grey means the client cannot tell whether that line is a player message, so it plays safe and renders it as a system line (that is the **design**, not a mis-detection). It usually happens with nickname / title plugins that use a message format the client does not know.
 
-The remedy is to describe the format by hand in `config/atomchat/atomchat-client.json` — `chatTemplates` for public chat and `whisperTemplates` for private chat, with the placeholders `{name}` `{display_name}` `{prefix}` `{suffix}` `{sep}` `{content}` (`{content}` must appear exactly once). **Reopen the chat screen** after editing; no game restart needed.
+Describe the format in `config/atomchat/atomchat-client.json`. `chatTemplates` matches public chat and `whisperTemplates` matches incoming whispers. **Reopen the chat screen** after editing.
+
+```json
+{
+  "chatTemplates": ["[{channel}] {sender}: {message}"],
+  "whisperTemplates": ["[{sender} ➥ {target}] {message}"]
+}
+```
+
+Preview the same format in the server template editor. Use `{display}` for nicknames. `{message}` is required and keeps spaces, punctuation, and line breaks after the delimiter. Existing local templates still accept `{name}`, `{display_name}`, `{prefix}`, `{suffix}`, `{sep}`, and `{content}`. Use one placeholder set per rule. If `{sep}` yields multiple splits, replace it with the literal separator, such as `: `.
+
+Conflicts in direction or field boundaries preserve the original line. The server preview explains conflicts, and the client debug log reports rejected rules and fallback reasons. Formatted messages with insufficient identity evidence are marked “Unknown identity”.
 
 Messages with an unknown translation key at the root are treated as system notices to preserve their styles and interactions. Public-chat templates do not override this rule, so player chat sent with a custom root translation key may also appear as a system message.
 

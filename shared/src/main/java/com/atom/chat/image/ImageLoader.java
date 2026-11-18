@@ -235,6 +235,10 @@ public final class ImageLoader {
     }
     public static Image decodeStatic(byte[] bytes, int maxDim) {
         validateSource(bytes);
+        return decodeStaticValidated(bytes, maxDim);
+    }
+
+    private static Image decodeStaticValidated(byte[] bytes, int maxDim) {
         long startedAt = com.atom.chat.diagnostics.FrameProfile.start();
         try {
             return downscale(Image.makeFromEncoded(bytes), maxDim);
@@ -310,7 +314,7 @@ public final class ImageLoader {
             return null;
         }
         if (failed != null) failedUntil.remove(url, failed);
-        Path disk = diskFile(url);
+        Path disk;
         LoadTask task;
         synchronized (pending) {
             task=pending.get(url);
@@ -319,7 +323,9 @@ public final class ImageLoader {
                 else pending.remove(url,task);
                 return null;
             }
-            if(!visible || (disk==null && !isFetchable(url)) || pending.size()>=MAX_PENDING_LOADS) return null;
+            if (!visible || pending.size() >= MAX_PENDING_LOADS) return null;
+            disk = diskFile(url);
+            if (disk == null && !isFetchable(url)) return null;
             task=new LoadTask(url);pending.put(url,task);
         }
         final LoadTask scheduled=task;
@@ -393,7 +399,7 @@ public final class ImageLoader {
                 failedUntil.remove(url);
                 return;
             }
-            Image image = decodeStatic(bytes, MAX_DIM);
+            Image image = decodeStaticValidated(bytes, MAX_DIM);
             if (image != null) {
                 if (disk != null && task.current() && (!fromDisk || !displaySized(bytes))) {
                     // Store only the small display version, never the original

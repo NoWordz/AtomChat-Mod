@@ -49,6 +49,41 @@ public final class ReactionChips {
     private record RowFrame(List<ReactionChipAnim.Chip> cells,Map<String,ReactionWire.Entry> entries) {
         static final RowFrame EMPTY = new RowFrame(List.of(), Map.of());
     }
+    private record Projection(long revision, UUID self, LinkedHashMap<String,Integer> live,
+                              Set<String> mine, Map<String,Long> arrivals,
+                              Map<String,ReactionWire.Entry> entries) {}
+    private final Map<UUID,Projection> projections = new LinkedHashMap<>(128, 0.75F, true) {
+        @Override
+        protected boolean removeEldestEntry(Map.Entry<UUID,Projection> eldest) {
+            return size() > 512;
+        }
+    };
+
+    private Projection projection(UUID key) {
+        long revision = ReactionClient.revision();
+        UUID self = ReactionClient.self.get();
+        Projection existing = projections.get(key);
+        if (existing != null && existing.revision() == revision && Objects.equals(existing.self(), self)) {
+            return existing;
+        }
+        LinkedHashMap<String,Integer> live = new LinkedHashMap<>();
+        Map<String,Long> arrivals = new HashMap<>();
+        Map<String,ReactionWire.Entry> entries = new HashMap<>();
+        Set<String> mine = new HashSet<>();
+        for (ReactionWire.Entry entry : ReactionClient.entries(key)) {
+            live.put(entry.emoji(), entry.members().size());
+            entries.put(entry.emoji(), entry);
+            if (self != null && entry.members().stream().anyMatch(member -> self.equals(member.uuid()))) {
+                mine.add(entry.emoji());
+            }
+            long arrival = ReactionClient.arrival(key, entry.emoji());
+            if (arrival > 0L) arrivals.put(entry.emoji(), arrival);
+        }
+        Projection result = new Projection(revision, self, live, mine, arrivals, entries);
+        projections.put(key, result);
+        return result;
+    }
+
     private final Map<Long,RowFrame> frames = new HashMap<>();
     private UiLayout.Rect viewport;
     private long frameNow = System.currentTimeMillis();
@@ -114,19 +149,9 @@ public final class ReactionChips {
         UUID key = ReactionClient.key(row);
         RowFrame result = RowFrame.EMPTY;
         if (key != null) {
-            LinkedHashMap<String,Integer> live = new LinkedHashMap<>();
-            Map<String,Long> arrivals = new HashMap<>();
-            Map<String,ReactionWire.Entry> entries = new HashMap<>();
-            Set<String> mine = new HashSet<>();
-            for (ReactionWire.Entry entry : ReactionClient.entries(key)) {
-                live.put(entry.emoji(), entry.members().size());
-                entries.put(entry.emoji(), entry);
-                if (ReactionClient.own(entry)) mine.add(entry.emoji());
-                long arrival = ReactionClient.arrival(key, entry.emoji());
-                if (arrival > 0L) arrivals.put(entry.emoji(), arrival);
-            }
-            result = new RowFrame(
-                    anim.sync(id, live, mine, arrivals, frameNow, Animations.messageEntry()), entries);
+            Projection model = projection(key);
+            result = new RowFrame(anim.sync(id, model.live(), model.mine(), model.arrivals(),
+                    frameNow, Animations.messageEntry()), model.entries());
         }
         return result;
     }
@@ -242,7 +267,7 @@ public final class ReactionChips {
      * the pointer, which fades the tooltip out instead of freezing it visible.
      */
     public void hover(Canvas canvas,float x,float y,boolean suppress) {
-        long now = frameNow;
+        long now = System.currentTimeMillis();
         float dt = hoverLastMs == 0L ? 16.0F : Math.min(50.0F, Math.max(1.0F, now - hoverLastMs));
         hoverLastMs = now;
 

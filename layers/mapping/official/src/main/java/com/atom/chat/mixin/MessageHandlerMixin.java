@@ -59,10 +59,16 @@ public class MessageHandlerMixin {
             if (privateMeta.system()) { MessageCapture.set(privateMeta); return; }
             var local = Minecraft.getInstance().player;
             boolean outgoing = local != null && uuid.equals(local.getUUID());
+            boolean outgoingKey = privateMeta.whisperPartnerUuid() != null;
+            if (outgoingKey != outgoing) {
+                MessageCapture.set(SenderMeta.systemMeta().withEvidence(com.atom.chat.chat.IdentityEvidence.CONFLICT));
+                return;
+            }
             // Incoming identity comes from the native message, not the nickname lookup.
             String partner = outgoing ? privateMeta.whisperPartner() : profile;
             MessageCapture.set(new SenderMeta(uuid, privateMeta.senderName(), profile, content, false, true,
-                    partner, privateMeta.senderComponent(), contentComponent).withEvidence(com.atom.chat.chat.IdentityEvidence.NATIVE).withOriginalContent(message.signedContent()));
+                    partner, privateMeta.senderComponent(), contentComponent, com.atom.chat.chat.IdentityEvidence.NATIVE,
+                    message.signedContent(), outgoing ? privateMeta.whisperPartnerUuid() : uuid));
             return;
         }
         MessageCapture.set(ChatPipeline.nativePublicLine(visible, senderComponent, contentComponent, uuid, profile).withOriginalContent(message.signedContent()));
@@ -86,23 +92,8 @@ public class MessageHandlerMixin {
         SenderMeta privateMeta = PrivateChatParser.tryParse(decorated);
         if (privateMeta != null) { MessageCapture.set(privateMeta); return; }
         if (ChatClassifier.isVanillaBroadcast(decorated)) return;
-        String decoratedStr = decorated.getString();
-        Component senderComponent = bound.name();
-        if (senderComponent != null && decorated.getString().equals(senderComponent.getString())) return;
-        if (senderComponent != null && !senderComponent.getString().isBlank()) {
-            String display = senderComponent.getString();
-            String profile = display;
-            UUID uuid = ChatClassifier.resolveUuid(display);
-            if (uuid != null) {
-                var info = ChatClassifier.resolveOnlinePlayer(display);
-                if (info != null) {
-                    profile = info.getProfile().getName();
-                }
-            }
-            MessageCapture.set(new SenderMeta(uuid, display, profile, null, false,
-                    senderComponent, message).withEvidence(com.atom.chat.chat.IdentityEvidence.TRANSLATION));
-            return;
-        }
+        // The final HUD pass can apply templates to the complete rendered envelope.
+        // A profileless bound nickname alone cannot identify a player across servers.
         // Identity-less delivery is classified once, at the final HUD component.
     }
 

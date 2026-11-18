@@ -63,6 +63,7 @@ public final class ServerConfigPage {
     private int editIndex=-1;
     private String focused,pressed,feedback="",sample="",drawingGroup="",previewSample;
     private List<MessageTemplate> previewRules;
+    private AtomChatConfig previewConfig;
     private MessageTemplate previewRule;
     private String legacyPackSummary="";
     private TemplateParser.Preview preview;
@@ -291,14 +292,18 @@ public final class ServerConfigPage {
     private List<String> placeholderNames(){return rule().kind()==MessageTemplate.Kind.OUTGOING?
             List.of("target","message","sender","uuid","display","channel"):List.of("sender","message","channel","display","uuid","target");}
     private TemplateParser.Preview parsed(){
-        var edited=rule();var rules=draft.templates();
-        if(previewRules!=rules||previewRule!=edited||!Objects.equals(previewSample,sample)){
-            previewRules=rules;previewRule=edited;previewSample=sample;
-            preview=TemplateParser.preview(edited,sample);
+        var edited=rule();var rules=draft.templates();var config=AtomChatConfig.get();
+        if(previewRules!=rules||previewConfig!=config||previewRule!=edited||!Objects.equals(previewSample,sample)){
+            previewRules=rules;previewConfig=config;previewRule=edited;previewSample=sample;
+            String visible=TemplateParser.visibleText(sample);
+            preview=TemplateParser.preview(edited,visible);
             if(preview.state()==TemplateParser.State.MATCH){
                 var candidates=new ArrayList<MessageTemplate>();
                 for(var candidate:rules)if(candidate==edited)candidates.add(new MessageTemplate(edited.id(),edited.name(),edited.kind(),edited.format(),true));else if(candidate.enabled())candidates.add(candidate);
-                var combined=TemplateParser.match(candidates,sample);
+                boolean localRules=(config.chatTemplates!=null&&!config.chatTemplates.isEmpty())
+                        ||(config.whisperTemplates!=null&&!config.whisperTemplates.isEmpty());
+                var combined=com.atom.chat.chat.ChatTemplates.matchConfigured(visible,candidates,config.chatTemplates,
+                        config.whisperTemplates,localRules?com.atom.chat.chat.ChatPipeline.onlineNameCandidates():List.of());
                 if(combined.state()==TemplateParser.State.AMBIGUOUS)preview=combined;
             }
         }
@@ -314,13 +319,16 @@ public final class ServerConfigPage {
         }
         top+=gap;
         if(result.state()!=TemplateParser.State.MATCH){
-            var lines=wrap(t("preview."+result.state().name()),width);if(canvas!=null)drawLines(canvas,lines,left,top,c.textSecondaryColor);return top-start+lines.size()*TITLE_LINE_H;
+            String key=result.error().isEmpty()?"preview."+result.state().name():"preview.reason."+result.error();
+            var lines=wrap(t(key),width);
+            if(canvas!=null)drawLines(canvas,lines,left,top,c.textSecondaryColor);
+            return top-start+lines.size()*TITLE_LINE_H;
         }
         var font=FontManager.font(UiTokens.SETTINGS_TILE_SUB);
         for(var name:List.of("channel","sender","target","display","uuid","message")){
             String value=result.match().fields().get(name);if(value==null)continue;
             String label=t("placeholder."+name);float labelW=SkiaFontRenderer.getStringWidth(font,label)+gap;
-            var lines=wrap(value,Math.max(1,width-labelW));
+            var lines=wrap(name.equals("message")?previewBody(value):value,Math.max(1,width-labelW));
             if(canvas!=null){SkiaFontRenderer.drawText(canvas,font,label,left,SkiaFontRenderer.centerBaselineY(font,top+TITLE_HALF_LINE),c.textSecondaryColor);drawLines(canvas,lines,left+labelW,top,c.textPrimaryColor);}
             top+=lines.size()*TITLE_LINE_H;
         }
@@ -328,6 +336,19 @@ public final class ServerConfigPage {
         var identity=wrap(t(result.match().fields().containsKey("uuid")?"uuid_in_sample":"uuid_absent"),width);
         if(canvas!=null)drawLines(canvas,identity,left,top,c.textSecondaryColor);
         return top-start+identity.size()*TITLE_LINE_H;
+    }
+
+    private static String previewBody(String value) {
+        var lines=value.split("\n",-1);
+        for(int i=0;i<lines.length;i++) {
+            String line=lines[i];
+            int from=0,to=line.length();
+            while(from<to && line.charAt(from)==' ') from++;
+            while(to>from && line.charAt(to-1)==' ') to--;
+            lines[i]="␠".repeat(from)+line.substring(from,to).replace("\t","⇥").replace("\r","␍")
+                    +"␠".repeat(line.length()-to);
+        }
+        return String.join("\n",lines);
     }
 
     public void render(Canvas canvas,UiLayout layout,float mx,float my,float dt){

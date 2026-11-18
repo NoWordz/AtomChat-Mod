@@ -125,6 +125,8 @@ public final class ChatPipeline {
         if (sender < 0 || args.length <= sender + 1) return null;
         Text name = args[sender] instanceof Text c ? c : Text.literal(String.valueOf(args[sender]));
         Text body = args[sender + 1] instanceof Text c ? c : Text.literal(String.valueOf(args[sender + 1]));
+        var identity = ComponentIdentity.resolveSender(name);
+        if (identity.conflict()) return SenderMeta.systemMeta().withEvidence(IdentityEvidence.CONFLICT);
         if (!message.getStyle().equals(net.minecraft.text.Style.EMPTY)) {
             name = name.copy().setStyle(name.getStyle().withParent(message.getStyle()));
             body = body.copy().setStyle(body.getStyle().withParent(message.getStyle()));
@@ -136,15 +138,10 @@ public final class ChatPipeline {
         }
         String display = name.getString().replaceAll("§.", "").trim();
         if (display.isBlank()) return null;
-        var identity = ComponentIdentity.resolveSender(name);
-        if (identity.conflict()) return SenderMeta.systemMeta().withEvidence(IdentityEvidence.CONFLICT);
-        var info = identity.uuid() == null && identity.account() == null ? ChatClassifier.resolveOnlinePlayer(display) : null;
-        String profile = identity.account() != null ? identity.account()
-                : identity.uuid() != null ? ChatClassifier.profileName(identity.uuid()) : info != null ? info.getProfile().getName() : display;
-        UUID uuid = identity.account() != null || identity.uuid() != null ? identity.uuid()
-                : info != null ? info.getProfile().getId() : SeenPlayers.findUuid(display);
+        UUID uuid = identity.evidence() == IdentityEvidence.ENTITY ? identity.uuid() : null;
+        String profile = identity.account() != null ? identity.account() : ChatClassifier.profileName(uuid);
         return new SenderMeta(uuid, display, profile, body.getString(), false, name, body)
-                .withEvidence(identity.uuid() != null ? IdentityEvidence.ENTITY : IdentityEvidence.TRANSLATION);
+                .withEvidence(identity.evidence() == IdentityEvidence.ENTITY ? IdentityEvidence.ENTITY : IdentityEvidence.TRANSLATION);
     }
 
     public static SenderMeta learnedPlayerLine(Text message) {
@@ -162,16 +159,14 @@ public final class ChatPipeline {
      *  players once seen in chat — the offline-player tail that lets relayed
      *  lines (bot bridges, delayed echoes) still parse as player chat. */
     public static List<String> onlineNameCandidates() {
-        var player = MinecraftClient.getInstance().player;
-        if (player == null || player.networkHandler == null) {
-            return List.of();
-        }
+        var client = MinecraftClient.getInstance();
+        var connection = client == null ? null : client.getNetworkHandler();
         LinkedHashSet<String> names = new LinkedHashSet<>();
-        player.networkHandler.getPlayerList().forEach(info -> {
-            for (String cand : ChatClassifier.nameCandidates(info)) {
-                names.add(cand);
+        if (connection != null) {
+            for (var info : connection.getPlayerList()) {
+                for (String candidate : ChatClassifier.nameCandidates(info)) names.add(candidate);
             }
-        });
+        }
         names.addAll(SeenPlayers.profileNames());
         for (var seen : SeenPlayers.snapshot()) if (seen.displayName() != null) names.add(seen.displayName());
         return new ArrayList<>(names);

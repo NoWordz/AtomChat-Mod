@@ -1,7 +1,6 @@
 package com.atom.chat.chat;
 
 import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.network.PlayerListEntry;
 import net.minecraft.text.Text;
 import net.minecraft.text.TranslatableTextContent;
 
@@ -17,6 +16,13 @@ public final class PrivateChatParser {
     }
 
     public static SenderMeta tryParse(Text message) {
+        var client = MinecraftClient.getInstance();
+        var player = client == null ? null : client.player;
+        return tryParse(message, player == null ? null : player.getName().getString(),
+                player == null ? null : player.getUuid());
+    }
+
+    static SenderMeta tryParse(Text message, String own, UUID ownUuid) {
         if (!(message.getContent() instanceof TranslatableTextContent tc)) {
             return null;
         }
@@ -28,31 +34,21 @@ public final class PrivateChatParser {
             String display = clean(name.getString());
             var identity = ComponentIdentity.resolveSender(name);
             if (identity.conflict()) return SenderMeta.systemMeta().withEvidence(IdentityEvidence.CONFLICT);
-            PlayerListEntry info = identity.uuid() == null && identity.account() == null && display != null ? ChatClassifier.resolveOnlinePlayer(display) : null;
-            String profile = identity.account() != null ? identity.account() : info != null ? info.getProfile().getName()
-                    : identity.uuid() != null ? ChatClassifier.profileName(identity.uuid()) : display;
-            UUID uuid = identity.account() != null || identity.uuid() != null ? identity.uuid()
-                    : info != null ? info.getProfile().getId() : SeenPlayers.findUuid(display);
+            UUID uuid = identity.evidence() == IdentityEvidence.ENTITY ? identity.uuid() : null;
+            String profile = identity.account() != null ? identity.account() : ChatClassifier.profileName(uuid);
             return new SenderMeta(uuid, display, profile, content.getString(), false, true,
                     profile, name, content).withEvidence(IdentityEvidence.TRANSLATION);
         }
         if (key.equals("commands.message.display.outgoing") && args.length >= 2) {
             Text partnerText = asText(args[0]);
             Text content = asText(args[1]);
-            String display = clean(partnerText.getString());
-            if (display == null) {
-                return null;
+            var peer = ComponentIdentity.resolveSender(partnerText);
+            if (peer.conflict()) return SenderMeta.systemMeta().withEvidence(IdentityEvidence.CONFLICT);
+            if (ownUuid == null || peer.uuid() == null || !peer.evidence().confirmsIdentity() || peer.account() == null) {
+                return SenderMeta.systemMeta();
             }
-            PlayerListEntry info = ChatClassifier.resolveOnlinePlayer(display);
-            String partner = info != null ? info.getProfile().getName() : display;
-            MinecraftClient client = MinecraftClient.getInstance();
-            if (client.player == null) {
-                return null;
-            }
-            String own = client.player.getName().getString();
-            UUID ownUuid = client.player.getUuid();
             return new SenderMeta(ownUuid, own, own, content.getString(), false, true,
-                    partner, Text.literal(own), content).withEvidence(IdentityEvidence.TRANSLATION);
+                    peer.account(), Text.literal(own), content, IdentityEvidence.TRANSLATION, null, peer.uuid());
         }
         return null;
     }

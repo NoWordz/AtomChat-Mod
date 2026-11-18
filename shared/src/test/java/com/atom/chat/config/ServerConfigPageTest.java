@@ -332,6 +332,19 @@ class ServerConfigPageTest {
         var preview=(com.atom.chat.chat.TemplateParser.Preview)parsed.invoke(page);
         assertEquals(com.atom.chat.chat.TemplateParser.State.AMBIGUOUS,preview.state());page.dispose();
     }
+    @Test void editorPreviewIncludesThisClientsConfiguredRules() throws Exception {
+        AtomChatConfig.get().whisperTemplates=List.of("{sender}: {message}");
+        var rule=new com.atom.chat.chat.MessageTemplate("public","Public",com.atom.chat.chat.MessageTemplate.Kind.PUBLIC,"{sender}: {message}",true);
+        var page=new ServerConfigPage(new Host("en_us"),1,values().withExtras(64,List.of(rule)));
+        try {
+            var edit=ServerConfigPage.class.getDeclaredMethod("templateAction",int.class,String.class);edit.setAccessible(true);edit.invoke(page,0,"edit");
+            var change=ServerConfigPage.class.getDeclaredMethod("change",String.class,String.class);change.setAccessible(true);change.invoke(page,"template.sample","Alice: hello");
+            var parsed=ServerConfigPage.class.getDeclaredMethod("parsed");parsed.setAccessible(true);
+            var preview=(com.atom.chat.chat.TemplateParser.Preview)parsed.invoke(page);
+            assertEquals(com.atom.chat.chat.TemplateParser.State.AMBIGUOUS,preview.state());
+            assertEquals("rule_conflict",preview.error());
+        } finally { page.dispose(); }
+    }
     @Test void undoHistoryDoesNotLeakBetweenTwoPhraseEditorsWithTheSameText() throws Exception {
         var config=new AtomChatConfig();config.animationEnabled=false;configField.set(null,config);
         var page=new ServerConfigPage(new Host("zh_cn"),1,values());var layout=UiLayout.ofDetail(10,10,420,850);

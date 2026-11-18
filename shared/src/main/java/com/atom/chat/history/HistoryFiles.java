@@ -82,7 +82,11 @@ public final class HistoryFiles {
         for (int i = Math.max(0, snapshot.size() - HistorySnapshot.MAX_ENTRIES); i < snapshot.size(); i++) {
             byte[] line;
             try {
-                line = HistoryStore.toLine(snapshot.get(i)).getBytes(StandardCharsets.UTF_8);
+                Entry entry = snapshot.get(i);
+                line = HistoryStore.toLine(entry).getBytes(StandardCharsets.UTF_8);
+                if (line.length > MAX_LINE_BYTES && (entry.senderComponentJson != null || entry.bodyComponentJson != null)) {
+                    line = HistoryStore.toLine(entry, false).getBytes(StandardCharsets.UTF_8);
+                }
             } catch (RuntimeException malformed) {
                 continue;
             }

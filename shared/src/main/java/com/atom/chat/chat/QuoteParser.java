@@ -25,7 +25,7 @@ public final class QuoteParser {
         if (text == null) {
             return null;
         }
-        String s = text.trim();
+        String s = text.stripLeading();
         if (!s.startsWith("「引用")) {
             return null;
         }
@@ -46,7 +46,7 @@ public final class QuoteParser {
             return null;
         }
         String quoteText = s.substring(colon + 1, close).trim();
-        String body = s.substring(close + 1).trim();
+        String body = s.substring(close + 1);
         return new Quote(name, quoteText, body);
     }
 }

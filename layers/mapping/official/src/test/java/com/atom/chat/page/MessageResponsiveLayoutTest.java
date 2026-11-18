@@ -34,6 +34,33 @@ class MessageResponsiveLayoutTest {
         },(url,visible)->image);
     }
 
+    @Test void richQuoteAndNameLayoutsRefreshWhenInputsChange() throws Exception {
+        var msg = new ChatMessage(Component.literal("<Alice> 「引用 @Bob: 中文😀很长的一段」hello"),
+                false, false, "Bob", "中文😀很长的一段", null, "Alice", "Alice", "hello");
+        var view = view(msg, null);
+        var font = com.atom.chat.font.FontManager.font(16);
+        try {
+            var quote = MessageListView.class.getDeclaredMethod("quoteLayout", ChatMessage.class,
+                    io.github.humbleui.skija.Font.class, float.class);
+            quote.setAccessible(true);
+            Object first = quote.invoke(view, msg, font, 60F);
+            assertNotNull(first);
+            assertSame(first, quote.invoke(view, msg, font, 60F));
+            assertNotSame(first, quote.invoke(view, msg, font, 100F));
+            assertNotSame(first, quote.invoke(view, msg.withDuplicateCount(2), font, 60F));
+            assertNotSame(first, quote.invoke(view, msg, com.atom.chat.font.FontManager.font(18), 60F));
+
+            var name = MessageListView.class.getDeclaredMethod("nameLayout", ChatMessage.class,
+                    io.github.humbleui.skija.Font.class, String.class, String.class);
+            name.setAccessible(true);
+            Object pending = name.invoke(view, msg, font, null, "pending");
+            assertSame(pending, name.invoke(view, msg, font, null, "pending"));
+            assertNotSame(pending, name.invoke(view, msg, font, null, "failed"));
+        } finally {
+            view.dispose();
+        }
+    }
+
     @Test void narrowTextUsesTheAvailableLaneAndMeasuredLinesMatchItsHit() {
         var cfg=AtomChatConfig.get();var saved=AppearancePresetStore.Snapshot.capture(cfg);
         int clock=cfg.timestampIntervalMinutes;var avatarStyle=cfg.avatarStyle;

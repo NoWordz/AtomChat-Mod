@@ -104,6 +104,32 @@ class InlineItemLayoutTest {
     }
 
     @Test
+    void truncatedMixedTextMatchesOriginalPrefixMeasurement() {
+        RichText text = RichText.concat(RichText.concat(RichText.literal("中文😀 hello "),
+                item("   钻石💎")), RichText.literal(" tail"));
+        var line = RichTextRenderer.wrapFor(text, FONT, Float.MAX_VALUE).get(0);
+        TextMeasurer measurer = value -> SkiaFontRenderer.getStringWidth(FONT, value);
+        float ellipsis = measurer.measure("…");
+        for (float width = 1; width < RichTextRenderer.width(FONT, line); width += 0.5F) {
+            int end = 0;
+            outer: for (RichTextLayout.Part part : line.parts()) {
+                if (part.isItem()) continue;
+                for (int i = 0; i < part.text().length();) {
+                    i += Character.charCount(part.text().codePointAt(i));
+                    int next = part.textStart() + i;
+                    if (RichTextLayout.advanceTo(line, measurer, next) + ellipsis > width) break outer;
+                    end = next;
+                }
+            }
+            RichText expected = end <= 0 ? RichText.literal("…")
+                    : RichText.concat(text.slice(0, end), RichText.literal("…"));
+            RichText actual = RichTextRenderer.truncate(FONT, text, width);
+            assertEquals(expected.getString(), actual.getString(), "width " + width);
+            assertEquals(expected.runs(), actual.runs(), "styles and item hover at width " + width);
+        }
+    }
+
+    @Test
     void narrowLinesStillKeepAnOversizedSlotWithItsFirstCharacter() {
         var lines = RichTextLayout.wrapWithItems(item("   ab"), s -> s.length() * 10f, 15, 12);
         assertEquals("   a", lines.get(0).getPlainText());
