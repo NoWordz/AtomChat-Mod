@@ -19,6 +19,15 @@ on:
       - "**.md"
       - "docs/**"
   workflow_dispatch:
+    inputs:
+      atomlib_input_url:
+        description: 'Explicit HTTPS Maven candidate archive (empty uses the reviewed released pin)'
+        type: string
+        required: false
+      atomlib_input_sha256:
+        description: 'SHA-256 of that exact archive; contained JARs must also match versions/atomlib.json'
+        type: string
+        required: false
 
 permissions:
   contents: read
@@ -36,6 +45,9 @@ jobs:
       # 工程目录与矩阵条目必须互相存在。红的原因会直接写在日志里。
       - name: 校验 versions/ 与各平台的身份来源
         run: python3 tools/verify_targets.py --matrix-out "$RUNNER_TEMP/matrix.json"
+
+      - name: 验证候选输入读取与失败保留
+        run: python3 tools/test_fetch_atomlib_input.py
 
       - name: 导出矩阵
         id: matrix
@@ -72,9 +84,12 @@ jobs:
           cache-read-only: ${{ github.event_name == 'pull_request' }}
 
       - name: 获取并认证固定 AtomLib 输入
+        env:
+          ATOMLIB_INPUT_URL: ${{ inputs.atomlib_input_url || vars.ATOMLIB_INPUT_URL }}
+          ATOMLIB_INPUT_SHA256: ${{ inputs.atomlib_input_sha256 || vars.ATOMLIB_INPUT_SHA256 }}
         run: |
           set -euo pipefail
-          python3 tools/fetch_atomlib_input.py --output "$RUNNER_TEMP/atomlib-input-path"
+          python3 tools/fetch_atomlib_input.py --url "$ATOMLIB_INPUT_URL" --sha256 "$ATOMLIB_INPUT_SHA256" --output "$RUNNER_TEMP/atomlib-input-path"
 
       - name: 构建并测试
         working-directory: ${{ matrix.project }}

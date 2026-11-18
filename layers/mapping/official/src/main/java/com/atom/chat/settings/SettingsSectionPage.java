@@ -63,6 +63,7 @@ import java.util.Objects;
  * so rendering, hit-testing and measurement can never disagree.</p>
  */
 public final class SettingsSectionPage {
+    private final com.atom.chat.settings.contract.SettingsYogaLayout contractLayout=new com.atom.chat.settings.contract.SettingsYogaLayout();
 
     /**
      * Page-entrance (unit V): the section's rows rise into place over the
@@ -1219,7 +1220,9 @@ public final class SettingsSectionPage {
             Row row=rows.get(i);CompactText compact=compactText(row,width);compactTexts.put(row,compact);
             full[i]=rowHeight(row,layout,compact);
         }
-        var slots=SettingsGroupFrontend.layout(full,groups,this::expansionOf);
+        var slots=section==SettingsSection.CHAT&&"history".equals(activeChipId(section))
+                ?contractLayout.layout(width,full,groups,this::expansionOf).slots()
+                :SettingsGroupFrontend.layout(full,groups,this::expansionOf);
         tops=slots.tops();heights=slots.heights();float contentHeight=slots.contentHeight();
         RowGeometry geometry = new RowGeometry(rows, section, layout.list.x(), layout.list.y(),
                 layout.list.w(), width, tops, heights, contentHeight, compactTexts);
@@ -3482,6 +3485,7 @@ public final class SettingsSectionPage {
 
     /** Drops per-page transient state so reopening a section starts clean. */
     public void reset() {
+        contractLayout.close();
         switches.clear();
         activeChip.clear();
         entrance.markSettled();

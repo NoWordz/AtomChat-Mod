@@ -38,6 +38,7 @@ import io.github.humbleui.skija.Color;
  * {@code SWITCH_W - SWITCH_KNOB - 2 * SWITCH_INSET}.</p>
  */
 public final class ToggleSwitch {
+    public record Appearance(int accent,boolean enabled,boolean lightCard,float cornerRadius){public Appearance{if(!Float.isFinite(cornerRadius)||cornerRadius<0)throw new IllegalArgumentException("Invalid settings corner parameter");}}
     private static final int KNOB = Color.makeARGB(255, 255, 255, 255);
     /**
      * Opacity of the disabled state; every colour the switch draws is scaled
@@ -119,6 +120,14 @@ public final class ToggleSwitch {
         scale.update(hover, pressed || pulsing(), dtMs, Animations.enabled(), UiTokens.SWITCH_W);
     }
 
+    /** Explicit shared frame for contracted hosts; legacy callers retain their existing clock entry. */
+    public void updateAt(com.atom.lib.motion.FrameTime frame,boolean on,boolean decorativeMotion){
+        if(frame.nowNanos()<0)throw new IllegalArgumentException("Negative settings frame time");
+        knob.tick(on?1:0,frame.nowNanos(),true);
+        scale.update(hover,pressed||frame.nowNanos()/1_000_000<pulseUntil,(float)Math.min(50,frame.deltaSeconds()*1000),decorativeMotion,UiTokens.SWITCH_W);
+    }
+    public void pulseAt(long frameMillis){if(frameMillis<0)throw new IllegalArgumentException("Negative settings pulse time");pulseUntil=Math.addExact(frameMillis,PULSE_MS);}
+
     /**
      * @param x left edge of the track
      * @param y top edge of the track
@@ -136,19 +145,29 @@ public final class ToggleSwitch {
      *                {@link #DISABLED_OPACITY}; input is handled upstream
      */
     public void render(Canvas canvas, float x, float y, int accent, boolean enabled) {
+        paint(canvas,x,y,accent,enabled,trackOff(),UiTokens.radius(UiTokens.SWITCH_H/(2*UiTokens.SCALE)),UiTokens.handleRadius(UiTokens.SWITCH_KNOB));
+    }
+    /** Immutable per-view appearance; the contracted path never reads a process-wide current palette. */
+    public void render(Canvas canvas,float x,float y,Appearance appearance){
+        float factor=UiTokens.radiusFactor(appearance.cornerRadius());
+        paint(canvas,x,y,appearance.accent(),appearance.enabled(),trackOff(appearance.lightCard()),UiTokens.SWITCH_H/2*factor,Math.min(UiTokens.SWITCH_KNOB/2,UiTokens.SWITCH_KNOB/2*factor));
+    }
+    public float knobPosition(){return knob.value();}
+    public float interactionScale(){return scale.scale();}
+    private void paint(Canvas canvas,float x,float y,int accent,boolean enabled,int off,float trackRadius,float knobRadius){
         float op = enabled ? 1.0F : DISABLED_OPACITY;
         scale.begin(canvas, x + UiTokens.SWITCH_W / 2.0F, y + UiTokens.SWITCH_H / 2.0F);
         try {
             float p = Math.max(0.0F, Math.min(1.0F, knob.value()));
             SkiaDraw.drawRoundedRect(canvas, x, y, UiTokens.SWITCH_W, UiTokens.SWITCH_H,
-                    UiTokens.radius(UiTokens.SWITCH_H / (2.0F * UiTokens.SCALE)),
-                    dim(SkiaDraw.lerpColor(trackOff(), accent, p), op));
+                    trackRadius,
+                    dim(SkiaDraw.lerpColor(off, accent, p), op));
 
             float travel = UiTokens.SWITCH_W - UiTokens.SWITCH_KNOB - UiTokens.SWITCH_INSET * 2.0F;
             float knobX = x + UiTokens.SWITCH_INSET + travel * p;
             float knobY = y + (UiTokens.SWITCH_H - UiTokens.SWITCH_KNOB) / 2.0F;
             SkiaDraw.drawRoundedRect(canvas, knobX, knobY, UiTokens.SWITCH_KNOB, UiTokens.SWITCH_KNOB,
-                    UiTokens.handleRadius(UiTokens.SWITCH_KNOB), dim(KNOB, op));
+                    knobRadius, dim(KNOB, op));
         } finally {
             canvas.restore();
         }

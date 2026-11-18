@@ -39,6 +39,7 @@ public final class ServerConfigPage {
     }
     private record Hit(UiLayout.Rect box,Runnable action,String field,String group,Motion motion){}
     private final Host host;
+    private final com.atom.chat.settings.contract.SettingsYogaLayout contractLayout=new com.atom.chat.settings.contract.SettingsYogaLayout();
     private Consumer<Boolean> navigationDirection=backwards->{};
     private final ServerConfigDraft draft;
     private final SettingsChipBar chips=new SettingsChipBar();
@@ -99,7 +100,7 @@ public final class ServerConfigPage {
         if(!draft.saving()||!draft.acknowledged())return false;
         draft.confirm(v,values);feedback="saved";requestedSnapshot=false;blur();return true;
     }
-    public void dispose(){closed=true;for(var image:images.values())image.close();images.clear();loading.clear();}
+    public void dispose(){closed=true;contractLayout.close();for(var image:images.values())image.close();images.clear();loading.clear();}
     public void leave(ConfirmationDialog dialog){
         confirmation=dialog;
         if(draft.saving()||importing)return;
@@ -342,7 +343,9 @@ public final class ServerConfigPage {
         var full=new ArrayList<Float>();var owners=new ArrayList<String>();
         for(var group:groups){if(headerHeight(group)>0){full.add(headerHeight(group)-UiTokens.SETTINGS_ROW_GAP);owners.add(null);}for(var row:group.rows()){full.add(height(row,geometry.viewport().w()));owners.add(group.id());}}
         float[] fullHeights=new float[full.size()];for(int i=0;i<full.size();i++)fullHeights[i]=full.get(i);
-        var slots=SettingsGroupFrontend.layout(fullHeights,owners.toArray(String[]::new),id->folds.getOrDefault(foldOwner(id),1f));
+        var slots=view==View.ROOT&&chip()==0&&host.administration()
+                ?contractLayout.layout(geometry.viewport().w(),fullHeights,owners.toArray(String[]::new),id->folds.getOrDefault(foldOwner(id),1f)).slots()
+                :SettingsGroupFrontend.layout(fullHeights,owners.toArray(String[]::new),id->folds.getOrDefault(foldOwner(id),1f));
         var viewport=geometry.viewport();float top=SettingsGroupFrontend.contentTop(layout,SettingsGroupFrontend.chipBand());
         scroll.setContent(top-viewport.y()+slots.contentHeight()+UiTokens.ROW_CLIP_INSET,viewport.h());
         if(requestedFocus!=null){int at=0;for(var group:groups){if(headerHeight(group)>0)at++;for(var row:group.rows()){if(row.id().equals(requestedFocus))scroll.scrollTo(Math.max(0,slots.tops()[at]),false);at++;}}requestedFocus=null;}
