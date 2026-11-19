@@ -54,9 +54,6 @@ def route_jobs(root, targets, pr_base, reviewed, tag):
             if not candidate or not revision:
                 raise ValueError(f"MISSING_EVIDENCE {config} and its reviewed Git revision are required")
             official = dict(target, mode="strict", runner="windows-2025", reviewed=revision)
-            if target['target'] == '1.21.1-neoforge':
-                # NeoForm recompiles the game JAR. Use the compiler that produced the reviewed input.
-                official.update(java="21.0.11", java_distribution="oracle")
             builds.extend([official, dict(target, mode="linux-verify", runner="ubuntu-latest", reviewed="")])
         else:
             official = dict(target, mode="legacy", runner="ubuntu-latest", reviewed="")
