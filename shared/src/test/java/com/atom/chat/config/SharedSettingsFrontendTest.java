@@ -7,9 +7,12 @@ import com.atom.chat.nav.*;
 import com.atom.chat.platform.Platform;
 import com.atom.chat.render.*;
 import com.atom.chat.settings.*;
+import com.atom.chat.settings.contract.SettingsContractResources;
 import com.atom.chat.theme.ThemeService;
 import com.atom.chat.ui.*;
 import com.atom.lib.design.atomchat.*;
+import com.atom.lib.frontend.contract.UiSoundIntent;
+import com.atom.lib.frontend.contract.UiSoundSink;
 import com.google.gson.*;
 import io.github.humbleui.skija.*;
 import java.nio.file.*;
@@ -121,7 +124,20 @@ class SharedSettingsFrontendTest {
         var cues=new ArrayList<FeedbackCue>();FeedbackSoundController.observeCuesForTest(cues::add);
         var surface=Surface.makeRasterN32Premul(460,900);
         try(var language=PreviewLanguage.install("zh_cn");var pane=new Pane(true,420,"zh_cn")){
+            var registry = SettingsContractResources.approved();
+            var contractCues = new ArrayList<UiSoundIntent>();
+            if (registry != null) {
+                pane.server.bindSettingsContract(registry, new UiSoundSink() {
+                    @Override public boolean supports(String channel) { return "MASTER".equals(channel); }
+                    @Override public boolean available(String resource) { return "atomchat:feedback_button".equals(resource); }
+                    @Override public void play(UiSoundIntent intent) {
+                        contractCues.add(intent);
+                        cues.add(FeedbackCue.BUTTON);
+                    }
+                });
+            }
             for(int i=0;i<50;i++)pane.frame(surface,1000+i*16);
+            assertEquals(registry != null, pane.server.hostingBodyMounted());
             pane.chip(1);assertEquals(List.of(FeedbackCue.BUTTON),cues,"a tab switch is one button cue");
             pane.chip(1);assertEquals(1,cues.size(),"re-clicking the selected tab stays silent");
             pane.chip(0);assertEquals(2,cues.size());
@@ -143,6 +159,8 @@ class SharedSettingsFrontendTest {
             boolean templateBefore=pane.server.draft().templates().get(0).enabled();
             pane.server.click(templateToggle.x()+templateToggle.w()/2,templateToggle.y()+templateToggle.h()/2,0);pane.server.release();
             assertEquals(6,cues.size(),"a template enable switch is one button cue");assertNotEquals(templateBefore,pane.server.draft().templates().get(0).enabled());
+            assertEquals(registry == null ? 0 : 1, contractCues.size(),
+                    "Only the selected hosting toggle emits through the contract");
         }finally{surface.close();}
     }
     @Test void serverMeasuredRowsKeepMiBAndEnglishWordsWhole()throws Exception{

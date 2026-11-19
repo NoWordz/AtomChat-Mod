@@ -16,19 +16,23 @@ import java.util.*;
 
 /** The existing hosting toggle row as a bound component, with business-only content and per-view appearance. */
 public final class HostingToggleComponent implements StrictPageSession.Implementation {
+    private final boolean composed;
+    public HostingToggleComponent(){this(false);}
+    public HostingToggleComponent(boolean composed){this.composed=composed;}
+
     public Control create(NodeId id,Map<Aspect,Value> values,StrictPageSession.ContentView content){throw new IllegalStateException("MISSING_FRAME_BINDINGS");}
     public void update(Control control,Map<Aspect,Value> values,StrictPageSession.ContentView content){throw new IllegalStateException("MISSING_FRAME_BINDINGS");}
-    public Control create(NodeId id,Map<Aspect,Value> values,StrictPageSession.ContentView content,StrictPageSession.FrameBindings frame){return new HostedControl(id,new Row(id,values,content,frame));}
+    public Control create(NodeId id,Map<Aspect,Value> values,StrictPageSession.ContentView content,StrictPageSession.FrameBindings frame){return new HostedControl(id,new Row(id,values,content,frame,composed));}
     public void update(Control control,Map<Aspect,Value> values,StrictPageSession.ContentView content,StrictPageSession.FrameBindings frame){
         var host=(HostedControl)control;host.adapter(Row.class).update(values,frame);host.refresh();
     }
     private static final class Row implements HostedControl.Adapter {
-        private final NodeId id;private final StrictPageSession.ContentView content;private final ToggleSwitch toggle=new ToggleSwitch();
+        private final boolean composed;private final NodeId id;private final StrictPageSession.ContentView content;private final ToggleSwitch toggle=new ToggleSwitch();
         private final LeafMeasure measure=this::measure;
         private Map<Aspect,Value> values;private StrictPageSession.FrameBindings bindings;private FrameTime time;
         private String title="",description="";private long revision,advanced=Long.MIN_VALUE;
         private UiLayout.Rect box;private float pointerX=Float.NaN,pointerY=Float.NaN,hover,paintedHover;private boolean hovered,pressed;
-        Row(NodeId id,Map<Aspect,Value> values,StrictPageSession.ContentView content,StrictPageSession.FrameBindings frame){this.id=id;this.content=content;update(values,frame);toggle.snapTo(checked());}
+        Row(NodeId id,Map<Aspect,Value> values,StrictPageSession.ContentView content,StrictPageSession.FrameBindings frame,boolean composed){this.composed=composed;this.id=id;this.content=content;update(values,frame);toggle.snapTo(checked());}
         void update(Map<Aspect,Value> values,StrictPageSession.FrameBindings frame){
             this.values=Map.copyOf(values);bindings=frame;String nextTitle=slotText("title"),nextDescription=slotText("description");
             if(!title.equals(nextTitle)||!description.equals(nextDescription)){title=nextTitle;description=nextDescription;revision++;}
@@ -50,7 +54,7 @@ public final class HostingToggleComponent implements StrictPageSession.Implement
         public void hover(float x,float y,PresentationFrame frame){pointerX=x;pointerY=y;}
         public boolean press(PointerEvent event,PresentationFrame frame){
             if(event.button()!=0||!enabled())return false;pointerX=event.x();pointerY=event.y();
-            if(content.commitBoolean("value",!checked())){toggle.pulseAt(time.nowNanos()/1_000_000);if(values.containsKey(Aspect.SOUND))content.feedback("BUTTON");}
+            if(content.commitBoolean("value",!checked())){if(composed)toggle.pulse();else toggle.pulseAt(time.nowNanos()/1_000_000);if(values.containsKey(Aspect.SOUND))content.feedback("BUTTON");}
             return true;
         }
         public void cancel(CancelReason reason){pressed=false;}
@@ -61,11 +65,11 @@ public final class HostingToggleComponent implements StrictPageSession.Implement
             float x=box.right()-UiTokens.SETTINGS_ROW_PAD-UiTokens.SWITCH_W,y=layout.stacked()?box.bottom()-UiTokens.SETTINGS_ROW_PAD-UiTokens.SWITCH_H:box.y()+(box.h()-UiTokens.SWITCH_H)/2;
             boolean over=enabled()&&pointerX>=x&&pointerX<=x+UiTokens.SWITCH_W&&pointerY>=y&&pointerY<=y+UiTokens.SWITCH_H;
             boolean step=advanced!=time.frameId();
-            if(step){paintedHover=hover;toggle.setInteraction(over,pressed&&over);toggle.updateAt(time,checked(),bindings.states().get("decorativeMotion"));}
+            if(step){paintedHover=hover;toggle.setInteraction(over,pressed&&over);if(composed)toggle.update((float)(time.deltaSeconds()*1000),checked());else toggle.updateAt(time,checked(),bindings.states().get("decorativeMotion"));}
             int accent=color("accent"),primary=color("textPrimary"),secondary=color("textSecondary");
-            if(paintedHover>.01f)SkiaDraw.drawRoundedRect(canvas,box.x(),box.y(),box.w(),box.h(),0,UiTokens.cardHover(accent,0,paintedHover));
+            if(!composed&&paintedHover>.01f)SkiaDraw.drawRoundedRect(canvas,box.x(),box.y(),box.w(),box.h(),0,UiTokens.cardHover(accent,0,paintedHover));
             SettingsRowText.draw(canvas,box,layout,enabled()?primary:secondary,secondary);
-            toggle.render(canvas,x,y,new ToggleSwitch.Appearance(accent,enabled(),bindings.states().get("lightCard"),(float)parameter("cornerRadius")));
+            if(composed)toggle.render(canvas,x,y,accent,enabled());else toggle.render(canvas,x,y,new ToggleSwitch.Appearance(accent,enabled(),bindings.states().get("lightCard"),(float)parameter("cornerRadius")));
             if(step){hover=UiMotion.approach(hover,hovered&&enabled()?1:0,(float)Math.min(50,time.deltaSeconds()*1000),UiMotion.HOVER_MS);advanced=time.frameId();}
         }
     }

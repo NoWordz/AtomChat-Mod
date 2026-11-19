@@ -17,6 +17,8 @@ public final class HistoryNumberRow {
 
     private HistoryNumberRow() {}
 
+    public static long caretMillis() { return System.currentTimeMillis(); }
+
     public static void draw(Canvas canvas, UiLayout.Rect row, SettingsRowText.Text compact, String title,
                             String description, String unit, String value, boolean editing, float hover,
                             DesignHost theme, int accent, int primary, int secondary, long millis) {

@@ -24,6 +24,20 @@ class SettingsYogaLayoutTest {
             layout.close();assertNotNull(layout.layout(420,new float[]{12.25f},new String[]{null},id->1).frame(),"reopened page owns a fresh native layout");
         }
     }
+    @Test void openingNarrowHistoryKeepsTheOriginalFloatAtTheNextGroup() {
+        try (var layout = new SettingsYogaLayout()) {
+            // The wrapped storage rows in the 280-wide history replay, during a fold reversal.
+            float[] heights = {40, 113.44f, 133.87f, 40, 91.72f};
+            String[] groups = {null, "storage", "storage", null, "cleanup"};
+            java.util.function.ToDoubleFunction<String> expansion =
+                    group -> group.equals("storage") ? .99718434f : 1;
+            var expected = SettingsGroupFrontend.layout(heights, groups, expansion);
+            var actual = layout.layout(280, heights, groups, expansion);
+            assertArrayEquals(expected.tops(), actual.slots().tops());
+            assertArrayEquals(expected.heights(), actual.slots().heights());
+        }
+    }
+
     @Test void malformedMeasurementsAndFoldStateAreRejectedBeforeNativeLayout(){
         try(var layout=new SettingsYogaLayout()){
             assertThrows(IllegalArgumentException.class,()->layout.layout(420,new float[]{1},new String[]{},id->1));

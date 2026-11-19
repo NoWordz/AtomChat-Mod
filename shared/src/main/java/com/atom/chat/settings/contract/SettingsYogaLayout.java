@@ -22,21 +22,32 @@ public final class SettingsYogaLayout implements AutoCloseable {
         var children=new ArrayList<LayoutNode>();
         List<LayoutNode> cardRows=null;
         int firstCardRow=-1;
+        float cursor=0;
+        float cardTop=0;
         double total=0;
         for(int row=0;row<full.length;row++){
             String group=groups[row];
-            float height=full[row]*(group==null?1:folds.get(group));total+=height;
+            float height=full[row]*(group==null?1:folds.get(group));
+            float top=cursor;
+            cursor+=height;
+            total+=height;
             var node=LayoutNode.leaf("settings-contract/row/"+row,leaf(width,height),null,0);
             if(group==null){
                 children.add(node);
             }else{
                 if(cardRows==null){
                     firstCardRow=row;
+                    cardTop=top;
                     cardRows=new ArrayList<>();
                 }
                 cardRows.add(node);
                 if(row+1==full.length||!group.equals(groups[row+1])){
-                    var box=LayoutStyle.column().size(Length.points(width),Length.auto()).flex(0,0,Length.auto());
+                    if (!Float.isFinite(cursor)) throw new IllegalArgumentException("Settings measurements overflow logical coordinates");
+                    // Folded rows historically advance the float cursor one row at a time.
+                    // Give Yoga the resulting group extent so the next header does not inherit
+                    // the different rounding from adding all child heights before their offset.
+                    float heightAtOriginalOrigin=cursor-cardTop;
+                    var box=LayoutStyle.column().size(Length.points(width),Length.points(heightAtOriginalOrigin)).flex(0,0,Length.auto());
                     children.add(new LayoutNode(new NodeId("settings-contract/group/"+firstCardRow),box,cardRows,null,0));
                     cardRows=null;
                 }
@@ -44,7 +55,9 @@ public final class SettingsYogaLayout implements AutoCloseable {
             if(row+1<full.length){
                 float next=groups[row+1]==null?1:folds.get(groups[row+1]);
                 if(cardRows==null){
-                    float gap=UiTokens.SETTINGS_ROW_GAP*next;total+=gap;
+                    float gap=UiTokens.SETTINGS_ROW_GAP*next;
+                    cursor+=gap;
+                    total+=gap;
                     // Keep the original separate inter-card gap as the next section unfolds.
                     children.add(LayoutNode.leaf("settings-contract/gap/"+row,leaf(width,gap),null,0));
                 }

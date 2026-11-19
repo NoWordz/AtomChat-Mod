@@ -74,3 +74,23 @@ tasks.register('verifyAtomLibInput') {
     }
 }
 tasks.named('check') { dependsOn 'verifyAtomLibInput' }
+
+def productionContractPath = "versions/frontend-contract/${target}/contract.properties".toString()
+def productionContract = new File(atomchatRepoRoot, productionContractPath)
+def localContract = providers.gradleProperty('atomchatFrontendContract')
+// Enrolled Linux CI builds and tests without the Windows admission resources.
+if (providers.gradleProperty('atomchatFrontendLinuxVerification').isPresent()) {
+    if (System.getProperty('os.name') != 'Linux' || !productionContract.isFile() || localContract.isPresent()) {
+        throw new GradleException('atomchatFrontendLinuxVerification requires a registered Linux verification build')
+    }
+    if (gradle.startParameter.taskNames != ['clean', 'build']) {
+        throw new GradleException('atomchatFrontendLinuxVerification is only available for clean build')
+    }
+    tasks.matching { it.name.startsWith('publish') || it.name in ['modrinth', 'curseforge'] }.configureEach {
+        doFirst { throw new GradleException('Linux verification archives cannot be published') }
+    }
+} else if (localContract.isPresent() || productionContract.isFile()) {
+    ext.atomchatFrontendContractFile = localContract.isPresent() ? file(localContract.get()) : productionContract
+    ext.atomchatFrontendProductionPath = productionContractPath
+    apply from: new File(atomchatRepoRoot, 'gradle/atomchat-frontend-contract.gradle')
+}

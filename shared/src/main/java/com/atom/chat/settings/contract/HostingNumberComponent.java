@@ -142,6 +142,11 @@ public final class HostingNumberComponent implements StrictPageSession.Implement
             sessionFocused = false;
         }
 
+        @Override public void hostFocus(boolean focused) {
+            field.focus(focused);
+            sessionFocused = focused;
+        }
+
         @Override public boolean interacting() { return field.focused(); }
 
         @Override public boolean text(String value) {

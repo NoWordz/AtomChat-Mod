@@ -4,9 +4,8 @@
   "version": "0.6.0",
   "compatibility_range": "[0.6.0,)",
   "input_archive": {
-    "source": "unreleased-candidate",
-    "required_property": "atomlibMavenRepo",
-    "note": "Use the provided 0.6.0 candidate Maven input. No public release URL is claimed."
+    "url": "https://github.com/NoWordz/AtomLib-Mod/releases/download/v0.6.0/atomlib-input-0.6.0.zip",
+    "sha256": "8972479efd74676712b7fac63dc4b7cb89d84129015e75538745a6342eeafbc1"
   },
   "client_platforms": [
     "windows-x64",
@@ -27,8 +26,8 @@
     }
   },
   "sha256": {
-    "1.20.1-forge": "5afa5800f2ac72760e414ca386dc54fbe75efb661db7ee3af7ca63fec9ea4366",
-    "1.21.1-fabric": "8bdae38c7cfecc7e39b4736595332d7cf598c2733dd1b37917511889287d2291",
-    "1.21.1-neoforge": "5f1c94c8cecda5d9821e5adaa42450830c85a1ac80e563efb469d143a6dbc7af"
+    "1.20.1-forge": "244347f48618597f567d44dbdc3238a8c1b2a4621bdb50f5ff000c0e020f4fde",
+    "1.21.1-fabric": "0a9e5d0070d9b79c78109bf74f46f181e3a00f1fdaf629b41dc06a3de29c9a3b",
+    "1.21.1-neoforge": "fde89a47dd6e95ff433a7f1980b943d7622d3cbedb89f61fcf8abc80307a6543"
   }
 }

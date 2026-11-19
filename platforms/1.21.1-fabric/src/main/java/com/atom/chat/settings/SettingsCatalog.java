@@ -66,6 +66,28 @@ public final class SettingsCatalog {
     private static final java.util.Map<SettingsSection, List<SettingsColor>> COLOR_CACHE =
             new java.util.EnumMap<>(SettingsSection.class);
 
+    private static final SettingsItem HISTORY_SWITCH = new SettingsItem("history",
+        "atomchat.settings.chat.history",
+        "atomchat.settings.chat.history.desc",
+        () -> AtomChatConfig.get().chatHistoryEnabled,
+        v -> AtomChatConfig.get().chatHistoryEnabled = v);
+
+    static SettingsItem historySwitch() { return HISTORY_SWITCH; }
+
+    private static final SettingsSlider HISTORY_RETENTION = new SettingsSlider("history_retention",
+        "atomchat.settings.chat.history.retention",
+        0.00F, 365.0F, 1.0F,
+        () -> AtomChatConfig.get().historyRetentionDays,
+        v -> AtomChatConfig.get().historyRetentionDays = Math.round(v),
+        v -> {
+            int days = Math.round(v);
+            return days == 0
+                    ? Text.translatable("atomchat.settings.chat.history.retention.forever").getString()
+                    : Text.translatable("atomchat.settings.chat.history.retention.days", days).getString();
+        });
+
+    static SettingsSlider historyRetention() { return HISTORY_RETENTION; }
+
     public static List<SettingsItem> items(SettingsSection section) {
         return ITEM_CACHE.computeIfAbsent(section, SettingsCatalog::buildItems);
     }
@@ -137,11 +159,7 @@ public final class SettingsCatalog {
                             "atomchat.settings.chat.whisper_banner.desc",
                             () -> AtomChatConfig.get().whisperBannerEnabled,
                             v -> AtomChatConfig.get().whisperBannerEnabled = v),
-                    new SettingsItem("history",
-                            "atomchat.settings.chat.history",
-                            "atomchat.settings.chat.history.desc",
-                            () -> AtomChatConfig.get().chatHistoryEnabled,
-                            v -> AtomChatConfig.get().chatHistoryEnabled = v),
+                    historySwitch(),
                     new SettingsItem("notification", "atomchat.settings.sounds.notification", "atomchat.settings.sounds.notification.desc",
                             () -> AtomChatConfig.get().notificationSoundEnabled, v -> AtomChatConfig.get().notificationSoundEnabled = v),
                     new SettingsItem("mention_sound", "atomchat.settings.sounds.mention_sound", "atomchat.settings.sounds.mention_sound.desc",
@@ -264,17 +282,7 @@ public final class SettingsCatalog {
                             v -> Math.round(v) == 0
                                     ? Text.translatable("atomchat.settings.chat.timestamp.off").getString()
                                     : Math.round(v) + " min"),
-                    new SettingsSlider("history_retention",
-                            "atomchat.settings.chat.history.retention",
-                            0.00F, 365.0F, 1.0F,
-                            () -> AtomChatConfig.get().historyRetentionDays,
-                            v -> AtomChatConfig.get().historyRetentionDays = Math.round(v),
-                            v -> {
-                                int days = Math.round(v);
-                                return days == 0
-                                        ? Text.translatable("atomchat.settings.chat.history.retention.forever").getString()
-                                        : Text.translatable("atomchat.settings.chat.history.retention.days", days).getString();
-                            }),
+                    historyRetention(),
                     new SettingsSlider("hud_offset_x", "atomchat.settings.notify.offset_x",
                             -500F, 500F, 1F, () -> AtomChatConfig.get().notificationHudOffsetX,
                             v -> AtomChatConfig.get().notificationHudOffsetX = v, v -> Math.round(v) + " px"),

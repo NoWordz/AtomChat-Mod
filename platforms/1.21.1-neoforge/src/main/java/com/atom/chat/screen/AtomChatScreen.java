@@ -1995,7 +1995,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         public void drawArrivingBody(Canvas canvas, UiLayout layout, int mouseX, int mouseY) {
             switch (topPage()) {
                 case CHAT_LIST, PROFILE, SETTINGS -> drawRootBody(canvas, mouseX, mouseY, topPage());
-                case SERVER_CONFIG -> { if (serverConfigPage != null) serverConfigPage.renderBody(canvas, detailLayout(), toVirtualX(mouseX), toVirtualY(mouseY), frameDt); }
+                case SERVER_CONFIG -> drawServerConfigBody(canvas, mouseX, mouseY);
                 case SETTINGS_SECTION -> drawSettingsSection(canvas, mouseX, mouseY, topNav().section());
                 case PROFILE_DETAIL -> drawProfileDetail(canvas, mouseX, mouseY);
                 default -> drawChatPageBody(canvas, layout, mouseX, mouseY, chatPageViewFor(topNav()));
@@ -2013,9 +2013,8 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
                 // back button, the online status and the feed filter.
                 case SETTINGS_SECTION, PROFILE_DETAIL, SERVER_CONFIG -> {
                     headerChrome.drawPushedHeader(canvas, vmx, vmy, topNav(), headerActionFor(topNav()));
-                    if (topPage() == AppPage.SETTINGS_SECTION) settingsSectionPage.renderFixedChipBar(
-                            canvas, detailLayout(), topNav().section(), vmx, vmy, accent());
-                    if(topPage()==AppPage.SERVER_CONFIG&&serverConfigPage!=null)serverConfigPage.renderFixedChrome(canvas,detailLayout(),vmx,vmy,frameDt);
+                    if (topPage() == AppPage.SETTINGS_SECTION) drawSettingsFixedChrome(canvas, vmx, vmy);
+                    if (topPage() == AppPage.SERVER_CONFIG) drawServerConfigFixedChrome(canvas, vmx, vmy);
                 }
                 default -> ShellHeader.render(canvas, layout.header,
                         headerChrome.shellTitleFor(topNav()), true,
@@ -2807,6 +2806,8 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         bottomChrome.close();
         composerTools.close();
         clickRipples.clear();
+        settingsSectionPage.closeHistoryContract();
+        if (serverConfigPage != null) serverConfigPage.closeHostingContract();
         settingsSectionPage.confirmation().reset();
         chatEffects.close();
         avatarWiring.poke().uninstall();
@@ -3281,6 +3282,22 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
      * the scrollbar. Deliberately header-free — the shell header (with the back
      * affordance) is drawn fixed on top so it never slides with the list.
      */
+    private void drawServerConfigBody(Canvas canvas, int mouseX, int mouseY) {
+        if (serverConfigPage != null) {
+            serverConfigPage.renderBody(canvas, detailLayout(), toVirtualX(mouseX), toVirtualY(mouseY), frameDt);
+        }
+    }
+
+    private void drawSettingsFixedChrome(Canvas canvas, float x, float y) {
+        settingsSectionPage.renderFixedChipBar(canvas, detailLayout(), topNav().section(), x, y, accent());
+    }
+
+    private void drawServerConfigFixedChrome(Canvas canvas, float x, float y) {
+        if (serverConfigPage != null) {
+            serverConfigPage.renderFixedChrome(canvas, detailLayout(), x, y, frameDt);
+        }
+    }
+
     private void drawSettingsSection(Canvas canvas, int mouseX, int mouseY, SettingsSection section) {
         settingsDetailPage.drawSettingsSection(canvas, mouseX, mouseY, section);
     }
@@ -4126,6 +4143,100 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         }
     }
 
+    private boolean clickSettingsSection(float mx, float my, UiLayout pageLayout,
+                                         ScrollController pageScroll, int button) {
+        if (button == 0 && headerChrome.adjacentButton().contains(mx, my)) {
+            ShellHeader.armActionPress();
+            settingsSectionPage.requestTabReset(topNav().section(), (key, failed) -> feedback(key, failed), () -> {
+                if (panelEditor != null) {
+                    panelEditor.followPanel(panelX(), panelY(), panelWidth(), panelHeight(),
+                            ScreenMetrics.vw(client.getWindow()), ScreenMetrics.vh(client.getWindow()));
+                    panelEditor.finishAfterSettingsReset();
+                }
+            });
+            com.atom.chat.audio.FeedbackSoundController.play(com.atom.chat.audio.FeedbackCue.BUTTON);
+            return true;
+        }
+        if (button == 0 && headerChrome.isBackButtonHit(mx, my)) {
+            popPage();
+            return true;
+        }
+        if (button == 0) {
+            int chip = settingsSectionPage.chipAt(topNav().section(), mx, my, pageLayout);
+            if (chip >= 0) {
+                // Same press-bounce arming the bottom tab bar uses.
+                settingsSectionPage.setPressedChip(chip);
+                if (chip != settingsSectionPage.activeChipIndex(topNav().section()))
+                    composite.navigationDirection(chip < settingsSectionPage.activeChipIndex(topNav().section()));
+                settingsSectionPage.selectChip(topNav().section(), chip);
+        com.atom.chat.audio.FeedbackSoundController.play(com.atom.chat.audio.FeedbackCue.BUTTON);
+                return true;
+            }
+        }
+        if (button == 0 && settingsSectionPage.themesPress(mx, my, pageLayout,
+                topNav().section(), pageScroll.getScrollY())) {
+            // The theme strip owns clicks on its row: a settled press
+            // selects a card, a moving one scrolls it.
+            return true;
+        }
+        if (button == 0) {
+            SettingsSection section = topNav().section();
+            // A slider press starts a drag or nudges by one step; it
+            // must never fall through to the row's other actions.
+            SettingsSectionPage.SliderHit slider = settingsSectionPage.sliderHit(
+                    mx, my, pageLayout, section, pageScroll.getScrollY());
+            if (slider != null) {
+                // Any click that is not the armed button disarms it.
+                // The retention-days row is an inline numeric input, not a
+                // linear 0..365 slider that cannot land on exact values.
+                if ("history_retention".equals(slider.row().slider().id())) {
+                    settingsSectionPage.beginNumberEdit(slider.row().slider());
+                    return true;
+                }
+                float normalized = slider.row().slider()
+                        .normalize(slider.row().slider().value());
+                if (slider.onKnob(mx, my, normalized)) {
+                    settingsSectionPage.beginSliderDrag(slider.index(), slider.row().slider(),
+                            slider.rowRect(), mx);
+                } else {
+                    settingsSectionPage.nudgeSlider(slider,
+                            mx < slider.track().x() + slider.track().w() / 2.0F ? -1 : 1);
+                }
+                return true;
+            }
+            SettingsSectionPage.ColorHit colorHit = settingsSectionPage.colorHit(
+                    mx, my, pageLayout, section, pageScroll.getScrollY());
+            if (colorHit != null) {
+                // Arm the swatch bounce; the press visual holds until release.
+                settingsSectionPage.setPressedSwatch(
+                        colorHit.plus() ? -1 : colorHit.rowIndex(),
+                        colorHit.plus() ? -1 : colorHit.swatchIndex());
+                if (colorHit.plus()) {
+                    colorPicker.open(colorHit.color());
+                    com.atom.chat.audio.FeedbackSoundController.play(com.atom.chat.audio.FeedbackCue.BUTTON);
+                } else {
+                    settingsSectionPage.applyColor(colorHit);
+        com.atom.chat.audio.FeedbackSoundController.play(com.atom.chat.audio.FeedbackCue.BUTTON);
+                }
+                return true;
+            }
+            SettingsSectionPage.RowHit hit = settingsSectionPage.hit(mx, my, pageLayout,
+                    section, pageScroll.getScrollY());
+            if (hit != null) {
+                // Arm the row press bounce wherever the press landed;
+                // hit-tests stay unscaled.
+                settingsSectionPage.setPressedRow(hit.index());
+                if (hit.onAction(mx, my)) {
+                    if (settingsSectionPage.perform(hit) && !settingsSectionPage.historyOwnsFeedback(hit)) {
+                        com.atom.chat.audio.FeedbackSoundController.play(com.atom.chat.audio.FeedbackCue.BUTTON);
+                    }
+                    return true;
+                }
+            }
+        }
+        return true;
+    }
+
     /** Root pages (conversation list / profile / settings): no composer, own scroll and rows. */
     private final class RootPageInput implements InputHandler {
         @Override
@@ -4158,98 +4269,8 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
                 pageScroll.beginDrag(my);
                 return true;
             }
-            // A pushed settings sub-page: back arrow, then switch rows.
             if (topPage() == AppPage.SETTINGS_SECTION) {
-                if (button == 0 && headerChrome.adjacentButton().contains(mx, my)) {
-                    ShellHeader.armActionPress();
-                    settingsSectionPage.requestTabReset(topNav().section(), (key, failed) -> feedback(key, failed), () -> {
-                        if (panelEditor != null) {
-                            panelEditor.followPanel(panelX(), panelY(), panelWidth(), panelHeight(),
-                                    ScreenMetrics.vw(client.getWindow()), ScreenMetrics.vh(client.getWindow()));
-                            panelEditor.finishAfterSettingsReset();
-                        }
-                    });
-                    com.atom.chat.audio.FeedbackSoundController.play(com.atom.chat.audio.FeedbackCue.BUTTON);
-                    return true;
-                }
-                if (button == 0 && headerChrome.isBackButtonHit(mx, my)) {
-                    popPage();
-                    return true;
-                }
-                if (button == 0) {
-                    int chip = settingsSectionPage.chipAt(topNav().section(), mx, my, pageLayout);
-                    if (chip >= 0) {
-                        // Same press-bounce arming the bottom tab bar uses.
-                        settingsSectionPage.setPressedChip(chip);
-                        if (chip != settingsSectionPage.activeChipIndex(topNav().section()))
-                            composite.navigationDirection(chip < settingsSectionPage.activeChipIndex(topNav().section()));
-                        settingsSectionPage.selectChip(topNav().section(), chip);
-                com.atom.chat.audio.FeedbackSoundController.play(com.atom.chat.audio.FeedbackCue.BUTTON);
-                        return true;
-                    }
-                }
-                if (button == 0 && settingsSectionPage.themesPress(mx, my, pageLayout,
-                        topNav().section(), pageScroll.getScrollY())) {
-                    // The theme strip owns clicks on its row: a settled press
-                    // selects a card, a moving one scrolls it.
-                    return true;
-                }
-                if (button == 0) {
-                    SettingsSection section = topNav().section();
-                    // A slider press starts a drag or nudges by one step; it
-                    // must never fall through to the row's other actions.
-                    SettingsSectionPage.SliderHit slider = settingsSectionPage.sliderHit(
-                            mx, my, pageLayout, section, pageScroll.getScrollY());
-                    if (slider != null) {
-                        // Any click that is not the armed button disarms it.
-                        // The retention-days row is an inline numeric input, not a
-                        // linear 0..365 slider that cannot land on exact values.
-                        if ("history_retention".equals(slider.row().slider().id())) {
-                            settingsSectionPage.beginNumberEdit(slider.row().slider());
-                            return true;
-                        }
-                        float normalized = slider.row().slider()
-                                .normalize(slider.row().slider().value());
-                        if (slider.onKnob(mx, my, normalized)) {
-                            settingsSectionPage.beginSliderDrag(slider.index(), slider.row().slider(),
-                                    slider.rowRect(), mx);
-                        } else {
-                            settingsSectionPage.nudgeSlider(slider,
-                                    mx < slider.track().x() + slider.track().w() / 2.0F ? -1 : 1);
-                        }
-                        return true;
-                    }
-                    SettingsSectionPage.ColorHit colorHit = settingsSectionPage.colorHit(
-                            mx, my, pageLayout, section, pageScroll.getScrollY());
-                    if (colorHit != null) {
-                        // Arm the swatch bounce; the press visual holds until release.
-                        settingsSectionPage.setPressedSwatch(
-                                colorHit.plus() ? -1 : colorHit.rowIndex(),
-                                colorHit.plus() ? -1 : colorHit.swatchIndex());
-                        if (colorHit.plus()) {
-                            colorPicker.open(colorHit.color());
-                            com.atom.chat.audio.FeedbackSoundController.play(com.atom.chat.audio.FeedbackCue.BUTTON);
-                        } else {
-                            settingsSectionPage.applyColor(colorHit);
-                com.atom.chat.audio.FeedbackSoundController.play(com.atom.chat.audio.FeedbackCue.BUTTON);
-                        }
-                        return true;
-                    }
-                    SettingsSectionPage.RowHit hit = settingsSectionPage.hit(mx, my, pageLayout,
-                            section, pageScroll.getScrollY());
-                    if (hit != null) {
-                        // Arm the row press bounce wherever the press landed;
-                        // hit-tests stay unscaled.
-                        settingsSectionPage.setPressedRow(hit.index());
-                        if (hit.onAction(mx, my)) {
-                            if (settingsSectionPage.perform(hit)) {
-                                com.atom.chat.audio.FeedbackSoundController.play(com.atom.chat.audio.FeedbackCue.BUTTON);
-                            }
-                            return true;
-                        }
-                    }
-                }
-                return true;
+                return clickSettingsSection(mx, my, pageLayout, pageScroll, button);
             }
             // A pushed profile detail: back arrow, then copyable rows/tiles.
             if (topPage() == AppPage.PROFILE_DETAIL) {

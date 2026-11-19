@@ -1,0 +1,46 @@
+import groovy.json.JsonSlurper
+
+buildscript {
+    def versionInput = project.file('../../versions/atomlib.json')
+    def atomlib = new JsonSlurper().parse(versionInput)
+    def repository = project.providers.gradleProperty('atomlibMavenRepo')
+        .orElse(project.providers.environmentVariable('ATOMLIB_MAVEN_REPO')).get()
+    repositories {
+        maven {
+            url = project.file(repository).toURI()
+            content { includeGroup(atomlib.group.toString()) }
+        }
+    }
+    dependencies {
+        classpath "${atomlib.group}:atomlib-frontend-checker:${atomlib.version}"
+    }
+}
+
+apply plugin: com.atom.lib.frontend.checker.FrontendContractPlugin
+
+def sceneConfig = new Properties()
+atomchatFrontendContractFile.withReader('UTF-8') { sceneConfig.load(it) }
+if (sceneConfig.getProperty('scene.sourceSet') == 'test') {
+    sourceSets.test.java.srcDir(new File(atomchatRepoRoot, 'shared/src/frontendScene/java'))
+    dependencies {
+        testImplementation files(com.atom.lib.frontend.checker.SceneCaptureIO.protectionDomain.codeSource.location.toURI())
+    }
+}
+
+// The local candidate can run before a reviewed version exists.
+// Ordinary build admission remains the checker's responsibility.
+frontendContract {
+    contract = atomchatFrontendContractFile
+    def reviewedPath = providers.gradleProperty('atomchatFrontendReviewed')
+    def reviewedConfigPath = providers.gradleProperty('atomchatFrontendReviewedConfig')
+    if (reviewedPath.isPresent() && reviewedConfigPath.isPresent()) {
+        throw new GradleException('Supply one reviewed AtomChat frontend contract source')
+    }
+    if (reviewedPath.isPresent()) {
+        reviewed = project.file(reviewedPath.get())
+    } else {
+        reviewedRepository = atomchatRepoRoot
+        reviewedConfig = reviewedConfigPath.getOrElse(atomchatFrontendProductionPath)
+        reviewedRevision = providers.gradleProperty('atomchatFrontendReviewedRevision').orNull
+    }
+}

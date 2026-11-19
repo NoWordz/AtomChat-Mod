@@ -147,8 +147,10 @@ class PageTransitionCompositeWiringSourceTest {
             String src=source(screen);
             assertTrue(body(src,"public void openServerConfig(").contains("page.bindNavigationDirection(composite::navigationDirection)"),screen);
             assertTrue(body(src,"public int bodyVariant()").contains("serverConfigPage.bodyVariant()"),screen);
-            assertTrue(body(src,"public void drawArrivingBody(Canvas canvas, UiLayout layout").contains("serverConfigPage.renderBody("),screen);
-            assertTrue(body(src,"public void drawArrivingHeader(Canvas canvas, UiLayout layout").contains("serverConfigPage.renderFixedChrome("),screen);
+            assertTrue(body(src,"public void drawArrivingBody(Canvas canvas, UiLayout layout").contains("case SERVER_CONFIG -> drawServerConfigBody("),screen);
+            assertTrue(body(src,"private void drawServerConfigBody(Canvas canvas").contains("serverConfigPage.renderBody("),screen);
+            assertTrue(body(src,"public void drawArrivingHeader(Canvas canvas, UiLayout layout").contains("drawServerConfigFixedChrome("),screen);
+            assertTrue(body(src,"private void drawServerConfigFixedChrome(Canvas canvas").contains("serverConfigPage.renderFixedChrome("),screen);
             assertTrue(src.contains("serverConfigPage.markEntered(composite.entrance().enteredAtMs())"),screen);
             assertTrue(body(src,"private float toVirtualX(double guiX)").contains("serverConfigPage.stationaryPointer(detailLayout(),y)"),screen);
             assertTrue(body(src,"private float toVirtualY(double guiY)").contains("serverConfigPage.stationaryPointer(detailLayout(),y)"),screen);

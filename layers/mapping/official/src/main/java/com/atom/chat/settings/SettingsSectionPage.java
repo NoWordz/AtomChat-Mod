@@ -1,7 +1,14 @@
 package com.atom.chat.settings;
 
 import com.atom.chat.settings.contract.HistoryFieldsPage;
+import com.atom.chat.settings.contract.SettingsContractMount;
+import com.atom.chat.settings.contract.SettingsContractResources;
+import com.atom.lib.client.input.ContractSoundOutput;
+import com.atom.lib.input.KeyEvent;
+import com.atom.lib.input.PointerEvent;
 import com.atom.lib.frontend.StrictPage;
+import com.atom.lib.frontend.contract.ContractRegistry;
+import com.atom.lib.frontend.contract.UiSoundSink;
 import com.atom.chat.ui.AtomChatAppearance;
 import com.atom.chat.nav.PageNavAxis;
 import com.atom.chat.ui.UiStagger;
@@ -410,6 +417,7 @@ public final class SettingsSectionPage {
                 || index == activeChipIndex(section)) {
             return;
         }
+        if (section == SettingsSection.CHAT && historyMount != null) historyMount.embedded().clear();
         activeChip.put(section.id(), index);
         rowGeometry = null;
         // The new row set draws in one frame, then rises in on the same
@@ -420,12 +428,21 @@ public final class SettingsSectionPage {
 
     /** Cancels a captured press without applying a theme, preset or setting. */
     public void cancelPointer() {
+        cancelPreviewPress();
+        endSliderDrag();
+        clearRowPress();
+    }
+
+    private void cancelPreviewPress() {
         for (CardStrip strip : previewStrips) {
             strip.pressed = false;
             strip.dragged = false;
             strip.pressedCard = -1;
         }
-        endSliderDrag();
+    }
+
+    private void clearRowPress() {
+        if (historyMount != null) historyMount.embedded().clear();
         setPressedRow(-1);
         setPressedChip(-1);
         setPressedSwatch(-1, -1);
@@ -564,6 +581,9 @@ public final class SettingsSectionPage {
     private int activeSliderIndex = -1;
     private float dragValue;
     /** Inline numeric editor state (used by the retention days row). */
+    private ContractRegistry settingsContract = SettingsContractResources.approved();
+    private UiSoundSink settingsSound = new ContractSoundOutput();
+    private SettingsContractMount historyMount;
     private final SettingsNumberEditor numberEditor = new SettingsNumberEditor();
     /** Last drawn geometry of the inline number row, for click-to-blur hit tests. */
     private UiLayout.Rect inlineNumberRowRect;
@@ -719,8 +739,13 @@ public final class SettingsSectionPage {
                 / UiTokens.SETTINGS_SWATCH_STEP));
     }
 
+    private static SettingsRowText.Text compactFlow(CompactText flow) {
+        return flow == null ? null : new SettingsRowText.Text(flow.title(), flow.description(), true,
+                flow.titleH(), flow.descriptionH(), flow.height());
+    }
+
     private void drawCompactText(Canvas canvas,UiLayout.Rect rect,CompactText flow,int descColor){
-        SettingsRowText.draw(canvas,rect,new SettingsRowText.Text(flow.title(),flow.description(),true,flow.titleH(),flow.descriptionH(),flow.height()),textPrimary(),descColor);
+        SettingsRowText.draw(canvas,rect,compactFlow(flow),textPrimary(),descColor);
     }
 
     public float rowHeight(Row row, UiLayout layout) {
@@ -756,7 +781,19 @@ public final class SettingsSectionPage {
                               boolean available, boolean redConfirm) {
     }
 
+    private ActionCopy historyCleanupCopy(SettingsItem item) {
+        boolean available = item.available();
+        String subtitle = available
+                ? tr(AtomChatConfig.get().chatHistoryEnabled
+                        ? "atomchat.settings.chat.history.clear.desc.saved"
+                        : "atomchat.settings.chat.history.clear.desc.memory")
+                : tr(item.subtitleKey() + ".unavailable");
+        return new ActionCopy(tr(item.titleKey()), subtitle,
+                available ? tr("atomchat.settings.action.clear") : "", available, false);
+    }
+
     private ActionCopy actionCopy(Row row) {
+        if (ACTION_HISTORY_CLEAR.equals(row.actionId())) return historyCleanupCopy(row.item());
         SettingsItem item = row.item();
         boolean available = item.available();
         boolean redConfirm = false;
@@ -795,11 +832,7 @@ public final class SettingsSectionPage {
                     == AtomChatConfig.PageNavStyle.ZOOM
                     ? "atomchat.settings.appearance.page_nav_style.zoom"
                     : "atomchat.settings.appearance.page_nav_style.slide");
-        } else if (ACTION_HISTORY_CLEAR.equals(row.actionId())) {
-            subtitle = tr(AtomChatConfig.get().chatHistoryEnabled
-                    ? "atomchat.settings.chat.history.clear.desc.saved"
-                    : "atomchat.settings.chat.history.clear.desc.memory");
-            verb = tr("atomchat.settings.action.clear");
+
         } else if (ACTION_CACHE_CLEAR.equals(row.actionId())) {
             long bytes = ImageLoader.get().diskCacheBytes();
             subtitle = humanBytes(bytes) + " · " + tr(item.subtitleKey());
@@ -932,17 +965,25 @@ public final class SettingsSectionPage {
         });
         return rows;
     }
+    private List<Row> historyRows() {
+        List<Row> rows = new ArrayList<>();
+        addHistoryRows(rows);
+        return rows;
+    }
+
+    private void addHistoryRows(List<Row> rows) {
+        addGroup(rows, "atomchat.settings.group.history.storage", () -> {
+            rows.add(Row.ofSwitch(SettingsCatalog.historySwitch()));
+            rows.add(Row.ofSlider(SettingsCatalog.historyRetention()));
+        });
+        addGroup(rows, "atomchat.settings.group.history.cleanup",
+                () -> rows.add(Row.ofAction(ACTION_HISTORY_CLEAR, historyClearItem())));
+    }
+
     private List<Row> chatRows(String chip) {
         List<Row> rows = new ArrayList<>();
         switch (chip == null ? "messages" : chip) {
-            case "history" -> {
-                addGroup(rows, "atomchat.settings.group.history.storage", () -> {
-                    addSwitches(rows, SettingsSection.CHAT, "history");
-                    addSliders(rows, SettingsSection.CHAT, "history_retention");
-                });
-                addGroup(rows, "atomchat.settings.group.history.cleanup",
-                        () -> rows.add(Row.ofAction(ACTION_HISTORY_CLEAR, historyClearItem())));
-            }
+            case "history" -> addHistoryRows(rows);
             case "notify" -> {
                 addGroup(rows, "atomchat.settings.group.notify.banner", () -> {
                     addSwitches(rows, SettingsSection.CHAT, "mention_banner", "whisper_banner");
@@ -1387,6 +1428,9 @@ public final class SettingsSectionPage {
         pointerY = vmy;
 
         String chip = activeChipId(section);
+        if (section == SettingsSection.CHAT && historyTabSelected() && settingsContract != null) {
+            beginHistoryBody(now, dt);
+        }
         List<Row> rows = measuredRowsSection == section && Objects.equals(measuredRowsChip, chip)
                 && measuredRows != null ? measuredRows : rows(section);
         // Fold animation clock: advances every group's expansion toward the
@@ -1683,6 +1727,11 @@ public final class SettingsSectionPage {
      *  its child rows on one shared surface instead of a card each. */
     private void drawRowContent(Canvas canvas, Row row, UiLayout.Rect rect, float hover,
                                 Font buttonFont, int accent, float dtMs) {
+        String contractSlot = hostedHistorySlot(row);
+        if (contractSlot != null && currentSectionForSettle == SettingsSection.CHAT) {
+            paintHistorySlot(canvas, contractSlot, rect);
+            return;
+        }
         switch (row.kind()) {
             case HERO -> drawHero(canvas, rect);
             case AUTHORS -> drawAuthors(canvas, rect, dtMs);
@@ -1757,7 +1806,14 @@ public final class SettingsSectionPage {
                     dt, Animations.enabled(), Math.max(card.w(), card.h()));
         }
         final int initialHovered=hovered;
-        return SettingsGroupFrontend.merged(canvas,card,expansion,press,()->{
+        return SettingsGroupFrontend.merged(canvas, card, expansion, press, () -> {
+            String slot = section == SettingsSection.CHAT ? hostedHistorySlot(rows.get(start)) : null;
+            if (slot != null) paintHistoryGroup(canvas, slot, card);
+            else {
+                SettingsGroupFrontend.drawCardSurface(canvas, card);
+                SettingsGroupFrontend.clipCard(canvas, card);
+            }
+        }, () -> {
             int selected=initialHovered;
             float pad=UiTokens.SETTINGS_ROW_PAD;
                     for (int j = start; j < end; j++) {
@@ -2762,6 +2818,11 @@ public final class SettingsSectionPage {
     /** Plain action card: title + description + a right-aligned verb or selector. */
     private void drawAction(Canvas canvas, Row row, UiLayout.Rect rect, float hover) {
         ActionCopy copy = actionCopy(row);
+        if (ACTION_HISTORY_CLEAR.equals(row.actionId())) {
+            var label = new HistoryLabelRow.Label(copy.title(), copy.subtitle(), copy.verb(), copy.available(), false);
+            label.paint(canvas, rect, compactFlow(compactText(row, rect.w())), textPrimary(), sec(255));
+            return;
+        }
         Font titleFont = FontManager.font(UiTokens.SETTINGS_TILE_TITLE);
         Font subFont = FontManager.font(UiTokens.SETTINGS_TILE_SUB);
         float textX = rect.x() + UiTokens.SETTINGS_ROW_PAD;
@@ -2871,6 +2932,11 @@ public final class SettingsSectionPage {
         // The four-arg overload wires the disabled state: an unavailable
         // switch renders its whole capsule at the control's disabled opacity.
         control.render(canvas, switchX, switchY, accent, item.available());
+        if ("history".equals(item.id())) {
+            var label = new HistoryLabelRow.Label(tr(item.titleKey()), descriptionText(row), "", item.available(), true);
+            label.paint(canvas, rect, compactFlow(compact), textPrimary(), sec(255));
+            return;
+        }
         if (compact != null) {
             drawCompactText(canvas, rect, compact, sec(item.available() ? 200 : 130));
             return;
@@ -2969,7 +3035,7 @@ public final class SettingsSectionPage {
                 compact.titleH(),compact.descriptionH(),compact.height());
         HistoryNumberRow.draw(canvas,rect,stacked,tr(slider.titleKey()),tr("atomchat.settings.chat.history.retention.desc"),
                 tr("atomchat.admin.days"),text,editing,numberFieldHover,AtomChatAppearance.theme(),
-                accent,textPrimary(),sec(200),editing?System.currentTimeMillis():0);
+                accent,textPrimary(),sec(200),editing?HistoryNumberRow.caretMillis():0);
     }
 
     private void drawInfo(Canvas canvas, Row row, UiLayout.Rect rect) {
@@ -3215,16 +3281,22 @@ public final class SettingsSectionPage {
      * the finger left it to the snapped value instead of teleporting there.
      */
     public void endSliderDrag() {
-        if (draggingSliderId != null && activeSliderIndex >= 0) {
-            List<Row> rows = rows(currentSectionForSettle);
-            if (activeSliderIndex < rows.size() && rows.get(activeSliderIndex).kind() == RowKind.SLIDER) {
-                SettingsSlider slider = rows.get(activeSliderIndex).slider();
-                slider.persist();
-                settleId = slider.id();
-                settleFrom = slider.normalize(dragValue);
-                settleTo = slider.normalize(slider.value());
-                settleStart = System.currentTimeMillis();
-            }
+        finishSliderDrag(hasSliderCapture() ? rows(currentSectionForSettle) : List.of());
+    }
+
+    private boolean hasSliderCapture() {
+        return draggingSliderId != null && activeSliderIndex >= 0;
+    }
+
+    private void finishSliderDrag(List<Row> rows) {
+        if (hasSliderCapture() && activeSliderIndex < rows.size()
+                && rows.get(activeSliderIndex).kind() == RowKind.SLIDER) {
+            SettingsSlider slider = rows.get(activeSliderIndex).slider();
+            slider.persist();
+            settleId = slider.id();
+            settleFrom = slider.normalize(dragValue);
+            settleTo = slider.normalize(slider.value());
+            settleStart = System.currentTimeMillis();
         }
         activeSliderIndex = -1;
         draggingSliderId = null;
@@ -3250,24 +3322,32 @@ public final class SettingsSectionPage {
         if (slider == null) {
             return;
         }
+        if (hostedHistoryActive() && "history_retention".equals(slider.id())) {
+            if (inlineNumberRowRect != null) pressHistory("history_retention", inlineNumberRowRect.x(), inlineNumberRowRect.y());
+            return;
+        }
         numberEditor.open(slider.id(), Math.round(slider.value()), slider::set);
     }
 
     public void appendNumberChar(char c) {
-        numberEditor.append(c);
+        if (hostedHistoryActive()) historyMount.embedded().text("history_retention", String.valueOf(c));
+        else numberEditor.append(c);
     }
 
     public void backspaceNumber() {
-        numberEditor.backspace();
+        if (hostedHistoryActive()) historyKey(KeyEvent.Key.BACKSPACE);
+        else numberEditor.backspace();
     }
 
     /** Parses and applies the typed value; empty buffer is treated as 0. */
     public void commitNumberEdit() {
-        numberEditor.commit();
+        if (hostedHistoryActive()) historyKey(KeyEvent.Key.ENTER);
+        else numberEditor.commit();
     }
 
     public void cancelNumberEdit() {
-        numberEditor.cancel();
+        if (hostedHistoryActive()) historyKey(KeyEvent.Key.ESCAPE);
+        else numberEditor.cancel();
     }
 
     /** Whether a virtual point lies inside the inline number row (focus stays). */
@@ -3344,6 +3424,8 @@ public final class SettingsSectionPage {
         if (hit == null) {
             return false;
         }
+        String slot = hostedHistorySlot(hit.row());
+        if (slot != null) return pressHistory(slot, hit.x() + hit.w() / 2, hit.y() + hit.h() / 2);
         switch (hit.row().kind()) {
             case SWITCH -> {
                 SettingsItem item = hit.row().item();
@@ -3388,9 +3470,14 @@ public final class SettingsSectionPage {
     private boolean performAction(Row row) {
         if (row.item() == null || !row.item().available() || actionHandler == null) return false;
         String actionId = row.actionId();
+        if (ACTION_HISTORY_CLEAR.equals(actionId)) {
+            String bodyKey = historyClearBodyKey();
+            cancelPointer();
+            showHistoryClear(row.item(), bodyKey);
+            return true;
+        }
         if (needsConfirm(actionId)) {
             String bodyKey = "atomchat.confirm." + actionId;
-            if (ACTION_HISTORY_CLEAR.equals(actionId) && !AtomChatConfig.get().chatHistoryEnabled) bodyKey += ".memory";
             cancelPointer();
             confirmation.openDangerous(tr(row.item().titleKey()), tr(bodyKey),
                     tr("atomchat.confirm.cancel"), tr("atomchat.confirm.confirm"),
@@ -3401,6 +3488,74 @@ public final class SettingsSectionPage {
         return true;
     }
 
+    private boolean confirmHistoryClear(SettingsItem item) {
+        if (!historyTabSelected() || !item.available() || actionHandler == null) return false;
+        String bodyKey = historyClearBodyKey();
+        cancelPreviewPress();
+        finishSliderDrag(hasSliderCapture() ? historyRows() : List.of());
+        clearRowPress();
+        showHistoryClear(item, bodyKey);
+        return true;
+    }
+
+    private static String historyClearBodyKey() {
+        return AtomChatConfig.get().chatHistoryEnabled
+                ? "atomchat.confirm.history_clear" : "atomchat.confirm.history_clear.memory";
+    }
+
+    private void showHistoryClear(SettingsItem item, String bodyKey) {
+        confirmation.openDangerous(tr(item.titleKey()), tr(bodyKey),
+                tr("atomchat.confirm.cancel"), tr("atomchat.confirm.confirm"),
+                () -> actionHandler.onAction(ACTION_HISTORY_CLEAR));
+    }
+
+    public void bindSettingsContract(ContractRegistry registry, UiSoundSink sound) {
+        closeHistoryContract();
+        settingsContract = registry;
+        settingsSound = java.util.Objects.requireNonNull(sound);
+    }
+
+    public boolean historyBodyMounted() { return hostedHistoryActive(); }
+
+    /** The selected field's accepted feedback is emitted by its strict input transaction. */
+    public boolean historyOwnsFeedback(RowHit hit) { return hostedHistorySlot(hit.row()) != null; }
+
+    private boolean hostedHistoryActive() { return historyMount != null && historyTabSelected(); }
+
+    private String hostedHistorySlot(Row row) {
+        if (!hostedHistoryActive()) return null;
+        if (row.kind() == RowKind.SWITCH && "history".equals(row.item().id())) return "history";
+        if (row.kind() == RowKind.SLIDER && "history_retention".equals(row.slider().id())) return "history_retention";
+        if (row.kind() == RowKind.ACTION && ACTION_HISTORY_CLEAR.equals(row.actionId())) return "history_clear";
+        return null;
+    }
+
+    private void beginHistoryBody(long now, float dt) {
+        if (historyMount == null) {
+            historyMount = SettingsContractMount.history(settingsContract, this::historyFields, settingsSound, numberEditor);
+        }
+        historyMount.begin(now, dt);
+    }
+
+    private void paintHistorySlot(Canvas canvas, String slot, UiLayout.Rect rect) {
+        boolean number = "history_retention".equals(slot);
+        if (number) inlineNumberRowRect = rect;
+        historyMount.paint(canvas, slot, rect, pointerX, pointerY,
+                number && numberEditor.active(), drawnRowIndex == pressedRow);
+    }
+
+    private void paintHistoryGroup(Canvas canvas, String slot, UiLayout.Rect card) {
+        historyMount.paintGroup(canvas, "history_clear".equals(slot) ? "cleanupFields" : "storageFields", card);
+    }
+
+    private boolean pressHistory(String slot, float x, float y) {
+        return historyMount.embedded().pointer(slot, new PointerEvent(PointerEvent.Type.PRESS, x, y, 0));
+    }
+
+    private void historyKey(KeyEvent.Key key) {
+        historyMount.embedded().key("history_retention", new KeyEvent(key, true, false, false, false));
+    }
+
     private boolean historyTabSelected() {
         return "history".equals(activeChipId(SettingsSection.CHAT));
     }
@@ -3408,7 +3563,7 @@ public final class SettingsSectionPage {
     /** Binds the real settings data and the existing confirmation route for the history tab. */
     public HistoryFieldsPage historyFields() {
         if (!historyTabSelected()) throw new IllegalStateException("History settings tab is not selected");
-        List<Row> rows = rows(SettingsSection.CHAT);
+        List<Row> rows = historyRows();
         Row toggle = rows.stream().filter(row -> row.kind() == RowKind.SWITCH).findFirst().orElseThrow();
         Row retention = rows.stream().filter(row -> row.slider() != null && isInlineNumberSlider(row.slider().id()))
                 .findFirst().orElseThrow();
@@ -3416,7 +3571,7 @@ public final class SettingsSectionPage {
         SettingsItem item = toggle.item();
         var enabled = new StrictPage.Content(Map.of(
                 "title", new StrictPage.Text(tr(item.titleKey())),
-                "description", new StrictPage.Text(descriptionText(toggle)),
+                "description", new StrictPage.Text(tr(item.available() ? item.subtitleKey() : item.subtitleKey() + ".unavailable")),
                 "value", new StrictPage.BooleanInput(item.value(), next -> {
                     if (!historyTabSelected() || !item.available() || next == item.value()) return false;
                     item.set(next);
@@ -3429,12 +3584,16 @@ public final class SettingsSectionPage {
                     slider.set((float) next);
                     return true;
                 }));
-        ActionCopy copy = actionCopy(cleanup);
+        ActionCopy copy = historyCleanupCopy(cleanup.item());
         return new HistoryFieldsPage(enabled, days, HistoryFieldsPage.cleanup(copy.title(), copy.subtitle(),
-                copy.verb(), copy.available(), new StrictPage.Action(() -> historyTabSelected() && performAction(cleanup))));
+                copy.verb(), copy.available(), new StrictPage.Action(() -> confirmHistoryClear(cleanup.item()))));
     }
 
     /** Shell callback for action cards; the screen owns the file picker. */
+    public SettingsContractMount mountHistoryContract(ContractRegistry registry, UiSoundSink sound) {
+        return SettingsContractMount.history(registry, this::historyFields, sound);
+    }
+
     public interface ActionHandler {
         void onAction(String actionId);
     }
@@ -3454,7 +3613,17 @@ public final class SettingsSectionPage {
     }
 
     /** Drops per-page transient state so reopening a section starts clean. */
+    public void closeHistoryContract() {
+        if (historyMount != null) {
+            historyMount.close();
+            historyMount = null;
+            numberEditor.cancel();
+            inlineNumberRowRect = null;
+        }
+    }
+
     public void reset() {
+        closeHistoryContract();
         contractLayout.close();
         switches.clear();
         activeChip.clear();

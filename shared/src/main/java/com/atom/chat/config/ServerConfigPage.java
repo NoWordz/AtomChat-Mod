@@ -7,9 +7,17 @@ import com.atom.chat.nav.PageNavAxis;
 import com.atom.chat.render.*;
 import com.atom.chat.settings.*;
 import com.atom.chat.settings.contract.HostingFieldsPage;
+import com.atom.chat.settings.contract.SettingsContractMount;
+import com.atom.chat.settings.contract.SettingsContractResources;
+import com.atom.lib.client.input.ContractSoundOutput;
+import com.atom.lib.input.KeyEvent;
+import com.atom.lib.input.PointerEvent;
 import com.atom.chat.ui.*;
 import com.atom.lib.design.atomchat.*;
+import com.atom.lib.controls.TextClipboard;
 import com.atom.lib.frontend.StrictPage;
+import com.atom.lib.frontend.contract.ContractRegistry;
+import com.atom.lib.frontend.contract.UiSoundSink;
 import io.github.humbleui.skija.Canvas;
 import io.github.humbleui.skija.Image;
 import io.github.humbleui.skija.Paint;
@@ -78,6 +86,10 @@ public final class ServerConfigPage {
     private long acknowledgedAt;
     private float frameAlpha=1;
 
+    private ContractRegistry settingsContract = SettingsContractResources.approved();
+    private UiSoundSink settingsSound = new ContractSoundOutput();
+    private SettingsContractMount hostingMount;
+
     public ServerConfigPage(Host host,int version,ServerConfigValues values){
         this.host=host;draft=new ServerConfigDraft(version,values);entrance.markEntered();
     }
@@ -89,31 +101,66 @@ public final class ServerConfigPage {
             throw new IllegalStateException("Hosting fields require the active administration hosting tab");
         }
         var sections=new ArrayList<HostingFieldsPage.Section>();
-        for(var group:content()){
+        for(var group:hostingGroups()){
             var fields=new ArrayList<HostingFieldsPage.Field>();
             for(var row:group.rows()){
                 String id=row.id();
                 if(row.kind()==Kind.TOGGLE){
                     var value=new StrictPage.BooleanInput(draft.enabled(id),next->{
                         if(!hostingRouteActive()||draft.saving()||next==draft.enabled(id))return false;
-                        draft.toggle(id);
-                        feedback="";
+                        toggleDraft(id);
                         return true;
                     });
                     fields.add(HostingFieldsPage.toggle(id,row.title(),row.description(),value,!draft.saving()));
                 }else if(row.kind()==Kind.NUMBER){
-                    var value=new StrictPage.TextInput(value(id),next->{
-                        if(!hostingRouteActive()||draft.saving())return false;
-                        change(id,next);
-                        return true;
-                    });
-                    fields.add(HostingFieldsPage.number(id,row.title(),description(row),row.unit(),value,
-                            fieldError(row),!draft.saving()));
+                    String raw = draft.text(id);
+                    boolean invalid = numericDraftError(id, raw);
+                    var value = new StrictPage.TextInput(raw, next -> commitHostingNumber(id, next));
+                    String description = numericDescription(row, invalid);
+                    fields.add(HostingFieldsPage.number(id, row.title(), description, row.unit(), value,
+                            invalid, !draft.saving()));
                 }
             }
             sections.add(new HostingFieldsPage.Section(group.id()+"Fields",fields));
         }
         return new HostingFieldsPage(sections);
+    }
+    private boolean commitHostingNumber(String id, String raw) {
+        if (!hostingRouteActive() || draft.saving()) return false;
+        feedback = "";
+        draft.text(id, raw);
+        return true;
+    }
+
+    public SettingsContractMount mountHostingContract(ContractRegistry registry, UiSoundSink sound) {
+        return SettingsContractMount.hosting(registry, this::hostingFields, hostingClipboard(), sound);
+    }
+
+    private TextClipboard hostingClipboard() {
+        return new TextClipboard() {
+            @Override public String read() { return host.clipboard(); }
+            @Override public void write(String text) { host.clipboard(text); }
+        };
+    }
+    public void bindSettingsContract(ContractRegistry registry, UiSoundSink sound) {
+        closeHostingContract();
+        settingsContract = registry;
+        settingsSound = Objects.requireNonNull(sound);
+        hits.clear();
+    }
+
+    public boolean hostingBodyMounted() { return hostingMountActive(); }
+
+    private boolean hostingMountActive() {
+        return hostingMount != null && hostingRouteActive();
+    }
+
+    private List<Group> hostingGroups() {
+        return List.of(
+                group("hosting",t("group.hosting"),DrawPrimitives.ICON_IMAGE_PATH,row("hostingEnabled",Kind.TOGGLE,"")),
+                group("storage",t("group.storage"),SettingsGroupGlyphs.LAYOUT,row("maxFileKb",Kind.NUMBER,"KiB"),
+                        row("maxTotalMb",Kind.NUMBER,"MiB"),row("maxAvatarTotalMb",Kind.NUMBER,"MiB"),row("maxProfileTotalMb",Kind.NUMBER,"MiB")),
+                group("retention",t("group.retention"),AppIcons.ICON_CLOCK_PATH,row("retentionDays",Kind.NUMBER,t("days")),row("uploadCooldownMs",Kind.NUMBER,"ms")));
     }
     public int chip(){return chips.selected();}
     public int bodyVariant(){return view.ordinal()*3+chip();}
@@ -137,7 +184,18 @@ public final class ServerConfigPage {
         if(!draft.saving()||!draft.acknowledged())return false;
         draft.confirm(v,values);feedback="saved";requestedSnapshot=false;blur();return true;
     }
-    public void dispose(){closed=true;contractLayout.close();for(var image:images.values())image.close();images.clear();loading.clear();}
+    public void closeHostingContract() {
+        blur();
+        if (hostingMount != null) {
+            hostingMount.close();
+            hostingMount = null;
+            hits.clear();
+        }
+    }
+
+    public void dispose(){
+        closeHostingContract();
+        closed=true;contractLayout.close();for(var image:images.values())image.close();images.clear();loading.clear();}
     public void leave(ConfirmationDialog dialog){
         confirmation=dialog;
         if(draft.saving()||importing)return;
@@ -156,9 +214,17 @@ public final class ServerConfigPage {
             fields.keySet().removeIf(id->id.startsWith("template.")||id.equals("phrase.value"));
             var editorScroll=scrolls.get(next+":"+chip());if(editorScroll!=null)editorScroll.reset();
         }
+        if (hostingMount != null) hostingMount.embedded().clear();
         view=next;pressed=null;entrance.markEntered();hits.clear();
     }
-    private void blur(){if(focused!=null&&fields.containsKey(focused))fields.get(focused).focus(false);focused=null;dragging=null;}
+    private void blur() {
+        if (focused != null) {
+            if (hostingMountActive()) hostingMount.embedded().focus(focused, false);
+            else if (fields.containsKey(focused)) fields.get(focused).focus(false);
+        }
+        focused = null;
+        dragging = null;
+    }
     public void tick(){
         draft.timeout(System.currentTimeMillis());
         if(draft.saving()&&draft.acknowledged()&&!requestedSnapshot&&System.currentTimeMillis()-acknowledgedAt>750){
@@ -190,11 +256,7 @@ public final class ServerConfigPage {
         }
         if(view==View.IMAGE)return List.of(group("image",shownImage.name(),DrawPrimitives.ICON_IMAGE_PATH,
                 new Row("image",shownImage.name(),"",Kind.IMAGE,"",-1)));
-        if(chip()==0)return List.of(
-                group("hosting",t("group.hosting"),DrawPrimitives.ICON_IMAGE_PATH,row("hostingEnabled",Kind.TOGGLE,"")),
-                group("storage",t("group.storage"),SettingsGroupGlyphs.LAYOUT,row("maxFileKb",Kind.NUMBER,"KiB"),
-                        row("maxTotalMb",Kind.NUMBER,"MiB"),row("maxAvatarTotalMb",Kind.NUMBER,"MiB"),row("maxProfileTotalMb",Kind.NUMBER,"MiB")),
-                group("retention",t("group.retention"),AppIcons.ICON_CLOCK_PATH,row("retentionDays",Kind.NUMBER,t("days")),row("uploadCooldownMs",Kind.NUMBER,"ms")));
+        if(chip()==0)return hostingGroups();
         if(chip()==1)return List.of(
                 group("pack",t("group.pack"),SettingsGroupGlyphs.LAYOUT,row("packEnabled",Kind.TOGGLE,""),row("packName",Kind.TEXT,""),
                         row("packMaxFiles",Kind.NUMBER,t("files")),row("packMaxMb",Kind.NUMBER,"MiB")),
@@ -295,8 +357,15 @@ public final class ServerConfigPage {
     }
     private float editorHeight(Row row){return form(row).preferredHeight(value(row.id()),geometry.viewport().w()-UiTokens.SETTINGS_ROW_PAD*2);}
     private SettingsRowText.Text rowText(Row row,float width){
-        if(row.kind()==Kind.NUMBER)return SettingsRowText.measureNumber(row.title(),description(row),width);
+        if(row.kind()==Kind.NUMBER)return numberRowText(row,width);
         return SettingsRowText.measure(row.title(),description(row),width,reserved(row),row.kind()==Kind.TOGGLE?UiTokens.SWITCH_H:0,true);
+    }
+    private SettingsRowText.Text numberRowText(Row row,float width){
+        boolean invalid = numericDraftError(row.id(), draft.text(row.id()));
+        return SettingsRowText.measureNumber(row.title(), numericDescription(row, invalid), width);
+    }
+    private String numericDescription(Row row, boolean invalid) {
+        return (invalid ? t("field_error") + " · " : "") + row.description();
     }
     private float textHeight(Row row,float width){return rowText(row,width).height();}
     private String description(Row row){return (fieldError(row)?t("field_error")+" · ":"")+row.description();}
@@ -319,10 +388,14 @@ public final class ServerConfigPage {
         if(id.equals("template.name"))return rule().name().isBlank()||rule().name().length()>48;
         if(id.equals("template.format"))return TemplateParser.validate(rule())!=null;
         if(id.equals("phrase.value"))return value(id).isBlank()||value(id).length()>200;
+        return numericDraftError(id, draft.text(id));
+    }
+
+    private static boolean numericDraftError(String id, String raw) {
         int max=switch(id){case "maxFileKb"->16384;case "maxTotalMb","maxAvatarTotalMb","maxProfileTotalMb"->65536;
             case "retentionDays"->3650;case "uploadCooldownMs"->600000;case "packMaxFiles"->200;case "packMaxMb"->16;default->-1;};
         if(max<0)return false;
-        try{int n=Integer.parseInt(value(id));return n<((id.equals("retentionDays")||id.equals("uploadCooldownMs"))?0:1)||n>max;}
+        try{int n=Integer.parseInt(raw);return n<((id.equals("retentionDays")||id.equals("uploadCooldownMs"))?0:1)||n>max;}
         catch(NumberFormatException e){return true;}
     }
     private boolean fieldError(Row row){return (row.kind()==Kind.NUMBER||row.kind()==Kind.TEXT||row.kind()==Kind.MULTILINE)&&fieldError(row.id());}
@@ -408,6 +481,7 @@ public final class ServerConfigPage {
         scroll.setContent(top-viewport.y()+slots.contentHeight()+UiTokens.ROW_CLIP_INSET,viewport.h());
         if(requestedFocus!=null){int at=0;for(var group:groups){if(headerHeight(group)>0)at++;for(var row:group.rows()){if(row.id().equals(requestedFocus))scroll.scrollTo(Math.max(0,slots.tops()[at]),false);at++;}}requestedFocus=null;}
         scroll.updateAnimation(UiStagger.frameTimeMillis());long now=UiStagger.frameTimeMillis();var axis=PageNavAxis.current();
+        if (hostingRouteActive() && settingsContract != null) beginHostingBody(now, dt);
         var config=AtomChatConfig.get();int slot=0,index=0;String[] hoveredRow={null};float drift=axis==UiStagger.Axis.HORIZONTAL&&!UiStagger.itemsSettled(entrance,now)?UiStagger.ITEM_STYLE_SLIDE_PX:0;
         canvas.save();
         try{
@@ -434,6 +508,12 @@ public final class ServerConfigPage {
                 drawingGroup=group.id();var f=SettingsGroupFrontend.motion(card,entrance,slot++,now,axis);var m=new Motion(f.cx(),f.cy(),f.scale(),f.dx(),f.dy());frameAlpha=f.alpha()*expansion;
                 var press=scales.computeIfAbsent(group.id(),k->PressScale.bounce());press.update(card.contains(m.x(mx),m.y(my)),Objects.equals(pressed,group.id()),dt,Animations.enabled(),Math.max(card.w(),card.h()));
                 SettingsGroupFrontend.stagger(canvas,card,f,()->SettingsGroupFrontend.merged(canvas,card,expansion,press,()->{
+                    if (hostingMountActive()) paintHostingGroup(canvas, group.id(), card);
+                    else {
+                        SettingsGroupFrontend.drawCardSurface(canvas, card);
+                        SettingsGroupFrontend.clipCard(canvas, card);
+                    }
+                },()->{
                     int at=start;
                     for(var row:group.rows()){
                         var box=new UiLayout.Rect(card.x(),top+slots.tops()[at]-scroll.getScrollY(),card.w(),slots.heights()[at]);at++;
@@ -506,7 +586,37 @@ public final class ServerConfigPage {
             ClickRipples.region(x,y,right-x,bottom-y,SettingsListAction.RADIUS*motion.scale(),primary?AtomChatConfig.get().accentColor:UiTokens.cardCutout(AtomChatAppearance.theme()));
         }
     }
+    private void beginHostingBody(long now, float dt) {
+        if (hostingMount == null) {
+            hostingMount = SettingsContractMount.hosting(settingsContract, this::hostingFields, hostingClipboard(), settingsSound, true);
+        }
+        hostingMount.begin(now, dt);
+    }
+
+    private void paintHostingGroup(Canvas canvas, String id, UiLayout.Rect card) {
+        hostingMount.paintGroup(canvas, id + "Fields", card);
+    }
+
+    private void drawHostingField(Canvas canvas, Row row, UiLayout.Rect rect, Motion motion,
+                                  UiLayout.Rect clip, float mx, float my) {
+        String id = row.id();
+        hostingMount.paint(canvas, id, rect, mx, my, id.equals(focused), Objects.equals(pressed, drawingGroup));
+        if (draft.saving()) return;
+        if (row.kind() == Kind.TOGGLE) {
+            hit(rect, () -> hostingMount.embedded().pointer(id,
+                    new PointerEvent(PointerEvent.Type.PRESS, (rect.x() + rect.right()) / 2, (rect.y() + rect.bottom()) / 2, 0)),
+                    null, motion, clip);
+        } else {
+            var box = SettingsRowText.number(rect, numberRowText(row, rect.w()).stacked());
+            hit(box, () -> {}, id, motion, clip);
+        }
+    }
+
     private void drawRow(Canvas canvas,Row row,UiLayout.Rect rect,Motion motion,UiLayout.Rect clip,float mx,float my,float dt){
+        if (hostingMountActive()) {
+            drawHostingField(canvas, row, rect, motion, clip, mx, my);
+            return;
+        }
         var c=AtomChatConfig.get();
         float pad=UiTokens.SETTINGS_ROW_PAD,left=rect.x()+pad,width=rect.w()-pad*2;
         boolean enabled=!draft.saving()&&(host.administration()||!row.id().equals("maxProfileTotalMb")&&!row.id().startsWith("template")&&!row.id().startsWith("asset"));
@@ -648,7 +758,11 @@ public final class ServerConfigPage {
         list.set(index,new MessageTemplate(r.id(),r.name(),r.kind(),r.format(),!r.enabled()));draft.templates(list);
     }
     private void toggleRow(String id,ToggleSwitch toggle){
-        draft.toggle(id);toggle.pulse();feedback="";cue();
+        toggleDraft(id);toggle.pulse();cue();
+    }
+    private void toggleDraft(String id) {
+        draft.toggle(id);
+        feedback="";
     }
     private void danger(Runnable action){
         confirmation.openDangerous(t("delete_title"),t("delete_hint"),host.label("atomchat.config.cancel"),t("delete"),action);
@@ -705,7 +819,7 @@ public final class ServerConfigPage {
         if(layout==null||geometry==null||button!=0)return true;
         if(view==View.ROOT){
             int chip=chips.hit(layout,x,y);
-            if(chip>=0){if(chip!=chip()){navigationDirection.accept(chip<chip());blur();chips.select(chip);entrance.markEntered();cue();}return true;}
+            if(chip>=0){if(chip!=chip()){navigationDirection.accept(chip<chip());blur();if(hostingMount!=null)hostingMount.embedded().clear();hits.clear();chips.select(chip);entrance.markEntered();cue();}return true;}
         }
         if(draft.saving())return true;
         if(geometry.save().contains(x,y)){
@@ -722,20 +836,39 @@ public final class ServerConfigPage {
         for(int i=hits.size()-1;i>=0;i--){
             var h=hits.get(i);if(!h.box().contains(x,y))continue;blur();
             if(h.field()!=null){
-                focused=h.field();fields.get(focused).focus(true);
-                fields.get(focused).pointer(h.motion().x(x),h.motion().y(y),false);dragging=h;
+                focused=h.field();
+                if (hostingMountActive()) {
+                    hostingMount.embedded().focus(focused, true);
+                    routeHostingPointer(h, PointerEvent.Type.PRESS, x, y);
+                } else {
+                    fields.get(focused).focus(true);
+                    fields.get(focused).pointer(h.motion().x(x),h.motion().y(y),false);
+                }
+                dragging=h;
             }else h.action().run();
             pressed=h.group();return true;
         }
         blur();return true;
     }
+    private void routeHostingPointer(Hit hit, PointerEvent.Type type, float x, float y) {
+        hostingMount.embedded().pointer(hit.field(), new PointerEvent(type, hit.motion().x(x), hit.motion().y(y), 0));
+    }
+
     public boolean drag(float x,float y){
-        if(dragging!=null&&focused!=null)fields.get(focused).pointer(dragging.motion().x(x),dragging.motion().y(y),true);
+        if(dragging!=null&&focused!=null) {
+            if (hostingMountActive()) routeHostingPointer(dragging, PointerEvent.Type.MOVE, x, y);
+            else fields.get(focused).pointer(dragging.motion().x(x),dragging.motion().y(y),true);
+        }
         if(scroll!=null&&scroll.isDragging())scroll.dragTo(y,geometry.viewport().h());return true;
     }
-    public void release(){chips.release();pressed=null;dragging=null;if(scroll!=null)scroll.endDrag();}
+    public void release(){
+        if (hostingMountActive() && dragging != null) routeHostingPointer(dragging, PointerEvent.Type.RELEASE, 0, 0);
+        chips.release();pressed=null;dragging=null;if(scroll!=null)scroll.endDrag();
+    }
     public boolean scroll(float x,float y,double amount){
-        for(int i=hits.size()-1;i>=0;i--){var hit=hits.get(i);if(hit.field()!=null&&hit.box().contains(x,y)&&fields.get(hit.field()).scroll(amount))return true;}
+        if (!hostingMountActive()) {
+            for(int i=hits.size()-1;i>=0;i--){var hit=hits.get(i);if(hit.field()!=null&&hit.box().contains(x,y)&&fields.get(hit.field()).scroll(amount))return true;}
+        }
         if(geometry!=null&&geometry.scrollViewport().contains(x,y)&&scroll!=null)scroll.wheel((float)amount);return true;
     }
     public boolean key(int key,int modifiers){
@@ -746,19 +879,53 @@ public final class ServerConfigPage {
             if(ids.isEmpty())return true;
             int at=focused==null?((modifiers&1)!=0?0:-1):ids.indexOf(focused);
             blur();focused=ids.get(Math.floorMod(at+((modifiers&1)!=0?-1:1),ids.size()));
-            SettingsFormField next=null;for(var group:content())for(var row:group.rows())if(row.id().equals(focused))next=form(row);
-            if(next==null)return true;next.edit.set(value(focused));next.focus(true);requestedFocus=focused;
+            if (hostingMountActive()) {
+                hostingMount.embedded().focus(focused, true);
+            } else {
+                SettingsFormField next=null;for(var group:content())for(var row:group.rows())if(row.id().equals(focused))next=form(row);
+                if(next==null)return true;next.edit.set(value(focused));next.focus(true);
+            }
+            requestedFocus=focused;
             for(var g:content())if(g.rows().stream().anyMatch(r->r.id().equals(focused))){collapsed.remove(g.id());folds.put(g.id(),1f);}
             return true;
         }
         if(focused==null)return true;
+        if (hostingMountActive()) {
+            var event = new KeyEvent(hostingKey(key), true, (modifiers & 1) != 0, (modifiers & 2) != 0, (modifiers & 4) != 0);
+            hostingMount.embedded().key(focused, event);
+            if (!hostingMount.embedded().interacting(focused)) blur();
+            return true;
+        }
         var field=fields.get(focused);String before=field.edit.text();field.key(key,modifiers,host::clipboard,host::clipboard);
         if(!before.equals(field.edit.text()))change(focused,field.edit.text());if(!field.focused())blur();return true;
     }
     public boolean character(char chr){
         if(focused!=null&&!draft.saving()&&chr>=32&&chr!=127){
-            var field=fields.get(focused);String before=field.edit.text();field.typed(chr);if(!before.equals(field.edit.text()))change(focused,field.edit.text());
+            if (hostingMountActive()) hostingMount.embedded().text(focused, String.valueOf(chr));
+            else {
+                var field=fields.get(focused);String before=field.edit.text();field.typed(chr);if(!before.equals(field.edit.text()))change(focused,field.edit.text());
+            }
         }
         return true;
+    }
+    private static KeyEvent.Key hostingKey(int key) {
+        return switch (key) {
+            case 'A' -> KeyEvent.Key.A;
+            case 'C' -> KeyEvent.Key.C;
+            case 'V' -> KeyEvent.Key.V;
+            case 'X' -> KeyEvent.Key.X;
+            case 'Y' -> KeyEvent.Key.Y;
+            case 'Z' -> KeyEvent.Key.Z;
+            case 257, 335 -> KeyEvent.Key.ENTER;
+            case 259 -> KeyEvent.Key.BACKSPACE;
+            case 261 -> KeyEvent.Key.DELETE;
+            case 262 -> KeyEvent.Key.RIGHT;
+            case 263 -> KeyEvent.Key.LEFT;
+            case 264 -> KeyEvent.Key.DOWN;
+            case 265 -> KeyEvent.Key.UP;
+            case 268 -> KeyEvent.Key.HOME;
+            case 269 -> KeyEvent.Key.END;
+            default -> KeyEvent.Key.OTHER;
+        };
     }
 }

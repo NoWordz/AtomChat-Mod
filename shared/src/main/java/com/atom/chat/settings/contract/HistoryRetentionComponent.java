@@ -32,6 +32,12 @@ import java.util.Map;
 
 /** Bound renderer for the history days setting, with the existing commit-on-Enter-or-blur editing model. */
 public final class HistoryRetentionComponent implements StrictPageSession.Implementation {
+    private final SettingsNumberEditor embeddedEditor;
+
+    public HistoryRetentionComponent() { this(null); }
+
+    public HistoryRetentionComponent(SettingsNumberEditor embeddedEditor) { this.embeddedEditor = embeddedEditor; }
+
     @Override
     public Control create(NodeId id, Map<Aspect, Value> values, StrictPageSession.ContentView content) {
         throw new IllegalStateException("MISSING_FRAME_BINDINGS");
@@ -45,7 +51,7 @@ public final class HistoryRetentionComponent implements StrictPageSession.Implem
     @Override
     public Control create(NodeId id, Map<Aspect, Value> values, StrictPageSession.ContentView content,
                           StrictPageSession.FrameBindings frame) {
-        Row row = new Row(id, content);
+        Row row = new Row(id, content, embeddedEditor);
         row.update(values, frame);
         return new HostedControl(id, row);
     }
@@ -60,8 +66,9 @@ public final class HistoryRetentionComponent implements StrictPageSession.Implem
 
     private static final class Row implements HostedControl.Adapter {
         private final NodeId id;
+        private final boolean composed;
         private final StrictPageSession.ContentView content;
-        private final SettingsNumberEditor edit = new SettingsNumberEditor();
+        private final SettingsNumberEditor edit;
         private final LeafMeasure measure = this::measure;
         private String title = "", description = "";
         private long revision, lastHoverFrame = Long.MIN_VALUE, lastHoverMillis;
@@ -70,8 +77,10 @@ public final class HistoryRetentionComponent implements StrictPageSession.Implem
         private FrameTime time;
         private AtomChatControlStyle appearance;
 
-        Row(NodeId id, StrictPageSession.ContentView content) {
+        Row(NodeId id, StrictPageSession.ContentView content, SettingsNumberEditor embeddedEditor) {
             this.id = id;
+            composed = embeddedEditor != null;
+            edit = composed ? embeddedEditor : new SettingsNumberEditor();
             this.content = content;
         }
 
@@ -176,7 +185,7 @@ public final class HistoryRetentionComponent implements StrictPageSession.Implem
             String text = edit.active() ? (edit.text().isEmpty() ? "0" : edit.text()) : Integer.toString(value());
             HistoryNumberRow.draw(canvas, row, flow.stacked() ? flow : null, title, description, label("unit"),
                     text, edit.active(), hover, appearance, appearance.accentColor(), appearance.textColor(),
-                    UiTokens.withAlpha(appearance.textSecondaryColor(), 200), millis);
+                    UiTokens.withAlpha(appearance.textSecondaryColor(), 200), composed && edit.active() ? HistoryNumberRow.caretMillis() : millis);
         }
     }
 }

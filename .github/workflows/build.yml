@@ -1,11 +1,6 @@
 name: Build
 
-# 单分支多目标：支持哪些目标写在 versions/targets.json 里，这个工作流里没有分支名。
-# 新增一个目标 = 加一条 JSON + 建工程目录，不必碰这个文件。
-#
-# 旧分支（Fabric-1.21.1 / NeoForge-1.21.1 / Forge-1.20.1）仍各自带着自己那份 build.yml，
-# 那三份在分支退休时一起删掉；发版（release.yml）同样等到收尾那一刀再改 —— 现在
-# main 上的构建不发布任何东西。
+# versions/targets.json supplies the supported targets and JDKs.
 
 on:
   push:
@@ -21,7 +16,7 @@ on:
   workflow_dispatch:
     inputs:
       atomlib_input_url:
-        description: 'Explicit HTTPS Maven candidate archive (empty uses the reviewed released pin)'
+        description: 'Explicit HTTPS Maven candidate archive (empty uses the configured input)'
         type: string
         required: false
       atomlib_input_sha256:
@@ -37,36 +32,42 @@ jobs:
     name: 校验矩阵
     runs-on: ubuntu-latest
     outputs:
-      list: ${{ steps.matrix.outputs.list }}
+      build: ${{ steps.matrix.outputs.build }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
 
-      # 本地与 CI 跑的是同一个脚本：矩阵是规则、mappings 必须一致、身份只有一份、
-      # 工程目录与矩阵条目必须互相存在。红的原因会直接写在日志里。
-      - name: 校验 versions/ 与各平台的身份来源
-        run: python3 tools/verify_targets.py --matrix-out "$RUNNER_TEMP/matrix.json"
+      - name: 校验目标、输入和归档规则
+        run: |
+          python3 tools/verify_targets.py --matrix-out "$RUNNER_TEMP/matrix.json"
+          python3 tools/test_fetch_atomlib_input.py
+          python3 tools/test_verify_jars.py
+          python3 tools/test_frontend_contract_ci.py
 
-      - name: 验证候选输入读取与失败保留
-        run: python3 tools/test_fetch_atomlib_input.py
-
-      - name: 导出矩阵
+      - name: 导出验证和分发矩阵
         id: matrix
-        run: echo "list=$(cat "$RUNNER_TEMP/matrix.json")" >> "$GITHUB_OUTPUT"
+        env:
+          CONTRACT_PR_BASE: ${{ github.event.pull_request.base.sha }}
+          CONTRACT_REVIEWED: ${{ vars.ATOMCHAT_FRONTEND_REVIEWED_REVISION }}
+        run: python3 tools/frontend_contract_ci.py matrix "$RUNNER_TEMP/matrix.json"
 
   build:
-    name: 构建 ${{ matrix.target }}
+    name: 构建 ${{ matrix.target }} / ${{ matrix.mode }}
     needs: targets
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.runner }}
     timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
-        include: ${{ fromJSON(needs.targets.outputs.list) }}
+        include: ${{ fromJSON(needs.targets.outputs.build) }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
 
-      # Skija 的 Linux 原生库链接 EGL/GL；测试的类路径里有它。
       - name: 安装 Skija 的 Linux 系统依赖
+        if: runner.os == 'Linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y libegl1 libgl1
@@ -80,73 +81,35 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v6
         with:
-          # PR 只读缓存；推 main 才刷新它。
           cache-read-only: ${{ github.event_name == 'pull_request' }}
 
       - name: 获取并认证固定 AtomLib 输入
+        shell: bash
         env:
           ATOMLIB_INPUT_URL: ${{ inputs.atomlib_input_url || vars.ATOMLIB_INPUT_URL }}
           ATOMLIB_INPUT_SHA256: ${{ inputs.atomlib_input_sha256 || vars.ATOMLIB_INPUT_SHA256 }}
-        run: |
-          set -euo pipefail
-          python3 tools/fetch_atomlib_input.py --url "$ATOMLIB_INPUT_URL" --sha256 "$ATOMLIB_INPUT_SHA256" --output "$RUNNER_TEMP/atomlib-input-path"
+        run: python tools/fetch_atomlib_input.py --url "$ATOMLIB_INPUT_URL" --sha256 "$ATOMLIB_INPUT_SHA256" --output "$RUNNER_TEMP/atomlib-input-path"
 
-      - name: 构建并测试
-        working-directory: ${{ matrix.project }}
-        run: |
-          chmod +x ./gradlew
-          ./gradlew clean build -PatomlibMavenRepo="$RUNNER_TEMP/maven" --no-daemon
+      - name: Linux 构建与测试
+        if: matrix.mode == 'linux-verify'
+        shell: bash
+        env:
+          PROJECT: ${{ matrix.project }}
+        run: python tools/frontend_contract_ci.py build "$PROJECT" "$RUNNER_TEMP/maven" --mode linux-verify
 
-      # 构建戳是拿到 jar 的人判断「这些字节来自哪次提交」的唯一依据，而它只在 checkout
-      # 真的干净时才说真话。这一步既把戳打进日志（验收时看得见），也在它说谎时让构建红。
-      # 假脏过一次，而且不是靠人发现的：三个 gradlew 的 exec 位不在索引里，这句 chmod
-      # 于是成了「已跟踪文件被改动」，每个发行 jar 都写着 +dirty —— 本机 core.fileMode=false，
-      # 所以只有下载产物的人看得到那个假标记。
-      - name: 断言构建戳没说谎
-        working-directory: ${{ matrix.project }}
-        run: |
-          set -euo pipefail
-          jar=$(find build/atomlib-consumer/libs -name '*.jar' ! -name '*sources*' ! -name '*-slim*')
-          test -n "$jar"
-          echo "构建戳（$jar）："
-          unzip -p "$jar" atomchat-build.properties
-          ! unzip -p "$jar" atomchat-build.properties | grep -q '^git_dirty=true'
+      - name: 构建并检验分发包
+        if: matrix.mode != 'linux-verify'
+        shell: bash
+        env:
+          PROJECT: ${{ matrix.project }}
+          CONTRACT_MODE: ${{ matrix.mode }}
+          CONTRACT_REVIEWED: ${{ matrix.reviewed }}
+        run: python tools/frontend_contract_ci.py build "$PROJECT" "$RUNNER_TEMP/maven" --mode "$CONTRACT_MODE" --reviewed="$CONTRACT_REVIEWED" --dist dist
 
-      # 产物级断言：单测跑的是类路径、构建闸盯的是源码目录与 AP 输出 —— 两者都拦不住
-      # "打包这一步少塞了一个嵌套 jar"或者"重定位只做了一半"。这几条看的是 jar 里面，
-      # 规则原本只在本地跑，现在每次构建都由 CI 跑一遍。
-      - name: 断言产物内容
-        run: |
-          python3 tools/test_verify_jars.py
-          python3 tools/verify_jars.py --profile atomlib-consumer "${{ matrix.project }}"
-
-      # AC has one architecture-independent consumer JAR. Pair it with exactly
-      # the AtomLib artifact pinned for this target, never with an OS variant.
-      - name: 取 AC 与配套 Lib
-        working-directory: ${{ matrix.project }}
-        run: |
-          set -euo pipefail
-          mkdir -p "$GITHUB_WORKSPACE/dist"
-          find build/atomlib-consumer/libs -name '*.jar' ! -name '*sources*' ! -name '*-slim*' -exec cp {} "$GITHUB_WORKSPACE/dist/" \;
-          lib=$(python3 -c 'import json;print(json.load(open("../../versions/atomlib.json"))["targets"]["${{ matrix.target }}"]["artifact"])')
-          version=$(python3 -c 'import json;print(json.load(open("../../versions/atomlib.json"))["version"])')
-          cp "$RUNNER_TEMP/maven/com/atom/lib/$lib/$version/$lib-$version.jar" "$GITHUB_WORKSPACE/dist/"
-          ls -la "$GITHUB_WORKSPACE/dist"
-          count=$(find "$GITHUB_WORKSPACE/dist" -name "*.jar" | wc -l)
-          if [ "$count" -ne 2 ]; then
-            echo "::error::Expected one AC JAR plus one pinned AtomLib JAR, got $count"
-            exit 1
-          fi
-          if find "$GITHUB_WORKSPACE/dist" -name "*-slim*" | grep -q .; then
-            echo "::error::取到的是 -slim 包（不含内嵌依赖）"
-            exit 1
-          fi
-
-      - name: 上传产物
+      - name: 上传分发包
+        if: matrix.mode != 'linux-verify'
         uses: actions/upload-artifact@v7
         with:
-          # buildable: false 但工程存在的目标照样编，名字上带出"未验证"。
-          # 后缀由 verify_targets.py 算好放进矩阵 —— 不在这里拼表达式。
           name: atomchat-pair-${{ matrix.target }}${{ matrix.suffix }}
           path: dist/*.jar
           if-no-files-found: error

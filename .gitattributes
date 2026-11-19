@@ -17,3 +17,6 @@ gradlew text eol=lf
 *.ttf binary
 *.jar binary
 *.zip binary
+
+# Preserve the exact bytes of the reviewed contract inputs across checkouts.
+versions/frontend-contract/*/contract.properties -text

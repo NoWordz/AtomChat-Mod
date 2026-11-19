@@ -31,6 +31,15 @@ on:
         default: false
         type: boolean
 
+      atomlib_input_url:
+        description: 'Explicit HTTPS Maven candidate archive (empty uses the configured input)'
+        type: string
+        required: false
+      atomlib_input_sha256:
+        description: 'SHA-256 of that exact archive; contained JARs must also match versions/atomlib.json'
+        type: string
+        required: false
+
 permissions:
   contents: write
 
@@ -39,31 +48,51 @@ jobs:
     name: 校验矩阵
     runs-on: ubuntu-latest
     outputs:
-      list: ${{ steps.matrix.outputs.list }}
+      build: ${{ steps.matrix.outputs.build }}
+      distribution: ${{ steps.matrix.outputs.distribution }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
 
-      - name: 校验 versions/ 与各平台的身份来源
-        run: python3 tools/verify_targets.py --matrix-out "$RUNNER_TEMP/matrix.json"
+      - name: 校验版本和归档规则
+        run: |
+          python3 tools/verify_targets.py --matrix-out "$RUNNER_TEMP/matrix.json"
+          python3 tools/test_verify_jars.py
 
-      - name: 导出矩阵
+      - name: 校验仓库版本号与标签一致
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          EXPECTED="${GITHUB_REF_NAME#v}"
+          ACTUAL="$(grep '^mod_version=' gradle.properties | cut -d= -f2 | tr -d '\r')"
+          if [ "$EXPECTED" != "$ACTUAL" ]; then
+            echo "::error::仓库根的 mod_version=${ACTUAL} 与标签 ${EXPECTED} 不一致"
+            exit 1
+          fi
+          echo "版本 ${ACTUAL} 与标签一致"
+
+      - name: 导出验证和分发矩阵
         id: matrix
-        run: echo "list=$(cat "$RUNNER_TEMP/matrix.json")" >> "$GITHUB_OUTPUT"
+        env:
+          CONTRACT_REVIEWED: ${{ vars.ATOMCHAT_FRONTEND_REVIEWED_REVISION }}
+        run: python3 tools/frontend_contract_ci.py matrix "$RUNNER_TEMP/matrix.json"
 
   build:
-    name: 构建 ${{ matrix.target }}
+    name: 构建 ${{ matrix.target }} / ${{ matrix.mode }}
     needs: targets
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.runner }}
     timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
-        include: ${{ fromJSON(needs.targets.outputs.list) }}
+        include: ${{ fromJSON(needs.targets.outputs.build) }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
 
-      # Skija 的 Linux 原生库链接 EGL/GL；测试的类路径里有它。
       - name: 安装 Skija 的 Linux 系统依赖
+        if: runner.os == 'Linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y libegl1 libgl1
@@ -78,67 +107,31 @@ jobs:
         uses: gradle/actions/setup-gradle@v6
 
       - name: 获取并认证固定 AtomLib 输入
-        run: |
-          set -euo pipefail
-          python3 tools/fetch_atomlib_input.py --output "$RUNNER_TEMP/atomlib-input-path"
+        shell: bash
+        env:
+          # Legacy tags keep using their released pin unless dispatch supplies an explicit archive.
+          ATOMLIB_INPUT_URL: ${{ inputs.atomlib_input_url || (matrix.mode != 'legacy' && vars.ATOMLIB_INPUT_URL) || '' }}
+          ATOMLIB_INPUT_SHA256: ${{ inputs.atomlib_input_sha256 || (matrix.mode != 'legacy' && vars.ATOMLIB_INPUT_SHA256) || '' }}
+        run: python tools/fetch_atomlib_input.py --url "$ATOMLIB_INPUT_URL" --sha256 "$ATOMLIB_INPUT_SHA256" --output "$RUNNER_TEMP/atomlib-input-path"
 
-      # 版本号只有一处（仓库根 gradle.properties），所以标签只需要跟这一处对齐 ——
-      # 旧流程要在三个分支上各校验一次，那是"身份有三份"的直接后果。
-      - name: 校验仓库版本号与标签一致
-        if: startsWith(github.ref, 'refs/tags/v')
-        run: |
-          EXPECTED="${GITHUB_REF_NAME#v}"
-          ACTUAL="$(grep '^mod_version=' gradle.properties | cut -d= -f2 | tr -d '\r')"
-          if [ "$EXPECTED" != "$ACTUAL" ]; then
-            echo "::error::仓库根的 mod_version=${ACTUAL} 与标签 ${EXPECTED} 不一致"
-            exit 1
-          fi
-          echo "版本 ${ACTUAL} 与标签一致"
+      - name: Linux 构建与测试
+        if: matrix.mode == 'linux-verify'
+        shell: bash
+        env:
+          PROJECT: ${{ matrix.project }}
+        run: python tools/frontend_contract_ci.py build "$PROJECT" "$RUNNER_TEMP/maven" --mode linux-verify
 
-      - name: 构建并测试
-        working-directory: ${{ matrix.project }}
-        run: |
-          chmod +x ./gradlew
-          ./gradlew clean build -PatomlibMavenRepo="$RUNNER_TEMP/maven" --no-daemon
+      - name: 构建并检验发布归档
+        if: matrix.mode != 'linux-verify'
+        shell: bash
+        env:
+          PROJECT: ${{ matrix.project }}
+          CONTRACT_MODE: ${{ matrix.mode }}
+          CONTRACT_REVIEWED: ${{ matrix.reviewed }}
+        run: python tools/frontend_contract_ci.py build "$PROJECT" "$RUNNER_TEMP/maven" --mode "$CONTRACT_MODE" --reviewed="$CONTRACT_REVIEWED" --dist dist
 
-      # 发出去的字节更要查这一条：标签是在干净 checkout 上检出的，所以戳里的
-      # git_dirty 只有 true 一种错法，而它会让人以为发行版来自未提交的源码。
-      - name: 断言构建戳没说谎
-        working-directory: ${{ matrix.project }}
-        run: |
-          set -euo pipefail
-          jar=$(find build/atomlib-consumer/libs -name '*.jar' ! -name '*sources*' ! -name '*-slim*')
-          test -n "$jar"
-          unzip -p "$jar" atomchat-build.properties
-          ! unzip -p "$jar" atomchat-build.properties | grep -q '^git_dirty=true'
-
-      # 发出去的字节更要查这一层：单测跑的是类路径，看不出打包时少塞了一个嵌套 jar。
-      - name: 断言产物内容
-        run: |
-          python3 tools/test_verify_jars.py
-          python3 tools/verify_jars.py --profile atomlib-consumer "${{ matrix.project }}"
-
-      - name: 取产物（-slim 与 sources 一律不要）
-        working-directory: ${{ matrix.project }}
-        run: |
-          set -euo pipefail
-          mkdir -p "$GITHUB_WORKSPACE/dist"
-          find build/atomlib-consumer/libs -name '*.jar' ! -name '*sources*' ! -name '*-slim*' -exec cp {} "$GITHUB_WORKSPACE/dist/" \;
-          lib=$(python3 -c 'import json;print(json.load(open("../../versions/atomlib.json"))["targets"]["${{ matrix.target }}"]["artifact"])')
-          version=$(python3 -c 'import json;print(json.load(open("../../versions/atomlib.json"))["version"])')
-          cp "$RUNNER_TEMP/maven/com/atom/lib/$lib/$version/$lib-$version.jar" "$GITHUB_WORKSPACE/dist/"
-          ls -la "$GITHUB_WORKSPACE/dist"
-          count=$(find "$GITHUB_WORKSPACE/dist" -name "*.jar" | wc -l)
-          if [ "$count" -ne 2 ]; then
-            echo "::error::Expected one AC JAR and one AtomLib JAR, got $count"
-            exit 1
-          fi
-          if find "$GITHUB_WORKSPACE/dist" -name "*-slim*" | grep -q .; then
-            echo "::error::取到的是 -slim 包（不含内嵌依赖）"
-            exit 1
-          fi
-
-      - name: 上传产物
+      - name: 上传分发包
+        if: matrix.mode != 'linux-verify'
         uses: actions/upload-artifact@v7
         with:
           name: jar-pair-${{ matrix.target }}${{ matrix.suffix }}
@@ -156,6 +149,7 @@ jobs:
       - name: 取回三个 AC/Lib 配套
         uses: actions/download-artifact@v8
         with:
+          pattern: jar-pair-*
           path: artifacts
           merge-multiple: true
 
@@ -202,18 +196,8 @@ jobs:
           # 带后缀的标签（-rc1 / -beta / -alpha）就是预发布
           prerelease: ${{ contains(github.ref_name, '-') }}
 
-  # 商店发布与建 Release 分开：手动重发时不必重新建 Release。
-  # 预发布标签整段跳过 —— 候选版不该出现在商店里。
-  #
-  # ⚠ job 级的 if 里没有 matrix 上下文（它只在 step 级可用），所以「只发某个目标」
-  # 这个过滤写在下面的 step 上：写成 job 级会让整个工作流在校验阶段就被拒掉，
-  # 表现是 0 秒失败、日志为空，只说"workflow file issue"。
   publish:
     name: 发布到商店 ${{ matrix.target }}
-    # targets 必须列在 needs 里：下面的 matrix 读的是 needs.targets.outputs.list。
-    # 只写 needs: build 的后果不是报错，而是这个 job 被整条丢掉 —— 整条 run 标红、
-    # 日志为空、jobs 列表里少一个。预发布演练看不见它（if 直接跳过，matrix 不求值），
-    # 只有真发版才会撞上（0.2.10 撞上了）。
     needs: [targets, build]
     if: >-
       ${{
@@ -221,16 +205,23 @@ jobs:
         !contains(github.ref_name, '-') &&
         inputs.dry_run != true
       }}
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.runner }}
     timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
-        include: ${{ fromJSON(needs.targets.outputs.list) }}
+        include: ${{ fromJSON(needs.targets.outputs.distribution) }}
+    env:
+      PROJECT: ${{ matrix.project }}
+      CONTRACT_MODE: ${{ matrix.mode }}
+      CONTRACT_REVIEWED: ${{ matrix.reviewed }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
 
       - name: 安装 Skija 的 Linux 系统依赖
+        if: runner.os == 'Linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y libegl1 libgl1
@@ -244,26 +235,24 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v6
 
-      - name: 获取固定 AtomLib 输入
-        run: |
-          set -euo pipefail
-          python3 tools/fetch_atomlib_input.py --output "$RUNNER_TEMP/atomlib-input-path"
+      - name: 获取并认证固定 AtomLib 输入
+        shell: bash
+        env:
+          # Legacy tags keep using their released pin unless dispatch supplies an explicit archive.
+          ATOMLIB_INPUT_URL: ${{ inputs.atomlib_input_url || (matrix.mode != 'legacy' && vars.ATOMLIB_INPUT_URL) || '' }}
+          ATOMLIB_INPUT_SHA256: ${{ inputs.atomlib_input_sha256 || (matrix.mode != 'legacy' && vars.ATOMLIB_INPUT_SHA256) || '' }}
+        run: python tools/fetch_atomlib_input.py --url "$ATOMLIB_INPUT_URL" --sha256 "$ATOMLIB_INPUT_SHA256" --output "$RUNNER_TEMP/atomlib-input-path"
 
-      # publishMods 由各平台自己的 build.gradle 定义（dependsOn modrinth / curseforge），
-      # 两个商店各自带 onlyIf 闸：没 token 或项目 id 没填就 SKIPPED，不会红。
-      - name: 构建并发布到 Modrinth 与 CurseForge
-        if: >-
-          ${{
-            inputs.target == '' ||
-            inputs.target == 'all' ||
-            inputs.target == matrix.target
-          }}
-        working-directory: ${{ matrix.project }}
-        run: |
-          chmod +x ./gradlew
-          ./gradlew clean build -PatomlibMavenRepo="$RUNNER_TEMP/maven" --no-daemon
-          python3 ../../tools/verify_jars.py --profile atomlib-consumer "$PWD"
-          ./gradlew publishMods -PatomlibMavenRepo="$RUNNER_TEMP/maven" --no-daemon
+      - name: 构建并检验商店归档
+        if: inputs.target == '' || inputs.target == 'all' || inputs.target == matrix.target
+        shell: bash
+        run: python tools/frontend_contract_ci.py build "$PROJECT" "$RUNNER_TEMP/maven" --mode "$CONTRACT_MODE" --reviewed="$CONTRACT_REVIEWED"
+
+      # Reuse the verified build directory in the same job and pass the same reviewed revision.
+      - name: 发布到 Modrinth 与 CurseForge
+        if: inputs.target == '' || inputs.target == 'all' || inputs.target == matrix.target
+        shell: bash
         env:
           MODRINTH_TOKEN: ${{ secrets.MODRINTH_TOKEN }}
           CURSEFORGE_TOKEN: ${{ secrets.CURSEFORGE_TOKEN }}
+        run: python tools/frontend_contract_ci.py publish "$PROJECT" "$RUNNER_TEMP/maven" --mode "$CONTRACT_MODE" --reviewed="$CONTRACT_REVIEWED"

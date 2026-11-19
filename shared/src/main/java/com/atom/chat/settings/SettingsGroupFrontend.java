@@ -58,6 +58,13 @@ public final class SettingsGroupFrontend {
     }
     /** Exact merged settings surface: fold fade/lift, press, one rounded card and clipped rows. */
     public static int merged(Canvas canvas,UiLayout.Rect card,float expansion,PressScale press,IntSupplier paintRows){
+        return merged(canvas, card, expansion, press, () -> {
+            drawCardSurface(canvas, card);
+            clipCard(canvas, card);
+        }, paintRows);
+    }
+    public static int merged(Canvas canvas, UiLayout.Rect card, float expansion, PressScale press,
+                             Runnable surface, IntSupplier paintRows) {
         canvas.save();Paint foldFade=null;
         try{
             if(expansion<.995f){
@@ -66,11 +73,20 @@ public final class SettingsGroupFrontend {
             }
             if(press!=null)press.begin(canvas,card.x()+card.w()/2,card.y()+card.h()/2);
             try{
-                AtomChatAppearance.drawCard(canvas,card.x(),card.y(),card.w(),card.h(),UiTokens.settingsRowRadius(AtomChatAppearance.theme()),0);
-                canvas.save();try{SkiaDraw.clip(canvas,card.x(),card.y(),card.w(),card.h(),UiTokens.settingsRowRadius(AtomChatAppearance.theme()));return paintRows.getAsInt();}finally{canvas.restore();}
+                canvas.save();try{surface.run();return paintRows.getAsInt();}finally{canvas.restore();}
             }finally{if(press!=null)canvas.restore();}
         }finally{if(foldFade!=null){foldFade.close();canvas.restore();}canvas.restore();}
     }
+    public static void drawCardSurface(Canvas canvas, UiLayout.Rect card) {
+        AtomChatAppearance.drawCard(canvas, card.x(), card.y(), card.w(), card.h(),
+                UiTokens.settingsRowRadius(AtomChatAppearance.theme()), 0);
+    }
+
+    public static void clipCard(Canvas canvas, UiLayout.Rect card) {
+        SkiaDraw.clip(canvas, card.x(), card.y(), card.w(), card.h(),
+                UiTokens.settingsRowRadius(AtomChatAppearance.theme()));
+    }
+
     public static void divider(Canvas canvas,UiLayout.Rect card,float y){
         SkiaDraw.drawRoundedRect(canvas,card.x()+UiTokens.SETTINGS_ROW_PAD,y,card.w()-UiTokens.SETTINGS_ROW_PAD*2,UiTokens.s(1),0,UiTokens.hairline(AtomChatAppearance.theme())); // bare-value: extracted settings divider thickness
     }
