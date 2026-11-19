@@ -42,11 +42,12 @@ def run(root: pathlib.Path, *args: str) -> subprocess.CompletedProcess:
 
 
 def build_fixture(tmp: pathlib.Path) -> pathlib.Path:
-    """最小夹具：两个在扫文件 + UiTokens（应被排除）+ 冻结基线。"""
-    for rel in (SAMPLE, "shared/src/main/java/com/atom/chat/ui/UiTokens.java"):
-        dst = tmp / rel
-        dst.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy(ROOT / rel, dst)
+    """使用一个真实待扫描文件和一个应被排除的 token 文件。"""
+    sample = tmp / SAMPLE
+    sample.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy(ROOT / SAMPLE, sample)
+    sample.with_name("UiTokens.java").write_text(
+        "final class UiTokens { static float sample = s(999); }\n", encoding="utf-8")
     (tmp / "tools").mkdir(parents=True, exist_ok=True)
     r = run(tmp, "--update")
     assert r.returncode == 0, r.stdout + r.stderr
@@ -61,6 +62,7 @@ with tempfile.TemporaryDirectory() as td:
     base = json.loads((fx / "tools/bare_baseline.json").read_text(encoding="utf-8"))
     print(f"  夹具基线：{base['total']} 处 / {len(base['files'])} 文件")
 
+    check("UiTokens 定义未计入基线", set(base["files"]) == {SAMPLE})
     check("基线一致 → 绿", run(fx).returncode == 0)
 
     print("\n== 变异 1：塞 s(999) → 必须红 ==")

@@ -27,6 +27,9 @@ on:
 permissions:
   contents: read
 
+env:
+  PYTHONUTF8: "1"
+
 jobs:
   targets:
     name: 校验矩阵
