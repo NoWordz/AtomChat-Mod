@@ -39,7 +39,11 @@ base {
 java.toolchain.languageVersion = JavaLanguageVersion.of(21)
 
 neoForge {
-    version = project.neo_version
+    enable {
+        version = project.neo_version
+        // The Windows contract was reviewed against the recompiled game classes.
+        disableRecompilation = providers.gradleProperty('atomchatFrontendLinuxVerification').isPresent()
+    }
 
     // No Parchment layer on purpose: AtomChat was written against Yarn and is
     // being ported to the official Mojang names used by NeoForge; adding
