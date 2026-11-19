@@ -100,6 +100,10 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libegl1 libgl1
 
+      - name: 安装 Linux OpenGL 测试环境
+        if: matrix.mode == 'linux-verify'
+        run: sudo apt-get install -y xvfb libgl1-mesa-dri
+
       - name: 设置 JDK ${{ matrix.java }}
         uses: actions/setup-java@v6
         with:
@@ -122,7 +126,8 @@ jobs:
         shell: bash
         env:
           PROJECT: ${{ matrix.project }}
-        run: python tools/frontend_contract_ci.py build "$PROJECT" "$RUNNER_TEMP/maven" --mode linux-verify
+          LIBGL_ALWAYS_SOFTWARE: "1"
+        run: xvfb-run -a python tools/frontend_contract_ci.py build "$PROJECT" "$RUNNER_TEMP/maven" --mode linux-verify
 
       - name: 构建并检验发布归档
         if: matrix.mode != 'linux-verify'

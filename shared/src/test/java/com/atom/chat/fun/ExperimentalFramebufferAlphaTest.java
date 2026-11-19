@@ -1,8 +1,8 @@
 package com.atom.chat.fun;
 
+import com.atom.chat.util.GlTestEnvironment;
 import io.github.humbleui.skija.*;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.Assumptions;
 import org.lwjgl.glfw.GLFW;
 import org.lwjgl.opengl.*;
 import org.lwjgl.system.MemoryStack;
@@ -11,7 +11,7 @@ import static org.junit.jupiter.api.Assertions.*;
 /** Iris/Bliss writes display RGB with unspecified alpha; reproduce that through raw GL, not Skia clear. */
 class ExperimentalFramebufferAlphaTest {
     @Test void actualFullscreenPlaybackDoesNotInterpretWorldAlphaAsImageCoverage() {
-        Assumptions.assumeTrue(System.getProperty("os.name").startsWith("Windows"),"native Windows GL regression");
+        GlTestEnvironment.requireWindowContext();
         assertTrue(GLFW.glfwInit());GLFW.glfwWindowHint(GLFW.GLFW_VISIBLE,GLFW.GLFW_FALSE);
         GLFW.glfwWindowHint(GLFW.GLFW_STENCIL_BITS,8);
         long window=GLFW.glfwCreateWindow(160,90,"AtomChat display alpha regression",0,0);assertNotEquals(0,window);

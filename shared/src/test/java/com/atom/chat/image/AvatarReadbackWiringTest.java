@@ -1,12 +1,12 @@
 package com.atom.chat.image;
 
+import com.atom.chat.util.GlTestEnvironment;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -18,7 +18,6 @@ import org.lwjgl.opengl.GL11C;
 import org.lwjgl.opengl.GL15C;
 import org.lwjgl.opengl.GL21C;
 import static org.junit.jupiter.api.Assertions.*;
-import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 class AvatarReadbackWiringTest {
     @Test
@@ -60,7 +59,7 @@ class AvatarReadbackWiringTest {
     /**
      * Exercises the production readback against a real driver. The hidden window
      * keeps this independent of Minecraft, while the assertions still consume the
-     * bytes the GL implementation wrote. Linux CI has no display and skips it.
+     * bytes the GL implementation wrote.
      */
     @Nested
     class RealGlReadback {
@@ -72,8 +71,7 @@ class AvatarReadbackWiringTest {
 
         @BeforeEach
         void openHiddenContext() {
-            assumeTrue(System.getProperty("os.name", "").toLowerCase(Locale.ROOT).startsWith("windows"),
-                    "real OpenGL readback requires a Windows display context");
+            GlTestEnvironment.requireWindowContext();
             glfwInitialized = GLFW.glfwInit();
             assertTrue(glfwInitialized, "GLFW initialization failed");
             GLFW.glfwWindowHint(GLFW.GLFW_VISIBLE, GLFW.GLFW_FALSE);
