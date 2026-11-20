@@ -218,6 +218,7 @@ public final class ProfilePage {
         UiStagger.Axis axis = PageNavAxis.current();
         float rise = UiStagger.itemRise(entrance, slot, now, axis);
         float driftDx = UiStagger.itemStyleSlidePx(entrance, slot, now, axis);
+        float maskOpacity = com.atom.chat.render.CardBackdrop.pushMaskOpacity(alpha);
         canvas.save();
         try {
             try (Paint layer = new Paint().setAlphaf(alpha)) {
@@ -242,6 +243,7 @@ public final class ProfilePage {
                 canvas.restore();
             }
         } finally {
+            com.atom.chat.render.CardBackdrop.restoreMaskOpacity(maskOpacity);
             canvas.restore();
         }
     }

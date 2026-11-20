@@ -364,5 +364,6 @@ public final class ThemeService {
         config.blurEnabled = def.blurEnabled;
         config.setPanelOutlineWidth(def.effectivePanelOutlineWidth());
         config.cardTint = def.cardTint;
+        config.cardBlurStrength = def.cardBlurStrength;
     }
 }

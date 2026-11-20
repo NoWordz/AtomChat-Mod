@@ -116,7 +116,7 @@ class PageTransitionCompositeWiringSourceTest {
         assertTrue(envelope.contains("host.drawArrivingBody(recording"));
         assertTrue(envelope.contains("lastFrame.playback(canvas)"));
         assertTrue(envelope.indexOf("lastFrame.playback(canvas)") < envelope.indexOf("host.drawArrivingHeader("));
-        assertTrue(src.contains("departing.playback(recording)"));
+        assertTrue(src.contains("previous.playback(canvas)"));
         assertTrue(src.contains("canvas.restoreToCount(save)"));
         assertFalse(src.contains("drawDepartingBody"),"old business draw cannot run on retirement");
     }

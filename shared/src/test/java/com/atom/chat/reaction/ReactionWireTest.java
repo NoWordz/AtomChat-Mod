@@ -8,6 +8,17 @@ class ReactionWireTest {
         var state=new ReactionWire.Snapshot(UUID.randomUUID(),7,List.of(new ReactionWire.Entry("❤️",List.of(new ReactionWire.Member(UUID.randomUUID(),"Alice")))));
         assertEquals(state,ReactionWire.readServer(ReactionWire.snapshot(state)));
     }
+    @Test void oldPeersKeepLegacyReactionsOnMessagesWithNewEmoji() {
+        var member = new ReactionWire.Member(UUID.randomUUID(), "Alice");
+        var faces = new ReactionWire.Entry("🫠", List.of(member));
+        var skull = new ReactionWire.Entry("💀", List.of(member));
+        var snapshot = new ReactionWire.Snapshot(UUID.randomUUID(), 12, List.of(faces, skull));
+        assertEquals(snapshot, ReactionWire.readServer(ReactionWire.snapshot(snapshot)));
+        assertEquals(new ReactionWire.Snapshot(snapshot.id(), 12, List.of(skull)),
+                ReactionWire.readServer(ReactionWire.legacySnapshot(snapshot)));
+        assertEquals(122L, ReactionEmoji.ALL.stream().filter(ReactionEmoji::legacy).count());
+    }
+
     @Test void receiptAndActionRoundTrip() {
         var receipt=new ReactionWire.Receipt(UUID.randomUUID(),UUID.randomUUID());
         assertEquals(receipt,ReactionWire.readServer(ReactionWire.receipt(receipt)));

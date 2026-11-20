@@ -1,5 +1,63 @@
 # Changelog
 
+## v0.9.2
+
+**新增**
+
+- 游戏内聊天 HUD 使用头像和气泡显示消息，支持图片与动态 GIF，并将文字限制为一行。
+- 聊天 HUD 默认常驻 5 条消息，可设为 0–10 条、约 10 秒后退出，或关闭并切回原版。
+- 卡片背景模糊支持 0–300%，默认 200%，并沿用面板已采用的更强模糊。
+- 实验性内容支持简体中文、繁体中文和英文的新年祝福，在聊天面板打开或关闭时播放全屏烟花。
+
+**更改**
+
+- 「外观与交互」整合主题、气泡和壁纸预设，并将材质、布局、交互和配色分设页签。
+- 自定义壁纸入口紧跟壁纸预设，配色整行可打开调色盘，布局页新增快捷 HUD 图标开关。
+- 操作反馈移入「交互」，聊天关键词特效保留在「聊天与通知」，并同步更新教程、分组图标和隐私页顺序。
+- 表情选择与消息反应共用顺序，新增黄豆脸和骷髅等表情。
+- 微调原有七张壁纸的高光、阴影和色调，保留构图与层次。
+
+**修复**
+
+- 顶栏和底栏的阴影跟随卡片不透明度，通知横幅使用对应的卡片模糊效果。
+- 表情包图片打开时直接出现在网格位置。
+- 修复 Fabric 客户端偶尔无法对刚收到的消息添加反应的问题。
+
+**性能**
+
+- 复用切页离场绘制命令，减少首次进入外观设置时的绘制工作。
+- 表情面板仅绘制可见网格，普通表情页跳过表情包目录扫描。
+- 缓存聊天 HUD 的静态气泡，复用图片和 GIF 缩略图缓冲。
+
+----
+
+**Added**
+
+- The in-game chat HUD shows bubbles and avatars, displays images and animated GIFs, and truncates text to one line.
+- The chat HUD keeps five messages by default and supports a 0–10 message limit, an optional timeout of about 10 seconds, and a switch back to vanilla chat.
+- Card background blur ranges from 0% to 300%, defaults to 200%, and reuses stronger blur already applied to the panel.
+- Optional fullscreen fireworks celebrate New Year greetings in English, Simplified Chinese or Traditional Chinese, with the panel open or closed.
+
+**Changed**
+
+- Appearance & Interaction groups theme, bubble and wallpaper presets together and has separate tabs for materials, layout, interactions and colors.
+- Custom wallpaper follows the wallpaper presets, the full color row opens the picker, and the Layout tab has a shortcut HUD icon switch.
+- Interaction settings include feedback sounds, chat-triggered effects stay under Chat & Notifications, and the tutorial, section icons and privacy page order reflect the new layout.
+- The picker and reactions share an expanded emoji order with more faces and skulls.
+- Refined the highlights, shadows and colors of the seven original wallpapers while preserving their composition and depth.
+
+**Fixed**
+
+- Header and bottom bar shadows follow card opacity, and notification banners use the corresponding card blur.
+- Stickers open directly in their grid positions.
+- Reactions are available on newly received messages on Fabric.
+
+**Performance**
+
+- Reused departing-page draw commands and reduced drawing work on the first visit to Appearance settings.
+- Limited emoji drawing to the visible grid and skipped sticker-directory scans on the emoji tab.
+- Cached static chat HUD bubbles and reused thumbnail buffers for images and GIFs.
+
 ## v0.9.1
 
 > 本地候选使用 AtomLib 0.6.0 候选包。

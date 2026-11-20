@@ -2,6 +2,7 @@ package com.atom.chat.settings;
 
 import com.atom.chat.ui.AtomChatAppearance;
 import com.atom.chat.render.CardShadowReach;
+import com.atom.chat.render.CardBackdrop;
 import com.atom.chat.ui.*;
 import com.atom.lib.design.atomchat.*;
 import io.github.humbleui.skija.*;
@@ -50,11 +51,12 @@ public final class SettingsGroupFrontend {
     /** Settings' outer stagger: padded local layer, rise, then style scale/drift. */
     public static int stagger(Canvas canvas,UiLayout.Rect rect,Motion m,IntSupplier paint){
         canvas.save();Paint fade=null;
+        float maskOpacity = CardBackdrop.pushMaskOpacity(m.alpha());
         try{
             if(m.alpha()<.995f){fade=new Paint().setAlphaf(m.alpha());canvas.saveLayer(CardShadowReach.layerRect(rect.x(),rect.y(),rect.w(),rect.h(),m.dy(),m.dx()),fade);}
             canvas.translate(m.dx(),m.dy());canvas.translate(m.cx(),m.cy());canvas.scale(m.scale(),m.scale());canvas.translate(-m.cx(),-m.cy());
             return paint.getAsInt();
-        }finally{if(fade!=null){fade.close();canvas.restore();}canvas.restore();}
+        }finally{CardBackdrop.restoreMaskOpacity(maskOpacity);if(fade!=null){fade.close();canvas.restore();}canvas.restore();}
     }
     /** Exact merged settings surface: fold fade/lift, press, one rounded card and clipped rows. */
     public static int merged(Canvas canvas,UiLayout.Rect card,float expansion,PressScale press,IntSupplier paintRows){
@@ -66,6 +68,7 @@ public final class SettingsGroupFrontend {
     public static int merged(Canvas canvas, UiLayout.Rect card, float expansion, PressScale press,
                              Runnable surface, IntSupplier paintRows) {
         canvas.save();Paint foldFade=null;
+        float maskOpacity = CardBackdrop.pushMaskOpacity(expansion);
         try{
             if(expansion<.995f){
                 canvas.translate(0,UiTokens.SETTINGS_FOLD_LIFT*(1-expansion));float pad=UiTokens.s(12); // bare-value: extracted existing settings fold layer reach
@@ -75,7 +78,7 @@ public final class SettingsGroupFrontend {
             try{
                 canvas.save();try{surface.run();return paintRows.getAsInt();}finally{canvas.restore();}
             }finally{if(press!=null)canvas.restore();}
-        }finally{if(foldFade!=null){foldFade.close();canvas.restore();}canvas.restore();}
+        }finally{CardBackdrop.restoreMaskOpacity(maskOpacity);if(foldFade!=null){foldFade.close();canvas.restore();}canvas.restore();}
     }
     public static void drawCardSurface(Canvas canvas, UiLayout.Rect card) {
         AtomChatAppearance.drawCard(canvas, card.x(), card.y(), card.w(), card.h(),

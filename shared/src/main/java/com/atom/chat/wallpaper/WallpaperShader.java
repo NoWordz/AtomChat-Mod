@@ -21,13 +21,13 @@ final class WallpaperShader {
                     float width=.33,t=(p.x-center)/width,d=width-abs(p.x-center);
                     float face=pow(clamp(1.-t*t,0.,1.),.7);
                     float3 sheet=mix(float3(.025,.075,.22),float3(.12,.31,.68),face);
-                    sheet*=.78+.22*cos(p.y*.8+fi*.5);
+                    sheet*=.80+.20*cos(p.y*.8+fi*.5);
                     sheet+=float3(.10,.22,.35)*exp(-pow((t+.76)/.045,2.));
                     c*=1.-.35*exp(-max(0.,-d)/.022)*(1.-aa(d,px));
                     c=mix(c,sheet,aa(d,px));
                 }
             } else if(mode<1.5) {
-                c=float3(.83,.74,.60);
+                c=mix(float3(.84,.75,.615),float3(.82,.73,.59),uv.y);
                 float d=p.y+.7*p.x+.40;
                 c=mix(c,float3(.57,.29,.16),aa(d,px));
                 d=p.y-.38*p.x-.48;
@@ -49,9 +49,9 @@ final class WallpaperShader {
                     float d=width-abs(p.x-center);
                     float face=pow(clamp(1.-t*t,0.,1.),.65);
                     float3 sheet=mix(float3(.015,.105,.064),float3(.12,.40,.24),face);
-                    sheet*=.80+.20*cos(p.y*.9+fi*.6);
-                    float glint=exp(-pow((t+.78)/.035,2.));
-                    sheet+=float3(.40,.33,.115)*glint*(.28+.30*cos(p.y*1.4+fi));
+                    sheet*=.82+.18*cos(p.y*.9+fi*.6);
+                    float glint=exp(-pow((t+.78)/.039,2.));
+                    sheet+=float3(.40,.33,.115)*glint*(.26+.28*cos(p.y*1.4+fi));
                     // Tight contact shadow belongs to the overlap, not the whole image.
                     c*=1.-.30*exp(-max(0.,-d)/.018)*(1.-aa(d,px));
                     c=mix(c,sheet,aa(d,px));
@@ -64,10 +64,10 @@ final class WallpaperShader {
                     float width=.115+.018*cos(p.y*1.6+fi);
                     float t=(p.x-center)/width, d=width-abs(p.x-center);
                     float3 hue=mix(float3(.47,.055,.23),float3(.72,.35,.065),fi*.5);
-                    float face=.40+.60*pow(clamp(1.-t*t,0.,1.),.65);
+                    float face=.42+.58*pow(clamp(1.-t*t,0.,1.),.65);
                     float3 ribbon=hue*face;
                     ribbon+=mix(float3(.35,.12,.25),float3(.38,.25,.10),fi*.5)
-                            *exp(-pow((t+.55)/.065,2.));
+                            *exp(-pow((t+.55)/.069,2.));
                     c+=hue*.045*exp(-max(0.,-d)/.018)*(1.-aa(d,px));
                     c=mix(c,ribbon,aa(d,px));
                 }
@@ -78,12 +78,12 @@ final class WallpaperShader {
                     float cover=aa(d,px);
                     float3 layer=mix(float3(.27,.13,.065),float3(.71,.48,.24),fi/6.);
                     layer*=.75+.25*smoothstep(-.5,.5,p.x);
-                    c*=1.-.42*exp(-abs(d+.014)/.022);
+                    c*=1.-.38*exp(-abs(d+.014)/.022);
                     c=mix(c,layer,cover);
                     c+=float3(.10,.065,.027)*exp(-abs(d)/(px*1.3));
                 }
             } else if(mode<5.5) {
-                c=mix(float3(.94,.91,.82),float3(.84,.83,.70),uv.y);
+                c=mix(float3(.945,.915,.83),float3(.84,.83,.71),uv.y);
                 float d=p.y+.5*p.x-.28;
                 c=mix(c,float3(.51,.55,.35),aa(d,px));
                 d=.50-length(p-float2(.30,-.83));
@@ -98,7 +98,7 @@ final class WallpaperShader {
                     float3 base=mix(float3(.43,.37,.46),float3(.48,.56,.44),fi*.25);
                     float face=.43+.57*pow(clamp(1.-t*t,0.,1.),.5);
                     float3 silk=base*face;
-                    silk+=float3(.14,.13,.13)*exp(-pow((t+.72)/.055,2.));
+                    silk+=float3(.13,.12,.12)*exp(-pow((t+.72)/.060,2.));
                     c*=1.-.27*exp(-max(0.,-d)/.018)*(1.-aa(d,px));
                     c=mix(c,silk,aa(d,px));
                 }

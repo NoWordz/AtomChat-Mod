@@ -96,7 +96,7 @@ class SettingsGroupIconsTest {
         }
     }
     private static String name(Path glyph)throws Exception {
-        for(var type:new Class<?>[]{com.atom.chat.ui.SettingsGroupGlyphs.class,AppIcons.class,com.atom.chat.render.DrawPrimitives.class})
+        for(var type:new Class<?>[]{com.atom.chat.ui.SettingsGroupGlyphs.class,com.atom.chat.ui.SettingsIcons.class,AppIcons.class,com.atom.chat.render.DrawPrimitives.class})
             for(var field:type.getFields())if(field.getType()==Path.class&&field.get(null)==glyph)
                 return field.getName().replace("ICON_","").replace("_PATH","");
         throw new AssertionError("unregistered glyph");

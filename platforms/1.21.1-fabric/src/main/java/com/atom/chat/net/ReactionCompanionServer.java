@@ -33,6 +33,13 @@ public final class ReactionCompanionServer {
     private static ReactionLedger ledger(MinecraftServer server) { return LEDGERS.computeIfAbsent(server, ignored -> new ReactionLedger()); }
     private static boolean available(ServerPlayerEntity receiver) { return net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking.canSend(receiver, ReactionPayloads.DataPayload.ID); }
     private static void send(ServerPlayerEntity receiver, byte[] bytes) { if (available(receiver)) { net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking.send(receiver, new ReactionPayloads.DataPayload(bytes)); } }
+    private static void sendSnapshot(ServerPlayerEntity receiver, byte[] expanded, byte[] legacy) {
+        if (net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking.canSend(receiver, ReactionPayloads.ExpandedData.ID)) {
+            net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking.send(receiver, new ReactionPayloads.ExpandedData(expanded));
+        } else {
+            send(receiver, legacy);
+        }
+    }
     private static void action(ServerPlayerEntity sender, byte[] bytes) {
         MinecraftServer server = sender.getServer();
         if (server == null || !com.atom.chat.config.AtomChatServerConfig.get().hostingEnabled) return;
@@ -47,16 +54,20 @@ public final class ReactionCompanionServer {
         ReactionWire.Snapshot snapshot = ledger.snapshot(action.id());
         if (snapshot == null) return;
         byte[] response = ReactionWire.snapshot(snapshot);
+        byte[] legacy = snapshot.entries().stream().allMatch(entry -> ReactionEmoji.legacy(entry.emoji()))
+                ? response : ReactionWire.legacySnapshot(snapshot);
         // The reacting client is included: it keeps no optimistic copy of its own
         // reaction, so this broadcast is the only thing that can make its chip
         // appear. A repeat that changed nothing goes to the sender alone.
-        if (before==snapshot.revision()) { send(sender,response); return; }
+        if (before==snapshot.revision()) { sendSnapshot(sender, response, legacy); return; }
         for (ServerPlayerEntity receiver : server.getPlayerManager().getPlayerList()) {
-            if(deliveries(server).received(action.id(),receiver.getUuid())) send(receiver, response);
+            if(deliveries(server).received(action.id(),receiver.getUuid())) sendSnapshot(receiver, response, legacy);
         }
     }
     public static void register() {
         net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking.registerGlobalReceiver(ReactionPayloads.ActionPayload.ID,
+                (payload, context) -> context.server().execute(() -> action(context.player(), payload.bytes())));
+        net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking.registerGlobalReceiver(ReactionPayloads.ExpandedAction.ID,
                 (payload, context) -> context.server().execute(() -> action(context.player(), payload.bytes())));
     }
 }

@@ -16,7 +16,9 @@ class TutorialGuideGroupingTest {
             assertFalse(e.body().contains("atomchat."),"guide must use localized production copy: "+e.body());
             assertTrue(e.lastRow()>=e.row());if(e.lastRow()>e.row())grouped++;
         }
-        assertTrue(guide.stream().filter(e->e.section()!=null).count()<=9,"one purpose per settings chip, never a narration of each group");
+        int tabs = Arrays.stream(SettingsSection.values()).mapToInt(section -> Math.max(1, page.chips(section).size())).sum();
+        assertEquals(tabs, guide.stream().filter(e -> e.section() != null).count(),
+                "one entry per settings tab");
         assertTrue(grouped>=4,"ordinary settings must advance by group, not by item");
         for(var section:SettingsSection.values())for(int chip=0;chip<Math.max(1,page.chips(section).size());chip++) {
             page.selectChip(section,chip);var copy=page.tutorialRows(section);rows+=copy.size();final int index=chip;

@@ -51,6 +51,12 @@ public final class ReactionWire {
             }
         });
     }
+    /** A 0.9.1 reader rejects an entire snapshot if one emoji is unknown. */
+    public static byte[] legacySnapshot(Snapshot snapshot) {
+        List<Entry> entries = snapshot.entries().stream().filter(entry -> ReactionEmoji.legacy(entry.emoji())).toList();
+        return snapshot(new Snapshot(snapshot.id(), snapshot.revision(), entries));
+    }
+
     public static byte[] rejection(String reason) {
         return encode(out -> { out.writeByte(2); out.writeUTF(reason); });
     }

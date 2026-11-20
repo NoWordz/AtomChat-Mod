@@ -59,6 +59,14 @@ public class AtomChatConfig {
     public boolean animationEnabled = true;
     /** QQ-style horizontal slide + fade when a message first enters the viewport. */
     public boolean messageEntryAnimation = true;
+    public boolean chatHudEnabled = true;
+    public boolean chatHudTimedExit = false;
+    public static final int CHAT_HUD_MAX_MESSAGES = 10;
+    public int chatHudMaxMessages = 5;
+
+    public int effectiveChatHudMaxMessages() {
+        return Math.max(0, Math.min(CHAT_HUD_MAX_MESSAGES, chatHudMaxMessages));
+    }
     /** Close the panel through its normal exit animation after a successful
      *  public/private/command send. Blank, blocked or image-only composer
      *  actions never reach the successful cleanup path, so they stay open.
@@ -333,6 +341,18 @@ public class AtomChatConfig {
      * one axis, three visual stops.
      */
     public float cardTint = 0.59866506F;
+
+    /** Strength of the per-card backdrop, independent of panel blur and tint. */
+    public float cardBlurStrength = 2F;
+
+    public float effectiveCardBlurStrength() {
+        return Float.isFinite(cardBlurStrength) ? Math.max(0F, Math.min(3F, cardBlurStrength)) : 2F;
+    }
+
+    public boolean needsSeparateCardBlur(boolean panelBlurDrawn) {
+        float strength = effectiveCardBlurStrength();
+        return strength > (panelBlurDrawn ? effectiveBlurStrength() : 0F);
+    }
     /** Panel outline (bezel ring) colour. */
     public int panelOutlineColor = 0xFF14161B;
     /**
@@ -412,6 +432,8 @@ public class AtomChatConfig {
     public float notificationHudOffsetY = 0;
     /** Uniform HUD-only size multiplier; the panel keeps its own geometry. */
     public float notificationHudScale = 1;
+    /** Show the shortcut bubble and its bound key in the game HUD. */
+    public boolean hudIconEnabled = true;
     /**
      * Skia banner when someone @mentions or quotes you, shared between
      * the game HUD and the open AtomChat panel with one expiry time.
@@ -689,6 +711,8 @@ public class AtomChatConfig {
                     config.bubbleStyle = config.effectiveBubbleStyle();
                     config.worldFeedFilter = config.effectiveWorldFeedFilter();
                     config.blurStrength = config.effectiveBlurStrength();
+                    config.cardBlurStrength = config.effectiveCardBlurStrength();
+                    config.chatHudMaxMessages = config.effectiveChatHudMaxMessages();
                     config.migrateOutlineWidth(hasKey(json, "panelOutlineWidth"));
                     config.migrateCornerStyle();
                     config.migratePixelRadius();

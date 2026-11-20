@@ -46,6 +46,19 @@ public final class AnimatedImage {
         return totalMs;
     }
 
+    /** Smaller raster frames preserve the original playback clock and repeat count. */
+    AnimatedImage thumbnail(int maxSide, long maxPixels) {
+        Image first = frames.get(0);
+        int largest = Math.max(first.getWidth(), first.getHeight());
+        long pixels = pixelCount();
+        if (largest <= maxSide && pixels <= maxPixels) return this;
+        int budgetSide = Math.max(1, (int) (largest * Math.sqrt(maxPixels / (double) pixels)));
+        int side = Math.min(maxSide, budgetSide);
+        var small = new java.util.ArrayList<Image>(frames.size());
+        for (Image frame : frames) small.add(ImageLoader.scaledCopy(frame, side));
+        return new AnimatedImage(small, durationsMs, repeatCount, startMs);
+    }
+
     /** Decoded pixel count across every frame, for the cache budget. */
     public long pixelCount() {
         long pixels = 0L;

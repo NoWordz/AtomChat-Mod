@@ -20,7 +20,7 @@ class PaintContextIdentityTest {
                 "platforms/1.21.1-fabric/src/main/java/com/atom/chat/render/SkiaGraphics.java")){
             String source=Files.readString(root().resolve(file));
             int identity=source.indexOf("borrowedContextIdentity.set(io.github.humbleui.skija.impl.Native.getPtr(frame.context()))");
-            int paint=source.indexOf("renderer.accept(canvas, null)");
+            int paint=source.indexOf("renderer.accept(canvas, cardWorld)");
             int expired=source.indexOf("borrowedContextIdentity.remove()");
             assertTrue(identity>=0&&identity<paint&&paint<expired,file);
         }
@@ -34,7 +34,7 @@ class PaintContextIdentityTest {
             int arrival=source.indexOf("composite.beginFrame(");
             assertTrue(arrival>=0&&arrival<rare,file+": arm this frame's interruption before testing its snapshot budget");
             int paint=source.indexOf("syncAnimationContext(graphics.contextIdentity())");
-            int draw=source.indexOf("drawPhone(canvas, worldSnapshot, mouseX, mouseY, delta)");
+            int draw=source.indexOf("drawPhone(canvas, graphics.requireSurface(), worldSnapshot, mouseX, mouseY, delta, null)");
             assertTrue(paint>=0&&paint<draw,file+": context replacement must clear pictures before replay");
             int helper=source.indexOf("private void syncAnimationContext(long contextId)");
             assertTrue(helper>=0&&source.substring(helper,helper+360).contains("composite.reset(); bottomChrome.reset();"),file);

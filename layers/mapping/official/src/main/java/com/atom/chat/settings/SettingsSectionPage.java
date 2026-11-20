@@ -51,6 +51,7 @@ import io.github.humbleui.skija.Paint;
 import io.github.humbleui.skija.PaintMode;
 import io.github.humbleui.skija.PaintStrokeCap;
 import io.github.humbleui.skija.PaintStrokeJoin;
+import io.github.humbleui.skija.PictureRecorder;
 import io.github.humbleui.skija.SamplingMode;
 import net.minecraft.network.chat.Component;
 
@@ -82,6 +83,7 @@ public final class SettingsSectionPage {
      */
     private final UiStagger.Entrance entrance = new UiStagger.Entrance();
     private static final Map<String, String> NO_ARG_TEXT = new HashMap<>();
+    private static long translationRevision;
 
     /** Arms the same item clock for navigation arrivals and local chip changes. */
     public void markEntered() {
@@ -104,7 +106,7 @@ public final class SettingsSectionPage {
     public void markSettled() {
         entrance.markSettled();
     }
-    public enum RowKind { HERO, AUTHORS, SWITCH, SLIDER, COLOR, INFO, BLOCKED, LABEL, ACTION, THEMES, BUBBLES, WALLPAPERS }
+    public enum RowKind { HERO, AUTHORS, SWITCH, SLIDER, COLOR, INFO, BLOCKED, BLOCKED_EMPTY, LABEL, ACTION, THEMES, BUBBLES, WALLPAPERS }
 
     public record Row(RowKind kind, SettingsItem item, SettingsSlider slider,
                       SettingsColor color, SettingsCatalog.InfoRow info, PlayerRef player,
@@ -203,7 +205,7 @@ public final class SettingsSectionPage {
     /** Fold-group id of the mod-info block; it shares the third-party
      *  block's merged-card language (see {@link #isAboutCardChild}). */
     private static final String GROUP_MOD_INFO = "modinfo";
-    private static final String LABEL_ADVANCED = "atomchat.settings.group.advanced";
+    private static final String LABEL_MAINTENANCE = "atomchat.settings.group.about.maintenance";
     private static final String LABEL_APPEARANCE_ADVANCED = "atomchat.settings.group.advancedcolors";
     private static final String ACTION_WALLPAPER_PICK = "wallpaper_pick";
     private static final String ACTION_WALLPAPER_CLEAR = "wallpaper_clear";
@@ -244,8 +246,8 @@ public final class SettingsSectionPage {
     }
 
     private SettingsItem hudEditItem() {
-        return new SettingsItem("hud_edit", "atomchat.settings.notify.layout",
-                "atomchat.settings.notify.layout.desc", () -> true, v -> { });
+        return new SettingsItem("hud_edit", "atomchat.settings.hud.editor",
+                "atomchat.settings.hud.editor.desc", () -> true, v -> { });
     }
 
     /** "Test sound" card: fires the notification cue right away, no message needed. */
@@ -326,14 +328,16 @@ public final class SettingsSectionPage {
     }
 
     private static final List<SectionChip> APPEARANCE_CHIPS = List.of(
-            new SectionChip("theme", "atomchat.settings.appearance.theme"),
-            new SectionChip("display", "atomchat.settings.group.display"),
-            new SectionChip("adjust", "atomchat.settings.group.adjust"));
+            new SectionChip("theme", "atomchat.settings.tab.presets"),
+            new SectionChip("material", "atomchat.settings.tab.material"),
+            new SectionChip("adjust", "atomchat.settings.tab.layout"),
+            new SectionChip("interaction", "atomchat.settings.tab.interaction"),
+            new SectionChip("colors", "atomchat.settings.tab.colors"));
     private static final List<SectionChip> CHAT_CHIPS = List.of(
             new SectionChip("messages", "atomchat.settings.group.chat.messages"),
             new SectionChip("history", "atomchat.settings.group.chat.history"),
             new SectionChip("notify", "atomchat.settings.group.chat.notify"),
-            new SectionChip("advanced", "atomchat.settings.group.chat.advanced"));
+            new SectionChip("effects", "atomchat.settings.tab.effects"));
     /** Active chip index per section id (chip-less sections never read it). */
     private final Map<String, Integer> activeChip = new HashMap<>();
 
@@ -445,7 +449,6 @@ public final class SettingsSectionPage {
         if (historyMount != null) historyMount.embedded().clear();
         setPressedRow(-1);
         setPressedChip(-1);
-        setPressedSwatch(-1, -1);
     }
 
     /** Rows of one chip by id (the crossfade's outgoing layer). */
@@ -555,8 +558,7 @@ public final class SettingsSectionPage {
     private final Map<Integer, PressScale> aboutCardPress = new HashMap<>();
     /** Row index under an active press for the bounce; -1 = none. */
     private int pressedRow = -1;
-    /** Per-swatch bounce scales, keyed by {@link #swatchKey}. */
-    private final Map<Long, PressScale> swatchScale = new HashMap<>();
+    private final Map<String, PressScale> colorPress = new HashMap<>();
     /** Row list from this frame's measure pass, reused by the immediately following draw. */
     private SettingsSection measuredRowsSection;
     private String measuredRowsChip;
@@ -566,21 +568,15 @@ public final class SettingsSectionPage {
     private List<Row> rowGroupRows;
     private String[] rowGroups;
     private RowGeometry rowGeometry;
-    /** Swatch hover/press state (row-local swatch index), -1 = none. */
-    private int hoveredSwatch = -1;
-    private int pressedSwatch = -1;
-    private int pressedSwatchRow = -1;
-    /** Index of the colour row the swatch state belongs to; -1 = none. */
-    private int swatchRowIndex = -1;
-    /** Row index being drawn this iteration (switch press attribution). */
+    private boolean colorRowHovered;
     private int drawnRowIndex = -1;
-    /** Render-time pointer, for per-control hover (the switch, swatches). */
+    /** Render-time pointer for per-control hover. */
     private float pointerX;
     private float pointerY;
     private String draggingSliderId;
     private int activeSliderIndex = -1;
     private float dragValue;
-    /** Inline numeric editor state (used by the retention days row). */
+    /** Inline numeric editor state. */
     private ContractRegistry settingsContract = SettingsContractResources.approved();
     private UiSoundSink settingsSound = new ContractSoundOutput();
     private SettingsContractMount historyMount;
@@ -625,6 +621,7 @@ public final class SettingsSectionPage {
     /** Resource reloads cover language changes and pack changes; keep no stale copy across them. */
     public static void clearTranslationCache() {
         NO_ARG_TEXT.clear();
+        translationRevision++;
     }
 
     private static String humanBytes(long bytes) {
@@ -641,7 +638,8 @@ public final class SettingsSectionPage {
     public static float rowHeight(RowKind kind) {
         return switch (kind) {
             case LABEL -> UiTokens.SETTINGS_LABEL_H;
-            case SLIDER, COLOR -> UiTokens.SETTINGS_SLIDER_ROW_H;
+            case SLIDER -> UiTokens.SETTINGS_SLIDER_ROW_H;
+            case BLOCKED_EMPTY -> s(160);
             case THEMES, WALLPAPERS -> UiTokens.SETTINGS_THEME_ROW_H;
             case BUBBLES -> UiTokens.SETTINGS_THEME_ROW_H;
             case HERO -> UiTokens.SETTINGS_HERO_H;
@@ -671,6 +669,10 @@ public final class SettingsSectionPage {
                 && rowGeometry.compactTexts().containsKey(row)) {
             return rowGeometry.compactTexts().get(row);
         }
+        return measureCompactText(row, width);
+    }
+
+    private CompactText measureCompactText(Row row, float width) {
         compactTextBuilds++;
         Font titleFont = FontManager.font(UiTokens.SETTINGS_TILE_TITLE);
         Font subFont = FontManager.font(UiTokens.SETTINGS_TILE_SUB);
@@ -707,20 +709,15 @@ public final class SettingsSectionPage {
             }
             case SLIDER -> {
                 title = tr(row.slider().titleKey());
-                reserved = SkiaFontRenderer.getStringWidth(subFont, row.slider().displayValue())
+                String value = "card_blur_strength".equals(row.slider().id()) ? "300% → 300%" : row.slider().displayValue();
+                reserved = SkiaFontRenderer.getStringWidth(subFont, value)
                         + UiTokens.SETTINGS_COMPACT_GAP;
                 controlH = UiTokens.SETTINGS_VALUE_BAND;
                 if (isInlineNumberSlider(row.slider().id())) {
-                    desc = tr("atomchat.settings.chat.history.retention.desc");
+                    desc = inlineNumberDescription(row.slider());
                     reserved = SettingsRowText.NUMBER_W+SettingsRowText.UNIT_W+UiTokens.SETTINGS_COMPACT_GAP;
                     controlH = SettingsFormField.BASE_H;
                 }
-            }
-            case COLOR -> {
-                title = tr(row.color().titleKey());
-                reserved = SkiaFontRenderer.getStringWidth(subFont, "#FFFFFF")
-                        + UiTokens.SETTINGS_VALUE_BAND;
-                controlH = UiTokens.SETTINGS_VALUE_BAND;
             }
             default -> { return null; }
         }
@@ -729,14 +726,8 @@ public final class SettingsSectionPage {
         if(!flow.stacked())return null;
         float h=UiTokens.SETTINGS_ROW_PAD*2+flow.titles().size()*flow.titleH()
                 +flow.descriptions().size()*flow.descriptionH()+controlH+UiTokens.SETTINGS_COMPACT_GAP*2;
-        // Ordinary sliders/colors retain the original separate track/swatch value band.
-        if((row.kind()==RowKind.SLIDER&&!number)||row.kind()==RowKind.COLOR)h+=UiTokens.SETTINGS_VALUE_BAND;
+        if (row.kind() == RowKind.SLIDER && !number) h += UiTokens.SETTINGS_VALUE_BAND;
         return new CompactText(flow.titles(),flow.descriptions(),flow.titleH(),flow.descriptionH(),controlH,Math.max(rowHeight(row.kind()),h));
-    }
-
-    private static int swatchColumns(UiLayout.Rect rect) {
-        return Math.max(1, (int) ((rect.w() - UiTokens.SETTINGS_ROW_PAD * 2.0F)
-                / UiTokens.SETTINGS_SWATCH_STEP));
     }
 
     private static SettingsRowText.Text compactFlow(CompactText flow) {
@@ -757,9 +748,9 @@ public final class SettingsSectionPage {
         float base = rowHeight(kind);
         if (compact != null) base = compact.height();
         if (kind == RowKind.COLOR) {
-            int columns = swatchColumns(new UiLayout.Rect(0, 0, rowCardWidth(layout), base));
-            int rows = (row.color().swatchCount() + columns) / columns;
-            return base + Math.max(0, rows - 1) * UiTokens.SETTINGS_SWATCH_STEP;
+            Font font = FontManager.font(UiTokens.SETTINGS_TILE_TITLE);
+            int lines = colorTitleLines(row.color(), font, rowCardWidth(layout)).size();
+            return Math.max(base, lines * SkiaFontRenderer.getHeight(font) + s(12));
         }
         if (compact != null) return base;
         if (kind != RowKind.SWITCH && kind != RowKind.ACTION && kind != RowKind.INFO) {
@@ -950,21 +941,6 @@ public final class SettingsSectionPage {
         }
     }
 
-    /** One chip of the chat page: the rows of that group, no group label
-     *  (the chip itself names the group). */
-    private List<Row> soundRows() {
-        List<Row> rows = new ArrayList<>();
-        addGroup(rows, "atomchat.settings.sounds.notification", () -> {
-            addSwitches(rows, SettingsSection.CHAT, "notification", "mention_sound", "whisper_sound");
-            addSliders(rows, SettingsSection.CHAT, "notify_volume");
-            rows.add(Row.ofAction(ACTION_TEST_SOUND, testSoundItem()));
-        });
-        addGroup(rows, "atomchat.settings.sounds.feedback", () -> {
-            addSwitches(rows, SettingsSection.CHAT, "feedback", "feedback_button", "feedback_send", "feedback_panel");
-            addSliders(rows, SettingsSection.CHAT, "feedback_volume");
-        });
-        return rows;
-    }
     private List<Row> historyRows() {
         List<Row> rows = new ArrayList<>();
         addHistoryRows(rows);
@@ -985,62 +961,90 @@ public final class SettingsSectionPage {
         switch (chip == null ? "messages" : chip) {
             case "history" -> addHistoryRows(rows);
             case "notify" -> {
-                addGroup(rows, "atomchat.settings.group.notify.banner", () -> {
-                    addSwitches(rows, SettingsSection.CHAT, "mention_banner", "whisper_banner");
-                    rows.add(Row.ofAction(ACTION_HUD_EDIT, hudEditItem()));
-                });
-                addGroup(rows, "atomchat.settings.sounds.notification", () -> {
-                    addSwitches(rows, SettingsSection.CHAT,
-                            "notification", "mention_sound", "whisper_sound");
+                addGroup(rows, "atomchat.settings.group.notify.mentions", () ->
+                        addSwitches(rows, SettingsSection.CHAT, "mention_banner", "mention_sound"));
+                addGroup(rows, "atomchat.settings.group.notify.whispers", () ->
+                        addSwitches(rows, SettingsSection.CHAT, "whisper_banner", "whisper_sound"));
+                addGroup(rows, "atomchat.settings.group.notify.audio", () -> {
+                    addSwitches(rows, SettingsSection.CHAT, "notification");
                     addSliders(rows, SettingsSection.CHAT, "notify_volume");
                     rows.add(Row.ofAction(ACTION_TEST_SOUND, testSoundItem()));
                 });
-                addGroup(rows, "atomchat.settings.group.notify.feedback", () -> {
-                    addSwitches(rows, SettingsSection.CHAT,
-                            "feedback", "feedback_button", "feedback_send", "feedback_panel");
-                    addSliders(rows, SettingsSection.CHAT, "feedback_volume");
-                });
             }
-            case "advanced" -> {
-                addGroup(rows, "atomchat.settings.group.chat.shortcuts",
-                        () -> rows.add(Row.ofAction(ACTION_TELEPORT_MODE, teleportModeItem())));
+            case "effects" -> {
                 addGroup(rows, "atomchat.settings.group.chat.fun",
                         () -> addSwitches(rows, SettingsSection.CHAT, "fun_effects"));
                 addGroup(rows, "atomchat.settings.group.chat.experimental",
                         () -> addSwitches(rows, SettingsSection.CHAT, "experimental_effects"));
             }
             default -> {
+                addSwitches(rows, SettingsSection.CHAT, "enabled");
+                addGroup(rows, "atomchat.settings.group.chat.hud", () -> {
+                    addSwitches(rows, SettingsSection.CHAT, "chat_hud");
+                    addSliders(rows, SettingsSection.CHAT, "chat_hud_max_messages");
+                    addSwitches(rows, SettingsSection.CHAT, "chat_hud_timed_exit");
+                });
                 addGroup(rows, "atomchat.settings.group.chat.input", () ->
-                        addSwitches(rows, SettingsSection.CHAT,
-                                "enabled", "close_after_send", "retain_draft_on_close"));
+                        addSwitches(rows, SettingsSection.CHAT, "close_after_send", "retain_draft_on_close"));
                 addGroup(rows, "atomchat.settings.group.chat.messages_display", () -> {
                     rows.add(Row.ofAction(ACTION_AVATAR_STYLE, avatarStyleItem()));
-                    addSwitches(rows, SettingsSection.CHAT,
-                            "images", "anti_spam", "compact_messages");
+                    addSwitches(rows, SettingsSection.CHAT, "compact_messages");
                     addSliders(rows, SettingsSection.CHAT, "timestamp");
                 });
-                addGroup(rows, "atomchat.settings.group.chat.interaction", () ->
-                        addSwitches(rows, SettingsSection.CHAT, "entry", "poke"));
+                addGroup(rows, "atomchat.settings.group.chat.content", () ->
+                        addSwitches(rows, SettingsSection.CHAT, "images", "anti_spam"));
             }
         }
         return rows;
     }
 
-    /** One chip of the appearance page. The theme chip carries the preview
-     *  strip, the corner knob and the folded colour palette; display holds the
-     *  chrome switches plus the wallpaper cards; adjust the five sliders. */
     private List<Row> appearanceRows(String chip) {
         List<Row> rows = new ArrayList<>();
         switch (chip == null ? "theme" : chip) {
-            case "display" -> {
-                addGroup(rows, "atomchat.settings.group.appearance.effects", () -> {
+            case "material" -> {
+                addGroup(rows, "atomchat.settings.group.appearance.panel_background", () -> {
                     addSwitches(rows, SettingsSection.APPEARANCE, "blur");
-                    addSliders(rows, SettingsSection.APPEARANCE, "blur_strength", "outline_width");
+                    addSliders(rows, SettingsSection.APPEARANCE, "blur_strength", "opacity");
                 });
+                addGroup(rows, "atomchat.settings.group.appearance.cards", () ->
+                        addSliders(rows, SettingsSection.APPEARANCE, "card_blur_strength", "cardtint"));
+                addGroup(rows, "atomchat.settings.group.appearance.corners", () ->
+                        addSliders(rows, SettingsSection.APPEARANCE, "outline_width", "corner_radius"));
+            }
+            case "adjust" -> {
+                addGroup(rows, "atomchat.settings.group.appearance.panel_layout", () ->
+                        rows.add(Row.ofAction("panel_edit", panelEditItem())));
+                addGroup(rows, "atomchat.settings.group.appearance.hud", () -> {
+                    rows.add(Row.ofAction(ACTION_HUD_EDIT, hudEditItem()));
+                    addSwitches(rows, SettingsSection.APPEARANCE, "hud_icon");
+                });
+                addGroup(rows, "atomchat.settings.group.appearance.layout", () -> {
+                    addSwitches(rows, SettingsSection.APPEARANCE, "half_screen");
+                    addSliders(rows, SettingsSection.APPEARANCE, "width", "height", "scale", "contentscale");
+                });
+            }
+            case "interaction" -> {
                 addGroup(rows, "atomchat.settings.group.appearance.motion", () -> {
                     addSwitches(rows, SettingsSection.APPEARANCE, "motion");
                     rows.add(Row.ofAction(ACTION_PAGE_NAV_STYLE, pageNavStyleItem()));
+                    addSwitches(rows, SettingsSection.CHAT, "entry");
                 });
+                addGroup(rows, "atomchat.settings.group.interaction.feedback", () -> {
+                    addSwitches(rows, SettingsSection.CHAT, "feedback", "feedback_button", "feedback_send", "feedback_panel");
+                    addSliders(rows, SettingsSection.CHAT, "feedback_volume");
+                });
+                addGroup(rows, "atomchat.settings.group.chat.shortcuts", () -> {
+                    addSwitches(rows, SettingsSection.CHAT, "poke");
+                    rows.add(Row.ofAction(ACTION_TELEPORT_MODE, teleportModeItem()));
+                });
+            }
+            case "colors" -> {
+                addColorGroup(rows, "atomchat.settings.group.appearance.message_colors", "bubble");
+                addColorGroup(rows, "atomchat.settings.group.appearance.ui_colors", "ui");
+            }
+            default -> {
+                addGroup(rows, "atomchat.settings.group.appearance.presets", () -> rows.add(Row.ofThemes()));
+                addGroup(rows, "atomchat.settings.group.appearance.bubbles", () -> rows.add(Row.ofBubbles()));
                 addGroup(rows, "atomchat.settings.group.appearance.wallpaper", () -> {
                     rows.add(new Row(RowKind.WALLPAPERS, null, null, null, null, null, null, null, null, null));
                     rows.add(Row.ofAction(ACTION_WALLPAPER_PICK, wallpaperPickItem()));
@@ -1049,46 +1053,30 @@ public final class SettingsSectionPage {
                     }
                 });
             }
-            case "adjust" -> {
-                addGroup(rows, "atomchat.settings.group.appearance.layout", () -> {
-                    rows.add(Row.ofAction("panel_edit", panelEditItem()));
-                    addSwitches(rows, SettingsSection.APPEARANCE, "half_screen");
-                    addSliders(rows, SettingsSection.APPEARANCE,
-                            "width", "height", "scale", "contentscale");
-                });
-                addGroup(rows, "atomchat.settings.group.appearance.transparency", () ->
-                        addSliders(rows, SettingsSection.APPEARANCE,
-                                "opacity", "cardtint"));
-            }
-            default -> {
-                // Theme strip first - one tap to a whole new look.
-                addGroup(rows, "atomchat.settings.group.appearance.presets",
-                        () -> rows.add(Row.ofThemes()));
-                addGroup(rows, "atomchat.settings.group.appearance.bubbles",
-                        () -> rows.add(Row.ofBubbles()));
-                addGroup(rows, "atomchat.settings.group.appearance.corners",
-                        () -> addSliders(rows, SettingsSection.APPEARANCE, "corner_radius"));
-                addGroup(rows, "atomchat.settings.group.appearance.message_colors", () -> {
-                    for (SettingsColor color : SettingsCatalog.colors(SettingsSection.APPEARANCE)) {
-                        if ("bubble".equals(color.group())) rows.add(Row.ofColor(color));
-                    }
-                });
-                addGroup(rows, "atomchat.settings.group.appearance.ui_colors", () -> {
-                    for (SettingsColor color : SettingsCatalog.colors(SettingsSection.APPEARANCE)) {
-                        if ("ui".equals(color.group())) rows.add(Row.ofColor(color));
-                    }
-                });
-            }
         }
         return rows;
     }
 
+    private void addColorGroup(List<Row> rows, String heading, String group) {
+        addGroup(rows, heading, () -> {
+            for (SettingsColor color : SettingsCatalog.colors(SettingsSection.APPEARANCE)) {
+                if (group.equals(color.group())) rows.add(Row.ofColor(color));
+            }
+        });
+    }
+
     private List<Row> privacyRows() {
         List<Row> rows = new ArrayList<>();
+        addGroup(rows, "atomchat.settings.group.privacy.sync", () ->
+                addSwitches(rows, SettingsSection.PRIVACY, "server_packs"));
         addGroup(rows, "atomchat.settings.group.privacy.messages", () ->
                 addSwitches(rows, SettingsSection.PRIVACY, "hideBlocked"));
         addGroup(rows, "atomchat.settings.group.privacy.blocked", () -> {
-            for (PlayerRef player : blockedPlayers()) {
+            List<PlayerRef> players = blockedPlayers();
+            if (players.isEmpty()) {
+                rows.add(new Row(RowKind.BLOCKED_EMPTY, null, null, null, null, null, null, null, null, null));
+            }
+            for (PlayerRef player : players) {
                 rows.add(Row.ofBlocked(player));
             }
         });
@@ -1111,7 +1099,7 @@ public final class SettingsSectionPage {
                 rows.add(Row.ofInfo(info));
             }
         });
-        addGroup(rows, LABEL_ADVANCED, () -> {
+        addGroup(rows, LABEL_MAINTENANCE, () -> {
             rows.add(Row.ofAction(ACTION_CACHE_CLEAR, cacheClearItem()));
             addSwitches(rows, SettingsSection.ABOUT, "debug");
         });
@@ -1228,8 +1216,9 @@ public final class SettingsSectionPage {
      * consumer.
      */
     private boolean isAboutCardChild(List<Row> rows, int index) {
-        // AUTHORS draws two independent cards; its fold group owns visibility only.
-        return rows.get(index).kind() != RowKind.AUTHORS && owningGroup(rows, index) != null;
+        // These rows paint their own content while their heading still controls folding.
+        RowKind kind = rows.get(index).kind();
+        return kind != RowKind.AUTHORS && kind != RowKind.BLOCKED_EMPTY && owningGroup(rows, index) != null;
     }
 
     private float rowAdvance(List<Row> rows, int index, UiLayout layout) {
@@ -1249,24 +1238,100 @@ public final class SettingsSectionPage {
         return rowHeight(rows.get(index), layout) * expansion + gap;
     }
 
+    private AppearanceMeasurement appearanceMeasurement;
+
+    private static final class AppearanceMeasurement {
+        private final List<Row> rows;
+        private final float width;
+        private final java.util.Set<String> collapsed;
+        private final Font titleFont;
+        private final Font subtitleFont;
+        private final long languageRevision;
+        private final boolean hasWallpaper;
+        private final IdentityHashMap<Row, CompactText> text = new IdentityHashMap<>();
+        private int nextRow;
+        private boolean themePreviewsPending;
+
+        private AppearanceMeasurement(List<Row> rows, float width, java.util.Set<String> collapsed,
+                                      Font titleFont, Font subtitleFont, long languageRevision, boolean hasWallpaper) {
+            this.rows = rows;
+            this.width = width;
+            this.collapsed = java.util.Set.copyOf(collapsed);
+            this.titleFont = titleFont;
+            this.subtitleFont = subtitleFont;
+            this.languageRevision = languageRevision;
+            this.hasWallpaper = hasWallpaper;
+            this.themePreviewsPending = rows.stream().anyMatch(row -> row.kind() == RowKind.THEMES);
+        }
+    }
+
+    private AppearanceMeasurement appearanceMeasurement(UiLayout layout) {
+        if (!"theme".equals(activeChipId(SettingsSection.APPEARANCE))) return null;
+        for (var fold : groupExpansion.entrySet()) {
+            if (fold.getValue() != (collapsedColorGroups.contains(fold.getKey()) ? 0F : 1F)) return null;
+        }
+        boolean hasWallpaper = WallpaperStore.isSet();
+        float width = rowCardWidth(layout);
+        Font title = FontManager.font(UiTokens.SETTINGS_TILE_TITLE);
+        Font subtitle = FontManager.font(UiTokens.SETTINGS_TILE_SUB);
+        AppearanceMeasurement measurement = appearanceMeasurement;
+        if (measurement == null || measurement.width != width || measurement.titleFont != title
+                || measurement.subtitleFont != subtitle || measurement.languageRevision != translationRevision
+                || measurement.hasWallpaper != hasWallpaper
+                || !measurement.collapsed.equals(collapsedColorGroups)) {
+            measurement = new AppearanceMeasurement(rows(SettingsSection.APPEARANCE), width,
+                    collapsedColorGroups, title, subtitle, translationRevision, hasWallpaper);
+            appearanceMeasurement = measurement;
+        }
+        return measurement;
+    }
+
+    /** Prepare one row per settled settings-home frame, including the cold theme preview paint. */
+    public void warmAppearanceTheme(UiLayout layout) {
+        AppearanceMeasurement measurement = appearanceMeasurement(layout);
+        if (measurement == null) return;
+        boolean textComplete = measurement.nextRow == measurement.rows.size();
+        // Measuring the page may finish the text work before a preview is ever painted.
+        if (measurement.themePreviewsPending && (textComplete
+                || measurement.rows.get(measurement.nextRow).kind() == RowKind.THEMES)) {
+            warmThemePreviews(measurement.width);
+            measurement.themePreviewsPending = false;
+            return;
+        }
+        if (textComplete) return;
+        Row row = measurement.rows.get(measurement.nextRow++);
+        if (row.kind() != RowKind.SLIDER) {
+            measurement.text.put(row, measureCompactText(row, measurement.width));
+        }
+    }
+
     private RowGeometry buildRowGeometry(SettingsSection section, List<Row> rows,
                                          UiLayout layout) {
         float width = rowCardWidth(layout);
         String[] groups = rowGroups(rows);
-        float[] tops = new float[rows.size()];
-        float[] heights = new float[rows.size()];
         IdentityHashMap<Row, CompactText> compactTexts = new IdentityHashMap<>();
+        AppearanceMeasurement prepared = appearanceMeasurement;
+        boolean preparedRows = prepared != null && prepared.rows == rows;
         float[] full = new float[rows.size()];
-        for(int i=0;i<rows.size();i++){
-            Row row=rows.get(i);CompactText compact=compactText(row,width);compactTexts.put(row,compact);
-            full[i]=rowHeight(row,layout,compact);
+        for (int i = 0; i < rows.size(); i++) {
+            Row row = rows.get(i);
+            CompactText compact = preparedRows && prepared.text.containsKey(row)
+                    ? prepared.text.get(row) : measureCompactText(row, width);
+            compactTexts.put(row, compact);
+            full[i] = rowHeight(row, layout, compact);
+        }
+        if (preparedRows) {
+            compactTexts.forEach((row, text) -> {
+                if (row.kind() != RowKind.SLIDER) prepared.text.put(row, text);
+            });
+            prepared.nextRow = rows.size();
         }
         var slots=section==SettingsSection.CHAT&&"history".equals(activeChipId(section))
                 ?contractLayout.layout(width,full,groups,this::expansionOf).slots()
                 :SettingsGroupFrontend.layout(full,groups,this::expansionOf);
-        tops=slots.tops();heights=slots.heights();float contentHeight=slots.contentHeight();
+        float contentHeight = slots.contentHeight();
         RowGeometry geometry = new RowGeometry(rows, section, layout.list.x(), layout.list.y(),
-                layout.list.w(), width, tops, heights, contentHeight, compactTexts);
+                layout.list.w(), width, slots.tops(), slots.heights(), contentHeight, compactTexts);
         rowGeometry = geometry;
         return geometry;
     }
@@ -1283,7 +1348,8 @@ public final class SettingsSectionPage {
     }
 
     public float measureContent(UiLayout layout, SettingsSection section) {
-        List<Row> rows = rows(section);
+        AppearanceMeasurement prepared = section == SettingsSection.APPEARANCE ? appearanceMeasurement(layout) : null;
+        List<Row> rows = prepared == null ? rows(section) : prepared.rows;
         measuredRowsSection = section;
         measuredRowsChip = activeChipId(section);
         measuredRows = rows;
@@ -1472,9 +1538,6 @@ public final class SettingsSectionPage {
         hoveredIndex = hovered;
         SettingsGroupFrontend.stepHover(rowHover,hovered>=0?hovered:null,dt);
 
-        if (section == SettingsSection.PRIVACY && blockedPlayers().isEmpty()) {
-            drawEmptyBlocked(canvas, layout, section, rows, scrollY);
-        }
         advanceSettle(now);
     }
 
@@ -1496,6 +1559,7 @@ public final class SettingsSectionPage {
         // One axis for the whole pass: every row of this frame plays the same
         // style's motion, so the mapping cannot change mid-list.
         UiStagger.Axis axis = PageNavAxis.current();
+        boolean skipTransparentPaint = section == SettingsSection.APPEARANCE;
         Font buttonFont = FontManager.font(UiTokens.FONT_QUOTE);
         int hovered = -1;
         canvas.save();
@@ -1528,11 +1592,17 @@ public final class SettingsSectionPage {
                             cardFirst.w(), cardLast.bottom() - cardFirst.y());
                     var cardMotion=SettingsGroupFrontend.motion(cardBounds,entrance,staggerIndex,now,axis);
                     staggerHits.add(cardBounds,cardMotion.dx(),cardMotion.dy(),cardMotion.scale());
-                    final int previousHovered=hovered;
-                    final int cardStart=i,cardEnd=end;
-                    hovered=SettingsGroupFrontend.stagger(canvas,cardBounds,
-                            cardMotion,
-                            ()->drawAboutCard(canvas,layout,section,rows,cardStart,cardEnd,scrollY,vmx,vmy,buttonFont,accent,dt,interactive,previousHovered));
+                    // An appearance preview starts work only once its stagger can display it.
+                    // Keep the same hit transform and slot even on an invisible frame.
+                    if (skipTransparentPaint && cardMotion.alpha() == 0F) {
+                        updateHiddenPreviewStrips(section, rows, i, end, cardBounds, layout, scrollY);
+                    } else {
+                        final int previousHovered=hovered;
+                        final int cardStart=i,cardEnd=end;
+                        hovered=SettingsGroupFrontend.stagger(canvas,cardBounds,
+                                cardMotion,
+                                ()->drawAboutCard(canvas,layout,section,rows,cardStart,cardEnd,scrollY,vmx,vmy,buttonFont,accent,dt,interactive,previousHovered));
+                    }
                     staggerIndex++;
                     i = end - 1; // the loop's own i++ lands past the card
                     continue;
@@ -1556,21 +1626,14 @@ public final class SettingsSectionPage {
                 // heading is not clickable, so it must not answer the pointer.
                 boolean over = interactive
                         && row.kind() != RowKind.AUTHORS
+                        && row.kind() != RowKind.BLOCKED_EMPTY
                         && (row.kind() != RowKind.LABEL || foldableGroup(row.labelKey()) != null)
                         && vmx >= rect.x() && vmx <= rect.right()
                         && vmy >= rect.y() && vmy <= rect.bottom();
                 if (over) {
                     hovered = i;
                 }
-                // Colour rows resolve the pointer to a row-local swatch index
-                // so drawColor can bounce the one under it (-1 = none).
-                if (row.kind() == RowKind.COLOR) {
-                    hoveredSwatch = interactive ? swatchAt(row.color(), rect, vmx, vmy) : -1;
-                    swatchRowIndex = interactive ? i : -1;
-                } else {
-                    hoveredSwatch = -1;
-                    swatchRowIndex = -1;
-                }
+                colorRowHovered = over && row.kind() == RowKind.COLOR;
                 // Draw from the animated value only. Never force it to 1 while
                 // hovered — that is what made the highlight snap in instead of
                 // fading in over the same 90ms the toolbar buttons use.
@@ -1590,23 +1653,24 @@ public final class SettingsSectionPage {
                 if (press != null && interactive) {
                     press.update(i == hovered, i == pressedRow, dt, Animations.enabled(), rect.w());
                 }
+                float rowAlpha = UiStagger.itemAlpha(entrance, staggerIndex, now);
+                float rowRise = UiStagger.itemRise(entrance, staggerIndex, now, axis);
+                float rowDx = styleDriftDx(axis, staggerIndex, now);
+                float combinedAlpha = expansion * rowAlpha;
+                float combinedRise = UiTokens.SETTINGS_FOLD_LIFT * (1.0F - expansion) + rowRise;
+                staggerHits.add(rect, rowDx, combinedRise,
+                        UiStagger.itemStyleZoomScale(entrance, staggerIndex, now, axis));
+                if (skipTransparentPaint && combinedAlpha == 0F) {
+                    staggerIndex++;
+                    continue;
+                }
+
                 canvas.save();
                 Paint foldFade = null;
                 try {
                     // The page entrance and the fold share one layer: either can
                     // be at full weight and the row still fades once, and the
                     // rise is a single translate.
-                    float rowAlpha = UiStagger.itemAlpha(entrance, staggerIndex, now);
-                    float rowRise = UiStagger.itemRise(entrance, staggerIndex, now, axis);
-                    // The style channel rides the SAME item progress: SLIDE drifts
-                    // the row in from the right, ZOOM settles it from 0.97, so a
-                    // section arrival differs visibly under the two global styles
-                    // while a SLIDE row never also rises.
-                    float rowDx = styleDriftDx(axis, staggerIndex, now);
-                    float combinedAlpha = expansion * rowAlpha;
-                    float combinedRise = UiTokens.SETTINGS_FOLD_LIFT * (1.0F - expansion) + rowRise;
-                    staggerHits.add(rect, rowDx, combinedRise,
-                            UiStagger.itemStyleZoomScale(entrance, staggerIndex, now, axis));
                     if (combinedAlpha < 0.995F) {
                         // The padded saveLayer keeps press overshoot and shadow
                         // tail inside the fade instead of punching through at
@@ -1625,10 +1689,13 @@ public final class SettingsSectionPage {
                     if (press != null) {
                         press.begin(canvas, rect.x() + rect.w() / 2.0F, rect.y() + rect.h() / 2.0F);
                     }
+                    float maskOpacity = com.atom.chat.render.CardBackdrop.pushMaskOpacity(
+                            combinedAlpha < .995F ? combinedAlpha : 1F);
                     try {
                         drawRow(canvas, row, rect, rowHover.getOrDefault(i, 0.0F),
                                 buttonFont, accent, dt);
                     } finally {
+                        com.atom.chat.render.CardBackdrop.restoreMaskOpacity(maskOpacity);
                         if (press != null) {
                             canvas.restore();
                         }
@@ -1696,25 +1763,13 @@ public final class SettingsSectionPage {
         }
     }
 
-    private void drawEmptyBlocked(Canvas canvas, UiLayout layout, SettingsSection section,
-                                  List<Row> rows, float scrollY) {
-        UiLayout.Rect last = rowRect(section, rows, rows.size() - 1, scrollY, layout);
-        float top = last.bottom() + s(10);
-        float height = Math.min(s(160), layout.list.bottom() - top);
-        if (height <= 0.0F) {
-            return;
-        }
-        drawEmptyState(canvas, new UiLayout.Rect(layout.list.x(), top, layout.list.w(), height),
-                "atomchat.settings.privacy.empty");
-    }
-
     private void drawRow(Canvas canvas, Row row, UiLayout.Rect rect, float hover,
                          Font buttonFont, int accent, float dtMs) {
         if (row.kind() == RowKind.LABEL) {
             drawLabel(canvas, row, rect);
             return;
         }
-        if (row.kind() != RowKind.HERO && row.kind() != RowKind.AUTHORS) {
+        if (row.kind() != RowKind.HERO && row.kind() != RowKind.AUTHORS && row.kind() != RowKind.BLOCKED_EMPTY) {
             AtomChatAppearance.drawCard(canvas, rect.x(), rect.y(), rect.w(), rect.h(),
                     UiTokens.settingsRowRadius(AtomChatAppearance.theme()), hover);
         }
@@ -1743,6 +1798,7 @@ public final class SettingsSectionPage {
             case BUBBLES -> drawBubblePreviews(canvas, rect, dtMs);
             case INFO -> drawInfo(canvas, row, rect);
             case BLOCKED -> drawBlocked(canvas, row, rect, hover, buttonFont);
+            case BLOCKED_EMPTY -> drawEmptyState(canvas, rect, "atomchat.settings.privacy.empty");
             case ACTION -> drawAction(canvas, row, rect, hover);
             default -> {
             }
@@ -1828,14 +1884,7 @@ public final class SettingsSectionPage {
                         if (interactive) {
                             drawnRowIndex = j;
                         }
-                        if (row.kind() == RowKind.COLOR) {
-                            hoveredSwatch = interactive
-                                    ? swatchAt(row.color(), rect, vmx, vmy) : -1;
-                            swatchRowIndex = interactive ? j : -1;
-                        } else {
-                            hoveredSwatch = -1;
-                            swatchRowIndex = -1;
-                        }
+                        colorRowHovered = over && row.kind() == RowKind.COLOR;
                         float rowAlpha = rowHover.getOrDefault(j, 0.0F);
                         if (rowAlpha > 0.01F) {
                             SkiaDraw.drawRoundedRect(canvas, rect.x(), rect.y(),
@@ -1855,11 +1904,6 @@ public final class SettingsSectionPage {
         });
     }
 
-    /** Map key for a per-swatch bounce spring: row index << 32 | swatch. */
-    private static long swatchKey(int rowIndex, int swatchIndex) {
-        return (long) rowIndex << 32 | swatchIndex;
-    }
-
     /** Arms the row press bounce (mouse-down) or clears it (-1 on release). */
     public void setPressedRow(int index) {
         pressedRow = index;
@@ -1870,38 +1914,19 @@ public final class SettingsSectionPage {
         pressedChip = index;
     }
 
-    /** Arms the colour-swatch press bounce or clears it (-1 on release). */
-    public void setPressedSwatch(int rowIndex, int swatchIndex) {
-        pressedSwatchRow = rowIndex;
-        pressedSwatch = swatchIndex;
+    private static float colorControlSize() {
+        return s(28);
     }
 
-
-    /**
-     * Row-local swatch index under the pointer, or -1. Geometry mirrors
-     * {@link #colorHit}: same strip centre, same r+s(4) slop.
-     */
-    private int swatchAt(SettingsColor color, UiLayout.Rect rect, float vmx, float vmy) {
-        if (!rect.contains(vmx, vmy)) return -1;
-        float radius = UiTokens.SETTINGS_SWATCH_RADIUS + UiTokens.SETTINGS_COMPACT_GAP;
-        for (int i = 0; i <= color.swatchCount(); i++) {
-            if (Math.abs(vmx - swatchX(rect, i)) <= radius
-                    && Math.abs(vmy - swatchCy(rect, i, color.swatchCount() + 1)) <= radius) return i;
-        }
-        return -1;
+    private static UiLayout.Rect colorControl(UiLayout.Rect row) {
+        float size = colorControlSize();
+        return new UiLayout.Rect(row.right() - UiTokens.SETTINGS_ROW_PAD - size,
+                row.y() + (row.h() - size) / 2F, size, size);
     }
 
-    /** Swatch strip geometry: centre Y within the row and the X step. */
-    private static float swatchCy(UiLayout.Rect rect, int index, int count) {
-        int columns = swatchColumns(rect);
-        int rows = (count + columns - 1) / columns;
-        return rect.bottom() - UiTokens.SETTINGS_SWATCH_BOTTOM
-                - (rows - 1 - index / columns) * UiTokens.SETTINGS_SWATCH_STEP;
-    }
-
-    private static float swatchX(UiLayout.Rect rect, int index) {
-        return rect.x() + UiTokens.SETTINGS_ROW_PAD + UiTokens.SETTINGS_SWATCH_RADIUS
-                + (index % swatchColumns(rect)) * UiTokens.SETTINGS_SWATCH_STEP;
+    private List<String> colorTitleLines(SettingsColor color, Font font, float width) {
+        float available = width - 2 * UiTokens.SETTINGS_ROW_PAD - colorControlSize() - UiTokens.SETTINGS_COMPACT_GAP;
+        return SkiaFontRenderer.wrapWords(font, tr(color.titleKey()), Math.max(1F, available));
     }
 
     // ---------------------------------------------------------------- themes
@@ -2161,6 +2186,31 @@ public final class SettingsSectionPage {
         }
     }
 
+    private void updatePreviewStrip(CardStrip strip, UiLayout.Rect rect) {
+        advanceStrip(strip, rect);
+        strip.rect = rect;
+        if (strip == themeStrip && revealLatestPresetPending) {
+            themeStrip.target = themeStrip.scroll = stripMaxScroll(themeStrip, rect);
+            themeStrip.animActive = false;
+            revealLatestPresetPending = false;
+        }
+    }
+
+    private void updateHiddenPreviewStrips(SettingsSection section, List<Row> rows, int first, int end,
+                                           UiLayout.Rect card, UiLayout layout, float scrollY) {
+        if (card.bottom() < layout.list.y() || card.y() > layout.list.bottom()
+                || rowExpansion(rows, first) < GROUP_FOLD_MIN_DRAWN) return;
+        for (int i = first; i < end; i++) {
+            CardStrip strip = switch (rows.get(i).kind()) {
+                case THEMES -> themeStrip;
+                case BUBBLES -> bubbleStrip;
+                case WALLPAPERS -> wallpaperStrip;
+                default -> null;
+            };
+            if (strip != null) updatePreviewStrip(strip, rowRect(section, rows, i, scrollY, layout));
+        }
+    }
+
     /**
      * Theme strip: title + current-preset name on the caption line, then the
      * horizontally scrollable preview cards - Default (drawn with the factory
@@ -2169,12 +2219,11 @@ public final class SettingsSectionPage {
      * hairline and the whole strip scrolls by wheel or drag.
      */
     private void drawWallpapers(Canvas canvas, UiLayout.Rect row, float dtMs) {
-        advanceStrip(wallpaperStrip, row);
-        wallpaperStrip.rect = row;
+        updatePreviewStrip(wallpaperStrip, row);
         wallpaperStrip.hoveredCard = stripCardAt(wallpaperStrip, row, pointerX, pointerY);
         Font title = FontManager.font(UiTokens.SETTINGS_TILE_TITLE);
         Font value = FontManager.font(UiTokens.SETTINGS_TILE_SUB);
-        SkiaFontRenderer.drawText(canvas, title, tr("atomchat.settings.wallpaper.presets"),
+        SkiaFontRenderer.drawText(canvas, title, tr("atomchat.settings.wallpaper.current"),
                 row.x() + UiTokens.SETTINGS_ROW_PAD,
                 SkiaFontRenderer.centerBaselineY(title, row.y() + WallpaperTokens.CAPTION_Y), textPrimary());
         String selected = com.atom.chat.wallpaper.WallpaperPresets.selectedId();
@@ -2204,8 +2253,7 @@ public final class SettingsSectionPage {
     }
 
     private void drawBubblePreviews(Canvas canvas, UiLayout.Rect row, float dtMs) {
-        advanceStrip(bubbleStrip, row);
-        bubbleStrip.rect = row;
+        updatePreviewStrip(bubbleStrip, row);
         bubbleStrip.hoveredCard = stripCardAt(bubbleStrip, row, pointerX, pointerY);
         AtomChatConfig cfg = AtomChatConfig.get();
         var preview = previewOf(AppearancePresetStore.Snapshot.capture(cfg));
@@ -2238,17 +2286,29 @@ public final class SettingsSectionPage {
     }
 
     private void drawThemes(Canvas canvas, UiLayout.Rect rect, float dtMs) {
-        advanceStrip(themeStrip, rect);
-        themeStrip.rect = rect;
-        if (revealLatestPresetPending) {
-            themeStrip.target = themeStrip.scroll = stripMaxScroll(themeStrip, rect);
-            themeStrip.animActive = false;
-            revealLatestPresetPending = false;
-        }
+        updatePreviewStrip(themeStrip, rect);
         themeStrip.hoveredCard = stripCardAt(themeStrip, rect, pointerX, pointerY);
+        drawThemePreviews(canvas, themeStrip, rect, dtMs);
+        if (appearanceMeasurement != null && appearanceMeasurement.width == rect.w()) {
+            appearanceMeasurement.themePreviewsPending = false;
+        }
+    }
+
+    private void warmThemePreviews(float width) {
+        float height = rowHeight(RowKind.THEMES);
+        // Recording initializes the same fonts and paint paths without replaying on the GPU.
+        try (PictureRecorder recorder = new PictureRecorder()) {
+            Canvas canvas = recorder.beginRecording(Rect.makeWH(width, height));
+            drawThemePreviews(canvas, new CardStrip(RowKind.THEMES), new UiLayout.Rect(0, 0, width, height), 0F);
+            recorder.finishRecordingAsPicture().close();
+        }
+    }
+
+    private void drawThemePreviews(Canvas canvas, CardStrip strip, UiLayout.Rect rect, float dtMs) {
         Font titleFont = FontManager.font(UiTokens.SETTINGS_TILE_TITLE);
         Font valueFont = FontManager.font(UiTokens.SETTINGS_TILE_SUB);
-        String currentId = AtomChatConfig.get().themeName;
+        AtomChatConfig config = AtomChatConfig.get();
+        String currentId = config.themeName;
         if (currentId == null) {
             currentId = "";
         }
@@ -2261,11 +2321,13 @@ public final class SettingsSectionPage {
         String currentName;
         List<AppearancePresetStore.Preset> custom = AppearancePresetStore.get().list();
         AppearancePresetStore.Preset matchingCustom = null;
-        AppearancePresetStore.Snapshot live = AppearancePresetStore.Snapshot.capture(AtomChatConfig.get());
-        for (AppearancePresetStore.Preset preset : custom) {
-            if (preset.snapshot().equals(live)) {
-                matchingCustom = preset;
-                break;
+        if (!custom.isEmpty()) {
+            AppearancePresetStore.Snapshot live = AppearancePresetStore.Snapshot.capture(config);
+            for (AppearancePresetStore.Preset preset : custom) {
+                if (preset.snapshot().equals(live)) {
+                    matchingCustom = preset;
+                    break;
+                }
             }
         }
         if (currentId.isEmpty() || ThemeService.FROSTED.equals(currentId)) {
@@ -2290,21 +2352,23 @@ public final class SettingsSectionPage {
                     UiTokens.THEME_CARD_H + s(30), UiTokens.radius(6, AtomChatAppearance.theme()));
             boolean frostedActive = matchingCustom == null
                     && (currentId.isEmpty() || ThemeService.FROSTED.equals(currentId));
-            drawThemeCard(canvas, rect, 0, ThemeService.previewOf(ThemeService.FROSTED),
-                    tr("atomchat.settings.theme.frosted"), frostedActive, false, AtomChatConfig.get().effectiveBubbleStyle(), dtMs);
+            AtomChatConfig.BubbleStyle bubbleStyle = config.effectiveBubbleStyle();
+            drawPreviewCard(canvas, strip, rect, 0, ThemeService.previewOf(ThemeService.FROSTED),
+                    tr("atomchat.settings.theme.frosted"), frostedActive, false, bubbleStyle, dtMs);
             ThemeService.Preset[] presets = ThemeService.presets();
             for (int i = 0; i < presets.length; i++) {
-                drawThemeCard(canvas, rect, i + 1, ThemeService.previewOf(presets[i].id()),
+                drawPreviewCard(canvas, strip, rect, i + 1, ThemeService.previewOf(presets[i].id()),
                         tr("atomchat.settings.theme." + presets[i].id()),
-                        matchingCustom == null && presets[i].id().equals(currentId), false, AtomChatConfig.get().effectiveBubbleStyle(), dtMs);
+                        matchingCustom == null && presets[i].id().equals(currentId), false, bubbleStyle, dtMs);
             }
+            int customStart = presets.length + 1;
             for (int i = 0; i < custom.size(); i++) {
                 AppearancePresetStore.Preset preset = custom.get(i);
-                drawThemeCard(canvas, rect, builtInThemeCount() + i,
+                drawPreviewCard(canvas, strip, rect, customStart + i,
                         previewOf(preset.snapshot()), presetName(preset), preset == matchingCustom,
-                        true, AtomChatConfig.BubbleStyle.valueOf(preset.snapshot().bubbleStyle()), dtMs);
+                        strip == themeStrip, AtomChatConfig.BubbleStyle.valueOf(preset.snapshot().bubbleStyle()), dtMs);
             }
-            drawAddThemeCard(canvas, rect, themeCardCount() - 1, dtMs);
+            drawAddThemeCard(canvas, strip, rect, customStart + custom.size(), dtMs);
         } finally {
             canvas.restore();
         }
@@ -2337,12 +2401,6 @@ public final class SettingsSectionPage {
      * player's own bubble on the right and a faint composer strip below - all
      * pure Skija primitives, no assets, at the theme's native corner scale.
      */
-    private void drawThemeCard(Canvas canvas, UiLayout.Rect rect, int index,
-                               ThemeService.Preview preview, String name,
-                               boolean selected, boolean deletable, AtomChatConfig.BubbleStyle bubbleStyle, float dtMs) {
-        drawPreviewCard(canvas, themeStrip, rect, index, preview, name, selected, deletable, bubbleStyle, dtMs);
-    }
-
     private void drawPreviewCard(Canvas canvas, CardStrip strip, UiLayout.Rect rect, int index,
                                  ThemeService.Preview preview, String name,
                                  boolean selected, boolean deletable, AtomChatConfig.BubbleStyle bubbleStyle, float dtMs) {
@@ -2434,15 +2492,15 @@ public final class SettingsSectionPage {
                 selected ? textPrimary() : sec(220));
     }
 
-    private void drawAddThemeCard(Canvas canvas, UiLayout.Rect rect, int index, float dtMs) {
-        float x = themeCardX(rect, index, themeStrip.scroll);
+    private void drawAddThemeCard(Canvas canvas, CardStrip strip, UiLayout.Rect rect, int index, float dtMs) {
+        float x = themeCardX(rect, index, strip.scroll);
         float y = themeCardY(rect);
         float w = UiTokens.THEME_CARD_W;
         float h = UiTokens.THEME_CARD_H;
         if(!stripCardVisible(rect,x,w))return;
-        PressScale press = themeStrip.scales.computeIfAbsent(index, k -> PressScale.bounce());
-        press.update(themeStrip.hoveredCard == index,
-                themeStrip.pressed && themeStrip.pressedCard == index, dtMs, Animations.enabled(), w);
+        PressScale press = strip.scales.computeIfAbsent(index, k -> PressScale.bounce());
+        press.update(strip.hoveredCard == index,
+                strip.pressed && strip.pressedCard == index, dtMs, Animations.enabled(), w);
         press.begin(canvas, x + w / 2.0F, y + h / 2.0F);
         try {
             SkiaDraw.drawRoundedRect(canvas, x, y, w, h, UiTokens.radius(10, AtomChatAppearance.theme()),
@@ -2459,89 +2517,35 @@ public final class SettingsSectionPage {
 
     private void drawColor(Canvas canvas, Row row, UiLayout.Rect rect, float dtMs) {
         SettingsColor color = row.color();
-        Font titleFont = FontManager.font(UiTokens.SETTINGS_TILE_TITLE);
-        Font valueFont = FontManager.font(UiTokens.SETTINGS_TILE_SUB);
-
-        CompactText compact = compactText(row, rect.w());
-        int gridRows = (color.swatchCount() + swatchColumns(rect)) / swatchColumns(rect);
-        float valueY = compact == null ? rect.y() + s(18)
-                : rect.bottom() - UiTokens.SETTINGS_SLIDER_ROW_H
-                    - Math.max(0, gridRows - 1) * UiTokens.SETTINGS_SWATCH_STEP + UiTokens.SETTINGS_VALUE_BAND;
-        if (compact != null) drawCompactText(canvas, rect, compact, sec(200));
-        else {
-        SkiaFontRenderer.drawText(canvas, titleFont,
-                SkiaFontRenderer.truncate(titleFont, tr(color.titleKey()), rect.w() - UiTokens.SETTINGS_ROW_PAD * 2.0F),
-                rect.x() + UiTokens.SETTINGS_ROW_PAD,
-                SkiaFontRenderer.centerBaselineY(titleFont, rect.y() + s(18)),
-                textPrimary());
+        Font font = FontManager.font(UiTokens.SETTINGS_TILE_TITLE);
+        var lines = colorTitleLines(color, font, rect.w());
+        float lineHeight = SkiaFontRenderer.getHeight(font);
+        float centerY = rect.y() + rect.h() / 2F;
+        float lineCenter = centerY - (lines.size() - 1) * lineHeight / 2F;
+        for (String line : lines) {
+            SkiaFontRenderer.drawText(canvas, font, line, rect.x() + UiTokens.SETTINGS_ROW_PAD,
+                    SkiaFontRenderer.centerBaselineY(font, lineCenter), textPrimary());
+            lineCenter += lineHeight;
         }
-        String hex = String.format("#%06X", color.value() & 0xFFFFFF);
-        float hexW = SkiaFontRenderer.getStringWidth(valueFont, hex);
-        SkiaFontRenderer.drawTextRight(canvas, valueFont, hex,
-                rect.right() - UiTokens.SETTINGS_ROW_PAD, valueY,
-                textPrimary());
-        // Live element preview: the current value as one small square, same
-        // shape for every colour row.
-        float prevW = s(11);
-        float prevR = UiTokens.radius(3, AtomChatAppearance.theme());
-        float prevRight = rect.right() - UiTokens.SETTINGS_ROW_PAD - hexW - s(8);
-        SkiaDraw.drawRoundedRect(canvas, prevRight - prevW, valueY - prevW / 2.0F,
-                prevW, prevW, prevR, color.value());
 
-        float r = UiTokens.s(9);
-        for (int i = 0; i < color.swatchCount(); i++) {
-            float scx = swatchX(rect, i);
-            float cy = swatchCy(rect, i, color.swatchCount() + 1);
-            int swatch = color.swatchColor(i);
-            // One bounce spring per swatch (keyed row+index): the swatches sit
-            // one step apart and this scale runs inside the row's own bounce,
-            // so the two compound. The scaled shape is the 2r swatch square.
-            // Hit-tests stay unscaled.
-            PressScale ps = swatchScale.computeIfAbsent(swatchKey(swatchRowIndex, i),
-                    k -> PressScale.bounce());
-            ps.update(i == hoveredSwatch,
-                    i == pressedSwatch && swatchRowIndex == pressedSwatchRow,
-                    dtMs, Animations.enabled(), 2.0F * r);
-            ps.begin(canvas, scx, cy);
-            try {
-                SkiaDraw.drawRoundedRect(canvas, scx - r, cy - r, 2.0F * r, 2.0F * r, r, swatch);
-                // Theme-adaptive hairline: pale swatches stay visible on light
-                // panels, dark ones on dark panels.
-                SkiaDraw.drawRing(canvas, scx + com.atom.chat.render.UiPixelSnap.halfDevicePx(), cy + com.atom.chat.render.UiPixelSnap.halfDevicePx(), r + s(0.75F), s(1.0F), UiTokens.hairline(AtomChatAppearance.theme()));
-                if (swatch == color.value()) {
-                    // Selection ring: the functional rim stroke with a breathing
-                    // gap — alpha 110, polarity-picked, so the ring survives pale
-                    // swatches on light panels and dark ones on dark panels.
-                    try (Paint ring = new Paint().setColor(UiTokens.rim(AtomChatAppearance.theme()))
-                            .setMode(PaintMode.STROKE).setStrokeWidth(s(2)).setAntiAlias(true)) {
-                        canvas.drawOval(io.github.humbleui.types.Rect.makeXYWH(
-                                scx - r - s(3), cy - r - s(3), 2.0F * (r + s(3)), 2.0F * (r + s(3))), ring);
-                    }
-                }
-            } finally {
-                canvas.restore();
-            }
-        }
-        // "+" cell: opens the custom colour picker (emote-grid plus language).
-        // Same per-cell bounce as the swatches: it is the strip's last hit
-        // target and used to sit dead under the pointer. The press phase keys
-        // off pressedSwatch as well, though the screen opens the picker on
-        // click, so hover is the visible half of the gesture in practice.
-        int plusIndex = color.swatchCount();
-        float px = swatchX(rect, plusIndex);
-        float cy = swatchCy(rect, plusIndex, color.swatchCount() + 1);
-        PressScale plus = swatchScale.computeIfAbsent(swatchKey(swatchRowIndex, plusIndex),
-                k -> PressScale.bounce());
-        plus.update(plusIndex == hoveredSwatch,
-                plusIndex == pressedSwatch && swatchRowIndex == pressedSwatchRow, dtMs,
-                Animations.enabled(), 2.0F * r);
-        plus.begin(canvas, px, cy);
+        var control = colorControl(rect);
+        float centerX = control.x() + control.w() / 2F;
+        float edge = s(24);
+        float left = centerX - edge / 2F;
+        float top = centerY - edge / 2F;
+        var scale = colorPress.computeIfAbsent(color.id(), id -> PressScale.bounce());
+        scale.update(colorRowHovered, colorRowHovered && drawnRowIndex == pressedRow,
+                dtMs, Animations.enabled(), edge);
+        scale.begin(canvas, centerX, centerY);
         try {
-            SkiaDraw.drawRoundedRect(canvas, px - r, cy - r, 2.0F * r, 2.0F * r, r,
-                    UiTokens.trackRest(AtomChatAppearance.theme()));
-            SkiaDraw.drawRing(canvas, px + com.atom.chat.render.UiPixelSnap.halfDevicePx(), cy + com.atom.chat.render.UiPixelSnap.halfDevicePx(), r + s(0.75F), s(1.0F), UiTokens.hairline(AtomChatAppearance.theme()));
-            drawIconCentered(canvas, AppIcons.ICON_PLUS_PATH, px, cy, s(12),
-                    textPrimary());
+            var theme = AtomChatAppearance.theme();
+            float radius = UiTokens.radius(4, theme);
+            SkiaDraw.drawRoundedRect(canvas, left - s(1), top - s(1), edge + s(2), edge + s(2),
+                    radius + s(1), UiTokens.rim(theme));
+            SkiaDraw.drawRoundedRect(canvas, left, top, edge, edge, radius, color.value());
+            if (colorRowHovered) {
+                SkiaDraw.drawRoundedRect(canvas, left, top, edge, edge, radius, UiTokens.cardHover(.30F, theme));
+            }
         } finally {
             canvas.restore();
         }
@@ -3012,8 +3016,13 @@ public final class SettingsSectionPage {
     }
 
     /** Sliders rendered as a right-side input field instead of a drag track. */
-    private static boolean isInlineNumberSlider(String id) {
-        return "history_retention".equals(id);
+    public static boolean isInlineNumberSlider(String id) {
+        return "history_retention".equals(id) || "chat_hud_max_messages".equals(id);
+    }
+
+    private static String inlineNumberDescription(SettingsSlider slider) {
+        return tr("history_retention".equals(slider.id())
+                ? "atomchat.settings.chat.history.retention.desc" : "atomchat.settings.chat.hud.limit.desc");
     }
 
     /**
@@ -3033,8 +3042,9 @@ public final class SettingsSectionPage {
         String text = editing ? (draft.isEmpty() ? "0" : draft) : Integer.toString(Math.round(slider.value()));
         var stacked=compact==null?null:new SettingsRowText.Text(compact.title(),compact.description(),true,
                 compact.titleH(),compact.descriptionH(),compact.height());
-        HistoryNumberRow.draw(canvas,rect,stacked,tr(slider.titleKey()),tr("atomchat.settings.chat.history.retention.desc"),
-                tr("atomchat.admin.days"),text,editing,numberFieldHover,AtomChatAppearance.theme(),
+        String unit = "history_retention".equals(slider.id()) ? "atomchat.admin.days" : "atomchat.settings.chat.hud.limit.unit";
+        HistoryNumberRow.draw(canvas,rect,stacked,tr(slider.titleKey()),inlineNumberDescription(slider),
+                tr(unit),text,editing,numberFieldHover,AtomChatAppearance.theme(),
                 accent,textPrimary(),sec(200),editing?HistoryNumberRow.caretMillis():0);
     }
 
@@ -3136,7 +3146,7 @@ public final class SettingsSectionPage {
             // through. Not pixel-nudged on purpose: that moves the ring and
             // opens a one-side seam. Polarity-adaptive UiTokens.rim separates
             // the circle from the row card behind. Same ring language as the
-            // swatches.
+            // color controls.
             SkiaDraw.drawRing(canvas, rect.x() + UiTokens.SETTINGS_ROW_PAD + avatar / 2.0F, avatarY + avatar / 2.0F,
                     com.atom.chat.render.AvatarRing.rimRadius(avatar / 2.0F),
                     com.atom.chat.render.AvatarRing.RIM_STROKE_PX, UiTokens.rim(AtomChatAppearance.theme()));
@@ -3175,7 +3185,7 @@ public final class SettingsSectionPage {
             }
             UiLayout.Rect rect = rowRect(section, rows, i, scrollY, layout);
             RowKind kind = rows.get(i).kind();
-            if (kind == RowKind.AUTHORS) {
+            if (kind == RowKind.AUTHORS || kind == RowKind.BLOCKED_EMPTY) {
                 continue;
             }
             if (kind == RowKind.BUBBLES || kind == RowKind.WALLPAPERS) {
@@ -3218,6 +3228,7 @@ public final class SettingsSectionPage {
 
     /** Slider row under the pointer, or null. Geometry matches the renderer. */
     public SliderHit sliderHit(float vmx, float vmy, UiLayout layout, SettingsSection section, float scrollY) {
+        if (!layout.list.contains(vmx, vmy) || vmy < layout.list.y() + chipBarHeight(section)) return null;
         List<Row> rows = rows(section);
         for (int i = 0; i < rows.size(); i++) {
             Row row = rows.get(i);
@@ -3326,7 +3337,7 @@ public final class SettingsSectionPage {
             if (inlineNumberRowRect != null) pressHistory("history_retention", inlineNumberRowRect.x(), inlineNumberRowRect.y());
             return;
         }
-        numberEditor.open(slider.id(), Math.round(slider.value()), slider::set);
+        numberEditor.open(slider.id(), Math.round(slider.value()), slider::set, "chat_hud_max_messages".equals(slider.id()));
     }
 
     public void appendNumberChar(char c) {
@@ -3385,37 +3396,20 @@ public final class SettingsSectionPage {
         hit.row().slider().nudge(direction);
     }
 
-    /** A colour swatch (or the "+" custom cell) under the pointer. */
-    public record ColorHit(int rowIndex, SettingsColor color, int swatchIndex, int swatch,
-                           boolean plus) {
-    }
+    public record ColorHit(int rowIndex, SettingsColor color) {}
 
-    /**
-     * Colour swatch or the trailing "+" cell under the pointer, or null.
-     * Geometry mirrors {@link #drawColor}: the row's swatch strip is
-     * hit-tested swatch by swatch, not per row, so a click between swatches
-     * falls through.
-     */
     public ColorHit colorHit(float vmx, float vmy, UiLayout layout, SettingsSection section, float scrollY) {
+        if (!layout.list.contains(vmx, vmy) || vmy < layout.list.y() + chipBarHeight(section)) return null;
         List<Row> rows = rows(section);
-        for (int rowIdx = 0; rowIdx < rows.size(); rowIdx++) {
-            Row row = rows.get(rowIdx);
-            if (row.kind() != RowKind.COLOR) {
-                continue;
+        for (int index = 0; index < rows.size(); index++) {
+            Row row = rows.get(index);
+            if (row.kind() != RowKind.COLOR || rowExpansion(rows, index) < GROUP_FOLD_MIN_DRAWN) continue;
+            UiLayout.Rect rect = rowRect(section, rows, index, scrollY, layout);
+            if (rect.contains(vmx, vmy)) {
+                return new ColorHit(index, row.color());
             }
-            SettingsColor color = row.color();
-            UiLayout.Rect rect = rowRect(section, rows, rowIdx, scrollY, layout);
-            int index = swatchAt(color, rect, vmx, vmy);
-            if (index >= 0) return index == color.swatchCount()
-                    ? new ColorHit(rowIdx, color, -1, 0, true)
-                    : new ColorHit(rowIdx, color, index, color.swatchColor(index), false);
         }
         return null;
-    }
-
-    /** Applies a colour swatch; writes through to the config immediately. */
-    public void applyColor(ColorHit hit) {
-        hit.color().apply(hit.swatch());
     }
 
     /** Applies a hit: flips a switch, opens a link, fires an action, folds a
@@ -3633,10 +3627,9 @@ public final class SettingsSectionPage {
         stepperHover.clear();
         rowPress.clear();
         aboutCardPress.clear();
-        swatchScale.clear();
+        colorPress.clear();
         pressedRow = -1;
-        pressedSwatch = -1;
-        pressedSwatchRow = -1;
+        colorRowHovered = false;
         themeStrip.reset();
         bubbleStrip.reset();
         pointerStrip = themeStrip;

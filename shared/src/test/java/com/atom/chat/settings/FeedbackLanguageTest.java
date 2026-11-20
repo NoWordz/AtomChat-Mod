@@ -11,10 +11,15 @@ class FeedbackLanguageTest {
         for(String target:new String[]{"1.20.1-forge","1.21.1-fabric","1.21.1-neoforge"}) {
             var zh=JsonParser.parseString(Files.readString(root.resolve("platforms/"+target+"/src/main/resources/assets/atomchat/lang/zh_cn.json"))).getAsJsonObject();
             var en=JsonParser.parseString(Files.readString(root.resolve("platforms/"+target+"/src/main/resources/assets/atomchat/lang/en_us.json"))).getAsJsonObject();
-            assertTrue(zh.get("atomchat.tutorial.about.body").getAsString().contains("诊断"));
-            assertTrue(zh.get("atomchat.tutorial.about.body").getAsString().contains("高级"));
-            assertTrue(zh.get("atomchat.tutorial.about.body").getAsString().contains("调试模式"));
-            assertTrue(en.get("atomchat.tutorial.about.body").getAsString().toLowerCase().contains("diagnostic"));
+            for (var language : java.util.List.of(zh, en)) {
+                for (String key : java.util.List.of("atomchat.tutorial.about.body", "atomchat.tutorial.settings.about.about")) {
+                    String guide = language.get(key).getAsString().toLowerCase(java.util.Locale.ROOT);
+                    assertTrue(guide.contains(language.get("atomchat.settings.group.about.maintenance")
+                            .getAsString().toLowerCase(java.util.Locale.ROOT)));
+                    assertTrue(guide.contains(language.get("atomchat.settings.about.debug")
+                            .getAsString().toLowerCase(java.util.Locale.ROOT)));
+                }
+            }
         }
     }
     @Test void allSixCatalogsContainTheActualOutlineAndWallpaperKeys() throws Exception {

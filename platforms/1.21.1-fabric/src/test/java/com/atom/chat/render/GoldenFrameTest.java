@@ -294,7 +294,7 @@ class GoldenFrameTest {
         ColorPickerOverlay picker = new ColorPickerOverlay(text -> {
         });
         SettingsColor color = new SettingsColor("golden", "atomchat.settings.color.accent", "ui",
-                new int[]{0xFF3B82F6, 0xFFEF4444, 0xFF22C55E}, () -> ACCENT, value -> {
+                () -> ACCENT, value -> {
         });
         pages.add(new Page("color-picker", UiMotion.POPUP_MS, () -> picker.open(color),
                 canvas -> picker.render(canvas, panelLayout.rect(), -1.0F, -1.0F, ACCENT)));

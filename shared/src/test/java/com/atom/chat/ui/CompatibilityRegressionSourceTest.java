@@ -74,7 +74,7 @@ class CompatibilityRegressionSourceTest {
         for (String platform : List.of("1.20.1-forge", "1.21.1-neoforge", "1.21.1-fabric")) {
             String src = source(root(), "platforms/" + platform
                     + "/src/main/java/com/atom/chat/mixin/ChatHudMixin.java");
-            src = method(src.substring(src.indexOf("private void atomchat$captureAndStore")), "atomchat$captureAndStore");
+            src = method(src.substring(src.indexOf("private ChatMessage atomchat$captureAndStore")), "atomchat$captureAndStore");
             assertFalse(src.contains("if (ownIdentity || ownEchoText)"), platform);
             assertFalse(src.contains("if (own) {"), "own messages without a local echo must enter the feed: " + platform);
         }

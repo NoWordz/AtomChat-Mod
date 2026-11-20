@@ -28,36 +28,116 @@ import com.atom.chat.chat.TellClickDetector;
 import com.atom.chat.chat.WhisperTextParser;
 import com.atom.chat.config.AtomChatConfig;
 import com.atom.chat.notification.NotificationController;
+import com.atom.chat.notification.NotificationHudOverlay;
+import com.atom.chat.render.ChatHudHistory;
+import com.atom.chat.render.ChatHudRenderer;
+import com.atom.chat.render.ItemIconRenderer;
 import com.atom.chat.text.ChatTextRewriter;
 import com.atom.chat.text.RichText;
+import com.atom.chat.ui.Animations;
 import net.minecraft.client.gui.screen.AtomChatScreen;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.hud.ChatHud;
+import net.minecraft.client.gui.hud.ChatHudLine;
+import net.minecraft.client.gui.screen.ChatScreen;
 import net.minecraft.client.gui.hud.MessageIndicator;
 import net.minecraft.client.network.PlayerListEntry;
 import net.minecraft.network.message.MessageSignatureData;
 import net.minecraft.text.Style;
 import net.minecraft.text.Text;
+import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
+import java.util.List;
 import java.util.UUID;
+import java.util.function.Function;
 
 @Mixin(value = ChatHud.class, priority = 500)
-public class ChatHudMixin {
+public class ChatHudMixin implements NotificationHudOverlay.PanelChatHud {
     @Unique
     private boolean atomchat$reposting;
 
+    @Shadow @Final private List<ChatHudLine> messages;
+
+    @Shadow private boolean isChatHidden() {
+        throw new AssertionError();
+    }
+
+    @Unique private final ChatHudHistory<ChatHudLine, Text, ChatMessage> atomchat$hudHistory = new ChatHudHistory<>();
+    @Unique private final ChatHudRenderer atomchat$hudRenderer = new ChatHudRenderer();
+    @Unique private static final Function<ChatHudLine, ChatMessage> atomchat$hudFallback =
+            row -> atomchat$systemPresentation(row.content());
+
     @Inject(method = "render", at = @At("HEAD"), cancellable = true)
-    private void atomchat$hideVanillaChatHud(DrawContext context, int currentTick, int mouseX, int mouseY, boolean focused, CallbackInfo ci) {
-        if (atomchat$panelOwnsInput()) {
+    private void atomchat$renderChatHud(DrawContext context, int currentTick, int mouseX, int mouseY, boolean focused, CallbackInfo ci) {
+        MinecraftClient client = MinecraftClient.getInstance();
+        if (client.currentScreen instanceof AtomChatScreen) {
+            // The HUD overlay paints the panel transition behind Screen.render.
+            ci.cancel();
+            return;
+        }
+        AtomChatConfig config = AtomChatConfig.get();
+        // The real vanilla chat screen retains its interactive history and hit testing.
+        if (focused || client.currentScreen instanceof ChatScreen || client.options.hudHidden
+                || client.player == null || isChatHidden() || !config.enabled || !config.chatHudEnabled) {
+            atomchat$hudRenderer.suspend();
+            return;
+        }
+
+        long now = System.nanoTime();
+        float visibility = NotificationHudOverlay.gameplayChatVisibility(client, now);
+        boolean animate = client.currentScreen == null && visibility >= 1F && Animations.messageEntry();
+        if (atomchat$paintGameplayChat(context, client, config, currentTick, visibility, false, animate, now)) {
             ci.cancel();
         }
+    }
+
+    @Override
+    public void atomchat$renderPanelHud(DrawContext context, float visibility, long now) {
+        MinecraftClient client = MinecraftClient.getInstance();
+        AtomChatConfig config = AtomChatConfig.get();
+        if (!config.enabled || !config.chatHudEnabled || client.player == null || client.options.hudHidden || isChatHidden()) {
+            atomchat$hudRenderer.suspend();
+            return;
+        }
+        atomchat$paintGameplayChat(context, client, config, client.inGameHud.getTicks(), visibility, true, false, now);
+    }
+
+    @Unique
+    private boolean atomchat$paintGameplayChat(DrawContext context, MinecraftClient client, AtomChatConfig config,
+                                              int currentTick, float visibility, boolean panel, boolean animate, long now) {
+        int limit = config.effectiveChatHudMaxMessages();
+        atomchat$hudRenderer.select(client.world, atomchat$hudHistory, messages, limit, atomchat$hudFallback,
+                panel, config.chatHudTimedExit ? ChatHudLine::creationTick : null, currentTick);
+        if (limit == 0 || visibility <= 0F) return true;
+
+        ChatHud hud = (ChatHud) (Object) this;
+        var viewport = ChatHudRenderer.Viewport.of(context.getMatrices().peek().getPositionMatrix(),
+                context.getScaledWindowWidth(), context.getScaledWindowHeight(), client.getWindow().getScaleFactor(), hud.getChatScale(), hud.getWidth());
+        int opacity = (int) (255D * (client.options.getChatOpacity().getValue() * 0.9D + 0.1D));
+        return atomchat$hudRenderer.render(viewport, client.player.getUuid(), OwnIdentity.bareName(),
+                net.minecraft.client.resource.language.I18n.translate("atomchat.sender.player"), net.minecraft.client.resource.language.I18n.translate("atomchat.hud.image"),
+                client.getFramebuffer().fbo,
+                context::draw, graphics -> ItemIconRenderer.prepare(context, graphics),
+                limit, opacity, visibility, animate, now / 1_000_000L);
+    }
+
+    @Inject(method = "addMessage(Lnet/minecraft/client/gui/hud/ChatHudLine;)V", at = @At("RETURN"))
+    private void atomchat$bindChatHudPresentation(ChatHudLine entry, CallbackInfo ci) {
+        atomchat$hudHistory.bind(entry, entry.content(), messages);
+    }
+
+    @Inject(method = "clear(Z)V", at = @At("HEAD"))
+    private void atomchat$clearChatHudPresentation(boolean clearHistory, CallbackInfo ci) {
+        atomchat$hudHistory.clear();
+        atomchat$hudRenderer.clear();
     }
 
     /** True while the AtomChat panel is the open screen. */
@@ -107,13 +187,14 @@ public class ChatHudMixin {
             return;
         }
         if (!AtomChatConfig.get().enabled) {
+            atomchat$hudHistory.stage(null, null);
             MessageCapture.consume();
             return;
         }
 
         // Store the original message first; the vanilla HUD copy is rewritten
         // below only after capture has already decided what belongs in ChatStore.
-        atomchat$captureAndStore(message, signatureData, indicator);
+        ChatMessage presentation = atomchat$captureAndStore(message);
 
         MinecraftClient client = MinecraftClient.getInstance();
         String ownName = client.player != null ? client.player.getName().getString() : null;
@@ -128,6 +209,8 @@ public class ChatHudMixin {
         } else {
             rewritten = ChatTextRewriter.rewrite(message);
         }
+        // Bind the presentation to the component vanilla actually queues, after rewriting.
+        atomchat$hudHistory.stage(rewritten != null ? rewritten : message, presentation);
         if (rewritten != null) {
             ci.cancel();
             atomchat$reposting = true;
@@ -135,12 +218,13 @@ public class ChatHudMixin {
                 ((ChatHud) (Object) this).addMessage(rewritten, signatureData, indicator);
             } finally {
                 atomchat$reposting = false;
+                atomchat$hudHistory.stage(null, null);
             }
         }
     }
 
     @Unique
-    private void atomchat$captureAndStore(Text message, MessageSignatureData signatureData, MessageIndicator indicator) {
+    private ChatMessage atomchat$captureAndStore(Text message) {
         String raw = message.getString();
         MinecraftClient client = MinecraftClient.getInstance();
         // Teleport failure watch: a "unknown command/no permission" reply right
@@ -161,41 +245,37 @@ public class ChatHudMixin {
         if (ChatClassifier.isXaeroWaypointData(raw)
                 || (meta != null && meta.contentText() != null
                 && ChatClassifier.isXaeroWaypointData(meta.contentText()))) {
-            addSystemMessage(message);
-            return;
+            return addSystemMessage(message);
         }
-        if (meta != null && meta.system()) { addSystemMessage(message); return; }
+        if (meta != null && meta.system()) { return addSystemMessage(message); }
         if (meta != null && meta.evidence() == IdentityEvidence.TRANSLATION
                 && (meta.senderUuid() == null || meta.whisper() && meta.whisperPartner() == null)
                 && meta.senderComponent() != null && meta.contentComponent() != null) {
             meta = ServerTemplateRecognition.unknown(meta.senderComponent(), meta.contentComponent());
         }
         if (meta != null && meta.whisper()) {
-            atomchat$routePrivate(message, meta, client);
-            return;
+            return atomchat$routePrivate(message, meta, client);
         }
         if (meta == null) {
             meta = PrivateChatParser.tryParse(message);
             if (meta != null) {
-                if (meta.system()) { addSystemMessage(message); return; }
-                if (meta.senderUuid() != null && meta.whisperPartner() != null) { atomchat$routePrivate(message, meta, client); return; }
+                if (meta.system()) { return addSystemMessage(message); }
+                if (meta.senderUuid() != null && meta.whisperPartner() != null) { return atomchat$routePrivate(message, meta, client); }
                 meta = ServerTemplateRecognition.unknown(meta.senderComponent(), meta.contentComponent());
             }
             if (meta == null) {
                 String ownName = client.player == null ? null : client.player.getName().getString();
                 if (ChatClassifier.classifyByKey(message) == ChatClassifier.Route.SYSTEM
                         || WhisperTextParser.isSpyEnvelope(raw)) {
-                    addSystemMessage(message);
-                    return;
+                    return addSystemMessage(message);
                 }
                 var inspected = com.atom.chat.chat.ComponentIdentity.inspect(message);
-                if (inspected.conflict()) { addSystemMessage(message); return; }
+                if (inspected.conflict()) { return addSystemMessage(message); }
                 meta = ServerTemplateRecognition.parseConfigured(message, inspected);
-                if (meta != null && meta.system()) { addSystemMessage(message); return; }
+                if (meta != null && meta.system()) { return addSystemMessage(message); }
                 configured = meta != null;
                 if (meta == null && WhisperTextParser.isThirdPartyEnvelope(raw, ownName)) {
-                    addSystemMessage(message);
-                    return;
+                    return addSystemMessage(message);
                 }
                 if (meta == null) meta = inspected.meta();
                 if (meta == null) {
@@ -204,20 +284,25 @@ public class ChatHudMixin {
                         meta = ServerTemplateRecognition.unknown(learned.senderComponent(), learned.contentComponent());
                     }
                 }
-                if (meta == null && ChatPipeline.hasUnmappedTranslation(message)) { addSystemMessage(message); return; }
-                if (meta == null && atomchat$tryTextWhisper(raw, message, client)) return;
+                if (meta == null && ChatPipeline.hasUnmappedTranslation(message)) { return addSystemMessage(message); }
+                if (meta == null) {
+                    SenderMeta whisper = atomchat$parseTextWhisper(message, client, null);
+                    if (whisper != null) return atomchat$storeTextWhisper(message, whisper, client);
+                }
                 if (meta == null) meta = TellClickDetector.detectByTellClick(message, raw);
                 if (meta == null) meta = ChatPipeline.tryParsePlayerLine(raw);
                 if (meta == null) meta = EasyBotParser.tryParse(raw);
-                if (meta == null) { atomchat$logParseMiss(raw); addSystemMessage(message); return; }
+                if (meta == null) { atomchat$logParseMiss(raw); return addSystemMessage(message); }
             }
         }
 
-        if (meta.whisper()) { atomchat$routePrivate(message, meta, client, configured); return; }
+        if (meta.whisper()) { return atomchat$routePrivate(message, meta, client, configured); }
         // A click/hover attributes a name, but does not declare a public channel.
         if (!configured && (meta.evidence() == IdentityEvidence.ENTITY
-                || meta.evidence() == IdentityEvidence.CLICK)
-                && atomchat$tryTextWhisper(raw, message, client, meta)) return;
+                || meta.evidence() == IdentityEvidence.CLICK)) {
+            SenderMeta whisper = atomchat$parseTextWhisper(message, client, meta);
+            if (whisper != null) return atomchat$storeTextWhisper(message, whisper, client);
+        }
         String content = ChatPipeline.extractContent(raw, meta);
         boolean own = isOwn(meta, raw, client);
         if (meta.evidence().confirmsIdentity() && meta.senderUuid() != null) {
@@ -231,7 +316,7 @@ public class ChatHudMixin {
         String blockName = unknown ? null : meta.profileName() != null ? meta.profileName() : meta.senderName();
         if (AtomChatConfig.get().hideBlockedMessages
                 && blockName != null && BlockList.isBlocked(blockName)) {
-            return;
+            return null;
         }
 
         String displayName = meta.senderComponent() != null ? meta.senderComponent().getString() : ChatPipeline.decoratedDisplayName(raw, meta);
@@ -263,12 +348,14 @@ public class ChatHudMixin {
             contentRich = ChatPipeline.quoteBodyRich(contentRich, body);
         }
         senderRich = atomchat$ensureSenderColor(senderRich, meta.profileName());
-        atomchat$addPublic(new ChatMessage(message, own, meta.system(),
+        ChatMessage presentation = new ChatMessage(message, own, meta.system(),
                 quote != null ? quote.quoteName() : null,
                 quote != null ? quote.quoteText() : null,
                 meta.senderUuid(), displayName, unknown ? "" : meta.profileName(), body,
-                senderRich, contentRich).retainPresentation(configured || unknown), body, meta.system() || unknown,
+                senderRich, contentRich).retainPresentation(configured || unknown);
+        atomchat$addPublic(presentation, body, meta.system() || unknown,
                 meta.evidence().confirmsIdentity(), meta.originalContent());
+        return presentation;
     }
 
     /**
@@ -412,19 +499,16 @@ public class ChatHudMixin {
     }
 
     @Unique
-    private static boolean atomchat$tryTextWhisper(String raw, Text message, MinecraftClient client) {
-        return atomchat$tryTextWhisper(raw, message, client, null);
+    private static SenderMeta atomchat$parseTextWhisper(Text message, MinecraftClient client, SenderMeta identity) {
+        String ownName = client.player == null ? null : client.player.getName().getString();
+        return com.atom.chat.chat.PrivateMessageRecognition.parse(message,
+                client.player == null ? null : client.player.getUuid(), ownName,
+                ChatPipeline.onlineNameCandidates(), identity);
     }
 
     @Unique
-    private static boolean atomchat$tryTextWhisper(String raw, Text message, MinecraftClient client, SenderMeta identity) {
-        String ownName = client.player == null ? null : client.player.getName().getString();
-        SenderMeta parsed = com.atom.chat.chat.PrivateMessageRecognition.parse(message,
-                client.player == null ? null : client.player.getUuid(), ownName,
-                ChatPipeline.onlineNameCandidates(), identity);
-        if (parsed == null) return false;
-        if (parsed.system()) addSystemMessage(message); else atomchat$routePrivate(message, parsed, client);
-        return true;
+    private static ChatMessage atomchat$storeTextWhisper(Text message, SenderMeta parsed, MinecraftClient client) {
+        return parsed.system() ? addSystemMessage(message) : atomchat$routePrivate(message, parsed, client);
     }
 
     /**
@@ -450,19 +534,19 @@ public class ChatHudMixin {
     }
 
     @Unique
-    private static void atomchat$routePrivate(Text message, SenderMeta meta, MinecraftClient client) {
-        atomchat$routePrivate(message, meta, client, false);
+    private static ChatMessage atomchat$routePrivate(Text message, SenderMeta meta, MinecraftClient client) {
+        return atomchat$routePrivate(message, meta, client, false);
     }
 
     @Unique
-    private static void atomchat$routePrivate(Text message, SenderMeta meta, MinecraftClient client, boolean configured) {
+    private static ChatMessage atomchat$routePrivate(Text message, SenderMeta meta, MinecraftClient client, boolean configured) {
         // Suppressed outgoing echo sentinel: the local bubble already exists.
         if (meta.system()) {
-            return;
+            return null;
         }
         String partnerName = meta.whisperPartner();
         if (partnerName == null) {
-            return;
+            return null;
         }
         boolean own = isOwn(meta, message.getString(), client);
         UUID partnerUuid = own ? meta.whisperPartnerUuid() : meta.senderUuid();
@@ -501,7 +585,8 @@ public class ChatHudMixin {
                     meta.whisperPartnerUuid() != null && meta.evidence().confirmsIdentity(),
                     meta.originalContent()))
                 PrivateChatStore.addOutgoing(partner, privateMessage);
-        } else if (!BlockList.isBlocked(partner)) {
+        } else {
+            if (BlockList.isBlocked(partner)) return null;
             boolean merged = PrivateChatStore.addIncoming(partner, privateMessage);
             if (meta.evidence().confirmsIdentity() && partnerUuid != null) {
                 SeenPlayers.remember(partnerUuid, meta.profileName(), meta.senderName());
@@ -513,11 +598,19 @@ public class ChatHudMixin {
                 NotificationController.onWhisper(privateMessage);
             }
         }
+        return privateMessage;
     }
 
-    private static void addSystemMessage(Text message) {
-        ChatStore.get().add(new ChatMessage(message, false, true, null, null,
-                null, null, null, null, RichText.empty(), RichText.of(message).linkifyUrls()));
+    private static ChatMessage addSystemMessage(Text message) {
+        ChatMessage presentation = atomchat$systemPresentation(message);
+        ChatStore.get().add(presentation);
+        return presentation;
+    }
+
+    @Unique
+    private static ChatMessage atomchat$systemPresentation(Text message) {
+        return new ChatMessage(message, false, true, null, null,
+                null, null, null, null, RichText.empty(), RichText.of(message).linkifyUrls());
     }
 
     private static boolean isOwn(SenderMeta meta, String raw, MinecraftClient client) {

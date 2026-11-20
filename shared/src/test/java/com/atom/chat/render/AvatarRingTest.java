@@ -25,7 +25,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * The avatar ring's geometry, the raster proof that it is concentric, and the
- * source guards that keep all five avatar sites on it.
+ * source guards that keep avatar painters on it.
  *
  * <p>Why all three: the numbers are trivial but the <em>coupling</em> is not.
  * The reported defect ("the avatar and its rim must touch") was five
@@ -39,13 +39,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class AvatarRingTest {
 
     private static final List<String> SITES = List.of(
+            "shared/src/main/java/com/atom/chat/render/MessagePaint.java",
             "layers/mapping/official/src/main/java/com/atom/chat/page/ProfilePage.java",
-            "layers/mapping/official/src/main/java/com/atom/chat/page/MessageListView.java",
             "layers/mapping/official/src/main/java/com/atom/chat/page/ConversationListPage.java",
             "layers/mapping/official/src/main/java/com/atom/chat/notification/NotificationBanner.java",
             "layers/mapping/official/src/main/java/com/atom/chat/settings/SettingsSectionPage.java",
             "platforms/1.21.1-fabric/src/main/java/com/atom/chat/page/ProfilePage.java",
-            "platforms/1.21.1-fabric/src/main/java/com/atom/chat/page/MessageListView.java",
             "platforms/1.21.1-fabric/src/main/java/com/atom/chat/page/ConversationListPage.java",
             "platforms/1.21.1-fabric/src/main/java/com/atom/chat/notification/NotificationBanner.java",
             "platforms/1.21.1-fabric/src/main/java/com/atom/chat/settings/SettingsSectionPage.java");
@@ -221,6 +220,19 @@ class AvatarRingTest {
         return Math.abs(((a >> 16) & 0xFF) - ((b >> 16) & 0xFF)) <= tol
                 && Math.abs(((a >> 8) & 0xFF) - ((b >> 8) & 0xFF)) <= tol
                 && Math.abs((a & 0xFF) - (b & 0xFF)) <= tol;
+    }
+
+    @Test
+    void panelAndHudDelegateTheirAvatarRimToTheSharedPainter() throws IOException {
+        for (String site : List.of(
+                "layers/mapping/official/src/main/java/com/atom/chat/page/MessageListView.java",
+                "platforms/1.21.1-fabric/src/main/java/com/atom/chat/page/MessageListView.java",
+                "shared/src/main/java/com/atom/chat/render/ChatHudRenderer.java")) {
+            String src = Files.readString(root().resolve(site), StandardCharsets.UTF_8);
+            assertTrue(src.contains("MessagePaint.avatar("), site);
+            assertFalse(src.contains("drawRing("), site);
+            assertFalse(src.contains("UiTokens.PROFILE_AVATAR_RING"), site);
+        }
     }
 
     @Test

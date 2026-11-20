@@ -79,8 +79,10 @@ public final class ShellHeader {
         // Floating chrome: same elevation language as the menus (two-tier
         // shadow behind an opaque-ish surface), unlike the edge-highlighted
         // content cards.
-        SkiaDraw.drawChromeShadow(canvas, header.x(), header.y(), header.w(), header.h(),
+        com.atom.chat.render.ChromeMaterial.drawShadow(canvas, header.x(), header.y(), header.w(), header.h(),
                 UiTokens.headerRadius(AtomChatAppearance.theme()));
+        com.atom.chat.render.ChromeMaterial.drawBackdrop(canvas, header.x(), header.y(), header.w(), header.h(),
+                UiTokens.headerRadius(AtomChatAppearance.theme()), 1F);
         SkiaDraw.drawRoundedRect(canvas, header.x(), header.y(), header.w(), header.h(),
                 UiTokens.headerRadius(AtomChatAppearance.theme()), UiTokens.cardFill(AtomChatAppearance.theme()));
         com.atom.chat.render.ChromeMaterial.drawDetails(canvas, header, UiTokens.headerRadius(AtomChatAppearance.theme()));

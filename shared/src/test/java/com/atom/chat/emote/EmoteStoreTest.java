@@ -13,6 +13,7 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 class EmoteStoreTest {
     @TempDir
@@ -194,6 +195,22 @@ class EmoteStoreTest {
         store.refresh();
         assertEquals(1, store.count());
         assertEquals("manual.png", store.list().get(0).getName());
+    }
+
+    @Test
+    void refreshKeepsRegularFilesAndSkipsLinkedImages() throws IOException {
+        EmoteStore store = newStore();
+        touch(store.dir(), "regular.png", new byte[]{1});
+        Path external = touch(tmp, "external.png", new byte[]{1}).toPath();
+        try {
+            Files.createSymbolicLink(store.dir().resolve("linked.png"), external);
+        } catch (IOException | UnsupportedOperationException | SecurityException unavailable) {
+            assumeTrue(false, "the OS does not permit file symlinks");
+        }
+        Files.createDirectory(store.dir().resolve("directory.png"));
+
+        store.refresh();
+        assertEquals(List.of("regular.png"), store.list().stream().map(File::getName).toList());
     }
 
     @Test

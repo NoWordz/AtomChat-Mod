@@ -39,6 +39,32 @@ class SettingsSectionRowFrameReuseTest {
     }
 
     @Test
+    void warmedPresetsReuseStaticTextAndMaterialRemeasuresDynamicControls(@TempDir Path root) {
+        Platform.install(new Platform.Provider() {
+            public Path configDir() { return root.resolve("config"); }
+            public Path gameDir() { return root.resolve("game"); }
+            public boolean isModLoaded(String modId) { return false; }
+        });
+        SettingsSectionPage page = new SettingsSectionPage();
+        UiLayout narrow = UiLayout.ofDetail(10F, 10F, 420F, 760F);
+        for (int frame = 0; frame < 80; frame++) page.warmAppearanceTheme(narrow);
+        long measured = page.compactTextBuildsForTest();
+        page.measureContent(narrow, SettingsSection.APPEARANCE);
+        page.measureContent(narrow, SettingsSection.APPEARANCE);
+        assertEquals(measured, page.compactTextBuildsForTest(), "preset text stays cached");
+        UiLayout widened = UiLayout.ofDetail(10F, 10F, 500F, 760F);
+        page.measureContent(widened, SettingsSection.APPEARANCE);
+        org.junit.jupiter.api.Assertions.assertTrue(page.compactTextBuildsForTest() > measured + 3);
+        page.selectChip(SettingsSection.APPEARANCE, 1);
+        int rows = page.rows(SettingsSection.APPEARANCE).size();
+        page.measureContent(widened, SettingsSection.APPEARANCE);
+        long afterMaterial = page.compactTextBuildsForTest();
+        page.measureContent(widened, SettingsSection.APPEARANCE);
+        assertEquals(afterMaterial + rows, page.compactTextBuildsForTest(),
+                "material settings remeasure changing values");
+    }
+
+    @Test
     void rowRectsDoNotRemeasureThePrefixForEveryRow(@TempDir Path root) {
         Platform.install(new Platform.Provider() {
             public Path configDir() { return root.resolve("config"); }

@@ -3,12 +3,15 @@ package com.atom.chat.emote;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Objects;
 import java.util.function.IntSupplier;
 
 /**
@@ -111,21 +114,51 @@ public final class EmoteStore {
         if (!com.atom.chat.util.DataMigration.allowPersonalPath(source)) {
             return files;
         }
+        BasicFileAttributes before;
+        try {
+            before = directoryAttributes(source);
+        } catch (IOException | SecurityException unavailable) {
+            return files;
+        }
         File[] listed = source.toFile().listFiles();
         if (listed == null) {
             return files;
         }
         for (File f : listed) {
-            if (f.isFile() && isSupportedName(f.getName())
-                    && com.atom.chat.util.DataMigration.allowPersonalPath(f.toPath())) {
-                files.add(f);
+            if (!isSupportedName(f.getName())) continue;
+            Path child = f.toPath();
+            try {
+                // listFiles returns direct children of the directory already checked above.
+                BasicFileAttributes attrs = Files.readAttributes(child, BasicFileAttributes.class,
+                        LinkOption.NOFOLLOW_LINKS);
+                if (attrs.isSymbolicLink() || attrs.isOther()) {
+                    com.atom.chat.util.DataMigration.allowPersonalPath(child);
+                } else if (attrs.isRegularFile()) {
+                    files.add(f);
+                }
+            } catch (IOException | SecurityException ignored) {
+                // A file may disappear or become inaccessible during the scan.
             }
+        }
+        try {
+            if (!com.atom.chat.util.DataMigration.allowPersonalPath(source)) return List.of();
+            BasicFileAttributes after = directoryAttributes(source);
+            if (!Objects.equals(before.fileKey(), after.fileKey())
+                    || !before.creationTime().equals(after.creationTime())) return List.of();
+        } catch (IOException | SecurityException changed) {
+            return List.of();
         }
         files.sort(Comparator.comparing(File::getName, String.CASE_INSENSITIVE_ORDER));
         while (files.size() > cap) {
             files.remove(files.size() - 1);
         }
         return files;
+    }
+
+    private static BasicFileAttributes directoryAttributes(Path source) throws IOException {
+        BasicFileAttributes attrs = Files.readAttributes(source, BasicFileAttributes.class, LinkOption.NOFOLLOW_LINKS);
+        if (!attrs.isDirectory() || attrs.isOther()) throw new IOException("Sticker directory has changed");
+        return attrs;
     }
 
     /** Current emotes, sorted by name. Never null. */

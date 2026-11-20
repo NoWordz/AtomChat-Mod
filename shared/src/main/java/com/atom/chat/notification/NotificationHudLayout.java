@@ -4,7 +4,13 @@ import com.atom.chat.ui.UiLayout;
 
 /** HUD placement is independent of the notification's lifetime and panel geometry. */
 public final class NotificationHudLayout {
-    public record Placement(UiLayout.Rect rect, float scale) { }
+    public record Placement(UiLayout.Rect rect, float scale) {
+        public Placement toGui(float density, float guiScale) {
+            float ratio = density / guiScale;
+            return new Placement(new UiLayout.Rect(rect.x() * ratio, rect.y() * ratio,
+                    rect.w() * ratio, rect.h() * ratio), scale * ratio);
+        }
+    }
     public enum Anchor {
         TOP_LEFT, TOP_CENTER, TOP_RIGHT, CENTER_LEFT, CENTER, CENTER_RIGHT, BOTTOM_LEFT, BOTTOM_CENTER, BOTTOM_RIGHT;
         public String key() { return "atomchat.settings.notify.position." + name().toLowerCase(java.util.Locale.ROOT); }

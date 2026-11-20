@@ -1,7 +1,6 @@
 package com.atom.chat.ui;
 
 
-import com.atom.chat.ui.UiStagger;
 import com.atom.lib.design.atomchat.UiTokens;
 import com.atom.chat.config.AtomChatConfig;
 import com.atom.chat.emote.EmoteImageCache;
@@ -43,11 +42,6 @@ import java.util.function.Consumer;
  */
 public final class EmojiPanel {
 
-    /**
-     * Page-entrance stagger (unit V): grid rows rise into place, 20ms apart.
-     * Armed when the panel opens; decoration only, hit tests unscaled.
-     */
-    private final UiStagger.Entrance entrance = new UiStagger.Entrance();
     /** Composer side effects the panel cannot own itself. */
     public interface Host {
         /** Appends text at the caret (emoji / kaomoji insert). */
@@ -99,7 +93,7 @@ public final class EmojiPanel {
 
     private boolean reactionMode;
     public void openReaction() {
-        reactionMode = true; open = true; tab = 0; scroll = 0; tabAnimFrom = -1;
+        reactionMode = true; open = true; tab = 0; scroll = 0; paintedScroll = 0; tabAnimFrom = -1; paintedTabOffset = 0;
         tabIndicatorAnim.animateTo(0, 0.0F); tabContentAnim.animateTo(0, 1.0F);
         cellHover.clear(); cellScale.clear(); pressedCellKey = -1;
     }
@@ -144,6 +138,9 @@ public final class EmojiPanel {
     private final Animator tabContentAnim = new Animator(Easing::easeInOutCubic);
     private final Animator tabIndicatorAnim = new Animator(Easing::easeInOutCubic);
     private int tabAnimFrom = -1;
+    private int outgoingScroll;
+    private float paintedTabOffset;
+    private int paintedScroll;
     private int tabAnimTo = -1;
 
     public EmojiPanel(Host host) {
@@ -208,15 +205,13 @@ public final class EmojiPanel {
     }
 
     /**
-     * Toggle from the composer's emoji button. Opening rescans the emote dir so
-     * files dropped in by hand appear, and clears stale cell highlights.
+     * Toggle from the composer. Refresh the sticker files only when their grid is shown.
      */
     public void toggle() {
         reactionMode = false;
         open = !open;
         if (open) {
-            entrance.markEntered();
-            refreshEmotes();
+            if (tab == 2) refreshEmotes();
             cellHover.clear();
             cellScale.clear();
             pressedCellKey = -1;
@@ -227,6 +222,7 @@ public final class EmojiPanel {
     public void resetTransient() {
         open = false;
         scroll = 0;
+        paintedScroll = 0;
     }
 
     /** Advances the open/close fade; called once per frame from the screen. */
@@ -284,8 +280,10 @@ public final class EmojiPanel {
             }
             if (t >= 0 && t < labels.length && t != tab) {
                 int from = tab;
+                outgoingScroll = scroll;
                 tab = t;
                 scroll = 0;
+                paintedScroll = 0;
                 cellHover.clear();
                 cellScale.clear();
                 pressedCellKey = -1;
@@ -298,35 +296,19 @@ public final class EmojiPanel {
             }
             return "";
         }
+        if (!insideGridWidth(mx, layout)) return "";
+        mx -= paintedTabOffset;
+        if (!insideGridWidth(mx, layout)) return "";
         // The emote (sticker) tab has its own grid — images, an add slot and a
         // per-cell remove button. It does its work inline and never inserts text.
         if (tab == 2) {
             if (sandboxMode || com.atom.chat.onboarding.TutorialSandbox.active()) return "☺";
             return emotePanelClick(layout, mx, my);
         }
-        // Content grid.
-        String[] items = tab == 1 ? KAOMOJI : EMOJIS;
-        float contentX = px + UiTokens.EMOJI_PANEL_PAD;
-        float contentY = py + UiTokens.EMOJI_TAB_H + s(2);
-        float contentW = pw - UiTokens.EMOJI_PANEL_PAD * 2.0F;
-        float itemH = tab == 1 ? UiTokens.EMOJI_KAOMOJI_ROW_H : UiTokens.EMOJI_CELL;
-        int cols = tab == 1 ? 2 : UiTokens.EMOJI_COLS;
-        float contentH = contentH();
-        // The padding strips and the strip below the last visible row are dead
-        // space. Unclamped maths used to wrap them around: col -1 landed on the
-        // previous row's last emoji and col == cols on the next row's first, so
-        // a click in the gutter silently inserted a different emoji.
-        if (mx < contentX || mx > contentX + contentW
-                || my < contentY || my > contentY + contentH) {
-            return "";
-        }
-        int col = (int) ((mx - contentX) / (contentW / cols));
-        int row = (int) ((my - contentY + scroll) / itemH);
-        col = Math.max(0, Math.min(cols - 1, col));
-        int idx = row * cols + col;
-        if (idx >= 0 && idx < items.length) {
+        int idx = textGridHoveredIndex(tab, mx, my, layout);
+        if (idx >= 0) {
             pulseCell(gridHoverKey(tab, idx));
-            return items[idx];
+            return (tab == 1 ? KAOMOJI : EMOJIS)[idx];
         }
         return "";
     }
@@ -340,6 +322,7 @@ public final class EmojiPanel {
         float pw = panelW();
         float ph = panelH();
         scroll = Math.max(0, Math.min(scroll, maxScroll()));
+        paintedScroll = scroll;
         canvas.save();
         try (Paint layer = new Paint()) {
             layer.setColor(Color.makeARGB((int) (255.0F * anim), 0, 0, 0));
@@ -418,22 +401,19 @@ public final class EmojiPanel {
             float contentY = py + UiTokens.EMOJI_TAB_H + s(2);
             float contentW = pw - UiTokens.EMOJI_PANEL_PAD * 2.0F;
             float contentH = contentH();
+            boolean transitioning = tabAnimFrom >= 0 && tabAnimFrom != tab && !tabContentAnim.isDone();
+            float tp = transitioning ? tabContentAnim.getValue() : 1F;
+            float travel = tabAnimTo > tabAnimFrom ? contentW : -contentW;
+            paintedTabOffset = transitioning ? travel * (1F - tp) : 0F;
             updateGridHover(layout, vmx, vmy, frameDt);
             canvas.save();
             SkiaDraw.clip(canvas, contentX, contentY, contentW, contentH, 0.0F);
-            boolean transitioning = tabAnimFrom >= 0 && tabAnimFrom != tab && !tabContentAnim.isDone();
-            float tp = transitioning ? tabContentAnim.getValue() : 1.0F;
             if (transitioning) {
-                float travel = contentW;
-                float inSign = tabAnimTo > tabAnimFrom ? 1.0F : -1.0F;
                 drawTabContent(canvas, tabAnimFrom, contentX, contentY, contentW, contentH,
-                        -inSign * travel * tp, 1.0F, false);
-                drawTabContent(canvas, tab, contentX, contentY, contentW, contentH,
-                        inSign * travel * (1.0F - tp), 1.0F, true);
-            } else {
-                drawTabContent(canvas, tab, contentX, contentY, contentW, contentH,
-                        0.0F, 1.0F, true);
+                        -travel * tp, outgoingScroll, false);
             }
+            drawTabContent(canvas, tab, contentX, contentY, contentW, contentH,
+                    paintedTabOffset, scroll, true);
             canvas.restore();
             canvas.restore();
         }
@@ -454,6 +434,8 @@ public final class EmojiPanel {
     private void startTabTransition(int from, int to) {
         tabAnimFrom = from;
         tabAnimTo = to;
+        paintedTabOffset = Animations.enabled()
+                ? Math.copySign(panelW() - UiTokens.EMOJI_PANEL_PAD * 2F, to - from) : 0F;
         tabContentAnim.setValue(0.0F);
         tabContentAnim.animateTo(UiMotion.TAB_MS, 1.0F);
         tabIndicatorAnim.animateTo(UiMotion.TAB_MS, to);
@@ -527,6 +509,11 @@ public final class EmojiPanel {
      * pointer is over the tab bar, a gutter or outside the content area. Matches
      * click's geometry so highlight and hit-test never drift.
      */
+    private static boolean insideGridWidth(float x, UiLayout layout) {
+        float left = panelX(layout) + UiTokens.EMOJI_PANEL_PAD;
+        return x >= left && x < left + panelW() - UiTokens.EMOJI_PANEL_PAD * 2F;
+    }
+
     private int textGridHoveredIndex(int tab, float mx, float my, UiLayout layout) {
         String[] items = tab == 1 ? KAOMOJI : EMOJIS;
         float px = panelX(layout);
@@ -544,7 +531,7 @@ public final class EmojiPanel {
         int cols = tab == 1 ? 2 : UiTokens.EMOJI_COLS;
         float itemH = tab == 1 ? UiTokens.EMOJI_KAOMOJI_ROW_H : UiTokens.EMOJI_CELL;
         int col = (int) ((mx - contentX) / (contentW / cols));
-        int row = (int) ((my - contentY + scroll) / itemH);
+        int row = (int) ((my - contentY + paintedScroll) / itemH);
         if (col < 0 || col >= cols) {
             return -1;
         }
@@ -572,7 +559,7 @@ public final class EmojiPanel {
         if (sandboxMode || com.atom.chat.onboarding.TutorialSandbox.active()) return -1;
         float colW = contentW / UiTokens.EMOTE_COLS;
         int col = (int) ((mx - contentX) / colW);
-        int row = (int) ((my - contentY + scroll) / UiTokens.EMOTE_CELL);
+        int row = (int) ((my - contentY + paintedScroll) / UiTokens.EMOTE_CELL);
         if (col < 0 || col >= UiTokens.EMOTE_COLS) {
             return -1;
         }
@@ -642,8 +629,9 @@ public final class EmojiPanel {
     private void updateGridHover(UiLayout layout, float vmx, float vmy, long frameDt) {
         var point = localPointer(layout,vmx,vmy); vmx=point.x(); vmy=point.y();
         int hovered = -1;
-        if (open && overPanelLocal(layout, vmx, vmy) && vmy >= panelY(layout) + UiTokens.EMOJI_TAB_H) {
-            hovered = tab == 2 ? emoteGridHoveredIndex(vmx, vmy, layout) : textGridHoveredIndex(tab, vmx, vmy, layout);
+        if (open && insideGridWidth(vmx, layout) && vmy >= panelY(layout) + UiTokens.EMOJI_TAB_H) {
+            float gridX = vmx - paintedTabOffset;
+            hovered = tab == 2 ? emoteGridHoveredIndex(gridX, vmy, layout) : textGridHoveredIndex(tab, gridX, vmy, layout);
         }
         int hoveredKey = hovered < 0 ? -1 : gridHoverKey(tab, hovered);
         Iterator<Map.Entry<Integer, Float>> it = cellHover.entrySet().iterator();
@@ -688,48 +676,24 @@ public final class EmojiPanel {
         }
     }
 
-    /**
-     * Draws one tab's content layer, optionally slid by dx and faded by alpha
-     * during a tab switch. The old layer is non-interactive (no hover highlights)
-     * because the pointer already targets the new tab.
-     */
+    /** Draw only cells intersecting the viewport, including during a sideways tab switch. */
     private void drawTabContent(Canvas canvas, int tab, float contentX, float contentY, float contentW, float contentH,
-                                float dx, float alpha, boolean interactive) {
-        if (alpha <= 0.005F) {
-            return;
-        }
-        boolean layered = alpha < 0.995F;
+                                float dx, int gridScroll, boolean interactive) {
+        if (Math.abs(dx) >= contentW) return;
         canvas.save();
-        canvas.translate(dx, 0.0F);
-        if (layered) {
-            try (Paint layer = new Paint()) {
-                layer.setColor(Color.makeARGB((int) (255.0F * alpha), 0, 0, 0));
-                // Cover the slide travel as well, or content leaving the layer's
-                // bounds would be cut out of the fade.
-                canvas.saveLayer(Rect.makeXYWH(contentX - s(24), contentY - s(8),
-                        contentW + s(48), contentH + s(16)), layer);
-                drawTabGrid(canvas, tab, contentX, contentY, contentW, contentH, interactive);
+        try {
+            canvas.translate(dx, 0F);
+            if (tab == 2) {
+                if (sandboxMode || com.atom.chat.onboarding.TutorialSandbox.active()) {
+                    drawSandboxSticker(canvas, contentX, contentY, contentW / UiTokens.EMOTE_COLS, UiTokens.EMOTE_CELL);
+                } else {
+                    drawEmoteGrid(canvas, contentX, contentY, contentW, contentH, dx, gridScroll, interactive);
+                }
+            } else {
+                drawTextGrid(canvas, tab, contentX, contentY, contentW, contentH, dx, gridScroll, interactive);
             }
-        } else {
-            drawTabGrid(canvas, tab, contentX, contentY, contentW, contentH, interactive);
-        }
-        if (layered) {
+        } finally {
             canvas.restore();
-        }
-        canvas.restore();
-    }
-
-    private void drawTabGrid(Canvas canvas, int tab, float contentX, float contentY, float contentW, float contentH,
-                             boolean interactive) {
-        if (tab == 2) {
-            if (sandboxMode || com.atom.chat.onboarding.TutorialSandbox.active()) {
-                float colW = contentW / UiTokens.EMOTE_COLS;
-                drawSandboxSticker(canvas, contentX, contentY, colW, UiTokens.EMOTE_CELL);
-                return;
-            }
-            drawEmoteGrid(canvas, contentX, contentY, contentW, contentH, interactive);
-        } else {
-            drawTextGrid(canvas, tab, contentX, contentY, contentW, contentH, interactive);
         }
     }
 
@@ -741,43 +705,46 @@ public final class EmojiPanel {
      * text never touches the capsule edge.
      */
     private void drawTextGrid(Canvas canvas, int tab, float contentX, float contentY, float contentW, float contentH,
-                              boolean interactive) {
+                              float dx, int gridScroll, boolean interactive) {
         String[] items = tab == 1 ? KAOMOJI : EMOJIS;
         Font itemFont = FontManager.font(tab == 1 ? UiTokens.FONT_KAOMOJI : UiTokens.FONT_EMOJI);
         float itemH = tab == 1 ? UiTokens.EMOJI_KAOMOJI_ROW_H : UiTokens.EMOJI_CELL;
         int cols = tab == 1 ? 2 : UiTokens.EMOJI_COLS;
         float cellW = contentW / cols;
-        for (int i = 0; i < items.length; i++) {
-            int col = i % cols;
-            int row = i / cols;
-            float ex = contentX + col * cellW;
-            float ey = contentY - scroll + row * itemH;
-            if (ey + itemH < contentY || ey > contentY + contentH) {
-                continue;
-            }
-            PressScale ps = interactive ? cellScale.get(gridHoverKey(tab, i)) : null;
-            if (ps != null) {
-                ps.begin(canvas, ex + cellW / 2.0F, ey + itemH / 2.0F);
-            }
-            try {
-                if (interactive) {
-                    float hov = cellHover.getOrDefault(gridHoverKey(tab, i), 0.0F);
-                    if (hov > 0.01F) {
-                        SkiaDraw.drawRoundedRect(canvas, ex + s(2), ey + s(2), cellW - s(4), itemH - s(4),
-                                UiTokens.radius(6, AtomChatAppearance.theme()),
-                                Color.makeARGB((int) (60.0F * hov), 255, 255, 255));
-                    }
-                }
-                if (tab == 1) {
-                    SkiaFontRenderer.drawText(canvas, itemFont, items[i], ex + s(8),
-                            SkiaFontRenderer.centerBaselineY(itemFont, ey + itemH / 2.0F), textPrimary());
-                } else {
-                    SkiaFontRenderer.drawTextCentered(canvas, itemFont, items[i],
-                            ex + cellW / 2.0F, ey + itemH / 2.0F, textPrimary());
-                }
-            } finally {
+        int firstCol = Math.max(0, (int) Math.floor(-dx / cellW));
+        int endCol = Math.min(cols, (int) Math.ceil((contentW - dx) / cellW));
+        int firstRow = (int) (gridScroll / itemH);
+        int endRow = Math.min((items.length + cols - 1) / cols,
+                (int) Math.ceil((gridScroll + contentH) / itemH));
+        for (int row = firstRow; row < endRow; row++) {
+            float ey = contentY - gridScroll + row * itemH;
+            int end = Math.min(items.length, row * cols + endCol);
+            for (int i = row * cols + firstCol; i < end; i++) {
+                float ex = contentX + (i % cols) * cellW;
+                PressScale ps = interactive ? cellScale.get(gridHoverKey(tab, i)) : null;
                 if (ps != null) {
-                    canvas.restore();
+                    ps.begin(canvas, ex + cellW / 2.0F, ey + itemH / 2.0F);
+                }
+                try {
+                    if (interactive) {
+                        float hov = cellHover.getOrDefault(gridHoverKey(tab, i), 0.0F);
+                        if (hov > 0.01F) {
+                            SkiaDraw.drawRoundedRect(canvas, ex + s(2), ey + s(2), cellW - s(4), itemH - s(4),
+                                    UiTokens.radius(6, AtomChatAppearance.theme()),
+                                    Color.makeARGB((int) (60.0F * hov), 255, 255, 255));
+                        }
+                    }
+                    if (tab == 1) {
+                        SkiaFontRenderer.drawText(canvas, itemFont, items[i], ex + s(8),
+                                SkiaFontRenderer.centerBaselineY(itemFont, ey + itemH / 2.0F), textPrimary());
+                    } else {
+                        SkiaFontRenderer.drawTextCentered(canvas, itemFont, items[i],
+                                ex + cellW / 2.0F, ey + itemH / 2.0F, textPrimary());
+                    }
+                } finally {
+                    if (ps != null) {
+                        canvas.restore();
+                    }
                 }
             }
         }
@@ -806,10 +773,10 @@ public final class EmojiPanel {
         }
         float colW = contentW / UiTokens.EMOTE_COLS;
         int col = Math.max(0, Math.min(UiTokens.EMOTE_COLS - 1, (int) ((mx - contentX) / colW)));
-        int row = (int) ((my - contentY + scroll) / UiTokens.EMOTE_CELL);
+        int row = (int) ((my - contentY + paintedScroll) / UiTokens.EMOTE_CELL);
         EmoteGridLayout.Cell cell = emoteLayout().cellAt(row, col);
         float ex = contentX + col * colW;
-        float ey = contentY - scroll + row * UiTokens.EMOTE_CELL;
+        float ey = contentY - paintedScroll + row * UiTokens.EMOTE_CELL;
         switch (cell.kind()) {
             case LOCAL -> {
                 File emote = emoteStore.list().get(cell.index());
@@ -855,45 +822,25 @@ public final class EmojiPanel {
      * about where "mine" ends and "theirs" begins.
      */
     private void drawEmoteGrid(Canvas canvas, float contentX, float contentY, float contentW, float contentH,
-                               boolean interactive) {
+                               float dx, int gridScroll, boolean interactive) {
         EmoteGridLayout layout = emoteLayout();
         float cell = UiTokens.EMOTE_CELL;
         float colW = contentW / UiTokens.EMOTE_COLS;
         float pad = s(4);
         List<File> emotes = emoteStore.list();
         List<File> serverEmotes = emoteStore.serverList();
-        int rows = layout.rows();
-        int addKey = emoteStore.count();
-        for (int row = 0; row < rows; row++) {
-            // Entrance rise (unit V): the row lands 20ms after its neighbour,
-            // draw-only — the cell hit tests keep unscaled coordinates. The
-            // row's fade is the same progress as its rise, so a cell is never
-            // seen opaque in a shifted position.
-            long rowNow = System.currentTimeMillis();
-            float rowAlpha = UiStagger.itemAlpha(entrance, row, rowNow);
-            // The emoji grid is not a page-navigation surface: it opens inside
-            // the composer, so it keeps the vertical rise whatever the page nav
-            // style is. Handing it the nav axis would make the grid slide in
-            // sideways on a SLIDE panel, which is a different gesture entirely.
-            float closeRow = UiStagger.itemRise(entrance, row, rowNow, UiStagger.Axis.VERTICAL);
-            float ey = contentY - scroll + row * cell + closeRow;
-            if (ey + cell < contentY || ey > contentY + contentH) {
-                continue;
-            }
-            boolean rowFaded = rowAlpha < 1.0F;
-            // The Paint must outlive the layer: Skia snapshots it at saveLayer
-            // time, but the existing draw sites keep it open until the matching
-            // restore, so this one does too.
-            Paint rowLayer = rowFaded ? new Paint().setAlphaf(rowAlpha) : null;
-            if (rowLayer != null) {
-                canvas.saveLayer(Rect.makeXYWH(contentX, ey, contentW, cell + closeRow + 1.0F), rowLayer);
-            }
-            try {
+        int addKey = emotes.size();
+        int firstRow = (int) (gridScroll / cell);
+        int endRow = Math.min(layout.rows(), (int) Math.ceil((gridScroll + contentH) / cell));
+        int firstCol = Math.max(0, (int) Math.floor(-dx / colW));
+        int endCol = Math.min(UiTokens.EMOTE_COLS, (int) Math.ceil((contentW - dx) / colW));
+        for (int row = firstRow; row < endRow; row++) {
+            float ey = contentY - gridScroll + row * cell;
             if (layout.cellAt(row, 0).kind() == EmoteGridLayout.Kind.SERVER_HEADER) {
                 drawServerHeader(canvas, contentX, ey, cell, contentW);
                 continue;
             }
-            for (int col = 0; col < UiTokens.EMOTE_COLS; col++) {
+            for (int col = firstCol; col < endCol; col++) {
                 EmoteGridLayout.Cell c = layout.cellAt(row, col);
                 float ex = contentX + col * colW;
                 switch (c.kind()) {
@@ -952,12 +899,7 @@ public final class EmojiPanel {
                     }
                 }
             }
-            } finally {
-                if (rowLayer != null) {
-                    canvas.restore();
-                    rowLayer.close();
-                }
-            }
+
         }
     }
 

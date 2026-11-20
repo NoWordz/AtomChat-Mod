@@ -137,6 +137,8 @@ public final class SendPipeline {
                 normalized = "[[CICode,url=" + normalized + ",name=图片]]";
             }
             client.player.connection.sendChat(normalized);
+            com.atom.chat.image.ImageLoader.get().rememberLocallySent(
+                    Cicodes.extractImageUrl(reply == null ? normalized : body));
             // Arm echo suppression: the server relays this line back through the
             // identity-less path on NCR-style servers (e33chat parity).
 
@@ -177,6 +179,7 @@ public final class SendPipeline {
                 : "/msg " + target.realName() + " " + normalized;
         client.player.connection.sendCommand(sendText.startsWith("/")
                 ? sendText.substring(1) : sendText);
+        if (!command) com.atom.chat.image.ImageLoader.get().rememberLocallySent(Cicodes.extractImageUrl(body));
         client.gui.getChat().addRecentChat(historyText);
 
         if (!command && !com.atom.chat.reaction.ReactionClient.enabled()) {

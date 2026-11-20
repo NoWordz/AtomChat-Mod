@@ -11,12 +11,14 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 class EmoteImageCacheTest {
 
@@ -61,6 +63,37 @@ class EmoteImageCacheTest {
         Image first = cache.image(file);
         assertNotNull(first);
         assertSame(first, cache.image(file), "a cached emote must be reused");
+    }
+
+    @Test
+    void previewRechecksADirectoryThatBecameALinkAfterScanning() throws Exception {
+        Path listed = Files.createDirectory(tmp.resolve("listed"));
+        Path outside = Files.createDirectory(tmp.resolve("outside"));
+        File original = Files.write(listed.resolve("preview.png"), png(4, 4)).toFile();
+        Path other = Files.write(outside.resolve("preview.png"), png(4, 4));
+        Path retired = Files.move(listed, tmp.resolve("retired"));
+        try {
+            Files.createSymbolicLink(listed, outside);
+        } catch (IOException | UnsupportedOperationException | SecurityException unavailable) {
+            assumeTrue(System.getProperty("os.name").startsWith("Windows"), "the OS does not permit symlinks");
+            Process junction = new ProcessBuilder("cmd.exe", "/d", "/c", "mklink", "/J",
+                    listed.toString(), outside.toString()).redirectErrorStream(true).start();
+            assertTrue(junction.waitFor(10, TimeUnit.SECONDS));
+            assertEquals(0, junction.exitValue(), new String(junction.getInputStream().readAllBytes()));
+        }
+        EmoteImageCache cache = new EmoteImageCache();
+        try {
+            assertTrue(Files.isSameFile(original.toPath(), other));
+            assertNull(cache.image(original));
+        } finally {
+            Files.deleteIfExists(listed);
+        }
+        Files.move(retired, listed);
+        try {
+            assertNotNull(cache.image(original), "restoring the real directory must make previews work again");
+        } finally {
+            cache.clear();
+        }
     }
 
     @Test

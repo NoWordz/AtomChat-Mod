@@ -9,6 +9,7 @@ import java.util.function.*;
 public final class ReactionClient {
     private ReactionClient() {}
     public static BooleanSupplier supported=()->false;
+    public static BooleanSupplier expandedSupported=()->false;
     public static Consumer<byte[]> sender=bytes->{};
     public static Supplier<UUID> self=()->null;
 
@@ -136,6 +137,10 @@ public final class ReactionClient {
         if(com.atom.chat.onboarding.TutorialSandbox.active()){com.atom.chat.onboarding.TutorialSandbox.action();return;}
         UUID k=key(row);
         if(k==null || !supported.getAsBoolean() || !ReactionEmoji.allowed(emoji)) return;
+        if (!ReactionEmoji.legacy(emoji) && !expandedSupported.getAsBoolean()) {
+            lastError = "update_for_emoji";
+            return;
+        }
         boolean active=entries(row).stream().filter(e->e.emoji().equals(emoji)).noneMatch(ReactionClient::own);
         sender.accept(ReactionWire.action(new ReactionWire.Action(k,emoji,active)));
     }

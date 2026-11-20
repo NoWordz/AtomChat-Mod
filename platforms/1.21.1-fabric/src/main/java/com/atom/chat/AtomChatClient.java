@@ -154,6 +154,7 @@ public class AtomChatClient implements ClientModInitializer {
             com.atom.chat.chat.PublicEchoTracker.clear();
             com.atom.chat.chat.OutgoingMessages.clear();
             ChatStore.reset();
+            com.atom.chat.fun.NewYearFireworks.INSTANCE.reset();
             com.atom.chat.chat.SeenPlayers.clear();
             com.atom.chat.chat.OwnIdentity.reset();
             com.atom.chat.net.MediaCompanionClient.onDisconnect();

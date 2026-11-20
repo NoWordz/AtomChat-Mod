@@ -9,6 +9,12 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 
 class NotificationRenderWiringTest {
+    @Test void panelNotificationKeepsALightBlurWhenCardBlurIsZero() {
+        float minimum = NotificationMaterial.panelSigma(0F);
+        assertTrue(minimum > 0F);
+        assertTrue(NotificationMaterial.panelSigma(2F) > minimum);
+        assertTrue(NotificationMaterial.panelSigma(3F) > NotificationMaterial.panelSigma(2F));
+    }
     @Test void readAndDrawFramebufferBindingsAreCapturedAndRestoredIndependently() throws Exception {
         String s = Files.readString(root().resolve("shared/src/main/java/com/atom/chat/render/GlStateUtil.java"));
         assertTrue(s.contains("GL_READ_FRAMEBUFFER_BINDING"));
@@ -54,8 +60,8 @@ class NotificationRenderWiringTest {
             String banner = Files.readString(root.resolve(path));
             assertFalse(banner.contains("NotificationBackdropBlur"), path);
             assertTrue(banner.contains("UiTokens.notificationFill(AtomChatAppearance.theme())"), path);
-            assertTrue(banner.contains("AtomChatAppearance.drawCard("), path);
-            assertTrue(banner.contains("UiCards.drawNotificationBackdrop("), path);
+            assertTrue(banner.contains("AtomChatAppearance.drawOverlayCard("), path);
+            assertTrue(banner.contains("NotificationMaterial.drawPanelBlur("), path);
             assertTrue(banner.contains("UiTokens.onAccent(config.accentColor)"), path);
             assertTrue(banner.contains("PanelOpenMotion.openScale(progress, style)"), path);
             assertTrue(banner.contains("PanelOpenMotion.openSlidePx(progress, style)"), path);
@@ -81,9 +87,11 @@ class NotificationRenderWiringTest {
             assertFalse(s.contains("drawNotificationBackdrop"), twin[0]);
             assertFalse(s.contains("HudBackdropAlpha"), twin[0]);
             assertTrue(s.contains("PanelBlurRenderer.render(new Matrix4f()"), twin[0]);
-            assertTrue(s.contains("NotificationBanner.hudPlacement(width, height).rect()"),
+            assertTrue(s.contains("NotificationBanner.hudPlacement(width, height).toGui(density, guiScale)"),
                     "the blur rect must reuse the banner's own placement: " + twin[0]);
-            assertTrue(s.contains("NotificationBanner.hudBackdropPreDrawn()"), twin[0]);
+            assertTrue(s.contains("banner && bannerBlur > 0F"), twin[0]);
+            assertTrue(s.contains("blurPlacement != null && PanelBlurRenderer.isAvailable()"), twin[0]);
+            assertTrue(s.contains("NotificationBanner.hudBackdropAlpha(), bannerBlur"), twin[0]);
             int flush = s.indexOf(twin[1]);
             int blur = s.indexOf("PanelBlurRenderer.render(");
             int draw = s.indexOf("GRAPHICS.draw(");
@@ -93,13 +101,13 @@ class NotificationRenderWiringTest {
             assertTrue(blur < s.indexOf("ItemIconRenderer.prepare") && s.indexOf("ItemIconRenderer.prepare") < paint,
                     "the blur must precede the Skia paint lambda in the pre-pass: " + twin[0]);
         }
-        // Both banner twins must skip the Skia backdrop when the pre-pass drew.
+        // The panel blurs its own painted content. The game overlay has only the raw GL path.
         for (String path : List.of("layers/mapping/official/src/main/java/com/atom/chat/notification/NotificationBanner.java",
                 "platforms/1.21.1-fabric/src/main/java/com/atom/chat/notification/NotificationBanner.java")) {
             String s = Files.readString(root().resolve(path));
-            assertTrue(s.contains("boolean backdropPreDrawn"), path);
-            assertTrue(s.contains("!backdropPreDrawn && (fill >>> 24) < 255"), path);
-            assertTrue(s.contains("public static void hudBackdropPreDrawn()"), path);
+            assertTrue(s.contains("localBlur && (fill >>> 24) < 255"), path);
+            assertTrue(s.contains("sendScale, interactive, interactive"), path);
+            assertTrue(s.contains("NotificationMaterial.drawPanelBlur("), path);
             assertTrue(s.contains("public static float hudBackdropAlpha()"), path);
         }
     }

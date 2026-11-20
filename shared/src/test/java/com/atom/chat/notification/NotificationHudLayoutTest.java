@@ -29,6 +29,18 @@ class NotificationHudLayoutTest {
         assertEquals(400, scaled.rect().y() + scaled.rect().h() / 2, 0.01);
         assertEquals(1.5F, scaled.scale(), 0.001F);
     }
+    @Test void gameBlurUsesTheSamePhysicalRectAndRadiusAsTheBanner() {
+        var hud = NotificationHudLayout.scaled(900, 600, 300, 100, 20,
+                NotificationHudLayout.Anchor.BOTTOM_RIGHT, -30, -40, 1.5F);
+        float density = 1.5F, guiScale = 3F;
+        var gui = hud.toGui(density, guiScale);
+        assertEquals(hud.rect().x() * density, gui.rect().x() * guiScale);
+        assertEquals(hud.rect().y() * density, gui.rect().y() * guiScale);
+        assertEquals(hud.rect().w() * density, gui.rect().w() * guiScale);
+        assertEquals(hud.rect().h() * density, gui.rect().h() * guiScale);
+        assertEquals(hud.scale() * density, gui.scale() * guiScale);
+    }
+
     @Test void hudIsExclusiveToUnobstructedGameplay() {
         assertTrue(NotificationHudLayout.visible(true,true,false,false,false));
         assertFalse(NotificationHudLayout.visible(false,true,false,false,false));

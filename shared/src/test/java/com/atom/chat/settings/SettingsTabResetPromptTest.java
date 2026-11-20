@@ -32,10 +32,10 @@ class SettingsTabResetPromptTest {
         var feedback = new ArrayList<String>();
         var prompt = new SettingsTabResetPrompt(dialog,()->config,c->{saves.incrementAndGet();return true;},
                 key->key.equals("atomchat.settings.reset.body")?"Restore %s":key,(key,failed)->feedback.add(key),()->{});
-        assertTrue(prompt.request(SettingsSection.APPEARANCE,"display","Appearance · Display"));
+        assertTrue(prompt.request(SettingsSection.APPEARANCE,"material","Appearance · Material"));
         assertEquals(.5F,config.blurStrength); assertEquals(0,saves.get());
         dialog.cancel(); assertEquals(.5F,config.blurStrength); assertEquals(0,saves.get());
-        prompt.request(SettingsSection.APPEARANCE,"display","Appearance · Display");
+        prompt.request(SettingsSection.APPEARANCE,"material","Appearance · Material");
         settle(dialog); dialog.key(258); dialog.key(257); dialog.key(257);
         assertEquals(AtomChatConfig.DEFAULT.blurStrength,config.blurStrength);
         assertEquals(123,config.accentColor); assertEquals(1,saves.get());
@@ -45,7 +45,7 @@ class SettingsTabResetPromptTest {
         var config=new AtomChatConfig();config.blurStrength=.5F;
         var dialog=new ConfirmationDialog();var errors=new AtomicInteger();
         var prompt=new SettingsTabResetPrompt(dialog,()->config,c->false,key->key,(key,failed)->{if(failed)errors.incrementAndGet();},()->fail("no success callback"));
-        prompt.request(SettingsSection.APPEARANCE,"display","Display");settle(dialog);dialog.key(258);dialog.key(257);
+        prompt.request(SettingsSection.APPEARANCE,"material","Material");settle(dialog);dialog.key(258);dialog.key(257);
         assertEquals(.5F,config.blurStrength);assertEquals(1,errors.get());
     }
 }

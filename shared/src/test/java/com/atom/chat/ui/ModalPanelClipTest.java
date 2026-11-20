@@ -63,7 +63,7 @@ class ModalPanelClipTest {
               for (float radius : new float[]{20F, 0F, 40F}) {
                 cfg.cornerRadius = radius;
                 preview.open(image);
-                picker.open(new SettingsColor("test", "test", "ui", new int[0], () -> 0xFF778899, v -> {}));
+                picker.open(new SettingsColor("test", "test", "ui", () -> 0xFF778899, v -> {}));
                 crop.open(null, true, 160, 160, "test");
                 java.util.List<java.util.function.Consumer<Canvas>> draws = java.util.List.of(
                     c -> preview.render(c, panel, -100, -100),

@@ -2,8 +2,10 @@ package com.atom.chat.settings;
 
 import com.atom.chat.config.AtomChatConfig;
 import com.atom.chat.platform.Platform;
+import com.atom.chat.render.SkiaFontRenderer;
 import com.atom.chat.theme.AppearancePresetStore;
 import com.atom.chat.ui.UiLayout;
+import com.atom.chat.ui.UiStagger;
 import com.atom.lib.design.atomchat.UiTokens;
 import io.github.humbleui.skija.Canvas;
 import io.github.humbleui.skija.Bitmap;
@@ -60,11 +62,86 @@ class SettingsPresetStripTest {
     }
 
     @Test
-    void wallpapersUseTheSameHorizontalStripGestureAndIndependentAction() throws Exception {
-        int display = java.util.stream.IntStream.range(0,page.chips(SettingsSection.APPEARANCE).size())
-                .filter(i -> page.chips(SettingsSection.APPEARANCE).get(i).id().equals("display"))
+    void measuringAnUnpaintedAppearancePageStillAllowsPreviewPreparation() throws Exception {
+        page.measureContent(layout, SettingsSection.APPEARANCE);
+        var clearShapes = SkiaFontRenderer.class.getDeclaredMethod("clearTextShapeCache");
+        var shapeBuilds = SkiaFontRenderer.class.getDeclaredMethod("shapedPlanBuilds");
+        clearShapes.setAccessible(true);
+        shapeBuilds.setAccessible(true);
+        clearShapes.invoke(null);
+        try {
+            long before = (long) shapeBuilds.invoke(null);
+            page.warmAppearanceTheme(layout);
+            long warmed = (long) shapeBuilds.invoke(null);
+            assertTrue(warmed > before, "returning before the previews draw must leave their preparation pending");
+            page.warmAppearanceTheme(layout);
+            assertEquals(warmed, shapeBuilds.invoke(null), "the preview is prepared once");
+        } finally {
+            clearShapes.invoke(null);
+        }
+    }
+
+    @Test
+    void transparentAppearancePreviewsSkipPaintingAndKeepTheirHitTransform() throws Exception {
+        AtomChatConfig config = AtomChatConfig.get();
+        config.animationEnabled = true;
+        config.pageNavStyle = AtomChatConfig.PageNavStyle.SLIDE;
+        var stripHitTests = SettingsSectionPage.class.getDeclaredField("stripHitTests");
+        stripHitTests.setAccessible(true);
+        long entered = 10_000L;
+        page.markEntered(entered);
+
+        try (Surface surface = Surface.makeRasterN32Premul(560, 940)) {
+            Canvas canvas = surface.getCanvas();
+            UiStagger.atFrame(entered, () ->
+                    page.renderBody(canvas, layout, SettingsSection.APPEARANCE, -1, -1, 0, config.accentColor));
+            assertEquals(0L, stripHitTests.getLong(page), "zero-opacity preview strips must skip painting");
+            UiLayout.Rect strip = page.themesRowRect(layout, SettingsSection.APPEARANCE, 0);
+            assertNotNull(strip);
+            UiLayout.Rect painted = page.staggerHits().paintedBounds(strip);
+            assertEquals(strip.x() + UiStagger.ITEM_STYLE_SLIDE_PX, painted.x(), 0.01F);
+
+            UiStagger.atFrame(entered + 160L, () ->
+                    page.renderBody(canvas, layout, SettingsSection.APPEARANCE, -1, -1, 0, config.accentColor));
+            assertEquals(3L, stripHitTests.getLong(page), "all three preview strips paint once they enter");
+        }
+    }
+
+    @Test
+    void aTransparentWallpaperStripStillScrollsBeforeASelection() throws Exception {
+        AtomChatConfig config = AtomChatConfig.get();
+        config.animationEnabled = true;
+        long entered = 10_000L;
+        page.markEntered(entered);
+        UiLayout tall = UiLayout.ofDetail(10, 10, 520, 1800);
+        List<SettingsSectionPage.Row> rows = page.rows(SettingsSection.APPEARANCE);
+        int wallpaperRow = java.util.stream.IntStream.range(0, rows.size())
+                .filter(i -> rows.get(i).kind() == SettingsSectionPage.RowKind.WALLPAPERS)
                 .findFirst().orElseThrow();
-        page.selectChip(SettingsSection.APPEARANCE,display);
+        UiLayout.Rect rect = page.rowRect(SettingsSection.APPEARANCE, rows, wallpaperRow, 0, tall);
+        float x = rect.x() + UiTokens.SETTINGS_ROW_PAD + UiTokens.THEME_CARD_W / 2;
+        float y = rect.y() + UiTokens.s(28) + UiTokens.THEME_CARD_H / 2;
+        assertTrue(page.themesUnderPointer(x, y, tall, SettingsSection.APPEARANCE, 0));
+        float cardStride = UiTokens.THEME_CARD_W + UiTokens.THEME_CARD_GAP;
+        page.wheelThemeStrip(-cardStride / UiTokens.s(60), rect);
+        var pointerStrip = SettingsSectionPage.class.getDeclaredField("pointerStrip");
+        pointerStrip.setAccessible(true);
+        Object strip = pointerStrip.get(page);
+        var scrollStarted = strip.getClass().getDeclaredField("animStart");
+        scrollStarted.setAccessible(true);
+        scrollStarted.setLong(strip, System.currentTimeMillis() - 1_000);
+
+        try (Surface surface = Surface.makeRasterN32Premul(560, 1820)) {
+            UiStagger.atFrame(entered, () ->
+                    page.renderBody(surface.getCanvas(), tall, SettingsSection.APPEARANCE, -1, -1, 0, config.accentColor));
+            assertTrue(page.themesPress(x, y, tall, SettingsSection.APPEARANCE, 0));
+            page.endThemeStrip();
+        }
+        assertEquals(List.of("wallpaper_preset:" + com.atom.chat.wallpaper.WallpaperPresets.presets()[1].id()), actions);
+    }
+
+    @Test
+    void wallpapersUseTheSameHorizontalStripGestureAndIndependentAction() throws Exception {
         assertTrue(page.rows(SettingsSection.APPEARANCE).stream().anyMatch(r -> r.kind().name().equals("WALLPAPERS")));
         UiLayout tall = UiLayout.ofDetail(0,0,480,1800);
         try(Surface surface=Surface.makeRasterN32Premul(480,1800)) {
@@ -169,13 +246,15 @@ class SettingsPresetStripTest {
     void everySettingsTabUsesTheConfirmedGroupHeadings() {
         assertGroupHeadings(SettingsSection.APPEARANCE, "theme",
                 "atomchat.settings.group.appearance.presets",
-                "atomchat.settings.group.appearance.corners",
+                "atomchat.settings.group.appearance.bubbles",
+                "atomchat.settings.group.appearance.wallpaper");
+        assertGroupHeadings(SettingsSection.APPEARANCE, "colors",
                 "atomchat.settings.group.appearance.message_colors",
                 "atomchat.settings.group.appearance.ui_colors");
         assertGroupHeadings(SettingsSection.CHAT, "messages",
                 "atomchat.settings.group.chat.input",
                 "atomchat.settings.group.chat.messages_display",
-                "atomchat.settings.group.chat.interaction");
+                "atomchat.settings.group.chat.content");
         assertTrue(page.rows(SettingsSection.PRIVACY).stream().anyMatch(r ->
                 r.kind() == SettingsSectionPage.RowKind.LABEL
                         && "atomchat.settings.group.privacy.blocked".equals(r.labelKey())));
@@ -185,8 +264,8 @@ class SettingsPresetStripTest {
     }
 
     @Test
-    void mergedColourCardsKeepPerRowAndPerSwatchHoverIdentity() throws Exception {
-        page.selectChip(SettingsSection.APPEARANCE, 0);
+    void mergedColourCardsKeepPerRowAndPerControlHoverIdentity() throws Exception {
+        selectTab(SettingsSection.APPEARANCE, "colors");
         List<SettingsSectionPage.Row> rows = page.rows(SettingsSection.APPEARANCE);
         List<Integer> colourRows = new ArrayList<>();
         for (int i = 0; i < rows.size(); i++) {
@@ -202,7 +281,7 @@ class SettingsPresetStripTest {
                     -1, -1, 0, 0xFF4A90E2);
             for (int row : List.of(colourRows.get(0), colourRows.get(1))) {
                 ColourProbe probe = findColourHit(tall, rows.get(row));
-                assertNotNull(probe, "a visible swatch is hittable in row " + row);
+                assertNotNull(probe, "the current color is hittable in row " + row);
                 page.render(surface.getCanvas(), tall, SettingsSection.APPEARANCE,
                         -1, -1, 0, 0xFF4A90E2);
                 assertTrue(surface.readPixels(bitmap, 0, 0));
@@ -216,7 +295,7 @@ class SettingsPresetStripTest {
                 byte[] hovered = bitmap.readPixels();
                 assertTrue(regionChanged(idle, hovered, 560,
                                 (int) probe.pointerX(), (int) probe.pointerY(), 24),
-                        "hovering a swatch in merged colour row " + row + " changes its local pixels");
+                        "hovering the color control in merged colour row " + row + " changes its local pixels");
             }
         }
     }
@@ -253,10 +332,14 @@ class SettingsPresetStripTest {
         return null;
     }
 
-    private void assertGroupHeadings(SettingsSection section, String chip, String... keys) {
+    private void selectTab(SettingsSection section, String chip) {
         int index = java.util.stream.IntStream.range(0, page.chips(section).size())
                 .filter(i -> page.chips(section).get(i).id().equals(chip)).findFirst().orElseThrow();
         page.selectChip(section, index);
+    }
+
+    private void assertGroupHeadings(SettingsSection section, String chip, String... keys) {
+        selectTab(section, chip);
         List<String> labels = page.rows(section).stream()
                 .filter(r -> r.kind() == SettingsSectionPage.RowKind.LABEL)
                 .map(SettingsSectionPage.Row::labelKey).toList();

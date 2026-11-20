@@ -12,6 +12,7 @@ its own copyright and license. This file collects the required notices.
 | Skija 0.143.18 (Java bindings for Skia) | Apache License 2.0 | Distributed by AtomLib, not embedded in the AtomChat consumer JAR |
 | HumbleUI types 0.2.0 | Apache License 2.0 | Distributed by AtomLib for geometry types |
 | FlatLaf | Apache License 2.0 | Modern Swing look and feel for the image picker |
+| [Tabler Icons](https://github.com/tabler/tabler-icons/tree/85e870dbe8680c2d6deefd062122d30ef1544a41) | MIT | Selected settings icons drawn by the existing icon painter. License included in `META-INF/licenses/Tabler-Icons.txt` |
 | LWJGL Yoga (3.3.1 Forge, 3.3.3 1.21.1) | BSD 3-Clause for LWJGL, MIT for Yoga | Layout backend distributed by AtomLib |
 
 ## Apache License 2.0 components

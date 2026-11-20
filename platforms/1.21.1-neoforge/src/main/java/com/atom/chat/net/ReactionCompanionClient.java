@@ -5,7 +5,8 @@ public final class ReactionCompanionClient {
     private ReactionCompanionClient() {}
     public static void init() {
         ReactionClient.supported = ReactionCompanionClient::supported;
-        ReactionClient.sender = bytes -> { if (supported()) { net.neoforged.neoforge.network.PacketDistributor.sendToServer(new ReactionPayloads.ActionPayload(bytes)); } };
+        ReactionClient.expandedSupported = ReactionCompanionClient::expandedSupported;
+        ReactionClient.sender = bytes -> { if (supported()) { net.neoforged.neoforge.network.PacketDistributor.sendToServer(expandedSupported() ? new ReactionPayloads.ExpandedAction(bytes) : new ReactionPayloads.ActionPayload(bytes)); } };
         ReactionClient.self = () -> { var client = Minecraft.getInstance(); return client.player == null ? null : client.player.getUUID(); };
 
     }
@@ -13,9 +14,16 @@ public final class ReactionCompanionClient {
         var client = Minecraft.getInstance();
         return client.player != null && client.getConnection() != null && (client.getConnection().hasChannel(ReactionPayloads.ActionPayload.TYPE));
     }
+    private static boolean expandedSupported() {
+        var connection = Minecraft.getInstance().getConnection();
+        return connection != null && connection.hasChannel(ReactionPayloads.ExpandedAction.TYPE);
+    }
     public static void onData(ReactionPayloads.DataPayload payload,Object origin) {
+        onBytes(payload.bytes(), origin);
+    }
+    static void onBytes(byte[] bytes, Object origin) {
         var client=Minecraft.getInstance();
         Object current=client.getConnection()==null ? null : client.getConnection().getConnection();
-        ReactionClient.acceptFrom(origin,current,payload.bytes());
+        ReactionClient.acceptFrom(origin,current,bytes);
     }
 }

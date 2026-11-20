@@ -18,11 +18,12 @@ class ExperimentalEffectsTest {
         cfg=new AtomChatConfig();
         var field=AtomChatConfig.class.getDeclaredField("instance");field.setAccessible(true);field.set(null,cfg);
     }
-    @Test void defaultOffAndActualAdvancedFoldHasOnlyOneSwitchImmediatelyAfterFun() throws Exception {
+    @Test void defaultOffAndEffectsFoldHasOnlyOneSwitchImmediatelyAfterFun() throws Exception {
         assertFalse(AtomChatConfig.class.getField("experimentalEffectsEnabled").getBoolean(cfg));
         var page=new SettingsSectionPage();
-        int advanced=0;for(var chip:page.chips(SettingsSection.CHAT)) { if(chip.id().equals("advanced"))break;advanced++; }
-        page.selectChip(SettingsSection.CHAT,advanced);
+        var chips=page.chips(SettingsSection.CHAT);
+        int effects=java.util.stream.IntStream.range(0,chips.size()).filter(i -> chips.get(i).id().equals("effects")).findFirst().orElseThrow();
+        page.selectChip(SettingsSection.CHAT,effects);
         var rows=page.rows(SettingsSection.CHAT);int fun=-1,experimental=-1;
         for(int i=0;i<rows.size();i++) {
             if("atomchat.settings.group.chat.fun".equals(rows.get(i).labelKey()))fun=i;
@@ -37,44 +38,5 @@ class ExperimentalEffectsTest {
         var item=rows.get(experimental+1).item();item.set(true);
         var saved=com.atom.chat.platform.Platform.configDir().resolve("atomchat/atomchat-client.json");
         assertTrue(gson.fromJson(java.nio.file.Files.readString(saved),AtomChatConfig.class).experimentalEffectsEnabled);
-    }
-    @Test void onlyManualEnableStartsIgnitionAndBusyMessagesDoNotQueue() {
-        try(var effects=new ExperimentalEffects(false)) {
-            assertFalse(effects.advance(false,true,100));
-            assertTrue(effects.advance(true,true,200));assertEquals(ExperimentalEffectType.IGNITION,effects.type());
-            effects.onMessage("冷死了",300);assertEquals(ExperimentalEffectType.IGNITION,effects.type());
-            assertFalse(effects.advance(true,true,3200));
-            effects.onMessage("冷死了",3300);assertEquals(ExperimentalEffectType.FROST,effects.type());
-            assertTrue(effects.advance(true,true,3400));assertFalse(effects.advance(false,true,3500));
-            assertTrue(effects.advance(true,true,3600));assertEquals(ExperimentalEffectType.IGNITION,effects.type());
-        }
-        try(var effects=new ExperimentalEffects(true)) {
-            assertFalse(effects.advance(true,true,100));
-            assertFalse(effects.advance(false,false,200));assertFalse(effects.advance(true,false,300));
-            assertFalse(effects.advance(true,true,400),"enabling motion later must not replay a skipped activation");
-        }
-    }
-    @Test void keywordWhitelistIgnoresCommandsLinksCodeAndQuotedText() {
-        var matcher=new ExperimentalEffectMatcher();
-        assertEquals(ExperimentalEffectType.WAVE,matcher.match("震惊！").orElseThrow());
-        assertEquals(ExperimentalEffectType.FROST,matcher.match("冷死了 ❄").orElseThrow());
-        assertEquals(ExperimentalEffectType.GRAVITY,matcher.match("黑洞 🕳").orElseThrow());
-        assertTrue(matcher.match("/say 黑洞").isEmpty());assertTrue(matcher.match("`黑洞` https://example.com/震惊").isEmpty());
-        assertTrue(matcher.match("「引用 @Bob: 冷死了」").isEmpty());assertTrue(matcher.match("coldplay shockwaves").isEmpty());
-        assertEquals(ExperimentalEffectType.FROST,matcher.match("冷死了，然后黑洞").orElseThrow());
-    }
-    @Test void returningFromAnotherScreenReinstallsAWorkingSessionWithoutAnIgnitionReplay() throws Exception {
-        cfg.experimentalEffectsEnabled=true;cfg.animationEnabled=true;
-        var presentation=new ChatEffectPresentation((m,p)->true);
-        var field=ChatEffectPresentation.class.getDeclaredField("experimental");field.setAccessible(true);
-        presentation.install();var original=(ExperimentalEffects)field.get(presentation);
-        presentation.close();presentation.install();
-        try {
-            var restored=(ExperimentalEffects)field.get(presentation);
-            assertFalse(restored.advance(true,true,100),"restoring an existing enabled screen must not replay activation");
-            restored.onMessage("黑洞",200);
-            assertEquals(ExperimentalEffectType.GRAVITY,restored.type(),"HUD editor returns to the same ChatScreen instance");
-            assertNotSame(original,restored,"closed native renderers must not be reused");
-        } finally {presentation.close();}
     }
 }

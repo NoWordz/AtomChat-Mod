@@ -2,7 +2,7 @@
 
 ## 1. Pick the right jar
 
-Download the one that matches your platform from [Releases](https://github.com/E33EPUS/AtomChat/releases):
+Download [AtomChat](https://github.com/NoWordz/AtomChat-Mod/releases/latest) and [AtomLib](https://github.com/NoWordz/AtomLib-Mod/releases/latest) for the same Minecraft version and loader.
 
 | Your game | Download this file | You also need |
 |---|---|---|
@@ -10,13 +10,13 @@ Download the one that matches your platform from [Releases](https://github.com/E
 | Minecraft 1.21.1 + NeoForge | `atomchat-NeoForge-1.21.1-x.y.z.jar` | NeoForge 21.1+, Java 21+ |
 | Minecraft 1.20.1 + Forge | `atomchat-Forge-1.20.1-x.y.z.jar` | Forge 47+, Java 17 |
 
-> ⚠️ The three platforms **do not interchange**: a jar built for another loader simply will not load. Note also the `-slim` file in the Forge downloads — it is for development and carries no bundled dependencies, so play with the one that has no `-slim` suffix.
+Choose the installation JARs for your loader. The installation requirements for the current development version are in the [README](../../README.md).
 
 ## 2. Drop it into mods
 
-Drag the jar into `.minecraft/mods/` (for a modpack instance, that instance's own `mods/` folder).
+Put both JARs in your client's `mods/` folder. For a modpack, use that instance's own folder.
 
-If you want the **server** to host images, sync avatars, or hand out an emote pack and quick phrases, put the same jar into the server's `mods/` as well. That step is optional: everything still works without it, images just go through a third-party image host. The server side is covered in the [Server Owner Guide](Server-Owner-Guide).
+To enable optional server media hosting, profile sync or shared stickers and quick phrases, put AtomChat into the server's `mods/` folder. Dedicated servers only need AtomChat. [Server Owner Guide](Server-Owner-Guide.md)
 
 ## 3. Open the panel
 
@@ -37,17 +37,14 @@ The panel looks like this: the public channel and the system clock on top, the m
 
 ## 5. Make it look like yours
 
-Click the **Settings** tab at the bottom. It is a Windows 11 style 2×2 tile home: **Appearance / Chat / Privacy & Blocking / About**.
+Open **Settings** at the bottom of the panel.
 
-Every option **applies immediately and is written to disk at once — no game restart**. Two to play with first:
-
-- `Appearance → UI scale`, from x0.75 to x1.50, scales the whole interface (handy on a small laptop);
-- `Appearance → Custom wallpaper` takes your own image, with the long edge scaled down to 1024 pixels.
-
-For the rest of the appearance options, and the full list of config keys, see [Appearance and Config](Appearance-and-Config).
+- Choose a theme, bubble shape or wallpaper in **Appearance & Interaction → Presets**. The custom wallpaper entry follows the wallpaper presets.
+- Adjust panel and card blur and opacity under **Surface**. Open **Layout** for panel size, the shortcut icon and the notification banner editor.
+- Under **Chat & Notifications → Messages → Chat HUD**, choose the message limit, timed dismissal or vanilla chat.
 
 ## Next
 
-- Where images actually live, and why some of them go through an image host → [Media and Transfers](Media-and-Transfers)
-- How to add or remove emotes, and where server-offered ones come from → [Emotes](Emotes)
-- The panel will not open after installing / messages turned grey / a crash → [Troubleshooting](Troubleshooting)
+- Where images actually live, and why some of them go through an image host → [Media and Transfers](Media-and-Transfers.md)
+- How to add or remove emotes, and where server-offered ones come from → [Emotes](Emotes.md)
+- The panel will not open after installing / messages turned grey / a crash → [Troubleshooting](Troubleshooting.md)

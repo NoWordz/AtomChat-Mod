@@ -106,6 +106,9 @@ public final class ImageLoader {
     public static final int MAX_ANIMATED_CACHED = 8;
     /** Animated frames: decoded-pixel budget across the animated LRU (about 96 MB). */
     public static final long MAX_ANIM_PIXELS_TOTAL = 24L * 1024L * 1024L;
+    private static final int MAX_HUD_ANIM_DIM = 96;
+    private static final long MAX_HUD_ANIM_PIXELS = 600_000L;
+    private static final int MAX_LOCALLY_SENT = 100;
 
     /** Byte source for a URL; HTTP by default, injected in tests. */
     public interface Fetcher {
@@ -131,11 +134,31 @@ public final class ImageLoader {
     private final Executor maintenance;
     private final java.util.concurrent.atomic.AtomicBoolean maintenanceQueued = new java.util.concurrent.atomic.AtomicBoolean();
     private static final int MAX_PENDING_LOADS = 32;
+    private static final long VISIBLE_REQUEST_MS = 2_000L;
+    private static final long NEVER_SEEN = Long.MIN_VALUE;
     private final class LoadTask {
         final String url;
-        volatile long lastSeen;
-        LoadTask(String url) { this.url=url;this.lastSeen=clock.getAsLong(); }
+        final boolean fromHud;
+        final AnimatedImage thumbnailSource;
+        volatile long panelSeenAt = NEVER_SEEN;
+        volatile long hudSeenAt = NEVER_SEEN;
+        LoadTask(String url, boolean hud, AnimatedImage thumbnailSource, long now) {
+            this.url = url;
+            this.fromHud = hud;
+            this.thumbnailSource = thumbnailSource;
+            seen(hud, now);
+        }
         boolean current() { return pending.get(url)==this; }
+        void seen(boolean hud, long now) {
+            if (hud) hudSeenAt = now;
+            else panelSeenAt = now;
+        }
+        boolean visible(long now) {
+            return recent(panelSeenAt, now) || recent(hudSeenAt, now);
+        }
+        private static boolean recent(long timestamp, long now) {
+            return timestamp != NEVER_SEEN && now - timestamp <= VISIBLE_REQUEST_MS;
+        }
     }
 
     private final LinkedHashMap<String, Image> cache = new LinkedHashMap<>(64, 0.75F, true) {
@@ -153,6 +176,16 @@ public final class ImageLoader {
      */
     private final LinkedHashMap<String, AnimatedImage> animatedCache =
             new LinkedHashMap<>(16, 0.75F, true);
+    // Like the other hot caches, guarded by pending; eviction is independent.
+    private final LinkedHashMap<String, AnimatedImage> hudAnimations = new LinkedHashMap<>(16, 0.75F, true) {
+        @Override
+        protected boolean removeEldestEntry(java.util.Map.Entry<String, AnimatedImage> eldest) {
+            return size() > com.atom.chat.config.AtomChatConfig.CHAT_HUD_MAX_MESSAGES;
+        }
+    };
+    private final LinkedHashMap<String, Boolean> locallySent = new LinkedHashMap<>();
+    private final LinkedHashMap<String, Long> hudDiskMisses = new LinkedHashMap<>();
+    // Admission, removal and hot cache publication share this monitor. I/O and decode run outside it.
     private final ConcurrentHashMap<String, LoadTask> pending = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, Long> failedUntil = new ConcurrentHashMap<>();
     private volatile Path diskDir;
@@ -175,10 +208,15 @@ public final class ImageLoader {
 
     /** A server's queued media must not publish into the next connection. */
     public void invalidateMedia() {
-        pending.keySet().removeIf(url -> url.startsWith(MEDIA_URL_PREFIX));
-        failedUntil.keySet().removeIf(url -> url.startsWith(MEDIA_URL_PREFIX));
-        synchronized (cache) { cache.keySet().removeIf(url -> url.startsWith(MEDIA_URL_PREFIX)); }
-        synchronized (animatedCache) { animatedCache.keySet().removeIf(url -> url.startsWith(MEDIA_URL_PREFIX)); }
+        synchronized (pending) {
+            pending.keySet().removeIf(url -> url.startsWith(MEDIA_URL_PREFIX));
+            failedUntil.keySet().removeIf(url -> url.startsWith(MEDIA_URL_PREFIX));
+            cache.keySet().removeIf(url -> url.startsWith(MEDIA_URL_PREFIX));
+            animatedCache.keySet().removeIf(url -> url.startsWith(MEDIA_URL_PREFIX));
+            hudAnimations.keySet().removeIf(url -> url.startsWith(MEDIA_URL_PREFIX));
+            locallySent.clear();
+            hudDiskMisses.keySet().removeIf(url -> url.startsWith(MEDIA_URL_PREFIX));
+        }
     }
 
     /** Enables the disk layer and trims any over-limit leftovers; called once
@@ -280,13 +318,13 @@ public final class ImageLoader {
     /** Seeds the normal draw and preview cache without I/O; tutorial-only state owns removal. */
     public void putMemoryImage(String url, Image image) {
         if(url==null||image==null)return;
-        synchronized(cache){cache.put(url,image);failedUntil.remove(url);}
+        synchronized(pending){cache.put(url,image);clearFailure(url);}
     }
 
     /** Releases a memory-only seed; the cache holds the sole reference. */
     public void removeMemoryImage(String url) {
         if(url==null)return;
-        synchronized(cache){cache.remove(url);}
+        synchronized(pending){cache.remove(url);}
     }
 
     /**
@@ -296,81 +334,122 @@ public final class ImageLoader {
      * margin).
      */
     public Image get(String url, boolean visible) {
+        return get(url, visible, false);
+    }
+
+    /** HUD reads cached external images, but only local sends and valid companion media can start another fetch. */
+    public Image getHudImage(String url, boolean visible) {
+        return get(url, visible, true);
+    }
+
+    /** Called at the actual local send boundary, independently of how the server labels the echo. */
+    public void rememberLocallySent(String url) {
+        if (url == null || !(url.startsWith("https://") || url.startsWith("http://"))) return;
+        synchronized (pending) {
+            locallySent.put(url, Boolean.TRUE);
+            if (locallySent.size() > MAX_LOCALLY_SENT) locallySent.remove(locallySent.keySet().iterator().next());
+        }
+    }
+
+    private Image get(String url, boolean visible, boolean hud) {
         if (url == null || url.isBlank()) {
             return null;
         }
-        synchronized (cache) {
-            Image cached = cache.get(url);
-            if (cached != null) {
-                return cached;
-            }
-        }
-        Image animated = animatedFrame(url);
-        if (animated != null) {
-            return animated;
-        }
-        Long failed = failedUntil.get(url);
-        if (failed != null && clock.getAsLong() < failed) {
-            return null;
-        }
-        if (failed != null) failedUntil.remove(url, failed);
+        AnimatedImage full;
         Path disk;
         LoadTask task;
         synchronized (pending) {
-            task=pending.get(url);
-            if(task!=null) {
-                if(visible) task.lastSeen=clock.getAsLong();
-                else pending.remove(url,task);
-                return null;
+            Image cached = cache.get(url);
+            if (cached != null) return cached;
+            AnimatedImage thumbnail = hud ? hudAnimations.get(url) : null;
+            if (thumbnail != null) return thumbnail.frameAt(clock.getAsLong());
+            full = animatedCache.get(url);
+            if (full != null && (!hud || !visible)) return full.frameAt(clock.getAsLong());
+            if (hud && !visible) return null;
+            long now = clock.getAsLong();
+            Long failed = failedUntil.get(url);
+            if (failed != null && now < failed) return full == null ? null : full.frameAt(now);
+            if (failed != null) failedUntil.remove(url, failed);
+            task = pending.get(url);
+            if (task != null) {
+                if (visible) {
+                    task.seen(hud, now);
+                } else if (!task.fromHud) {
+                    pending.remove(url, task);
+                }
+                return full == null ? null : full.frameAt(now);
             }
-            if (!visible || pending.size() >= MAX_PENDING_LOADS) return null;
-            disk = diskFile(url);
-            if (disk == null && !isFetchable(url)) return null;
-            task=new LoadTask(url);pending.put(url,task);
+            if (!visible || pending.size() >= MAX_PENDING_LOADS) return full == null ? null : full.frameAt(now);
+            boolean allowNetwork = !hud || knownNetworkSource(url);
+            Long diskMiss = hud && !allowNetwork ? hudDiskMisses.get(url) : null;
+            if (full == null && diskMiss != null && now < diskMiss) return null;
+            disk = full == null ? diskFile(url) : null;
+            if (full == null && disk == null && (!allowNetwork || !isFetchable(url))) return null;
+            task = new LoadTask(url, hud, full, now);
+            pending.put(url, task);
         }
         final LoadTask scheduled=task;
         try {
             executor.execute(() -> {
-                if(!scheduled.current() || clock.getAsLong()-scheduled.lastSeen>2_000L) {
-                    pending.remove(url,scheduled);return;
+                if (!scheduled.current() || !scheduled.visible(clock.getAsLong())) {
+                    release(scheduled);
+                    return;
                 }
                 load(url,disk,scheduled);
             });
-        } catch(java.util.concurrent.RejectedExecutionException full) {
-            pending.remove(url,scheduled);return null;
+        } catch (java.util.concurrent.RejectedExecutionException rejected) {
+            release(scheduled);
+            return full == null ? null : full.frameAt(clock.getAsLong());
         }
         {
             // The executor may be direct (tests) and complete synchronously;
             // re-check before reporting a miss so the first visible call can
             // already serve the image.
-            synchronized (cache) {
+            synchronized (pending) {
                 Image loaded = cache.get(url);
-                if (loaded != null) {
-                    return loaded;
-                }
-            }
-            Image justLoaded = animatedFrame(url);
-            if (justLoaded != null) {
-                return justLoaded;
+                if (loaded != null) return loaded;
+                AnimatedImage animation = hud ? hudAnimations.get(url) : null;
+                if (animation == null) animation = animatedCache.get(url);
+                if (animation != null) return animation.frameAt(clock.getAsLong());
             }
         }
-        return null;
+        return full == null ? null : full.frameAt(clock.getAsLong());
     }
 
-    /** Current frame of a cached animation, or null when the url is not one. */
-    private Image animatedFrame(String url) {
-        synchronized (animatedCache) {
-            AnimatedImage animated = animatedCache.get(url);
-            return animated == null ? null : animated.frameAt(clock.getAsLong());
+    private void release(LoadTask task) {
+        synchronized (pending) {
+            pending.remove(task.url, task);
+        }
+    }
+
+    /** Caller holds the admission monitor. */
+    private boolean knownNetworkSource(String url) {
+        return locallySent.containsKey(url) || com.atom.chat.net.MediaIds.isSafeId(com.atom.chat.net.MediaIds.idOf(url));
+    }
+
+    private boolean mayFetch(LoadTask task) {
+        synchronized (pending) {
+            return task.current() && (knownNetworkSource(task.url) || LoadTask.recent(task.panelSeenAt, clock.getAsLong()));
         }
     }
 
     private void load(String url, Path disk, LoadTask task) {
+        boolean diskOnly = task.fromHud;
         try {
+            if (task.thumbnailSource != null) {
+                publishAnimation(task, task.thumbnailSource);
+                return;
+            }
             boolean fromDisk = disk != null && com.atom.chat.util.DataMigration.allowPersonalPath(disk) && Files.exists(disk);
+            // A queued external request still needs recent panel visibility at the actual fetch boundary.
+            diskOnly = !mayFetch(task);
             byte[] bytes;
             if(fromDisk) { try(java.io.InputStream input=Files.newInputStream(disk)) { bytes=readSource(input); } }
-            else bytes=fetcher.fetch(url);
+            else if (!diskOnly) bytes=fetcher.fetch(url);
+            else {
+                if (task.hudSeenAt != NEVER_SEEN) noteLoadFailure(task, true);
+                return;
+            }
             if (!task.current()) return;
             validateSource(bytes);
             if (fromDisk) {
@@ -392,11 +471,7 @@ public final class ImageLoader {
                     // the next load detects them by magic again.
                     writeDiskCache(disk, bytes);
                 }
-                synchronized (animatedCache) {
-                    if (!task.current()) return;
-                    putAnimated(url, animated);
-                }
-                failedUntil.remove(url);
+                publishAnimation(task, animated);
                 return;
             }
             Image image = decodeStaticValidated(bytes, MAX_DIM);
@@ -407,41 +482,58 @@ public final class ImageLoader {
                     // the processed format on their next load.
                     writeDiskCache(disk, encodeForDisk(image));
                 }
-                synchronized (cache) {
+                synchronized (pending) {
                     if (!task.current()) { image.close();return; }
                     cache.put(url, image);
+                    clearFailure(url);
                 }
-                failedUntil.remove(url);
-            } else if (task.current()) {
-                fail(url);
-            }
+            } else noteLoadFailure(task, diskOnly);
         } catch (Exception e) {
             AtomChat.LOGGER.warn(com.atom.chat.diagnostics.AtomChatLog.message("resource", "Failed to load chat image {}"), url, e);
-            if (task.current()) fail(url);
+            noteLoadFailure(task, diskOnly);
         } finally {
-            pending.remove(url,task);
+            release(task);
         }
     }
 
-    /** Inserts an animation and trims the LRU to its count/pixel budget. */
-    private void putAnimated(String url, AnimatedImage image) {
-        synchronized (animatedCache) {
-            animatedCache.put(url, image);
-            while (animatedCache.size() > 1
-                    && (animatedCache.size() > MAX_ANIMATED_CACHED
-                        || animatedPixelsLocked() > MAX_ANIM_PIXELS_TOTAL)) {
-                java.util.Iterator<java.util.Map.Entry<String, AnimatedImage>> it =
-                        animatedCache.entrySet().iterator();
-                if (!it.hasNext()) {
-                    break;
-                }
-                it.next();
-                it.remove();
+    private void publishAnimation(LoadTask task, AnimatedImage image) {
+        AnimatedImage thumbnail = task.hudSeenAt != NEVER_SEEN ? image.thumbnail(MAX_HUD_ANIM_DIM, MAX_HUD_ANIM_PIXELS) : null;
+        synchronized (pending) {
+            if (!task.current()) return;
+            if (thumbnail != null) hudAnimations.put(task.url, thumbnail);
+            if (task.panelSeenAt != NEVER_SEEN || thumbnail == null) putAnimated(task.url, image);
+            clearFailure(task.url);
+        }
+    }
+
+    private void noteLoadFailure(LoadTask task, boolean diskOnly) {
+        synchronized (pending) {
+            if (!task.current()) return;
+            if (!diskOnly) {
+                fail(task.url);
+                return;
             }
+            hudDiskMisses.put(task.url, clock.getAsLong() + FAILURE_TTL_MS);
+            if (hudDiskMisses.size() > MAX_FAILURES) hudDiskMisses.remove(hudDiskMisses.keySet().iterator().next());
         }
     }
 
-    /** Caller must hold the animated cache monitor. */
+    private void clearFailure(String url) {
+        failedUntil.remove(url);
+        hudDiskMisses.remove(url);
+    }
+
+    /** Inserts an animation and trims the LRU. Caller holds the admission monitor. */
+    private void putAnimated(String url, AnimatedImage image) {
+        animatedCache.put(url, image);
+        while (animatedCache.size() > 1
+                && (animatedCache.size() > MAX_ANIMATED_CACHED
+                    || animatedPixelsLocked() > MAX_ANIM_PIXELS_TOTAL)) {
+            animatedCache.remove(animatedCache.keySet().iterator().next());
+        }
+    }
+
+    /** Caller must hold the admission monitor. */
     private long animatedPixelsLocked() {
         long pixels = 0L;
         for (AnimatedImage image : animatedCache.values()) {
@@ -667,14 +759,15 @@ public final class ImageLoader {
 
     /** Test seam: drops all memory/negative state (disk cache untouched). */
     void resetMemory() {
-        synchronized (cache) {
+        synchronized (pending) {
             cache.clear();
-        }
-        synchronized (animatedCache) {
             animatedCache.clear();
+            hudAnimations.clear();
+            hudDiskMisses.clear();
+            locallySent.clear();
+            failedUntil.clear();
+            pending.clear();
         }
-        failedUntil.clear();
-        pending.clear();
     }
 
     private Path diskFile(String url) {
@@ -689,6 +782,13 @@ public final class ImageLoader {
 
     /** Fits the image inside {@code maxDim} without ever upscaling it. */
     static Image downscale(Image source, int maxDim) {
+        Image copy = scaledCopy(source, maxDim);
+        if (source != copy) source.close();
+        return copy;
+    }
+
+    /** Returns the borrowed source when it already fits. */
+    static Image scaledCopy(Image source, int maxDim) {
         if (source == null) {
             return null;
         }
@@ -708,7 +808,6 @@ public final class ImageLoader {
                         Rect.makeXYWH(0, 0, tw, th),
                         SamplingMode.LINEAR, paint, false);
             }
-            source.close();
             return surface.makeImageSnapshot();
         }
     }

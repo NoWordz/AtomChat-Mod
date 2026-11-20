@@ -299,7 +299,7 @@ class SettingsDetailPageTest {
             // an active-but-unrendered modal is a frozen screen (0.2.x).
             harness.cropper.open(source, false, 1.0F, 1.0F, "banner");
             harness.colorPicker.open(new SettingsColor("bubble_text", "atomchat.settings.bubbleText", "bubbles",
-                    new int[]{0xFF112233}, () -> 0xFF112233, value -> {
+                    () -> 0xFF112233, value -> {
                     }));
 
             harness.page.drawSettingsSection(canvas, 100, 100, SettingsSection.APPEARANCE);
@@ -315,20 +315,26 @@ class SettingsDetailPageTest {
     @Test
     void allSettingsGroupsStartExpanded() {
         var page = new SettingsSectionPage();
+        page.selectChip(SettingsSection.APPEARANCE, chipIndex(page, SettingsSection.APPEARANCE, "colors"));
         assertTrue(page.rows(SettingsSection.APPEARANCE).stream()
                 .anyMatch(row -> row.kind() == SettingsSectionPage.RowKind.COLOR),
                 "appearance color controls must be visible without expanding a group");
-        int notify = java.util.stream.IntStream.range(0, page.chips(SettingsSection.CHAT).size())
-                .filter(i -> page.chips(SettingsSection.CHAT).get(i).id().equals("notify"))
-                .findFirst().orElseThrow();
-        page.selectChip(SettingsSection.CHAT, notify);
+        page.selectChip(SettingsSection.CHAT, chipIndex(page, SettingsSection.CHAT, "notify"));
         var ids = page.rows(SettingsSection.CHAT).stream().filter(row -> row.item() != null)
                 .map(row -> row.item().id()).collect(java.util.stream.Collectors.toSet());
-        assertTrue(ids.containsAll(java.util.Set.of("notification", "mention_sound", "whisper_sound",
-                "feedback", "feedback_button", "feedback_send", "feedback_panel")),
-                "notification and feedback controls must start visible");
+        assertTrue(ids.containsAll(java.util.Set.of("notification", "mention_sound", "whisper_sound")),
+                "notification controls must start visible");
+        page.selectChip(SettingsSection.APPEARANCE, chipIndex(page, SettingsSection.APPEARANCE, "interaction"));
+        var feedback = page.rows(SettingsSection.APPEARANCE).stream().filter(row -> row.item() != null)
+                .map(row -> row.item().id()).collect(java.util.stream.Collectors.toSet());
+        assertTrue(feedback.containsAll(java.util.Set.of("feedback", "feedback_button", "feedback_send", "feedback_panel")));
         assertTrue(page.rows(SettingsSection.ABOUT).stream().anyMatch(row -> row.item() != null
                 && row.item().id().equals("debug")), "the about advanced group must start expanded");
+    }
+
+    private static int chipIndex(SettingsSectionPage page, SettingsSection section, String id) {
+        return java.util.stream.IntStream.range(0, page.chips(section).size())
+                .filter(i -> page.chips(section).get(i).id().equals(id)).findFirst().orElseThrow();
     }
 
     /** A retention-days style slider whose commit lands in an int the test can read. */

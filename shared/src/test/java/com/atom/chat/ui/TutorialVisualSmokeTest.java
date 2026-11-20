@@ -17,6 +17,70 @@ import static org.junit.jupiter.api.Assertions.*;
 /** Production settings rows, scroll geometry and guide paint, without a parallel demo panel. */
 class TutorialVisualSmokeTest {
     @BeforeAll static void setup(@TempDir Path root)throws Exception{UiFeatureRenderTest.setup(root);}
+
+    @Test void updatedSettingsStepsFitInNarrowChineseAndEnglishWindows() throws Exception {
+        var viewport = new UiLayout.Rect(0, 0, 480, 820);
+        var panel = UiLayout.ofDetail(32, 28, 390, 760);
+        Path output = Path.of("build/test-artifacts/tutorial-narrow");
+        Files.createDirectories(output);
+        for (String locale : new String[]{"zh_cn", "en_us"}) {
+            try (var language = PreviewLanguage.install(locale);
+                 var surface = Surface.makeRasterN32Premul(480, 820)) {
+                SettingsSectionPage.clearTranslationCache();
+                var page = new SettingsSectionPage();
+                com.google.gson.JsonObject copy;
+                try (var reader = new java.io.InputStreamReader(
+                        getClass().getResourceAsStream("/assets/atomchat/lang/" + locale + ".json"),
+                        java.nio.charset.StandardCharsets.UTF_8)) {
+                    copy = com.google.gson.JsonParser.parseReader(reader).getAsJsonObject();
+                }
+                java.util.function.Function<String, String> tr = key -> copy.get(key).getAsString();
+                var guide = TutorialGuide.build(page, tr);
+                var session = new TutorialSession();
+                session.itinerary(guide);
+                session.start();
+                long time = System.currentTimeMillis();
+                for (var entry : guide) {
+                    while (session.entry() != entry) session.next();
+                    if (entry.section() == null) continue;
+                    var section = entry.section();
+                    page.selectChip(section, entry.chip());
+                    var scroll = new ScrollController();
+                    page.tutorialAnchor(section, entry.row(), panel, scroll);
+                    float scrollY = scroll.getScrollY();
+                    var canvas = surface.getCanvas();
+                    page.markSettled();
+                    for (int frame = 0; frame < 20; frame++) {
+                        canvas.clear(0xFF718092);
+                        SkiaDraw.drawRoundedRect(canvas, 32, 28, 390, 760, UiTokens.panelRadius(), 0xff171b24);
+                        time += 16L;
+                        UiStagger.atFrame(time, () -> page.render(canvas, panel, section, -1, -1, scrollY, 0xff4085eb));
+                    }
+                    var target = page.tutorialGroupAnchor(section, entry.row(), entry.lastRow(), panel, scrollY);
+                    var overlay = new TutorialOverlay();
+                    try {
+                        overlay.viewport(viewport);
+                        overlay.anchor(target);
+                        int saves = canvas.getSaveCount();
+                        overlay.render(canvas, session, panel, panel, panel.tabBar, tr, -1, -1, 1000);
+                        assertTrue(viewport.contains(overlay.geometry().card()), entry.title());
+                        for (var button : overlay.geometry().buttons()) {
+                            assertTrue(button.w() > 0 && button.h() > 0 && viewport.contains(button), entry.title());
+                        }
+                        assertEquals(saves, canvas.getSaveCount());
+                        try (var image = surface.makeImageSnapshot(); var data = image.encodeToData(EncodedImageFormat.PNG)) {
+                            Files.write(output.resolve(locale + "-" + section.id() + "-" + entry.chip() + ".png"), data.getBytes());
+                        }
+                    } finally {
+                        overlay.close();
+                    }
+                }
+            } finally {
+                SettingsSectionPage.clearTranslationCache();
+            }
+        }
+    }
+
     @Test void realGroupsHaveReadableExternalAnnotationsInBothLocales() throws Exception {
         Path out=Path.of(System.getProperty("atomchat.repoRoot","../.."),"docs/evidence/2026-11-13-ui-refinement",
                 System.getProperty("atomchat.golden.target","local"));Files.createDirectories(out);

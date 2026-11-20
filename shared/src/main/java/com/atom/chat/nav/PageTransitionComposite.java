@@ -2,6 +2,7 @@ package com.atom.chat.nav;
 
 import com.atom.chat.ui.AtomChatAppearance;
 import com.atom.chat.config.AtomChatConfig;
+import com.atom.chat.render.CardBackdrop;
 import com.atom.chat.ui.Animations;
 import com.atom.chat.ui.UiLayout;
 import com.atom.chat.ui.UiStagger;
@@ -29,7 +30,9 @@ public final class PageTransitionComposite implements AutoCloseable {
     private Paint alphaPaint = new Paint();
     private NavPage stamped;
     private int stampedBodyVariant;
-    private Picture lastFrame, departing;
+    private Picture lastFrame, departing, lastMask, departingMask;
+    private InterruptiblePageMotion.Frame lastMotion;
+    private float lastClipTop;
     private UiLayout.Rect bounds;
     private boolean arrivalEvent, arrivalFromPushedToRoot, backwards;
     private long frameTime;
@@ -57,9 +60,7 @@ public final class PageTransitionComposite implements AutoCloseable {
                     top.page().name()+":"+top.param()+":"+variant);
             boolean interrupted = !motion.sample(nowMs).settled();
             arrivalFromPushedToRoot = !stamped.isRoot() && top.isRoot();
-            if (departing != null) departing.close();
-            departing = lastFrame;
-            lastFrame = null;
+            freezeLastFrame();
             navigationOverflow = interrupted && departing != null
                     && departing.getApproximateOpCount() > MAX_COMMANDS;
             motion.retarget(nowMs, backwards || arrivalFromPushedToRoot,
@@ -105,50 +106,103 @@ public final class PageTransitionComposite implements AutoCloseable {
         bounds = panel;
         Rect cull = Rect.makeXYWH(panel.x(), panel.y(), panel.w(), panel.h());
         Picture target;
+        Picture mask = null;
         try (PictureRecorder recorder = new PictureRecorder()) {
             Canvas recording = recorder.beginRecording(cull);
-            UiStagger.atFrame(nowMs, () -> host.drawArrivingBody(recording, layout, mouseX, mouseY));
+            mask = CardBackdrop.recordMasks(cull,
+                    () -> UiStagger.atFrame(nowMs, () -> host.drawArrivingBody(recording, layout, mouseX, mouseY)));
             target = recorder.finishRecordingAsPicture();
+        } catch (RuntimeException | Error failure) {
+            close(mask);
+            throw failure;
         }
-        try {
-            Picture composed;
-            InterruptiblePageMotion.Frame frame = motion.sample(nowMs);
-            if (overlaySettled(nowMs)) {
-                composed = target;
-                target = null;
-                if (departing != null) { departing.close(); departing = null; }
-            } else {
-                try (PictureRecorder recorder = new PictureRecorder()) {
-                    Canvas recording = recorder.beginRecording(cull);
-                    recording.clipRect(Rect.makeLTRB(panel.x(), host.bodyClipTop(layout), panel.right(), panel.bottom()));
-                    if (frame.alpha() == 0 && departing != null) {
-                        // Replaying the exact command stream avoids an extra AA clip/layer
-                        // rounding the same interrupted pixels a second time.
-                        departing.playback(recording);
-                    } else {
-                    SkiaDraw.clip(recording, panel.x(), panel.y(), panel.w(), panel.h(), UiTokens.panelRadius(AtomChatAppearance.theme()));
-                    recording.clipRect(Rect.makeLTRB(panel.x(), host.bodyClipTop(layout), panel.right(), panel.bottom()));
-                    if (departing != null) drawLayer(recording, departing, panel,
-                            1 - frame.alpha(), frame.exitDx(), frame.exitScale());
-                    drawLayer(recording, target, panel, frame.alpha(), frame.dx(), frame.scale());
-                    }
-                    composed = recorder.finishRecordingAsPicture();
-                }
-            }
-            if (lastFrame != null) lastFrame.close();
-            lastFrame = composed;
-            // Expand commands instead of retaining a nested transition Picture chain.
+
+        close(lastFrame);
+        close(lastMask);
+        lastFrame = target;
+        lastMask = mask;
+        lastClipTop = host.bodyClipTop(layout);
+        if (overlaySettled(nowMs)) {
+            lastMotion = null;
+            close(departing);
+            close(departingMask);
+            departing = null;
+            departingMask = null;
+            if (lastMask != null) CardBackdrop.applyMasks(canvas, cull, lastMask::playback);
             lastFrame.playback(canvas);
-        } finally { if (target != null) target.close(); }
+        } else {
+            lastMotion = motion.sample(nowMs);
+            // The backdrop sits below all page content. Keep the same composition when freezing an interruption.
+            if (lastMask != null || departingMask != null) {
+                CardBackdrop.applyMasks(canvas, cull,
+                        layer -> drawTransition(layer, lastMask, departingMask, panel, lastClipTop, lastMotion));
+            }
+            drawTransition(canvas, lastFrame, departing, panel, lastClipTop, lastMotion);
+        }
         UiStagger.atFrame(nowMs, () -> host.drawArrivingHeader(canvas, layout, mouseX, mouseY, vmx, vmy));
     }
+
+    /** Only an interruption needs to flatten the previously displayed pair of bodies. */
+    private void freezeLastFrame() {
+        if (lastMotion == null || bounds == null) {
+            close(departing);
+            close(departingMask);
+            departing = lastFrame;
+            departingMask = lastMask;
+        } else {
+            Picture frozen = recordTransition(lastFrame, departing);
+            Picture frozenMask;
+            try {
+                frozenMask = lastMask == null && departingMask == null ? null : recordTransition(lastMask, departingMask);
+            } catch (RuntimeException | Error failure) {
+                frozen.close();
+                throw failure;
+            }
+            close(lastFrame);
+            close(lastMask);
+            close(departing);
+            close(departingMask);
+            departing = frozen;
+            departingMask = frozenMask;
+        }
+        lastFrame = null;
+        lastMask = null;
+        lastMotion = null;
+    }
+
+    private Picture recordTransition(Picture target, Picture previous) {
+        try (PictureRecorder recorder = new PictureRecorder()) {
+            Canvas canvas = recorder.beginRecording(Rect.makeXYWH(bounds.x(), bounds.y(), bounds.w(), bounds.h()));
+            drawTransition(canvas, target, previous, bounds, lastClipTop, lastMotion);
+            return recorder.finishRecordingAsPicture();
+        }
+    }
+
+    private void drawTransition(Canvas canvas, Picture target, Picture previous, UiLayout.Rect panel,
+                                float clipTop, InterruptiblePageMotion.Frame frame) {
+        int save = canvas.save();
+        try {
+            canvas.clipRect(Rect.makeLTRB(panel.x(), clipTop, panel.right(), panel.bottom()));
+            if (frame.alpha() == 0 && previous != null) {
+                previous.playback(canvas);
+            } else {
+                SkiaDraw.clip(canvas, panel.x(), panel.y(), panel.w(), panel.h(), UiTokens.panelRadius(AtomChatAppearance.theme()));
+                drawLayer(canvas, previous, panel, 1 - frame.alpha(), frame.exitDx(), frame.exitScale());
+                drawLayer(canvas, target, panel, frame.alpha(), frame.dx(), frame.scale());
+            }
+        } finally {
+            canvas.restoreToCount(save);
+        }
+    }
+
     private void drawLayer(Canvas canvas, Picture picture, UiLayout.Rect panel,
                            float alpha, float dx, float scale) {
-        if (alpha <= 0) return;
+        if (picture == null || alpha <= 0) return;
         int save = canvas.save();
         try {
             alphaPaint.setAlphaf(alpha);
-            canvas.saveLayer(Rect.makeXYWH(panel.x(), panel.y(), panel.w(), panel.h()), alphaPaint);
+            Rect layerBounds = Rect.makeXYWH(panel.x(), panel.y(), panel.w(), panel.h());
+            canvas.saveLayer(layerBounds, alphaPaint);
             canvas.translate(panel.x() + panel.w() / 2 + dx, panel.y() + panel.h() / 2);
             canvas.scale(scale, scale);
             canvas.translate(-panel.x() - panel.w() / 2, -panel.y() - panel.h() / 2);
@@ -170,29 +224,52 @@ public final class PageTransitionComposite implements AutoCloseable {
             return;
         }
         ImageInfo info = ImageInfo.makeN32Premul(width, height);
+        Picture body = compactPicture(context, info, departing);
+        Picture mask = null;
+        try {
+            if (departingMask != null) mask = compactPicture(context, info, departingMask);
+        } catch (RuntimeException | Error failure) {
+            body.close();
+            throw failure;
+        }
+        departing.close();
+        close(departingMask);
+        departing = body;
+        departingMask = mask;
+        navigationOverflow = false;
+    }
+
+    private Picture compactPicture(DirectContext context, ImageInfo info, Picture picture) {
         try (Surface surface = Surface.makeRenderTarget(context, false, info, 0, SurfaceOrigin.BOTTOM_LEFT, null)) {
             if (surface == null) throw new IllegalStateException("Navigation snapshot surface unavailable");
             Canvas canvas = surface.getCanvas();
             canvas.clear(0);
             canvas.scale(deviceDensity, deviceDensity);
             canvas.translate(-bounds.x(), -bounds.y());
-            departing.playback(canvas);
+            picture.playback(canvas);
             // No CPU readback or synchronous GPU wait. Immutable owned image retains its target.
             context.flushAndSubmit(surface, false);
             try (Image image = surface.makeImageSnapshot(); PictureRecorder recorder = new PictureRecorder()) {
-                Canvas recording = recorder.beginRecording(Rect.makeXYWH(bounds.x(), bounds.y(), bounds.w(), bounds.h()));
-                recording.drawImageRect(image, Rect.makeXYWH(bounds.x(), bounds.y(), bounds.w(), bounds.h()));
-                Picture compacted = recorder.finishRecordingAsPicture();
-                departing.close();
-                departing = compacted;
-                navigationOverflow = false;
+                Rect cull = Rect.makeXYWH(bounds.x(), bounds.y(), bounds.w(), bounds.h());
+                Canvas recording = recorder.beginRecording(cull);
+                recording.drawImageRect(image, cull);
+                return recorder.finishRecordingAsPicture();
             }
         }
     }
+
+    private static void close(Picture picture) {
+        if (picture != null) picture.close();
+    }
+
     private void clearPictures() {
         navigationOverflow = false;
-        if (lastFrame != null) { lastFrame.close(); lastFrame = null; }
-        if (departing != null) { departing.close(); departing = null; }
+        close(lastFrame);
+        close(departing);
+        close(lastMask);
+        close(departingMask);
+        lastFrame = departing = lastMask = departingMask = null;
+        lastMotion = null;
     }
     public void reset() {
         if (alphaPaint.isClosed()) alphaPaint = new Paint();

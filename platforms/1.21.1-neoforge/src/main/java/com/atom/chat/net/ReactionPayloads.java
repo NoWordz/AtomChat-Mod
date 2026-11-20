@@ -56,6 +56,50 @@ public final class ReactionPayloads {
         }
     }
     
+    public record ExpandedAction(byte[] bytes) implements CustomPacketPayload {
+        public static final Type<ExpandedAction> TYPE =
+                new Type<>(ResourceLocation.fromNamespaceAndPath(AtomChat.MOD_ID, "reaction_action_v3"));
+        public static final StreamCodec<RegistryFriendlyByteBuf, ExpandedAction> STREAM_CODEC =
+                new StreamCodec<>() {
+                    @Override
+                    public ExpandedAction decode(RegistryFriendlyByteBuf buf) {
+                        return new ExpandedAction(buf.readByteArray(128));
+                    }
+
+                    @Override
+                    public void encode(RegistryFriendlyByteBuf buf, ExpandedAction payload) {
+                        buf.writeByteArray(payload.bytes());
+                    }
+                };
+
+        @Override
+        public Type<? extends CustomPacketPayload> type() {
+            return TYPE;
+        }
+    }
+
+    public record ExpandedData(byte[] bytes) implements CustomPacketPayload {
+        public static final Type<ExpandedData> TYPE =
+                new Type<>(ResourceLocation.fromNamespaceAndPath(AtomChat.MOD_ID, "reaction_data_v3"));
+        public static final StreamCodec<RegistryFriendlyByteBuf, ExpandedData> STREAM_CODEC =
+                new StreamCodec<>() {
+                    @Override
+                    public ExpandedData decode(RegistryFriendlyByteBuf buf) {
+                        return new ExpandedData(buf.readByteArray(com.atom.chat.reaction.ReactionWire.MAX_BYTES));
+                    }
+
+                    @Override
+                    public void encode(RegistryFriendlyByteBuf buf, ExpandedData payload) {
+                        buf.writeByteArray(payload.bytes());
+                    }
+                };
+
+        @Override
+        public Type<? extends CustomPacketPayload> type() {
+            return TYPE;
+        }
+    }
+
     public static void register(net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent event) {
         net.neoforged.neoforge.network.registration.PayloadRegistrar registrar = event.registrar("1").optional();
         registrar.playToServer(ActionPayload.TYPE, ActionPayload.STREAM_CODEC,
@@ -64,6 +108,14 @@ public final class ReactionPayloads {
                 (payload, ctx) -> {
                     if (net.neoforged.fml.loading.FMLEnvironment.dist == net.neoforged.api.distmarker.Dist.CLIENT) {
                         ctx.enqueueWork(() -> ReactionCompanionClient.onData(payload,ctx.connection()));
+                    }
+                });
+        registrar.playToServer(ExpandedAction.TYPE, ExpandedAction.STREAM_CODEC,
+                (payload, ctx) -> ReactionCompanionServer.handleBytes(payload.bytes(), ctx));
+        registrar.playToClient(ExpandedData.TYPE, ExpandedData.STREAM_CODEC,
+                (payload, ctx) -> {
+                    if (net.neoforged.fml.loading.FMLEnvironment.dist == net.neoforged.api.distmarker.Dist.CLIENT) {
+                        ctx.enqueueWork(() -> ReactionCompanionClient.onBytes(payload.bytes(), ctx.connection()));
                     }
                 });
     }

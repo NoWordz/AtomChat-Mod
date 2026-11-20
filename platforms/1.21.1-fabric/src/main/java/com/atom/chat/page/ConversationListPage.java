@@ -462,6 +462,7 @@ public final class ConversationListPage {
                                     canvas.saveLayer(CardShadowReach.layerRect(
                                             layout.list.x(), y, layout.list.w(), h,
                                             foldLift + rowRise, styleDx), alpha);
+                                    float maskOpacity = com.atom.chat.render.CardBackdrop.pushMaskOpacity(privateExpansion * rowAlpha);
                                     try {
                                         canvas.translate(0.0F, foldLift + rowRise);
                                         applyStyleMotion(canvas, axis,
@@ -470,6 +471,7 @@ public final class ConversationListPage {
                                         drawRow(canvas, row, rect.x(), y, rect.w(),
                                                 i == hoverRowIndex ? rowHover : 0.0F, i, over, pulsing, dt);
                                     } finally {
+                                        com.atom.chat.render.CardBackdrop.restoreMaskOpacity(maskOpacity);
                                         // Composite before the alpha Paint is closed.
                                         canvas.restore();
                                     }
@@ -495,10 +497,12 @@ public final class ConversationListPage {
                                     applyStyleMotion(canvas, axis,
                                             new UiLayout.Rect(rect.x(), y, rect.w(), h),
                                             styleDx, staggerIndex, now);
+                                    float maskOpacity = com.atom.chat.render.CardBackdrop.pushMaskOpacity(rowAlpha);
                                     try {
                                         drawRow(canvas, row, rect.x(), y, rect.w(),
                                                 i == hoverRowIndex ? rowHover : 0.0F, i, over, pulsing, dt);
                                     } finally {
+                                        com.atom.chat.render.CardBackdrop.restoreMaskOpacity(maskOpacity);
                                         canvas.restore();
                                     }
                                 }

@@ -151,7 +151,8 @@ public final class BottomTabBar {
 
     private void renderBar(Canvas canvas, UiLayout.Rect bar, int selectedIndex,
                            int textPrimary, int accent) {
-        SkiaDraw.drawChromeShadow(canvas, bar.x(), bar.y(), bar.w(), bar.h(), UiTokens.shellChromeRadius(AtomChatAppearance.theme()));
+        com.atom.chat.render.ChromeMaterial.drawShadow(canvas, bar.x(), bar.y(), bar.w(), bar.h(), UiTokens.shellChromeRadius(AtomChatAppearance.theme()));
+        com.atom.chat.render.ChromeMaterial.drawBackdrop(canvas, bar.x(), bar.y(), bar.w(), bar.h(), UiTokens.shellChromeRadius(AtomChatAppearance.theme()), 1F);
         SkiaDraw.drawRoundedRect(canvas, bar.x(), bar.y(), bar.w(), bar.h(),
                 UiTokens.shellChromeRadius(AtomChatAppearance.theme()), UiTokens.cardFill(AtomChatAppearance.theme()));
         com.atom.chat.render.ChromeMaterial.drawDetails(canvas, bar, UiTokens.shellChromeRadius(AtomChatAppearance.theme()));

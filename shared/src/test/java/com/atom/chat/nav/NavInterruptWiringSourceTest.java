@@ -164,10 +164,8 @@ class NavInterruptWiringSourceTest {
                 "layers/mapping/official/src/main/java/com/atom/chat/ui/EmojiPanel.java",
                 "platforms/1.21.1-fabric/src/main/java/com/atom/chat/ui/EmojiPanel.java")) {
             String s = source(root(), page);
-            assertTrue(s.contains("entrance.markEntered();"), page + ": the grid arms on open");
-            assertTrue(s.contains("UiStagger.itemRise(entrance, row, rowNow, UiStagger.Axis.VERTICAL)"), page);
-            assertTrue(s.contains("UiStagger.itemAlpha(entrance, row, rowNow)"), page
-                    + ": the row fade rides the same progress as its rise");
+            assertFalse(s.contains("UiStagger.itemRise("), page + ": sticker images paint in their final rows");
+            assertTrue(s.contains("ComposerPopupTransform.of("), page + ": the panel keeps its popup motion");
         }
     }
 }

@@ -542,7 +542,8 @@ public final class ServerConfigPage {
         if(view==View.ROOT)chips.render(canvas,layout,List.of(host.label("atomchat.config.tab.hosting"),host.label("atomchat.config.tab.pack"),t("templates")),mx,my,dt);
         else{var breadcrumb=FontManager.font(UiTokens.SETTINGS_TILE_SUB);SkiaFontRenderer.drawText(canvas,breadcrumb,t(view==View.TEMPLATE?"breadcrumb.templates":"breadcrumb.pack"),layout.chipBar.x()+UiTokens.SETTINGS_ROW_PAD,SkiaFontRenderer.centerBaselineY(breadcrumb,layout.chipBar.y()+layout.chipBar.h()/2),config.textSecondaryColor);}
         var bar=geometry.bar();
-        SkiaDraw.drawChromeShadow(canvas,bar.x(),bar.y(),bar.w(),bar.h(),UiTokens.shellChromeRadius(AtomChatAppearance.theme()));
+        com.atom.chat.render.ChromeMaterial.drawShadow(canvas,bar.x(),bar.y(),bar.w(),bar.h(),UiTokens.shellChromeRadius(AtomChatAppearance.theme()));
+        com.atom.chat.render.ChromeMaterial.drawBackdrop(canvas, bar.x(), bar.y(), bar.w(), bar.h(), UiTokens.shellChromeRadius(AtomChatAppearance.theme()), 1F);
         SkiaDraw.drawRoundedRect(canvas,bar.x(),bar.y(),bar.w(),bar.h(),UiTokens.shellChromeRadius(AtomChatAppearance.theme()),UiTokens.cardFill(AtomChatAppearance.theme()));
         boolean root=view==View.ROOT;
         boolean enabled=!draft.saving()&&!importing&&(!root||draft.dirty()&&draft.validation()==null);

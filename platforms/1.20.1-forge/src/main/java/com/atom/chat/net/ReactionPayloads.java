@@ -22,6 +22,7 @@ public final class ReactionPayloads {
     public static final int ID_POKED = 1;
 
     public static SimpleChannel CHANNEL;
+    public static SimpleChannel EXPANDED;
 
     public record ActionPayload(byte[] bytes) {
         public static void encode(ActionPayload payload, FriendlyByteBuf buf) {
@@ -45,18 +46,19 @@ public final class ReactionPayloads {
 
     
     public static void register() {
-        CHANNEL = NetworkRegistry.newSimpleChannel(
-                CHANNEL_NAME,
-                () -> PROTOCOL,
-                NetworkRegistry.acceptMissingOr(PROTOCOL),
-                NetworkRegistry.acceptMissingOr(PROTOCOL));
+        CHANNEL = channel(CHANNEL_NAME);
+        EXPANDED = channel(ResourceLocation.fromNamespaceAndPath(AtomChat.MOD_ID, "reaction_emoji_v3"));
+    }
 
-        CHANNEL.messageBuilder(ActionPayload.class, ID_POKE, net.minecraftforge.network.NetworkDirection.PLAY_TO_SERVER)
+    private static SimpleChannel channel(ResourceLocation id) {
+        SimpleChannel channel = NetworkRegistry.newSimpleChannel(id, () -> PROTOCOL,
+                NetworkRegistry.acceptMissingOr(PROTOCOL), NetworkRegistry.acceptMissingOr(PROTOCOL));
+        channel.messageBuilder(ActionPayload.class, ID_POKE, net.minecraftforge.network.NetworkDirection.PLAY_TO_SERVER)
                 .encoder(ActionPayload::encode)
                 .decoder(ActionPayload::decode)
                 .consumerMainThread((payload, ctx) -> ReactionCompanionServer.handleAction(payload, ctx.get()))
                 .add();
-        CHANNEL.messageBuilder(DataPayload.class, ID_POKED, net.minecraftforge.network.NetworkDirection.PLAY_TO_CLIENT)
+        channel.messageBuilder(DataPayload.class, ID_POKED, net.minecraftforge.network.NetworkDirection.PLAY_TO_CLIENT)
                 .encoder(DataPayload::encode)
                 .decoder(DataPayload::decode)
                 .consumerMainThread((payload, ctx) -> {
@@ -67,5 +69,6 @@ public final class ReactionPayloads {
                     ctx.get().setPacketHandled(true);
                 })
                 .add();
+        return channel;
     }
 }

@@ -26,11 +26,14 @@ public final class AtomChatAppearance {
 
     public static void drawCard(Canvas canvas, float x, float y, float width, float height,
                                 float radius, float hover) {
+        if ((com.atom.lib.design.atomchat.UiTokens.cardFill(theme()) >>> 24) != 255) {
+            com.atom.chat.render.CardBackdrop.draw(canvas, x, y, width, height, radius);
+        }
         UiCards.drawCard(canvas, x, y, width, height, radius, hover, theme(), RIPPLES);
     }
 
-    public static void drawCard(Canvas canvas, float x, float y, float width, float height,
-                                float radius, float hover, int shadow, float blur, int fill) {
+    public static void drawOverlayCard(Canvas canvas, float x, float y, float width, float height,
+                                       float radius, float hover, int shadow, float blur, int fill) {
         UiCards.drawCard(canvas, x, y, width, height, radius, hover, shadow, blur, fill, theme(), RIPPLES);
     }
 

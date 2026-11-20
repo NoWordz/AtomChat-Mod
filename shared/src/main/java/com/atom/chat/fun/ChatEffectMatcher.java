@@ -7,12 +7,11 @@ public final class ChatEffectMatcher {
     private static final Pattern[] RULES = {
         Pattern.compile("(?:我喜欢你|我爱你)(?!\\p{IsHan})|(?<![\\p{L}\\p{N}_/@.:-])(?:i\\s+(?:like|love)\\s+(?:you|u)|love\\s+(?:you|u))(?![\\p{L}\\p{N}_])", Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE),
         Pattern.compile("生日快乐(?!\\p{IsHan})|(?<![\\p{L}\\p{N}_/@.:-])(?:happy\\s+(?:birthday|bday)|hbd)(?![\\p{L}\\p{N}_])", Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE),
-        Pattern.compile("新年快乐(?!\\p{IsHan})|(?<![\\p{L}\\p{N}_/@.:-])(?:happy\\s+new\\s+year|hny)(?![\\p{L}\\p{N}_])", Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE),
         Pattern.compile("晚安(?!\\p{IsHan})|(?<![\\p{L}\\p{N}_/@.:-])(?:good\\s+night|goodnight)(?![\\p{L}\\p{N}_])", Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE)
     };
     private static final ChatEffectType[] TYPES = {
         ChatEffectType.HEART, ChatEffectType.CAKE,
-        ChatEffectType.FIREWORK, ChatEffectType.STAR
+        ChatEffectType.STAR
     };
     public Optional<ChatEffectType> match(String body) {
         String text=matchableText(body);if(text==null)return Optional.empty();
@@ -28,7 +27,7 @@ public final class ChatEffectMatcher {
         if (body == null || body.isBlank() || body.stripLeading().startsWith("/") || body.contains("CICode")) return null;
         StringBuilder text = new StringBuilder(body);
         var excluded = EXCLUDED.matcher(body);
-        while (excluded.find()) for (int i=excluded.start();i<excluded.end();i++) text.setCharAt(i, ' ');
+        while (excluded.find()) for (int i=excluded.start();i<excluded.end();i++) text.setCharAt(i, '\uFFFC');
         return text.toString();
     }
 }

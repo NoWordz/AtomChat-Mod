@@ -8,7 +8,7 @@ class ChatEffectSessionTest {
   assertFalse(s.trigger(ChatEffectType.CAKE,200)); assertEquals(ChatEffectType.HEART,s.type());
   assertTrue(s.active(3099)); assertFalse(s.active(3100));
   assertTrue(s.trigger(ChatEffectType.CAKE,3100)); s.clear(); assertFalse(s.active(3101));
-  assertTrue(s.trigger(ChatEffectType.FIREWORK,3101));
+  assertTrue(s.trigger(ChatEffectType.CAKE,3101));
  }
  @Test void particleBoundsAndDeterminism() {
   for(var t:ChatEffectType.values()) {

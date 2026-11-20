@@ -39,15 +39,21 @@ public final class SkiaGraphics {
      * the AtomLib bridge. No second Skija context or framebuffer is created.
      */
     public void draw(Runnable preUi, float density, java.util.function.BiConsumer<Canvas, Image> renderer) {
-        draw(preUi, density, renderer, false);
+        draw(preUi, density, renderer, false, false, () -> false);
     }
 
     /** Only the chat panel participates in the panel performance profile. */
     public void drawPanel(Runnable preUi, float density, java.util.function.BiConsumer<Canvas, Image> renderer) {
-        draw(preUi, density, renderer, true);
+        drawPanel(preUi, density, renderer, false, () -> false);
     }
 
-    private void draw(Runnable preUi, float density, java.util.function.BiConsumer<Canvas, Image> renderer, boolean panel) {
+    public void drawPanel(Runnable preUi, float density, java.util.function.BiConsumer<Canvas, Image> renderer,
+                          boolean panelBlurPlanned, java.util.function.BooleanSupplier panelBlurDrawn) {
+        draw(preUi, density, renderer, true, panelBlurPlanned, panelBlurDrawn);
+    }
+
+    private void draw(Runnable preUi, float density, java.util.function.BiConsumer<Canvas, Image> renderer,
+                      boolean panel, boolean panelBlurPlanned, java.util.function.BooleanSupplier panelBlurDrawn) {
         RenderSystem.assertOnRenderThread();
         java.util.Objects.requireNonNull(renderer, "renderer");
         long profileStart = panel ? FrameProfile.start() : 0L;
@@ -65,40 +71,53 @@ public final class SkiaGraphics {
             // runs before the pre-pass so a capture rect snapped in there reads
             // the same density the panel is about to be painted at.
             UiPixelSnap.beginFrame(scale);
-            if (preUi != null) {
-                long started = com.atom.chat.diagnostics.FrameSegments.start(segmentId);
-                try { bridge.vanillaPass(preUi); } finally { com.atom.chat.diagnostics.FrameSegments.end(segmentId, com.atom.chat.diagnostics.FrameSegments.Stage.PRE_UI, started); }
-            }
-            long bridgeStarted = com.atom.chat.diagnostics.FrameSegments.start(segmentId);
-            long[] bridgeExitStarted = segmentId == 0 ? null : new long[1];
-            bridge.drawFrame((canvas, frame) -> {
-                com.atom.chat.diagnostics.FrameSegments.end(segmentId, com.atom.chat.diagnostics.FrameSegments.Stage.BRIDGE_ENTER, bridgeStarted);
-                borrowedSurface.set(frame.surface());
-                borrowedBackend.set(frame.backendRenderTarget());
-                int base = canvas.getSaveCount();
-                canvas.save();
-                canvas.scale(scale, scale);
-                try {
-                    borrowedContextIdentity.set(io.github.humbleui.skija.impl.Native.getPtr(frame.context()));
+            var config = panel ? com.atom.chat.config.AtomChatConfig.get() : null;
+            boolean worldBehindCards = panel && !com.atom.chat.wallpaper.WallpaperStore.isSet();
+            boolean captureBeforeBlur = worldBehindCards && config.needsSeparateCardBlur(panelBlurPlanned);
+            Image world = captureBeforeBlur ? CardBackdrop.captureWorld(bridge::captureFrame) : null;
+            try {
+                if (preUi != null) {
                     long started = com.atom.chat.diagnostics.FrameSegments.start(segmentId);
-                    try { renderer.accept(canvas, null); } finally { com.atom.chat.diagnostics.FrameSegments.end(segmentId, com.atom.chat.diagnostics.FrameSegments.Stage.DRAW, started); }
-                } finally {
-                    borrowedContextIdentity.remove();
-                    int leaked = canvas.getSaveCount() - (base + 1);
-                    if (leaked != 0 && com.atom.chat.config.AtomChatConfig.get().debug) {
-                        leakLogCount++;
-                        if (leakLogCount == 1 || leakLogCount % 200 == 0) {
-                            AtomChat.LOGGER.warn(com.atom.chat.diagnostics.AtomChatLog.message("render",
-                                    "Skia canvas stack leak: {} unbalanced save/saveLayer (occurrence {})"),
-                                    leaked, leakLogCount);
-                        }
-                    }
-                    canvas.restoreToCount(base);
-                    if (bridgeExitStarted != null) bridgeExitStarted[0] = com.atom.chat.diagnostics.FrameSegments.start(segmentId);
+                    try { bridge.vanillaPass(preUi); } finally { com.atom.chat.diagnostics.FrameSegments.end(segmentId, com.atom.chat.diagnostics.FrameSegments.Stage.PRE_UI, started); }
                 }
-            });
-            if (bridgeExitStarted != null) com.atom.chat.diagnostics.FrameSegments.end(segmentId, com.atom.chat.diagnostics.FrameSegments.Stage.BRIDGE_EXIT, bridgeExitStarted[0]);
-            segmentSuccess = true;
+                if (worldBehindCards && !captureBeforeBlur && config.needsSeparateCardBlur(panelBlurDrawn.getAsBoolean())) {
+                    // The expected panel pre-pass failed. Sample the world for cards on this frame.
+                    world = CardBackdrop.captureWorld(bridge::captureFrame);
+                }
+                Image cardWorld = world;
+                long bridgeStarted = com.atom.chat.diagnostics.FrameSegments.start(segmentId);
+                long[] bridgeExitStarted = segmentId == 0 ? null : new long[1];
+                bridge.drawFrame((canvas, frame) -> {
+                    com.atom.chat.diagnostics.FrameSegments.end(segmentId, com.atom.chat.diagnostics.FrameSegments.Stage.BRIDGE_ENTER, bridgeStarted);
+                    borrowedSurface.set(frame.surface());
+                    borrowedBackend.set(frame.backendRenderTarget());
+                    int base = canvas.getSaveCount();
+                    canvas.save();
+                    canvas.scale(scale, scale);
+                    try {
+                        borrowedContextIdentity.set(io.github.humbleui.skija.impl.Native.getPtr(frame.context()));
+                        long started = com.atom.chat.diagnostics.FrameSegments.start(segmentId);
+                        try { renderer.accept(canvas, cardWorld); } finally { com.atom.chat.diagnostics.FrameSegments.end(segmentId, com.atom.chat.diagnostics.FrameSegments.Stage.DRAW, started); }
+                    } finally {
+                        borrowedContextIdentity.remove();
+                        int leaked = canvas.getSaveCount() - (base + 1);
+                        if (leaked != 0 && com.atom.chat.config.AtomChatConfig.get().debug) {
+                            leakLogCount++;
+                            if (leakLogCount == 1 || leakLogCount % 200 == 0) {
+                                AtomChat.LOGGER.warn(com.atom.chat.diagnostics.AtomChatLog.message("render",
+                                        "Skia canvas stack leak: {} unbalanced save/saveLayer (occurrence {})"),
+                                        leaked, leakLogCount);
+                            }
+                        }
+                        canvas.restoreToCount(base);
+                        if (bridgeExitStarted != null) bridgeExitStarted[0] = com.atom.chat.diagnostics.FrameSegments.start(segmentId);
+                    }
+                });
+                if (bridgeExitStarted != null) com.atom.chat.diagnostics.FrameSegments.end(segmentId, com.atom.chat.diagnostics.FrameSegments.Stage.BRIDGE_EXIT, bridgeExitStarted[0]);
+                segmentSuccess = true;
+            } finally {
+                if (world != null) world.close();
+            }
         } finally {
             borrowedSurface.remove();
             borrowedBackend.remove();

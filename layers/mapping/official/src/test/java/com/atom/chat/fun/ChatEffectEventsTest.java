@@ -70,24 +70,44 @@ class ChatEffectEventsTest {
   } finally { presentation.close();cfg.funEffectsEnabled=fun;cfg.animationEnabled=motion; }
  }
 
- @Test void experimentalTriggersUseTheVisibleFeedAndRemainIndependentOfEmojiSwitch() throws Exception {
-  var cfg=com.atom.chat.config.AtomChatConfig.get();
-  boolean previous=cfg.experimentalEffectsEnabled,fun=cfg.funEffectsEnabled,motion=cfg.animationEnabled;
-  cfg.experimentalEffectsEnabled=true;cfg.funEffectsEnabled=false;cfg.animationEnabled=true;
-  var visible=new java.util.concurrent.atomic.AtomicBoolean(true);
-  var presentation=new ChatEffectPresentation((m,p)->visible.get()&&p==null);
-  var field=ChatEffectPresentation.class.getDeclaredField("experimental");field.setAccessible(true);
-  presentation.install();var effects=(ExperimentalEffects)field.get(presentation);
-  var message=new ChatMessage(Component.literal("黑洞"),false,false,null,null,UUID.randomUUID(),"Alice","Alice","黑洞");
-  try(var surface=io.github.humbleui.skija.Surface.makeRasterN32Premul(16,16)) {
-   ChatEffectEvents.publish(message,PlayerRef.of(UUID.randomUUID(),"Background"));assertNull(effects.type());
-   ChatEffectEvents.publish(message);assertEquals(ExperimentalEffectType.GRAVITY,effects.type());
-   assertFalse(presentation.session().active(ChatEffectPresentation.nowMs()));
-   visible.set(false);presentation.renderExperimental(surface);assertNull(effects.type());
-   visible.set(true);ChatEffectEvents.publish(message);assertEquals(ExperimentalEffectType.GRAVITY,effects.type());
-   cfg.animationEnabled=false;presentation.renderExperimental(surface);assertNull(effects.type());
-   ChatEffectEvents.publish(message);assertNull(effects.type());
-  } finally {presentation.close();cfg.experimentalEffectsEnabled=previous;cfg.funEffectsEnabled=fun;cfg.animationEnabled=motion;}
-  ChatEffectEvents.publish(message);assertNull(effects.type());
+ @Test void fireworksListenToNewRowsWithoutAnOpenScreen() {
+  var cfg = com.atom.chat.config.AtomChatConfig.get();
+  boolean experimental = cfg.experimentalEffectsEnabled, animation = cfg.animationEnabled, enabled = cfg.enabled;
+  cfg.experimentalEffectsEnabled = cfg.animationEnabled = cfg.enabled = true;
+  var fireworks = NewYearFireworks.INSTANCE;
+  fireworks.reset();
+  var partner = PlayerRef.of(UUID.randomUUID(), "Alice");
+  var body = Component.literal("新年快樂！");
+  var received = new ChatMessage(body, false, false, null, null, UUID.randomUUID(), "Alice", "Alice", "新年快樂！");
+  var sent = new ChatMessage(body, true);
+  try {
+   ChatEffectEvents.publish(new ChatMessage(body, false, true));
+   var hiddenLink = Component.literal("Happy New Year").withStyle(style -> style.withClickEvent(
+           new net.minecraft.network.chat.ClickEvent(net.minecraft.network.chat.ClickEvent.Action.OPEN_URL, "https://example.com")));
+   ChatEffectEvents.publish(new ChatMessage(hiddenLink, false));
+   var linkedPrefix = Component.literal("https://example.com/").withStyle(style -> style.withClickEvent(
+           new net.minecraft.network.chat.ClickEvent(net.minecraft.network.chat.ClickEvent.Action.OPEN_URL, "https://example.com")));
+   var splitLink = Component.empty().append(linkedPrefix).append(Component.literal("新年快乐"));
+   ChatEffectEvents.publish(new ChatMessage(splitLink, false));
+   var quoteMarker = Component.literal("> ").withStyle(style -> style.withClickEvent(
+           linkedPrefix.getStyle().getClickEvent()));
+   var linkedQuote = Component.empty().append(quoteMarker).append(Component.literal("Happy New Year"));
+   ChatEffectEvents.publish(new ChatMessage(linkedQuote, false));
+   ChatEffectEvents.publish(new ChatMessage(body, false, false, null, null, null, "Unknown", "", "新年快樂！"));
+   ChatStore.get().addLoaded(java.util.List.of(received));
+   assertFalse(fireworks.active(ChatEffectPresentation.nowMs()));
+   PrivateChatStore.addIncoming(partner, received);
+   assertTrue(fireworks.active(ChatEffectPresentation.nowMs()));
+   fireworks.reset();
+   ChatStore.get().add(sent);
+   assertTrue(fireworks.active(ChatEffectPresentation.nowMs()));
+  } finally {
+   fireworks.reset();
+   ChatStore.reset();
+   PrivateChatStore.reset();
+   cfg.experimentalEffectsEnabled = experimental;
+   cfg.animationEnabled = animation;
+   cfg.enabled = enabled;
+  }
  }
 }

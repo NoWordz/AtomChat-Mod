@@ -64,6 +64,106 @@ class PageTransitionCompositeTest {
         assertEquals(save,c.getSaveCount(),"snapshot rendering is canvas neutral");
         try(Bitmap b=new Bitmap()){b.allocN32Pixels(W,H);assertTrue(s.readPixels(b,0,0));return b.readPixels();}
     }
+    /** Uses production page bodies on an identical raster target for 0.9.1/0.9.2 A/B. */
+    @Test void measureSettingsPageTransitions() {
+        Assumptions.assumeTrue("1".equals(System.getenv("ATOMCHAT_NAV_BENCH")));
+        long[] moving = new long[24 * 20 * 2];
+        long[] steady = new long[24 * 2];
+        try (Surface surface = Surface.makeRasterN32Premul(W, H)) {
+            var canvas = surface.getCanvas();
+            long now = 10_000;
+            for (int repeat = -8; repeat < 24; repeat++) {
+                top = NavPage.of(AppPage.SETTINGS);
+                composite.reset();
+                paintBenchmarkFrame(canvas, now);
+                for (int pass = 0; pass < 2; pass++) {
+                    top = pass == 0 ? NavPage.settingsSection(SettingsSection.APPEARANCE) : NavPage.of(AppPage.SETTINGS);
+                    for (int frame = 0; frame < 20; frame++) {
+                        now += 16;
+                        long elapsed = paintBenchmarkFrame(canvas, now);
+                        if (repeat >= 0) moving[(repeat * 2 + pass) * 20 + frame] = elapsed;
+                    }
+                    now += 32;
+                    long elapsed = paintBenchmarkFrame(canvas, now);
+                    if (repeat >= 0) steady[repeat * 2 + pass] = elapsed;
+                }
+            }
+        }
+        reportBenchmark("transition", moving);
+        reportBenchmark("settled", steady);
+    }
+
+    private long paintBenchmarkFrame(Canvas canvas, long now) {
+        draws.clear();
+        headers.clear();
+        canvas.clear(BG);
+        long start = System.nanoTime();
+        composite.beginFrame(now);
+        if (composite.consumeArrivalEvent()) {
+            if (top.isRoot()) home.markEntered(now);
+            else detail.markEntered(now);
+        }
+        composite.drawArrivingFrame(canvas, layout, -100, -100, -100, -100, now);
+        return System.nanoTime() - start;
+    }
+
+    private static void reportBenchmark(String name, long[] samples) {
+        Arrays.sort(samples);
+        long longFrames = Arrays.stream(samples).filter(ns -> ns > 16_666_667).count();
+        System.out.printf(Locale.ROOT, "Page transition raster %s n=%d p50=%.3fms p95=%.3fms p99=%.3fms >16.67ms=%d%n",
+                name, samples.length, samples[samples.length / 2] / 1e6,
+                samples[(int) (samples.length * .95)] / 1e6, samples[(int) (samples.length * .99)] / 1e6, longFrames);
+    }
+
+    @Test void aSecondTapDoesNotJumpTheBlurredBackground() {
+        var config = new AtomChatConfig();
+        config.cardBlurStrength = 3F;
+        config.panelOpacity = 0F;
+        try (Surface target = Surface.makeRasterN32Premul(W, H);
+             Surface wallpaper = Surface.makeRasterN32Premul(W, H);
+             Paint sampleColor = new Paint().setColor(0xFFE6A243);
+             PageTransitionComposite glass = new PageTransitionComposite(new PageTransitionComposite.Host() {
+                 public NavPage topNav() { return top; }
+                 public boolean arrivalStaggersSurfaces() { return false; }
+                 public void drawArrivingBody(Canvas canvas, UiLayout layout, int mx, int my) {
+                     float x = top.isRoot() ? 120 : 210;
+                     com.atom.chat.render.CardBackdrop.draw(canvas, x, 300, 240, 260, 20);
+                     try (Paint tint = new Paint().setColor(0x88402030)) {
+                         canvas.drawRRect(io.github.humbleui.types.RRect.makeXYWH(x, 300, 240, 260, 20), tint);
+                     }
+                 }
+                 public void drawArrivingHeader(Canvas c, UiLayout l, int mx, int my, float x, float y) {}
+             })) {
+            wallpaper.getCanvas().clear(0xFF243C77);
+            wallpaper.getCanvas().drawRect(io.github.humbleui.types.Rect.makeLTRB(280, 0, W, H), sampleColor);
+            try (Image image = wallpaper.makeImageSnapshot()) {
+                top = NavPage.of(AppPage.SETTINGS);
+                paintGlassFrame(glass, target, image, config, 1000);
+                top = NavPage.settingsSection(SettingsSection.APPEARANCE);
+                paintGlassFrame(glass, target, image, config, 1010);
+                byte[] before = paintGlassFrame(glass, target, image, config, 1170);
+                top = NavPage.settingsSection(SettingsSection.CHAT);
+                assertArrayEquals(before, paintGlassFrame(glass, target, image, config, 1170),
+                        "immediately interrupting must preserve both the visible body and the glass");
+            }
+        }
+    }
+
+    private byte[] paintGlassFrame(PageTransitionComposite glass, Surface target, Image wallpaper,
+                                   AtomChatConfig config, long now) {
+        Canvas canvas = target.getCanvas();
+        canvas.drawImage(wallpaper, 0, 0);
+        glass.beginFrame(now);
+        try (var frame = com.atom.chat.render.CardBackdrop.begin(target, canvas, layout.rect(), null, wallpaper, config)) {
+            glass.drawArrivingFrame(canvas, layout, -100, -100, -100, -100, now);
+        }
+        try (Bitmap bitmap = new Bitmap()) {
+            bitmap.allocN32Pixels(W, H);
+            assertTrue(target.readPixels(bitmap, 0, 0));
+            return bitmap.readPixels();
+        }
+    }
+
     @Test void settingsTabLabelsStayStillWhileOnlyTheirContentMoves() {
         for(var style:AtomChatConfig.PageNavStyle.values()) {
             AtomChatConfig.get().pageNavStyle=style;

@@ -7,7 +7,7 @@ import com.atom.chat.nav.PageNavAxis;
 import com.atom.chat.render.SkiaFontRenderer;
 import com.atom.chat.render.CardShadowReach;
 import com.atom.chat.ui.Animations;
-import com.atom.lib.design.atomchat.AppIcons;
+import com.atom.chat.ui.SettingsIcons;
 import com.atom.chat.ui.UiLayout;
 import com.atom.chat.ui.PressScale;
 import com.atom.chat.ui.UiMotion;
@@ -162,6 +162,7 @@ public final class SettingsHomePage {
                 } else {
                     float tileDx = UiStagger.itemStyleSlidePx(entrance, i, now, axis);
                     canvas.save();
+                    float maskOpacity = com.atom.chat.render.CardBackdrop.pushMaskOpacity(tileAlpha);
                     try (Paint layer = new Paint().setAlphaf(tileAlpha)) {
                         // The layer is the tile's travel union plus the shadow's
                         // reach. saveLayer is a hard clip, so a layer sized to
@@ -180,6 +181,7 @@ public final class SettingsHomePage {
                         drawTile(canvas, tile, sections[i], tileHover[i], tileScale[i]);
                         canvas.restore();
                     } finally {
+                        com.atom.chat.render.CardBackdrop.restoreMaskOpacity(maskOpacity);
                         canvas.restore();
                     }
                 }
@@ -241,10 +243,10 @@ public final class SettingsHomePage {
 
     public static Path iconFor(SettingsSection section) {
         return switch (section) {
-            case APPEARANCE -> AppIcons.ICON_SETTINGS_APPEARANCE_PATH;
-            case CHAT -> AppIcons.ICON_TAB_CHAT_PATH;
-            case PRIVACY -> AppIcons.ICON_SETTINGS_PRIVACY_PATH;
-            case ABOUT -> AppIcons.ICON_SETTINGS_ABOUT_PATH;
+            case APPEARANCE -> SettingsIcons.PALETTE;
+            case CHAT -> SettingsIcons.MESSAGES;
+            case PRIVACY -> SettingsIcons.SHIELD_LOCK;
+            case ABOUT -> SettingsIcons.INFO_CIRCLE;
         };
     }
 

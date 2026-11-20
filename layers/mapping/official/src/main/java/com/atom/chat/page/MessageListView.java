@@ -5,17 +5,15 @@ import com.atom.chat.AtomChat;
 import com.atom.chat.chat.ChatMessage;
 import com.atom.chat.chat.Cicodes;
 import com.atom.chat.chat.ImageCode;
-import com.atom.chat.chat.MentionHighlighter;
 import com.atom.chat.chat.MessageGrouping;
 import com.atom.chat.chat.OwnIdentity;
 import com.atom.chat.config.AtomChatConfig;
 import com.atom.chat.font.FontManager;
 import com.atom.chat.image.ImageLoader;
-import com.atom.chat.image.PlayerAvatar;
 import com.atom.chat.render.ClickableSpan;
 import com.atom.chat.render.Easing;
+import com.atom.chat.render.MessagePaint;
 import com.atom.chat.render.RichTextRenderer;
-import com.atom.chat.render.SkiaImages;
 import com.atom.lib.design.atomchat.SkiaDraw;
 import com.atom.chat.render.SkiaFontRenderer;
 import com.atom.chat.render.TextSurface;
@@ -34,7 +32,6 @@ import io.github.humbleui.skija.Color;
 import io.github.humbleui.skija.Font;
 import io.github.humbleui.skija.Image;
 import io.github.humbleui.skija.Paint;
-import io.github.humbleui.skija.SamplingMode;
 import io.github.humbleui.types.Rect;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -547,15 +544,7 @@ public final class MessageListView {
         if (cached != null) {
             return cached;
         }
-        RichText content = msg.getContentRich();
-        if (!msg.isSystem()) {
-            String own = OwnIdentity.bareName();
-            if (own != null && !own.isBlank()) {
-                content = MentionHighlighter.highlightLocal(content, own,
-                        OwnIdentity.displayNameRich());
-            }
-        }
-        List<RichLine> lines = RichTextRenderer.wrapFor(content, font, wrapWidth);
+        List<RichLine> lines = RichTextRenderer.wrapFor(MessagePaint.body(msg), font, wrapWidth);
         layoutCache.put(key, lines);
         return lines;
     }
@@ -935,28 +924,7 @@ public final class MessageListView {
         if (!msg.isIdentityUnknown() && (name == null || name.isBlank())) {
             name = host.senderName(msg);
         }
-        if (!msg.isIdentityUnknown() && PlayerAvatar.drawE33Chat(canvas, uuid, name, avatarX, avatarY, UiTokens.AVATAR_SIZE)) {
-            return;
-        }
-        Image face = msg.isIdentityUnknown() ? null : PlayerAvatar.face(uuid, name);
-        if (face != null) {
-            SkiaImages.drawRoundedImage(canvas, face, avatarX, avatarY, UiTokens.AVATAR_SIZE, UiTokens.AVATAR_SIZE,
-                    UiTokens.AVATAR_SIZE / 2.0F, SamplingMode.LINEAR);
-        } else {
-            SkiaDraw.drawRoundedRect(canvas, avatarX, avatarY, UiTokens.AVATAR_SIZE, UiTokens.AVATAR_SIZE,
-                    UiTokens.AVATAR_SIZE / 2.0F, Color.makeARGB(255, 120, 130, 145));
-        }
-        // Hairline rim concentric with the bitmap (face or placeholder):
-        // AvatarRing centres the stroke ON the bitmap's edge, so half of it
-        // covers the avatar and half sits past it, and the separator's outer
-        // edge lands exactly on the stroke's outer edge — no panel colour can
-        // show through between bitmap and rim. The centre is deliberately not
-        // pixel-nudged: that moves the whole ring and opens a one-side seam.
-        // Polarity-adaptive UiTokens.rim separates it from whatever bubble or
-        // panel sits behind. Same ring language as the swatches.
-        SkiaDraw.drawRing(canvas, avatarX + UiTokens.AVATAR_SIZE / 2.0F, avatarY + UiTokens.AVATAR_SIZE / 2.0F,
-                com.atom.chat.render.AvatarRing.rimRadius(UiTokens.AVATAR_SIZE / 2.0F),
-                com.atom.chat.render.AvatarRing.RIM_STROKE_PX, UiTokens.rim(AtomChatAppearance.theme()));
+        MessagePaint.avatar(canvas, msg, uuid, name, avatarX, avatarY);
     }
 
     /** Clock pill height between messages (see {@link #dividerBefore}). */

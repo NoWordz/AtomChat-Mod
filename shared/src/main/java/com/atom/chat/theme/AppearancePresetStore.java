@@ -53,7 +53,7 @@ public final class AppearancePresetStore {
                            int cardColor, int panelOutlineColor,
                            int secondaryCapsuleBg, int secondaryCapsuleText,
                            float panelOpacity, float panelWidth, float panelHeight, boolean panelWidthAutomatic, boolean panelHeightAutomatic,
-                           float uiScale, float contentScale, float cardTint,
+                           float uiScale, float contentScale, float cardTint, float cardBlurStrength,
                            float cornerRadius, boolean blurEnabled, boolean panelOutline, float panelOutlineWidth,
                            boolean animationEnabled, String pageNavStyle, String themeName,
                            String bubbleStyle) {
@@ -64,7 +64,7 @@ public final class AppearancePresetStore {
                     config.cardColor, config.panelOutlineColor,
                     config.secondaryCapsuleBg, config.secondaryCapsuleText,
                     config.panelOpacity, config.panelWidth, config.panelHeight, config.panelWidthAutomatic, config.panelHeightAutomatic,
-                    config.uiScale, config.contentScale, config.cardTint, config.cornerRadius,
+                    config.uiScale, config.contentScale, config.cardTint, config.effectiveCardBlurStrength(), config.cornerRadius,
                     config.blurEnabled, config.panelOutline, config.effectivePanelOutlineWidth(), config.animationEnabled,
                     config.pageNavStyle.name(), config.themeName == null ? "" : config.themeName,
                     config.effectiveBubbleStyle().name());
@@ -93,6 +93,7 @@ public final class AppearancePresetStore {
             config.uiScale = uiScale;
             config.contentScale = contentScale;
             config.cardTint = cardTint;
+            config.cardBlurStrength = cardBlurStrength;
             config.cornerRadius = cornerRadius;
             config.blurEnabled = blurEnabled;
             config.panelOutline = panelOutline;
@@ -312,6 +313,7 @@ public final class AppearancePresetStore {
                     a.has("panelWidthAutomatic") && bool(a, "panelWidthAutomatic"),
                     a.has("panelHeightAutomatic") && bool(a, "panelHeightAutomatic"),
                     number(a, "uiScale"), number(a, "contentScale"), number(a, "cardTint"),
+                    a.has("cardBlurStrength") ? number(a, "cardBlurStrength") : 0F,
                     number(a, "cornerRadius"), bool(a, "blurEnabled"), bool(a, "panelOutline"),
                     a.has("panelOutlineWidth") ? number(a, "panelOutlineWidth") : (bool(a, "panelOutline") ? 2F : 0F),
                     bool(a, "animationEnabled"), string(a, "pageNavStyle"),
@@ -342,6 +344,7 @@ public final class AppearancePresetStore {
                 || !finite(s.uiScale(), 0.75F, 1.5F)
                 || !finite(s.contentScale(), 0.8F, 1.5F)
                 || !finite(s.cardTint(), 0F, 1F)
+                || !finite(s.cardBlurStrength(), 0F, 3F)
                 || !finite(s.cornerRadius(), 0F, 25F)
                 || !finite(s.panelOutlineWidth(), 0F, 6F)) {
             return false;
@@ -464,6 +467,7 @@ public final class AppearancePresetStore {
         a.addProperty("uiScale", s.uiScale());
         a.addProperty("contentScale", s.contentScale());
         a.addProperty("cardTint", s.cardTint());
+        a.addProperty("cardBlurStrength", s.cardBlurStrength());
         a.addProperty("cornerRadius", s.cornerRadius());
         a.addProperty("blurEnabled", s.blurEnabled());
         a.addProperty("panelOutline", s.panelOutline());

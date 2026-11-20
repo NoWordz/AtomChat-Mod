@@ -1,5 +1,41 @@
 # Release Notes
 
+## v0.9.2
+
+**新增**
+
+- 游戏内聊天 HUD 支持头像、气泡、图片和动态 GIF，默认常驻 5 条，可设为 0–10 条、到时退出或切回原版。
+- 卡片背景模糊默认 200%，可调至 0–300%，也会影响通知横幅。
+- 实验性内容新增全屏新年烟花，可用中英文新年祝福触发。
+
+**更改**
+
+- 「外观与交互」集中管理主题、气泡和壁纸预设，配色独立成页，并新增快捷 HUD 图标开关。
+- 优化原有七张壁纸、设置分类、分组图标和教程。
+- 表情面板与消息反应共用扩充后的表情顺序。
+
+**修复与性能**
+
+- 优化切页、表情面板和聊天 HUD 绘制，修复表情包打开时上移、栏卡阴影透明度和 Fabric 新消息反应问题。
+
+----
+
+**Added**
+
+- The in-game chat HUD shows avatars, bubbles, images and animated GIFs. It keeps five messages by default and supports a 0–10 limit, an optional timeout and a switch back to vanilla chat.
+- Card blur defaults to 200% and can be adjusted from 0% to 300%. It also affects notification banners.
+- Optional fullscreen fireworks play for New Year greetings in Chinese and English.
+
+**Changed**
+
+- Appearance & Interaction brings theme, bubble and wallpaper presets together, gives colors their own tab, and adds a shortcut HUD icon switch.
+- Refined the seven original wallpapers, settings categories, section icons and tutorial.
+- The emoji picker and message reactions share the same expanded emoji order.
+
+**Fixes and performance**
+
+- Improved page transitions, emoji picker and chat HUD rendering, and fixed sticker entry motion, bar shadow opacity and missing reactions on newly received Fabric messages.
+
 ## v0.9.1
 
 > 本地候选使用 AtomLib 0.6.0 候选包。

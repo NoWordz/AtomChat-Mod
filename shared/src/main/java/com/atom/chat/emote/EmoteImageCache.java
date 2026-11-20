@@ -2,9 +2,12 @@ package com.atom.chat.emote;
 
 import com.atom.chat.AtomChat;
 import com.atom.chat.image.ImageLoader;
+import com.atom.chat.util.DataMigration;
 import io.github.humbleui.skija.Image;
 
 import java.io.File;
+import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -55,13 +58,11 @@ public final class EmoteImageCache {
         if (failed.contains(file)) {
             return null;
         }
-        if (!file.isFile()) {
-            cache.remove(file);
-            return null;
-        }
-        try {
-            Image decoded = ImageLoader.decodeStatic(
-                    java.nio.file.Files.readAllBytes(file.toPath()), MAX_DIM);
+        var path = file.toPath();
+        if (!DataMigration.allowPersonalPath(path)) return null;
+        if (!Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS)) return null;
+        try (var input = Files.newInputStream(path, LinkOption.NOFOLLOW_LINKS)) {
+            Image decoded = ImageLoader.decodeStatic(input.readAllBytes(), MAX_DIM);
             if (decoded != null) {
                 cache.put(file, decoded);
                 return decoded;

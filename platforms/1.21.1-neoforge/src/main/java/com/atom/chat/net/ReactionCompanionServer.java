@@ -33,6 +33,13 @@ public final class ReactionCompanionServer {
     private static ReactionLedger ledger(MinecraftServer server) { return LEDGERS.computeIfAbsent(server, ignored -> new ReactionLedger()); }
     private static boolean available(ServerPlayer receiver) { return receiver.connection.hasChannel(ReactionPayloads.DataPayload.TYPE); }
     private static void send(ServerPlayer receiver, byte[] bytes) { if (available(receiver)) { net.neoforged.neoforge.network.PacketDistributor.sendToPlayer(receiver, new ReactionPayloads.DataPayload(bytes)); } }
+    private static void sendSnapshot(ServerPlayer receiver, byte[] expanded, byte[] legacy) {
+        if (receiver.connection.hasChannel(ReactionPayloads.ExpandedData.TYPE)) {
+            net.neoforged.neoforge.network.PacketDistributor.sendToPlayer(receiver, new ReactionPayloads.ExpandedData(expanded));
+        } else {
+            send(receiver, legacy);
+        }
+    }
     private static void action(ServerPlayer sender, byte[] bytes) {
         MinecraftServer server = sender.server;
         if (server == null || !com.atom.chat.config.AtomChatServerConfig.get().hostingEnabled) return;
@@ -47,15 +54,20 @@ public final class ReactionCompanionServer {
         ReactionWire.Snapshot snapshot = ledger.snapshot(action.id());
         if (snapshot == null) return;
         byte[] response = ReactionWire.snapshot(snapshot);
+        byte[] legacy = snapshot.entries().stream().allMatch(entry -> ReactionEmoji.legacy(entry.emoji()))
+                ? response : ReactionWire.legacySnapshot(snapshot);
         // The reacting client is included: it keeps no optimistic copy of its own
         // reaction, so this broadcast is the only thing that can make its chip
         // appear. A repeat that changed nothing goes to the sender alone.
-        if (before==snapshot.revision()) { send(sender,response); return; }
+        if (before==snapshot.revision()) { sendSnapshot(sender, response, legacy); return; }
         for (ServerPlayer receiver : server.getPlayerList().getPlayers()) {
-            if(deliveries(server).received(action.id(),receiver.getUUID())) send(receiver, response);
+            if(deliveries(server).received(action.id(),receiver.getUUID())) sendSnapshot(receiver, response, legacy);
         }
     }
     public static void handleAction(ReactionPayloads.ActionPayload payload, net.neoforged.neoforge.network.handling.IPayloadContext ctx) {
-        ctx.enqueueWork(() -> { if (ctx.player() instanceof ServerPlayer sender) action(sender, payload.bytes()); });
+        handleBytes(payload.bytes(), ctx);
+    }
+    static void handleBytes(byte[] bytes, net.neoforged.neoforge.network.handling.IPayloadContext ctx) {
+        ctx.enqueueWork(() -> { if (ctx.player() instanceof ServerPlayer sender) action(sender, bytes); });
     }
 }

@@ -17,12 +17,25 @@ public final class SettingsChipBar {
     public int selected(){return selected;}
     public void select(int index){if(index<0||index>2||index==selected)return;selected=index;pressed=index;}
     public void release(){pressed=-1;}
+    private static float insetX(UiLayout layout, int count) {
+        float width = layout.chipBar.w() / count;
+        return count >= 4 && width < LayoutTokens.CHIP_COMPACT_SLOT ? LayoutTokens.CHIP_COMPACT_INSET : UiTokens.TAB_EDGE_PAD;
+    }
+
+    private static UiLayout.Rect cell(UiLayout layout, int index, int count) {
+        float inset = insetX(layout, count);
+        var bar = layout.chipBar;
+        float width = bar.w() / count;
+        return new UiLayout.Rect(bar.x() + width * index + inset, bar.y() + UiTokens.TAB_EDGE_PAD,
+                Math.max(0, width - 2 * inset), UiTokens.CHIP_PILL_H);
+    }
+
     public int hit(UiLayout layout,float x,float y){return hit(layout,3,x,y);}
     public static int hit(UiLayout layout,int count,float x,float y){
-        if(count==0)return -1;float cellW=layout.chipBar.w()/count,inset=UiTokens.TAB_EDGE_PAD;
+        if(count==0)return -1;float cellW=layout.chipBar.w()/count,inset=insetX(layout,count);
         for(int i=0;i<count;i++){
-            var cell=layout.chipRect(i,count);float cx=layout.chipBar.x()+cellW*(i+.5f),cy=layout.chipBar.y()+layout.chipBar.h()/2;
-            if(Math.abs(x-cx)<=cell.w()/2+inset&&Math.abs(y-cy)<=cell.h()/2+inset)return i;
+            var cell=cell(layout,i,count);float cx=layout.chipBar.x()+cellW*(i+.5f),cy=layout.chipBar.y()+layout.chipBar.h()/2;
+            if(Math.abs(x-cx)<=cell.w()/2+inset&&Math.abs(y-cy)<=cell.h()/2+UiTokens.TAB_EDGE_PAD)return i;
         }return -1;
     }
     public void update(UiLayout layout,int count,int selected,int pressed,float mx,float my,float dt){
@@ -32,21 +45,25 @@ public final class SettingsChipBar {
         for(int i=0;i<count;i++){
             boolean over=i==hovered;float next=UiMotion.approach(hover.getOrDefault(i,0f),over?1:0,dt,UiMotion.HOVER_MS);
             if(next<.01f&&!over)hover.remove(i);else hover.put(i,next);
-            scales.computeIfAbsent(i,k->PressScale.bounce()).update(over,over&&pressed==i,dt,Animations.enabled(),layout.chipRect(i,count).w());
+            scales.computeIfAbsent(i,k->PressScale.bounce()).update(over,over&&pressed==i,dt,Animations.enabled(),cell(layout,i,count).w());
         }
     }
     public void draw(Canvas canvas,UiLayout layout,List<String> labels,int selected,int secondary){
         int count=labels.size();if(count==0||layout.chipBar.w()<=0)return;
-        var first=layout.chipRect(0,count);float inset=UiTokens.TAB_EDGE_PAD;
-        float x=layout.chipBar.x()+indicator.getValue()*layout.chipBar.w()/count+inset;
+        var first=cell(layout,0,count);
+        float inset=insetX(layout,count);
+        boolean compact=inset<UiTokens.TAB_EDGE_PAD;
+        float fontSize=compact?LayoutTokens.CHIP_COMPACT_FONT:UiTokens.SETTINGS_TILE_SUB;
+        float textInset=compact?LayoutTokens.CHIP_COMPACT_INSET:LayoutTokens.CHIP_LABEL_PADDING;
+        float x=first.x()+indicator.getValue()*layout.chipBar.w()/count;
         var active=scales.get(selected);if(active!=null)active.begin(canvas,x+first.w()/2,first.y()+first.h()/2);
         try{SkiaDraw.drawRoundedRect(canvas,x,first.y(),first.w(),first.h(),UiTokens.insetRadius(UiTokens.chromeRadius(AtomChatAppearance.theme()),inset,first.w(),first.h()),UiTokens.accentFill(AtomChatAppearance.theme()));}finally{if(active!=null)canvas.restore();}
         for(int i=0;i<count;i++){
-            var cell=layout.chipRect(i,count);boolean on=i==selected;var font=on?FontManager.boldFont(UiTokens.SETTINGS_TILE_SUB):FontManager.font(UiTokens.SETTINGS_TILE_SUB);
+            var cell=cell(layout,i,count);boolean on=i==selected;var font=on?FontManager.boldFont(fontSize):FontManager.font(fontSize);
             var scale=scales.get(i);if(scale!=null)scale.begin(canvas,cell.x()+cell.w()/2,cell.y()+cell.h()/2);
             try{
                 if(!on&&hover.getOrDefault(i,0f)>.01f)SkiaDraw.drawRoundedRect(canvas,cell.x(),cell.y(),cell.w(),cell.h(),UiTokens.insetRadius(UiTokens.chromeRadius(AtomChatAppearance.theme()),inset,cell.w(),cell.h()),UiTokens.cardHover(hover.get(i), AtomChatAppearance.theme()));
-                SkiaFontRenderer.drawTextCentered(canvas,font,SkiaFontRenderer.truncate(font,labels.get(i),Math.max(0,cell.w()-UiTokens.s(10))),cell.x()+cell.w()/2,cell.y()+cell.h()/2,on?UiTokens.onAccent(UiTokens.accentFill(AtomChatAppearance.theme())):secondary); // bare-value: unchanged settings chip text inset
+                SkiaFontRenderer.drawTextCentered(canvas,font,SkiaFontRenderer.truncate(font,labels.get(i),Math.max(0,cell.w()-textInset)),cell.x()+cell.w()/2,cell.y()+cell.h()/2,on?UiTokens.onAccent(UiTokens.accentFill(AtomChatAppearance.theme())):secondary);
             }finally{if(scale!=null)canvas.restore();}
         }
     }

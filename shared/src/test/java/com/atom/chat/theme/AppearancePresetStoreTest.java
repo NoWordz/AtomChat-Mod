@@ -133,6 +133,7 @@ class AppearancePresetStoreTest {
         c.blurEnabled = false;
         c.panelOutline = false;
         c.cardTint = 0.61F;
+        c.cardBlurStrength = 2.35F;
         c.cornerRadius = 7.5F;
         c.panelWidth = 512.0F;
         c.panelHeight = 700.0F;
@@ -164,6 +165,7 @@ class AppearancePresetStoreTest {
         assertFalse(target.blurEnabled);
         assertFalse(target.panelOutline);
         assertEquals(0.61F, target.cardTint, 0.0001F);
+        assertEquals(2.35F, target.cardBlurStrength, 0.0001F);
         assertEquals(7.5F, target.cornerRadius, 0.0001F);
         assertEquals(512.0F, target.panelWidth, 0.0001F);
         assertEquals(700.0F, target.panelHeight, 0.0001F);

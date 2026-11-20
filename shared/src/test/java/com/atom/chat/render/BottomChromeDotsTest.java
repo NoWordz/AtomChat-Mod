@@ -103,7 +103,7 @@ class BottomChromeDotsTest {
         // A production chat bubble occupies part of the dot band too.
         com.atom.chat.render.ChatBubble.draw(canvas,270,bar.y()-30,180,22,AtomChatConfig.BubbleStyle.CORNER,false,0xFF67758A);
     }
-    private static void shadow(Canvas canvas,UiLayout.Rect bar,float radius){SkiaDraw.drawChromeShadow(canvas,bar.x(),bar.y(),bar.w(),bar.h(),radius);}
+    private static void shadow(Canvas canvas,UiLayout.Rect bar,float radius){ChromeMaterial.drawShadow(canvas,bar.x(),bar.y(),bar.w(),bar.h(),radius);}
     private static void face(Canvas canvas,UiLayout.Rect bar,float radius){SkiaDraw.drawRoundedRect(canvas,bar.x(),bar.y(),bar.w(),bar.h(),radius,UiTokens.cardFill(AtomChatAppearance.theme()));ChromeMaterial.drawDetails(canvas,bar,radius);}
     private static byte[] pixels(Surface surface){try(var bitmap=new Bitmap()){bitmap.allocN32Pixels(560,620);assertTrue(surface.readPixels(bitmap,0,0));return bitmap.readPixels();}}
     private static void save(Surface surface,String name)throws Exception{

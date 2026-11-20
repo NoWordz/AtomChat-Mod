@@ -7,7 +7,7 @@ class ChatEffectMatcherTest {
   var m = new ChatEffectMatcher();
   for (String s : new String[]{"我喜欢你！","我爱你❤️","I like you","I LIKE U!","I love you","I love u","love you","love u"}) assertEquals(Optional.of(ChatEffectType.HEART), m.match(s), s);
   for (String s : new String[]{"祝你生日快乐！","happy birthday","Happy  Bday!","HBD"}) assertEquals(Optional.of(ChatEffectType.CAKE), m.match(s), s);
-  for (String s : new String[]{"新年快乐！","happy new year","HNY"}) assertEquals(Optional.of(ChatEffectType.FIREWORK), m.match(s), s);
+  for (String s : new String[]{"新年快乐！","新年快樂！","happy new year","HNY"}) assertTrue(m.match(s).isEmpty(), s);
  }
  @Test void boundariesAndExcludedTokens() {
   var m = new ChatEffectMatcher();

@@ -7,7 +7,7 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 
 class SettingsTabDefaultsTest {
-    @Test void displayRestoresItsWholeTabAndLeavesOtherTabsAndPersonalDataAlone() {
+    @Test void materialRestoresItsWholeTabAndLeavesOtherTabsAndPersonalDataAlone() {
         var config = new AtomChatConfig();
         config.blurStrength = .5F; config.blurEnabled = false;
         config.panelOutline = false; config.panelOutlineWidth = 0;
@@ -15,7 +15,7 @@ class SettingsTabDefaultsTest {
         config.accentColor = 0xFF18A682; config.panelWidth = 630; config.contentScale = 1.3F;
         config.enabled = false; config.blockedPlayers = List.of("Keep");
         var saves = new AtomicInteger();
-        assertTrue(SettingsTabDefaults.reset(config, SettingsSection.APPEARANCE, "display", () -> { saves.incrementAndGet(); return true; }));
+        assertTrue(SettingsTabDefaults.reset(config, SettingsSection.APPEARANCE, "material", () -> { saves.incrementAndGet(); return true; }));
         assertEquals(AtomChatConfig.DEFAULT.blurStrength, config.blurStrength);
         assertEquals(AtomChatConfig.DEFAULT.blurEnabled, config.blurEnabled);
         assertEquals(AtomChatConfig.DEFAULT.panelOutlineWidth, config.panelOutlineWidth);
@@ -27,16 +27,31 @@ class SettingsTabDefaultsTest {
     }
     @Test void failedSaveRollsBackTheTabAndUnknownTabCannotResetAnything() {
         var config = new AtomChatConfig(); config.blurStrength = .5F; config.blurEnabled = false;
-        assertFalse(SettingsTabDefaults.reset(config, SettingsSection.APPEARANCE, "display", () -> false));
+        assertFalse(SettingsTabDefaults.reset(config, SettingsSection.APPEARANCE, "material", () -> false));
         assertEquals(.5F, config.blurStrength); assertFalse(config.blurEnabled);
         assertFalse(SettingsTabDefaults.reset(config, SettingsSection.APPEARANCE, "missing", () -> fail("unknown tab must not save")));
+    }
+    @Test void restoringColorsKeepsTheAppliedThemeAndItsMaterialSettings() {
+        var config = new AtomChatConfig();
+        config.themeName = "raven";
+        config.panelBgColor = 0xff334455;
+        config.panelOpacity = .85F;
+        assertTrue(SettingsTabDefaults.reset(config, SettingsSection.APPEARANCE, "colors", () -> true));
+        assertEquals(AtomChatConfig.DEFAULT.panelBgColor, config.panelBgColor);
+        assertEquals("raven", config.themeName);
+        assertEquals(.85F, config.panelOpacity);
     }
     @Test void notificationEditorSettingsResetButChatHistoryAndPersonalRecordsRemain() {
         var config = new AtomChatConfig();
         config.notificationHudScale = 1.8F; config.notificationHudOffsetX = 70;
         config.chatHistoryEnabled = true; config.historyRetentionDays = 90;
         config.playerSignature = "Keep my signature";
+        config.hudIconEnabled = false;
         assertTrue(SettingsTabDefaults.reset(config, SettingsSection.CHAT, "notify", () -> true));
+        assertEquals(1.8F, config.notificationHudScale);
+        assertFalse(config.hudIconEnabled);
+        assertTrue(SettingsTabDefaults.reset(config, SettingsSection.APPEARANCE, "adjust", () -> true));
+        assertTrue(config.hudIconEnabled);
         assertEquals(AtomChatConfig.DEFAULT.notificationHudScale, config.notificationHudScale);
         assertEquals(AtomChatConfig.DEFAULT.notificationHudOffsetX, config.notificationHudOffsetX);
         assertTrue(config.chatHistoryEnabled); assertEquals(90, config.historyRetentionDays);

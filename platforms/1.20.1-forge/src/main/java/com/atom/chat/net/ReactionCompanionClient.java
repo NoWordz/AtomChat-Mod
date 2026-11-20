@@ -5,13 +5,19 @@ public final class ReactionCompanionClient {
     private ReactionCompanionClient() {}
     public static void init() {
         ReactionClient.supported = ReactionCompanionClient::supported;
-        ReactionClient.sender = bytes -> { if (supported()) { ReactionPayloads.CHANNEL.sendToServer(new ReactionPayloads.ActionPayload(bytes)); } };
+        ReactionClient.expandedSupported = ReactionCompanionClient::expandedSupported;
+        ReactionClient.sender = bytes -> { if (supported()) { (expandedSupported() ? ReactionPayloads.EXPANDED : ReactionPayloads.CHANNEL).sendToServer(new ReactionPayloads.ActionPayload(bytes)); } };
         ReactionClient.self = () -> { var client = Minecraft.getInstance(); return client.player == null ? null : client.player.getUUID(); };
 
     }
     public static boolean supported() {
         var client = Minecraft.getInstance();
         return client.player != null && client.getConnection() != null && (ReactionPayloads.CHANNEL != null && ReactionPayloads.CHANNEL.isRemotePresent(client.getConnection().getConnection()));
+    }
+    private static boolean expandedSupported() {
+        var connection = Minecraft.getInstance().getConnection();
+        return connection != null && ReactionPayloads.EXPANDED != null
+                && ReactionPayloads.EXPANDED.isRemotePresent(connection.getConnection());
     }
     public static void onData(ReactionPayloads.DataPayload payload,Object origin) {
         var client=Minecraft.getInstance();

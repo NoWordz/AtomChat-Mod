@@ -101,7 +101,18 @@ class SharedSettingsFrontendTest {
         void chip(int value){if(admin){var cell=layout.chipRect(value,3);server.click(cell.x()+cell.w()/2,cell.y()+cell.h()/2,0);server.release();}else settings.selectChip(SettingsSection.CHAT,value);}
         void fold(){
             float x=layout.list.x()+UiTokens.SETTINGS_ROW_PAD,y=SettingsGroupFrontend.contentTop(layout,SettingsGroupFrontend.chipBand())+UiTokens.SETTINGS_LABEL_H/2;
-            if(admin){server.click(x,y,0);server.release();}else{var hit=settings.hit(x,y,layout,SettingsSection.CHAT,scrolling.detailScroll().getScrollY());assertNotNull(hit);assertTrue(settings.perform(hit));}
+            if(admin){server.click(x,y,0);server.release();}else{
+                var section=SettingsSection.CHAT;
+                var rows=settings.rows(section);
+                String label="atomchat.settings.group.chat.input";
+                int index=java.util.stream.IntStream.range(0,rows.size())
+                        .filter(i -> label.equals(rows.get(i).labelKey())).findFirst().orElseThrow();
+                float scrollY=scrolling.detailScroll().getScrollY();
+                var heading=settings.tutorialGroupAnchor(section,index,index,layout,scrollY);
+                y=heading.y()+heading.h()/2;
+                var hit=settings.hit(x,y,layout,section,scrollY);
+                assertNotNull(hit);assertEquals(label,hit.row().labelKey());assertTrue(settings.perform(hit));
+            }
             ripples.click(x,y);
         }
         byte[] frame(Surface surface,long time)throws Exception{
@@ -281,7 +292,7 @@ class SharedSettingsFrontendTest {
             var folds=ServerConfigPage.class.getDeclaredField("folds");folds.setAccessible(true);
             for(int i=0;i<30;i++){
                 normal.frame(left,1800+i*16);admin.frame(right,1800+i*16);
-                float expected=normal.settings.tutorialFolds().expansion().get("label:"+normal.settings.rows(SettingsSection.CHAT).get(0).labelKey());
+                 float expected=normal.settings.tutorialFolds().expansion().get("label:atomchat.settings.group.chat.input");
                 assertEquals(expected,((Map<?,?>)folds.get(admin.server)).get("hosting"));
                 try(var a=left.makeImageSnapshot();var b=right.makeImageSnapshot()){pair.getCanvas().drawImage(a,0,0);pair.getCanvas().drawImage(b,460,0);}png(pair,out().resolve("motion/fold/"+String.format("%03d.png",i)));
             }

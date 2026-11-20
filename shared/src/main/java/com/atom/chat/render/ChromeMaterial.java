@@ -24,9 +24,28 @@ public final class ChromeMaterial {
 
     private ChromeMaterial() { }
 
+    public static void drawShadow(Canvas canvas, float x, float y, float width, float height, float radius) {
+        float opacity = cardOpacity();
+        if (opacity <= 0F) return;
+        SkiaDraw.drawChromeShadow(canvas, x, y, width, height, radius,
+                withAlpha(UiTokens.CHROME_SHADOW_INNER, opacity), withAlpha(UiTokens.CHROME_SHADOW_OUTER, opacity));
+    }
+
+    public static void drawBackdrop(Canvas canvas, float x, float y, float width, float height, float radius, float opacity) {
+        if (cardOpacity() < 1F) CardBackdrop.draw(canvas, x, y, width, height, radius, opacity);
+    }
+
+    private static int withAlpha(int color, float opacity) {
+        return Math.round((color >>> 24) * opacity) << 24 | (color & 0xFFFFFF);
+    }
+
+    private static float cardOpacity() {
+        return (UiTokens.cardFill(AtomChatAppearance.theme()) >>> 24) / 255F;
+    }
+
     public static void drawDetails(Canvas canvas, UiLayout.Rect bar, float radius) {
         if (bar == null || bar.w() <= 0F || bar.h() <= 0F) return;
-        float opacity = (UiTokens.cardFill(AtomChatAppearance.theme()) >>> 24) / 255F;
+        float opacity = cardOpacity();
         if (opacity <= 0F) return;
         canvas.save();
         try {

@@ -87,7 +87,7 @@ public final class EmojiWiring {
             @Override
             public void sendSticker(Path file) {
                 if(com.atom.chat.onboarding.TutorialSandbox.active()){com.atom.chat.onboarding.TutorialSandbox.action();return;}
-                host.uploadSticker(file);
+                if (com.atom.chat.util.DataMigration.allowPersonalPath(file)) host.uploadSticker(file);
             }
 
             @Override

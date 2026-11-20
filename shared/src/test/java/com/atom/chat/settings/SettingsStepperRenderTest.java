@@ -68,11 +68,11 @@ class SettingsStepperRenderTest {
         try {
             for (float width : new float[]{240, 1000}) {
                 checkSelector(width, SettingsSection.CHAT, 0, "avatar_style");
-                checkSelector(width, SettingsSection.CHAT, 3, "teleport_mode");
-                checkSelector(width, SettingsSection.APPEARANCE, 1, "page_nav_style");
+                checkSelector(width, SettingsSection.APPEARANCE, 3, "teleport_mode");
+                checkSelector(width, SettingsSection.APPEARANCE, 3, "page_nav_style");
             }
-            var page = new SettingsSectionPage(); page.selectChip(SettingsSection.CHAT, 2);
-            var rows = page.rows(SettingsSection.CHAT);
+            var page = new SettingsSectionPage(); page.selectChip(SettingsSection.APPEARANCE, 2);
+            var rows = page.rows(SettingsSection.APPEARANCE);
             assertEquals(1, rows.stream().filter(r -> "hud_edit".equals(r.actionId())).count());
             assertFalse(rows.stream().anyMatch(r -> "hud_position".equals(r.actionId())
                     || r.slider() != null && r.slider().id().startsWith("hud_offset_")));
@@ -131,23 +131,25 @@ class SettingsStepperRenderTest {
         var rows = page.rows(section);
         for (int i = 0; i < rows.size(); i++) {
             var row = rows.get(i); if (!action.equals(row.actionId())) continue;
-            var rect = page.rowRect(section, rows, i, 0, layout);
+            var unscrolled = page.rowRect(section, rows, i, 0, layout);
+            float scroll = Math.max(0, unscrolled.bottom() - layout.list.bottom() + 20);
+            var rect = page.rowRect(section, rows, i, scroll, layout);
             var geometry = page.stepperGeometry(row, rect);
             var left = page.hit(geometry.previous().x() + geometry.previous().w() / 2,
-                    geometry.previous().y() + geometry.previous().h() / 2, layout, section, 0);
+                    geometry.previous().y() + geometry.previous().h() / 2, layout, section, scroll);
             var right = page.hit(geometry.next().x() + geometry.next().w() / 2,
-                    geometry.next().y() + geometry.next().h() / 2, layout, section, 0);
+                    geometry.next().y() + geometry.next().h() / 2, layout, section, scroll);
             assertNotNull(left); assertNotNull(right);
             assertEquals(action + ":prev", left.row().actionId());
             assertEquals(action, right.row().actionId());
-            assertNull(page.hit(rect.x() + UiTokens.SETTINGS_ROW_PAD, rect.y() + 1, layout, section, 0));
+            assertNull(page.hit(rect.x() + UiTokens.SETTINGS_ROW_PAD, rect.y() + 1, layout, section, scroll));
             if (geometry.value().w() > 0) assertNull(page.hit(
                     geometry.value().x() + geometry.value().w() / 2,
-                    geometry.value().y() + geometry.value().h() / 2, layout, section, 0));
+                    geometry.value().y() + geometry.value().h() / 2, layout, section, scroll));
             try (var surface = Surface.makeRasterN32Premul(1100, 1800)) {
                 for (int frame = 0; frame < 3; frame++) {
                     int save = surface.getCanvas().getSaveCount();
-                    page.render(surface.getCanvas(), layout, section, -1, -1, 0, 0xFF4488CC);
+                    page.render(surface.getCanvas(), layout, section, -1, -1, scroll, 0xFF4488CC);
                     assertEquals(save, surface.getCanvas().getSaveCount());
                 }
                 Path output = Path.of("build/test-artifacts/stepper-" + action + ".png");

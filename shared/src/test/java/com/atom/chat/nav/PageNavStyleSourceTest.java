@@ -125,7 +125,7 @@ class PageNavStyleSourceTest {
     void bothVariantsConsumeTheOneRead() throws IOException {
         String src=source(COMPOSITE);
         assertTrue(body(src,"public void beginFrame(long nowMs)").contains("style() == AtomChatConfig.PageNavStyle.ZOOM"));
-        String envelope=body(src,"public void drawArrivingFrame(Canvas canvas, UiLayout layout");
+        String envelope=body(src,"private void drawTransition(Canvas canvas");
         assertTrue(envelope.contains("frame.dx()"));assertTrue(envelope.contains("frame.scale()"));
     }
 

@@ -57,12 +57,13 @@ public final class BottomChromeTransition implements AutoCloseable {
     public void drawBackdrop(Canvas canvas) {
         var shape = paintedShape();
         if (shape.w() < .01f || shape.h() < .01f || shape.alpha() <= 0) return;
+        float radius = Math.min(UiTokens.shellChromeRadius(AtomChatAppearance.theme()), Math.min(shape.w(), shape.h()) / 2);
+        com.atom.chat.render.ChromeMaterial.drawBackdrop(canvas, shape.x(), shape.y(), shape.w(), shape.h(), radius, shape.alpha());
         int save = beginShapeLayer(canvas, shape);
         try {
-            float radius = Math.min(UiTokens.shellChromeRadius(AtomChatAppearance.theme()), Math.min(shape.w(), shape.h()) / 2);
             // HEAD chat drew its shadow before the message list; nav drew it after the body.
             if (mode == Mode.CHAT)
-                SkiaDraw.drawChromeShadow(canvas, shape.x(), shape.y(), shape.w(), shape.h(), radius);
+                com.atom.chat.render.ChromeMaterial.drawShadow(canvas, shape.x(), shape.y(), shape.w(), shape.h(), radius);
             if (geometry.settled(frameTime))
                 com.atom.chat.render.DotTexture.drawEdge(canvas, paintedRect(), radius, true,
                         com.atom.chat.config.AtomChatConfig.get().textSecondaryColor);
@@ -102,7 +103,7 @@ public final class BottomChromeTransition implements AutoCloseable {
         try {
             float radius = Math.min(UiTokens.shellChromeRadius(AtomChatAppearance.theme()), Math.min(shape.w(), shape.h()) / 2);
             if (mode != Mode.CHAT)
-                SkiaDraw.drawChromeShadow(canvas, shape.x(), shape.y(), shape.w(), shape.h(), radius);
+                com.atom.chat.render.ChromeMaterial.drawShadow(canvas, shape.x(), shape.y(), shape.w(), shape.h(), radius);
             SkiaDraw.drawRoundedRect(canvas, shape.x(), shape.y(), shape.w(), shape.h(), radius, UiTokens.cardFill(AtomChatAppearance.theme()));
             com.atom.chat.render.ChromeMaterial.drawDetails(canvas, paintedRect(), radius);
             canvas.translate(shape.x(), shape.y());

@@ -49,13 +49,13 @@ class SettingsBubblePreviewTest {
         assertTrue(selections.isEmpty(),"a vertical page-scroll gesture cannot select a bubble style");
     }
 
-    @Test void bubbleStripPrecedesCornersAndDragsWithoutSelecting() throws Exception {
+    @Test void bubbleStripPrecedesWallpapersAndDragsWithoutSelecting() throws Exception {
         var page = new SettingsSectionPage();
         var layout = UiLayout.ofDetail(0,0,230,1800);
         var rows = page.rows(SettingsSection.APPEARANCE);
         int bubble = java.util.stream.IntStream.range(0,rows.size()).filter(i -> rows.get(i).kind() == SettingsSectionPage.RowKind.BUBBLES).findFirst().orElseThrow();
-        int corners = java.util.stream.IntStream.range(0,rows.size()).filter(i -> "atomchat.settings.group.appearance.corners".equals(rows.get(i).labelKey())).findFirst().orElseThrow();
-        assertTrue(bubble < corners,"bubble style belongs above the corner-radius group");
+        int wallpaper = java.util.stream.IntStream.range(0,rows.size()).filter(i -> rows.get(i).kind() == SettingsSectionPage.RowKind.WALLPAPERS).findFirst().orElseThrow();
+        assertTrue(bubble < wallpaper,"bubble presets precede wallpaper presets");
         var method=SettingsSectionPage.class.getDeclaredMethod("rowRect",SettingsSection.class,java.util.List.class,int.class,float.class,UiLayout.class);
         method.setAccessible(true);
         var row=(UiLayout.Rect)method.invoke(page,SettingsSection.APPEARANCE,rows,bubble,0F,layout);
@@ -103,13 +103,13 @@ class SettingsBubblePreviewTest {
         var layout=UiLayout.ofDetail(0,0,520,1800);
         var rows=page.rows(SettingsSection.APPEARANCE);
         int next=java.util.stream.IntStream.range(0,rows.size()).filter(i->
-                "atomchat.settings.group.appearance.corners".equals(rows.get(i).labelKey())).findFirst().orElseThrow();
+                "atomchat.settings.group.appearance.wallpaper".equals(rows.get(i).labelKey())).findFirst().orElseThrow();
         var method=SettingsSectionPage.class.getDeclaredMethod("rowRect",SettingsSection.class,java.util.List.class,int.class,float.class,UiLayout.class);
         method.setAccessible(true);
         var rect=(UiLayout.Rect)method.invoke(page,SettingsSection.APPEARANCE,rows,next,0F,layout);
         var hit=page.hit(rect.x()+rect.w()/2,rect.y()+rect.h()/2,layout,SettingsSection.APPEARANCE,0F);
         assertNotNull(hit);
-        assertEquals("atomchat.settings.group.appearance.corners",hit.row().labelKey(),"hidden preview area cannot cover the next heading");
+        assertEquals("atomchat.settings.group.appearance.wallpaper",hit.row().labelKey(),"hidden preview area cannot cover the next heading");
     }
 
     @Test void threeExplicitSelectionsAreReachableAtRegularAndNarrowWidths() throws Exception {

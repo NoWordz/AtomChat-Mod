@@ -11,37 +11,39 @@ import java.util.function.BooleanSupplier;
 public final class SettingsTabDefaults {
     private SettingsTabDefaults() { }
     private static final Map<String, List<String>> NAMES = Map.ofEntries(
-            Map.entry("APPEARANCE/theme", List.of(
+            Map.entry("APPEARANCE/theme", List.of("bubbleStyle")),
+            Map.entry("APPEARANCE/colors", List.of(
                 "accentColor", "ownBubbleColor", "bubbleTextColor",
                 "otherBubbleColor", "otherBubbleTextColor", "panelBgColor",
                 "textPrimaryColor", "textSecondaryColor", "cardColor",
-                "panelOutlineColor", "secondaryCapsuleBg", "secondaryCapsuleText",
-                "themeName", "bubbleStyle", "cornerRadius")),
-            Map.entry("APPEARANCE/display", List.of(
-                "blurEnabled", "blurStrength", "panelOutline",
-                "panelOutlineWidth", "animationEnabled", "pageNavStyle")),
+                "panelOutlineColor", "secondaryCapsuleBg", "secondaryCapsuleText")),
+            Map.entry("APPEARANCE/material", List.of(
+                "blurEnabled", "blurStrength", "cardBlurStrength", "panelOutline",
+                "panelOutlineWidth", "cornerRadius", "panelOpacity", "cardTint")),
             Map.entry("APPEARANCE/adjust", List.of(
                 "halfScreenMode", "halfScreenWidth", "halfScreenWidthCustomized",
                 "panelWidth", "panelHeight", "panelWidthAutomatic", "panelHeightAutomatic", "panelPositionCustom",
                 "panelPositionX", "panelPositionY", "uiScale",
-                "contentScale", "panelOpacity", "cardTint")),
+                "contentScale", "notificationHudPosition", "notificationHudOffsetX",
+                "notificationHudOffsetY", "notificationHudScale", "hudIconEnabled")),
+            Map.entry("APPEARANCE/interaction", List.of(
+                "animationEnabled", "pageNavStyle", "messageEntryAnimation", "avatarPokeEnabled",
+                "teleportCommandMode", "feedbackSoundEnabled", "feedbackButtonEnabled",
+                "feedbackSendEnabled", "feedbackPanelEnabled", "feedbackVolume")),
             Map.entry("CHAT/messages", List.of(
                 "enabled", "closeAfterSend", "retainDraftOnClose",
+                "chatHudEnabled", "chatHudMaxMessages", "chatHudTimedExit",
                 "avatarStyle", "imageMessagesEnabled", "antiSpamEnabled",
-                "compactMessagesEnabled", "timestampIntervalMinutes", "messageEntryAnimation",
-                "avatarPokeEnabled")),
+                "compactMessagesEnabled", "timestampIntervalMinutes")),
             Map.entry("CHAT/history", List.of(
                 "chatHistoryEnabled", "historyRetentionDays")),
             Map.entry("CHAT/notify", List.of(
-                "mentionBannerEnabled", "whisperBannerEnabled", "notificationHudPosition",
-                "notificationHudOffsetX", "notificationHudOffsetY", "notificationHudScale",
+                "mentionBannerEnabled", "whisperBannerEnabled",
                 "notificationSoundEnabled", "mentionSoundEnabled", "whisperSoundEnabled",
-                "notifyVolume", "feedbackSoundEnabled", "feedbackButtonEnabled",
-                "feedbackSendEnabled", "feedbackPanelEnabled", "feedbackVolume")),
-            Map.entry("CHAT/advanced", List.of(
-                "teleportCommandMode", "funEffectsEnabled", "experimentalEffectsEnabled")),
+                "notifyVolume")),
+            Map.entry("CHAT/effects", List.of("funEffectsEnabled", "experimentalEffectsEnabled")),
             Map.entry("PRIVACY/privacy", List.of(
-                "hideBlockedMessages")),
+                "hideBlockedMessages", "serverPacksEnabled")),
             Map.entry("ABOUT/about", List.of(
                 "debug")));
     private static final Map<String, List<Field>> FIELDS = resolveFields();
