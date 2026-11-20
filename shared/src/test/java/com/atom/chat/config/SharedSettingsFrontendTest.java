@@ -104,7 +104,8 @@ class SharedSettingsFrontendTest {
             if(admin){server.click(x,y,0);server.release();}else{
                 var section=SettingsSection.CHAT;
                 var rows=settings.rows(section);
-                String label="atomchat.settings.group.chat.input";
+                String label=settings.activeChipIndex(section)==1
+                        ?"atomchat.settings.group.history.storage":"atomchat.settings.group.chat.input";
                 int index=java.util.stream.IntStream.range(0,rows.size())
                         .filter(i -> label.equals(rows.get(i).labelKey())).findFirst().orElseThrow();
                 float scrollY=scrolling.detailScroll().getScrollY();

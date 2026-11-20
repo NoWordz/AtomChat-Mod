@@ -4,7 +4,7 @@
 
 <h1 align="center">AtomChat</h1>
 
-<p align="center"><em>为 Minecraft 带来手机风格的聊天面板与游戏内聊天 HUD。</em></p>
+<p align="center"><em>基于 Skija，为 Minecraft 带来手机应用风格的聊天体验。</em></p>
 
 <p align="center">
   <a href="https://github.com/NoWordz/AtomChat-Mod/releases/latest"><strong>下载</strong></a> ·
