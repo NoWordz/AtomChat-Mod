@@ -1,11 +1,12 @@
 # AtomChat 当前状态
 
-## 2026-11-20 · 0.9.2 已验收
+## 2026-11-20 · 0.9.2 已发布
 
 - **实机**。用户验收通过的最终包安装在 `1.21.1-CCB`，Minecraft 1.21.1、Fabric Loader 0.18.2、AtomLib 0.7.0、Windows x64。AtomChat JAR SHA-256 为 `d57d68eaa51d2766d8b356e34af998a8e5399ae7b498831969999104e2ab9dcb`。
 - **本版**。设置重分类、独立配色页、卡片模糊、带头像与 GIF 的聊天 HUD、全屏新年烟花和七张原有壁纸微调已收口。HUD 气泡与快捷图标间距由 21 降至 6 个 GUI 像素。 [双语更新说明](../RELEASE_NOTES.md#v092)
 - **三端检查**。11 月 20 日的最终候选构建和 HUD 专项，Fabric、Forge、NeoForge 各通过 20 项、跳过 1 项可选基准，零失败。本轮重查三个 JAR 的版本、资源与客户端依赖，目标矩阵和裸值检查也通过。
-- **发布状态**。0.9.2 源码交付使用 `main`，GitHub 最新公开发行仍为 0.8.0。现有严格前端源码检查使用旧设置契约 `55e8670a`，三端在新增和重组 UI 后均报告未覆盖入口。候选构建与三端包核验已完成，正式分发构建仍受该检查阻挡。
+- **UI 契约**。在 `main` 的 `d41d4b24` 更新三端审定配置。以验收版重采历史与托管页各场景，每端 140 个离屏样本零容差通过。Windows 严格分发检查与 Linux 构建测试均通过。 [构建 CI](https://github.com/NoWordz/AtomChat-Mod/actions/runs/44666257046)
+- **发布**。`v0.9.2` 从同一提交发布为 GitHub 最新正式版，包含三端 AtomChat 和对应的 AtomLib 0.6.0。商店发布任务跳过缺少凭据的上传。 [GitHub Release](https://github.com/NoWordz/AtomChat-Mod/releases/tag/v0.9.2) · [发布 CI](https://github.com/NoWordz/AtomChat-Mod/actions/runs/44667469550)
 - **验证范围**。早期 Fabric 候选按原路线复测，外观设置首帧在卡片模糊 0% 和 300% 时分别为 11.36 ms 和 11.64 ms，随后各观测到一帧超出 16.67 ms。Forge 和 NeoForge 的本轮证据为本地测试和产物检查。 [功能验证](verification/2026-11-19-v092-functional-verification.md) · [切页实测](verification/2026-11-19-v092-navigation-frame-times.md)
 
 ## 2026-11-18 AtomChat 0.9.1 候选收口
