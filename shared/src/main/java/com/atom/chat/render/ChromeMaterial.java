@@ -3,6 +3,7 @@ package com.atom.chat.render;
 import com.atom.chat.config.AtomChatConfig;
 import com.atom.chat.ui.AtomChatAppearance;
 import com.atom.chat.ui.UiLayout;
+import com.atom.lib.design.atomchat.SkiaDraw;
 import com.atom.lib.design.atomchat.UiTokens;
 import io.github.humbleui.skija.Canvas;
 import io.github.humbleui.skija.Paint;
@@ -26,9 +27,17 @@ public final class ChromeMaterial {
     private ChromeMaterial() { }
 
     public static float cornerRadius(UiLayout.Rect bar, float requested) {
+        return UiTokens.insetRadius(legacyBarRadius(requested), 0F, bar.w(), bar.h());
+    }
+
+    /** Circular inset controls retain the 0.9.3 radius before the short-side cap. */
+    public static float circularInsetCornerRadius(float width, float height, float outerRadius, float inset) {
+        return UiTokens.insetRadius(legacyBarRadius(outerRadius), inset, width, height);
+    }
+
+    private static float legacyBarRadius(float requested) {
         float slider = AtomChatAppearance.theme().cornerRadius();
-        float radius = slider > LEGACY_BAR_CORNER_LIMIT ? requested * (LEGACY_BAR_CORNER_LIMIT / slider) : requested;
-        return UiTokens.insetRadius(radius, 0F, bar.w(), bar.h());
+        return slider > LEGACY_BAR_CORNER_LIMIT ? requested * (LEGACY_BAR_CORNER_LIMIT / slider) : requested;
     }
 
     public static float insetCornerRadius(float width, float height, float outerRadius, float inset) {
@@ -43,8 +52,16 @@ public final class ChromeMaterial {
     }
 
     public static void drawShadow(Canvas canvas, float x, float y, float width, float height, float radius) {
-        HudShadow.drawSurface(canvas, CornerGeometry.circularRect(x, y, width, height, radius),
-                ShadowTokens.CHROME, cardOpacity());
+        if (!SoftShadow.enabled() || width <= 0F || height <= 0F) return;
+        float opacity = cardOpacity();
+        if (opacity <= 0F) return;
+        // Reuse the 0.9.3 cached two-pass shadow, including its soft falloff under a translucent face.
+        SkiaDraw.drawChromeShadow(canvas, x, y, width, height, radius,
+                withAlpha(UiTokens.CHROME_SHADOW_INNER, opacity), withAlpha(UiTokens.CHROME_SHADOW_OUTER, opacity));
+    }
+
+    private static int withAlpha(int color, float opacity) {
+        return (Math.round((color >>> 24) * opacity) << 24) | (color & 0xFFFFFF);
     }
 
     public static void drawBackdrop(Canvas canvas, float x, float y, float width, float height, float radius, float opacity) {

@@ -30,7 +30,6 @@ class PanelShellCornersTest {
             pixels.allocN32Pixels(500, 500);
             var historical = AtomChatAppearance.theme();
             config.cornerRadius = 29F;
-            var theme = AtomChatAppearance.theme();
             var header = new UiLayout.Rect(0F, 0F, 220F, UiTokens.HEADER_HEIGHT);
             var composer = new UiLayout.Rect(0F, 0F, 220F, UiTokens.INPUT_HEIGHT);
             var tabs = new UiLayout.Rect(0F, 0F, 220F, UiTokens.TAB_BAR_H);
@@ -49,10 +48,17 @@ class PanelShellCornersTest {
             var layout = UiLayout.ofDetail(-initial.x() - inset, -initial.y() - inset, 395F, 450F);
             var chips = new SettingsChipBar();
             chips.update(layout, 3, 0, -1, -400F, -400F, 16F);
-            float radius = ChromeMaterial.insetCornerRadius(initial.w() / 3F - 2F * inset,
-                    UiTokens.CHIP_PILL_H, UiTokens.chromeRadius(theme), inset);
+            float radius = UiTokens.insetRadius(UiTokens.chromeRadius(historical), inset,
+                    initial.w() / 3F - 2F * inset, UiTokens.CHIP_PILL_H);
             assertCircularCorner(surface, pixels, 0F, 0F, radius,
                     () -> chips.draw(canvas, layout, List.of("", "", ""), 0, 0), "settings tab");
+            float cellWidth = layout.chipBar.w() / 3F;
+            chips.update(layout, 3, 0, -1, cellWidth + initial.w() / 6F - inset,
+                    UiTokens.CHIP_PILL_H / 2F, 1000F);
+            canvas.translate(-cellWidth, 0F);
+            assertCircularCorner(surface, pixels, 0F, 0F, radius,
+                    () -> chips.draw(canvas, layout, List.of("", "", ""), 0, 0), "settings hover",
+                    UiTokens.cardHover(1F, AtomChatAppearance.theme()) >>> 24);
         } finally {
             field.set(null, previous);
         }
@@ -64,6 +70,11 @@ class PanelShellCornersTest {
 
     private static void assertCircularCorner(Surface surface, Bitmap pixels, float x, float y, float radius,
                                              Runnable draw, String control) {
+        assertCircularCorner(surface, pixels, x, y, radius, draw, control, 255);
+    }
+
+    private static void assertCircularCorner(Surface surface, Bitmap pixels, float x, float y, float radius,
+                                             Runnable draw, String control, int alpha) {
         surface.getCanvas().clear(0);
         draw.run();
         assertTrue(surface.readPixels(pixels, 0, 0));
@@ -72,10 +83,10 @@ class PanelShellCornersTest {
         float outside = radius * .286F;
         assertEquals(0, pixels.getColor((int) ((x + outside) * 32F), (int) ((y + outside) * 32F)) >>> 24, control);
         float inside = radius * .36F;
-        assertEquals(255, pixels.getColor((int) ((x + inside) * 32F), (int) ((y + inside) * 32F)) >>> 24, control);
+        assertEquals(alpha, pixels.getColor((int) ((x + inside) * 32F), (int) ((y + inside) * 32F)) >>> 24, control);
     }
 
-    @Test void navigationAndSettingsCapsulesChangeBetween28And30() throws Exception {
+    @Test void selectedAndHoveredCapsulesFollowTheSharedSliderAndCircularCap() throws Exception {
         var field = AtomChatConfig.class.getDeclaredField("instance");
         field.setAccessible(true);
         var previous = field.get(null);
@@ -95,7 +106,7 @@ class PanelShellCornersTest {
             chips.update(layout, 3, 0, -1, layout.chipBar.x() + .5F * layout.chipBar.w(),
                     layout.chipBar.y() + .5F * layout.chipBar.h(), 50F);
             int[] previousCoverage = {Integer.MAX_VALUE, Integer.MAX_VALUE, Integer.MAX_VALUE, Integer.MAX_VALUE};
-            for (int radius = 28; radius <= 30; radius++) {
+            for (int radius : new int[]{12, 18, 25, 28, 30}) {
                 config.cornerRadius = radius;
                 canvas.clear(0);
                 root.renderContents(canvas, bar, 0, 0, config.accentColor);
@@ -106,11 +117,52 @@ class PanelShellCornersTest {
                         capsuleCoverage(pixels, layout.chipBar, 0), capsuleCoverage(pixels, layout.chipBar, 1)
                 };
                 for (int i = 0; i < coverage.length; i++) {
-                    assertTrue(coverage[i] > 0 && coverage[i] < previousCoverage[i],
-                            "capsule " + i + " at " + radius + ": coverage " + previousCoverage[i] + " -> " + coverage[i]);
+                    String label = "capsule " + i + " at " + radius;
+                    assertTrue(coverage[i] > 0, label);
+                    if (radius <= 25) {
+                        assertTrue(coverage[i] < previousCoverage[i],
+                                label + ": coverage " + previousCoverage[i] + " -> " + coverage[i]);
+                    } else {
+                        assertEquals(previousCoverage[i], coverage[i], label + " keeps the 0.9.3 radius cap");
+                    }
                 }
                 previousCoverage = coverage;
             }
+        } finally {
+            field.set(null, previous);
+        }
+    }
+
+    @Test void navigationSelectionAndHoverUseTheSameCircularArc() throws Exception {
+        var field = AtomChatConfig.class.getDeclaredField("instance");
+        field.setAccessible(true);
+        var previous = field.get(null);
+        var config = new AtomChatConfig();
+        config.performanceMode = true;
+        config.cornerRadius = 25F;
+        field.set(null, config);
+        try (var surface = Surface.makeRasterN32Premul(500, 500); var pixels = new Bitmap()) {
+            var canvas = surface.getCanvas();
+            canvas.scale(32F, 32F);
+            pixels.allocN32Pixels(500, 500);
+            var theme = AtomChatAppearance.theme();
+            float inset = UiTokens.TAB_EDGE_PAD;
+            float width = 360F;
+            float cellWidth = width / 3F;
+            float capsuleWidth = cellWidth - 2F * inset;
+            float capsuleHeight = UiTokens.TAB_BAR_H - 2F * inset;
+            var bar = new UiLayout.Rect(-cellWidth - inset, -inset, width, UiTokens.TAB_BAR_H);
+            var root = new BottomTabBar();
+            root.update(1000F, capsuleWidth / 2F, capsuleHeight / 2F, bar);
+            float radius = ChromeMaterial.circularInsetCornerRadius(capsuleWidth, capsuleHeight,
+                    UiTokens.shellChromeRadius(theme), inset);
+            assertCircularCorner(surface, pixels, 0F, 0F, radius,
+                    () -> root.renderContents(canvas, bar, 0, 0, 0), "navigation hover",
+                    UiTokens.cardHover(1F, theme) >>> 24);
+
+            var selectedBar = new UiLayout.Rect(-inset, -inset, width, UiTokens.TAB_BAR_H);
+            assertCircularCorner(surface, pixels, 0F, 0F, radius,
+                    () -> root.renderContents(canvas, selectedBar, 0, 0, 0), "navigation selection");
         } finally {
             field.set(null, previous);
         }

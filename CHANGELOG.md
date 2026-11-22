@@ -4,7 +4,8 @@
 
 **更改**
 
-- 面板上下栏恢复 0.9.3 的圆弧与半径，设置页签用普通圆角，发送按钮保留连续曲率。
+- 面板上下栏恢复 0.9.3 的圆弧、半径和双层软阴影。
+- 底导航和设置页签的选中、悬停胶囊共用普通圆角并随全局圆角设置变化，发送按钮保留连续曲率。
 - 连续曲率圆角更圆润，并保留原有的圆角设置范围。
 - 面板和聊天 HUD 的次级胶囊背景最低不透明度从 85% 降到 70%。
 - 圆角填充、描边、部分裁切、图片边缘、模糊遮罩和线框图标采用局部抗锯齿。
@@ -12,12 +13,14 @@
 **修复**
 
 - 修复 NeoForge 上启用 Gnetum 时游戏内聊天 HUD 回退到原版、开关面板时短暂闪回的问题。
+- 发布流水线可下载并核验配套的 AtomLib 0.7.1 构建输入。
 
 ----
 
 **Changed**
 
-- The panel bars restore their 0.9.3 arcs and radii, settings tabs use circular corners, and the Send button retains continuous corners.
+- The panel bars restore their 0.9.3 circular corners, radii, and soft two-layer shadows.
+- Selected and hovered tabs in settings and bottom navigation share circular corners and follow the global corner setting. The Send button retains continuous corners.
 - Continuous corners are rounder across the existing corner-radius range.
 - Lowered the minimum opacity of secondary capsule backgrounds from 85% to 70% in the panel and chat HUD.
 - Added local antialiasing for rounded fills and strokes, selected clips, image edges, blur masks, and outline icons.
@@ -25,6 +28,7 @@
 **Fixed**
 
 - Fixed the chat HUD falling back to vanilla with Gnetum on NeoForge and briefly switching back when opening or closing the panel.
+- The release pipeline can fetch and verify the matching AtomLib 0.7.1 build input.
 
 ## v0.9.4
 

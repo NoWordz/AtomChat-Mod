@@ -170,7 +170,7 @@ public final class BottomTabBar {
         float inset = UiTokens.TAB_EDGE_PAD;
         float capsuleH = bar.h() - inset * 2.0F;
         float capsuleW = cellWidth - inset * 2.0F;
-        float radius = ChromeMaterial.insetCornerRadius(capsuleW, capsuleH,
+        float radius = ChromeMaterial.circularInsetCornerRadius(capsuleW, capsuleH,
                 UiTokens.shellChromeRadius(AtomChatAppearance.theme()), inset);
 
         // The indicator IS the selected cell index, animated: it carries the
@@ -186,7 +186,8 @@ public final class BottomTabBar {
         // capsule has no per-cell identity of its own while it slides.
         canvas.save();
         applyBounce(canvas, tabScale[selectedIndex].scale(), capsuleCenterX, barCenterY);
-        CornerGeometry.drawRoundedRect(canvas, capsuleX, bar.y() + inset, capsuleW, capsuleH, radius,
+        CornerGeometry.fill(canvas,
+                CornerGeometry.circularRect(capsuleX, bar.y() + inset, capsuleW, capsuleH, radius),
                 UiTokens.accentFill(AtomChatAppearance.theme()));
         canvas.restore();
 
@@ -205,7 +206,8 @@ public final class BottomTabBar {
             // would only dull it.
             if (i != selectedIndex && tabHover[i] > 0.01F) {
                 float x = bar.x() + cellWidth * i + inset;
-                CornerGeometry.drawRoundedRect(canvas, x, bar.y() + inset, capsuleW, capsuleH, radius,
+                CornerGeometry.fill(canvas,
+                        CornerGeometry.circularRect(x, bar.y() + inset, capsuleW, capsuleH, radius),
                         UiTokens.cardHover(tabHover[i], AtomChatAppearance.theme()));
             }
 

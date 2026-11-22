@@ -58,7 +58,7 @@ public final class SettingsChipBar {
         float textInset=compact?LayoutTokens.CHIP_COMPACT_INSET:LayoutTokens.CHIP_LABEL_PADDING;
         float x=first.x()+indicator.getValue()*layout.chipBar.w()/count;
         var theme = AtomChatAppearance.theme();
-        float radius = ChromeMaterial.insetCornerRadius(first.w(), first.h(), UiTokens.chromeRadius(theme), inset);
+        float radius = ChromeMaterial.circularInsetCornerRadius(first.w(), first.h(), UiTokens.chromeRadius(theme), inset);
         int accent = UiTokens.accentFill(theme);
         var active = scales.get(selected);
         boolean scaleIndicator = active != null && active.scale() != 1F;

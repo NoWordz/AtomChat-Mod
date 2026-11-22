@@ -4,7 +4,7 @@
   "version": "0.7.1",
   "compatibility_range": "[0.7.1,0.8.0)",
   "input_archive": {
-    "url": "https://github.com/NoWordz/AtomLib-Mod/releases/download/v0.7.1/atomlib-input-0.7.1.zip",
+    "url": "https://github.com/NoWordz/AtomChat-Mod/releases/download/atomlib-input-0.7.1/atomlib-input-0.7.1.zip",
     "sha256": "6b226cde719114cc879928cf7178b5fa31ebcbd1bf9f4c6748b4153fcd611ab8"
   },
   "client_platforms": [

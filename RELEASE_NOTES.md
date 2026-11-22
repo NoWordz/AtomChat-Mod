@@ -4,7 +4,7 @@
 
 **更改**
 
-- 面板上下栏恢复 0.9.3 的圆角，设置页签用普通圆角，发送按钮保留连续曲率。
+- 面板上下栏恢复 0.9.3 的圆角和柔和阴影，底导航与设置页签的选中和悬停状态采用一致的圆角。
 - 圆角边缘、图片和线框图标更平滑。
 - 面板和聊天 HUD 的次级胶囊背景最低不透明度降至 70%。
 
@@ -12,17 +12,25 @@
 
 - 修复 NeoForge 上启用 Gnetum 时聊天 HUD 回退到原版并在开关面板时闪现的问题。
 
+**安装**
+
+- 下载与 Minecraft 版本和加载器对应的 AtomChat JAR，以及同一发布页上的 AtomLib 0.7.1 配套 JAR。
+
 ----
 
 **Changed**
 
-- The panel bars restore their 0.9.3 corners, settings tabs use circular corners, and the Send button retains continuous corners.
+- The panel bars restore their 0.9.3 corners and soft shadows. Selected and hovered tabs in settings and bottom navigation now use matching corners.
 - Smoother rounded edges, images, and outline icons.
 - Secondary capsule backgrounds in the panel and chat HUD now have a minimum opacity of 70%.
 
 **Fixed**
 
 - Fixed the chat HUD reverting to vanilla with Gnetum on NeoForge and flickering when opening or closing the panel.
+
+**Installation**
+
+- Download the AtomChat JAR for your Minecraft version and loader, along with the matching AtomLib 0.7.1 JAR from this release.
 
 ## v0.9.4
 
