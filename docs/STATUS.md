@@ -1,11 +1,15 @@
 # AtomChat 当前状态
 
-## 2026-11-23 · 0.9.5 发布准备
+## 2026-11-23 · 0.9.5 正式发布
+
+- GitHub Latest 已更新至 `v0.9.5`，标签指向 `9bbd098d3f3aa4241211bedea210bd7cb9f931e5`。双语发布说明和 6 个公开附件均已核对。三份 AtomChat 附件的构建戳指向发布提交，关键渲染与兼容类同本地验收包一致，三份 AtomLib 附件的摘要与固定输入一致。 [公开发布](https://github.com/NoWordz/AtomChat-Mod/releases/tag/v0.9.5) · [发布回执](D:/AtomChat-Backups/2026-11-22-v095-release/release-verification.json)
+- 主分支构建 7/7、标签发布流水线 11/11 通过，覆盖 Windows 和 Linux 的 Fabric、Forge、NeoForge。仓库未配置商店发布凭据，Modrinth 和 CurseForge 上传步骤跳过。 [主分支 CI](https://github.com/NoWordz/AtomChat-Mod/actions/runs/45044799139) · [标签发布 CI](https://github.com/NoWordz/AtomChat-Mod/actions/runs/45045842561)
 
 - 最终版恢复上下栏 0.9.3 双层软阴影，设置页与底导航的选中、悬停胶囊统一采用普通圆弧并随全局圆角调节，发送按钮保留连续曲率。最终包离屏核对了栏角、两态胶囊与阴影。 [外观对照](D:/AtomChat-Backups/2026-11-22-v095-chrome-followup/chrome-unified-final.png)
 - 本地三端 `clean build frontendContractCheck verifyAtomLibInput` 通过，各 196 个设置场景，合计 6,801 项测试中 54 项跳过、零失败。11 月 22 日 23:46 安装与读回完成。Fabric CCB `ba9046a0436e`、Forge 1.20.1-main `2a5bc2d39e41`、NeoForge 航空学 `0d8d2566433f`。 [构建记录](D:/AtomChat-Backups/2026-11-22-v095-chrome-followup/verification.json) · [部署回执](D:/AtomChat-Backups/2026-11-22-v095-chrome-followup/deployment-readback.json)
 - GitHub Actions 此前在下载 AtomLib 0.7.1 构建输入时返回 404。下载地址改为 AtomChat 配套构建输入附件，ZIP 和三端配套 JAR 沿用已验收的内容摘要。
 - NeoForge 的 Linux 验证随后发现 Gradle 配置缓存无法读取任务执行阶段的依赖范围。依赖声明任务改为捕获配置阶段确定的版本和范围。配置缓存冷跑、重用均已通过，产物内的版本和范围保持一致。
+- 清理和回读 191 个测试目录、83 个生成的日志及缓存文件和 2 个临时解包目录。 [清理回执](D:/AtomChat-Backups/2026-11-22-v095-release/cleanup/summary.json)
 
 ## 2026-11-22 · 0.9.5 恢复上下栏的 0.9.3 半径
 
