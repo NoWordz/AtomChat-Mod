@@ -17,13 +17,39 @@ public final class CornerGeometry {
     public static final boolean ANTIALIAS = Boolean.parseBoolean(System.getProperty("atomchat.shapeAntialias", "true"));
     private static final int MAX_PATHS = 256;
     private static final float REACH_SCALE = 1.25F;
-    private static final float DIAGONAL = .20629947F;
-    private static final float STRAIGHT_HANDLE = .727F;
+    static final float DIAGONAL = .224F;
+    static final float STRAIGHT_HANDLE = .727F;
     private static final LinkedHashMap<RRect, Path> PATHS = new LinkedHashMap<>(64, .75F, true);
     private static final Paint FILL = new Paint().setAntiAlias(ANTIALIAS);
     private static final Paint EDGE = new Paint().setAntiAlias(ANTIALIAS).setMode(PaintMode.STROKE);
 
     private CornerGeometry() { }
+
+    public static RRect circularRect(float x, float y, float width, float height, float radius) {
+        float fitted = Math.max(0F, Math.min(radius, Math.min(width, height) / 2F));
+        return new CircularRect(x, y, x + width, y + height, new float[]{fitted});
+    }
+
+    static boolean usesCircularArcs(RRect rect) {
+        return rect instanceof CircularRect;
+    }
+
+    /** Keep explicitly circular contours circular when an annotation moves or scales them. */
+    private static final class CircularRect extends RRect {
+        private CircularRect(float left, float top, float right, float bottom, float[] radii) {
+            super(left, top, right, bottom, radii);
+        }
+
+        @Override public RRect offset(float dx, float dy) {
+            return new CircularRect(getLeft() + dx, getTop() + dy, getRight() + dx, getBottom() + dy, _radii);
+        }
+
+        @Override public RRect scale(float sx, float sy) {
+            float ry = _radii.length == 1 ? _radii[0] : _radii[1];
+            return new CircularRect(getLeft() * sx, getTop() * sy, getRight() * sx, getBottom() * sy,
+                    new float[]{_radii[0] * Math.abs(sx), ry * Math.abs(sy)});
+        }
+    }
 
     /** Zero selects Skia's native square, ellipse or capsule. Also used for the GL blur mask. */
     public static float continuousReach(float radius, float width, float height) {
@@ -49,6 +75,15 @@ public final class CornerGeometry {
     }
 
     public static void drawRRect(Canvas canvas, RRect rect, Paint paint) {
+        drawRRect(canvas, rect, paint, false);
+    }
+
+    static void drawRRect(Canvas canvas, RRect rect, Paint paint, boolean circularCoverage) {
+        if (RoundedCoverage.draw(canvas, rect, paint, circularCoverage)) return;
+        drawNative(canvas, rect, paint);
+    }
+
+    private static void drawNative(Canvas canvas, RRect rect, Paint paint) {
         Path path = contour(rect);
         if (path == null) canvas.drawRRect(rect, paint);
         else canvas.drawPath(path, paint);
@@ -58,6 +93,17 @@ public final class CornerGeometry {
         Path path = contour(rect);
         if (path == null) canvas.clipRRect(rect, mode, aa && ANTIALIAS);
         else canvas.clipPath(path, mode, aa && ANTIALIAS);
+    }
+
+    public static void drawClipped(Canvas canvas, RRect rect, Runnable draw) {
+        if (RoundedCoverage.clip(canvas, rect, null, draw)) return;
+        int save = canvas.save();
+        try {
+            clipRRect(canvas, rect, true);
+            draw.run();
+        } finally {
+            canvas.restoreToCount(save);
+        }
     }
 
     public static void clipRRect(Canvas canvas, RRect rect, boolean aa) {
@@ -73,7 +119,15 @@ public final class CornerGeometry {
     }
 
     public static void drawRoundedRect(Canvas canvas, float x, float y, float width, float height, float radius, int color) {
-        drawRRect(canvas, RRect.makeXYWH(x, y, width, height, radius), FILL.setColor(color));
+        fill(canvas, RRect.makeXYWH(x, y, width, height, radius), color);
+    }
+
+    public static void fill(Canvas canvas, RRect outline, int color) {
+        if (!RoundedCoverage.fill(canvas, outline, color)) fillNative(canvas, outline, color);
+    }
+
+    public static void fillNative(Canvas canvas, RRect outline, int color) {
+        drawNative(canvas, outline, FILL.setColor(color));
     }
 
     public static void drawEdgeHighlight(Canvas canvas, float x, float y, float width, float height,
@@ -97,7 +151,20 @@ public final class CornerGeometry {
         return br > 0F && br == bl && ((tl == 0F && tr == br) || (tr == 0F && tl == br));
     }
 
-    private static Path contour(RRect rect) {
+    record Radii(float tl, float tr, float br, float bl) {
+        float minNonzeroRadius() {
+            return Math.min(Math.min(nonzero(tl), nonzero(tr)), Math.min(nonzero(br), nonzero(bl)));
+        }
+
+        private static float nonzero(float radius) {
+            return radius == 0F ? Float.POSITIVE_INFINITY : Math.abs(radius);
+        }
+    }
+
+    // Positive reaches select the original continuous path. Negative radii
+    // identify the three native circular arcs of a single-tip bubble.
+    static Radii coverageCorners(RRect rect) {
+        if (usesCircularArcs(rect)) return circularCorners(rect);
         float[] radii = rect._radii;
         float half = Math.min(rect.getWidth(), rect.getHeight()) / 2F;
         if (half <= 0F) return null;
@@ -109,7 +176,7 @@ public final class CornerGeometry {
         } else if (radii.length == 8) {
             for (int i = 0; i < 8; i += 2) if (radii[i] != radii[i + 1]) return null;
             tr = radii[2]; br = radii[4]; bl = radii[6];
-            if (isSingleTip(tl, tr, br, bl)) return null;
+            if (isSingleTip(tl, tr, br, bl)) return new Radii(-tl, -tr, -br, -bl);
             if (Math.max(Math.max(tl, tr), Math.max(br, bl)) < 1F
                     || Math.min(Math.min(tl, tr), Math.min(br, bl)) >= half - .001F) return null;
             tl = Math.min(tl * REACH_SCALE, half);
@@ -119,15 +186,31 @@ public final class CornerGeometry {
         } else {
             return null;
         }
+        return new Radii(tl, tr, br, bl);
+    }
+
+    static Radii circularCorners(RRect rect) {
+        var radii = rect._radii;
+        float radius = radii[0];
+        if (radius <= 0F || Math.min(rect.getWidth(), rect.getHeight()) <= 0F) return null;
+        for (float value : radii) if (value != radius) return null;
+        float fitted = Math.min(radius, Math.min(rect.getWidth(), rect.getHeight()) / 2F);
+        return new Radii(-fitted, -fitted, -fitted, -fitted);
+    }
+
+    private static Path contour(RRect rect) {
+        if (usesCircularArcs(rect)) return null;
+        Radii corners = coverageCorners(rect);
+        if (corners == null || corners.br() < 0F) return null;
         Path path = PATHS.get(rect);
         if (path != null) return path;
         float left = rect.getLeft(), top = rect.getTop(), right = rect.getRight(), bottom = rect.getBottom();
         try (PathBuilder builder = new PathBuilder()) {
-            builder.moveTo(left + tl, top);
-            corner(builder, right, top, 1, 0, 0, 1, tr);
-            corner(builder, right, bottom, 0, 1, -1, 0, br);
-            corner(builder, left, bottom, -1, 0, 0, -1, bl);
-            corner(builder, left, top, 0, -1, 1, 0, tl);
+            builder.moveTo(left + corners.tl(), top);
+            corner(builder, right, top, 1, 0, 0, 1, corners.tr());
+            corner(builder, right, bottom, 0, 1, -1, 0, corners.br());
+            corner(builder, left, bottom, -1, 0, 0, -1, corners.bl());
+            corner(builder, left, top, 0, -1, 1, 0, corners.tl());
             path = builder.closePath().detach();
         }
         if (PATHS.size() == MAX_PATHS) {
@@ -144,8 +227,8 @@ public final class CornerGeometry {
         float ux = inX * reach, uy = inY * reach, vx = outX * reach, vy = outY * reach;
         builder.lineTo(x - ux, y - uy);
         if (reach <= 0F) return;
-        // Mirrored cubics approximate the x³ + y³ unit corner used by the blur shader.
-        // The first two handles lie on the straight edge, so curvature starts at zero.
+        // Both halves meet on the diagonal with the same tangent and curvature.
+        // Two handles on each straight edge keep the join curvature at zero.
         float joinHandle = 2F * DIAGONAL;
         builder.cubicTo(x - STRAIGHT_HANDLE * ux, y - STRAIGHT_HANDLE * uy, x - joinHandle * ux, y - joinHandle * uy,
                 x + DIAGONAL * (vx - ux), y + DIAGONAL * (vy - uy));
@@ -156,5 +239,7 @@ public final class CornerGeometry {
     static void release() {
         PATHS.values().forEach(Path::close);
         PATHS.clear();
+        RoundedCoverage.release();
+        OutlineIcons.release();
     }
 }

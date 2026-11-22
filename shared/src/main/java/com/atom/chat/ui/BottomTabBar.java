@@ -153,8 +153,8 @@ public final class BottomTabBar {
         float radius = ChromeMaterial.cornerRadius(bar, UiTokens.shellChromeRadius(AtomChatAppearance.theme()));
         ChromeMaterial.drawShadow(canvas, bar.x(), bar.y(), bar.w(), bar.h(), radius);
         ChromeMaterial.drawBackdrop(canvas, bar.x(), bar.y(), bar.w(), bar.h(), radius, 1F);
-        CornerGeometry.drawRoundedRect(canvas, bar.x(), bar.y(), bar.w(), bar.h(),
-                radius, UiTokens.cardFill(AtomChatAppearance.theme()));
+        CornerGeometry.fill(canvas, CornerGeometry.circularRect(bar.x(), bar.y(), bar.w(), bar.h(), radius),
+                UiTokens.cardFill(AtomChatAppearance.theme()));
         ChromeMaterial.drawDetails(canvas, bar, radius);
 
         renderContents(canvas, bar, selectedIndex, textPrimary, accent);

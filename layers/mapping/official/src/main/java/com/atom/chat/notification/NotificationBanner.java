@@ -7,7 +7,6 @@ import com.atom.chat.config.AtomChatConfig;
 import com.atom.chat.font.FontManager;
 import com.atom.chat.image.PlayerAvatar;
 import com.atom.chat.ui.PanelOpenMotion;
-import com.atom.chat.render.OutlineIconBounds;
 import com.atom.chat.render.RichTextRenderer;
 import com.atom.chat.render.SkiaImages;
 import com.atom.chat.render.SkiaFontRenderer;
@@ -24,8 +23,6 @@ import io.github.humbleui.skija.Font;
 import io.github.humbleui.skija.Image;
 import io.github.humbleui.skija.Paint;
 import io.github.humbleui.skija.PaintMode;
-import io.github.humbleui.skija.PaintStrokeCap;
-import io.github.humbleui.skija.PaintStrokeJoin;
 import io.github.humbleui.skija.Path;
 import io.github.humbleui.skija.SamplingMode;
 import io.github.humbleui.types.Rect;
@@ -738,26 +735,7 @@ public final class NotificationBanner {
     }
 
     private static void drawIconCentered(Canvas canvas, Path icon, float cx, float cy, float size, int color) {
-        Rect b = OutlineIconBounds.of(icon);
-        if (b == null || b.isEmpty()) {
-            return;
-        }
-        float scale = size / Math.max(b.getWidth(), b.getHeight());
-        canvas.save();
-        try {
-            canvas.translate(cx - (b.getLeft() + b.getRight()) / 2.0F * scale,
-                    cy - (b.getTop() + b.getBottom()) / 2.0F * scale);
-            canvas.scale(scale, scale);
-            try (Paint paint = new Paint().setColor(color).setAntiAlias(true)
-                    .setMode(PaintMode.STROKE)
-                    .setStrokeWidth(1.5F / scale)
-                    .setStrokeCap(PaintStrokeCap.ROUND)
-                    .setStrokeJoin(PaintStrokeJoin.ROUND)) {
-                canvas.drawPath(icon, paint);
-            }
-        } finally {
-            canvas.restore();
-        }
+        com.atom.chat.render.OutlineIcons.draw(canvas, icon, cx, cy, size, 1.5F, color);
     }
 
     private static String typeKey(Type type) {

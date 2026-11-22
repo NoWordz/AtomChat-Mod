@@ -120,6 +120,27 @@ class PanelBlurReloadTest {
                 assertEquals(64, fading[3]);
                 assertArrayEquals(new int[]{0, 0, 255, 64}, readPixel(20, 19), "the gap is untouched");
                 assertArrayEquals(new int[]{0, 0, 255, 64}, readPixel(8, 4), "the rounded corner is untouched");
+                GL11C.glClearColor(0F, 0F, 1F, 0F);
+                GL11C.glClear(GL11C.GL_COLOR_BUFFER_BIT);
+                var fractional = List.of(new BlurMask(new UiLayout.Rect(10.75F, 10.75F, 40F, 26F), 0F, 1F));
+                assertTrue(PanelBlurRenderer.drawMaskedQuads(new Matrix4f(), fractional, 1, 0, 64, 64, 64, texture));
+                assertEquals(191, readPixel(10, 20)[2], 1, "the outside-center pixel retains its quarter coverage");
+                assertEquals(239, readPixel(10, 10)[2], 1, "both square corner axes contribute coverage");
+                assertEquals(0, readPixel(10, 20)[3]);
+                assertEquals(0, readPixel(20, 20)[3]);
+
+                var roundRect = new UiLayout.Rect(11.02F, 11.02F, 44F, 44F);
+                GL11C.glClear(GL11C.GL_COLOR_BUFFER_BIT);
+                assertTrue(PanelBlurRenderer.drawMaskedQuads(new Matrix4f(),
+                        List.of(new BlurMask(roundRect, -20F, 1F)), 1, 0, 64, 64, 64, texture));
+                assertEquals(128, readPixel(15, 15)[2], 3, "sample on the continuous diagonal");
+                assertEquals(0, readPixel(15, 15)[3]);
+
+                GL11C.glClear(GL11C.GL_COLOR_BUFFER_BIT);
+                var narrowRadius = new UiLayout.Rect(10.9F, 10F, 36F, 36F);
+                assertTrue(PanelBlurRenderer.drawMaskedQuads(new Matrix4f(),
+                        List.of(new BlurMask(narrowRadius, -3F, 1F)), 1, 0, 64, 64, 64, texture));
+                assertEquals(230, readPixel(10, 25)[2], 1, "a straight edge retains exactly one tenth of the pixel");
                 assertEquals(GL11C.GL_NO_ERROR, GL11C.glGetError());
             } finally {
                 field.set(null, null);

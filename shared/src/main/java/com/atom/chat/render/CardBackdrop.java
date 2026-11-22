@@ -155,10 +155,14 @@ public final class CardBackdrop implements AutoCloseable {
     }
 
     public static void draw(Canvas canvas, float x, float y, float width, float height, float radius, float opacity) {
+        if (width <= 0F || height <= 0F || opacity <= 0F || (RECORDING.get() == null && FRAME.get() == null)) return;
+        draw(canvas, RRect.makeXYWH(x, y, width, height, radius), opacity);
+    }
+
+    static void draw(Canvas canvas, RRect shape, float opacity) {
         MaskRecorder recorder = RECORDING.get();
         CardBackdrop frame = FRAME.get();
-        if ((recorder == null && frame == null) || width <= 0F || height <= 0F || opacity <= 0F) return;
-        RRect shape = RRect.makeXYWH(x, y, width, height, radius);
+        if ((recorder == null && frame == null) || shape.getWidth() <= 0F || shape.getHeight() <= 0F || opacity <= 0F) return;
         if (recorder != null) {
             float previous = pushMaskOpacity(opacity);
             try {
@@ -166,11 +170,12 @@ public final class CardBackdrop implements AutoCloseable {
             } finally {
                 restoreMaskOpacity(previous);
             }
-        } else {
+        } else if (!RoundedCoverage.clip(canvas, shape, frame.composite.setAlphaf(opacity),
+                () -> frame.drawDeviceImage(canvas, null))) {
             int save = canvas.save();
             try {
                 CornerGeometry.clipRRect(canvas, shape, true);
-                frame.drawDeviceImage(canvas, frame.composite.setAlphaf(opacity));
+                frame.drawDeviceImage(canvas, frame.composite);
             } finally {
                 canvas.restoreToCount(save);
             }

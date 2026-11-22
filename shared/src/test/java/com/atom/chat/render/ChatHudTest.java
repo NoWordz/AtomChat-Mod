@@ -535,8 +535,10 @@ class ChatHudTest {
             new ChatHudRenderer().paint(surface.getCanvas(), List.of(row), viewport, null, "Local", "Player",
                     config, 1, 255, 1F, false, 0);
             assertTrue(surface.readPixels(pixels, 0, 0));
-            assertEquals(217, peakAlpha(pixels, pixel -> (pixel & 0xFFFFFF) == 0x00FF00));
+            assertEquals(179, peakAlpha(pixels, pixel -> (pixel & 0xFFFFFF) == 0x00FF00));
             assertEquals(0x4000FF00, config.secondaryCapsuleBg);
+            config.secondaryCapsuleBg = 0xCC00FF00;
+            assertEquals(0xCC00FF00, config.effectiveSecondaryCapsuleBg());
         }
     }
 

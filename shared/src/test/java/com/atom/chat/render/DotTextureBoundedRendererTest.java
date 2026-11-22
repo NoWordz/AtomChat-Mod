@@ -310,8 +310,8 @@ class DotTextureBoundedRendererTest {
              Paint glow = new Paint().setAntiAlias(true).setMaskFilter(blur)) {
             c.save();
             c.clipRect(Rect.makeXYWH(bar.x(), bar.y() - depth, bar.w(), depth + r));
-            CornerGeometry.clipRRect(c, outline, ClipMode.DIFFERENCE, true);
-            CornerGeometry.drawRRect(c, outline, glow.setMode(PaintMode.STROKE).setStrokeWidth(UiTokens.DOT_GLOW_STROKE)
+            c.clipRRect(outline, ClipMode.DIFFERENCE, true);
+            c.drawRRect(outline, glow.setMode(PaintMode.STROKE).setStrokeWidth(UiTokens.DOT_GLOW_STROKE)
                     .setColor(tint(color, UiTokens.DOT_GLOW_ALPHA)));
             int[] alphas = {19, 26, 32, 38, 45, 50, 54, 59, 64};
             for (int i = 0; i < Math.ceil(bar.w() / UiTokens.MESSAGE_DOT_GAP); i++) {

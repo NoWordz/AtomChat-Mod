@@ -416,7 +416,7 @@ public class AtomChatConfig {
     public int secondaryCapsuleText = 0xDCAAAABA;
 
     public int effectiveSecondaryCapsuleBg() {
-        int alpha = Math.max(secondaryCapsuleBg >>> 24, Math.round(.85F * 255));
+        int alpha = Math.max(secondaryCapsuleBg >>> 24, Math.round(.70F * 255));
         return (alpha << 24) | (secondaryCapsuleBg & 0xFFFFFF);
     }
     /**

@@ -498,7 +498,12 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
             if(step==com.atom.chat.onboarding.TutorialSession.Step.EXPRESSIONS&&emojiPanel.isOpen())radius=emojiPanel.paintedRadius(layout());
             else if(step==com.atom.chat.onboarding.TutorialSession.Step.QUICK_PHRASES&&quickPhrasePanel.isOpen())radius=quickPhrasePanel.paintedRadius(layout());
             else if(contextMenu.hasMessageMenu()||contextMenu.hasPlayerCardMenu())radius=contextMenu.surfaceRadius();
-            else if(step==com.atom.chat.onboarding.TutorialSession.Step.NAVIGATION||step==com.atom.chat.onboarding.TutorialSession.Step.COMPOSE)radius=ChromeMaterial.cornerRadius(rect, UiTokens.shellChromeRadius(AtomChatAppearance.theme()));
+            else if (step == com.atom.chat.onboarding.TutorialSession.Step.NAVIGATION
+                    || step == com.atom.chat.onboarding.TutorialSession.Step.COMPOSE) {
+                float barRadius = ChromeMaterial.cornerRadius(rect, UiTokens.shellChromeRadius(AtomChatAppearance.theme()));
+                return new com.atom.chat.onboarding.TutorialAnchor(rect,
+                        CornerGeometry.circularRect(rect.x(), rect.y(), rect.w(), rect.h(), barRadius));
+            }
             else if(step==com.atom.chat.onboarding.TutorialSession.Step.PLAYERS_BLOCK||step==com.atom.chat.onboarding.TutorialSession.Step.AVATAR_PROFILE)radius=rect.w()/2;
             else if(step==com.atom.chat.onboarding.TutorialSession.Step.MESSAGE_ACTIONS||step==com.atom.chat.onboarding.TutorialSession.Step.IMAGES) {
                 for(var hit:messageListView.hits())if(step==com.atom.chat.onboarding.TutorialSession.Step.MESSAGE_ACTIONS||hit.imageUrl()!=null)
@@ -3076,7 +3081,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
             // accent so the mode is unmistakable.
             try (Paint border = new Paint().setMode(PaintMode.STROKE).setAntiAlias(true)
                     .setColor(accent()).setStrokeWidth(s(1.5F))) {
-                CornerGeometry.drawRRect(canvas, io.github.humbleui.types.RRect.makeXYWH(
+                CornerGeometry.drawRRect(canvas, CornerGeometry.circularRect(
                         bar.x(), bar.y(), bar.w(), bar.h(),
                         ChromeMaterial.cornerRadius(bar, UiTokens.shellChromeRadius(AtomChatAppearance.theme()))), border);
             }

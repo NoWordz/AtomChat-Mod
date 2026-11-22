@@ -289,6 +289,25 @@ class DrawPrimitivesTest {
     }
 
     @Test
+    void sendFaceStillUsesAContinuousCorner() {
+        AtomChatConfig.get().cornerRadius = 20F;
+        var primitives = new DrawPrimitives(new Host());
+        try (var surface = Surface.makeRasterN32Premul(270, 270); var pixel = new Bitmap()) {
+            var canvas = surface.getCanvas();
+            canvas.scale(64F, 64F);
+            float radius = UiTokens.radius(9, com.atom.chat.ui.AtomChatAppearance.theme());
+            int corner = (int) (radius * .286F * 64F);
+            pixel.allocN32Pixels(1, 1);
+            for (boolean enabled : new boolean[]{true, false}) {
+                canvas.clear(0);
+                primitives.drawSendButton(canvas, 0F, 0F, OFF_SCREEN, OFF_SCREEN, enabled);
+                assertTrue(surface.readPixels(pixel, corner, corner));
+                assertEquals(enabled ? 255 : 0x55, pixel.getColor(0, 0) >>> 24);
+            }
+        }
+    }
+
+    @Test
     void enabledSendHasTheChromeRimAndAnExternalContactShadow() {
         DrawPrimitives primitives = new DrawPrimitives(new Host());
         try (var surface = Surface.makeRasterN32Premul(SURFACE_W, SURFACE_H); var pixels = new Bitmap()) {

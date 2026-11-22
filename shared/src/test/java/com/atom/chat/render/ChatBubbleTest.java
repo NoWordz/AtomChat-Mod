@@ -48,25 +48,41 @@ class ChatBubbleTest {
     }
 
     @Test
-    void singleTipUsesTheNativeCircularArcAtFractionalScale() {
-        try (Surface actual = Surface.makeRasterN32Premul(190, 100);
-             Surface expected = Surface.makeRasterN32Premul(190, 100);
+    void singleTipMatchesCircularAreaAtFractionalScale() {
+        int width = 190, height = 100, samples = 16;
+        try (Surface actual = Surface.makeRasterN32Premul(width, height);
+             Surface reference = Surface.makeRasterN32Premul(width * samples, height * samples);
              Bitmap a = new Bitmap(); Bitmap b = new Bitmap();
              var paint = new io.github.humbleui.skija.Paint().setAntiAlias(true).setColor(-1)) {
-            a.allocN32Pixels(190, 100);
-            b.allocN32Pixels(190, 100);
+            a.allocN32Pixels(width, height);
+            b.allocN32Pixels(width * samples, height * samples);
             actual.getCanvas().scale(1.25F, 1.25F);
-            expected.getCanvas().scale(1.25F, 1.25F);
+            reference.getCanvas().scale(1.25F * samples, 1.25F * samples);
             for (boolean own : new boolean[]{false, true}) {
                 actual.getCanvas().clear(0);
-                expected.getCanvas().clear(0);
+                reference.getCanvas().clear(0);
                 ChatBubble.draw(actual.getCanvas(), 10.25F, 10.5F, 120, 50, BubbleStyle.CORNER, own, -1);
-                expected.getCanvas().drawRRect(ChatBubble.outline(10.25F, 10.5F, 120, 50, BubbleStyle.CORNER, own, 1F), paint);
+                reference.getCanvas().drawRRect(ChatBubble.outline(10.25F, 10.5F, 120, 50, BubbleStyle.CORNER, own, 1F), paint);
                 assertTrue(actual.readPixels(a, 0, 0));
-                assertTrue(expected.readPixels(b, 0, 0));
-                for (int y = 0; y < 100; y++) for (int x = 0; x < 190; x++) {
-                    assertEquals(b.getColor(x, y), a.getColor(x, y), "pixel " + x + "," + y);
+                assertTrue(reference.readPixels(b, 0, 0));
+                byte[] low = a.readPixels(), high = b.readPixels();
+                float error = 0F;
+                int edgePixels = 0;
+                for (int y = 0; y < height; y++) for (int x = 0; x < width; x++) {
+                    int sum = 0;
+                    for (int dy = 0; dy < samples; dy++) for (int dx = 0; dx < samples; dx++) {
+                        int index = ((y * samples + dy) * width * samples + x * samples + dx) * 4 + 3;
+                        sum += high[index] & 255;
+                    }
+                    float expected = sum / (float) (samples * samples);
+                    int alpha = low[(y * width + x) * 4 + 3] & 255;
+                    if (expected != alpha || (alpha > 0 && alpha < 255)) {
+                        edgePixels++;
+                        error += Math.abs(expected - alpha);
+                    }
                 }
+                assertTrue(edgePixels > 200);
+                assertTrue(error / edgePixels < 3F, "edge alpha MAE " + error / edgePixels);
             }
         }
     }

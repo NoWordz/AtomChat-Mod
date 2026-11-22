@@ -35,7 +35,7 @@ public final class DotTexture {
     private static final float[] EDGE_POINTS = new float[512 * 2];
     private static float[] edgeDrawPoints = new float[0];
 
-    private static final int KIND_EDGE = 0, KIND_TRAIL = 1, KIND_HALO = 2;
+    private static final int KIND_EDGE = 0, KIND_TRAIL = 1, KIND_HALO = 2, KIND_POPUP_EDGE = 3;
     private static final int MAX_CACHED = 64;
     private static final int MAX_HALO_IMAGES = 8;
     private static final long MAX_HALO_BYTES = 32L * 1024L * 1024L;
@@ -164,13 +164,13 @@ public final class DotTexture {
 
     /** The bar's own rounded outline is also the origin of every dot column. */
     public static void drawEdge(Canvas canvas, UiLayout.Rect bar, float radius, boolean above, int tint) {
-        drawEdge(canvas, bar, radius, above, tint, true, false);
+        drawEdge(canvas, bar, radius, above, tint, true, false, true);
     }
 
     /** The live panel can reuse its native-pixel decoration once its bars have settled. */
     public static void drawPanelEdge(Canvas canvas, UiLayout.Rect bar, float radius, boolean above, int tint, boolean settled) {
         if (!settled) invalidatePanelEdgePose(above);
-        drawEdge(canvas, bar, radius, above, tint, true, settled);
+        drawEdge(canvas, bar, radius, above, tint, true, settled, true);
     }
 
     /** Motion or a hidden bar breaks the cold mask's repeated-pose check. */
@@ -181,19 +181,21 @@ public final class DotTexture {
     /** Changing bar geometry uses the identical primitives without allocating transient Pictures. */
     public static void drawMovingEdge(Canvas canvas, UiLayout.Rect bar, float radius, boolean above, int tint) {
         invalidatePanelEdgePose(above);
-        drawEdge(canvas, bar, radius, above, tint, false, false);
+        drawEdge(canvas, bar, radius, above, tint, false, false, true);
     }
 
     private static void drawEdge(Canvas canvas, UiLayout.Rect bar, float radius, boolean above, int tint,
-                                 boolean useCache, boolean settled) {
+                                 boolean useCache, boolean settled, boolean circular) {
         if (!SoftShadow.enabled() || !visible(bar, tint)) return;
         long segmentId = com.atom.chat.diagnostics.FrameSegments.current(), started = com.atom.chat.diagnostics.FrameSegments.start(segmentId);
         try {
             float r = Math.max(0F, Math.min(radius, Math.min(bar.w(), bar.h()) / 2F));
-            RRect outline = RRect.makeXYWH(bar.x(), bar.y(), bar.w(), bar.h(), r);
+            RRect outline = circular ? CornerGeometry.circularRect(bar.x(), bar.y(), bar.w(), bar.h(), r)
+                    : RRect.makeXYWH(bar.x(), bar.y(), bar.w(), bar.h(), r);
             if (cached && settled && drawPanelMask(canvas, bar, r, outline, above, tint)) return;
             if (cached && useCache) {
-                Key key = new Key(KIND_EDGE, bar.x(), bar.y(), bar.w(), bar.h(), radius, tint, above, UiTokens.SCALE, null);
+                int kind = circular ? KIND_EDGE : KIND_POPUP_EDGE;
+                Key key = new Key(kind, bar.x(), bar.y(), bar.w(), bar.h(), radius, tint, above, UiTokens.SCALE, null);
                 Picture picture = picture(key, c -> edgeBody(c, bar, r, outline, above, tint));
                 canvas.save();
                 try {
@@ -373,7 +375,7 @@ public final class DotTexture {
         canvas.save();
         try {
             canvas.clipRect(Rect.makeXYWH(left, popup.bottom(), right-left, bottom-popup.bottom()));
-            drawEdge(canvas, popup, radius, false, tint);
+            drawEdge(canvas, popup, radius, false, tint, true, false, false);
         } finally { canvas.restore(); }
     }
 

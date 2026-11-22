@@ -35,9 +35,12 @@ public final class Ripple {
 
     public void draw(Canvas canvas, UiLayout.Rect bounds, float corner, int color) {
         if (waves.isEmpty() || bounds.w() <= 0 || bounds.h() <= 0) return;
-        canvas.save();
+        CornerGeometry.drawClipped(canvas, RRect.makeXYWH(bounds.x(), bounds.y(), bounds.w(), bounds.h(), corner),
+                () -> drawWaves(canvas, bounds, color));
+    }
+
+    private void drawWaves(Canvas canvas, UiLayout.Rect bounds, int color) {
         try (Paint paint = new Paint().setAntiAlias(true)) {
-            CornerGeometry.clipRRect(canvas, RRect.makeXYWH(bounds.x(), bounds.y(), bounds.w(), bounds.h(), corner));
             for (Wave wave : waves) {
                 float t = wave.elapsed / DURATION_MS;
                 float dx = Math.max(Math.abs(wave.x - bounds.x()), Math.abs(bounds.right() - wave.x));
@@ -46,6 +49,6 @@ public final class Ripple {
                 paint.setColor((color & 0xFFFFFF) | (Math.round(35 * (1 - t)) << 24));
                 canvas.drawCircle(wave.x, wave.y, radius, paint);
             }
-        } finally { canvas.restore(); }
+        }
     }
 }

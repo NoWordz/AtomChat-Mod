@@ -368,7 +368,9 @@ public final class PanelBlurRenderer {
     }
 
     private static boolean drawRoundedQuad(Matrix4f pose, float x, float y, float w, float h, float radius, float alpha, int texture) {
-        return drawRoundedQuad(pose, x, y, w, h, radius, alpha, texture, 0F, 1F - uvY, uvX, 1F);
+        return GlStateUtil.withRgbOnlyBlend(() ->
+                drawRoundedQuad(pose, x, y, w, h, radius, alpha, texture, 0F, 1F - uvY, uvX, 1F,
+                        Minecraft.getInstance().getWindow().getGuiScale()));
     }
 
     static boolean drawMaskedQuads(Matrix4f pose, java.util.List<BlurMask> masks, double scale,
@@ -378,7 +380,7 @@ public final class PanelBlurRenderer {
                 var rect = mask.rect();
                 var uv = mask.textureCoords(scale, captureX, captureBottom, textureWidth, textureHeight);
                 if (!drawRoundedQuad(pose, rect.x(), rect.y(), rect.w(), rect.h(), mask.radius(), mask.alpha(), texture,
-                        uv.getLeft(), uv.getTop(), uv.getRight(), uv.getBottom())) return false;
+                        uv.getLeft(), uv.getTop(), uv.getRight(), uv.getBottom(), scale)) return false;
             }
             return true;
         });
@@ -386,7 +388,7 @@ public final class PanelBlurRenderer {
 
     private static boolean drawRoundedQuad(Matrix4f pose, float x, float y, float w, float h, float radius,
                                            float alpha, int texture, float uLeft, float vTop, float uRight,
-                                           float vBottom) {
+                                           float vBottom, double deviceScale) {
         ShaderInstance sh = roundedShader;
         if (sh == null) {
             return false;
@@ -421,10 +423,14 @@ public final class PanelBlurRenderer {
         // capacity modes. Exact mode reproduces the original 0..1 UV verbatim.
         BufferBuilder bb = Tesselator.getInstance().getBuilder();
         bb.begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_TEX_COLOR);
-        bb.vertex(pose, x, y, 0).uv(uLeft, vTop).color(1.0F, 1.0F, 1.0F, alpha).endVertex();
-        bb.vertex(pose, x, y + h, 0).uv(uLeft, vBottom).color(1.0F, 1.0F, 1.0F, alpha).endVertex();
-        bb.vertex(pose, x + w, y + h, 0).uv(uRight, vBottom).color(1.0F, 1.0F, 1.0F, alpha).endVertex();
-        bb.vertex(pose, x + w, y, 0).uv(uRight, vTop).color(1.0F, 1.0F, 1.0F, alpha).endVertex();
+        // The coverage shader also owns pixels whose centers sit just outside the shape.
+        float pad = 1F / Math.max(poseScale * (float) deviceScale, .001F);
+        float du = (uRight - uLeft) * pad / w;
+        float dv = (vBottom - vTop) * pad / h;
+        bb.vertex(pose, x - pad, y - pad, 0).uv(uLeft - du, vTop - dv).color(1.0F, 1.0F, 1.0F, alpha).endVertex();
+        bb.vertex(pose, x - pad, y + h + pad, 0).uv(uLeft - du, vBottom + dv).color(1.0F, 1.0F, 1.0F, alpha).endVertex();
+        bb.vertex(pose, x + w + pad, y + h + pad, 0).uv(uRight + du, vBottom + dv).color(1.0F, 1.0F, 1.0F, alpha).endVertex();
+        bb.vertex(pose, x + w + pad, y - pad, 0).uv(uRight + du, vTop - dv).color(1.0F, 1.0F, 1.0F, alpha).endVertex();
         BufferUploader.drawWithShader(bb.end());
 
         if (blendWasOn) {

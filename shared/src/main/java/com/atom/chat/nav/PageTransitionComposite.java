@@ -4,6 +4,7 @@ import com.atom.chat.ui.PanelBackground;
 import com.atom.chat.config.AtomChatConfig;
 import com.atom.chat.render.CardBackdrop;
 import com.atom.chat.render.DotTexture;
+import com.atom.chat.render.EdgePixelGrid;
 import com.atom.chat.render.SettingsLabelShadow;
 import com.atom.chat.ui.Animations;
 import com.atom.chat.ui.UiLayout;
@@ -105,7 +106,8 @@ public final class PageTransitionComposite implements AutoCloseable {
         UiLayout.Rect panel = layout.rect();
         if (bounds != null && !bounds.equals(panel)) { clearPictures(); motion.finish(); }
         bounds = panel;
-        if (AtomChatConfig.performanceModeActive() && !CardBackdrop.active()) {
+        // Without motion, an unsettled panel can paint on its current pixel grid directly.
+        if ((AtomChatConfig.performanceModeActive() || (!settledPanel && !Animations.enabled())) && !CardBackdrop.active()) {
             clearPictures();
             motion.finish();
             UiStagger.atFrame(nowMs, () -> {
@@ -122,7 +124,8 @@ public final class PageTransitionComposite implements AutoCloseable {
         Picture mask = null;
         try (PictureRecorder recorder = new PictureRecorder()) {
             Canvas recording = recorder.beginRecording(cull);
-            Runnable draw = () -> UiStagger.atFrame(nowMs, () -> host.drawArrivingBody(recording, layout, mouseX, mouseY));
+            Runnable body = () -> UiStagger.atFrame(nowMs, () -> host.drawArrivingBody(recording, layout, mouseX, mouseY));
+            Runnable draw = settledPanel && settledBody ? () -> EdgePixelGrid.record(recording, canvas, body) : body;
             boolean snapTitles = settledPanel && settledBody && settingsBody && UiStagger.itemsSettled(entrance, nowMs);
             mask = CardBackdrop.recordMasks(cull, snapTitles
                     ? () -> DotTexture.recordTitles(recording, canvas,

@@ -7,18 +7,13 @@ import com.atom.lib.design.atomchat.UiTokens;
 import com.atom.chat.config.AtomChatConfig;
 import com.atom.chat.font.FontManager;
 import com.atom.chat.render.DotTexture;
+import com.atom.chat.render.OutlineIcons;
 import com.atom.chat.render.SkiaFontRenderer;
 import io.github.humbleui.skija.Canvas;
-import io.github.humbleui.skija.Paint;
-import io.github.humbleui.skija.PaintMode;
-import io.github.humbleui.skija.PaintStrokeCap;
-import io.github.humbleui.skija.PaintStrokeJoin;
 import io.github.humbleui.types.Rect;
 
 /** The existing empty-list glyph and caption, with one local static backdrop. */
 public final class EmptyState {
-    private static final Paint ICON = new Paint().setAntiAlias(true).setMode(PaintMode.STROKE)
-            .setStrokeCap(PaintStrokeCap.ROUND).setStrokeJoin(PaintStrokeJoin.ROUND);
     private EmptyState() { }
 
     public static void draw(Canvas canvas, UiLayout.Rect area, String caption) {
@@ -39,15 +34,8 @@ public final class EmptyState {
                     UiTokens.withAlpha(cfg.accentColor, UiTokens.DOT_SECONDARY_TINT_ALPHA));
             int muted = UiTokens.withAlpha(cfg.textSecondaryColor, 150);
             var path = AppIcons.ICON_NO_PLAYERS_PATH;
-            var b = path.getBounds();
-            float scale = icon / Math.max(b.getWidth(), b.getHeight());
-            canvas.save();
-            try {
-                canvas.translate(cx - (b.getLeft()+b.getRight())/2F*scale,
-                        top + icon/2F - (b.getTop()+b.getBottom())/2F*scale);
-                canvas.scale(scale, scale);
-                canvas.drawPath(path, ICON.setColor(muted).setStrokeWidth(UiTokens.iconStroke(icon)/scale));
-            } finally { canvas.restore(); }
+            OutlineIcons.draw(canvas, path, path.getBounds(), cx, top + icon / 2F, icon,
+                    UiTokens.iconStroke(icon), muted);
             SkiaFontRenderer.drawTextCentered(canvas, font, caption, cx,
                     top + icon + gap + textH/2F, muted);
         } finally { canvas.restore(); }

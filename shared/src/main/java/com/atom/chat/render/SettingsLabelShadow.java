@@ -155,7 +155,7 @@ public final class SettingsLabelShadow {
 
     private static void drawInk(Canvas c, Font font, String text, float x, float y,
                                 Path icon, float iconX, float iconY, float iconSize, int color) {
-        if (icon != null) DrawPrimitives.drawIconCentered(c, icon, iconX, iconY, iconSize, color);
+        if (icon != null) OutlineIcons.drawNative(c, icon, iconX, iconY, iconSize, color);
         if (!text.isEmpty()) SkiaFontRenderer.drawText(c, font, text, x, y, color);
     }
 }

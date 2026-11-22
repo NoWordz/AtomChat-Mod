@@ -577,7 +577,8 @@ public final class ServerConfigPage {
         float radius = ChromeMaterial.cornerRadius(bar, UiTokens.shellChromeRadius(AtomChatAppearance.theme()));
         ChromeMaterial.drawShadow(canvas, bar.x(), bar.y(), bar.w(), bar.h(), radius);
         ChromeMaterial.drawBackdrop(canvas, bar.x(), bar.y(), bar.w(), bar.h(), radius, 1F);
-        CornerGeometry.drawRoundedRect(canvas, bar.x(), bar.y(), bar.w(), bar.h(), radius, UiTokens.cardFill(AtomChatAppearance.theme()));
+        CornerGeometry.fill(canvas, CornerGeometry.circularRect(bar.x(), bar.y(), bar.w(), bar.h(), radius),
+                UiTokens.cardFill(AtomChatAppearance.theme()));
         boolean root=view==View.ROOT;
         boolean enabled=!draft.saving()&&!importing&&(!root||draft.dirty()&&draft.validation()==null);
         String action=view==View.PHRASE||view==View.TEMPLATE||view==View.TEMPLATE_GUIDE?t("done"):view==View.PHRASES||view==View.EMOTES?t("back_pack"):!root?t("back"):host.label(draft.saving()?"atomchat.config.saving":"atomchat.config.save");

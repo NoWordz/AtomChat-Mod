@@ -14,6 +14,7 @@ import com.atom.chat.ui.*;
 import io.github.humbleui.skija.Canvas;
 import io.github.humbleui.skija.Paint;
 import io.github.humbleui.skija.Path;
+import io.github.humbleui.types.RRect;
 import io.github.humbleui.types.Rect;
 import java.util.*;
 import java.util.function.Function;
@@ -68,46 +69,50 @@ public final class ToolMenu {
             float pad = UiTokens.COMPOSER_POPUP_LAYER_PAD;
             if (fading) canvas.saveLayer(Rect.makeXYWH(box.x() - pad, box.y() - pad,
                     box.w() + pad * 2, box.h() + pad * 2), layer);
-            float cx = box.x() + box.w() / 2, cy = box.y() + box.h() / 2;
             ComposerPopupTransform.of(box,anim).apply(canvas);
             MenuPopup.drawSurface(canvas, box.x(), box.y(), box.w(), box.h());
             com.atom.chat.render.DotTexture.drawConnector(canvas, box, UiTokens.radius(MenuPopup.SURFACE_RADIUS, AtomChatAppearance.theme()),
                     source.inputBar, source.imageBtn, com.atom.chat.config.AtomChatConfig.get().accentColor);
             int hovered = hit(source, mx, my);
-            canvas.save();
-            try {
-                // Like context menus, complete rows fit by their bounce budget, without a contour clip.
-                // Only a scrolling player viewport needs to cut partially visible rows.
-                if (rows() * ToolLayout.MENU_ROW_H > box.h())
-                    CornerGeometry.clip(canvas, box.x(), box.y(), box.w(), box.h(), UiTokens.radius(MenuPopup.SURFACE_RADIUS, AtomChatAppearance.theme()));
-                var font = FontManager.font(UiTokens.FONT_BUTTON);
-                int first = Math.max(0, (int) (scroll / ToolLayout.MENU_ROW_H));
-                int end = Math.min(rows(), first + (int) Math.ceil(box.h() / ToolLayout.MENU_ROW_H) + 1);
-                for (int i = first; i < end; i++) {
-                    boolean disabled = playersOpen && i == 1 && players.isEmpty();
-                    float h = UiMotion.approach(hover.getOrDefault(i, 0F), !disabled && i == hovered ? 1 : 0, dt, UiMotion.HOVER_MS);
-                    hover.put(i, h);
-                    var spring = bounce.computeIfAbsent(i, key -> PressScale.bounce());
-                    MenuPopup.updateRowBounce(spring, !disabled && i == hovered, dt, box.w());
-                    float y = box.y() + i * ToolLayout.MENU_ROW_H - scroll, rowCy = y + ToolLayout.MENU_ROW_H / 2;
-                    MenuPopup.beginRowBounce(canvas, spring, cx, rowCy);
-                    try {
-                        MenuPopup.drawRowWash(canvas, box.x(), y, box.w(), ToolLayout.MENU_ROW_H, h);
-                        int color = disabled ? 0xFF999DA6 : 0xFFF4F5F7;
-                        Path icon = playersOpen ? i == 0 ? AppIcons.ICON_BACK_PATH : AppIcons.ICON_TAB_PROFILE_PATH
-                                : i == 0 ? SEARCH : i == 1 ? AppIcons.ICON_TAB_PROFILE_PATH : TablerIcons.PHOTO;
-                        DrawPrimitives.drawIconCentered(canvas, icon, box.x() + ToolLayout.MENU_ROW_H / 2, rowCy,
-                                UiTokens.COMPOSER_ICON_SIZE, color);
-                        String label = playersOpen ? i == 0 ? tr.apply("atomchat.tools.back")
-                                : players.isEmpty() ? tr.apply("atomchat.tools.players.empty") : players.get(i - 1).displayName()
-                                : tr.apply("atomchat.tools." + new String[]{"search", "players", "image"}[i]);
-                        SkiaFontRenderer.drawText(canvas, font, SkiaFontRenderer.truncate(font, label,
-                                        box.w() - ToolLayout.MENU_ROW_H - MenuPopup.rowInset(box.w())),
-                                box.x() + ToolLayout.MENU_ROW_H, SkiaFontRenderer.centerBaselineY(font, rowCy), color);
-                    } finally { MenuPopup.endRowBounce(canvas); }
-                }
-            } finally { canvas.restore(); }
+            // Only the scrolling player viewport needs to crop partial rows.
+            if (rows() * ToolLayout.MENU_ROW_H > box.h()) {
+                float radius = UiTokens.radius(MenuPopup.SURFACE_RADIUS, AtomChatAppearance.theme());
+                var outline = RRect.makeXYWH(box.x(), box.y(), box.w(), box.h(), radius);
+                CornerGeometry.drawClipped(canvas, outline, () -> drawRows(canvas, box, hovered, dt, tr));
+            } else {
+                drawRows(canvas, box, hovered, dt, tr);
+            }
             if (fading) canvas.restore();
         } finally { canvas.restore(); }
+    }
+
+    private void drawRows(Canvas canvas, UiLayout.Rect box, int hovered, float dt, Function<String, String> tr) {
+        float cx = box.x() + box.w() / 2;
+        var font = FontManager.font(UiTokens.FONT_BUTTON);
+        int first = Math.max(0, (int) (scroll / ToolLayout.MENU_ROW_H));
+        int end = Math.min(rows(), first + (int) Math.ceil(box.h() / ToolLayout.MENU_ROW_H) + 1);
+        for (int i = first; i < end; i++) {
+            boolean disabled = playersOpen && i == 1 && players.isEmpty();
+            float h = UiMotion.approach(hover.getOrDefault(i, 0F), !disabled && i == hovered ? 1 : 0, dt, UiMotion.HOVER_MS);
+            hover.put(i, h);
+            var spring = bounce.computeIfAbsent(i, key -> PressScale.bounce());
+            MenuPopup.updateRowBounce(spring, !disabled && i == hovered, dt, box.w());
+            float y = box.y() + i * ToolLayout.MENU_ROW_H - scroll, rowCy = y + ToolLayout.MENU_ROW_H / 2;
+            MenuPopup.beginRowBounce(canvas, spring, cx, rowCy);
+            try {
+                MenuPopup.drawRowWash(canvas, box.x(), y, box.w(), ToolLayout.MENU_ROW_H, h);
+                int color = disabled ? 0xFF999DA6 : 0xFFF4F5F7;
+                Path icon = playersOpen ? i == 0 ? AppIcons.ICON_BACK_PATH : AppIcons.ICON_TAB_PROFILE_PATH
+                        : i == 0 ? SEARCH : i == 1 ? AppIcons.ICON_TAB_PROFILE_PATH : TablerIcons.PHOTO;
+                DrawPrimitives.drawIconCentered(canvas, icon, box.x() + ToolLayout.MENU_ROW_H / 2, rowCy,
+                        UiTokens.COMPOSER_ICON_SIZE, color);
+                String label = playersOpen ? i == 0 ? tr.apply("atomchat.tools.back")
+                        : players.isEmpty() ? tr.apply("atomchat.tools.players.empty") : players.get(i - 1).displayName()
+                        : tr.apply("atomchat.tools." + new String[]{"search", "players", "image"}[i]);
+                SkiaFontRenderer.drawText(canvas, font, SkiaFontRenderer.truncate(font, label,
+                                box.w() - ToolLayout.MENU_ROW_H - MenuPopup.rowInset(box.w())),
+                        box.x() + ToolLayout.MENU_ROW_H, SkiaFontRenderer.centerBaselineY(font, rowCy), color);
+            } finally { MenuPopup.endRowBounce(canvas); }
+        }
     }
 }

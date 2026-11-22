@@ -1,5 +1,29 @@
 # Release Notes
 
+## v0.9.5
+
+**更改**
+
+- 面板上下栏和设置页签恢复普通圆角，发送按钮继续使用更圆润的连续曲率。
+- 圆角边缘、图片和线框图标更平滑。
+- 面板和聊天 HUD 的次级胶囊背景最低不透明度降至 70%。
+
+**修复**
+
+- 修复 NeoForge 上启用 Gnetum 时聊天 HUD 回退到原版并在开关面板时闪现的问题。
+
+----
+
+**Changed**
+
+- The panel bars and settings tabs use circular corners again, and the Send button keeps rounder continuous corners.
+- Smoother rounded edges, images, and outline icons.
+- Secondary capsule backgrounds in the panel and chat HUD now have a minimum opacity of 70%.
+
+**Fixed**
+
+- Fixed the chat HUD reverting to vanilla with Gnetum on NeoForge and flickering when opening or closing the panel.
+
 ## v0.9.4
 
 **更改**

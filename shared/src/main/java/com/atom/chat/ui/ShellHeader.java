@@ -97,8 +97,8 @@ public final class ShellHeader {
         float radius = ChromeMaterial.cornerRadius(header, UiTokens.headerRadius(AtomChatAppearance.theme()));
         ChromeMaterial.drawShadow(canvas, header.x(), header.y(), header.w(), header.h(), radius);
         ChromeMaterial.drawBackdrop(canvas, header.x(), header.y(), header.w(), header.h(), radius, 1F);
-        CornerGeometry.drawRoundedRect(canvas, header.x(), header.y(), header.w(), header.h(),
-                radius, UiTokens.cardFill(AtomChatAppearance.theme()));
+        CornerGeometry.fill(canvas, CornerGeometry.circularRect(header.x(), header.y(), header.w(), header.h(), radius),
+                UiTokens.cardFill(AtomChatAppearance.theme()));
         ChromeMaterial.drawDetails(canvas, header, radius);
 
         if (backButton != null && backOpacity > 0) {

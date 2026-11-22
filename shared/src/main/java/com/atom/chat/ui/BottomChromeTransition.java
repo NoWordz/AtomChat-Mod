@@ -2,6 +2,7 @@ package com.atom.chat.ui;
 
 import com.atom.chat.render.CornerGeometry;
 import com.atom.chat.render.ChromeMaterial;
+import com.atom.chat.render.EdgePixelGrid;
 import com.atom.lib.design.atomchat.UiTokens;
 import io.github.humbleui.skija.Canvas;
 import io.github.humbleui.skija.Paint;
@@ -19,9 +20,12 @@ public final class BottomChromeTransition implements AutoCloseable {
     private Mode mode;
     private UiLayout.Rect rest;
     private long frameTime;
+    private boolean animationEnabled;
     private Paint alpha = new Paint();
 
     public void beginFrame(Mode mode, UiLayout.Rect chatRect, UiLayout.Rect navRect, long now, boolean enabled) {
+        if (animationEnabled != enabled) clearPictures();
+        animationEnabled = enabled;
         frameTime = now;
         boolean pageChanged = this.mode != mode;
         this.mode = mode;
@@ -100,7 +104,19 @@ public final class BottomChromeTransition implements AutoCloseable {
                 Canvas recording = recorder.beginRecording(Rect.makeXYWH(-.5f, -.5f, 2, 2));
                 recording.scale(1 / rest.w(), 1 / rest.h());
                 recording.translate(-rest.x(), -rest.y());
-                contents.accept(recording);
+                var shape = paintedShape();
+                if (!animationEnabled && shape.x() == rest.x() && shape.y() == rest.y()
+                        && shape.w() == rest.w() && shape.h() == rest.h()) {
+                    // Project the normalized recording to the fixed playback size.
+                    int save = canvas.save();
+                    try {
+                        canvas.translate(rest.x(), rest.y());
+                        canvas.scale(rest.w(), rest.h());
+                        EdgePixelGrid.record(recording, canvas, () -> contents.accept(recording));
+                    } finally {
+                        canvas.restoreToCount(save);
+                    }
+                } else contents.accept(recording);
                 picture = recorder.finishRecordingAsPicture();
             }
             if (mode == Mode.CHAT) { if (chat != null) chat.close(); chat = picture; }
@@ -114,7 +130,8 @@ public final class BottomChromeTransition implements AutoCloseable {
             float radius = ChromeMaterial.cornerRadius(bounds, UiTokens.shellChromeRadius(AtomChatAppearance.theme()));
             if (mode != Mode.CHAT)
                 ChromeMaterial.drawShadow(canvas, shape.x(), shape.y(), shape.w(), shape.h(), radius);
-            CornerGeometry.drawRoundedRect(canvas, shape.x(), shape.y(), shape.w(), shape.h(), radius, UiTokens.cardFill(AtomChatAppearance.theme()));
+            var outline = CornerGeometry.circularRect(shape.x(), shape.y(), shape.w(), shape.h(), radius);
+            CornerGeometry.fill(canvas, outline, UiTokens.cardFill(AtomChatAppearance.theme()));
             ChromeMaterial.drawDetails(canvas, bounds, radius);
             canvas.translate(shape.x(), shape.y());
             canvas.scale(shape.w(), shape.h());
@@ -134,9 +151,12 @@ public final class BottomChromeTransition implements AutoCloseable {
             picture.playback(canvas);
         } finally { canvas.restoreToCount(save); }
     }
-    private void clear() {
+    private void clearPictures() {
         if (chat != null) { chat.close(); chat = null; }
         if (nav != null) { nav.close(); nav = null; }
+    }
+    private void clear() {
+        clearPictures();
         mode = null; rest = null; geometry.reset(); blend.reset();
     }
     public void reset() {

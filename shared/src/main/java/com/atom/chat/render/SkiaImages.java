@@ -71,7 +71,7 @@ public final class SkiaImages {
                 0F, sy, shape.getTop() - sy * src.getTop(), 0F, 0F, 1F);
         try (var shader = image.makeShader(FilterTileMode.CLAMP, FilterTileMode.CLAMP, mode, placement)) {
             try {
-                CornerGeometry.drawRRect(canvas, shape, PAINT.setShader(shader));
+                CornerGeometry.drawRRect(canvas, shape, PAINT.setShader(shader), true);
             } finally {
                 PAINT.setShader(null);
             }

@@ -40,11 +40,12 @@ public final class ChromeMaterial {
     }
 
     public static void drawShadow(Canvas canvas, float x, float y, float width, float height, float radius) {
-        HudShadow.drawSurface(canvas, x, y, width, height, radius, ShadowTokens.CHROME, cardOpacity());
+        HudShadow.drawSurface(canvas, CornerGeometry.circularRect(x, y, width, height, radius),
+                ShadowTokens.CHROME, cardOpacity());
     }
 
     public static void drawBackdrop(Canvas canvas, float x, float y, float width, float height, float radius, float opacity) {
-        if (cardOpacity() < 1F) CardBackdrop.draw(canvas, x, y, width, height, radius, opacity);
+        if (cardOpacity() < 1F) CardBackdrop.draw(canvas, CornerGeometry.circularRect(x, y, width, height, radius), opacity);
     }
 
     private static float cardOpacity() {
@@ -52,30 +53,40 @@ public final class ChromeMaterial {
     }
 
     public static void drawDetails(Canvas canvas, UiLayout.Rect bar, float radius) {
-        if (bar != null) drawDetails(canvas, bar.x(), bar.y(), bar.w(), bar.h(), radius, cardOpacity());
+        if (bar != null) drawDetails(canvas, bar.x(), bar.y(), bar.w(), bar.h(), radius, cardOpacity(), true);
     }
 
     static void drawDetails(Canvas canvas, float x, float y, float width, float height,
                             float radius, float opacity) {
+        drawDetails(canvas, x, y, width, height, radius, opacity, false);
+    }
+
+    private static void drawDetails(Canvas canvas, float x, float y, float width, float height,
+                                    float radius, float opacity, boolean circular) {
         if (width <= 0F || height <= 0F || opacity <= 0F) return;
         canvas.save();
         try {
             // A stroke around an inset that turns square can extend beyond the tiny face corner.
             if (radius > 0F && radius < 1F + UiTokens.CHROME_INNER_SHADE / 2F) {
-                CornerGeometry.clip(canvas, x, y, width, height, radius);
+                CornerGeometry.clipRRect(canvas, detailOutline(x, y, width, height, radius, circular));
             }
             canvas.translate(x, y);
             float inset = UiTokens.CHROME_HAIRLINE / 2F;
-            CornerGeometry.drawRRect(canvas, RRect.makeXYWH(inset, inset, Math.max(0F, width - inset * 2F),
-                    Math.max(0F, height - inset * 2F), Math.max(0F, radius - inset)),
+            CornerGeometry.drawRRect(canvas, detailOutline(inset, inset, Math.max(0F, width - inset * 2F),
+                    Math.max(0F, height - inset * 2F), Math.max(0F, radius - inset), circular),
                     LIGHT_PAINT.setAlphaf(opacity));
             canvas.translate(0F, height);
             inset = UiTokens.CHROME_INNER_SHADE / 2F;
-            CornerGeometry.drawRRect(canvas, RRect.makeXYWH(inset, -height + inset,
+            CornerGeometry.drawRRect(canvas, detailOutline(inset, -height + inset,
                     Math.max(0F, width - inset * 2F), Math.max(0F, height - inset * 2F),
-                    Math.max(0F, radius - inset)), SHADE_PAINT.setAlphaf(opacity));
+                    Math.max(0F, radius - inset), circular), SHADE_PAINT.setAlphaf(opacity));
         } finally {
             canvas.restore();
         }
+    }
+
+    private static RRect detailOutline(float x, float y, float width, float height, float radius, boolean circular) {
+        return circular ? CornerGeometry.circularRect(x, y, width, height, radius)
+                : RRect.makeXYWH(x, y, width, height, radius);
     }
 }

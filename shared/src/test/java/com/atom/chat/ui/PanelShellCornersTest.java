@@ -1,6 +1,7 @@
 package com.atom.chat.ui;
 
 import com.atom.chat.config.AtomChatConfig;
+import com.atom.chat.render.ChromeMaterial;
 import com.atom.chat.settings.SettingsChipBar;
 import com.atom.lib.design.atomchat.UiTokens;
 import io.github.humbleui.skija.Bitmap;
@@ -13,6 +14,61 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class PanelShellCornersTest {
+    @Test void headerComposerNavigationAndSettingsTabsUseCircularArcs() throws Exception {
+        var field = AtomChatConfig.class.getDeclaredField("instance");
+        field.setAccessible(true);
+        var previous = field.get(null);
+        var config = new AtomChatConfig();
+        config.performanceMode = true;
+        config.cornerRadius = 29F;
+        config.cardTint = 1F;
+        field.set(null, config);
+        try (var surface = Surface.makeRasterN32Premul(500, 500);
+             var pixels = new Bitmap(); var bottom = new BottomChromeTransition()) {
+            var canvas = surface.getCanvas();
+            canvas.scale(32F, 32F);
+            pixels.allocN32Pixels(500, 500);
+            var theme = AtomChatAppearance.theme();
+            var header = new UiLayout.Rect(0F, 0F, 220F, UiTokens.HEADER_HEIGHT);
+            var composer = new UiLayout.Rect(0F, 0F, 220F, UiTokens.INPUT_HEIGHT);
+            var tabs = new UiLayout.Rect(0F, 0F, 220F, UiTokens.TAB_BAR_H);
+            assertCircularCorner(surface, pixels, 0F, 0F, ChromeMaterial.cornerRadius(header, UiTokens.headerRadius(theme)),
+                    () -> ShellHeader.render(canvas, header, "", false, null, 0F, 0), "header");
+            for (var mode : List.of(BottomChromeTransition.Mode.CHAT, BottomChromeTransition.Mode.NAV)) {
+                bottom.beginFrame(mode, composer, tabs, 1000, false);
+                var bounds = bottom.paintedRect();
+                assertCircularCorner(surface, pixels, bounds.x(), bounds.y(),
+                        ChromeMaterial.cornerRadius(bounds, UiTokens.shellChromeRadius(theme)),
+                        () -> bottom.draw(canvas, ignored -> {}), mode.name());
+            }
+
+            var initial = UiLayout.ofDetail(0F, 0F, 395F, 450F).chipBar;
+            float inset = UiTokens.TAB_EDGE_PAD;
+            var layout = UiLayout.ofDetail(-initial.x() - inset, -initial.y() - inset, 395F, 450F);
+            var chips = new SettingsChipBar();
+            chips.update(layout, 3, 0, -1, -400F, -400F, 16F);
+            float radius = ChromeMaterial.insetCornerRadius(initial.w() / 3F - 2F * inset,
+                    UiTokens.CHIP_PILL_H, UiTokens.chromeRadius(theme), inset);
+            assertCircularCorner(surface, pixels, 0F, 0F, radius,
+                    () -> chips.draw(canvas, layout, List.of("", "", ""), 0, 0), "settings tab");
+        } finally {
+            field.set(null, previous);
+        }
+    }
+
+    private static void assertCircularCorner(Surface surface, Bitmap pixels, float x, float y, float radius,
+                                             Runnable draw, String control) {
+        surface.getCanvas().clear(0);
+        draw.run();
+        assertTrue(surface.readPixels(pixels, 0, 0));
+        // At about 28.6% of the nominal radius, the former continuous curve was filled.
+        // A circular arc cuts back 29.29% on both axes.
+        float outside = radius * .286F;
+        assertEquals(0, pixels.getColor((int) ((x + outside) * 32F), (int) ((y + outside) * 32F)) >>> 24, control);
+        float inside = radius * .36F;
+        assertEquals(255, pixels.getColor((int) ((x + inside) * 32F), (int) ((y + inside) * 32F)) >>> 24, control);
+    }
+
     @Test void navigationAndSettingsCapsulesChangeBetween28And30() throws Exception {
         var field = AtomChatConfig.class.getDeclaredField("instance");
         field.setAccessible(true);

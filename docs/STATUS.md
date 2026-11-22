@@ -1,5 +1,43 @@
 # AtomChat 当前状态
 
+## 2026-11-22 · 0.9.5 完成验证
+
+- 面板上栏、导航底栏、输入栏、服务器配置底栏和设置页签采用普通圆弧。发送按钮、底栏的选中胶囊和其余连续曲率部件沿用原形状。轮廓的抗锯齿、描边、阴影、点阵和模糊同时匹配。 [设置原尺寸对照](D:/AtomChat-Backups/2026-11-22-v095-final/settings-history-1x.png)
+- 三端 `clean build frontendContractCheck verifyAtomLibInput` 全部通过。各端 196 个正式设置场景中 140 张像素发生预期变化，状态、观测和音效一致。全量 6,792 项中 54 项跳过、零失败。审定 `77d93a52f274c23eefa9d18bc6988d158efe7dc5`。 [验证记录](D:/AtomChat-Backups/2026-11-22-v095-final/verification.json)
+- 21:45 三个本地测试实例已安装并读回。Fabric CCB `30624b8beb5f`、Forge 1.20.1-main `c58ff34cd7c9`、NeoForge 航空学 `186c582db78e`。旧包和配置已备份，配套 AtomLib 0.7.1。 [部署回执](D:/AtomChat-Backups/2026-11-22-v095-final/deployment-readback.json)
+
+## 2026-11-22 · 0.9.5 圆角与聊天 HUD 修正版（20:48 基线）
+
+- 连续圆角的 45° 切入加深约 8.6%，沿用原延伸长度和栏位。次级胶囊背景最低不透明度降至 70%，更高自定义值按原值使用。 [设置页原尺寸对照](D:/AtomChat-Backups/2026-11-22-v095-followup/settings-history-1x.png)
+- 滚动玩家菜单及图片边缘改为局部覆盖。GPU 测得连续裁切与圆形图片的候选边缘误差分别为 0.89 与 1.07，图标覆盖保持一致。最低测试半径和未投影回放仍有覆盖残差。 [量测与参考](D:/AtomChat-Backups/2026-11-22-v095-followup/aa-edge-results.json)
+- 旧 Forge 包的 Yoga DLL 报错在目前三端未复现。三端的实装 20:01 包、原生库及真实加载器已分别核对。NeoForge 隔离复现了 Gnetum 缓存帧缓冲导致的原版 HUD 回退。修复把聊天层放回主帧缓冲，开关面板及原版输入验证通过。心自安然的原服务器未连接。 [三端 Yoga](D:/AtomChat-Backups/2026-11-22-v095-followup/yoga/verification.json) · [HUD 逐帧记录](D:/AtomChat-Backups/2026-11-22-v095-followup/hud/trial-frame-counts.json)
+- 三端正式源码与各 196 个场景通过。全量 6,786 项中 54 项跳过、零失败。审定 `71c3158238af9aae39fcedd1c078cdfab2394812`。 [构建核验](D:/AtomChat-Backups/2026-11-22-v095-followup/verification.json)
+- 20:48 部署到 Fabric CCB `89b413d7dd8c`、Forge 1.20.1-main `62b4c8010ed8` 和 NeoForge 航空学 `afd095b5415a`。旧包和配置已备份，新包逐端读回。 [部署回执](D:/AtomChat-Backups/2026-11-22-v095-followup/deployment-readback.json)
+
+## 2026-11-22 · 0.9.5 恢复 0.9.4 圆角并保留抗锯齿（20:01 基线）
+
+- 用户撤回 0.9.5 的圆角形状、半径映射与上下栏间距修改。以上皆回到已验收的 0.9.4 `f167a31a`，0.9.5 只保留局部抗锯齿升级。沿原有 Skija 曲线取像素覆盖，保留设置胶囊、线框图标、形状填充和描边、局部裁切、聊天气泡及 OpenGL 模糊遮罩的抗锯齿。 [原尺寸离屏对照](D:/AtomChat-Backups/2026-11-22-v095-aa-only/settings-history-1x.png)
+- 关闭本轮 Skija 局部抗锯齿时，Fabric 的 196 个设置样本与 0.9.4 的参考逐像素一致。开启后，三端的设置回放彼此逐像素一致，场景观测和音效与旧参考一致。三端执行 `clean build frontendContractCheck verifyAtomLibInput`，6,786 项中 54 项跳过，零失败。正式审定 `20d9ff6a97fd0175dcf7ec68ac48a6ba4d5dc594`。 [离屏对照记录](D:/AtomChat-Backups/2026-11-22-v095-aa-only/settings-parity.json) · [构建回执](D:/AtomChat-Backups/2026-11-22-v095-aa-only/verification.json)
+- 20:01 三端部署并读回。Fabric CCB `7c3a2a8e263c`、Forge 1.20.1-main `c5899494bc71`、NeoForge 航空学 `be4079ec2cff`。旧包与配置均已备份，原 AtomLib 0.7.1 继续配对。测试实例未启动。 [部署回执](D:/AtomChat-Backups/2026-11-22-v095-aa-only/deployment-readback.json)
+
+## 2026-11-22 · 0.9.5 圆润连续曲率修正版（已替换）
+
+- 连续圆角采用 2.5 次幂轮廓。短边空间有限时，同一曲线按实际尺寸拟合。Skija 矢量、局部覆盖和通知模糊遮罩沿用对应轮廓。 [原倍率轮廓对照](D:/AtomChat-Backups/2026-11-22-v095-rounder-continuous/continuous-corners-1x.png)
+- 三端重跑 `clean build frontendContractCheck verifyAtomLibInput`，6,801 项测试中 56 项跳过，零失败。各端通过 196 个正式设置场景。Fabric 两项 OpenGL 专项另跑通过。审定为 `112f433a73b4ced1950f1f9c700e540f12bdafa9`。 [三端构建记录](D:/AtomChat-Backups/2026-11-22-v095-rounder-continuous/verification.json) · [Fabric OpenGL 结果](D:/AtomChat-Backups/2026-11-22-v095-rounder-continuous/gpu-straight-results.xml)
+- 19:12 三个测试实例的活动包已通过读回。Fabric CCB `9a33b92c9015`、Forge 1.20.1-main `8529b9b78dc0`、NeoForge 航空学 `9e67f6354016`。旧包和配置备份已核对，原 AtomLib 0.7.1 继续配对。主实例未启动。 [三端部署回执](D:/AtomChat-Backups/2026-11-22-v095-rounder-continuous/deployment-readback.json)
+
+## 2026-11-22 · 0.9.5 首轮包已部署到三个测试实例
+
+- 设置胶囊默认使用局部像素覆盖 AA。上下栏和托管保存栏的面板侧圆角从面板轮廓向内推导，直边留白统一。导航、教程和输入借用态使用同一栏面轮廓。面板通知横幅与列表共用起点。 [原尺寸 CCB 对照](D:/AtomChat-Backups/2026-11-22-v095-rendering/ccb-chrome-1x.png)
+- 三端配 AtomLib 0.7.1 重新执行严格构建及设置契约，各回放 196 个样本。全量 6,786 项含 56 跳过，零失败。三端隔离实机进入世界并打开面板和设置。最终 Fabric 包在隔离 CCB 上做 AA 开关四轮对照。 [验证与帧时](handoff/2026-11-22-v095-rendering.md#生产实现与三端部署)
+- 14:24 安装到 `1.21.1-CCB`、`1.20.1-main` 和 `Mechanomania-航空学`，AtomChat 指纹分别以 `1171ba329aeb`、`bda692a73109`、`52053a367825` 开头。三端配对 0.7.1，活动包和备份都已独立回读。 [部署回读](D:/AtomChat-Backups/2026-11-22-v095-rendering/deployment-readback.json)
+
+## 2026-11-22 · 0.9.5 图形首轮复测
+
+- 从 `f167a31a` 开始 0.9.5 开发。隐藏 OpenGL 同位置、同配置半径的设置胶囊对照中，普通圆弧、原生连续曲线、局部 AA 连续曲线的覆盖误差均值分别为 2.51、17.89、1.76。局部 AA 已加入隔离原生测试。隔离 CCB 选中稳态的两对 p50 方向不同，当前包采用原生 Skija AA。 [复测与原图](handoff/2026-11-22-v095-rendering.md#095-首轮复测)
+- 上下栏与圆弧面板的轮廓不等距。圆角设置为 29 时，上栏到面板外轮廓的 45° 间距约 9.7 逻辑像素，同布局普通圆弧约 13.3。面板侧角可沿内轮廓作同心圆弧。 [轮廓示意](D:/AtomChat-Backups/2026-11-22-v095-kickoff/header-gap.png)
+- 本轮用归档 AtomLib 0.7.1 重跑三端 Windows 严格构建和设置契约，6,777 项含 56 项跳过，零失败。三端各 3 项局部覆盖测试通过。CCB 当前安装为已验收的 0.9.4。 [本轮验证](D:/AtomChat-Backups/2026-11-22-v095-kickoff/verification.json)
+
 ## 2026-11-22 · 0.9.4 功能验收完成
 
 - 用户确认本轮功能正常。当前版本仍为 0.9.4，下一版 0.9.5 聚焦图形问题追踪和抗锯齿升级。接手顺序、对照方法和归档入口见 [0.9.5 图形交接](handoff/2026-11-22-v095-rendering.md)。

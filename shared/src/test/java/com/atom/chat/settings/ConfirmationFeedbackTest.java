@@ -70,7 +70,7 @@ class ConfirmationFeedbackTest {
             Canvas reference = expected.getCanvas();
             try (Paint paint = new Paint().setImageFilter(com.atom.chat.render.SkiaFontRenderer.backingShadow())) {
                 int layer = reference.saveLayer(null, paint);
-                com.atom.chat.render.DrawPrimitives.drawIconCentered(reference, AppIcons.ICON_CLOCK_PATH,
+                com.atom.chat.render.OutlineIcons.drawNative(reference, AppIcons.ICON_CLOCK_PATH,
                         x + size / 2F, cy, size, 0xFF000000);
                 reference.restoreToCount(layer);
             }

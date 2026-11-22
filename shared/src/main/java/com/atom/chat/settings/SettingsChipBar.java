@@ -1,6 +1,5 @@
 package com.atom.chat.settings;
 
-import com.atom.chat.render.CornerGeometry;
 import com.atom.chat.ui.AtomChatAppearance;
 import com.atom.chat.font.FontManager;
 import com.atom.chat.render.*;
@@ -65,7 +64,7 @@ public final class SettingsChipBar {
         boolean scaleIndicator = active != null && active.scale() != 1F;
         if (scaleIndicator) active.begin(canvas, x + first.w()/2, first.y() + first.h()/2);
         try {
-            CornerGeometry.drawRoundedRect(canvas, x, first.y(), first.w(), first.h(), radius, accent);
+            SettingsCapsuleCoverage.draw(canvas, x, first.y(), first.w(), first.h(), radius, accent);
         } finally {
             if (scaleIndicator) canvas.restore();
         }
@@ -77,7 +76,7 @@ public final class SettingsChipBar {
             boolean scaleLabel = scale != null && scale.scale() != 1F;
             if (scaleLabel) scale.begin(canvas, cell.x() + cell.w()/2, cell.y() + cell.h()/2);
             try{
-                if(!on&&hover.getOrDefault(i,0f)>.01f)CornerGeometry.drawRoundedRect(canvas,cell.x(),cell.y(),cell.w(),cell.h(),radius,UiTokens.cardHover(hover.get(i), theme));
+                if(!on&&hover.getOrDefault(i,0f)>.01f)SettingsCapsuleCoverage.draw(canvas,cell.x(),cell.y(),cell.w(),cell.h(),radius,UiTokens.cardHover(hover.get(i), theme));
                 String label = SkiaFontRenderer.truncate(font, labels.get(i), Math.max(0, cell.w() - textInset));
                 int ink = on ? UiTokens.onAccent(accent) : secondary;
                 float labelX = cell.x() + cell.w() / 2F - SkiaFontRenderer.getStringWidth(font, label) / 2F;

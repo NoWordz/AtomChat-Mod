@@ -45,10 +45,10 @@ public final class HudShadow {
         float width = outline.getWidth(), height = outline.getHeight();
         if (width <= 0F || height <= 0F) return;
         float[] radii = outline._radii;
-        float tl = radii[0], tr = radii.length == 1 ? tl : radii[2];
-        float br = radii.length == 1 ? tl : radii[4], bl = radii.length == 1 ? tl : radii[6];
+        float tl = radii[0], tr = radii.length == 8 ? radii[2] : tl;
+        float br = radii.length == 8 ? radii[4] : tl, bl = radii.length == 8 ? radii[6] : tl;
         float radius = Math.max(Math.max(tl, tr), Math.max(br, bl));
-        boolean circularCorners = CornerGeometry.isSingleTip(tl, tr, br, bl)
+        boolean circularCorners = CornerGeometry.usesCircularArcs(outline) || CornerGeometry.isSingleTip(tl, tr, br, bl)
                 || (tl == tr && tl == br && tl == bl && radius >= Math.min(width, height) / 2F - .001F);
         float reach = circularCorners ? radius : CornerGeometry.maxReach(radius);
         int span = (int) Math.ceil((2F * reach + 6F * profile.wideSigma() + 2F) * DENSITY);
@@ -99,7 +99,11 @@ public final class HudShadow {
                             ShadowTokens.Face profile, float alpha) {
         if (!SoftShadow.enabled() || alpha <= 0F || width <= 0F || height <= 0F) return;
         float corner = Math.max(0F, Math.min(radius, Math.min(width, height) / 2F));
-        var outline = RRect.makeXYWH(x, y, width, height, corner);
+        drawSurface(canvas, RRect.makeXYWH(x, y, width, height, corner), profile, alpha);
+    }
+
+    static void drawSurface(Canvas canvas, RRect outline, ShadowTokens.Face profile, float alpha) {
+        if (!SoftShadow.enabled() || alpha <= 0F) return;
         draw(canvas, outline, profile, alpha < 1F ? OPACITY.setAlphaf(alpha) : null);
     }
 

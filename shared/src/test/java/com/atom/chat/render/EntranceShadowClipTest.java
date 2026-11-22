@@ -193,13 +193,13 @@ class EntranceShadowClipTest {
      * makes the lead comparable across frames of different alpha.
      */
     private static int firstShadowRow(int cx, Bitmap bmp, int bg, int cardTop) {
-        // The peak is taken a few rows clear of the card so a card pixel can
-        // never masquerade as the shadow's darkest point. Every level is a
+        // The peak is taken three rows above the interior detection, beyond
+        // the antialiased face edge and hairline. Every level is a
         // horizontal average across the tile's flat top edge: the shadow is
         // uniform there, so averaging cancels the 8-bit quantisation that would
         // otherwise move the contour by a pixel from frame to frame.
         float peak = 0.0F;
-        for (int y = Math.max(0, cardTop - 16); y <= cardTop - 4; y++) {
+        for (int y = Math.max(0, cardTop - 16); y <= cardTop - 3; y++) {
             peak = Math.max(peak, rowDarkening(bmp, cx, y, bg));
         }
         if (peak <= 1.0F) {
@@ -213,7 +213,7 @@ class EntranceShadowClipTest {
         // frame cannot move the contour, low enough that the contour sits where
         // the tail is still visibly travelling with the card.
         float threshold = Math.max(0.5F, peak * 0.3F);
-        for (int y = Math.max(0, cardTop - 40); y <= cardTop - 4; y++) {
+        for (int y = Math.max(0, cardTop - 40); y <= cardTop - 3; y++) {
             if (rowDarkening(bmp, cx, y, bg) >= threshold) {
                 return y;
             }

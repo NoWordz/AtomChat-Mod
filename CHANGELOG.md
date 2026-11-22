@@ -1,5 +1,31 @@
 # Changelog
 
+## v0.9.5
+
+**更改**
+
+- 面板上下栏和设置页签恢复普通圆角，发送按钮保留连续曲率。
+- 连续曲率圆角更圆润，并保留原有的圆角设置范围。
+- 面板和聊天 HUD 的次级胶囊背景最低不透明度从 85% 降到 70%。
+- 圆角填充、描边、部分裁切、图片边缘、模糊遮罩和线框图标采用局部抗锯齿。
+
+**修复**
+
+- 修复 NeoForge 上启用 Gnetum 时游戏内聊天 HUD 回退到原版、开关面板时短暂闪回的问题。
+
+----
+
+**Changed**
+
+- The panel bars and settings tabs use circular corners again, and the Send button retains continuous corners.
+- Continuous corners are rounder across the existing corner-radius range.
+- Lowered the minimum opacity of secondary capsule backgrounds from 85% to 70% in the panel and chat HUD.
+- Added local antialiasing for rounded fills and strokes, selected clips, image edges, blur masks, and outline icons.
+
+**Fixed**
+
+- Fixed the chat HUD falling back to vanilla with Gnetum on NeoForge and briefly switching back when opening or closing the panel.
+
 ## v0.9.4
 
 **更改**
