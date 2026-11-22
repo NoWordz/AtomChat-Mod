@@ -4,7 +4,7 @@
 
 **更改**
 
-- 面板上下栏和设置页签恢复普通圆角，发送按钮继续使用更圆润的连续曲率。
+- 面板上下栏恢复 0.9.3 的圆角，设置页签用普通圆角，发送按钮保留连续曲率。
 - 圆角边缘、图片和线框图标更平滑。
 - 面板和聊天 HUD 的次级胶囊背景最低不透明度降至 70%。
 
@@ -16,7 +16,7 @@
 
 **Changed**
 
-- The panel bars and settings tabs use circular corners again, and the Send button keeps rounder continuous corners.
+- The panel bars restore their 0.9.3 corners, settings tabs use circular corners, and the Send button retains continuous corners.
 - Smoother rounded edges, images, and outline icons.
 - Secondary capsule backgrounds in the panel and chat HUD now have a minimum opacity of 70%.
 

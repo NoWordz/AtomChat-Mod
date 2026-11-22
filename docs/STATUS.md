@@ -1,6 +1,12 @@
 # AtomChat 当前状态
 
-## 2026-11-22 · 0.9.5 完成验证
+## 2026-11-22 · 0.9.5 恢复上下栏的 0.9.3 半径
+
+- 21:53 的 CCB 截图显示，上一版圆弧上下栏仍使用连续曲率时期的半径限幅。用当时的实装包和相同配置复测，上栏和下栏半径分别从 `18.24 / 19.90` 恢复到 0.9.3 的 `24.87 / 27.98` 界面单位。恢复滑块到 25 时的栏位半径上限，极窄栏以短边的一半为上限。 [圆角对照](D:/AtomChat-Backups/2026-11-22-v095-bar-radius/bar-corners-093-095-fixed.png)
+- 三端通过 `clean build frontendContractCheck verifyAtomLibInput`，各 196 个正式设置场景，合计 6,792 项测试中 54 项跳过、零失败。最终 Fabric 包按截图档位和滑块 30 档离屏比对 0.9.3 半径。 [构建记录](D:/AtomChat-Backups/2026-11-22-v095-bar-radius/verification.json) · [产物实测](D:/AtomChat-Backups/2026-11-22-v095-bar-radius/package-geometry.log)
+- 22:41 完成三端测试实例替换与读回。Fabric CCB `231b278340e0`、Forge 1.20.1-main `f1baf140d363`、NeoForge 航空学 `ec7a14bc2a12`。 [部署回执](D:/AtomChat-Backups/2026-11-22-v095-bar-radius/deployment-readback.json)
+
+## 2026-11-22 · 0.9.5 首次改回圆弧
 
 - 面板上栏、导航底栏、输入栏、服务器配置底栏和设置页签采用普通圆弧。发送按钮、底栏的选中胶囊和其余连续曲率部件沿用原形状。轮廓的抗锯齿、描边、阴影、点阵和模糊同时匹配。 [设置原尺寸对照](D:/AtomChat-Backups/2026-11-22-v095-final/settings-history-1x.png)
 - 三端 `clean build frontendContractCheck verifyAtomLibInput` 全部通过。各端 196 个正式设置场景中 140 张像素发生预期变化，状态、观测和音效一致。全量 6,792 项中 54 项跳过、零失败。审定 `77d93a52f274c23eefa9d18bc6988d158efe7dc5`。 [验证记录](D:/AtomChat-Backups/2026-11-22-v095-final/verification.json)

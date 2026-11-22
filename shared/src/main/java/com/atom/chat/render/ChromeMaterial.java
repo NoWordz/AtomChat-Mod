@@ -12,6 +12,8 @@ import io.github.humbleui.types.RRect;
 
 /** Low-contrast interior light, reserved for the header, composer and navigation bar. */
 public final class ChromeMaterial {
+    /** AtomLib 0.7.0 capped AtomChat 0.9.3's bar radius multiplier at 1.25. */
+    private static final float LEGACY_BAR_CORNER_LIMIT = 25F;
     private static final Shader LIGHT = Shader.makeLinearGradient(0F, 0F, 0F, UiTokens.CHROME_DETAIL_DEPTH,
             new int[]{0x16FFFFFF, 0x00FFFFFF}, new float[]{0F, 1F});
     private static final Shader SHADE = Shader.makeLinearGradient(0F, -UiTokens.CHROME_DETAIL_DEPTH, 0F, 0F,
@@ -24,8 +26,9 @@ public final class ChromeMaterial {
     private ChromeMaterial() { }
 
     public static float cornerRadius(UiLayout.Rect bar, float requested) {
-        if (requested <= 0F) return 0F;
-        return CornerGeometry.fitRadius(requested, maximumRadius(requested), bar.w(), bar.h());
+        float slider = AtomChatAppearance.theme().cornerRadius();
+        float radius = slider > LEGACY_BAR_CORNER_LIMIT ? requested * (LEGACY_BAR_CORNER_LIMIT / slider) : requested;
+        return UiTokens.insetRadius(radius, 0F, bar.w(), bar.h());
     }
 
     public static float insetCornerRadius(float width, float height, float outerRadius, float inset) {

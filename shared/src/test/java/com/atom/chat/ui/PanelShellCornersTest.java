@@ -20,7 +20,7 @@ class PanelShellCornersTest {
         var previous = field.get(null);
         var config = new AtomChatConfig();
         config.performanceMode = true;
-        config.cornerRadius = 29F;
+        config.cornerRadius = 25F;
         config.cardTint = 1F;
         field.set(null, config);
         try (var surface = Surface.makeRasterN32Premul(500, 500);
@@ -28,17 +28,19 @@ class PanelShellCornersTest {
             var canvas = surface.getCanvas();
             canvas.scale(32F, 32F);
             pixels.allocN32Pixels(500, 500);
+            var historical = AtomChatAppearance.theme();
+            config.cornerRadius = 29F;
             var theme = AtomChatAppearance.theme();
             var header = new UiLayout.Rect(0F, 0F, 220F, UiTokens.HEADER_HEIGHT);
             var composer = new UiLayout.Rect(0F, 0F, 220F, UiTokens.INPUT_HEIGHT);
             var tabs = new UiLayout.Rect(0F, 0F, 220F, UiTokens.TAB_BAR_H);
-            assertCircularCorner(surface, pixels, 0F, 0F, ChromeMaterial.cornerRadius(header, UiTokens.headerRadius(theme)),
+            assertCircularCorner(surface, pixels, 0F, 0F, circularRadius(header, UiTokens.headerRadius(historical)),
                     () -> ShellHeader.render(canvas, header, "", false, null, 0F, 0), "header");
             for (var mode : List.of(BottomChromeTransition.Mode.CHAT, BottomChromeTransition.Mode.NAV)) {
                 bottom.beginFrame(mode, composer, tabs, 1000, false);
                 var bounds = bottom.paintedRect();
                 assertCircularCorner(surface, pixels, bounds.x(), bounds.y(),
-                        ChromeMaterial.cornerRadius(bounds, UiTokens.shellChromeRadius(theme)),
+                        circularRadius(bounds, UiTokens.shellChromeRadius(historical)),
                         () -> bottom.draw(canvas, ignored -> {}), mode.name());
             }
 
@@ -54,6 +56,10 @@ class PanelShellCornersTest {
         } finally {
             field.set(null, previous);
         }
+    }
+
+    private static float circularRadius(UiLayout.Rect bar, float requested) {
+        return Math.min(requested, Math.min(bar.w(), bar.h()) / 2F);
     }
 
     private static void assertCircularCorner(Surface surface, Bitmap pixels, float x, float y, float radius,
@@ -120,7 +126,7 @@ class PanelShellCornersTest {
         return coverage;
     }
 
-    @Test void floatingBarsKeepRoundingAtEveryHighSliderValue() throws Exception {
+    @Test void floatingBarsFollowTheLegacyRadiusLimitAndShortSideCap() throws Exception {
         var field = AtomChatConfig.class.getDeclaredField("instance");
         field.setAccessible(true);
         var previous = field.get(null);
@@ -134,11 +140,17 @@ class PanelShellCornersTest {
             canvas.scale(1.25F, 1.25F);
             pixels.allocN32Pixels(340, 320);
             var header = new UiLayout.Rect(16F, 16F, 220F, UiTokens.HEADER_HEIGHT);
-            var composer = new UiLayout.Rect(16F, 64F, 220F, UiTokens.INPUT_HEIGHT);
+            var composer = new UiLayout.Rect(16F, 64F, 48F, UiTokens.INPUT_HEIGHT);
             var tabs = new UiLayout.Rect(16F, 184F, 220F, UiTokens.TAB_BAR_H);
             int[] previousCoverage = {Integer.MAX_VALUE, Integer.MAX_VALUE, Integer.MAX_VALUE};
-            for (int radius = 25; radius <= 30; radius++) {
+            float[] previousRadii = {-1F, -1F, -1F};
+            for (int radius = 20; radius <= 30; radius++) {
+                config.cornerRadius = Math.min(radius, 25F);
+                var historical = AtomChatAppearance.theme();
                 config.cornerRadius = radius;
+                float chromeRadius = UiTokens.shellChromeRadius(historical);
+                float[] radii = {circularRadius(header, UiTokens.headerRadius(historical)),
+                        circularRadius(composer, chromeRadius), circularRadius(tabs, chromeRadius)};
                 bottom.beginFrame(BottomChromeTransition.Mode.CHAT, composer, tabs, 1000, false);
                 int[] coverage = {
                         cornerCoverage(surface, pixels, header,
@@ -150,10 +162,16 @@ class PanelShellCornersTest {
                         })
                 };
                 for (int bar = 0; bar < coverage.length; bar++) {
-                    assertTrue(coverage[bar] < previousCoverage[bar], "bar " + bar + " at " + radius
-                            + ": corner coverage " + previousCoverage[bar] + " -> " + coverage[bar]);
+                    String label = "bar " + bar + " at " + radius;
+                    if (radii[bar] == previousRadii[bar]) {
+                        assertEquals(previousCoverage[bar], coverage[bar], label);
+                    } else {
+                        assertTrue(coverage[bar] < previousCoverage[bar], label + ": corner coverage "
+                                + previousCoverage[bar] + " -> " + coverage[bar]);
+                    }
                 }
                 previousCoverage = coverage;
+                previousRadii = radii;
             }
         } finally {
             field.set(null, previous);
