@@ -5,7 +5,8 @@ def lock = new JsonSlurper().parse(new File(atomchatRepoRoot, 'versions/atomlib.
 def target = projectDir.name
 def definition = lock.targets[target]
 if (definition == null) throw new GradleException("No AtomLib input for ${target}")
-ext.atomlibVersion = lock.version.toString()
+def requiredVersion = lock.version.toString()
+ext.atomlibVersion = requiredVersion
 // 【空串不是通配符，三端一律用锁里的 compatibility_range】
 // 这里曾按目标分成两套写法（Forge 空串、NeoForge '*'），凭的是一句「Forge 用空串
 // 表示任意版本」。它是错的：两端都把这段字符串交给 Maven 的
@@ -24,11 +25,12 @@ if (!compatibilityRange) {
 }
 ext.atomlibVersionRange = compatibilityRange
 def fabricBounds = compatibilityRange =~ /^\[([^,]+),([^)]*)\)$/
-if (!fabricBounds.matches() || fabricBounds.group(1) != atomlibVersion) {
+if (!fabricBounds.matches() || fabricBounds.group(1) != requiredVersion) {
     throw new GradleException("Expected AtomLib compatibility_range [compiled version,exclusive upper bound)")
 }
-ext.atomlibFabricRange = ">=" + fabricBounds.group(1) +
+def fabricRange = ">=" + fabricBounds.group(1) +
         (fabricBounds.group(2).isEmpty() ? "" : " <" + fabricBounds.group(2))
+ext.atomlibFabricRange = fabricRange
 def coordinate = "${lock.group}:${definition.artifact}:${lock.version}".toString()
 def repositoryPath = providers.gradleProperty('atomlibMavenRepo').orElse(providers.environmentVariable('ATOMLIB_MAVEN_REPO'))
 if (!repositoryPath.isPresent()) {
@@ -56,13 +58,13 @@ dependencies {
 }
 def metadata = tasks.register('generateAtomLibRequirement') {
     def output = layout.buildDirectory.file('generated/atomlib-requirement/atomchat-atomlib.properties')
-    inputs.property('version', atomlibVersion)
-    inputs.property('fabricRange', atomlibFabricRange)
+    inputs.property('version', requiredVersion)
+    inputs.property('fabricRange', fabricRange)
     outputs.file(output)
     doLast {
         def file = output.get().asFile
         file.parentFile.mkdirs()
-        file.setText("version=${lock.version}\nfabricRange=${atomlibFabricRange}\n", 'UTF-8')
+        file.setText("version=${requiredVersion}\nfabricRange=${fabricRange}\n", 'UTF-8')
     }
 }
 sourceSets.main.resources.srcDir(layout.buildDirectory.dir('generated/atomlib-requirement'))
