@@ -1,8 +1,8 @@
 package com.atom.chat.avatar;
 
+import com.atom.chat.render.CornerGeometry;
 import com.atom.chat.ui.AtomChatAppearance;
 import com.atom.chat.font.FontManager;
-import com.atom.lib.design.atomchat.SkiaDraw;
 import com.atom.chat.render.SkiaFontRenderer;
 import com.atom.chat.ui.Animations;
 import com.atom.lib.design.atomchat.AppIcons;
@@ -21,7 +21,6 @@ import io.github.humbleui.skija.PaintMode;
 import io.github.humbleui.skija.PaintStrokeCap;
 import io.github.humbleui.skija.PaintStrokeJoin;
 import io.github.humbleui.skija.Path;
-import io.github.humbleui.skija.PathFillMode;
 import io.github.humbleui.skija.SamplingMode;
 import io.github.humbleui.skija.Surface;
 import io.github.humbleui.types.RRect;
@@ -372,7 +371,7 @@ public final class ImageCropper {
         canvas.save();
         try {
             com.atom.chat.ui.PanelBackground.clipInterior(canvas, panel);
-            SkiaDraw.drawRoundedRect(canvas, panel.x(), panel.y(), panelW, panelH,
+            CornerGeometry.drawRoundedRect(canvas, panel.x(), panel.y(), panelW, panelH,
                     UiTokens.modalBackdropRadius(AtomChatAppearance.theme()), Color.makeARGB((int) (200.0F * anim), 8, 9, 14));
 
             Image image = decoded;
@@ -385,7 +384,7 @@ public final class ImageCropper {
                 float left = offX - decodeW * scale / 2.0F;
                 float top = offY - decodeH * scale / 2.0F;
                 canvas.save();
-                SkiaDraw.clip(canvas, panel.x(), panel.y(), panelW, panelH, UiTokens.modalBackdropRadius(AtomChatAppearance.theme()));
+                CornerGeometry.clip(canvas, panel.x(), panel.y(), panelW, panelH, UiTokens.modalBackdropRadius(AtomChatAppearance.theme()));
                 try (Paint paint = new Paint().setAntiAlias(true)) {
                     canvas.drawImageRect(image,
                             Rect.makeXYWH(0, 0, decodeW, decodeH),
@@ -395,19 +394,17 @@ public final class ImageCropper {
                     canvas.restore();
                 }
 
-                // Darken everything outside the frame (even-odd panel + frame).
-                try (io.github.humbleui.skija.PathBuilder mask = new io.github.humbleui.skija.PathBuilder()) {
-                    mask.addRect(Rect.makeXYWH(panel.x(), panel.y(), panelW, panelH));
-                    if (circle) {
-                        mask.addOval(Rect.makeXYWH(cx - rx, cy - ry, 2.0F * rx, 2.0F * ry));
-                    } else {
-                        mask.addRRect(RRect.makeXYWH(cx - rx, cy - ry, 2.0F * rx, 2.0F * ry, s(12)));
-                    }
-                    mask.setFillMode(PathFillMode.EVEN_ODD);
-                    try (Path maskPath = mask.detach();
-                         Paint paint = new Paint().setColor(Color.makeARGB((int) (150.0F * anim), 0, 0, 0))) {
-                        canvas.drawPath(maskPath, paint);
-                    }
+                // Use the same contour for the dimmer and the visible crop ring.
+                var cropBounds = Rect.makeXYWH(cx - rx, cy - ry, 2F * rx, 2F * ry);
+                canvas.save();
+                try (Paint dim = new Paint().setColor(Color.makeARGB((int) (150F * anim), 0, 0, 0))) {
+                    RRect opening = circle ? RRect.makeOvalXYWH(cropBounds.getLeft(), cropBounds.getTop(),
+                            cropBounds.getWidth(), cropBounds.getHeight())
+                            : RRect.makeXYWH(cropBounds.getLeft(), cropBounds.getTop(), cropBounds.getWidth(), cropBounds.getHeight(), s(12));
+                    CornerGeometry.clipRRect(canvas, opening, io.github.humbleui.skija.ClipMode.DIFFERENCE, true);
+                    canvas.drawRect(Rect.makeXYWH(panel.x(), panel.y(), panelW, panelH), dim);
+                } finally {
+                    canvas.restore();
                 }
             }
 
@@ -416,7 +413,7 @@ public final class ImageCropper {
                 if (circle) {
                     canvas.drawOval(Rect.makeXYWH(cx - rx, cy - ry, 2.0F * rx, 2.0F * ry), ring);
                 } else {
-                    canvas.drawRRect(RRect.makeXYWH(cx - rx, cy - ry, 2.0F * rx, 2.0F * ry, s(12)), ring);
+                    CornerGeometry.drawRRect(canvas, RRect.makeXYWH(cx - rx, cy - ry, 2.0F * rx, 2.0F * ry, s(12)), ring);
                 }
             }
 
@@ -465,15 +462,15 @@ public final class ImageCropper {
     private void drawRoundButton(Canvas canvas, float cx, float cy, Path icon, float hover, int alpha) {
         float r = s(24);
         float radius = UiTokens.radius(24, AtomChatAppearance.theme());
-        SkiaDraw.drawRoundedShadow(canvas, cx - r, cy - r, 2.0F * r, 2.0F * r, radius, s(6),
+        com.atom.chat.render.SoftShadow.drawRounded(canvas, cx - r, cy - r, 2.0F * r, 2.0F * r, radius, s(6),
                 // The button fades itself (no alpha layer above it),
                 // so the shadow rides the same fade instead of
                 // hard-cutting at the last frame.
                 UiTokens.withAlpha(UiTokens.CHROME_SHADOW, 100.0F * alpha / 255.0F));
-        SkiaDraw.drawRoundedRect(canvas, cx - r, cy - r, 2.0F * r, 2.0F * r, radius,
+        CornerGeometry.drawRoundedRect(canvas, cx - r, cy - r, 2.0F * r, 2.0F * r, radius,
                 Color.makeARGB((int) (0.92F * alpha), 35, 39, 47));
         if (hover > 0.01F) {
-            SkiaDraw.drawRoundedRect(canvas, cx - r, cy - r, 2.0F * r, 2.0F * r, radius,
+            CornerGeometry.drawRoundedRect(canvas, cx - r, cy - r, 2.0F * r, 2.0F * r, radius,
                     Color.makeARGB((int) (60.0F * hover), 255, 255, 255));
         }
         float size = r;

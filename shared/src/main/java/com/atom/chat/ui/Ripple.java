@@ -1,5 +1,6 @@
 package com.atom.chat.ui;
 
+import com.atom.chat.render.CornerGeometry;
 import io.github.humbleui.skija.Canvas;
 import io.github.humbleui.skija.Paint;
 import io.github.humbleui.types.RRect;
@@ -36,7 +37,7 @@ public final class Ripple {
         if (waves.isEmpty() || bounds.w() <= 0 || bounds.h() <= 0) return;
         canvas.save();
         try (Paint paint = new Paint().setAntiAlias(true)) {
-            canvas.clipRRect(RRect.makeXYWH(bounds.x(), bounds.y(), bounds.w(), bounds.h(), corner));
+            CornerGeometry.clipRRect(canvas, RRect.makeXYWH(bounds.x(), bounds.y(), bounds.w(), bounds.h(), corner));
             for (Wave wave : waves) {
                 float t = wave.elapsed / DURATION_MS;
                 float dx = Math.max(Math.abs(wave.x - bounds.x()), Math.abs(bounds.right() - wave.x));

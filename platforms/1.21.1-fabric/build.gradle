@@ -49,9 +49,21 @@ tasks.named('remapJar') {
 }
 
 processResources {
-    inputs.property 'version', project.version
-    inputs.property 'atomlibVersion', project.atomlibVersion
-    filesMatching('fabric.mod.json') { expand version: project.version, atomlib_version: project.atomlibVersion }
+    filteringCharset = 'UTF-8'
+    def jsonContents = { String value ->
+        String quoted = groovy.json.JsonOutput.toJson(value)
+        quoted.substring(1, quoted.length() - 1)
+    }
+    def metadata = [
+            version: project.version,
+            atomlib_fabric_range: project.atomlibFabricRange,
+            mod_description: jsonContents(project.mod_description + '\n\nCredits: ' + project.mod_credits),
+            mod_authors: project.mod_authors.split(' & ').collect(jsonContents).join('","'),
+            mod_repository_url: jsonContents(project.mod_repository_url),
+            mod_issues_url: jsonContents(project.mod_issues_url),
+    ]
+    inputs.properties metadata
+    filesMatching('fabric.mod.json') { expand metadata }
 }
 
 tasks.withType(JavaCompile).configureEach {

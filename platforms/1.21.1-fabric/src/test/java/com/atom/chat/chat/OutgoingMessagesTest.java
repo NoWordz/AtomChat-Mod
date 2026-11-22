@@ -69,6 +69,57 @@ class OutgoingMessagesTest {
         OutgoingMessages.expire(System.currentTimeMillis()+OutgoingMessages.TIMEOUT_MS+1);
         assertFalse(MessageMerge.canMerge(local,msg(SELF,"Self","same")));
     }
+    @Test void sequentialConfirmedRepeatsFoldPublicAndPrivateWithoutLosingDeliveryState() {
+        var previous = MessageMerge.antiSpamEnabledSupplier;
+        MessageMerge.antiSpamEnabledSupplier = () -> true;
+        try {
+            for (var partner : Arrays.asList(null, PlayerRef.of(null,"Alice"))) {
+                ChatMessage first = null;
+                for (int i = 0; i < 3; i++) {
+                    var local = msg(SELF,"Self","same");
+                    if (i == 0) first = local;
+                    OutgoingMessages.sent(local,partner,"same");
+                    if (partner == null) ChatStore.get().add(local);
+                    else PrivateChatStore.addOutgoing(partner,local);
+                    assertTrue(OutgoingMessages.reconcile(msg(SELF,"Self","same"),partner,true,"same"));
+                }
+                var rows = partner == null ? ChatStore.get().snapshot() : PrivateChatStore.messages(partner);
+                assertEquals(1,rows.size());
+                assertEquals(3,rows.get(0).getDuplicateCount());
+                assertEquals(first.getId(),rows.get(0).getId());
+                assertEquals(OutgoingMessages.State.CONFIRMED,rows.get(0).deliveryState());
+            }
+        } finally {
+            MessageMerge.antiSpamEnabledSupplier = previous;
+        }
+    }
+
+    @Test void confirmationBindsTheHudAndStoredCopyToTheirOwnReactionDelivery() {
+        var previous = MessageMerge.antiSpamEnabledSupplier;
+        MessageMerge.antiSpamEnabledSupplier = () -> true;
+        var fingerprint = UUID.randomUUID();
+        try {
+            for (int i = 0; i < 2; i++) {
+                var local = msg(SELF,"Self","same");
+                var received = msg(SELF,"Self","same");
+                var delivery = UUID.randomUUID();
+                OutgoingMessages.sent(local,null,"same");
+                ChatStore.get().add(local);
+                var receipt = new com.atom.chat.reaction.ReactionWire.Receipt(delivery,fingerprint);
+                com.atom.chat.reaction.ReactionClient.accept(com.atom.chat.reaction.ReactionWire.receipt(receipt));
+                try (var scope = com.atom.chat.reaction.ReactionClient.incoming(fingerprint)) {
+                    assertTrue(OutgoingMessages.reconcile(received,null,true,"same"));
+                }
+                assertEquals(i + 1, ChatStore.get().snapshot().size());
+                assertEquals(delivery, com.atom.chat.reaction.ReactionClient.key(received));
+                assertEquals(delivery, com.atom.chat.reaction.ReactionClient.key(ChatStore.get().snapshot().get(i)));
+            }
+        } finally {
+            com.atom.chat.reaction.ReactionClient.reset();
+            MessageMerge.antiSpamEnabledSupplier = previous;
+        }
+    }
+
     @Test void privateEchoUpdatesOnlyItsOwnConversation() {
         var partner=PlayerRef.of(null,"Alice");var local=msg(SELF,"Self","secret");
         OutgoingMessages.sent(local,partner,"secret");PrivateChatStore.addOutgoing(partner,local);

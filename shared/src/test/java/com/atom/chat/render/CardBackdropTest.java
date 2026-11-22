@@ -12,6 +12,27 @@ class CardBackdropTest {
     private static final UiLayout.Rect PANEL = new UiLayout.Rect(0, 0, 180, 120);
     private static final Rect BOUNDS = Rect.makeWH(180, 120);
 
+    @Test void cardsCannotBringWorldPixelsFromOutsideThePanelIntoItsEdges() {
+        var cfg = new AtomChatConfig();
+        cfg.panelOutline = false;
+        cfg.cardBlurStrength = 3F;
+        cfg.panelOpacity = 0F;
+        try (var source = Surface.makeRasterN32Premul(180, 120);
+             var result = Surface.makeRasterN32Premul(180, 120);
+             var black = new Paint().setColor(0xFF000000)) {
+            source.getCanvas().clear(0xFFFFFFFF);
+            source.getCanvas().drawRect(Rect.makeLTRB(40, 0, 140, 120), black);
+            Canvas canvas = result.getCanvas();
+            canvas.clear(0xFFFFFFFF);
+            try (var input = source.makeImageSnapshot();
+                 var frame = CardBackdrop.begin(result, canvas, new UiLayout.Rect(40, 0, 100, 120), input, null, cfg)) {
+                CardBackdrop.draw(canvas, 42, 20, 96, 80, 0);
+            }
+            assertEquals(0, value(pixels(result), 44, 60));
+            assertEquals(0, value(pixels(result), 134, 60));
+        }
+    }
+
     @Test void reusesEqualOrStrongerPaintedPanelWithoutChangingTheSavedCardStrength() {
         var config = new AtomChatConfig();
         assertEquals(2F, config.effectiveCardBlurStrength());
@@ -57,6 +78,7 @@ class CardBackdropTest {
                 assertEquals(value(before, 88, 20), value(result, 88, 20), "outside card");
                 assertTrue(value(result, 88, 60) > 40, "softened black side");
                 assertTrue(value(result, 92, 60) < 215, "softened white side");
+                assertTrue(value(result, 70, 60) > 40, "300% reaches the same physical distance as panel Kawase");
             }
         }
     }
@@ -75,6 +97,11 @@ class CardBackdropTest {
                 Canvas canvas = target.getCanvas();
                 canvas.clear(0xFF000000);
                 try (var frame = CardBackdrop.begin(target, canvas, PANEL, null, image, cfg)) {
+                    CardBackdrop.draw(canvas, 90, 30, 60, 50, 8);
+                }
+                int anchored = value(pixels(target), 120, 50);
+                canvas.clear(0xFF000000);
+                try (var frame = CardBackdrop.begin(target, canvas, PANEL, null, image, cfg)) {
                     Canvas body = recorder.beginRecording(BOUNDS);
                     body.clipRect(Rect.makeLTRB(0, 30, 180, 80));
                     try (Picture masks = CardBackdrop.recordMasks(BOUNDS,
@@ -87,7 +114,8 @@ class CardBackdropTest {
                     }
                 }
                 byte[] result = pixels(target);
-                assertTrue(value(result, 120, 50) > 220, "wallpaper stays anchored while the mask moves");
+                assertTrue(anchored > 128, "the fixed mask samples the light side of the wallpaper");
+                assertEquals(anchored, value(result, 120, 50), "a moving mask samples the same screen pixel as the fixed mask");
                 assertEquals(0, value(result, 120, 25), "the scroll clip travels with the card");
                 assertEquals(0, value(result, 155, 50), "the blur is confined to the mask");
             }
@@ -113,6 +141,7 @@ class CardBackdropTest {
                 var config = new AtomChatConfig();
                 config.cardBlurStrength = 3;
                 config.panelOpacity = 0;
+                config.panelOutline = false;
                 Canvas canvas = surface.getCanvas();
                 org.lwjgl.opengl.GL11C.glClearColor(0F, 0F, 0F, .25F);
                 org.lwjgl.opengl.GL11C.glClear(org.lwjgl.opengl.GL11C.GL_COLOR_BUFFER_BIT);

@@ -37,7 +37,7 @@
 
 ## 兼容性
 
-AtomChat 0.9.2 客户端需要 AtomLib 0.6.0 或更新版本。AtomLib 0.7.0 提供 Windows、macOS 和 glibc Linux 上 x64、ARM64 的原生库。0.9.2 的游戏内验收环境为 Windows x64、Fabric 与 AtomLib 0.7.0。 [AtomLib 桌面端支持](https://github.com/NoWordz/AtomLib-Mod/releases/tag/v0.7.0)
+公开发布的 AtomChat 0.9.2 请配合 AtomLib 0.6.0 使用，包内的设置资源对应这个库版本。AtomChat 0.9.3 开发包在 Windows 上使用 AtomLib 0.7.0。 [AtomLib 桌面端支持](https://github.com/NoWordz/AtomLib-Mod/releases/tag/v0.7.0)
 
 图片消息沿用 E33Chat、ChatImage 使用的 `[[CICode]]` 协议。替换聊天界面的模组或部分服务器消息格式可能需要额外配置。 [常见问题排查](docs/wiki/常见问题排查.md)
 

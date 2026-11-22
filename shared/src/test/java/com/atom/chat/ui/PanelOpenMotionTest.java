@@ -277,6 +277,18 @@ class PanelOpenMotionTest {
         assertEquals(painted.radius() * 2.0F / 4.0, capture.radius(), 1.0e-4F);
     }
 
+    @Test
+    void smallPanelsFitTheirCornersAndCollapsedAperturesStayEmpty() {
+        var tiny = new UiLayout.Rect(10F, 20F, 10F, 20F);
+        var rim = PanelBackground.contour(tiny, 1F);
+        assertEquals(4F, rim._radii[0]);
+        assertEquals(8F, rim.getWidth());
+        var blur = PanelOpenMotion.blurCapture(1F, AtomChatConfig.PageNavStyle.ZOOM,
+                tiny.x(), tiny.y(), tiny.w(), tiny.h(), 6F, 1D, 1D);
+        assertEquals(0F, blur.w());
+        assertEquals(0F, blur.radius());
+    }
+
     /** The fade layer covers the scaled panel plus its slide excursion and slack. */
     @Test
     void theFadeLayerCoversTheScaledPanelAndItsSlide() {

@@ -1,11 +1,12 @@
 package com.atom.chat.ui;
 
 
+import com.atom.chat.render.CornerGeometry;
 import com.atom.lib.design.atomchat.UiTokens;
 import com.atom.chat.chat.ChatMessage;
 import com.atom.chat.reaction.*;
 import com.atom.chat.render.Easing;
-import com.atom.lib.design.atomchat.SkiaDraw;
+import com.atom.chat.render.HudShadow;
 import com.atom.chat.render.SkiaFontRenderer;
 import com.atom.chat.font.FontManager;
 import io.github.humbleui.skija.Canvas;
@@ -208,8 +209,9 @@ public final class ReactionChips {
             canvas.save();
             try {
                 scaleAbout(canvas, capsuleScale, bx, cyMid);
-                SkiaDraw.drawRoundedRect(canvas, cx, cy, cell.w(), height(),
-                        UiTokens.radius(UiTokens.REACTION_RADIUS, AtomChatAppearance.theme()), fade(fill, alpha));
+                float radius = UiTokens.radius(UiTokens.REACTION_RADIUS, AtomChatAppearance.theme());
+                HudShadow.drawPanel(canvas, cx, cy, cell.w(), height(), radius, alpha);
+                CornerGeometry.drawRoundedRect(canvas, cx, cy, cell.w(), height(), radius, fade(fill, alpha));
             } finally { canvas.restore(); }
 
             float ex = cx + UiTokens.REACTION_EMOJI_CENTER;
@@ -304,7 +306,7 @@ public final class ReactionChips {
             MenuPopup.drawSurface(canvas, left, top, w, height());
             canvas.save();
             try {
-                SkiaDraw.clip(canvas, left, top, w, height(), UiTokens.radius(UiTokens.REACTION_RADIUS, AtomChatAppearance.theme()));
+                CornerGeometry.clip(canvas, left, top, w, height(), UiTokens.radius(UiTokens.REACTION_RADIUS, AtomChatAppearance.theme()));
                 SkiaFontRenderer.drawText(canvas, font, label, left + UiTokens.REACTION_TOOLTIP_INSET,
                         SkiaFontRenderer.centerBaselineY(font, top + height() / 2.0F), 0xFFFFFFFF);
             } finally { canvas.restore(); }

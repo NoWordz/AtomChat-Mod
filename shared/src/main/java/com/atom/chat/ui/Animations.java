@@ -5,15 +5,9 @@ import com.atom.chat.config.AtomChatConfig;
 /**
  * Central gate for decorative motion.
  *
- * <p>The settings switch is deliberately <em>not</em> a blanket freeze. Motion
- * that answers the pointer (hover tint, wheel glide, scrollbar drag) stays on
- * so the UI never feels dead; motion that only ornaments a state change
- * (message entrance, page push, panel open, poke shake, scroll snapping) is
- * what gets collapsed to zero.</p>
- *
- * <p>Every duration in this UI must be read through {@link #ms(long)} rather
- * than straight from {@link UiMotion}, so a single config flag governs the
- * whole surface instead of each call site growing its own condition.</p>
+ * <p>The decorative setting controls entrances and transitions. Performance
+ * mode additionally makes pointer feedback, scroll and typing feedback
+ * immediate. Media playback has its own clock.</p>
  */
 public final class Animations {
     private Animations() {
@@ -21,7 +15,7 @@ public final class Animations {
 
     /** Whether decorative motion is allowed at all. */
     public static boolean enabled() {
-        return AtomChatConfig.get().animationEnabled;
+        return AtomChatConfig.get().effectiveAnimationEnabled();
     }
 
     /**
@@ -31,6 +25,11 @@ public final class Animations {
      */
     public static long ms(long durationMs) {
         return enabled() ? durationMs : 0L;
+    }
+
+    /** Callers show the caret only while the field is focused. */
+    public static boolean caretVisible(long millis) {
+        return AtomChatConfig.performanceModeActive() || (millis / 500L) % 2L == 0L;
     }
 
     /**
@@ -44,6 +43,7 @@ public final class Animations {
 
     /** Whether double-clicking another player's avatar pokes them. */
     public static boolean avatarPoke() {
-        return AtomChatConfig.get().avatarPokeEnabled;
+        var config = AtomChatConfig.get();
+        return !config.performanceMode && config.avatarPokeEnabled;
     }
 }

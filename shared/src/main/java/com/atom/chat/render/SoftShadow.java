@@ -1,11 +1,13 @@
 package com.atom.chat.render;
 
+import com.atom.chat.config.AtomChatConfig;
+import com.atom.lib.design.atomchat.SkiaDraw;
 import io.github.humbleui.skija.Canvas;
 import io.github.humbleui.skija.ClipMode;
-import io.github.humbleui.skija.FilterBlurMode;
 import io.github.humbleui.skija.FilterMode;
 import io.github.humbleui.skija.Image;
-import io.github.humbleui.skija.MaskFilter;
+import io.github.humbleui.skija.ImageInfo;
+import io.github.humbleui.skija.Matrix33;
 import io.github.humbleui.skija.Paint;
 import io.github.humbleui.skija.Surface;
 import io.github.humbleui.types.IRect;
@@ -17,22 +19,41 @@ import java.util.Map;
 
 /** Panel/dialog Gaussian shadows and popup material for the jump button. Render-thread confined. */
 public final class SoftShadow {
-    private static final float PANEL_SIGMA = ShadowTokens.PANEL_SIGMA;
-    private static final float PANEL_DROP = ShadowTokens.PANEL_DROP;
-    private static final float FLOAT_SIGMA = ShadowTokens.FLOAT_SIGMA;
-    private static final float FLOAT_DROP = ShadowTokens.FLOAT_DROP;
     private static final int DENSITY = 3;
     private static final int MAX_PATCHES = 12;
+    private static final int MAX_SETTLED_SHADOW_PIXELS = 1024 * 1024;
+    private static final float MAX_SETTLED_SHADOW_DENSITY = 2F;
     private static final Map<Float, PanelPatch> PANEL_PATCHES = new LinkedHashMap<>(16, .75F, true);
-    private static final Map<Float, PanelPatch> FLOAT_PATCHES = new LinkedHashMap<>(16, .75F, true);
+    private static DeviceShadowKey previousShadowKey;
+    private static DeviceShadow settledShadow;
 
     private record PanelPatch(Image image, IRect center) { }
+    private record DeviceShadowKey(RRect face, float width, float height, Matrix33 matrix) { }
+    private record DeviceShadow(DeviceShadowKey key, Image image) { }
 
     private SoftShadow() { }
 
-    /** Already scaled drawing units. Four sigma plus the downward offset and AA fringe. */
+    public static boolean enabled() {
+        return !AtomChatConfig.performanceModeActive();
+    }
+
+    public static void drawRounded(Canvas canvas, float x, float y, float width, float height,
+                                   float radius, float blur, int color) {
+        if (!enabled() || width <= 0F || height <= 0F || blur <= 0F || (color >>> 24) == 0) return;
+        if (CornerGeometry.continuousReach(radius, width, height) == 0F) {
+            SkiaDraw.drawRoundedShadow(canvas, x, y, width, height, radius, blur, color);
+        } else {
+            HudShadow.drawMaterialShade(canvas, x, y, width, height, radius, blur, color);
+        }
+    }
+
+    /** Already scaled drawing units, including the near-transparent resampling fringe. */
     public static float panelPad() {
-        return (float) Math.ceil(PANEL_SIGMA * 4F + PANEL_DROP + 2F);
+        return edgePad(ShadowTokens.PANEL);
+    }
+
+    public static void drawCard(Canvas canvas, float x, float y, float width, float height, float radius) {
+        HudShadow.drawSurface(canvas, x, y, width, height, radius, ShadowTokens.CARD, 1F);
     }
 
     /** Includes the FAB's press-release overshoot, since its fade layer encloses the scale. */
@@ -42,13 +63,24 @@ public final class SoftShadow {
 
     /** Padded layer reach for a floating surface's cached two-tier shadow. */
     public static float floatPad() {
-        return (float) Math.ceil(FLOAT_SIGMA * 4F + FLOAT_DROP + 2F);
+        return ShadowTokens.FLOAT.pad();
     }
 
     /** Call before the background, outside its clip. Screen clipping leaves only exposed docked edges. */
     public static void drawPanel(Canvas canvas, float x, float y, float width, float height, float radius) {
-        if (width <= 0 || height <= 0) return;
+        drawPanel(canvas, x, y, width, height, radius, false);
+    }
+
+    /** The settled live panel can reuse a native-resolution shadow without reapplying its clip. */
+    public static void drawPanel(Canvas canvas, float x, float y, float width, float height, float radius, boolean settled) {
         float r = Math.max(0F, Math.min(radius, Math.min(width, height) / 2F));
+        drawPanel(canvas, RRect.makeXYWH(x, y, width, height, r), settled);
+    }
+
+    public static void drawPanel(Canvas canvas, RRect face, boolean settled) {
+        float width = face.getWidth(), height = face.getHeight();
+        if (!enabled() || width <= 0 || height <= 0) return;
+        float r = face._radii[0];
         PanelPatch patch = PANEL_PATCHES.get(r);
         if (patch == null) {
             patch = makePanelPatch(r);
@@ -59,12 +91,17 @@ public final class SoftShadow {
             }
             PANEL_PATCHES.put(r, patch);
         }
+        if (settled && drawSettledShadow(canvas, face, width, height, patch, r)) return;
+        drawPanelPatch(canvas, face, width, height, patch);
+    }
+
+    private static void drawPanelPatch(Canvas canvas, RRect face, float width, float height, PanelPatch patch) {
         canvas.save();
         try {
             // A translucent panel must show its wallpaper, never its own black shadow mask.
-            canvas.clipRRect(RRect.makeXYWH(x, y, width, height, r), ClipMode.DIFFERENCE, true);
+            canvas.clipRRect(face, ClipMode.DIFFERENCE, true);
             float pad = panelPad();
-            canvas.translate(x - pad, y - pad);
+            canvas.translate(face.getLeft() - pad, face.getTop() - pad);
             canvas.scale(1F / DENSITY, 1F / DENSITY);
             canvas.drawImageNine(patch.image(), patch.center(),
                     Rect.makeWH((width + pad * 2F) * DENSITY, (height + pad * 2F) * DENSITY),
@@ -72,6 +109,57 @@ public final class SoftShadow {
         } finally {
             canvas.restore();
         }
+    }
+
+    private static boolean drawSettledShadow(Canvas canvas, RRect face, float faceWidth, float faceHeight,
+                                             PanelPatch patch, float radius) {
+        if (radius == 0F) return false;
+        Matrix33 matrix = canvas.getLocalToDeviceAsMatrix33();
+        float[] m = matrix._mat;
+        float scale = m[0];
+        // Transforms and high-density coverage stay on the live clip.
+        if (!(scale > 0F && scale <= MAX_SETTLED_SHADOW_DENSITY) || m[4] != scale
+                || m[1] != 0F || m[3] != 0F || m[6] != 0F || m[7] != 0F || m[8] != 1F) return false;
+        float left = face.getLeft() * scale + m[2], top = face.getTop() * scale + m[5];
+        float right = face.getRight() * scale + m[2], bottom = face.getBottom() * scale + m[5];
+        if (!onPixelGrid(left) || !onPixelGrid(top) || !onPixelGrid(right) || !onPixelGrid(bottom)) return false;
+        int pad = (int) Math.ceil(panelPad() * scale) + 1;
+        int x = Math.round(left) - pad, y = Math.round(top) - pad;
+        int width = Math.round(right) + pad - x, height = Math.round(bottom) + pad - y;
+        if ((long) width * height > MAX_SETTLED_SHADOW_PIXELS) return false;
+
+        var key = new DeviceShadowKey(face, faceWidth, faceHeight, matrix);
+        if (settledShadow == null || !settledShadow.key().equals(key)) {
+            // A size or position in flight is cheaper to paint live than to upload repeatedly.
+            if (!key.equals(previousShadowKey)) {
+                previousShadowKey = key;
+                return false;
+            }
+            // The panel layers are black. Cache only their coverage, at one texel per output pixel.
+            try (Surface surface = Surface.makeRaster(ImageInfo.makeA8(width, height))) {
+                Canvas bake = surface.getCanvas();
+                bake.clear(0);
+                bake.translate(-x, -y);
+                bake.concat(matrix);
+                drawPanelPatch(bake, face, faceWidth, faceHeight, patch);
+                Image image = surface.makeImageSnapshot();
+                if (settledShadow != null) settledShadow.image().close();
+                settledShadow = new DeviceShadow(key, image);
+            }
+        }
+        previousShadowKey = key;
+        canvas.save();
+        try {
+            canvas.resetMatrix();
+            canvas.drawImage(settledShadow.image(), x, y);
+        } finally {
+            canvas.restore();
+        }
+        return true;
+    }
+
+    private static boolean onPixelGrid(float coordinate) {
+        return Math.abs(coordinate - Math.round(coordinate)) <= .001F;
     }
 
     /** Shares the accepted popup material, including its lit rim and shaded interior. */
@@ -81,75 +169,29 @@ public final class SoftShadow {
         com.atom.chat.ui.MenuPopup.drawMaterial(canvas, x, y, size, size, r, fillArgb);
     }
 
-    /**
-     * Two-tier drop shadow for dialogs, tutorial cards and popup plates. The
-     * Gaussian is baked once per radius and stretched with nine-patch drawing;
-     * a stable card therefore submits one image draw instead of a Skia mask
-     * filter per frame. The difference clip keeps the translucent face clean.
-     */
+    /** Compact floating cards share the dimension-aware outline and leave the face clear. */
     public static void drawFloating(Canvas canvas, float x, float y, float width, float height, float radius) {
-        if (width <= 0 || height <= 0) return;
-        float r = Math.max(0F, Math.min(radius, Math.min(width, height) / 2F));
-        PanelPatch patch = FLOAT_PATCHES.get(r);
-        if (patch == null) {
-            patch = makeFloatingPatch(r);
-            if (FLOAT_PATCHES.size() >= MAX_PATCHES) {
-                var oldest = FLOAT_PATCHES.entrySet().iterator();
-                oldest.next().getValue().image().close();
-                oldest.remove();
-            }
-            FLOAT_PATCHES.put(r, patch);
-        }
-        canvas.save();
-        try {
-            canvas.clipRRect(RRect.makeXYWH(x, y, width, height, r), ClipMode.DIFFERENCE, true);
-            float pad = floatPad();
-            canvas.translate(x - pad, y - pad);
-            canvas.scale(1F / DENSITY, 1F / DENSITY);
-            canvas.drawImageNine(patch.image(), patch.center(),
-                    Rect.makeWH((width + pad * 2F) * DENSITY, (height + pad * 2F) * DENSITY),
-                    FilterMode.LINEAR, null);
-        } finally {
-            canvas.restore();
-        }
+        HudShadow.drawSurface(canvas, x, y, width, height, radius, ShadowTokens.FLOAT, 1F);
+    }
+
+    private static float edgePad(ShadowTokens.Face profile) {
+        return (float) Math.ceil(profile.wideSigma() * 4F + profile.ambient().drop() + 2F);
     }
 
     private static PanelPatch makePanelPatch(float radius) {
+        var profile = ShadowTokens.PANEL;
         float pad = panelPad();
         // Three sigma between a corner and the stretch seam makes each edge effectively straight.
-        int side = (int) Math.ceil(2F * (radius + PANEL_SIGMA * 3F) + 2F);
+        int side = (int) Math.ceil(2F * (radius + profile.wideSigma() * 3F) + 2F);
         int pixels = (int) ((side + pad * 2F) * DENSITY);
         try (Surface surface = Surface.makeRasterN32Premul(pixels, pixels);
-             Paint paint = new Paint().setAntiAlias(true);
-             MaskFilter wide = MaskFilter.makeBlur(FilterBlurMode.NORMAL, PANEL_SIGMA);
-             MaskFilter contact = MaskFilter.makeBlur(FilterBlurMode.NORMAL, ShadowTokens.CONTACT_SIGMA)) {
+             Paint paint = new Paint().setAntiAlias(true)) {
             Canvas canvas = surface.getCanvas();
             canvas.clear(0);
             canvas.scale(DENSITY, DENSITY);
-            canvas.drawRRect(RRect.makeXYWH(pad, pad + PANEL_DROP, side, side, radius),
-                    paint.setColor(0x78000000).setMaskFilter(wide));
-            canvas.drawRRect(RRect.makeXYWH(pad, pad + ShadowTokens.CONTACT_DROP, side, side, radius),
-                    paint.setColor(0x44000000).setMaskFilter(contact));
-            int seam = pixels / 2;
-            return new PanelPatch(surface.makeImageSnapshot(), IRect.makeXYWH(seam, seam, 1, 1));
-        }
-    }
-
-    private static PanelPatch makeFloatingPatch(float radius) {
-        float pad = floatPad();
-        int side = (int) Math.ceil(2F * (radius + FLOAT_SIGMA * 3F) + 2F);
-        int pixels = (int) ((side + pad * 2F) * DENSITY);
-        try (Surface surface = Surface.makeRasterN32Premul(pixels, pixels);
-             Paint paint = new Paint().setAntiAlias(true);
-             MaskFilter wide = MaskFilter.makeBlur(FilterBlurMode.NORMAL, FLOAT_SIGMA);
-             MaskFilter contact = MaskFilter.makeBlur(FilterBlurMode.NORMAL, ShadowTokens.CONTACT_SIGMA)) {
-            Canvas canvas = surface.getCanvas();
-            canvas.clear(0);
-            canvas.scale(DENSITY, DENSITY);
-            canvas.drawRRect(RRect.makeXYWH(pad, pad + FLOAT_DROP, side, side, radius),
-                    paint.setColor(0x8C000000).setMaskFilter(wide));
-            canvas.drawRRect(RRect.makeXYWH(pad, pad + ShadowTokens.CONTACT_DROP, side, side, radius),
-                    paint.setColor(0x54000000).setMaskFilter(contact));
+            var shape = RRect.makeXYWH(pad, pad, side, side, radius);
+            HudShadow.paintLayer(canvas, shape, paint, profile.ambient(), true);
+            HudShadow.paintLayer(canvas, shape, paint, profile.contact(), true);
             int seam = pixels / 2;
             return new PanelPatch(surface.makeImageSnapshot(), IRect.makeXYWH(seam, seam, 1, 1));
         }
@@ -157,9 +199,16 @@ public final class SoftShadow {
 
     /** Call alongside the renderer's other image-cache teardown, on its render thread. */
     public static void release() {
+        if (settledShadow != null) {
+            settledShadow.image().close();
+            settledShadow = null;
+        }
+        previousShadowKey = null;
+        DotTexture.clearPanelEdges();
+        CornerGeometry.release();
+        HudShadow.release();
+        com.atom.chat.ui.ChatShortcutHint.release();
         PANEL_PATCHES.values().forEach(p -> p.image().close());
         PANEL_PATCHES.clear();
-        FLOAT_PATCHES.values().forEach(p -> p.image().close());
-        FLOAT_PATCHES.clear();
     }
 }

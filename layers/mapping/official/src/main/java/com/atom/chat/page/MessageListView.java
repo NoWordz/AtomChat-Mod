@@ -1,20 +1,26 @@
 package com.atom.chat.page;
 
+import com.atom.chat.render.CornerGeometry;
 import com.atom.chat.ui.AtomChatAppearance;
 import com.atom.chat.AtomChat;
 import com.atom.chat.chat.ChatMessage;
 import com.atom.chat.chat.Cicodes;
 import com.atom.chat.chat.ImageCode;
 import com.atom.chat.chat.MessageGrouping;
+import com.atom.chat.ui.MessageGeometry;
 import com.atom.chat.chat.OwnIdentity;
 import com.atom.chat.config.AtomChatConfig;
 import com.atom.chat.font.FontManager;
 import com.atom.chat.image.ImageLoader;
+import com.atom.chat.image.MessageImage;
 import com.atom.chat.render.ClickableSpan;
 import com.atom.chat.render.Easing;
+import com.atom.chat.render.ChatBubble;
+import com.atom.chat.render.HudShadow;
+import com.atom.chat.render.MessageNameShadow;
 import com.atom.chat.render.MessagePaint;
+import com.atom.chat.render.SoftShadow;
 import com.atom.chat.render.RichTextRenderer;
-import com.atom.lib.design.atomchat.SkiaDraw;
 import com.atom.chat.render.SkiaFontRenderer;
 import com.atom.chat.render.TextSurface;
 import com.atom.chat.text.RichText;
@@ -30,7 +36,6 @@ import static com.atom.lib.design.atomchat.UiTokens.s;
 import io.github.humbleui.skija.Canvas;
 import io.github.humbleui.skija.Color;
 import io.github.humbleui.skija.Font;
-import io.github.humbleui.skija.Image;
 import io.github.humbleui.skija.Paint;
 import io.github.humbleui.types.Rect;
 import java.util.ArrayList;
@@ -84,7 +89,7 @@ public final class MessageListView {
          *                list's draw is viewport-gated, so it passes true (the
          *                same contract as {@link ImageLoader#get(String, boolean)}).
          */
-        Image get(String url, boolean visible);
+        MessageImage get(String url, boolean visible);
     }
 
     private static final long MESSAGE_ANIM_MS = UiMotion.MESSAGE_MS;
@@ -125,9 +130,9 @@ public final class MessageListView {
         QuoteKey key = new QuoteKey(message, font, width, UiTokens.INLINE_ITEM_GAP);
         QuoteLayout cached = quoteCache.get(key);
         if (cached != null) return cached;
-        RichText rich = quoteRichLine(message);
+        RichText rich = MessagePaint.richQuote(message);
         if (rich == null) return null;
-        List<RichLine> lines = RichTextRenderer.wrapFor(truncateRich(font, rich, width), font, Float.MAX_VALUE);
+        List<RichLine> lines = MessagePaint.oneLine(rich, font, width);
         float textWidth = 0.0F;
         for (RichLine line : lines) textWidth = Math.max(textWidth, RichTextRenderer.width(font, line));
         QuoteLayout result = new QuoteLayout(lines, textWidth);
@@ -137,6 +142,8 @@ public final class MessageListView {
 
     private record NameKey(ChatMessage message, Font font, String fallback, String status, float itemGap) {}
     private record NameLayout(List<RichLine> lines, float width) {}
+    private final MessageNameShadow nameShadows = new MessageNameShadow(128);
+    private final java.util.function.DoubleSupplier shadowDensity;
     private final Map<NameKey, NameLayout> nameCache = new LinkedHashMap<>(128, 0.75F, true) {
         @Override
         protected boolean removeEldestEntry(Map.Entry<NameKey, NameLayout> eldest) {
@@ -258,7 +265,11 @@ public final class MessageListView {
     private long highlightUntil;
 
     public MessageListView(Host host) {
-        this(host, ImageLoader.get()::get);
+        this(host, ImageLoader.get()::getMessageImage);
+    }
+
+    public MessageListView(Host host, java.util.function.DoubleSupplier shadowDensity) {
+        this(host, ImageLoader.get()::getMessageImage, shadowDensity);
     }
 
     /**
@@ -268,8 +279,13 @@ public final class MessageListView {
      * download. Production always goes through {@link #MessageListView(Host)}.
      */
     MessageListView(Host host, ImageLookup images) {
+        this(host, images, () -> 2F);
+    }
+
+    private MessageListView(Host host, ImageLookup images, java.util.function.DoubleSupplier shadowDensity) {
         this.host = host;
         this.images = images;
+        this.shadowDensity = shadowDensity;
     }
 
     // ------------------------------------------------------------------ public api
@@ -300,7 +316,7 @@ public final class MessageListView {
             }
             cursor += messageHeight(messages.get(i), width, isCompactGrouped(messages, i));
             cursor += isCompactGrouped(messages, i + 1)
-                    ? MessageGrouping.groupedGap(UiTokens.LIST_GAP, UiTokens.s(2))
+                    ? MessageGeometry.groupedGap()
                     : UiTokens.LIST_GAP;
         }
         if (limit < messages.size() && dividerBefore(messages, limit)) {
@@ -319,8 +335,8 @@ public final class MessageListView {
             highlightMessage = null;
             return;
         }
-        float t = Math.min(1.0F, left / (float) HIGHLIGHT_MS);
-        SkiaDraw.drawRoundedRect(canvas, x, y - UiTokens.s(2), w, h + UiTokens.s(4),
+        float t = AtomChatConfig.performanceModeActive() ? 1.0F : Math.min(1.0F, left / (float) HIGHLIGHT_MS);
+        CornerGeometry.drawRoundedRect(canvas, x, y - UiTokens.s(2), w, h + UiTokens.s(4),
                 UiTokens.radius(8, AtomChatAppearance.theme()), Color.makeARGB((int) (60.0F * t), 255, 255, 255));
     }
 
@@ -361,7 +377,7 @@ public final class MessageListView {
         scroll.updateAnimation(System.currentTimeMillis());
         canvas.save();
         try {
-            SkiaDraw.clip(canvas, x, y, width, height, 0.0F);
+            CornerGeometry.clip(canvas, x, y, width, height, 0.0F);
             if (messages.isEmpty()) {
                 com.atom.chat.ui.EmptyState.draw(canvas, new com.atom.chat.ui.UiLayout.Rect(x, y, width, height),
                         tr("atomchat.conversation.empty"));
@@ -377,18 +393,14 @@ public final class MessageListView {
             // and re-wrapping every folded row above the viewport was the second
             // full-window walk per frame.
             float scrollTop = scroll.getScrollY();
-            int first = from;
-            while (first < messages.size()
-                    && rowTop[first] + rowHeight[first] < scrollTop - 80.0F
-                    && (Float.isNaN(dividerTop[first])
-                        || dividerTop[first] + TIME_DIVIDER_H < scrollTop - 80.0F)) {
-                // Same bookkeeping the skip branch below performs for a row
-                // that scrolled out: drop its entrance stamp, keep it settled.
-                messageEnterStart.remove(messages.get(first));
-                first++;
+            float visibleTop = scrollTop - 80F, visibleBottom = scrollTop + height + 80F;
+            int last = messages.size();
+            int first = firstRowEndingAfter(from, last, visibleTop);
+            // Only active entrance stamps need the old scan's off-screen cleanup.
+            if (!messageEnterStart.isEmpty()) {
+                for (int i = from; i < first; i++) messageEnterStart.remove(messages.get(i));
             }
-            float cursorY = y;
-            for (int mi = first; mi < messages.size(); mi++) {
+            for (int mi = first; mi < last; mi++) {
                 ChatMessage msg = messages.get(mi);
                 boolean grouped = isCompactGrouped(messages, mi);
                 if (!Float.isNaN(dividerTop[mi])) {
@@ -396,20 +408,19 @@ public final class MessageListView {
                     // message is in the extended viewport, so occluded
                     // dividers cost nothing.
                     float divOffset = dividerTop[mi];
-                    if (divOffset <= scroll.getScrollY() + height + 80.0F
-                            && divOffset + TIME_DIVIDER_H >= scroll.getScrollY() - 80.0F) {
+                    if (divOffset <= visibleBottom && divOffset + TIME_DIVIDER_H >= visibleTop) {
                         drawTimeDivider(canvas, msg.getTimestamp(), x, width, y + divOffset);
                     }
                 }
                 float h = rowHeight[mi];
                 float offset = rowTop[mi];
-                if (offset > scroll.getScrollY() + height + 80.0F) {
+                if (offset > visibleBottom) {
                     break;
                 }
                 // Absolute, not accumulated: rowTop is the measure walk's cursor,
                 // so the divider gap above this row is already inside it.
-                cursorY = y + offset;
-                if (offset + h >= scroll.getScrollY() - 80.0F) {
+                float cursorY = y + offset;
+                if (offset + h >= visibleTop) {
                     float t = entranceProgress(msg, now);
                     boolean layered = t < 1.0F;
                     if (!layered) {
@@ -438,8 +449,9 @@ public final class MessageListView {
                                 : -(1.0F - move) * travel;
                         try (Paint layer = new Paint()) {
                             layer.setColor(Color.makeARGB((int) (255.0F * fade), 0, 0, 0));
-                            canvas.saveLayer(Rect.makeXYWH(x - travel - 4.0F, cursorY - 4.0F,
-                                    width + travel * 2.0F + 8.0F, h + 28.0F), layer);
+                            float pad = HudShadow.PANEL_PAD;
+                            canvas.saveLayer(Rect.makeXYWH(x - travel - pad, cursorY - pad,
+                                    width + 2F * (travel + pad), h + 24F + 2F * pad), layer);
                             canvas.translate(dx, 0.0F);
                         }
                     }
@@ -521,9 +533,10 @@ public final class MessageListView {
         loadEarlierScale.begin(canvas, bx + w / 2.0F, by + h / 2.0F);
         try {
             float pillRadius = UiTokens.radius(h / (2.0F * UiTokens.SCALE), AtomChatAppearance.theme());
-            SkiaDraw.drawRoundedRect(canvas, bx, by, w, h, pillRadius, secondaryCapsuleBg());
+            HudShadow.drawPanel(canvas, bx, by, w, h, pillRadius);
+            CornerGeometry.drawRoundedRect(canvas, bx, by, w, h, pillRadius, secondaryCapsuleBg());
             if (loadEarlierHover > 0.01F) {
-                SkiaDraw.drawRoundedRect(canvas, bx, by, w, h, pillRadius,
+                CornerGeometry.drawRoundedRect(canvas, bx, by, w, h, pillRadius,
                         UiTokens.cardHover(loadEarlierHover, AtomChatAppearance.theme()));
             }
             SkiaFontRenderer.drawTextCentered(canvas, font, label, bx + w / 2.0F, by + h / 2.0F,
@@ -823,7 +836,7 @@ public final class MessageListView {
             }
             cursor += messageHeight(messages.get(i), width, isCompactGrouped(messages, i));
             cursor += isCompactGrouped(messages, i + 1)
-                    ? MessageGrouping.groupedGap(UiTokens.LIST_GAP, UiTokens.s(2))
+                    ? MessageGeometry.groupedGap()
                     : UiTokens.LIST_GAP;
         }
         return cursor;
@@ -873,6 +886,7 @@ public final class MessageListView {
 
     /** Drops entrance-animation bookkeeping; called when the screen is removed. */
     public void dispose() {
+        nameShadows.clear();
         messageEnterStart.clear();
         messageEnterSettled.clear();
     }
@@ -924,6 +938,8 @@ public final class MessageListView {
         if (!msg.isIdentityUnknown() && (name == null || name.isBlank())) {
             name = host.senderName(msg);
         }
+        float size = UiTokens.AVATAR_SIZE;
+        HudShadow.drawPanel(canvas, avatarX, avatarY, size, size, size / 2F);
         MessagePaint.avatar(canvas, msg, uuid, name, avatarX, avatarY);
     }
 
@@ -936,27 +952,17 @@ public final class MessageListView {
      * message of the list always carries one (e33chat behaviour); 0 disables
      * timestamps entirely.
      */
-    /** Whether the message at {@code index} continues a compact same-sender group. */
+    /** Whether this row follows a same-sender row without an intervening clock pill. */
     private static boolean isCompactGrouped(List<ChatMessage> messages, int index) {
-        if (!AtomChatConfig.get().compactMessagesEnabled || index <= 0 || index >= messages.size()) {
-            return false;
-        }
-        if (dividerBefore(messages, index)) {
-            return false;
-        }
-        return MessageGrouping.isSameGroup(messages.get(index - 1), messages.get(index));
+        return AtomChatConfig.get().compactMessagesEnabled && index > 0 && index < messages.size()
+                && MessageGrouping.continues(messages.get(index - 1), messages.get(index),
+                        AtomChatConfig.get().timestampIntervalMinutes);
     }
 
     private static boolean dividerBefore(List<ChatMessage> messages, int index) {
-        int minutes = AtomChatConfig.get().timestampIntervalMinutes;
-        if (minutes <= 0) {
-            return false;
-        }
-        if (index <= 0 || index >= messages.size()) {
-            return index == 0;
-        }
-        return messages.get(index).getTimestamp() - messages.get(index - 1).getTimestamp()
-                >= minutes * 60_000L;
+        return index >= 0 && index < messages.size()
+                && MessageGrouping.hasTimeDivider(index == 0 ? null : messages.get(index - 1),
+                        messages.get(index), AtomChatConfig.get().timestampIntervalMinutes);
     }
 
     /** The clock pill itself: same capsule family as system messages. */
@@ -968,8 +974,9 @@ public final class MessageListView {
         float pillH = TIME_DIVIDER_H - s(6);
         float pillX = x + (width - pillW) / 2.0F;
         float pillY = y + s(3);
-        SkiaDraw.drawRoundedRect(canvas, pillX, pillY, pillW, pillH, UiTokens.radius(10, AtomChatAppearance.theme()),
-                secondaryCapsuleBg());
+        float radius = UiTokens.radius(10, AtomChatAppearance.theme());
+        HudShadow.drawPanel(canvas, pillX, pillY, pillW, pillH, radius);
+        CornerGeometry.drawRoundedRect(canvas, pillX, pillY, pillW, pillH, radius, secondaryCapsuleBg());
         SkiaFontRenderer.drawTextCentered(canvas, font, time, x + width / 2.0F, pillY + pillH / 2.0F,
                 secondaryCapsuleText(), TextSurface.CAPSULE.shadowed(), secondaryCapsuleBg());
     }
@@ -1124,8 +1131,10 @@ public final class MessageListView {
         if (hasQuote) {
             drawQuotePill(canvas, msg, x, maxWidth, y + band, msg.isOwn());
         }
-        com.atom.chat.render.ChatBubble.draw(canvas, bubbleX, bubbleTop, bubbleWidth, bubbleHeight,
-                AtomChatConfig.get().effectiveBubbleStyle(), msg.isOwn(), msg.isOwn() ? ownBubble() : otherBubble());
+        var style = AtomChatConfig.get().effectiveBubbleStyle();
+        HudShadow.drawPanel(canvas, ChatBubble.outline(bubbleX, bubbleTop, bubbleWidth, bubbleHeight, style, msg.isOwn(), 1F));
+        ChatBubble.draw(canvas, bubbleX, bubbleTop, bubbleWidth, bubbleHeight,
+                style, msg.isOwn(), msg.isOwn() ? ownBubble() : otherBubble());
         drawMessageSelection(canvas, msg, richLines, bubbleX + UiTokens.BUBBLE_PAD, bubbleTop + bubbleHeight / 2.0F, lineHeight, font);
         // No backing shadow on bubble text (TextSurface.BUBBLE): the soft shadow
         // is reserved for the capsule family and the name band. A bubble fill and
@@ -1160,7 +1169,9 @@ public final class MessageListView {
         float bubbleX = x + (maxWidth - bubbleWidth) / 2.0F;
         float bubbleTop = y + s(2);
         // System capsules share the secondary capsule family (configurable).
-        SkiaDraw.drawRoundedRect(canvas, bubbleX, bubbleTop, bubbleWidth, bubbleHeight, UiTokens.radius(10, AtomChatAppearance.theme()),
+        float radius = UiTokens.radius(10, AtomChatAppearance.theme());
+        HudShadow.drawPanel(canvas, bubbleX, bubbleTop, bubbleWidth, bubbleHeight, radius);
+        CornerGeometry.drawRoundedRect(canvas, bubbleX, bubbleTop, bubbleWidth, bubbleHeight, radius,
                 secondaryCapsuleBg());
         drawMessageSelection(canvas, msg, richLines, bubbleX + UiTokens.BUBBLE_PAD, bubbleTop + bubbleHeight / 2.0F, lineHeight, font);
         // Capsule text takes a backing shadow (TextSurface.CAPSULE); the shadow
@@ -1189,8 +1200,9 @@ public final class MessageListView {
     private void drawQuotePill(Canvas canvas, ChatMessage msg, float x, float maxWidth, float pillY, boolean own) {
         Font quoteFont = FontManager.font(UiTokens.FONT_QUOTE);
         float capW = bubbleMaxWidth(msg, maxWidth);
-        float barW = s(3);
-        float textMaxW = Math.max(1F, capW - UiTokens.QUOTE_PAD_X * 2.0F - barW - s(4));
+        float textInset = MessagePaint.quoteTextInset();
+        float padding = textInset + UiTokens.QUOTE_PAD_X;
+        float textMaxW = Math.max(1F, capW - padding);
         String name = msg.getQuoteName().startsWith("@") ? msg.getQuoteName() : "@" + msg.getQuoteName();
         String quote = name + ": " + msg.getQuoteText();
         boolean imageQuote = msg.getQuoteText() != null
@@ -1211,7 +1223,7 @@ public final class MessageListView {
         List<RichLine> pillLines = pillLayout == null ? null : pillLayout.lines();
         String display = pillLayout != null ? null : Cicodes.truncateToWidth(quoteFont, quote, textMaxW);
         float textW = pillLayout != null ? pillLayout.width() : SkiaFontRenderer.getStringWidth(quoteFont, display);
-        float pillW = Math.min(capW, textW + UiTokens.QUOTE_PAD_X * 2.0F + barW + s(4));
+        float pillW = Math.min(capW, textW + padding);
         // Align the quote's outer edge with the bubble's outer edge, not with
         // the avatar. The bubble uses AVATAR_GAP as the horizontal gap to the
         // avatar, so the quote must use the same token.
@@ -1222,10 +1234,9 @@ public final class MessageListView {
                 : x + avatarEdgeInset() + UiTokens.AVATAR_SIZE + UiTokens.AVATAR_GAP;
         // Quote pill shares the secondary capsule family (configurable), so it
         // reads as the same family as system messages and time dividers.
-        SkiaDraw.drawRoundedRect(canvas, pillX, pillY, pillW, UiTokens.QUOTE_HEIGHT,
-                UiTokens.radius(6, AtomChatAppearance.theme()), secondaryCapsuleBg());
-        SkiaDraw.drawRoundedRect(canvas, pillX + UiTokens.QUOTE_PAD_X, pillY + s(3), barW, UiTokens.QUOTE_HEIGHT - s(6), barW / 2.0F, accent());
-        float textStartX = pillX + UiTokens.QUOTE_PAD_X + barW + s(4);
+        HudShadow.drawPanel(canvas, pillX, pillY, pillW, UiTokens.QUOTE_HEIGHT, MessagePaint.quoteRadius());
+        MessagePaint.quoteCapsule(canvas, pillX, pillY, pillW, capsuleBg, accent());
+        float textStartX = pillX + textInset;
         float quoteCenterY = pillY + UiTokens.QUOTE_HEIGHT / 2.0F;
         if (pillLines != null) {
             RichTextRenderer.drawLines(canvas, quoteFont, pillLines, textStartX, quoteCenterY,
@@ -1248,38 +1259,6 @@ public final class MessageListView {
             SkiaFontRenderer.drawText(canvas, quoteFont, display, textStartX, centerBaselineY, quoteText,
                     TextSurface.CAPSULE.shadowed(), capsuleBg);
         }
-    }
-
-    /**
-     * The pill's rich text: {@code @name: quoted text}, where the name and the
-     * quoted text are the parts sliced out of the original line in the data layer.
-     * The {@code @} and {@code ": "} separators are colourless literals, so they
-     * take the render fallback (the capsule colour) like every other colourless
-     * run.
-     *
-     * @return null when the capsule has no rich source (text drift, no original
-     *         Component, an empty part), so the caller draws the plain string pill
-     */
-    private static RichText quoteRichLine(ChatMessage msg) {
-        RichText nameRich = msg.getQuoteNameRich();
-        RichText textRich = msg.getQuoteTextRich();
-        if (nameRich.isEmpty() || textRich.isEmpty()) {
-            return null;
-        }
-        String at = nameRich.getString().startsWith("@") ? "" : "@";
-        return RichText.concat(
-                RichText.concat(RichText.literal(at), nameRich),
-                RichText.concat(RichText.literal(": "), textRich));
-    }
-
-    /**
-     * Truncates a rich line to {@code maxW} with an ellipsis, keeping every kept
-     * run's style. The ellipsis itself is colourless (the capsule fallback paints
-     * it). Code-point stepping never splits a surrogate pair, matching the cut
-     * rule of the plain-text truncator this replaces.
-     */
-    private static RichText truncateRich(Font font, RichText text, float maxW) {
-        return RichTextRenderer.truncate(font, text, maxW);
     }
 
     /**
@@ -1333,8 +1312,10 @@ public final class MessageListView {
         // RichTextRenderer.drawLines takes a centerY and internally converts
         // it to the cap-height baseline, matching the old drawText helper.
         float centerY = rowY + UiTokens.NAME_BAND / 2.0F;
+        nameShadows.draw(canvas, nameFont, lines, nameWidth, x, centerY, lineHeight,
+                Math.max(1F, (float) shadowDensity.getAsDouble()), SoftShadow.enabled());
         RichTextRenderer.drawLines(canvas, nameFont, lines, x, centerY, lineHeight, textPrimary(),
-                clickableSpans, true, TextSurface.NAME_BAND.shadowed());
+                clickableSpans, true);
     }
 
     /**
@@ -1366,7 +1347,7 @@ public final class MessageListView {
         }
         float centerY = bubbleTop + bubbleHeight / 2.0F;
         SkiaFontRenderer.drawText(canvas, font, label, x,
-                SkiaFontRenderer.centerBaselineY(font, centerY), accent());
+                SkiaFontRenderer.centerBaselineY(font, centerY), accent(), true);
     }
 
     private MessageHit drawImageMessage(Canvas canvas, ChatMessage msg, String raw, String imageUrl,
@@ -1398,7 +1379,11 @@ public final class MessageListView {
         if (hasQuote) {
             drawQuotePill(canvas, msg, x, maxWidth, y + band, msg.isOwn());
         }
-        Image image = images.get(imageUrl, true);
+        var style = AtomChatConfig.get().effectiveBubbleStyle();
+        MessageImage image = images.get(imageUrl, true);
+        if (image == null || !image.transparent()) {
+            HudShadow.drawPanel(canvas, ChatBubble.outline(bubbleX, bubbleTop, imageW, imageH, style, msg.isOwn(), 1F));
+        }
         if (image != null) {
             // No bubble fill behind a loaded image: a transparent PNG/GIF must
             // show the panel behind it, not a grey plate. The rounded clip in
@@ -1408,13 +1393,11 @@ public final class MessageListView {
             // the bubble already has the image's proportions and the bitmap is
             // simply fitted to it. Stretching only happened because the box used
             // to be a fixed 275x175 with the height clamped rather than scaled.
-            com.atom.chat.render.ChatBubble.drawImage(canvas, image, bubbleX, bubbleTop, imageW, imageH,
-                    AtomChatConfig.get().effectiveBubbleStyle(), msg.isOwn());
+            ChatBubble.drawImage(canvas, image.image(), bubbleX, bubbleTop, imageW, imageH, style, msg.isOwn());
         } else {
             // Placeholder only while the download is in flight: once an image
             // is loaded it must not keep a plate behind its transparent pixels.
-            com.atom.chat.render.ChatBubble.draw(canvas, bubbleX, bubbleTop, imageW, imageH,
-                    AtomChatConfig.get().effectiveBubbleStyle(), msg.isOwn(), otherBubble());
+            ChatBubble.draw(canvas, bubbleX, bubbleTop, imageW, imageH, style, msg.isOwn(), otherBubble());
             Font loadingFont = FontManager.font(UiTokens.FONT_QUOTE);
             SkiaFontRenderer.drawTextCentered(canvas, loadingFont, tr("atomchat.image.loading"),
                     bubbleX + imageW / 2.0F, bubbleTop + imageH / 2.0F, textSecondary());
@@ -1467,8 +1450,9 @@ public final class MessageListView {
         if (hasQuote) {
             drawQuotePill(canvas, msg, x, maxWidth, y + band, msg.isOwn());
         }
-        com.atom.chat.render.ChatBubble.draw(canvas, pillX, pillTop, pillW, pillH,
-                AtomChatConfig.get().effectiveBubbleStyle(), msg.isOwn(), secondaryCapsuleBg());
+        var style = AtomChatConfig.get().effectiveBubbleStyle();
+        HudShadow.drawPanel(canvas, ChatBubble.outline(pillX, pillTop, pillW, pillH, style, msg.isOwn(), 1F));
+        ChatBubble.draw(canvas, pillX, pillTop, pillW, pillH, style, msg.isOwn(), secondaryCapsuleBg());
         SkiaFontRenderer.drawTextCentered(canvas, font, placeholder,
                 pillX + pillW / 2.0F, pillTop + pillH / 2.0F,
                 placeholderGreen(secondaryCapsuleBg()), TextSurface.CAPSULE.shadowed(), secondaryCapsuleBg());
@@ -1502,6 +1486,16 @@ public final class MessageListView {
     private int heightConfig = -1;
     private long heightReaction = -1L;
     private float heightValue = -1.0F;
+
+    private int firstRowEndingAfter(int from, int end, float top) {
+        // Each optional clock divider ends before its own row ends.
+        while (from < end) {
+            int middle = (from + end) >>> 1;
+            if (rowTop[middle] + rowHeight[middle] < top) from = middle + 1;
+            else end = middle;
+        }
+        return from;
+    }
 
     private float measureContentHeight(List<ChatMessage> messages, float width, int from) {
         int config = (AtomChatConfig.get().imageMessagesEnabled ? 1 : 0)
@@ -1555,7 +1549,7 @@ public final class MessageListView {
             contentHeight += h;
             boolean nextGrouped = isCompactGrouped(messages, i + 1);
             contentHeight += nextGrouped
-                    ? MessageGrouping.groupedGap(UiTokens.LIST_GAP, UiTokens.s(2))
+                    ? MessageGeometry.groupedGap()
                     : UiTokens.LIST_GAP;
         }
         return contentHeight;
@@ -1694,7 +1688,7 @@ public final class MessageListView {
             float x1 = textX + RichTextLayout.advanceTo(richLine,
                     text -> SkiaFontRenderer.getStringWidth(font, text), richLine.textStart() + end);
             float y = blockTop + i * lineHeight;
-            SkiaDraw.drawRoundedRect(canvas, x0, y, Math.max(1.0F, x1 - x0), lineHeight, s(1), 0xE02D6FD6);
+            CornerGeometry.drawRoundedRect(canvas, x0, y, Math.max(1.0F, x1 - x0), lineHeight, s(1), 0xE02D6FD6);
         }
     }
 
@@ -1808,7 +1802,7 @@ public final class MessageListView {
 
     /** Shared capsule background for system messages, time dividers, quote pills. */
     private int secondaryCapsuleBg() {
-        return AtomChatConfig.get().secondaryCapsuleBg;
+        return AtomChatConfig.get().effectiveSecondaryCapsuleBg();
     }
 
     private int secondaryCapsuleText() {

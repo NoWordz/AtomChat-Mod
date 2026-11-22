@@ -1,6 +1,5 @@
 package com.atom.chat.render;
 
-import com.atom.lib.design.atomchat.UiTokens;
 import io.github.humbleui.types.Rect;
 
 /**
@@ -16,23 +15,14 @@ import io.github.humbleui.types.Rect;
  * and the frame the layer was skipped it sprang 11px further out. The card
  * and its shadow must travel together, so the layer has to contain both.</p>
  *
- * <p><b>The number.</b> {@code UiCards.drawCard} draws through
- * {@code SkiaDraw.drawRoundedShadow} with blur
- * {@code UiTokens.CONTENT_SHADOW_BLUR} = {@code s(6)} and offsets the shadow
- * rect by {@code blur * 0.5}. The rendered tail on the settings tile measured
- * 13 logical px above the card fill; {@code s(12)} = 15 covers it with margin
- * for the blur's AA fringe. One shared constant, so no site can re-derive a
- * pad of its own and quietly under-size it again.</p>
- *
- * <p><b>Bucket.</b> Shared single source, no Minecraft names — only
- * {@link UiTokens}.</p>
+ * The layer uses the same reach as the cached card shadow.
  */
 public final class CardShadowReach {
     /**
      * The four-side pad, in logical px, that contains the whole
-     * {@code CARD_SHADOW} tail (blur plus the blur/2 offset).
+     * contact and ambient shadow tails.
      */
-    public static final float PAD = UiTokens.s(12.0F); // bare-value: sized to the measured shadow tail, not a scaled family token
+    public static final float PAD = ShadowTokens.CARD.pad();
 
     private CardShadowReach() {
     }

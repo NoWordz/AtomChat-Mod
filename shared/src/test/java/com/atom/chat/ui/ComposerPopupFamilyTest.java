@@ -52,7 +52,7 @@ class ComposerPopupFamilyTest {
             expected.getCanvas().clear(0); actual.getCanvas().clear(0);
             MenuPopup.drawSurface(expected.getCanvas(), box.x(), box.y(), box.w(), box.h());
             expected.getCanvas().save();
-            primitives.drawIcon(expected.getCanvas(), DrawPrimitives.ICON_IMAGE_PATH, box.x(), box.y() + ToolLayout.MENU_ROW_H * 2,
+            primitives.drawIcon(expected.getCanvas(), TablerIcons.PHOTO, box.x(), box.y() + ToolLayout.MENU_ROW_H * 2,
                     ToolLayout.MENU_ROW_H, ToolLayout.MENU_ROW_H, 0xFFF4F5F7);
             expected.getCanvas().restore();
             menu.render(actual.getCanvas(), layout, -1, -1, 200, key -> key);

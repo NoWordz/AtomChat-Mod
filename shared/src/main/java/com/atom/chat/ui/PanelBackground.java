@@ -1,7 +1,13 @@
 package com.atom.chat.ui;
 
 
+import com.atom.chat.render.CornerGeometry;
+import com.atom.chat.render.SoftShadow;
 import com.atom.lib.design.atomchat.UiTokens;
+import io.github.humbleui.skija.Canvas;
+import io.github.humbleui.skija.Paint;
+import io.github.humbleui.types.RRect;
+
 /**
  * Panel background colour policy, kept pure so it can be unit tested.
  *
@@ -23,11 +29,52 @@ public final class PanelBackground {
         return config.halfScreenMode ? 0 : UiTokens.s(config.effectivePanelOutlineWidth());
     }
 
-    /** Inset stroke centre and radius together, keeping the outer contour identical to the fill. */
+    /** Keep the material's actual stroke width, including fractional device pixels. */
+    public static float renderOutlineInset() {
+        return outlineInset();
+    }
+
+    /** All shell layers use concentric circular corners at their respective insets. */
+    static RRect contour(UiLayout.Rect panel, float inset) {
+        float halfSide = Math.max(0F, Math.min(panel.w(), panel.h()) / 2F);
+        float edge = Math.min(inset, halfSide);
+        float radius = Math.min(UiTokens.panelRadius(AtomChatAppearance.theme()), halfSide);
+        return RRect.makeXYWH(panel.x() + edge, panel.y() + edge,
+                Math.max(0F, panel.w() - 2F * edge), Math.max(0F, panel.h() - 2F * edge),
+                Math.max(0F, radius - edge));
+    }
+
+    private static RRect backdropContour(UiLayout.Rect panel) {
+        // Meet the outline inside its solid band. Carrying the bright tint all the
+        // way to the outer AA edge lets it show through the partially covered rim.
+        // Translucent outlines deliberately reveal the backplate through the rim.
+        boolean opaqueOutline = com.atom.chat.config.AtomChatConfig.get().panelOutlineColor >>> 24 == 255;
+        return contour(panel, opaqueOutline ? renderOutlineInset() / 2F : 0F);
+    }
+
+    public static void drawShadow(Canvas canvas, UiLayout.Rect panel, boolean settled) {
+        SoftShadow.drawPanel(canvas, contour(panel, 0F), settled);
+    }
+
+    public static void drawTint(Canvas canvas, UiLayout.Rect panel, int tint) {
+        try (var paint = new Paint().setColor(tint).setAntiAlias(CornerGeometry.ANTIALIAS)) {
+            canvas.drawRRect(backdropContour(panel), paint);
+        }
+    }
+
+    public static void clipBackdrop(Canvas canvas, UiLayout.Rect panel) {
+        canvas.clipRRect(backdropContour(panel), CornerGeometry.ANTIALIAS);
+    }
+
+    public static void clipExterior(Canvas canvas, UiLayout.Rect panel) {
+        canvas.clipRRect(contour(panel, 0F), CornerGeometry.ANTIALIAS);
+    }
+
+    /** Inset the stroke centre and the corner token to place the rim over the panel tint. */
     public static void drawBezel(io.github.humbleui.skija.Canvas canvas, UiLayout.Rect panel) {
         var config = com.atom.chat.config.AtomChatConfig.get();
-        float width = outlineInset();
-        if (width <= 0) return;
+        float width = renderOutlineInset();
+        if (width <= 0 || panel.w() <= width || panel.h() <= width) return;
         float half = width / 2;
         int base = config.panelOutlineColor;
         int alpha = base & 0xFF000000;
@@ -40,22 +87,15 @@ public final class PanelBackground {
                 new float[]{0F, .16F, .48F, 1F});
              var paint = new io.github.humbleui.skija.Paint()
                 .setMode(io.github.humbleui.skija.PaintMode.STROKE).setStrokeWidth(width)
-                .setAntiAlias(true).setShader(light)) {
-            canvas.drawRRect(io.github.humbleui.types.RRect.makeXYWH(
-                    panel.x() + half, panel.y() + half,
-                    Math.max(0, panel.w() - width), Math.max(0, panel.h() - width),
-                    Math.max(0, UiTokens.panelRadius(AtomChatAppearance.theme()) - half)), paint);
+                .setAntiAlias(CornerGeometry.ANTIALIAS).setShader(light)) {
+            canvas.drawRRect(contour(panel, half), paint);
         }
     }
 
-    /** Clip panel-local overlays to the same inner contour as the wallpaper.
+    /** Clip panel-local overlays to the panel aperture used by the world blur.
      * The caller owns the enclosing canvas save/restore. */
     public static void clipInterior(io.github.humbleui.skija.Canvas canvas, UiLayout.Rect panel) {
-        float inset = outlineInset();
-        com.atom.lib.design.atomchat.SkiaDraw.clip(canvas,
-                panel.x() + inset, panel.y() + inset,
-                Math.max(0F, panel.w() - 2F * inset), Math.max(0F, panel.h() - 2F * inset),
-                Math.max(0F, UiTokens.panelRadius(AtomChatAppearance.theme()) - inset));
+        canvas.clipRRect(contour(panel, renderOutlineInset()), CornerGeometry.ANTIALIAS);
     }
 
     /** Drops the colour's own alpha; the panel applies its configured opacity instead. */

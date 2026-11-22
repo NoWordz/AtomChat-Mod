@@ -78,14 +78,8 @@ class AvatarRingTest {
         assertEquals(UiTokens.s(1.0F), AvatarRing.RIM_STROKE_PX, 0.0F);
         for (float r : new float[]{UiTokens.s(22), UiTokens.s(38), UiTokens.s(18)}) {
             assertEquals(r + UiTokens.s(1.0F), AvatarRing.separatorRadius(r), 1e-4F);
-            assertEquals(r + 0.5F * UiTokens.s(1.0F), AvatarRing.rimRadius(r), 1e-4F);
-            // The rim's inner edge lands exactly on the bitmap edge: touching,
-            // with only the separator pad behind it.
-            assertEquals(r, AvatarRing.rimRadius(r) - 0.5F * AvatarRing.RIM_STROKE_PX, 1e-4F,
-                    "the rim's inner edge IS the avatar's outer edge");
-            assertEquals(AvatarRing.separatorRadius(r),
-                    AvatarRing.rimRadius(r) + 0.5F * AvatarRing.RIM_STROKE_PX, 1e-4F,
-                    "separator outer edge == rim outer edge, or a panel-colour ring shows");
+            assertEquals(r - UiPixelSnap.halfDevicePx(), AvatarRing.separatorRadius(r) - AvatarRing.rimWidth(r),
+                    1e-4F, "the rim overlaps the clipped avatar without moving its centre");
         }
     }
 
@@ -149,8 +143,7 @@ class AvatarRingTest {
                         UiTokens.withAlpha(AtomChatConfig.get().panelBgColor & 0xFFFFFF, 255));
                 SkiaDraw.drawRoundedImage(canvas, face, ox, oy, size, size, size / 2.0F,
                         SamplingMode.LINEAR);
-                SkiaDraw.drawRing(canvas, ox + size / 2.0F, oy + size / 2.0F,
-                        AvatarRing.rimRadius(size / 2.0F), AvatarRing.RIM_STROKE_PX, UiTokens.rim());
+                AvatarRing.draw(canvas, ox + size / 2.0F, oy + size / 2.0F, size / 2.0F, UiTokens.rim());
             } finally {
                 face.close();
             }
@@ -241,10 +234,8 @@ class AvatarRingTest {
             Path file = root().resolve(site);
             assertTrue(Files.isRegularFile(file), "missing avatar site: " + site);
             String src = Files.readString(file, StandardCharsets.UTF_8);
-            assertTrue(src.contains("com.atom.chat.render.AvatarRing.rimRadius("),
-                    site + ": the rim radius must come from AvatarRing");
-            assertTrue(src.contains("com.atom.chat.render.AvatarRing.RIM_STROKE_PX"),
-                    site + ": the rim stroke must come from AvatarRing");
+            assertTrue(src.contains("com.atom.chat.render.AvatarRing.draw("),
+                    site + ": the rim must be painted by AvatarRing");
             assertFalse(src.contains("UiTokens.PROFILE_AVATAR_RING"),
                     site + ": the old s(2) separator pad must not come back");
             // Every drawRing in these files is either an avatar rim (AvatarRing,
@@ -259,17 +250,9 @@ class AvatarRingTest {
                     break;
                 }
                 String call = src.substring(at, Math.min(src.length(), at + 320));
-                boolean avatarRim = call.contains("AvatarRing.rimRadius(");
-                assertTrue(avatarRim || call.contains("UiTokens.hairline(AtomChatAppearance.theme())"),
+                assertTrue(call.contains("UiTokens.hairline(AtomChatAppearance.theme())"),
                         site + ": a hand-derived ring radius came back: "
                                 + call.lines().findFirst().orElse(""));
-                if (avatarRim) {
-                    String statement = call.substring(0, call.indexOf(");") + 2);
-                    assertFalse(statement.contains("halfDevicePx"),
-                            site + ": an avatar rim must stay concentric with the bitmap, "
-                                    + "not centre-nudged by halfDevicePx: "
-                                    + statement.replace('\n', ' '));
-                }
                 from = at + "drawRing(".length();
             }
         }

@@ -5,6 +5,7 @@ import com.atom.chat.nav.AppPage;
 import com.atom.chat.nav.NavPage;
 import com.atom.chat.platform.Platform;
 import com.atom.chat.text.RichText;
+import com.atom.chat.ui.TablerIcons;
 import com.atom.lib.design.atomchat.AppIcons;
 import com.atom.chat.ui.ShellHeader;
 import com.atom.chat.ui.UiLayout;
@@ -132,7 +133,7 @@ class WorldFeedFilterTest {
         WorldFeedFilter filter = new WorldFeedFilter();
         ShellHeader.HeaderAction action = action(filter);
         assertNotNull(action);
-        assertSame(AppIcons.ICON_FILTER_PATH, action.icon(), "the funnel means nothing is filtered");
+        assertSame(TablerIcons.FILTER, action.icon(), "the funnel means nothing is filtered");
         assertEquals(AtomChatConfig.get().textPrimaryColor, action.color(),
                 "an inactive filter is plain text colour, not accent");
     }
@@ -150,7 +151,7 @@ class WorldFeedFilterTest {
         assertSame(AppIcons.ICON_TAB_PROFILE_PATH, action(filter).icon(), "SYSTEM -> PLAYERS: person");
 
         filter.cycle();
-        assertSame(AppIcons.ICON_FILTER_PATH, action(filter).icon(), "PLAYERS -> ALL: back to the funnel");
+        assertSame(TablerIcons.FILTER, action(filter).icon(), "PLAYERS -> ALL: back to the funnel");
         assertEquals(AtomChatConfig.get().textPrimaryColor, action(filter).color());
     }
 
@@ -215,7 +216,7 @@ class WorldFeedFilterTest {
         assertTrue(fresh.accepts(player));
         assertEquals(List.of(player), fresh.filterFeed(List.of(player)));
         fresh.cycle();
-        assertSame(AppIcons.ICON_FILTER_PATH, action(used).icon(),
+        assertSame(TablerIcons.FILTER, action(used).icon(),
                 "existing filters also see the current preference");
     }
 
@@ -238,7 +239,7 @@ class WorldFeedFilterTest {
             var expectedIcon = switch (mode) {
                 case "SYSTEM" -> AppIcons.ICON_ANNOUNCE_PATH;
                 case "PLAYERS" -> AppIcons.ICON_TAB_PROFILE_PATH;
-                default -> AppIcons.ICON_FILTER_PATH;
+                default -> TablerIcons.FILTER;
             };
             assertSame(expectedIcon, action(reopened).icon(), "header after reload: " + mode);
             assertSame(action(filter).icon(), action(reopened).icon());
@@ -277,7 +278,7 @@ class WorldFeedFilterTest {
         reloadWithMode(value);
         WorldFeedFilter filter = new WorldFeedFilter();
         List<ChatMessage> feed = List.of(line("visible"));
-        assertSame(AppIcons.ICON_FILTER_PATH, action(filter).icon());
+        assertSame(TablerIcons.FILTER, action(filter).icon());
         assertSame(feed, filter.filterFeed(feed));
         assertTrue(filter.accepts(feed.get(0)));
         assertEquals(612F, AtomChatConfig.get().panelWidth);
@@ -293,7 +294,7 @@ class WorldFeedFilterTest {
         Files.writeString(configFile(), "{\"panelWidth\":612}");
         AtomChatConfig.reload();
         WorldFeedFilter filter = new WorldFeedFilter();
-        assertSame(AppIcons.ICON_FILTER_PATH, action(filter).icon());
+        assertSame(TablerIcons.FILTER, action(filter).icon());
         assertEquals(612F, AtomChatConfig.get().panelWidth);
         assertSavedMode("ALL");
     }
@@ -306,7 +307,7 @@ class WorldFeedFilterTest {
         configInstance.set(null, config);
         WorldFeedFilter filter = new WorldFeedFilter();
         List<ChatMessage> feed = List.of(line("visible"));
-        assertSame(AppIcons.ICON_FILTER_PATH, action(filter).icon());
+        assertSame(TablerIcons.FILTER, action(filter).icon());
         assertSame(feed, filter.filterFeed(feed));
         assertTrue(filter.accepts(feed.get(0)));
         filter.cycle();

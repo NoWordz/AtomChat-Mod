@@ -114,6 +114,75 @@ class NotificationPresentationTest {
             }
         });
     }
+
+    @Test void hudMasksRetainIndividualPositionsAndFadeThroughTheSameFrameAsTheCards() throws Exception {
+        withConfig(config -> {
+            config.cardTint = .6F;
+            config.notificationHudPosition = NotificationHudLayout.Anchor.BOTTOM_RIGHT;
+            config.notificationHudScale = 1.25F;
+            for (var style : AtomChatConfig.PageNavStyle.values()) {
+                config.pageNavStyle = style;
+                var clock = new AtomicLong(1000);
+                var banner = new NotificationBanner(clock::get);
+                for (int i = 0; i < 3; i++) {
+                    banner.enqueue(NotificationBanner.Type.MENTION, "Alice", "Notice " + i, null);
+                    clock.addAndGet(1000);
+                }
+                clock.set(6999);
+                var steady = banner.prepareHud(1000, 800).blurMasks(1.5F, 3F);
+                assertEquals(3, steady.size());
+                for (int i = 0; i < steady.size() - 1; i++) {
+                    assertTrue(steady.get(i).rect().y() > steady.get(i + 1).rect().bottom(),
+                            "the gap is outside both rounded masks");
+                }
+
+                clock.set(7080);
+                var frame = banner.prepareHud(1000, 800);
+                var fading = frame.blurMasks(1.5F, 3F);
+                assertEquals(3, fading.size());
+                assertEquals(steady.get(1), fading.get(1));
+                assertEquals(steady.get(2), fading.get(2));
+                var oldest = fading.get(0);
+                assertEquals(Math.exp(-80F / com.atom.chat.ui.UiMotion.PANEL_CLOSE_TAU_MS), oldest.alpha(), .001F);
+                assertNotEquals(steady.get(0).rect().x(), oldest.rect().x());
+                if (style == AtomChatConfig.PageNavStyle.ZOOM) {
+                    assertTrue(Math.abs(oldest.radius()) < Math.abs(steady.get(0).radius()));
+                    assertTrue(oldest.rect().w() < steady.get(0).rect().w());
+                }
+                clock.set(7200);
+                try (var surface = Surface.makeRasterN32Premul(1000, 800)) {
+                    banner.renderInHud(surface.getCanvas(), frame);
+                }
+                assertEquals(fading, frame.blurMasks(1.5F, 3F), "painting must not reevaluate the animation clock");
+                banner.tick();
+                assertEquals(2, banner.prepareHud(1000, 800).blurMasks(1.5F, 3F).size());
+            }
+        });
+    }
+
+    @Test void panelBackdropChangesOnlyTheCurrentRoundedRectAndFadesWithIt() {
+        try (var surface = Surface.makeRasterN32Premul(240, 180);
+             var pixels = new Bitmap(); var white = new Paint().setColor(0xFFFFFFFF)) {
+            var canvas = surface.getCanvas();
+            pixels.allocN32Pixels(240, 180);
+            for (float alpha : new float[]{1F, .25F, 0F}) {
+                canvas.clear(0xFF000000);
+                for (int x = 0; x < 240; x += 8) canvas.drawRect(Rect.makeXYWH(x + 4, 0, 4, 180), white);
+                // The lower banner moves with its animated transform as its opacity falls.
+                NotificationMaterial.drawPanelBlur(canvas, 16, 16, 160, 36, 8, 1F, 2F);
+                canvas.save();
+                canvas.translate(24, 14);
+                NotificationMaterial.drawPanelBlur(canvas, 16, 60, 160, 36, 8, alpha, 2F);
+                canvas.restore();
+                assertTrue(surface.readPixels(pixels, 0, 0));
+                assertEquals(0xFF000000, pixels.getColor(64, 62), "gap stays sharp");
+                assertEquals(0xFFFFFFFF, pixels.getColor(68, 62));
+                assertEquals(0xFF000000, pixels.getColor(24, 91), "old footprint stays sharp");
+                int red = (pixels.getColor(64, 92) >> 16) & 255;
+                assertEquals(Math.round(128 * alpha), red, 12, "the blur coverage tracks the badge's alpha");
+            }
+        }
+    }
     @Test void opacityFollowsCardsWithHalfOpacityFloorWithoutChangingRgb() throws Exception {
         withConfig(config -> {
             config.cardColor = 0xFFFFFFFF;

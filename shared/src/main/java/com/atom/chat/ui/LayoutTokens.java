@@ -5,12 +5,13 @@ import com.atom.lib.design.atomchat.UiTokens;
 /** Host layout limits in the same drawing units as the existing component tokens. */
 public final class LayoutTokens {
     private static final float TOAST_MAX_LOGICAL=560, SETTINGS_TILE_MAX_LOGICAL=200;
-    private static final float JUMP_SIZE_LOGICAL=38;
+    private static final float JUMP_SIZE_LOGICAL=38, JUMP_EDGE_INSET_LOGICAL=12;
     private static final float CHIP_COMPACT_SLOT_LOGICAL=64, CHIP_COMPACT_INSET_LOGICAL=3, CHIP_COMPACT_FONT_LOGICAL=10;
     private static final float CHIP_LABEL_PADDING_LOGICAL=10;
     public static final float TOAST_MAX_WIDTH = UiTokens.s(TOAST_MAX_LOGICAL);
     public static final float SETTINGS_TILE_MAX = UiTokens.s(SETTINGS_TILE_MAX_LOGICAL);
     public static final float JUMP_SIZE = UiTokens.s(JUMP_SIZE_LOGICAL);
+    public static final float JUMP_EDGE_INSET = UiTokens.s(JUMP_EDGE_INSET_LOGICAL);
     public static final float CHIP_COMPACT_SLOT = UiTokens.s(CHIP_COMPACT_SLOT_LOGICAL);
     public static final float CHIP_COMPACT_INSET = UiTokens.s(CHIP_COMPACT_INSET_LOGICAL);
     public static final float CHIP_COMPACT_FONT = UiTokens.s(CHIP_COMPACT_FONT_LOGICAL);

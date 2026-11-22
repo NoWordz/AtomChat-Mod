@@ -1,5 +1,6 @@
 package com.atom.chat.page;
 
+import com.atom.chat.render.CornerGeometry;
 import com.atom.chat.ui.AtomChatAppearance;
 import com.atom.chat.nav.PageNavAxis;
 import com.atom.chat.ui.UiStagger;
@@ -368,7 +369,7 @@ public final class ConversationListPage {
             // the clip is the plain viewport again.
             float driftClipPad = axis == UiStagger.Axis.HORIZONTAL && !UiStagger.itemsSettled(entrance, now)
                     ? UiStagger.ITEM_STYLE_SLIDE_PX : 0.0F;
-            SkiaDraw.clip(canvas, layout.list.x() - CardShadowReach.PAD, layout.list.y(),
+            CornerGeometry.clip(canvas, layout.list.x() - CardShadowReach.PAD, layout.list.y(),
                     layout.list.w() + driftClipPad + CardShadowReach.PAD * 2, layout.list.h(), 0.0F);
             float y = contentTop(layout, scrollY);
             // Stagger position = the row's slot inside the VISIBLE viewport, so
@@ -449,7 +450,7 @@ public final class ConversationListPage {
                             try {
                                 // The clip runs to the row's sunk position so the
                                 // entrance's rise is not shaved off at the slot edge.
-                                SkiaDraw.clip(canvas, layout.list.x() - CardShadowReach.PAD, y,
+                                CornerGeometry.clip(canvas, layout.list.x() - CardShadowReach.PAD, y,
                                         layout.list.w() + styleDx + CardShadowReach.PAD * 2, h + rowRise, 0.0F);
                                 // The fold's own fade multiplies the entrance's:
                                 // one layer, so the row cannot be opaque under a
@@ -576,7 +577,7 @@ public final class ConversationListPage {
         SettingsSectionPage.drawChevron(canvas, rightX - chevron / 2.0F, cy, chevron,
                 privateExpansion, textPrimary());
         float lineY = y + h - UiTokens.s(5);
-        SkiaDraw.drawRoundedRect(canvas, textX, lineY,
+        CornerGeometry.drawRoundedRect(canvas, textX, lineY,
                 Math.max(0.0F, rightX - textX), UiTokens.s(1), UiTokens.s(0.5F), lineColor);
     }
 
@@ -720,7 +721,7 @@ public final class ConversationListPage {
         float iconY = y + (ROW_H - iconSize) / 2.0F;
 
         if (row.kind == RowKind.PUBLIC) {
-            SkiaDraw.drawRoundedRect(canvas, iconX, iconY, iconSize, iconSize, iconRadius,
+            CornerGeometry.drawRoundedRect(canvas, iconX, iconY, iconSize, iconSize, iconRadius,
                     Color.makeARGB(60, 255, 255, 255));
             drawIconCentered(canvas, AppIcons.ICON_GLOBE_PATH,
                     iconX + iconSize / 2.0F, iconY + iconSize / 2.0F, s(26),
@@ -771,7 +772,7 @@ public final class ConversationListPage {
             int dotColor = row.online()
                     ? Color.makeARGB(255, 82, 196, 110)
                     : Color.makeARGB(255, 224, 82, 82);
-            SkiaDraw.drawRoundedRect(canvas, dotX - dotR, dotY - dotR, dotR * 2, dotR * 2, dotR, dotColor);
+            CornerGeometry.drawRoundedRect(canvas, dotX - dotR, dotY - dotR, dotR * 2, dotR * 2, dotR, dotColor);
         }
         if (!time.isEmpty()) {
             SkiaFontRenderer.drawText(canvas, timeFont, time, timeX,
@@ -795,7 +796,7 @@ public final class ConversationListPage {
             float bx = x + w - s(10) - badgeW;
             float by = y + ROW_H / 2.0F + s(12) - bh / 2.0F;
             int badgeColor = mentionBadge ? Color.makeARGB(255, 245, 158, 11) : Color.makeARGB(255, 244, 67, 54);
-            SkiaDraw.drawRoundedRect(canvas, bx, by, badgeW, bh,
+            CornerGeometry.drawRoundedRect(canvas, bx, by, badgeW, bh,
                     UiTokens.radius(bh / (2.0F * UiTokens.SCALE), AtomChatAppearance.theme()), badgeColor);
             SkiaFontRenderer.drawTextCentered(canvas, badgeFont, badgeText,
                     bx + badgeW / 2.0F, by + bh / 2.0F, Color.makeARGB(255, 255, 255, 255));
@@ -810,7 +811,7 @@ public final class ConversationListPage {
         if (face != null) {
             SkiaImages.drawRoundedImage(canvas, face, x, y, size, size, size / 2.0F, SamplingMode.LINEAR);
         } else {
-            SkiaDraw.drawRoundedRect(canvas, x, y, size, size, size / 2.0F, Color.makeARGB(255, 120, 130, 145));
+            CornerGeometry.drawRoundedRect(canvas, x, y, size, size, size / 2.0F, Color.makeARGB(255, 120, 130, 145));
         }
         // Hairline rim concentric with the bitmap (face or placeholder):
         // AvatarRing centres the stroke ON the bitmap's edge, so half of it
@@ -820,9 +821,8 @@ public final class ConversationListPage {
         // that moves the whole ring and opens a one-side seam. Polarity-adaptive
         // UiTokens.rim separates the circle from the row card behind. Same ring
         // language as the swatches.
-        SkiaDraw.drawRing(canvas, x + size / 2.0F, y + size / 2.0F,
-                com.atom.chat.render.AvatarRing.rimRadius(size / 2.0F),
-                com.atom.chat.render.AvatarRing.RIM_STROKE_PX, UiTokens.rim(AtomChatAppearance.theme()));
+        com.atom.chat.render.AvatarRing.draw(canvas, x + size / 2.0F, y + size / 2.0F,
+                size / 2.0F, UiTokens.rim(AtomChatAppearance.theme()));
     }
 
     private static String previewText(Row row) {

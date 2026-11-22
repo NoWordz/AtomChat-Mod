@@ -4,13 +4,19 @@ import java.util.Collections;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.BiPredicate;
+import java.util.function.BinaryOperator;
 import java.util.function.Function;
 import java.util.function.ToIntFunction;
 
 /** Associates capture with the actual vanilla entry, including a rewritten re-post. */
 public final class ChatHudHistory<K, C, V> {
     private static final int DISPLAY_TICKS = 200;
+    private static final int MAX_MERGED_ROWS = 100;
     private final Map<K, V> presentations = new IdentityHashMap<>();
+    private final Map<V, Merged<V>> mergedRows = new IdentityHashMap<>();
+    public record Merger<V>(BiPredicate<V, V> matches, BinaryOperator<V> combine) {}
+    private record Merged<V>(V tail, V value) {}
     private C pendingContent;
     private V pendingPresentation;
 
@@ -53,8 +59,39 @@ public final class ChatHudHistory<K, C, V> {
         }
     }
 
+    /** Fold consecutive live presentations without mutating vanilla entries or their expiry. */
+    public void copyRecentMerged(List<K> liveEntries, int limit, Function<K, V> vanillaFallback,
+                                 ToIntFunction<K> receivedTick, int currentTick, List<V> output, Merger<V> merger) {
+        output.clear();
+        if (limit <= 0) return;
+        V previous = null;
+        for (K entry : liveEntries) {
+            if (receivedTick != null && currentTick - receivedTick.applyAsInt(entry) >= DISPLAY_TICKS) break;
+            V current = presentation(entry, vanillaFallback);
+            if (current == null) continue;
+            if (previous != null && merger.matches().test(current, previous)) {
+                int last = output.size() - 1;
+                output.set(last, merge(current, output.get(last), merger.combine()));
+            } else {
+                if (output.size() >= limit) break;
+                output.add(current);
+            }
+            previous = current;
+        }
+    }
+
+    private V merge(V head, V tail, BinaryOperator<V> combine) {
+        var cached = mergedRows.get(head);
+        if (cached != null && cached.tail() == tail) return cached.value();
+        V value = combine.apply(head, tail);
+        if (mergedRows.size() >= MAX_MERGED_ROWS) mergedRows.clear();
+        mergedRows.put(head, new Merged<>(tail, value));
+        return value;
+    }
+
     public void clear() {
         presentations.clear();
+        mergedRows.clear();
         stage(null, null);
     }
 }

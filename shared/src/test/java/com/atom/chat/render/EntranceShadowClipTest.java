@@ -56,6 +56,7 @@ class EntranceShadowClipTest {
     private int oldPanelBg;
     private int oldCardColor;
     private float oldCardTint;
+    private boolean oldPerformanceMode;
 
     @BeforeAll
     static void installPlatform() {
@@ -74,6 +75,8 @@ class EntranceShadowClipTest {
         oldPanelBg = config.panelBgColor;
         oldCardColor = config.cardColor;
         oldCardTint = config.cardTint;
+        oldPerformanceMode = config.performanceMode;
+        config.performanceMode = false;
         config.animationEnabled = true;
         // ZOOM is the axis whose cards actually rise; under SLIDE there is no
         // vertical travel, so a vertical shadow lead could not regress there.
@@ -95,6 +98,7 @@ class EntranceShadowClipTest {
         config.panelBgColor = oldPanelBg;
         config.cardColor = oldCardColor;
         config.cardTint = oldCardTint;
+        config.performanceMode = oldPerformanceMode;
     }
 
     @Test
@@ -105,6 +109,7 @@ class EntranceShadowClipTest {
         int bg = AtomChatConfig.get().panelBgColor;
 
         int[] leads = new int[FRAMES.length];
+        long enteredAt = 10_000L;
         for (int f = 0; f < FRAMES.length; f++) {
             long t = FRAMES[f];
             Surface surface = Surface.makeRasterN32Premul(W, H);
@@ -112,15 +117,16 @@ class EntranceShadowClipTest {
                 SettingsHomePage page = new SettingsHomePage();
                 Field clock = SettingsHomePage.class.getDeclaredField("lastFrameMs");
                 clock.setAccessible(true);
-                clock.setLong(page, System.currentTimeMillis() - 16);
+                long frameAt = enteredAt + t;
+                clock.setLong(page, frameAt - 16);
                 Field entranceField = SettingsHomePage.class.getDeclaredField("entrance");
                 entranceField.setAccessible(true);
                 UiStagger.Entrance entrance = (UiStagger.Entrance) entranceField.get(page);
-                entrance.markEntered(System.currentTimeMillis() - t);
+                entrance.markEntered(enteredAt);
 
                 Canvas canvas = surface.getCanvas();
                 canvas.clear(bg);
-                page.render(canvas, layout, -1.0F, -1.0F, 0.0F);
+                UiStagger.atFrame(frameAt, () -> page.render(canvas, layout, -1.0F, -1.0F, 0.0F));
                 // The stamp the page actually drew with: the entrance alpha has
                 // to be evaluated on it, not on the one the test armed.
                 float alpha = UiStagger.itemAlpha(entrance, 0, clock.getLong(page));

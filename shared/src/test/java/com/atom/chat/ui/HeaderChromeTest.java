@@ -75,6 +75,7 @@ class HeaderChromeTest {
         final List<String> labelKeys = new ArrayList<>();
         final List<String> calls = new ArrayList<>();
         String privateName;
+        java.util.function.UnaryOperator<String> labelText = java.util.function.UnaryOperator.identity();
         UiLayout.Rect header = HEADER;
         UiLayout.Rect pushedHeader = PUSHED_HEADER;
         float dt = 16.0F;
@@ -82,7 +83,7 @@ class HeaderChromeTest {
         @Override
         public String label(String key) {
             labelKeys.add(key);
-            return key;
+            return labelText.apply(key);
         }
 
         @Override
@@ -405,6 +406,70 @@ class HeaderChromeTest {
             return back;
         } finally {
             warm.close();
+        }
+    }
+
+    @Test
+    void theClockStaysOnTheSamePixelsAsTheNavigationTitleChanges() {
+        setUp();
+        host.labelText = key -> "About";
+        long frame = 12 * 60_000L;
+        var privateChat = NavPage.privateChat(ALICE);
+        var settings = NavPage.settingsSection(SettingsSection.ABOUT);
+        try (var old = Surface.makeRasterN32Premul(SURFACE_W, SURFACE_H);
+             var arrival = Surface.makeRasterN32Premul(SURFACE_W, SURFACE_H);
+             var finalFrame = Surface.makeRasterN32Premul(SURFACE_W, SURFACE_H)) {
+            chrome.drawNavigationHeader(old.getCanvas(), HEADER, privateChat, -1, -1, true, null, frame);
+            chrome.drawNavigationHeader(arrival.getCanvas(), HEADER, settings, -1, -1, null, null, frame + 10);
+            chrome.drawNavigationHeader(finalFrame.getCanvas(), HEADER, settings, -1, -1, null, null, frame + 150);
+            int[] clock = {334, 53, 62, 34};
+            assertEquals(0, colourMass(old, arrival, clock));
+            assertEquals(0, colourMass(old, finalFrame, clock));
+            assertTrue(colourMass(old, finalFrame, new int[]{90, 45, 225, 50}) > 1000,
+                    "the settled title and private status mark changed");
+        }
+    }
+
+    @Test
+    void aDrawnRestoreButtonCannotActOnADifferentSettingsSection() {
+        setUp();
+        var cfg = com.atom.chat.config.AtomChatConfig.get();
+        boolean previous = cfg.animationEnabled;
+        cfg.animationEnabled = true;
+        var appearance = NavPage.settingsSection(SettingsSection.APPEARANCE);
+        var chat = NavPage.settingsSection(SettingsSection.CHAT);
+        try (var frame = Surface.makeRasterN32Premul(SURFACE_W, SURFACE_H)) {
+            var reset = new ShellHeader.HeaderAction(chrome.adjacentButton(), 0,
+                    EditorActionIcons.RESTORE, host.textPrimary());
+            chrome.drawNavigationHeader(frame.getCanvas(), HEADER, appearance, -1, -1, null, reset, 0);
+            assertTrue(chrome.isActionVisible(appearance));
+            assertFalse(chrome.isActionVisible(chat), "the other section's restore button was never drawn");
+            chrome.drawNavigationHeader(frame.getCanvas(), HEADER, chat, -1, -1, null, reset, 40);
+            assertFalse(chrome.isActionVisible(chat), "the outgoing section still owns the pixels");
+            chrome.drawNavigationHeader(frame.getCanvas(), HEADER, chat, -1, -1, null, reset, 190);
+            assertTrue(chrome.isActionVisible(chat));
+        } finally {
+            cfg.animationEnabled = previous;
+        }
+    }
+
+    @Test
+    void aLongTitleDoesNotDisplaceTheClockInANarrowNavigationHeader() {
+        setUp();
+        host.header = new UiLayout.Rect(20, 30, 240, 80);
+        host.labelText = key -> "Settings section with a deliberately long title";
+        long time = 60_000L;
+        var settings = NavPage.settingsSection(SettingsSection.ABOUT);
+        try (var before = Surface.makeRasterN32Premul(SURFACE_W, SURFACE_H);
+             var after = Surface.makeRasterN32Premul(SURFACE_W, SURFACE_H)) {
+            chrome.drawNavigationHeader(before.getCanvas(), host.header, NavPage.privateChat(ALICE), -1, -1,
+                    null, null, time);
+            var reset = new ShellHeader.HeaderAction(chrome.adjacentButton(), 0,
+                    EditorActionIcons.RESTORE, host.textPrimary());
+            chrome.drawNavigationHeader(after.getCanvas(), host.header, settings, -1, -1, null, reset, time + 10);
+            after.getCanvas().clear(0);
+            chrome.drawNavigationHeader(after.getCanvas(), host.header, settings, -1, -1, null, reset, time + 160);
+            assertEquals(0, colourMass(before, after, new int[]{221, 53, 37, 34}));
         }
     }
 

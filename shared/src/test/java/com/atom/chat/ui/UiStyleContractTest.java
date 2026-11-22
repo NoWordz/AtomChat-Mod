@@ -53,7 +53,7 @@ class UiStyleContractTest {
     }
     @Test void headerIconsUseTheSameSizeAndAreVisuallyCenteredInTheirHoverRect() {
         int samples=0;
-        for(var icon:new io.github.humbleui.skija.Path[]{AppIcons.ICON_BACK_PATH,AppIcons.ICON_FILTER_PATH,
+        for(var icon:new io.github.humbleui.skija.Path[]{TablerIcons.ARROW_LEFT,TablerIcons.FILTER,
                 AppIcons.ICON_ANNOUNCE_PATH,AppIcons.ICON_TAB_PROFILE_PATH,EditorActionIcons.RESTORE}) {
             for(float density:new float[]{1,1.5F,2}) for(int pose=0;pose<3;pose++) {
                 assertHeaderIcon(icon,density,pose);samples++;

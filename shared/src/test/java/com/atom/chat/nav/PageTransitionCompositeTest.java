@@ -26,6 +26,7 @@ class PageTransitionCompositeTest {
     private PageTransitionComposite composite;
     private PageTransitionComposite.Host drawHost;
     private final List<NavPage> headers=new ArrayList<>();
+    private Canvas actualBodyCanvas;
     private boolean oldAnimations;
     private AtomChatConfig.PageNavStyle oldStyle;
     @BeforeEach void setup() {
@@ -42,6 +43,7 @@ class PageTransitionCompositeTest {
             public float bodyClipTop(UiLayout l){return top.isRoot()?l.header.bottom():l.chipBar.bottom();}
             public void drawArrivingBody(Canvas c,UiLayout l,int mx,int my) {
                 draws.add(top);
+                actualBodyCanvas = c;
                 if(top.isRoot())home.render(c,l,-100,-100,0);
                 else detail.renderBody(c,l,top.section(),-100,-100,0,AtomChatConfig.get().accentColor);
             }
@@ -229,6 +231,29 @@ class PageTransitionCompositeTest {
                 int from=(int)(layout.header.bottom()+com.atom.lib.design.atomchat.UiTokens.floatSurfaceShadowPad()+2)*W*4;
                 assertArrayEquals(Arrays.copyOfRange(b.readPixels(),from,b.readPixels().length),Arrays.copyOfRange(actual,from,actual.length));}
             assertTrue(composite.overlaySettled(1020));
+        }
+    }
+    @Test void performanceModePaintsTheTargetOnceAndRetiresAnInFlightTransition() {
+        var config = AtomChatConfig.get();
+        boolean previousMode = config.performanceMode;
+        try (var surface = Surface.makeRasterN32Premul(W, H)) {
+            config.performanceMode = false;
+            frame(surface, 1000);
+            top = NavPage.settingsSection(SettingsSection.APPEARANCE);
+            frame(surface, 1010);
+            assertFalse(composite.overlaySettled(1030));
+            assertNotSame(surface.getCanvas(), actualBodyCanvas);
+            draws.clear();
+            headers.clear();
+            config.performanceMode = true;
+            frame(surface, 1030);
+            assertEquals(List.of(top), draws);
+            assertEquals(List.of(top), headers);
+            assertSame(surface.getCanvas(), actualBodyCanvas);
+            assertEquals(1F, composite.paintedBodyScale());
+            assertTrue(composite.overlaySettled(1030));
+        } finally {
+            config.performanceMode = previousMode;
         }
     }
     @Test void pureModelsCoverDirectionInverseHitsAndTenThousandRetargets(){InterruptiblePageMotionProbe.main(new String[0]);com.atom.chat.ui.BottomChromeMotionProbe.main(new String[0]);}

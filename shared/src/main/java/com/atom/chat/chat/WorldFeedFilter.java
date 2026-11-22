@@ -5,6 +5,7 @@ import com.atom.chat.nav.AppPage;
 import com.atom.chat.nav.NavPage;
 import com.atom.lib.design.atomchat.AppIcons;
 import com.atom.chat.ui.ShellHeader;
+import com.atom.chat.ui.TablerIcons;
 import com.atom.chat.ui.UiLayout;
 import io.github.humbleui.skija.Path;
 
@@ -89,7 +90,7 @@ public final class WorldFeedFilter {
         Path icon =
                 worldFilter == MessageFilter.SYSTEM ? AppIcons.ICON_ANNOUNCE_PATH
                         : worldFilter == MessageFilter.PLAYERS ? AppIcons.ICON_TAB_PROFILE_PATH
-                        : AppIcons.ICON_FILTER_PATH;
+                        : TablerIcons.FILTER;
         int color = worldFilter.isFiltering() ? config.accentColor : config.textPrimaryColor;
         return new ShellHeader.HeaderAction(button, hover, icon, color);
     }

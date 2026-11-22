@@ -67,7 +67,14 @@ public final class SettingsSlider {
     }
 
     public float value() {
-        return clamp(getter.get());
+        return available() ? clamp(getter.get()) : 0F;
+    }
+
+    public boolean available() {
+        return switch (id) {
+            case "blur_strength", "card_blur_strength" -> !AtomChatConfig.get().performanceMode;
+            default -> true;
+        };
     }
 
     public String displayValue() {
@@ -85,12 +92,12 @@ public final class SettingsSlider {
      * sixty times a second. The write happens once, on release.
      */
     public void apply(float value) {
-        setter.set(clamp(value));
+        if (available()) setter.set(clamp(value));
     }
 
     /** Flushes the in-memory value to {@code atomchat-client.json}. */
     public void persist() {
-        AtomChatConfig.save(AtomChatConfig.get());
+        if (available()) AtomChatConfig.save(AtomChatConfig.get());
     }
 
     /** Nudges by one {@link #step()} in the given direction. */

@@ -355,10 +355,10 @@ public final class EnvironmentSummary {
     }
 
     private static String switchesLine(AtomChatConfig config) {
-        return "blur=" + onOff(config.blurEnabled) + " (opacity " + config.panelOpacity + ")"
+        return "blur=" + onOff(config.effectiveBlurEnabled()) + " (opacity " + config.panelOpacity + ")"
                 + " | wallpaper=" + (WallpaperStore.isSet() ? "set" : "none")
                 + " | imageMessages=" + onOff(config.imageMessagesEnabled)
-                + " | animations=" + onOff(config.animationEnabled)
+                + " | animations=" + onOff(config.effectiveAnimationEnabled()) + " | performanceMode=" + onOff(config.performanceMode)
                 + " | panel=" + (int) config.panelWidth + "x" + (int) config.panelHeight
                 + " @" + config.uiScale + "x"
                 + " | debug=" + onOff(config.debug);

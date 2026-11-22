@@ -2,6 +2,7 @@ package com.atom.chat.settings;
 
 import com.atom.chat.font.FontManager;
 import com.atom.chat.render.SkiaFontRenderer;
+import com.atom.chat.ui.Animations;
 import com.atom.chat.ui.UiLayout;
 import com.atom.lib.design.atomchat.DesignHost;
 import com.atom.lib.design.atomchat.UiTokens;
@@ -43,7 +44,7 @@ public final class HistoryNumberRow {
         SkiaFontRenderer.drawText(canvas, font, shown, field.x() + FIELD_INSET,
                 SkiaFontRenderer.centerBaselineY(font, center), editing ? accent : primary);
         SettingsRowText.drawNumberUnit(canvas, field, unit, secondary);
-        if (editing && (millis / 500L) % 2L == 0L) {
+        if (editing && Animations.caretVisible(millis)) {
             float x = field.x() + FIELD_INSET + SkiaFontRenderer.getStringWidth(font, shown) + CARET_GAP;
             try (Paint caret = new Paint().setColor(accent).setStrokeWidth(UiTokens.FOCUS_RING_WIDTH).setAntiAlias(true)) {
                 canvas.drawLine(x, center - CARET_HALF_HEIGHT, x, center + CARET_HALF_HEIGHT, caret);

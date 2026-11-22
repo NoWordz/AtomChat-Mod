@@ -107,13 +107,9 @@ class PageTransitionWiringSourceTest {
         for (String screen : SCREENS) {
             String src = source(screen);
             String header = body(src, "public void drawArrivingHeader(Canvas canvas, UiLayout layout");
-            assertTrue(header.contains("ShellHeader.render("),
-                    screen + ": the chat pages' header (back arrow, online status, filter) draws "
-                            + "through ShellHeader inside the envelope");
-            assertTrue(header.contains("headerChrome.backButton()"),
-                    screen + ": the back button must come from the current page's chrome");
-            assertTrue(header.contains("headerChrome.drawPushedHeader("),
-                    screen + ": the settings/profile header draws through the pushed-header path");
+            assertTrue(header.contains("headerChrome.drawNavigationHeader(canvas, layout.header,"),
+                    screen + ": the navigation header uses the same device-aligned bounds on every page");
+            assertTrue(header.contains("headerActionFor(nav)"), screen + ": actions belong to the arriving page");
             assertFalse(header.contains("activePrivateTarget()"),
                     screen + ": the header must read the arriving page's own target, not the stack "
                             + "top's — a stale subject would paint the wrong online status");

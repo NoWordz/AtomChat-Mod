@@ -63,6 +63,7 @@ public final class GifDecoder {
             }
             AnimationFrameInfo[] infos = codec.getFramesInfo();
             int[] durations = new int[usable];
+            boolean transparent = false;
             for (int i = 0; i < usable; i++) {
                 Bitmap bitmap = new Bitmap();
                 try {
@@ -70,7 +71,8 @@ public final class GifDecoder {
                         break;
                     }
                     codec.readPixels(bitmap, i);
-                    Image frame = Image.makeFromBitmap(bitmap);
+                    if (!transparent) transparent = !bitmap.computeIsOpaque();
+                    Image frame = Image.makeFromBitmap(bitmap.setImmutable());
                     if (frame == null) {
                         break;
                     }
@@ -87,7 +89,7 @@ public final class GifDecoder {
             }
             int[] trimmed = new int[frames.size()];
             System.arraycopy(durations, 0, trimmed, 0, trimmed.length);
-            return new AnimatedImage(frames, trimmed, codec.getRepetitionCount(), nowMs);
+            return new AnimatedImage(frames, trimmed, codec.getRepetitionCount(), nowMs, transparent);
         } catch (Throwable t) {
             closeFrames(frames);
             AtomChat.LOGGER.warn(com.atom.chat.diagnostics.AtomChatLog.message("resource", "Failed to decode animated GIF ({} bytes)"),

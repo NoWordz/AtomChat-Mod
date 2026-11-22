@@ -87,7 +87,7 @@ def command(project, maven, mode, revision, operation, system, machine):
     return [*args, f"-PatomlibMavenRepo={maven}", "--no-daemon"]
 
 
-def verify_product(project, mode):
+def verify_product(project, mode, *, require_clean=True):
     build = project / "build/atomlib-consumer"
     products = [jar for jar in (build / "libs").glob("*.jar")
                 if "sources" not in jar.name and "-slim" not in jar.name]
@@ -97,7 +97,7 @@ def verify_product(project, mode):
     with ZipFile(product) as archive:
         stamp = archive.read("atomchat-build.properties").decode("ascii")
         print(f"Build stamp for {product.name}\n{stamp}", flush=True)
-        if "git_dirty=false" not in stamp.splitlines():
+        if require_clean and "git_dirty=false" not in stamp.splitlines():
             raise ValueError("CI artifact requires a clean checkout")
         packaged = {name: archive.read(name) for name in archive.namelist()
                     if name.startswith(CONTRACT_RESOURCES) and name.endswith(".fcl")}

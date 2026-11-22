@@ -221,7 +221,12 @@ public final class SettingsCatalog {
                             "atomchat.settings.about.debug",
                             "atomchat.settings.about.debug.desc",
                             () -> AtomChatConfig.get().debug,
-                            v -> AtomChatConfig.get().debug = v));
+                            v -> AtomChatConfig.get().debug = v),
+                    new SettingsItem("performance_mode",
+                            "atomchat.settings.about.performance_mode",
+                            "atomchat.settings.about.performance_mode.desc",
+                            () -> AtomChatConfig.get().performanceMode,
+                            v -> AtomChatConfig.get().performanceMode = v));
         };
     }
 
@@ -290,7 +295,7 @@ public final class SettingsCatalog {
                     // and the factory reset never write it.
                     new SettingsSlider("corner_radius",
                             "atomchat.settings.appearance.corners",
-                            0.0F, UiTokens.s(20), 1.0F,
+                            0.0F, AtomChatConfig.MAX_CORNER_RADIUS, 1.0F,
                             () -> AtomChatConfig.get().cornerRadius,
                             v -> AtomChatConfig.get().cornerRadius = v,
                             v -> Math.round(v) + " px"));
@@ -364,7 +369,7 @@ public final class SettingsCatalog {
                     new SettingsColor("secondary_capsule_bg",
                             "atomchat.settings.appearance.secondarycapsulebg",
                             "bubble",
-                            () -> AtomChatConfig.get().secondaryCapsuleBg,
+                            () -> AtomChatConfig.get().effectiveSecondaryCapsuleBg(),
                             v -> AtomChatConfig.get().secondaryCapsuleBg = v),
                     new SettingsColor("secondary_capsule_text",
                             "atomchat.settings.appearance.secondarycapsuletext",
@@ -421,14 +426,24 @@ public final class SettingsCatalog {
     }
 
     /** Bundled third-party components, each linking to its own project page. */
-    public static List<InfoRow> thirdPartyRows() {
-        return List.of(
+    private static final List<InfoRow> THIRD_PARTY = List.of(
                 new InfoRow("atomchat.settings.about.thirdparty", "Skija",
                         "https://github.com/HumbleUI/Skija"),
-                new InfoRow("atomchat.settings.about.thirdparty.skia", "Skia",
-                        "https://skia.org/"),
+                new InfoRow("atomchat.settings.about.thirdparty.atomlib", "AtomLib",
+                        "https://github.com/NoWordz/AtomLib-Mod"),
+                new InfoRow("atomchat.settings.about.thirdparty.tabler", "Tabler Icons",
+                        "https://github.com/tabler/tabler-icons"),
+                new InfoRow("atomchat.settings.about.thirdparty.lucide", "Lucide",
+                        "https://lucide.dev/"),
+                new InfoRow("atomchat.settings.about.thirdparty.feather", "Feather",
+                        "https://feathericons.com/"),
                 new InfoRow("atomchat.settings.about.thirdparty.flatlaf", "FlatLaf",
-                        "https://github.com/JFormDesigner/FlatLaf"));
+                        "https://github.com/JFormDesigner/FlatLaf"),
+                new InfoRow("atomchat.settings.about.thirdparty.nfde", "Native File Dialog Extended",
+                        "https://github.com/btzy/nativefiledialog-extended"));
+
+    public static List<InfoRow> thirdPartyRows() {
+        return THIRD_PARTY;
     }
 
     public record InfoRow(String titleKey, String value, String uri) {

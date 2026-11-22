@@ -1,5 +1,7 @@
 package com.atom.chat.render;
 
+import com.atom.chat.config.AtomChatConfig;
+
 /**
  * Simple tween animator. Ported from Tuui's SmoothAnimator concept.
  */
@@ -23,6 +25,9 @@ public class Animator {
     }
 
     public Animator animateTo(float durationMs, float target) {
+        if (durationMs <= 0F || AtomChatConfig.performanceModeActive()) {
+            return setValue(target);
+        }
         if (lastEnd != target || end != target || this.duration != durationMs) {
             start = value;
             duration = durationMs;
@@ -46,6 +51,10 @@ public class Animator {
 
     public void update(float deltaMs) {
         if (done) {
+            return;
+        }
+        if (AtomChatConfig.performanceModeActive()) {
+            setValue(end);
             return;
         }
         timePassed += deltaMs;

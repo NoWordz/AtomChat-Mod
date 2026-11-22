@@ -36,6 +36,24 @@ class EmoteStoreTest {
     }
 
     @Test
+    void deferredStoreScansOnceWhenTheStickerTabFirstNeedsIt() throws IOException {
+        Path local = tmp.resolve("local");
+        Path server = tmp.resolve("server");
+        var localFile = touch(local, "first.png", new byte[]{1});
+        var serverFile = touch(server, "server.png", new byte[]{1});
+        var scans = new java.util.concurrent.atomic.AtomicInteger();
+        var store = EmoteStore.deferred(local, () -> {
+            scans.incrementAndGet();
+            return EmoteStore.UNLIMITED;
+        });
+        assertEquals(0, scans.get());
+        store.setServerDir(server);
+        assertEquals(1, scans.get());
+        assertEquals(List.of(localFile), store.list());
+        assertEquals(List.of(serverFile), store.serverList());
+    }
+
+    @Test
     void isSupportedName() {
         assertTrue(EmoteStore.isSupportedName("a.png"));
         assertTrue(EmoteStore.isSupportedName("A.JPG"));

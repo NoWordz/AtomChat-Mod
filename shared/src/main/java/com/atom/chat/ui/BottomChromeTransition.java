@@ -1,6 +1,7 @@
 package com.atom.chat.ui;
 
-import com.atom.lib.design.atomchat.SkiaDraw;
+import com.atom.chat.render.CornerGeometry;
+import com.atom.chat.render.ChromeMaterial;
 import com.atom.lib.design.atomchat.UiTokens;
 import io.github.humbleui.skija.Canvas;
 import io.github.humbleui.skija.Paint;
@@ -55,20 +56,28 @@ public final class BottomChromeTransition implements AutoCloseable {
 
     /** Original dot band stays behind page cards/messages, in physical UI coordinates. */
     public void drawBackdrop(Canvas canvas) {
+        drawBackdrop(canvas, false);
+    }
+
+    public void drawBackdrop(Canvas canvas, boolean settledPanel) {
         var shape = paintedShape();
-        if (shape.w() < .01f || shape.h() < .01f || shape.alpha() <= 0) return;
-        float radius = Math.min(UiTokens.shellChromeRadius(AtomChatAppearance.theme()), Math.min(shape.w(), shape.h()) / 2);
-        com.atom.chat.render.ChromeMaterial.drawBackdrop(canvas, shape.x(), shape.y(), shape.w(), shape.h(), radius, shape.alpha());
+        if (shape.w() < .01f || shape.h() < .01f || shape.alpha() <= 0) {
+            com.atom.chat.render.DotTexture.invalidatePanelEdgePose(true);
+            return;
+        }
+        var bounds = paintedRect();
+        float radius = ChromeMaterial.cornerRadius(bounds, UiTokens.shellChromeRadius(AtomChatAppearance.theme()));
+        ChromeMaterial.drawBackdrop(canvas, shape.x(), shape.y(), shape.w(), shape.h(), radius, shape.alpha());
         int save = beginShapeLayer(canvas, shape);
         try {
             // HEAD chat drew its shadow before the message list; nav drew it after the body.
             if (mode == Mode.CHAT)
-                com.atom.chat.render.ChromeMaterial.drawShadow(canvas, shape.x(), shape.y(), shape.w(), shape.h(), radius);
+                ChromeMaterial.drawShadow(canvas, shape.x(), shape.y(), shape.w(), shape.h(), radius);
             if (geometry.settled(frameTime))
-                com.atom.chat.render.DotTexture.drawEdge(canvas, paintedRect(), radius, true,
-                        com.atom.chat.config.AtomChatConfig.get().textSecondaryColor);
+                com.atom.chat.render.DotTexture.drawPanelEdge(canvas, bounds, radius, true,
+                        com.atom.chat.config.AtomChatConfig.get().textSecondaryColor, settledPanel && shape.alpha() == 1F);
             else
-                com.atom.chat.render.DotTexture.drawMovingEdge(canvas, paintedRect(), radius, true,
+                com.atom.chat.render.DotTexture.drawMovingEdge(canvas, bounds, radius, true,
                         com.atom.chat.config.AtomChatConfig.get().textSecondaryColor);
         } finally { canvas.restoreToCount(save); }
     }
@@ -101,11 +110,12 @@ public final class BottomChromeTransition implements AutoCloseable {
         if (shape.w() < .01f || shape.h() < .01f || shape.alpha() <= 0) return;
         int save = beginShapeLayer(canvas, shape);
         try {
-            float radius = Math.min(UiTokens.shellChromeRadius(AtomChatAppearance.theme()), Math.min(shape.w(), shape.h()) / 2);
+            var bounds = paintedRect();
+            float radius = ChromeMaterial.cornerRadius(bounds, UiTokens.shellChromeRadius(AtomChatAppearance.theme()));
             if (mode != Mode.CHAT)
-                com.atom.chat.render.ChromeMaterial.drawShadow(canvas, shape.x(), shape.y(), shape.w(), shape.h(), radius);
-            SkiaDraw.drawRoundedRect(canvas, shape.x(), shape.y(), shape.w(), shape.h(), radius, UiTokens.cardFill(AtomChatAppearance.theme()));
-            com.atom.chat.render.ChromeMaterial.drawDetails(canvas, paintedRect(), radius);
+                ChromeMaterial.drawShadow(canvas, shape.x(), shape.y(), shape.w(), shape.h(), radius);
+            CornerGeometry.drawRoundedRect(canvas, shape.x(), shape.y(), shape.w(), shape.h(), radius, UiTokens.cardFill(AtomChatAppearance.theme()));
+            ChromeMaterial.drawDetails(canvas, bounds, radius);
             canvas.translate(shape.x(), shape.y());
             canvas.scale(shape.w(), shape.h());
             float mix = Math.max(0, Math.min(1, blend.sample(frameTime).x()));

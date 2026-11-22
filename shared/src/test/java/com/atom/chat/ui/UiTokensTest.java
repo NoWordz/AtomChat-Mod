@@ -9,11 +9,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Guards for the continuous corner-radius knob: the knob is in real screen
- * pixels, so the {@code 20} default reproduces the shipped default look
- * (factor 1), the slider maximum is exactly 1.25x, and 0 — pure square — must
- * hold at factor 0, so every {@link UiTokens#radius(float)} call collapses to
- * a hard zero no matter the base radius.
+ * Guards the 1080p-basis corner knob: 0 is square, 20 keeps the design
+ * reference size, and the configured maximum is 30.
  *
  * <p>Also guards the colour-derivation language on both surface
  * polarities: the accent-dyed, alpha-constant hover wash
@@ -48,20 +45,19 @@ class UiTokensTest {
     }
 
     @Test
-    void sliderMaximumIsOnePointTwoFive() {
-        assertEquals(1.25F, UiTokens.radiusFactor(UiTokens.s(20)), 1e-6F,
-                "s(20) is the slider maximum");
+    void radiusContinuesPastTheFormerMaximum() {
+        assertEquals(1.25F, UiTokens.radiusFactor(25F), 1e-6F);
+        assertEquals(1.4F, UiTokens.radiusFactor(28F), 1e-6F);
+        assertEquals(1.5F, UiTokens.radiusFactor(AtomChatConfig.MAX_CORNER_RADIUS), 1e-6F);
     }
 
     @Test
-    void outOfRangeValuesClamp() {
-        assertTrue(UiTokens.radiusFactor(-5f) >= 0.0F, "negative clamps to square");
-        assertEquals(0.0F, UiTokens.radiusFactor(-5f), 0.0F, "negative clamps to exactly 0");
-        assertEquals(1.25F, UiTokens.radiusFactor(999f), 1e-6F, "oversized clamps to the maximum");
-        // The old reference-px default 28 would be factor 1.4 in the new
-        // pixel formula — past the shipped ceiling, so it must clamp.
-        assertEquals(1.25F, UiTokens.radiusFactor(28f), 1e-6F,
-                "the old 28 default overshoots and clamps to the maximum");
+    void atomChatAppliesItsOwnRadiusLimitsBeforeUsingLibraryTokens() {
+        var config = new AtomChatConfig();
+        config.cornerRadius = -5F;
+        assertEquals(0F, UiTokens.radiusFactor(config.effectiveCornerRadius()));
+        config.cornerRadius = 999F;
+        assertEquals(1.5F, UiTokens.radiusFactor(config.effectiveCornerRadius()));
     }
 
     // Hover retains accent RGB on both light and dark surfaces.
@@ -226,22 +222,26 @@ class UiTokensTest {
     }
 
     @Test
-    void squareCornerSettingReachesControlHandles() {
-        float previous = AtomChatConfig.get().cornerRadius;
+    void squareCornerSettingReachesControlHandles() throws Exception {
+        var instance = AtomChatConfig.class.getDeclaredField("instance");
+        instance.setAccessible(true);
+        var previous = instance.get(null);
+        var config = new AtomChatConfig();
+        instance.set(null, config);
         try {
-            AtomChatConfig.get().cornerRadius = 20.0F;
+            config.cornerRadius = 20.0F;
             assertEquals(UiTokens.SWITCH_KNOB / 2.0F,
                     UiTokens.handleRadius(UiTokens.SWITCH_KNOB, AtomChatAppearance.theme()), 0.01F,
                     "the shipped radius keeps switch and slider handles round");
-            AtomChatConfig.get().cornerRadius = 0.0F;
+            config.cornerRadius = 0.0F;
             assertEquals(0.0F, UiTokens.handleRadius(UiTokens.SWITCH_KNOB, AtomChatAppearance.theme()), 0.0F);
             assertEquals(0.0F, UiTokens.handleRadius(UiTokens.SLIDER_KNOB, AtomChatAppearance.theme()), 0.0F);
-            AtomChatConfig.get().cornerRadius = 8.0F;
+            config.cornerRadius = 8.0F;
             float middle = UiTokens.handleRadius(UiTokens.SLIDER_KNOB, AtomChatAppearance.theme());
             assertTrue(middle > 0.0F && middle < UiTokens.SLIDER_KNOB / 2.0F,
                     "middle radii follow the continuous knob instead of snapping");
         } finally {
-            AtomChatConfig.get().cornerRadius = previous;
+            instance.set(null, previous);
         }
     }
 }

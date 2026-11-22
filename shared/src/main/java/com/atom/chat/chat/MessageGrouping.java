@@ -34,6 +34,16 @@ public final class MessageGrouping {
         return dt >= 0L && dt <= GROUP_TIME_MS;
     }
 
+    public static boolean continues(ChatMessage previous, ChatMessage current, int timestampIntervalMinutes) {
+        return isSameGroup(previous, current) && !hasTimeDivider(previous, current, timestampIntervalMinutes);
+    }
+
+    /** A chronological list begins with a divider when timestamps are enabled. */
+    public static boolean hasTimeDivider(ChatMessage previous, ChatMessage current, int minutes) {
+        return minutes > 0 && (previous == null
+                || current.getTimestamp() - previous.getTimestamp() >= minutes * 60_000L);
+    }
+
     /** Tight vertical gap between two rows inside the same compact group. */
     public static float groupedGap(float listGap, float minDesignPx) {
         return Math.max(minDesignPx, listGap / 3.0F);

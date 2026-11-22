@@ -37,7 +37,7 @@ Install AtomChat on the server to add media hosting, profile sync, shared sticke
 
 ## Compatibility
 
-AtomChat 0.9.2 requires AtomLib 0.6.0 or later on the client. AtomLib 0.7.0 provides Windows, macOS and glibc Linux natives for x64 and ARM64. The 0.9.2 in-game acceptance was on Windows x64 with Fabric and AtomLib 0.7.0. [AtomLib desktop support](https://github.com/NoWordz/AtomLib-Mod/releases/tag/v0.7.0)
+Pair the published AtomChat 0.9.2 package with AtomLib 0.6.0. Its bundled settings profile belongs to that library release. The AtomChat 0.9.3 development builds target AtomLib 0.7.0 on Windows. [AtomLib desktop support](https://github.com/NoWordz/AtomLib-Mod/releases/tag/v0.7.0)
 
 Image messages use the `[[CICode]]` protocol used by E33Chat and ChatImage. Chat-screen replacements or unusual server chat formats may require extra configuration. [Troubleshooting](docs/wiki/Troubleshooting.md)
 

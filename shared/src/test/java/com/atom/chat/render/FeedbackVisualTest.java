@@ -61,9 +61,16 @@ class FeedbackVisualTest {
                 try(var a=new Bitmap();var b=new Bitmap()) {
                     a.allocN32Pixels(450,260);b.allocN32Pixels(450,260);
                     assertTrue(expected.readPixels(a,0,0));assertTrue(actual.readPixels(b,0,0));
-                    byte[] expectedPixels=a.readPixels(),actualPixels=b.readPixels();int max=0;
-                    for(int i=0;i<expectedPixels.length;i++)max=Math.max(max,Math.abs((expectedPixels[i]&255)-(actualPixels[i]&255)));
-                    assertTrue(max<=7,"menu surface must match the independently preserved old material, max="+max);
+                    // The user changed the corner contour. The center strip still guards the
+                    // full original material across both edges, shade, face and shadow tail.
+                    int max=0;
+                    for(int y=0;y<260;y++) for(int x=132;x<298;x++) {
+                        int before=a.getColor(x,y), after=b.getColor(x,y);
+                        for(int channel=0;channel<32;channel+=8) {
+                            max=Math.max(max,Math.abs((before>>>channel&255)-(after>>>channel&255)));
+                        }
+                    }
+                    assertTrue(max<=7,"straight edges must match the independently preserved material, max="+max);
                 }
             }
         } finally {WallpaperPresets.cancelPending();instance.set(null,previous);provider.set(null,oldProvider);}

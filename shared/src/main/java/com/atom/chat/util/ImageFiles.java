@@ -8,6 +8,7 @@ import javax.imageio.stream.ImageInputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Locale;
 
 /**
@@ -16,9 +17,13 @@ import java.util.Locale;
  * accepted extension list can never drift apart between entry points.
  */
 public final class ImageFiles {
-    private static final String[] EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp"};
+    private static final List<String> EXTENSIONS = List.of(".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp");
 
     private ImageFiles() {
+    }
+
+    static List<String> extensions() {
+        return EXTENSIONS;
     }
 
     public static boolean isImage(Path file) {

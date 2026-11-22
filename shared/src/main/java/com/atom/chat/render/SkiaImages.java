@@ -1,10 +1,12 @@
 package com.atom.chat.render;
 
-import com.atom.lib.design.atomchat.SkiaDraw;
 import io.github.humbleui.skija.Canvas;
+import io.github.humbleui.skija.FilterTileMode;
 import io.github.humbleui.skija.Image;
+import io.github.humbleui.skija.Matrix33;
 import io.github.humbleui.skija.Paint;
 import io.github.humbleui.skija.SamplingMode;
+import io.github.humbleui.types.RRect;
 import io.github.humbleui.types.Rect;
 
 /**
@@ -21,7 +23,7 @@ import io.github.humbleui.types.Rect;
  * <p>Buckets: shared, no Minecraft names. Render thread only.</p>
  */
 public final class SkiaImages {
-    private static final Paint PAINT = new Paint().setAntiAlias(true);
+    private static final Paint PAINT = new Paint().setAntiAlias(CornerGeometry.ANTIALIAS);
 
     private SkiaImages() {
     }
@@ -37,8 +39,43 @@ public final class SkiaImages {
         if (image == null || width <= 0.0F || height <= 0.0F) {
             return;
         }
-        SkiaDraw.drawRoundedImage(canvas, ImageQuality.scaledForLogical(image, Math.max(width, height)),
-                x, y, width, height, radius, mode);
+        Image source = ImageQuality.scaledForLogical(image, Math.max(width, height));
+        Rect src = Rect.makeWH(source.getWidth(), source.getHeight());
+        drawRounded(canvas, source, src, x, y, width, height, radius, mode);
+    }
+
+    public static void drawImageCover(Canvas canvas, Image image, float x, float y, float width, float height,
+                                      float radius, SamplingMode mode) {
+        if (image == null || width <= 0F || height <= 0F) return;
+        float sourceWidth = Math.min(image.getWidth(), image.getHeight() * width / height);
+        float sourceHeight = Math.min(image.getHeight(), image.getWidth() * height / width);
+        Rect src = Rect.makeXYWH((image.getWidth() - sourceWidth) / 2F, (image.getHeight() - sourceHeight) / 2F,
+                sourceWidth, sourceHeight);
+        drawRounded(canvas, image, src, x, y, width, height, radius, mode);
+    }
+
+    private static void drawRounded(Canvas canvas, Image image, Rect src, float x, float y, float width, float height,
+                                    float radius, SamplingMode mode) {
+        if (radius <= 0F) {
+            canvas.drawImageRect(image, src, Rect.makeXYWH(x, y, width, height), mode, PAINT, false);
+        } else {
+            drawShape(canvas, image, src, RRect.makeXYWH(x, y, width, height, radius), mode);
+        }
+    }
+
+    static void drawShape(Canvas canvas, Image image, Rect src, RRect shape, SamplingMode mode) {
+        // Give the shape sole ownership of edge coverage. An AA image rectangle
+        // under an AA clip multiplies coverage where their edges coincide.
+        float sx = shape.getWidth() / src.getWidth(), sy = shape.getHeight() / src.getHeight();
+        var placement = new Matrix33(sx, 0F, shape.getLeft() - sx * src.getLeft(),
+                0F, sy, shape.getTop() - sy * src.getTop(), 0F, 0F, 1F);
+        try (var shader = image.makeShader(FilterTileMode.CLAMP, FilterTileMode.CLAMP, mode, placement)) {
+            try {
+                CornerGeometry.drawRRect(canvas, shape, PAINT.setShader(shader));
+            } finally {
+                PAINT.setShader(null);
+            }
+        }
     }
 
     /** Plain image blit with the same decimation policy as the rounded variant. */

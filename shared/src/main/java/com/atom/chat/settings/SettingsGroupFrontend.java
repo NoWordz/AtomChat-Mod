@@ -1,5 +1,6 @@
 package com.atom.chat.settings;
 
+import com.atom.chat.render.CornerGeometry;
 import com.atom.chat.ui.AtomChatAppearance;
 import com.atom.chat.render.CardShadowReach;
 import com.atom.chat.render.CardBackdrop;
@@ -86,11 +87,11 @@ public final class SettingsGroupFrontend {
     }
 
     public static void clipCard(Canvas canvas, UiLayout.Rect card) {
-        SkiaDraw.clip(canvas, card.x(), card.y(), card.w(), card.h(),
+        CornerGeometry.clip(canvas, card.x(), card.y(), card.w(), card.h(),
                 UiTokens.settingsRowRadius(AtomChatAppearance.theme()));
     }
 
     public static void divider(Canvas canvas,UiLayout.Rect card,float y){
-        SkiaDraw.drawRoundedRect(canvas,card.x()+UiTokens.SETTINGS_ROW_PAD,y,card.w()-UiTokens.SETTINGS_ROW_PAD*2,UiTokens.s(1),0,UiTokens.hairline(AtomChatAppearance.theme())); // bare-value: extracted settings divider thickness
+        CornerGeometry.drawRoundedRect(canvas,card.x()+UiTokens.SETTINGS_ROW_PAD,y,card.w()-UiTokens.SETTINGS_ROW_PAD*2,UiTokens.s(1),0,UiTokens.hairline(AtomChatAppearance.theme())); // bare-value: extracted settings divider thickness
     }
 }

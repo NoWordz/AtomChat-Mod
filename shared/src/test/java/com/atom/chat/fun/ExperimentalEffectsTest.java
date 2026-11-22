@@ -2,7 +2,7 @@ package com.atom.chat.fun;
 
 import com.atom.chat.config.AtomChatConfig;
 import com.atom.chat.settings.*;
-import com.atom.chat.ui.SettingsGroupGlyphs;
+import com.atom.chat.ui.TablerIcons;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
@@ -32,7 +32,7 @@ class ExperimentalEffectsTest {
         assertTrue(fun>=0);assertEquals(fun+2,experimental);
         assertEquals("experimental_effects",rows.get(experimental+1).item().id());
         assertEquals(rows.size()-1,experimental+1);
-        assertSame(SettingsGroupGlyphs.EXPERIMENTAL,SettingsGroupIcons.forLabel("atomchat.settings.group.chat.experimental"));
+        assertSame(TablerIcons.FLASK,SettingsGroupIcons.forLabel("atomchat.settings.group.chat.experimental"));
         var gson=new com.google.gson.Gson();
         assertFalse(gson.fromJson("{}",AtomChatConfig.class).experimentalEffectsEnabled,"old config files default off");
         var item=rows.get(experimental+1).item();item.set(true);

@@ -115,7 +115,7 @@ class PageTransitionCompositeWiringSourceTest {
         String envelope=body(src,"public void drawArrivingFrame(Canvas canvas, UiLayout layout");
         assertTrue(envelope.contains("host.drawArrivingBody(recording"));
         assertTrue(envelope.contains("lastFrame.playback(canvas)"));
-        assertTrue(envelope.indexOf("lastFrame.playback(canvas)") < envelope.indexOf("host.drawArrivingHeader("));
+        assertTrue(envelope.indexOf("lastFrame.playback(canvas)") < envelope.lastIndexOf("host.drawArrivingHeader("));
         assertTrue(src.contains("previous.playback(canvas)"));
         assertTrue(src.contains("canvas.restoreToCount(save)"));
         assertFalse(src.contains("drawDepartingBody"),"old business draw cannot run on retirement");
@@ -167,7 +167,7 @@ class PageTransitionCompositeWiringSourceTest {
         Map<String, String> portWork = new LinkedHashMap<>();
         portWork.put("topNav", "navStack.topNav()");
         portWork.put("drawArrivingBody", "drawChatPageBody(canvas, layout, mouseX, mouseY, chatPageViewFor(topNav()))");
-        portWork.put("drawArrivingHeader", "headerChrome.backButton()");
+        portWork.put("drawArrivingHeader", "headerChrome.drawNavigationHeader(");
         portWork.put("arrivalStaggersSurfaces", "return false");
         for (String screen : SCREENS) {
             String src = source(screen);

@@ -280,7 +280,7 @@ class OffscreenRenderTest {
     }
 
     /**
-     * The about page's third-party rows render as ONE merged card (the
+     * The about page's mod info rows render as ONE merged card (the
      * owner's single-card + hairline language). Everything asserted here
      * runs through public geometry only — rows(), hit(), measureContent(),
      * render() — so the test cannot drift from the renderer's own walk:
@@ -293,36 +293,34 @@ class OffscreenRenderTest {
      * section — before the children leave the list and the hit-test.
      */
     @Test
-    void thirdPartyAboutRowsTileOneCardAndFoldCleanly() throws Exception {
+    void modInfoAboutRowsTileOneCardAndFoldCleanly() throws Exception {
         try (Panel panel = new Panel()) {
             UiLayout layout = UiLayout.ofDetail(PANEL_X, PANEL_Y, PANEL_W, PANEL_H);
             SettingsSectionPage page = new SettingsSectionPage();
             float cx = layout.list.x() + layout.list.w() / 2.0F;
 
-            // The third-party block, straight from the public row feed.
+            // The mod info block, straight from the public row feed.
             List<SettingsSectionPage.Row> rows = page.rows(SettingsSection.ABOUT);
             int labelIdx = -1;
-            int modInfoIdx = -1;
             for (int i = 0; i < rows.size(); i++) {
                 SettingsSectionPage.Row row = rows.get(i);
                 if (row.kind() != SettingsSectionPage.RowKind.LABEL) {
                     continue;
                 }
-                if ("atomchat.settings.about.thirdparty.group".equals(row.labelKey())) {
+                if ("atomchat.settings.about.modinfo".equals(row.labelKey())) {
                     labelIdx = i;
-                } else if ("atomchat.settings.about.modinfo".equals(row.labelKey())) {
-                    modInfoIdx = i;
                 }
             }
-            assertTrue(labelIdx >= 0, "about feed lost its third-party label");
-            assertTrue(modInfoIdx >= 0, "about feed lost its modinfo heading");
+            assertTrue(labelIdx >= 0, "about feed lost its mod info label");
             int childFrom = labelIdx + 1;
             int childTo = childFrom;
             while (childTo < rows.size()
                     && rows.get(childTo).kind() != SettingsSectionPage.RowKind.LABEL) {
                 childTo++;
             }
-            assertEquals(3, childTo - childFrom, "third-party card is three Skija/Skia/FlatLaf rows");
+            assertEquals(List.of("atomchat.settings.about.version", "atomchat.settings.about.license",
+                            "atomchat.settings.about.repo"),
+                    rows.subList(childFrom, childTo).stream().map(row -> row.info().titleKey()).toList());
 
             // Map every row's vertical slot by walking the hit-test down the
             // list's centre line — the same geometry the renderer and the
@@ -350,37 +348,24 @@ class OffscreenRenderTest {
                 float[] above = slots.get(i);
                 float[] below = slots.get(i + 1);
                 assertTrue(above != null && below != null,
-                        "third-party child row " + i + " is not hit-testable at scroll 0");
+                        "mod info child row " + i + " is not hit-testable at scroll 0");
                 assertTrue(below[0] - above[1] <= 1.01F,
                         "gap between merged-card children " + above[1] + " -> " + below[0]);
             }
-            // Control: the seam from the hero down to the modinfo heading
-            // walks the same list but keeps the ordinary row gap. Both about
-            // headings (modinfo AND third party) head a merged card of their
-            // own — SettingsSectionPage.isAboutCardChild takes GROUP_MOD_INFO
-            // as well — so the only seam that survives is the one between a
-            // card and the row outside it; a pair INSIDE either card is
-            // deliberately at zero (that is what the tiling above asserts).
-            float[] heroSlot = slots.get(0);
-            float[] modHeadSlot = slots.get(modInfoIdx);
-            assertTrue(heroSlot != null && modHeadSlot != null,
-                    "hero or modinfo heading is not hit-testable at scroll 0");
-            assertTrue(modHeadSlot[0] - heroSlot[1] > 1.5F,
-                    "control gap missing between the hero and the modinfo heading");
-
-            // The render pass does clip to the viewport, so scroll just
-            // enough to bring the whole card on screen, then park the pointer
-            // on the card's middle row: the hover wash and the whole-card
-            // bounce path must draw, paint, and balance the canvas.
-            scrollY = Math.max(0.0F, slots.get(childTo - 1)[1]
+            // Exercise the first and last info rows
+            // at the scroll positions where each is visible and interactive.
+            for (int index : new int[]{childFrom, childTo - 1}) {
+                float[] slot = slots.get(index);
+                float center = (slot[0] + slot[1]) / 2F;
+                float rowScroll = Math.max(0F, center - layout.list.y() - layout.list.h() / 2F);
+                float hoverY = center - rowScroll;
+                assertTrue(hoverY >= layout.list.y() && hoverY <= layout.list.bottom());
+                assertEquals(index, page.hit(cx, hoverY, layout, SettingsSection.ABOUT, rowScroll).index());
+                panel.paintedFrame("mod info card hover " + index,
+                        canvas -> page.render(canvas, layout, SettingsSection.ABOUT, cx, hoverY, rowScroll, ACCENT));
+            }
+            final float cardScrollY = Math.max(0.0F, slots.get(childTo - 1)[1]
                     - layout.list.bottom() + UiTokens.SETTINGS_ROW_GAP);
-            assertTrue(slots.get(childFrom)[0] - scrollY >= layout.list.y() - 0.5F,
-                    "card top scrolled off the viewport; list too short for the card");
-            float[] middle = slots.get(childFrom + 1);
-            final float cardScrollY = scrollY;
-            final float hoverY = (middle[0] + middle[1]) / 2.0F - cardScrollY;
-            panel.paintedFrame("third-party card hover",
-                    canvas -> page.render(canvas, layout, SettingsSection.ABOUT, cx, hoverY, cardScrollY, ACCENT));
 
             // Fold the group the way a click does, then ride the fold out
             // frame by frame: every animated frame must balance the canvas,
@@ -392,23 +377,22 @@ class OffscreenRenderTest {
                     layout, SettingsSection.ABOUT, 0.0F);
             assertTrue(labelHit != null
                     && labelHit.row().kind() == SettingsSectionPage.RowKind.LABEL,
-                    "third-party label is not hit-testable");
+                    "mod info label is not hit-testable");
             page.perform(labelHit);
             for (int frame = 0; frame < 90; frame++) {
                 final int n = frame;
-                panel.frame("third-party fold frame " + n,
+                panel.frame("mod info fold frame " + n,
                         canvas -> page.render(canvas, layout, SettingsSection.ABOUT, -1.0F, -1.0F, cardScrollY, ACCENT));
                 Thread.sleep(16);
             }
-            boolean anyThirdPartyLeft = page.rows(SettingsSection.ABOUT).stream()
-                    .anyMatch(row -> row.info() != null
-                            && row.info().titleKey().startsWith("atomchat.settings.about.thirdparty"));
-            assertFalse(anyThirdPartyLeft, "folded third-party rows still feed the list");
+            boolean anyModInfoLeft = page.rows(SettingsSection.ABOUT).stream()
+                    .anyMatch(row -> row.info() != null);
+            assertFalse(anyModInfoLeft, "folded mod info rows still feed the list");
             float measureAfter = page.measureContent(layout, SettingsSection.ABOUT);
             // The children's own heights (measured through rowHeight, which
             // includes headless font wrap) plus the single trailing gap to
-            // the next section — a per-row-card layout would give back three
-            // gaps instead of one.
+            // the next section — a per-row-card layout would give back a gap
+            // per row.
             float childrenHeight = 0.0F;
             for (int i = childFrom; i < childTo; i++) {
                 childrenHeight += page.rowHeight(rows.get(i), layout);
@@ -505,7 +489,7 @@ class OffscreenRenderTest {
                             DotTexture.drawEdge(canvas,bar,UiTokens.chromeRadius(AtomChatAppearance.theme()),true,cfg.textSecondaryColor);
                             var ctor=MessageListView.class.getDeclaredConstructor(MessageListView.Host.class,MessageListView.ImageLookup.class);
                             ctor.setAccessible(true);
-                            var view=ctor.newInstance(new OffscreenHost(openedAfter(history)),(MessageListView.ImageLookup)(url,visible)->image);
+                            var view=ctor.newInstance(new OffscreenHost(openedAfter(history)),(MessageListView.ImageLookup)(url,visible)->new com.atom.chat.image.MessageImage(image, false));
                             try {draw(view,layout,history,new ScrollController()).accept(canvas);}finally{view.dispose();}
                             com.atom.chat.ui.ShellHeader.render(canvas,layout.header,"世界聊天",false,null,0F,cfg.textPrimaryColor);
                             SkiaDraw.drawRoundedRect(canvas,bar.x(),bar.y(),bar.w(),bar.h(),UiTokens.chromeRadius(AtomChatAppearance.theme()),UiTokens.cardFill(AtomChatAppearance.theme()));

@@ -186,7 +186,7 @@ class AboutHeroAssetTest {
     /** All three platforms ship both files, and the copies are byte-identical. */
     @Test
     void allThreePlatformsShipTheSameTwoAssets() throws IOException, NoSuchAlgorithmException {
-        for (String asset : List.of(ART, WORDMARK)) {
+        for (String asset : List.of(ART, WORDMARK, "assets/atomchat/mod_logo.png")) {
             Map<String, String> digests = new LinkedHashMap<>();
             for (String platform : PLATFORMS) {
                 Path file = repoRoot().resolve(platform).resolve("src/main/resources").resolve(asset);
@@ -411,7 +411,7 @@ class AboutHeroAssetTest {
     void theHeroRendererLoadsTheWordmarkAndContainDrawsIt() throws IOException {
         for (String hero : HERO_SOURCES) {
             String src = source(hero);
-            assertTrue(src.contains("/assets/atomchat/logo.png"),
+            assertTrue(src.contains("/assets/atomchat/mod_logo.png"),
                     hero + ": the A hero must load the bundled app icon");
             assertTrue(src.contains("logo_wordmark.png"),
                     hero + ": the hero must load the wordmark (logo_wordmark.png),"

@@ -243,6 +243,11 @@ public final class ScrollController {
             startScrollAnim(scrollTarget, UiMotion.SCROLL_SNAP_MS, true);
         }
         if (scrollAnimActive) {
+            if (com.atom.chat.config.AtomChatConfig.performanceModeActive()) {
+                scrollY = scrollTarget;
+                scrollAnimActive = false;
+                return;
+            }
             float t = Math.min(1.0F, (nowMs - scrollAnimStart) / (float) scrollAnimMs);
             scrollY = scrollAnimFrom + (scrollAnimTo - scrollAnimFrom) * Easing.easeOutCubic(t);
             if (t >= 1.0F) {
@@ -306,7 +311,8 @@ public final class ScrollController {
      *                   is off), false for wheel glide (always animated).
      */
     private void startScrollAnim(float to, long durationMs, boolean decorative) {
-        long ms = (decorative && !decorativeMotion) ? 0L : durationMs;
+        long ms = (decorative && !decorativeMotion) || com.atom.chat.config.AtomChatConfig.performanceModeActive()
+                ? 0L : durationMs;
         scrollTarget = to;
         if (ms <= 0L || Math.abs(scrollY - to) <= 0.5F) {
             scrollY = to;

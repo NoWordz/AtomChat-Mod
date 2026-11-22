@@ -1,6 +1,7 @@
 package com.atom.chat.ui;
 
 
+import com.atom.chat.render.CornerGeometry;
 import com.atom.lib.design.atomchat.UiTokens;
 import com.atom.chat.config.AtomChatConfig;
 import com.atom.chat.emote.EmoteImageCache;
@@ -11,7 +12,6 @@ import com.atom.chat.pack.ServerPackStore;
 import com.atom.chat.render.Animator;
 import com.atom.chat.render.Easing;
 import com.atom.chat.render.SkiaImages;
-import com.atom.lib.design.atomchat.SkiaDraw;
 import com.atom.chat.render.SkiaFontRenderer;
 import static com.atom.lib.design.atomchat.UiTokens.s;
 import io.github.humbleui.skija.Canvas;
@@ -150,7 +150,7 @@ public final class EmojiPanel {
     private EmojiPanel(Host host, boolean sandboxMode) {
         this.host = host;
         this.sandboxMode = sandboxMode;
-        this.emoteStore = sandboxMode ? null : new EmoteStore(
+        this.emoteStore = sandboxMode ? null : EmoteStore.deferred(
                  com.atom.chat.util.CacheDirs.emotesDir(),
                 // Read at scan time, so a hand-edited cap is picked up on the next scan
                 // instead of being frozen at construction.
@@ -362,7 +362,7 @@ public final class EmojiPanel {
             canvas.save();
             applyBounce(canvas, tabScale[tab].scale(),
                     pillX + pillW / 2.0F, py + s(6) + pillH / 2.0F);
-            SkiaDraw.drawRoundedRect(canvas, pillX, py + s(6), pillW, pillH, UiTokens.radius(8, AtomChatAppearance.theme()),
+            CornerGeometry.drawRoundedRect(canvas, pillX, py + s(6), pillW, pillH, UiTokens.radius(8, AtomChatAppearance.theme()),
                     SKIN_PILL_FILL);
             canvas.restore();
             for (int t = 0; t < labels.length; t++) {
@@ -377,7 +377,7 @@ public final class EmojiPanel {
                         float hy = py + s(6);
                         float hw = tabW - s(8);
                         float hh = UiTokens.EMOJI_TAB_H - s(8);
-                        SkiaDraw.drawRoundedRect(canvas, hx, hy, hw, hh, UiTokens.radius(8, AtomChatAppearance.theme()),
+                        CornerGeometry.drawRoundedRect(canvas, hx, hy, hw, hh, UiTokens.radius(8, AtomChatAppearance.theme()),
                                 Color.makeARGB((int) (45.0F * hov), 255, 255, 255));
                     }
                     float tx = tabStripX + t * tabW;
@@ -407,7 +407,7 @@ public final class EmojiPanel {
             paintedTabOffset = transitioning ? travel * (1F - tp) : 0F;
             updateGridHover(layout, vmx, vmy, frameDt);
             canvas.save();
-            SkiaDraw.clip(canvas, contentX, contentY, contentW, contentH, 0.0F);
+            CornerGeometry.clip(canvas, contentX, contentY, contentW, contentH, 0.0F);
             if (transitioning) {
                 drawTabContent(canvas, tabAnimFrom, contentX, contentY, contentW, contentH,
                         -travel * tp, outgoingScroll, false);
@@ -729,7 +729,7 @@ public final class EmojiPanel {
                     if (interactive) {
                         float hov = cellHover.getOrDefault(gridHoverKey(tab, i), 0.0F);
                         if (hov > 0.01F) {
-                            SkiaDraw.drawRoundedRect(canvas, ex + s(2), ey + s(2), cellW - s(4), itemH - s(4),
+                            CornerGeometry.drawRoundedRect(canvas, ex + s(2), ey + s(2), cellW - s(4), itemH - s(4),
                                     UiTokens.radius(6, AtomChatAppearance.theme()),
                                     Color.makeARGB((int) (60.0F * hov), 255, 255, 255));
                         }
@@ -906,7 +906,7 @@ public final class EmojiPanel {
     /** The shared hover highlight, faded with the same curve as every other cell. */
     private void drawHoverWash(Canvas canvas, float ex, float ey, float colW, float cell, float hover) {
         if (hover > 0.01F) {
-            SkiaDraw.drawRoundedRect(canvas, ex + s(2), ey + s(2), colW - s(4), cell - s(4),
+            CornerGeometry.drawRoundedRect(canvas, ex + s(2), ey + s(2), colW - s(4), cell - s(4),
                     UiTokens.radius(8, AtomChatAppearance.theme()),
                     Color.makeARGB((int) (60.0F * hover), 255, 255, 255));
         }
@@ -921,7 +921,7 @@ public final class EmojiPanel {
         // The wash and the x sit above the picture, so the button can never be
         // buried under the emote itself.
         float rs = UiTokens.EMOTE_REMOVE_SIZE;
-        SkiaDraw.drawRoundedRect(canvas, ex + colW - rs - s(2), ey + s(2), rs, rs,
+        CornerGeometry.drawRoundedRect(canvas, ex + colW - rs - s(2), ey + s(2), rs, rs,
                 UiTokens.radius(4, AtomChatAppearance.theme()),
                 Color.makeARGB((int) (200.0F * hover), 214, 48, 48));
         Font xFont = FontManager.font(UiTokens.FONT_QUOTE);
@@ -951,7 +951,7 @@ public final class EmojiPanel {
     private void drawAddSlot(Canvas canvas, float ex, float ey, float colW, float cell, float hover) {
         boolean disabled = emoteStore.isFull();
         if (hover > 0.01F && !disabled) {
-            SkiaDraw.drawRoundedRect(canvas, ex + s(2), ey + s(2), colW - s(4), cell - s(4),
+            CornerGeometry.drawRoundedRect(canvas, ex + s(2), ey + s(2), colW - s(4), cell - s(4),
                     UiTokens.radius(8, AtomChatAppearance.theme()),
                     Color.makeARGB((int) (60.0F * hover), 255, 255, 255));
         }
@@ -963,7 +963,7 @@ public final class EmojiPanel {
     /** A transient drawn sticker demonstrates selection without files or an emote store. */
     private static void drawSandboxSticker(Canvas canvas, float ex, float ey, float colW, float cell) {
         float pad = UiTokens.EMOJI_PANEL_PAD;
-        SkiaDraw.drawRoundedRect(canvas, ex + pad, ey + pad, Math.max(0,colW-pad*2), Math.max(0,cell-pad*2),
+        CornerGeometry.drawRoundedRect(canvas, ex + pad, ey + pad, Math.max(0,colW-pad*2), Math.max(0,cell-pad*2),
                 UiTokens.settingsRowRadius(AtomChatAppearance.theme()), 0xFF355E9C);
         Font font = FontManager.font(UiTokens.FONT_EMOJI);
         SkiaFontRenderer.drawTextCentered(canvas, font, "☺", ex + colW / 2.0F,

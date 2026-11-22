@@ -19,7 +19,7 @@ import java.util.List;
  * current frame, and Skija finalises the native memory once unreferenced.
  */
 public final class AnimatedImage {
-    private final List<Image> frames;
+    private final List<MessageImage> frames;
     private final int[] durationsMs;
     private final int totalMs;
     /** Skia convention: negative = loop forever, otherwise the play count. */
@@ -27,7 +27,14 @@ public final class AnimatedImage {
     private final long startMs;
 
     AnimatedImage(List<Image> frames, int[] durationsMs, int repeatCount, long startMs) {
-        this.frames = List.copyOf(frames);
+        this(frames, durationsMs, repeatCount, startMs, frames.stream().anyMatch(image -> {
+            MessageImage raster = MessageImage.fromRaster(image);
+            return raster == null || raster.transparent();
+        }));
+    }
+
+    AnimatedImage(List<Image> frames, int[] durationsMs, int repeatCount, long startMs, boolean transparent) {
+        this.frames = frames.stream().map(frame -> new MessageImage(frame, transparent)).toList();
         this.durationsMs = durationsMs.clone();
         int total = 0;
         for (int d : this.durationsMs) {
@@ -48,22 +55,22 @@ public final class AnimatedImage {
 
     /** Smaller raster frames preserve the original playback clock and repeat count. */
     AnimatedImage thumbnail(int maxSide, long maxPixels) {
-        Image first = frames.get(0);
-        int largest = Math.max(first.getWidth(), first.getHeight());
+        MessageImage first = frames.get(0);
+        int largest = Math.max(first.image().getWidth(), first.image().getHeight());
         long pixels = pixelCount();
         if (largest <= maxSide && pixels <= maxPixels) return this;
         int budgetSide = Math.max(1, (int) (largest * Math.sqrt(maxPixels / (double) pixels)));
         int side = Math.min(maxSide, budgetSide);
         var small = new java.util.ArrayList<Image>(frames.size());
-        for (Image frame : frames) small.add(ImageLoader.scaledCopy(frame, side));
-        return new AnimatedImage(small, durationsMs, repeatCount, startMs);
+        for (MessageImage frame : frames) small.add(ImageLoader.scaledCopy(frame.image(), side));
+        return new AnimatedImage(small, durationsMs, repeatCount, startMs, first.transparent());
     }
 
     /** Decoded pixel count across every frame, for the cache budget. */
     public long pixelCount() {
         long pixels = 0L;
-        for (Image frame : frames) {
-            pixels += (long) frame.getWidth() * frame.getHeight();
+        for (MessageImage frame : frames) {
+            pixels += (long) frame.image().getWidth() * frame.image().getHeight();
         }
         return pixels;
     }
@@ -73,6 +80,11 @@ public final class AnimatedImage {
      * last frame once their play count is exhausted; looping animations wrap.
      */
     public Image frameAt(long nowMs) {
+        MessageImage frame = messageFrameAt(nowMs);
+        return frame == null ? null : frame.image();
+    }
+
+    MessageImage messageFrameAt(long nowMs) {
         if (frames.isEmpty()) {
             return null;
         }

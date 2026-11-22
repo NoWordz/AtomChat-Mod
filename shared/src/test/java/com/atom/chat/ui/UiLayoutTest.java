@@ -14,6 +14,18 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class UiLayoutTest {
     private static final float EPS = 0.01F;
 
+    @Test
+    void jumpToLatestKeepsItsOriginalInsetAsTheComposerGrows() {
+        float originalInset = UiTokens.s(12);
+        UiLayout singleLine = UiLayout.of(24, 100, 525, 975);
+        UiLayout wrapped = UiLayout.of(24, 100, 525, 975, UiTokens.INPUT_LINE_H_REF);
+
+        for (UiLayout layout : new UiLayout[]{singleLine, wrapped}) {
+            assertEquals(originalInset, layout.list.right() - layout.jumpLatest().right(), EPS);
+            assertEquals(originalInset, layout.inputBar.y() - layout.jumpLatest().bottom(), EPS);
+        }
+    }
+
     @Test void widePanelChromeAndContentFollowThePanelWidth() {
         UiLayout normal = UiLayout.of(30, 20, 760, 900);
         UiLayout wide = UiLayout.of(30, 20, 1500, 900);

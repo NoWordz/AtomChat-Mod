@@ -16,7 +16,7 @@ public final class ChatEffectPresentation {
     public static long nowMs() { return System.nanoTime()/1_000_000L; }
     private boolean enabled() {
         var cfg=AtomChatConfig.get();
-        return cfg.funEffectsEnabled && cfg.animationEnabled;
+        return cfg.funEffectsEnabled && cfg.effectiveAnimationEnabled();
     }
     public void install() {
         ChatEffectEvents.install(listener);

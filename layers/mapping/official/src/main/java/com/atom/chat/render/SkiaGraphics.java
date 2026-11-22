@@ -21,6 +21,8 @@ public final class SkiaGraphics {
     private final ThreadLocal<Surface> borrowedSurface = new ThreadLocal<>();
     private final ThreadLocal<BackendRenderTarget> borrowedBackend = new ThreadLocal<>();
     private final ThreadLocal<Long> borrowedContextIdentity = new ThreadLocal<>();
+    private java.lang.ref.WeakReference<Surface> lastInkSurface;
+    private long inkGeneration;
 
     /** Kept for callers from the former standalone renderer; the bridge checks size on every pass. */
     public void checkFrameBufferId() { }
@@ -150,6 +152,32 @@ public final class SkiaGraphics {
         var target = borrowedBackend.get();
         if (target == null) throw new IllegalStateException("Render target is only borrowed during a Skia paint callback");
         return target;
+    }
+
+    /** The HUD owns the new surface. The bridge surface and context stay inside this paint. */
+    Surface createInkSurface(int width, int height) {
+        return createInkSurface(requireSurface(), width, height);
+    }
+
+    static Surface createInkSurface(Surface target, int width, int height) {
+        try {
+            Surface compatible = target.makeSurface(io.github.humbleui.skija.ImageInfo.makeN32Premul(width, height));
+            return io.github.humbleui.skija.impl.Native.getPtr(compatible) == 0L ? null : compatible;
+        } catch (AssertionError unavailableTarget) {
+            // Skija wraps a native allocation failure in this assertion.
+            if (!"Managed ptr is 0".equals(unavailableTarget.getMessage())) throw unavailableTarget;
+            return null;
+        }
+    }
+
+    /** A wrapper replacement invalidates HUD textures, including after a GL context rebuild. */
+    long inkGeneration() {
+        Surface surface = requireSurface();
+        if (lastInkSurface == null || lastInkSurface.get() != surface) {
+            lastInkSurface = new java.lang.ref.WeakReference<>(surface);
+            inkGeneration++;
+        }
+        return inkGeneration;
     }
 
     public Surface requireSurface() {

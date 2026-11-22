@@ -116,6 +116,7 @@ tasks.named('jar') {
 
 // This block expands all declared replace properties in the resource targets.
 var generateModMetadata = tasks.register("generateModMetadata", ProcessResources) {
+    filteringCharset = 'UTF-8'
     var replaceProperties = [
             minecraft_version      : minecraft_version,
             minecraft_version_range: minecraft_version_range,
@@ -128,6 +129,9 @@ var generateModMetadata = tasks.register("generateModMetadata", ProcessResources
             mod_version            : mod_version,
             mod_authors            : mod_authors,
             mod_description        : mod_description,
+            mod_credits            : mod_credits,
+            mod_repository_url    : mod_repository_url,
+            mod_issues_url        : mod_issues_url,
             atomlib_version_range  : atomlibVersionRange,
     ]
     inputs.properties replaceProperties

@@ -3,10 +3,15 @@ package com.atom.chat.ui;
 
 import com.atom.lib.design.atomchat.UiTokens;
 import com.atom.chat.config.AtomChatConfig;
+import com.atom.chat.chat.MessageGrouping;
 
 /** The message lane shared by wrapping, image sizing, reactions and hit geometry. */
 public final class MessageGeometry {
     private MessageGeometry() { }
+
+    public static float groupedGap() {
+        return MessageGrouping.groupedGap(UiTokens.LIST_GAP, UiTokens.s(2)); // bare-value: existing compact group gap shared by list and HUD
+    }
 
     public static float avatarInset() {
         float hat = AtomChatConfig.get().avatarStyle == AtomChatConfig.AvatarStyle.E33CHAT

@@ -95,9 +95,9 @@ class SoftShadowTest {
             assertTrue(surface.readPixels(pixels,0,0));
             save(surface,"panel-transparent.png");
             assertEquals(0,pixels.getColor(350,400),"transparent wallpaper area must stay unshaded");
-            int near=pixels.getColor(580,400)>>>24;
-            int middle=pixels.getColor(594,400)>>>24;
-            int far=pixels.getColor(Math.round(570 + SoftShadow.panelPad() - 1),400)>>>24;
+            int near=pixels.getColor(576,400)>>>24;
+            int middle=pixels.getColor(584,400)>>>24;
+            int far=pixels.getColor(598,400)>>>24;
             assertTrue(near>middle && middle>far,"shadow must decay gradually: "+near+","+middle+","+far);
             assertTrue(middle>0,"a visible soft tail must extend beyond a thin rim");
             assertTrue(far<=1,"tail must die out before the layer edge");
@@ -124,18 +124,84 @@ class SoftShadowTest {
         }
     }
 
+    @Test void settledShadowRetainsDeviceCoverageAndLeavesTheInteriorClear() {
+        try (var surface = Surface.makeRasterN32Premul(500, 645);
+             var before = new Bitmap(); var after = new Bitmap()) {
+            var canvas = surface.getCanvas();
+            canvas.translate(61F, 64F);
+            canvas.scale(1.25F, 1.25F);
+            before.allocN32Pixels(500, 645);
+            after.allocN32Pixels(500, 645);
+            for (float x : new float[]{0F, .4F, 8F}) {
+                canvas.clear(0);
+                SoftShadow.drawPanel(canvas, x, 0, 278.4F, 398.4F, 25F);
+                assertTrue(surface.readPixels(before, 0, 0));
+                for (int frame = 0; frame < 3; frame++) {
+                    canvas.clear(0);
+                    SoftShadow.drawPanel(canvas, x, 0, 278.4F, 398.4F, 25F, true);
+                }
+                assertTrue(surface.readPixels(after, 0, 0));
+                int peak = 0;
+                for (int y = 0; y < 645; y++) {
+                    for (int px = 0; px < 500; px++) {
+                        peak = Math.max(peak, Math.abs((before.getColor(px, y) >>> 24) - (after.getColor(px, y) >>> 24)));
+                    }
+                }
+                assertTrue(peak <= 4, "settled shadow must preserve the contour, peak alpha difference " + peak);
+                assertEquals(0, after.getColor(230, 300));
+                assertTrue((after.getColor(430, 300) >>> 24) > 0, "the soft outside tail must remain");
+            }
+        } finally {
+            SoftShadow.release();
+        }
+    }
+
+    @Test void settledShadowReusesOneDeviceMaskAndSkipsHigherDensities() throws Exception {
+        var field = SoftShadow.class.getDeclaredField("settledShadow");
+        field.setAccessible(true);
+        SoftShadow.release();
+        try (var surface = Surface.makeRasterN32Premul(700, 850)) {
+            var canvas = surface.getCanvas();
+            canvas.translate(80F, 80F);
+            canvas.scale(2.5F, 2.5F);
+            for (int frame = 0; frame < 3; frame++) SoftShadow.drawPanel(canvas, 0, 0, 200, 250, 25, true);
+            assertNull(field.get(null), "high-density clipping must continue to use vectors");
+
+            canvas.resetMatrix();
+            canvas.translate(80F, 80F);
+            canvas.scale(2F, 2F);
+            SoftShadow.drawPanel(canvas, 0, 0, 200, 250, 25, true);
+            assertNull(field.get(null), "a new layout must settle before baking");
+            SoftShadow.drawPanel(canvas, 0, 0, 200, 250, 25, true);
+            Object mask = field.get(null);
+            assertNotNull(mask, "aligned output at 2x uses the single native-resolution coverage mask");
+            SoftShadow.drawPanel(canvas, 0, 0, 200, 250, 25, true);
+            assertSame(mask, field.get(null));
+
+            var imageAccessor = mask.getClass().getDeclaredMethod("image");
+            imageAccessor.setAccessible(true);
+            var image = (io.github.humbleui.skija.Image) imageAccessor.invoke(mask);
+            for (int frame = 0; frame < 2; frame++) SoftShadow.drawPanel(canvas, 4, 0, 200, 250, 25, true);
+            assertNotSame(mask, field.get(null), "a moved panel must use the matching coverage");
+            assertTrue(image.isClosed(), "replacing the mask must close the old native image");
+        } finally {
+            SoftShadow.release();
+        }
+        assertNull(field.get(null));
+    }
+
     @Test void ninePatchHasTheSameProfileAsTheFullSizeGaussian() throws Exception {
         int w=850,h=950;
         try(var actual=Surface.makeRasterN32Premul(w,h);var expected=Surface.makeRasterN32Premul(w,h);
             var a=new Bitmap();var b=new Bitmap();var paint=new io.github.humbleui.skija.Paint().setAntiAlias(true);
-            var wide=io.github.humbleui.skija.MaskFilter.makeBlur(io.github.humbleui.skija.FilterBlurMode.NORMAL,22.5F);
-            var contact=io.github.humbleui.skija.MaskFilter.makeBlur(io.github.humbleui.skija.FilterBlurMode.NORMAL,5F)) {
+            var wide=io.github.humbleui.skija.MaskFilter.makeBlur(io.github.humbleui.skija.FilterBlurMode.NORMAL,12.5F);
+            var contact=io.github.humbleui.skija.MaskFilter.makeBlur(io.github.humbleui.skija.FilterBlurMode.NORMAL,5.5F)) {
             actual.getCanvas().clear(0);expected.getCanvas().clear(0);
             SoftShadow.drawPanel(actual.getCanvas(),160,130,510,690,28);
             var c=expected.getCanvas();c.save();
             c.clipRRect(io.github.humbleui.types.RRect.makeXYWH(160,130,510,690,28),io.github.humbleui.skija.ClipMode.DIFFERENCE,true);
-            c.drawRRect(io.github.humbleui.types.RRect.makeXYWH(160,145F,510,690,28),paint.setColor(0x78000000).setMaskFilter(wide));
-            c.drawRRect(io.github.humbleui.types.RRect.makeXYWH(160,133.75F,510,690,28),paint.setColor(0x44000000).setMaskFilter(contact));
+            c.drawRRect(io.github.humbleui.types.RRect.makeXYWH(160,135F,510,690,28),paint.setColor(0x24000000).setMaskFilter(wide));
+            c.drawRRect(io.github.humbleui.types.RRect.makeXYWH(160,133.25F,510,690,28),paint.setColor(0x40000000).setMaskFilter(contact));
             c.restore();
             a.allocN32Pixels(w,h);b.allocN32Pixels(w,h);assertTrue(actual.readPixels(a,0,0));assertTrue(expected.readPixels(b,0,0));
             int peakDifference=0;long error=0;int count=0;
@@ -146,6 +212,33 @@ class SoftShadowTest {
             }
             System.out.printf("panel nine-patch vs full Gaussian: peak-alpha-difference=%d mean=%.4f%n",peakDifference,(double)error/count);
             assertTrue(peakDifference<=4,"nine-patch must not create corner seams or a distinct rim");
+        }
+    }
+
+    @Test void shortFloatingShadowMatchesItsOwnOutlineAlongTheStraightEdges() {
+        try (var actual = Surface.makeRasterN32Premul(340, 150);
+             var expected = Surface.makeRasterN32Premul(340, 150);
+             var actualPixels = new Bitmap(); var expectedPixels = new Bitmap();
+             var paint = new io.github.humbleui.skija.Paint().setAntiAlias(true)) {
+            var shape = io.github.humbleui.types.RRect.makeXYWH(60, 45, 220, 45, 14);
+            actual.getCanvas().clear(0);
+            expected.getCanvas().clear(0);
+            SoftShadow.drawFloating(actual.getCanvas(), 60, 45, 220, 45, 14);
+            var reference = expected.getCanvas();
+            reference.clipRRect(shape, io.github.humbleui.skija.ClipMode.DIFFERENCE, true);
+            HudShadow.paintLayer(reference, shape, paint, ShadowTokens.FLOAT.ambient());
+            HudShadow.paintLayer(reference, shape, paint, ShadowTokens.FLOAT.contact());
+            actualPixels.allocN32Pixels(340, 150);
+            expectedPixels.allocN32Pixels(340, 150);
+            assertTrue(actual.readPixels(actualPixels, 0, 0));
+            assertTrue(expected.readPixels(expectedPixels, 0, 0));
+            for (int d = 2; d <= 25; d++) {
+                assertEquals(expectedPixels.getColor(170, 45 - d) >>> 24,
+                        actualPixels.getColor(170, 45 - d) >>> 24, 4, "upper tail at " + d);
+                assertEquals(expectedPixels.getColor(170, 89 + d) >>> 24,
+                        actualPixels.getColor(170, 89 + d) >>> 24, 4, "lower tail at " + d);
+            }
+            assertEquals(0, actualPixels.getColor(170, 66) >>> 24, "the transparent face remains clear");
         }
     }
 
@@ -166,7 +259,7 @@ class SoftShadowTest {
                 assertTrue(Math.abs(a*.5F-b)<=1,"fade must not truncate at "+x);
                 if(a>0) tail++;
             }
-            assertTrue(tail>20,"docked panel must cast a broad shadow on its visible right edge");
+            assertTrue(tail>10 && tail<35,"docked edge retains a compact soft shadow: "+tail);
             assertEquals(0,fullPixels.getColor(419,430));
             save(full,"half-screen-edge.png");save(faded,"half-screen-fade.png");
         }
@@ -207,7 +300,8 @@ class SoftShadowTest {
         try(var surface=Surface.makeRasterN32Premul(100,100)) {
             var draw=SkiaPipelineWarmup.class.getDeclaredMethod("draw",io.github.humbleui.skija.Canvas.class,java.util.List.class);
             draw.setAccessible(true);draw.invoke(null,surface.getCanvas(),pictures);
-            assertTrue(patches.containsKey(UiTokens.panelRadius()),"first phone frame must reuse a prepared Gaussian patch");
+            assertTrue(patches.containsKey(UiTokens.panelRadius(com.atom.chat.ui.AtomChatAppearance.theme())),
+                    "first phone frame must reuse a prepared Gaussian patch");
             assertTrue(patches.containsKey(0F),"first docked frame must reuse its square-edge Gaussian patch");
         } finally { pictures.forEach(io.github.humbleui.skija.Picture::close);SoftShadow.release(); }
     }

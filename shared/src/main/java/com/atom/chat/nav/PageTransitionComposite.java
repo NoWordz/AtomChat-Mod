@@ -1,13 +1,13 @@
 package com.atom.chat.nav;
 
-import com.atom.chat.ui.AtomChatAppearance;
+import com.atom.chat.ui.PanelBackground;
 import com.atom.chat.config.AtomChatConfig;
 import com.atom.chat.render.CardBackdrop;
+import com.atom.chat.render.DotTexture;
+import com.atom.chat.render.SettingsLabelShadow;
 import com.atom.chat.ui.Animations;
 import com.atom.chat.ui.UiLayout;
 import com.atom.chat.ui.UiStagger;
-import com.atom.lib.design.atomchat.SkiaDraw;
-import com.atom.lib.design.atomchat.UiTokens;
 import io.github.humbleui.skija.*;
 import io.github.humbleui.types.Rect;
 
@@ -60,7 +60,8 @@ public final class PageTransitionComposite implements AutoCloseable {
                     top.page().name()+":"+top.param()+":"+variant);
             boolean interrupted = !motion.sample(nowMs).settled();
             arrivalFromPushedToRoot = !stamped.isRoot() && top.isRoot();
-            freezeLastFrame();
+            if (AtomChatConfig.performanceModeActive()) clearPictures();
+            else freezeLastFrame();
             navigationOverflow = interrupted && departing != null
                     && departing.getApproximateOpCount() > MAX_COMMANDS;
             motion.retarget(nowMs, backwards || arrivalFromPushedToRoot,
@@ -99,18 +100,34 @@ public final class PageTransitionComposite implements AutoCloseable {
         return bounds == null ? y : motion.sample(frameTime).inverseY(y, bounds.y() + bounds.h() / 2);
     }
     public void drawArrivingFrame(Canvas canvas, UiLayout layout, int mouseX, int mouseY,
-                                  float vmx, float vmy, long nowMs) {
+                                  float vmx, float vmy, long nowMs, boolean settledPanel) {
         frameTime = nowMs;
         UiLayout.Rect panel = layout.rect();
         if (bounds != null && !bounds.equals(panel)) { clearPictures(); motion.finish(); }
         bounds = panel;
+        if (AtomChatConfig.performanceModeActive() && !CardBackdrop.active()) {
+            clearPictures();
+            motion.finish();
+            UiStagger.atFrame(nowMs, () -> {
+                host.drawArrivingBody(canvas, layout, mouseX, mouseY);
+                host.drawArrivingHeader(canvas, layout, mouseX, mouseY, vmx, vmy);
+            });
+            return;
+        }
+        boolean settingsBody = stamped != null
+                && (stamped.page() == AppPage.SETTINGS_SECTION || stamped.page() == AppPage.SERVER_CONFIG);
+        boolean settledBody = overlaySettled(nowMs);
         Rect cull = Rect.makeXYWH(panel.x(), panel.y(), panel.w(), panel.h());
         Picture target;
         Picture mask = null;
         try (PictureRecorder recorder = new PictureRecorder()) {
             Canvas recording = recorder.beginRecording(cull);
-            mask = CardBackdrop.recordMasks(cull,
-                    () -> UiStagger.atFrame(nowMs, () -> host.drawArrivingBody(recording, layout, mouseX, mouseY)));
+            Runnable draw = () -> UiStagger.atFrame(nowMs, () -> host.drawArrivingBody(recording, layout, mouseX, mouseY));
+            boolean snapTitles = settledPanel && settledBody && settingsBody && UiStagger.itemsSettled(entrance, nowMs);
+            mask = CardBackdrop.recordMasks(cull, snapTitles
+                    ? () -> DotTexture.recordTitles(recording, canvas,
+                            () -> SettingsLabelShadow.onDeviceGrid(recording, canvas.getLocalToDeviceAsMatrix33(), draw))
+                    : draw);
             target = recorder.finishRecordingAsPicture();
         } catch (RuntimeException | Error failure) {
             close(mask);
@@ -122,7 +139,7 @@ public final class PageTransitionComposite implements AutoCloseable {
         lastFrame = target;
         lastMask = mask;
         lastClipTop = host.bodyClipTop(layout);
-        if (overlaySettled(nowMs)) {
+        if (settledBody) {
             lastMotion = null;
             close(departing);
             close(departingMask);
@@ -139,7 +156,15 @@ public final class PageTransitionComposite implements AutoCloseable {
             }
             drawTransition(canvas, lastFrame, departing, panel, lastClipTop, lastMotion);
         }
-        UiStagger.atFrame(nowMs, () -> host.drawArrivingHeader(canvas, layout, mouseX, mouseY, vmx, vmy));
+        Runnable header = () -> UiStagger.atFrame(nowMs,
+                () -> host.drawArrivingHeader(canvas, layout, mouseX, mouseY, vmx, vmy));
+        if (settledPanel && settingsBody) SettingsLabelShadow.onDeviceGrid(canvas, null, header);
+        else header.run();
+    }
+
+    public void drawArrivingFrame(Canvas canvas, UiLayout layout, int mouseX, int mouseY,
+                                  float vmx, float vmy, long nowMs) {
+        drawArrivingFrame(canvas, layout, mouseX, mouseY, vmx, vmy, nowMs, false);
     }
 
     /** Only an interruption needs to flatten the previously displayed pair of bodies. */
@@ -186,7 +211,7 @@ public final class PageTransitionComposite implements AutoCloseable {
             if (frame.alpha() == 0 && previous != null) {
                 previous.playback(canvas);
             } else {
-                SkiaDraw.clip(canvas, panel.x(), panel.y(), panel.w(), panel.h(), UiTokens.panelRadius(AtomChatAppearance.theme()));
+                PanelBackground.clipExterior(canvas, panel);
                 drawLayer(canvas, previous, panel, 1 - frame.alpha(), frame.exitDx(), frame.exitScale());
                 drawLayer(canvas, target, panel, frame.alpha(), frame.dx(), frame.scale());
             }

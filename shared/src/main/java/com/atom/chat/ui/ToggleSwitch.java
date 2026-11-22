@@ -1,6 +1,7 @@
 package com.atom.chat.ui;
 
 
+import com.atom.chat.render.CornerGeometry;
 import com.atom.lib.design.atomchat.UiTokens;
 import com.atom.lib.design.atomchat.SkiaDraw;
 import com.atom.chat.theme.ThemeService;
@@ -115,7 +116,7 @@ public final class ToggleSwitch {
      * control answers the click itself — so the gate passes true here.
      */
     public void update(float dtMs, boolean on) {
-        knob.tick(on ? 1.0F : 0.0F, true);
+        knob.tick(on ? 1.0F : 0.0F, !com.atom.chat.config.AtomChatConfig.performanceModeActive());
         // The scaled shape is the whole track, so the budget derives from SWITCH_W.
         scale.update(hover, pressed || pulsing(), dtMs, Animations.enabled(), UiTokens.SWITCH_W);
     }
@@ -123,7 +124,7 @@ public final class ToggleSwitch {
     /** Explicit shared frame for contracted hosts; legacy callers retain their existing clock entry. */
     public void updateAt(com.atom.lib.motion.FrameTime frame,boolean on,boolean decorativeMotion){
         if(frame.nowNanos()<0)throw new IllegalArgumentException("Negative settings frame time");
-        knob.tick(on?1:0,frame.nowNanos(),true);
+        knob.tick(on?1:0,frame.nowNanos(),!com.atom.chat.config.AtomChatConfig.performanceModeActive());
         scale.update(hover,pressed||frame.nowNanos()/1_000_000<pulseUntil,(float)Math.min(50,frame.deltaSeconds()*1000),decorativeMotion,UiTokens.SWITCH_W);
     }
     public void pulseAt(long frameMillis){if(frameMillis<0)throw new IllegalArgumentException("Negative settings pulse time");pulseUntil=Math.addExact(frameMillis,PULSE_MS);}
@@ -159,14 +160,14 @@ public final class ToggleSwitch {
         scale.begin(canvas, x + UiTokens.SWITCH_W / 2.0F, y + UiTokens.SWITCH_H / 2.0F);
         try {
             float p = Math.max(0.0F, Math.min(1.0F, knob.value()));
-            SkiaDraw.drawRoundedRect(canvas, x, y, UiTokens.SWITCH_W, UiTokens.SWITCH_H,
+            CornerGeometry.drawRoundedRect(canvas, x, y, UiTokens.SWITCH_W, UiTokens.SWITCH_H,
                     trackRadius,
                     dim(SkiaDraw.lerpColor(off, accent, p), op));
 
             float travel = UiTokens.SWITCH_W - UiTokens.SWITCH_KNOB - UiTokens.SWITCH_INSET * 2.0F;
             float knobX = x + UiTokens.SWITCH_INSET + travel * p;
             float knobY = y + (UiTokens.SWITCH_H - UiTokens.SWITCH_KNOB) / 2.0F;
-            SkiaDraw.drawRoundedRect(canvas, knobX, knobY, UiTokens.SWITCH_KNOB, UiTokens.SWITCH_KNOB,
+            CornerGeometry.drawRoundedRect(canvas, knobX, knobY, UiTokens.SWITCH_KNOB, UiTokens.SWITCH_KNOB,
                     knobRadius, dim(KNOB, op));
         } finally {
             canvas.restore();

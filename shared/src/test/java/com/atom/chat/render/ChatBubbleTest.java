@@ -21,10 +21,10 @@ class ChatBubbleTest {
     void roundRemovesMoreCornerAreaWithoutChangingTheBubbleBounds() {
         try (Surface s = Surface.makeRasterN32Premul(160, 90)) {
             ChatBubble.draw(s.getCanvas(), 10, 10, 140, 60, BubbleStyle.CLASSIC, false, -1);
-            assertEquals(-1, pixel(s, 17, 17));
+            assertEquals(-1, pixel(s, 15, 15));
             s.getCanvas().clear(0);
             ChatBubble.draw(s.getCanvas(), 10, 10, 140, 60, BubbleStyle.ROUND, false, -1);
-            assertEquals(0, pixel(s, 17, 17));
+            assertEquals(0, pixel(s, 15, 15));
             assertEquals(-1, pixel(s, 80, 10));
             assertEquals(-1, pixel(s, 10, 40));
             assertEquals(0, pixel(s, 9, 40));
@@ -48,6 +48,30 @@ class ChatBubbleTest {
     }
 
     @Test
+    void singleTipUsesTheNativeCircularArcAtFractionalScale() {
+        try (Surface actual = Surface.makeRasterN32Premul(190, 100);
+             Surface expected = Surface.makeRasterN32Premul(190, 100);
+             Bitmap a = new Bitmap(); Bitmap b = new Bitmap();
+             var paint = new io.github.humbleui.skija.Paint().setAntiAlias(true).setColor(-1)) {
+            a.allocN32Pixels(190, 100);
+            b.allocN32Pixels(190, 100);
+            actual.getCanvas().scale(1.25F, 1.25F);
+            expected.getCanvas().scale(1.25F, 1.25F);
+            for (boolean own : new boolean[]{false, true}) {
+                actual.getCanvas().clear(0);
+                expected.getCanvas().clear(0);
+                ChatBubble.draw(actual.getCanvas(), 10.25F, 10.5F, 120, 50, BubbleStyle.CORNER, own, -1);
+                expected.getCanvas().drawRRect(ChatBubble.outline(10.25F, 10.5F, 120, 50, BubbleStyle.CORNER, own, 1F), paint);
+                assertTrue(actual.readPixels(a, 0, 0));
+                assertTrue(expected.readPixels(b, 0, 0));
+                for (int y = 0; y < 100; y++) for (int x = 0; x < 190; x++) {
+                    assertEquals(b.getColor(x, y), a.getColor(x, y), "pixel " + x + "," + y);
+                }
+            }
+        }
+    }
+
+    @Test
     void imageUsesTheSameShapeAndRestoresClipAndSaveStack() {
         try (Surface source = Surface.makeRasterN32Premul(140, 60);
              Surface target = Surface.makeRasterN32Premul(160, 90)) {
@@ -60,6 +84,46 @@ class ChatBubbleTest {
                 assertEquals(saves, target.getCanvas().getSaveCount());
                 target.getCanvas().clear(0xFF00FF00);
                 assertEquals(0xFF00FF00, pixel(target, 0, 0), "image clip must not leak");
+            }
+        }
+    }
+
+    @Test
+    void opaqueImageAndSolidBubbleHaveTheSameFractionalEdgeCoverage() {
+        try (Surface source = Surface.makeRasterN32Premul(120, 50);
+             Surface text = Surface.makeRasterN32Premul(190, 100);
+             Surface photo = Surface.makeRasterN32Premul(190, 100);
+             Bitmap textPixels = new Bitmap(); Bitmap photoPixels = new Bitmap()) {
+            source.getCanvas().clear(0xFFFFFFFF);
+            textPixels.allocN32Pixels(190, 100);
+            photoPixels.allocN32Pixels(190, 100);
+            try (Image image = source.makeImageSnapshot()) {
+                for (float phase : new float[]{0F, .25F, .5F, .75F}) {
+                    var textCanvas = text.getCanvas();
+                    var photoCanvas = photo.getCanvas();
+                    textCanvas.clear(0);
+                    photoCanvas.clear(0);
+                    textCanvas.save();
+                    photoCanvas.save();
+                    textCanvas.scale(1.25F, 1.25F);
+                    photoCanvas.scale(1.25F, 1.25F);
+                    ChatBubble.draw(textCanvas, 10F + phase, 10F + phase, 120F, 50F, BubbleStyle.CORNER, false, -1);
+                    ChatBubble.drawImage(photoCanvas, image, 10F + phase, 10F + phase, 120F, 50F, BubbleStyle.CORNER, false);
+                    textCanvas.restore();
+                    photoCanvas.restore();
+                    assertTrue(text.readPixels(textPixels, 0, 0));
+                    assertTrue(photo.readPixels(photoPixels, 0, 0));
+                    int partial = 0;
+                    int worstError = 0;
+                    for (int y = 0; y < 100; y++) for (int x = 0; x < 190; x++) {
+                        int a = textPixels.getColor(x, y) >>> 24;
+                        int b = photoPixels.getColor(x, y) >>> 24;
+                        if (a > 0 && a < 255) partial++;
+                        worstError = Math.max(worstError, Math.abs(a - b));
+                    }
+                    assertTrue(partial > 0, "the solid bubble edge must be antialiased");
+                    assertTrue(worstError <= 1, "phase " + phase + ", maximum alpha difference " + worstError);
+                }
             }
         }
     }

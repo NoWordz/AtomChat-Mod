@@ -1,6 +1,7 @@
 modLoader="javafml"
 loaderVersion="${loader_version_range}"
 license="${mod_license}"
+issueTrackerURL="${mod_issues_url}"
 
 [[mods]]
 modId="${mod_id}"
@@ -8,8 +9,10 @@ version="${mod_version}"
 displayName="${mod_name}"
 displayTest="IGNORE_ALL_VERSION"
 authors="${mod_authors}"
+credits="${mod_credits}"
+displayURL="${mod_repository_url}"
 description="${mod_description}"
-logoFile="assets/atomchat/logo.png"
+logoFile="assets/atomchat/mod_logo.png"
 
 [[mixins]]
 config="atomchat.screen.mixins.json"

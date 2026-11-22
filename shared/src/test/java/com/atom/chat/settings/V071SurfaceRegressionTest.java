@@ -88,15 +88,28 @@ class V071SurfaceRegressionTest {
             draw(page,actual,layout,scroll,-1,-1,1000);
             float gap=com.atom.lib.design.atomchat.UiTokens.SETTINGS_TILE_GAP;
             float width=(row.w()-gap)/2;
-            com.atom.lib.design.atomchat.UiCards.drawCard(reference.getCanvas(),row.x()+width+gap,row.y(),width,row.h(),
-                    com.atom.lib.design.atomchat.UiTokens.settingsTileRadius(),0);
+            com.atom.chat.ui.AtomChatAppearance.drawCard(reference.getCanvas(),row.x()+width+gap,row.y(),width,row.h(),
+                    com.atom.lib.design.atomchat.UiTokens.settingsTileRadius(com.atom.chat.ui.AtomChatAppearance.theme()),0);
             a.allocN32Pixels(660,960);r.allocN32Pixels(660,960);
             assertTrue(actual.readPixels(a,0,0));assertTrue(reference.readPixels(r,0,0));
-            int x=(int)layout.list.right()+3,y=(int)(row.y()+row.h()/2);
+            int x=(int)Math.ceil(layout.list.right()),y=(int)(row.y()+row.h()/2);
             assertTrue((r.getColor(x,y)>>>24)>0,"the independent card renderer must have a visible shadow at the probe");
             assertEquals(r.getColor(x,y)>>>24,a.getColor(x,y)>>>24,"the page clip must preserve that shadow tail");
         }
     }
+    @Test void thePanelNotificationKeepsItsTranslucentFaceClearOfTheShadow() {
+        try (var surface = Surface.makeRasterN32Premul(220, 140); var pixels = new Bitmap()) {
+            var canvas = surface.getCanvas();
+            canvas.clear(0);
+            com.atom.chat.ui.AtomChatAppearance.drawPanelOverlayCard(
+                    canvas, 35F, 35F, 150F, 55F, 14F, 0F, 0x8090A0B0);
+            pixels.allocN32Pixels(220, 140);
+            assertTrue(surface.readPixels(pixels, 0, 0));
+            assertEquals(0x80, pixels.getColor(110, 62) >>> 24, "the shadow may only darken the exterior");
+            assertTrue((pixels.getColor(110, 92) >>> 24) > 0, "the panel notification retains visible lift");
+        }
+    }
+
     private static void draw(SettingsSectionPage page,Surface surface,UiLayout layout,float scroll,float x,float y,long now) {
         surface.getCanvas().clear(0);
         UiStagger.atFrame(now,()->page.render(surface.getCanvas(),layout,SettingsSection.ABOUT,x,y,scroll,0xFF4488CC));

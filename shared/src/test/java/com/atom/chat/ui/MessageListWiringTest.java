@@ -8,6 +8,10 @@ import com.atom.chat.nav.NavPage;
 import com.atom.chat.page.MessageListView;
 import com.atom.chat.platform.Platform;
 import com.atom.chat.config.AtomChatConfig;
+import com.atom.chat.chat.MessageMerge;
+import com.atom.chat.reaction.ReactionClient;
+import com.atom.chat.reaction.ReactionWire;
+import com.atom.chat.text.RichText;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -156,6 +160,51 @@ class MessageListWiringTest {
     private void setUp() {
         host = new Recorder();
         wiring = new MessageListWiring<>(host);
+    }
+
+    @Test
+    void repeatsWithSeparateDeliveryIdsFoldOnlyVisuallyAndSplitOnReaction() {
+        setUp();
+        var oldSetting = MessageMerge.antiSpamEnabledSupplier;
+        MessageMerge.antiSpamEnabledSupplier = () -> true;
+        try {
+            var text = RichText.literal("same");
+            var first = new ChatMessage(text.toText(), false, false, null, null, ALICE.uuid(),
+                    "Alice", "Alice", text.getString());
+            var latest = new ChatMessage(text.toText(), false, false, null, null, ALICE.uuid(),
+                    "Alice", "Alice", text.getString());
+            UUID fingerprint = UUID.randomUUID();
+            UUID firstDelivery = UUID.randomUUID();
+            UUID latestDelivery = UUID.randomUUID();
+            ReactionClient.accept(ReactionWire.receipt(new ReactionWire.Receipt(firstDelivery, fingerprint)));
+            ReactionClient.accept(ReactionWire.receipt(new ReactionWire.Receipt(latestDelivery, fingerprint)));
+            try (var delivery = ReactionClient.incoming(fingerprint)) {
+                ReactionClient.bind(first);
+            }
+            try (var delivery = ReactionClient.incoming(fingerprint)) {
+                ReactionClient.bind(latest);
+            }
+            host.worldSnapshot.add(first);
+            host.worldSnapshot.add(latest);
+            var page = NavPage.of(AppPage.WORLD_CHAT);
+            var displayed = wiring.messagesForNav(page);
+            assertEquals(1, displayed.size());
+            assertEquals(2, displayed.get(0).getDuplicateCount());
+            assertEquals(latestDelivery, ReactionClient.key(displayed.get(0)));
+            assertSame(displayed, wiring.messagesForNav(page));
+            assertEquals(2, host.worldSnapshot.size());
+
+            var member = new ReactionWire.Member(UUID.randomUUID(), "Bob");
+            var heart = new ReactionWire.Entry("😀", List.of(member));
+            ReactionClient.accept(ReactionWire.snapshot(new ReactionWire.Snapshot(firstDelivery, 1, List.of(heart))));
+            assertEquals(List.of(first, latest), wiring.messagesForNav(page));
+            assertEquals(firstDelivery, ReactionClient.key(first));
+            assertEquals(1, ReactionClient.entries(first).size());
+            assertTrue(ReactionClient.entries(latest).isEmpty());
+        } finally {
+            ReactionClient.reset();
+            MessageMerge.antiSpamEnabledSupplier = oldSetting;
+        }
     }
 
     // ------------------------------------------------------- 1. the view's host

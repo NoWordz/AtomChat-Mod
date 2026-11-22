@@ -1,6 +1,6 @@
 package com.atom.chat.notification;
 
-import com.atom.lib.design.atomchat.SkiaDraw;
+import com.atom.chat.render.CornerGeometry;
 import com.atom.lib.design.atomchat.UiTokens;
 import io.github.humbleui.skija.Canvas;
 import io.github.humbleui.skija.FilterTileMode;
@@ -20,11 +20,12 @@ final class NotificationMaterial {
 
     static void drawPanelBlur(Canvas canvas, float x, float y, float width, float height,
                               float radius, float alpha, float cardStrength) {
+        if (com.atom.chat.config.AtomChatConfig.performanceModeActive()) return;
         float sigma = panelSigma(cardStrength);
         int save = canvas.save();
         try (ImageFilter filter = ImageFilter.makeBlur(sigma, sigma, FilterTileMode.CLAMP);
              Paint paint = new Paint().setAlphaf(alpha)) {
-            SkiaDraw.clip(canvas, x, y, width, height, radius);
+            CornerGeometry.clip(canvas, x, y, width, height, radius);
             canvas.saveLayer(new SaveLayerRec(Rect.makeXYWH(x, y, width, height), paint, filter));
             canvas.restore();
         } finally {

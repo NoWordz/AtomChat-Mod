@@ -1,5 +1,125 @@
 # Changelog
 
+## v0.9.4
+
+**更改**
+
+- 聊天面板的上下栏、卡片、气泡、头像和胶囊采用更紧凑的软阴影。
+- 聊天 HUD 恢复可见的旧版接触影，透明图片保留干净的边缘。
+- 发送按钮采用上下栏的细高光和暗边，并加入短接触影。
+- 更新多处界面图标及模组标志。
+- 面板外壳与单尖气泡保留普通圆弧，部分栏位和胶囊使用连续曲率，圆角设置上限为 30 px。
+- 关于页的第三方组件改为可横向滚动的图标列表，点击图标打开项目链接。
+- 配套构建输入更新至 AtomLib 0.7.1，设置契约覆盖第三方组件卡片的交互。
+
+**修复**
+
+- 发送按钮的绘制、悬停、按压和点击范围在窄布局下对齐。
+- 面板通知的阴影仅出现在轮廓外，半透明内容区域保持清晰。
+- 底栏和设置页的悬停、选中胶囊在高圆角档位仍随设置变化。
+- 性能模式切换页签直接到位，HUD 快捷图标去掉黑描边。
+- 聊天面板和 HUD 恢复重复消息合并计数。
+- HUD 通知恢复背景模糊，普通玩家名默认以白色显示。
+
+**性能**
+
+- 将面板表面的两层阴影预合成为可复用的轮廓影图。
+- 面板和设置组标题的点阵按设备像素复用。
+
+----
+
+**Changed**
+
+- The chat panel uses more compact soft shadows on its bars, cards, bubbles, avatars, and capsules.
+- The chat HUD restores its previous contact shadow while keeping transparent image edges clear.
+- The Send button uses the same fine highlights and shading as the panel bars and adds a short contact shadow.
+- Updated interface icons and the mod logo.
+- The panel frame and single-tip bubbles retain circular arcs, while some bars and pills use continuous corners up to a 30 px setting.
+- The About page lists third-party components in a horizontal strip with clickable project icons.
+- Updated the paired build input to AtomLib 0.7.1 and extended the settings contract to cover the third-party credit strip.
+
+**Fixed**
+
+- The Send button's shape, hover, press feedback, and hit area now align in narrow layouts.
+- Panel notification shadows stay outside their translucent surfaces.
+- Hover and selection pills in the bottom navigation and settings keep responding at high corner-radius settings.
+- Performance mode switches tabs immediately and drops the black outline on the HUD shortcut.
+- The chat panel and HUD count repeated messages again.
+- HUD notifications regain backdrop blur, and ordinary player names default to white.
+
+**Performance**
+
+- Panel surfaces combine the two shadow layers into reusable outline images.
+- The panel and settings group headers reuse dot patterns at device-pixel resolution.
+
+## v0.9.3
+
+**新增**
+
+- 服务端消息模板页加入新手教程，提供规则格式、例句和解析结果。
+- 游戏内聊天 HUD 显示单行引用胶囊，超出宽度时省略。
+- 关于页加入性能模式，开启时暂时关闭模糊、软阴影和界面动效，关闭后恢复原设置。
+
+**更改**
+
+- 切页时淡出旧标题和变化的图标，再淡入新内容。
+- 更新模组列表的作者署名、第三方鸣谢和仓库链接。
+- 关于页合并 Skija 说明，补充实际使用的图标和选择器致谢。
+- Windows x64 优先打开系统文件选择器，桌面选择器继续提供兼容回退。
+- 面板和 HUD 的次级胶囊共用 85% 的最低底色不透明度。
+- 面板和 HUD 的消息使用轻量软阴影，透明图跳过图片外框阴影。
+- HUD 跟随紧凑分组选项，组首离开后由最早可见的消息补回头像和名字。
+- 客户端前置更新至 AtomLib 0.7.0。
+
+**修复**
+
+- 修复聊天页与其他页面切换时头栏时钟的像素偏移。
+- Fabric 重载资源时释放旧的模糊着色器。
+- 面板和卡片采用相同的 Kawase 强度，较高的卡片强度不会再切回较弱的模糊。
+- 修复面板圆角描边外缘漏出亮色底边，并把返回底部按钮移回输入栏上方。
+- HUD 通知逐条裁切背景模糊，模糊随通知移动和淡出。
+- 聊天 HUD 和快捷键提示随游戏界面缩放，提示在暂停菜单和背包中仍可见。
+
+**性能**
+
+- 后台预热 Emoji 选择器前两屏的字形。
+- 将表情包目录扫描延迟到打开表情包页，并限制缩略图读取量。
+- 静止 HUD 消息按物理像素对齐后缓存，缩放或移动时直接绘制。
+
+----
+
+**Added**
+
+- The server message template page includes a tutorial with a sample rule, chat line and parsed result.
+- The in-game chat HUD shows quoted messages in a single capsule line and truncates long quotes.
+- Performance mode in About temporarily disables blur, soft shadows and interface animations, restoring the saved settings when switched off.
+
+**Changed**
+
+- Page switches fade out the previous title and changing icons before fading in the new content.
+- Updated the in-game mod list with author attribution, third-party credits and repository links.
+- The About page groups the Skija attribution and credits the icon sets and file picker in use.
+- Windows x64 opens the system file picker first and keeps the desktop picker as a compatibility fallback.
+- Secondary chat capsules use an 85% minimum background opacity in the panel and the HUD.
+- Panel and HUD messages use subtle soft shadows, and transparent images skip the image outline shadow.
+- The HUD follows compact grouping and restores the sender name and avatar on the oldest visible message when the group head leaves.
+- The client now requires AtomLib 0.7.0 or later.
+
+**Fixed**
+
+- Fixed a pixel shift in the header clock when switching between chat and other pages.
+- Fabric releases the old blur shaders when resources reload.
+- Panel and card backgrounds share the Kawase blur scale so a stronger card setting retains the stronger blur.
+- Fixed light pixels along the panel outline corners and moved the jump-to-latest button back above the composer.
+- HUD notifications clip background blur individually and move and fade it with each banner.
+- The chat HUD and shortcut hint follow in-game UI scaling, and the hint stays visible in the pause menu and inventory.
+
+**Performance**
+
+- The first two pages of emoji glyphs are prewarmed in the background.
+- Sticker directories are scanned when the sticker tab is opened, and thumbnail reads are bounded.
+- Settled HUD messages use a device-pixel-aligned cache and draw directly while scaling or moving.
+
 ## v0.9.2
 
 **新增**

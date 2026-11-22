@@ -56,16 +56,25 @@ public final class SettingsItem {
     }
 
     public boolean value() {
-        return getter.getAsBoolean();
+        return !performanceLocked() && getter.getAsBoolean();
     }
 
     /** False when another setting currently overrides this one. */
     public boolean available() {
-        return available == null || available.getAsBoolean();
+        return !performanceLocked() && (available == null || available.getAsBoolean());
+    }
+
+    public boolean performanceLocked() {
+        return switch (id) {
+            case "blur", "motion", "entry", "poke", "page_nav_style", "fun_effects", "experimental_effects" ->
+                    AtomChatConfig.get().performanceMode;
+            default -> false;
+        };
     }
 
     /** Applies the value and writes {@code atomchat-client.json} immediately. */
     public void set(boolean value) {
+        if (performanceLocked()) return;
         setter.accept(value);
         AtomChatConfig.save(AtomChatConfig.get());
     }

@@ -281,10 +281,52 @@ class DrawPrimitivesTest {
             AtomChatConfig.get().cornerRadius = 20F;
             frame(canvas, surface, () ->
                     primitives.drawSendButton(canvas, BX, BY, OFF_SCREEN, OFF_SCREEN));
-            assertEquals(0, alphaAt(surface, (int) BX + 1, (int) BY + 1),
-                    "the default radius cuts the corner pixel away");
+            assertTrue(alphaAt(surface, (int) BX + 1, (int) BY + 1) < 128,
+                    "the default radius leaves the face clear of the corner");
             writePng(surface, "send-radius-default.png");
             assertEquals(initialSaveCount, canvas.getSaveCount());
+        }
+    }
+
+    @Test
+    void enabledSendHasTheChromeRimAndAnExternalContactShadow() {
+        DrawPrimitives primitives = new DrawPrimitives(new Host());
+        try (var surface = Surface.makeRasterN32Premul(SURFACE_W, SURFACE_H); var pixels = new Bitmap()) {
+            var canvas = surface.getCanvas();
+            pixels.allocN32Pixels(SURFACE_W, SURFACE_H);
+            canvas.clear(0);
+            primitives.drawSendButton(canvas, BX, BY, OFF_SCREEN, OFF_SCREEN);
+            assertTrue(surface.readPixels(pixels, 0, 0));
+            int x = (int) BX + 18;
+            int bottom = (int) (BY + UiTokens.BUTTON_H);
+            int topRed = (pixels.getColor(x, (int) BY) >> 16) & 0xFF;
+            int faceRed = (pixels.getColor(x, (int) BY + 12) >> 16) & 0xFF;
+            assertTrue(topRed > faceRed && topRed - faceRed <= 22,
+                    "upper highlight uses the same subtle contrast as the composer");
+            assertTrue((pixels.getColor(x, bottom + 2) >>> 24) > 0, "the active button has contact lift");
+
+            canvas.clear(0);
+            primitives.drawSendButton(canvas, BX, BY, OFF_SCREEN, OFF_SCREEN, false);
+            assertTrue(surface.readPixels(pixels, 0, 0));
+            assertEquals(0, pixels.getColor(x, bottom + 2) >>> 24, "disabled Send stays flat");
+        }
+    }
+
+    @Test
+    void narrowComposerSendFitsItsLayoutAndIgnoresHoverToItsRight() {
+        var button = new com.atom.chat.ui.UiLayout.Rect(BX, BY, UiTokens.BUTTON_W - 18F, UiTokens.BUTTON_H);
+        var primitives = new DrawPrimitives(new Host());
+        try (var surface = Surface.makeRasterN32Premul(SURFACE_W, SURFACE_H)) {
+            var canvas = surface.getCanvas();
+            float middleY = button.y() + button.h() / 2F;
+            byte[] idle = frame(canvas, surface,
+                    () -> primitives.drawSendButton(canvas, button, OFF_SCREEN, OFF_SCREEN, true));
+            int outsideX = (int) button.right() + 6;
+            assertTrue(alphaAt(surface, outsideX, (int) middleY) < 128,
+                    "the accent face must stop at the narrow layout edge");
+            byte[] outside = frame(canvas, surface,
+                    () -> primitives.drawSendButton(canvas, button, outsideX, middleY, true));
+            assertArrayEquals(idle, outside, "pixels beyond the Send hit rectangle cannot trigger hover");
         }
     }
 

@@ -1,5 +1,6 @@
 package com.atom.chat.tools;
 
+import com.atom.chat.render.CornerGeometry;
 import com.atom.chat.chat.PlayerRef;
 import com.atom.chat.font.FontManager;
 import com.atom.chat.render.SkiaFontRenderer;
@@ -54,7 +55,7 @@ public final class ComposerTools implements InputHandler {
             var hint = layout.searchStatus;
             canvas.save();
             try {
-                com.atom.lib.design.atomchat.SkiaDraw.clip(canvas, hint.x(), hint.y(), hint.w(), hint.h(), 0);
+                CornerGeometry.clip(canvas, hint.x(), hint.y(), hint.w(), hint.h(), 0);
                 SkiaFontRenderer.drawTextCentered(canvas, font, status, hint.x() + hint.w() / 2, hint.y() + hint.h() / 2,
                         com.atom.chat.config.AtomChatConfig.get().textSecondaryColor);
             } finally { canvas.restore(); }

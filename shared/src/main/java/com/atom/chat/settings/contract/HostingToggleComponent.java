@@ -1,5 +1,6 @@
 package com.atom.chat.settings.contract;
 
+import com.atom.chat.render.CornerGeometry;
 import com.atom.chat.settings.SettingsRowText;
 import com.atom.chat.ui.ToggleSwitch;
 import com.atom.chat.ui.UiLayout;
@@ -67,7 +68,7 @@ public final class HostingToggleComponent implements StrictPageSession.Implement
             boolean step=advanced!=time.frameId();
             if(step){paintedHover=hover;toggle.setInteraction(over,pressed&&over);if(composed)toggle.update((float)(time.deltaSeconds()*1000),checked());else toggle.updateAt(time,checked(),bindings.states().get("decorativeMotion"));}
             int accent=color("accent"),primary=color("textPrimary"),secondary=color("textSecondary");
-            if(!composed&&paintedHover>.01f)SkiaDraw.drawRoundedRect(canvas,box.x(),box.y(),box.w(),box.h(),0,UiTokens.cardHover(accent,0,paintedHover));
+            if(!composed&&paintedHover>.01f)CornerGeometry.drawRoundedRect(canvas,box.x(),box.y(),box.w(),box.h(),0,UiTokens.cardHover(accent,0,paintedHover));
             SettingsRowText.draw(canvas,box,layout,enabled()?primary:secondary,secondary);
             if(composed)toggle.render(canvas,x,y,accent,enabled());else toggle.render(canvas,x,y,new ToggleSwitch.Appearance(accent,enabled(),bindings.states().get("lightCard"),(float)parameter("cornerRadius")));
             if(step){hover=UiMotion.approach(hover,hovered&&enabled()?1:0,(float)Math.min(50,time.deltaSeconds()*1000),UiMotion.HOVER_MS);advanced=time.frameId();}

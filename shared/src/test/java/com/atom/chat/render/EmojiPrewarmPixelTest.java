@@ -53,6 +53,50 @@ class EmojiPrewarmPixelTest {
         assertArrayEquals(cold, warmed, "预热 glyph 与冷栅格 glyph 的像素必须完全一致");
     }
 
+    @Test void startupWarmsThePickerAndItsFirstScroll() throws InterruptedException {
+        completeStartupWarmup();
+        var emojis = com.atom.chat.reaction.ReactionEmoji.ALL;
+        int page = com.atom.lib.design.atomchat.UiTokens.EMOJI_COLS * com.atom.lib.design.atomchat.UiTokens.EMOJI_VISIBLE_ROWS;
+        var font = FontManager.font(com.atom.lib.design.atomchat.UiTokens.FONT_EMOJI);
+        try (var surface = Surface.makeRasterN32Premul(W, H)) {
+            long firstHits = SkiaFontRenderer.emojiPrewarmHits();
+            for (String text : emojis.subList(0, page)) {
+                SkiaFontRenderer.drawText(surface.getCanvas(), font, text, 20, 60, 0xFFFFFFFF);
+            }
+            long scrollHits = SkiaFontRenderer.emojiPrewarmHits();
+            assertTrue(scrollHits > firstHits, "the first viewport must consume prewarmed glyphs");
+            for (String text : emojis.subList(page, page * 2)) {
+                SkiaFontRenderer.drawText(surface.getCanvas(), font, text, 20, 120, 0xFFFFFFFF);
+            }
+            assertTrue(SkiaFontRenderer.emojiPrewarmHits() > scrollHits, "the first scroll must consume prewarmed glyphs");
+        }
+    }
+
+    @Test void disabledAtomChatDoesNotPrewarmThePicker() throws InterruptedException {
+        var config = com.atom.chat.config.AtomChatConfig.get();
+        boolean wasEnabled = config.enabled;
+        config.enabled = false;
+        try {
+            completeStartupWarmup();
+            long hits = SkiaFontRenderer.emojiPrewarmHits();
+            render(FontManager.font(com.atom.lib.design.atomchat.UiTokens.FONT_EMOJI));
+            assertEquals(hits, SkiaFontRenderer.emojiPrewarmHits());
+        } finally {
+            config.enabled = wasEnabled;
+        }
+    }
+
+    private static void completeStartupWarmup() throws InterruptedException {
+        FirstOpenWarmup.resetForTest();
+        FirstOpenWarmup.prewarmFontsAsync();
+        for (Thread thread : Thread.getAllStackTraces().keySet()) {
+            if (thread.getName().equals("AtomChat-FontPrewarm")) {
+                thread.join(10_000);
+                assertFalse(thread.isAlive(), "the startup warmup should finish");
+            }
+        }
+    }
+
     private static byte[] render(Font primary) {
         try (Surface surface = Surface.makeRasterN32Premul(W, H)) {
             var canvas = surface.getCanvas();

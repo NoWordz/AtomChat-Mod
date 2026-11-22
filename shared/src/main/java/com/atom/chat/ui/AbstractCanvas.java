@@ -1,6 +1,6 @@
 package com.atom.chat.ui;
 
-import com.atom.lib.design.atomchat.SkiaDraw;
+import com.atom.chat.render.CornerGeometry;
 import io.github.humbleui.skija.Canvas;
 
 import java.util.ArrayList;
@@ -55,7 +55,7 @@ public class AbstractCanvas extends UiComponent {
         canvas.save();
         try {
             if (radius > 0) {
-                SkiaDraw.clip(canvas, x, y, width, height, radius);
+                CornerGeometry.clip(canvas, x, y, width, height, radius);
             } else {
                 canvas.clipRect(io.github.humbleui.types.Rect.makeXYWH(x, y, width, height));
             }

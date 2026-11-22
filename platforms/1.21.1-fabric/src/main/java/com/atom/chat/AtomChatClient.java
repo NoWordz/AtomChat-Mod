@@ -1,6 +1,8 @@
 package com.atom.chat;
 
 import com.atom.chat.banner.BannerStore;
+import com.atom.chat.compat.AtomLibDependencyCheck;
+import com.atom.chat.compat.FabricAtomLibVersion;
 import com.atom.chat.config.AtomChatConfig;
 import com.atom.chat.image.ImageLoader;
 import com.atom.chat.notification.NotificationBanner;
@@ -77,8 +79,10 @@ public class AtomChatClient implements ClientModInitializer {
 
     @Override
     public void onInitializeClient() {
-        com.atom.chat.compat.AtomLibDependencyCheck.require(net.fabricmc.loader.api.FabricLoader.getInstance()
-                .getModContainer("atomlib").map(mod -> mod.getMetadata().getVersion().getFriendlyString()).orElse(null));
+        var atomLib = net.fabricmc.loader.api.FabricLoader.getInstance()
+                .getModContainer("atomlib").map(mod -> mod.getMetadata().getVersion()).orElse(null);
+        if (atomLib != null) FabricAtomLibVersion.requireCompatible(atomLib, AtomLibDependencyCheck.fabricRange());
+        AtomLibDependencyCheck.require(atomLib == null ? null : atomLib.getFriendlyString());
         // Idempotent second call: the client-only mixin plugin claimed AWT
         // before Minecraft's Main ran. This log line reports the outcome of
         // whichever call won, so it is the picker's field diagnostic.
@@ -181,7 +185,7 @@ public class AtomChatClient implements ClientModInitializer {
                         () -> firstOpenWarmupTexts());
             }
             if (com.atom.chat.render.FirstOpenWarmup.consumeGlWarmup()) {
-                warmupGl(client, com.atom.chat.config.AtomChatConfig.get().blurEnabled);
+                warmupGl(client, com.atom.chat.config.AtomChatConfig.get().effectiveBlurEnabled());
             }
             // First tick only (self-guarded): identity always, the detailed
             // block when debug is on. It lives here rather than in client init

@@ -2,10 +2,9 @@ package com.atom.chat.ui;
 
 
 
-import com.atom.lib.design.atomchat.AppIcons;
+import com.atom.chat.render.CornerGeometry;
 import com.atom.lib.design.atomchat.UiTokens;
 import com.atom.chat.font.FontManager;
-import com.atom.lib.design.atomchat.SkiaDraw;
 import com.atom.chat.render.SkiaFontRenderer;
 import io.github.humbleui.skija.Canvas;
 import java.util.List;
@@ -105,12 +104,12 @@ public final class ConfirmationDialog {
         ClickRipples.block(box);
         canvas.save();
         try {
-            SkiaDraw.clip(canvas, box.x(), box.y(), box.w(), box.h(), PickerModalPaint.radius());
+            CornerGeometry.clip(canvas, box.x(), box.y(), box.w(), box.h(), PickerModalPaint.radius());
             float pad = geometry.padding();
             float x = box.x() + pad;
             var titleFont = FontManager.font(UiTokens.SETTINGS_TILE_TITLE);
             com.atom.chat.render.DrawPrimitives.drawIconCentered(canvas,
-                    tutorial ? com.atom.chat.onboarding.GuideIcon.PATH : AppIcons.ICON_WARNING_PATH,
+                    tutorial ? com.atom.chat.onboarding.GuideIcon.PATH : TablerIcons.ALERT_TRIANGLE,
                     x+UiTokens.COMPOSER_ICON_SIZE/2,geometry.titleCenterY(),UiTokens.COMPOSER_ICON_SIZE,
                     dangerous ? UiTokens.dangerColor() : com.atom.chat.config.AtomChatConfig.get().accentColor);
             SkiaFontRenderer.drawText(canvas,titleFont,SkiaFontRenderer.truncate(titleFont,title,
@@ -119,7 +118,7 @@ public final class ConfirmationDialog {
             float y = box.y() + pad + UiTokens.HEADER_HEIGHT;
             canvas.save();
             try {
-                SkiaDraw.clip(canvas, x, y, Math.max(0, box.w() - pad * 2),
+                CornerGeometry.clip(canvas, x, y, Math.max(0, box.w() - pad * 2),
                         Math.max(0, geometry.cancel().y() - y - pad / 2), 0);
                 float bodyHeight=Math.max(0,geometry.cancel().y()-y-pad/2);
                 maxBodyScroll=Math.max(0,lines.size()*lineHeight-bodyHeight);

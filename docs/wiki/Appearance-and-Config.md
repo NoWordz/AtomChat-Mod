@@ -57,7 +57,7 @@ A wallpaper and background blur are **mutually exclusive**; with both configured
 
 ## About
 
-Version, licence, repository links, third-party components (Skija / Skia / FlatLaf), and two actions:
+Version, licence, repository links, third-party credits for the rendering and picker components and the icon sets, and two actions:
 
 - **Clear image cache** — clears only the image cache under `<game dir>/atomchat/`, leaving emotes, wallpaper and avatars alone;
 - **Debug mode** — writes the avatar colour sampling into `.minecraft/atomchat/cache/debug/` as PNGs, for chasing avatar colour problems.

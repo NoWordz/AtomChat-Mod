@@ -240,6 +240,17 @@ class AppearancePresetStoreTest {
     }
 
     @Test
+    void presetRoundTripsTheNewRadiusLimit() {
+        AtomChatConfig config = new AtomChatConfig();
+        config.cornerRadius = 30F;
+        var saved = store.saveCurrent(config, null);
+        assertTrue(saved.ok());
+        var target = new AtomChatConfig();
+        assertTrue(store.apply(saved.preset().id(), target).ok());
+        assertEquals(30F, target.cornerRadius);
+    }
+
+    @Test
     void nonFiniteOrOutOfRangeValuesAndPathTraversalAreRejected() {
         AtomChatConfig bad = new AtomChatConfig();
         bad.cornerRadius = Float.NaN;

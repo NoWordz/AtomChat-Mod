@@ -33,7 +33,6 @@ import org.lwjgl.opengl.GL30;
 public final class PanelBlurRenderer {
     private static final String ROUNDED_SHADER_NAME = "atomchat_panel_blur";
     private static final String KAWASE_SHADER_NAME = "atomchat_kawase_blur";
-    private static final int KAWASE_PASSES = 5;
 
     private static ShaderInstance roundedShader;
     private static ShaderInstance kawaseShader;
@@ -93,6 +92,27 @@ public final class PanelBlurRenderer {
     }
 
     public static boolean render(Matrix4f pose, float x, float y, float width, float height, float radius, float alpha, float strength) {
+        return render(pose, x, y, width, height, radius, alpha, strength, null);
+    }
+
+    /** One world capture and blur, followed by individual animated rounded masks. */
+    public static boolean renderMasked(java.util.List<BlurMask> masks, float strength) {
+        if (masks.isEmpty() || strength <= 0F
+                || com.atom.chat.config.AtomChatConfig.performanceModeActive()) return false;
+        var client = Minecraft.getInstance();
+        var framebuffer = client.getMainRenderTarget();
+        var capture = BlurMask.capture(masks, client.getWindow().getGuiScale(), framebuffer.width, framebuffer.height);
+        try {
+            return render(new Matrix4f(), capture.x(), capture.y(), capture.w(), capture.h(), 0F, 1F, strength, masks);
+        } finally {
+            // The next diagnostic panel reuse must refresh after the HUD borrows its textures.
+            recreated = true;
+        }
+    }
+
+    private static boolean render(Matrix4f pose, float x, float y, float width, float height, float radius,
+                                  float alpha, float strength, java.util.List<BlurMask> masks) {
+        if (strength <= 0F || com.atom.chat.config.AtomChatConfig.performanceModeActive()) return false;
         // prepass_probe: 分段计时（诊断，只在 debug=on 且非 measureOnly 取时钟）。两者皆否则完全静默、产品行为不变。
         com.atom.chat.config.AtomChatConfig probeCfg = com.atom.chat.config.AtomChatConfig.get();
         final boolean probeOn = com.atom.chat.diagnostics.Truth3Probe.instrumentEnabled(
@@ -168,7 +188,9 @@ public final class PanelBlurRenderer {
                 return false;
             }
             ppM6 = probeOn ? System.nanoTime() : 0L;    // composite 段起
-            if (!drawRoundedQuad(pose, x, y, width, height, radius, alpha, blurTex)) {
+            boolean drawn = masks == null ? drawRoundedQuad(pose, x, y, width, height, radius, alpha, blurTex)
+                    : drawMaskedQuads(pose, masks, scale, px, py + hCrop, texW, texH, blurTex);
+            if (!drawn) {
                 ppM7 = probeOn ? System.nanoTime() : 0L;
                 return false;
             }
@@ -236,6 +258,7 @@ public final class PanelBlurRenderer {
      */
     public static boolean renderReuse(Matrix4f pose, float x, float y, float width, float height,
                                       float radius, float alpha, float strength) {
+        if (strength <= 0F || com.atom.chat.config.AtomChatConfig.performanceModeActive()) return false;
         if (alpha <= 0.003F || width <= 0.0F || height <= 0.0F) {
             return false;
         }
@@ -345,6 +368,25 @@ public final class PanelBlurRenderer {
     }
 
     private static boolean drawRoundedQuad(Matrix4f pose, float x, float y, float w, float h, float radius, float alpha, int texture) {
+        return drawRoundedQuad(pose, x, y, w, h, radius, alpha, texture, 0F, 1F - uvY, uvX, 1F);
+    }
+
+    static boolean drawMaskedQuads(Matrix4f pose, java.util.List<BlurMask> masks, double scale,
+                                    int captureX, int captureBottom, int textureWidth, int textureHeight, int texture) {
+        return GlStateUtil.withRgbOnlyBlend(() -> {
+            for (BlurMask mask : masks) {
+                var rect = mask.rect();
+                var uv = mask.textureCoords(scale, captureX, captureBottom, textureWidth, textureHeight);
+                if (!drawRoundedQuad(pose, rect.x(), rect.y(), rect.w(), rect.h(), mask.radius(), mask.alpha(), texture,
+                        uv.getLeft(), uv.getTop(), uv.getRight(), uv.getBottom())) return false;
+            }
+            return true;
+        });
+    }
+
+    private static boolean drawRoundedQuad(Matrix4f pose, float x, float y, float w, float h, float radius,
+                                           float alpha, int texture, float uLeft, float vTop, float uRight,
+                                           float vBottom) {
         ShaderInstance sh = roundedShader;
         if (sh == null) {
             return false;
@@ -357,7 +399,8 @@ public final class PanelBlurRenderer {
         float poseScale = Math.abs(pose.m00());
         Vector4f center = pose.transform(new Vector4f(x + w / 2.0F, y + h / 2.0F, 0.0F, 1.0F));
         uRect.set(center.x(), center.y(), w / 2.0F * poseScale, h / 2.0F * poseScale);
-        uRadius.set(Math.min(radius, Math.min(w, h) / 2.0F) * poseScale);
+        float maskRadius = Math.copySign(Math.min(Math.abs(radius), Math.min(w, h) / 2F), radius);
+        uRadius.set(maskRadius * poseScale);
         // GL textures are bottom-up; the shader flips V so GUI top-left is texture top.
         uFlipV.set(1.0F);
 
@@ -376,13 +419,12 @@ public final class PanelBlurRenderer {
         // V is 1-(1-v)*uvY, so after u_FlipV=1 the sampled V is (1-v)*uvY, landing
         // exactly on the captured sub-region for both exact (uvX=uvY=1) and
         // capacity modes. Exact mode reproduces the original 0..1 UV verbatim.
-        float vTop = 1.0F - uvY;
         BufferBuilder bb = Tesselator.getInstance().getBuilder();
         bb.begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_TEX_COLOR);
-        bb.vertex(pose, x, y, 0).uv(0.0F, vTop).color(1.0F, 1.0F, 1.0F, alpha).endVertex();
-        bb.vertex(pose, x, y + h, 0).uv(0.0F, 1.0F).color(1.0F, 1.0F, 1.0F, alpha).endVertex();
-        bb.vertex(pose, x + w, y + h, 0).uv(uvX, 1.0F).color(1.0F, 1.0F, 1.0F, alpha).endVertex();
-        bb.vertex(pose, x + w, y, 0).uv(uvX, vTop).color(1.0F, 1.0F, 1.0F, alpha).endVertex();
+        bb.vertex(pose, x, y, 0).uv(uLeft, vTop).color(1.0F, 1.0F, 1.0F, alpha).endVertex();
+        bb.vertex(pose, x, y + h, 0).uv(uLeft, vBottom).color(1.0F, 1.0F, 1.0F, alpha).endVertex();
+        bb.vertex(pose, x + w, y + h, 0).uv(uRight, vBottom).color(1.0F, 1.0F, 1.0F, alpha).endVertex();
+        bb.vertex(pose, x + w, y, 0).uv(uRight, vTop).color(1.0F, 1.0F, 1.0F, alpha).endVertex();
         BufferUploader.drawWithShader(bb.end());
 
         if (blendWasOn) {
@@ -572,15 +614,15 @@ public final class PanelBlurRenderer {
             }
 
             int srcTex = inputTex;
-            for (int i = 0; i < KAWASE_PASSES; i++) {
+            for (int i = 0; i < KawaseBlur.PASSES; i++) {
                 int dstFbo = (i % 2 == 0) ? tempFbo : resultFbo;
-                kawasePass(dstFbo, srcTex, vpW, vpH, capacityMode, tmx, tmy, (2.0F + i * 1.5F) * strength);
+                kawasePass(dstFbo, srcTex, vpW, vpH, capacityMode, tmx, tmy, KawaseBlur.spacing(i, strength));
                 if (capacityMode) {
                     extendEdge(dstFbo, w, h, texW, texH);
                 }
                 srcTex = (i % 2 == 0) ? tempTex : resultTex;
             }
-            lastBlurTex = (KAWASE_PASSES % 2 == 0) ? resultTex : tempTex;
+            lastBlurTex = (KawaseBlur.PASSES % 2 == 0) ? resultTex : tempTex;
             recreated = false;
         }
 

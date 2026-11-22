@@ -4,6 +4,7 @@ import com.atom.chat.chat.ChatMessage;
 import com.atom.chat.chat.ChatStore;
 import com.atom.chat.chat.PlayerRef;
 import com.atom.chat.chat.PrivateChatStore;
+import com.atom.chat.chat.RepeatedMessageView;
 import com.atom.chat.chat.WorldFeedFilter;
 import com.atom.chat.nav.AppPage;
 import com.atom.chat.nav.NavPage;
@@ -81,6 +82,8 @@ public final class MessageListWiring<S> {
     }
 
     private final Host<S> host;
+    private final RepeatedMessageView worldRepeats = new RepeatedMessageView();
+    private final RepeatedMessageView privateRepeats = new RepeatedMessageView();
 
     /** Pending click candidate used by the click/drag coexistence flow (Task 8). */
     private S pendingClickSpan;
@@ -130,10 +133,10 @@ public final class MessageListWiring<S> {
             return List.of();
         }
         if (page.page() == AppPage.WORLD_CHAT) {
-            return host.worldFeed().filterFeed(host.worldSnapshot());
+            return host.worldFeed().filterFeed(worldRepeats.rows(host.worldSnapshot()));
         }
         if (page.page() == AppPage.PRIVATE_CHAT) {
-            return host.privateMessages(page.target());
+            return privateRepeats.rows(host.privateMessages(page.target()));
         }
         return List.of();
     }

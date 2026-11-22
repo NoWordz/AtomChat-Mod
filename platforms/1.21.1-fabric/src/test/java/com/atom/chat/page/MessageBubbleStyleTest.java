@@ -37,10 +37,13 @@ class MessageBubbleStyleTest {
         AtomChatConfig cfg = AtomChatConfig.get();
         var snapshot = com.atom.chat.theme.AppearancePresetStore.Snapshot.capture(cfg);
         boolean oldImages = cfg.imageMessagesEnabled;
+        boolean oldPerformance = cfg.performanceMode;
         int oldInterval = cfg.timestampIntervalMinutes;
         try (Surface target = Surface.makeRasterN32Premul(420, 640);
              Surface source = Surface.makeRasterN32Premul(120, 80)) {
             com.atom.chat.theme.AppearancePresetStore.Snapshot.capture(new AtomChatConfig()).applyTo(cfg);
+            // Isolate the exact bubble and image clip pixels from the outer shadow.
+            cfg.performanceMode = true;
             cfg.timestampIntervalMinutes = 0;
             cfg.imageMessagesEnabled = !kind.equals("disabled");
             cfg.secondaryCapsuleBg = 0xFF2C3E50;
@@ -61,7 +64,7 @@ class MessageBubbleStyleTest {
                             public long openStart() { return msg.getTimestamp() + 1; }
                         };
                         MessageListView view = new MessageListView(host,
-                                (url, visible) -> kind.equals("loaded") ? image : null);
+                                (url, visible) -> kind.equals("loaded") ? new com.atom.chat.image.MessageImage(image, false) : null);
                         try {
                             target.getCanvas().clear(0);
                             view.draw(target.getCanvas(), 10, 10, 400, 600, List.of(msg), new ScrollController());
@@ -91,6 +94,7 @@ class MessageBubbleStyleTest {
                 }
             }
         } finally {
+            cfg.performanceMode = oldPerformance;
             snapshot.applyTo(cfg);
             cfg.imageMessagesEnabled = oldImages;
             cfg.timestampIntervalMinutes = oldInterval;

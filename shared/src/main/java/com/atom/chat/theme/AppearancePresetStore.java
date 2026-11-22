@@ -64,7 +64,7 @@ public final class AppearancePresetStore {
                     config.cardColor, config.panelOutlineColor,
                     config.secondaryCapsuleBg, config.secondaryCapsuleText,
                     config.panelOpacity, config.panelWidth, config.panelHeight, config.panelWidthAutomatic, config.panelHeightAutomatic,
-                    config.uiScale, config.contentScale, config.cardTint, config.effectiveCardBlurStrength(), config.cornerRadius,
+                    config.uiScale, config.contentScale, config.cardTint, config.storedCardBlurStrength(), config.cornerRadius,
                     config.blurEnabled, config.panelOutline, config.effectivePanelOutlineWidth(), config.animationEnabled,
                     config.pageNavStyle.name(), config.themeName == null ? "" : config.themeName,
                     config.effectiveBubbleStyle().name());
@@ -93,13 +93,15 @@ public final class AppearancePresetStore {
             config.uiScale = uiScale;
             config.contentScale = contentScale;
             config.cardTint = cardTint;
-            config.cardBlurStrength = cardBlurStrength;
             config.cornerRadius = cornerRadius;
-            config.blurEnabled = blurEnabled;
             config.panelOutline = panelOutline;
             config.setPanelOutlineWidth(panelOutlineWidth);
-            config.animationEnabled = animationEnabled;
-            config.pageNavStyle = AtomChatConfig.PageNavStyle.valueOf(pageNavStyle);
+            if (!config.performanceMode) {
+                config.cardBlurStrength = cardBlurStrength;
+                config.blurEnabled = blurEnabled;
+                config.animationEnabled = animationEnabled;
+                config.pageNavStyle = AtomChatConfig.PageNavStyle.valueOf(pageNavStyle);
+            }
             config.themeName = themeName == null ? "" : themeName;
             config.bubbleStyle = AtomChatConfig.BubbleStyle.valueOf(bubbleStyle);
         }
@@ -345,7 +347,7 @@ public final class AppearancePresetStore {
                 || !finite(s.contentScale(), 0.8F, 1.5F)
                 || !finite(s.cardTint(), 0F, 1F)
                 || !finite(s.cardBlurStrength(), 0F, 3F)
-                || !finite(s.cornerRadius(), 0F, 25F)
+                || !finite(s.cornerRadius(), 0F, AtomChatConfig.MAX_CORNER_RADIUS)
                 || !finite(s.panelOutlineWidth(), 0F, 6F)) {
             return false;
         }

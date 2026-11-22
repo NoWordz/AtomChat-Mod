@@ -2,19 +2,18 @@ package com.atom.chat.ui;
 
 
 
+import com.atom.chat.render.OutlineIcons;
+import com.atom.chat.render.CornerGeometry;
+import com.atom.chat.render.ChromeMaterial;
 import com.atom.lib.design.atomchat.AppIcons;
 import com.atom.lib.design.atomchat.UiTokens;
 import com.atom.chat.nav.AppPage;
 import com.atom.chat.nav.PageNavAxis;
 import com.atom.chat.render.Animator;
 import com.atom.chat.render.Easing;
-import com.atom.lib.design.atomchat.SkiaDraw;
 import io.github.humbleui.skija.Canvas;
 import io.github.humbleui.skija.Color;
 import io.github.humbleui.skija.Paint;
-import io.github.humbleui.skija.PaintMode;
-import io.github.humbleui.skija.PaintStrokeCap;
-import io.github.humbleui.skija.PaintStrokeJoin;
 import io.github.humbleui.skija.Path;
 import io.github.humbleui.types.Rect;
 
@@ -31,7 +30,7 @@ public final class BottomTabBar {
     private static final Path[] ICONS = {
             AppIcons.ICON_TAB_CHAT_PATH,
             AppIcons.ICON_TAB_PROFILE_PATH,
-            AppIcons.ICON_TAB_SETTINGS_PATH
+            TablerIcons.SETTINGS
     };
 
     private final Animator indicatorAnim = new Animator(Easing::easeInOutCubic);
@@ -151,11 +150,12 @@ public final class BottomTabBar {
 
     private void renderBar(Canvas canvas, UiLayout.Rect bar, int selectedIndex,
                            int textPrimary, int accent) {
-        com.atom.chat.render.ChromeMaterial.drawShadow(canvas, bar.x(), bar.y(), bar.w(), bar.h(), UiTokens.shellChromeRadius(AtomChatAppearance.theme()));
-        com.atom.chat.render.ChromeMaterial.drawBackdrop(canvas, bar.x(), bar.y(), bar.w(), bar.h(), UiTokens.shellChromeRadius(AtomChatAppearance.theme()), 1F);
-        SkiaDraw.drawRoundedRect(canvas, bar.x(), bar.y(), bar.w(), bar.h(),
-                UiTokens.shellChromeRadius(AtomChatAppearance.theme()), UiTokens.cardFill(AtomChatAppearance.theme()));
-        com.atom.chat.render.ChromeMaterial.drawDetails(canvas, bar, UiTokens.shellChromeRadius(AtomChatAppearance.theme()));
+        float radius = ChromeMaterial.cornerRadius(bar, UiTokens.shellChromeRadius(AtomChatAppearance.theme()));
+        ChromeMaterial.drawShadow(canvas, bar.x(), bar.y(), bar.w(), bar.h(), radius);
+        ChromeMaterial.drawBackdrop(canvas, bar.x(), bar.y(), bar.w(), bar.h(), radius, 1F);
+        CornerGeometry.drawRoundedRect(canvas, bar.x(), bar.y(), bar.w(), bar.h(),
+                radius, UiTokens.cardFill(AtomChatAppearance.theme()));
+        ChromeMaterial.drawDetails(canvas, bar, radius);
 
         renderContents(canvas, bar, selectedIndex, textPrimary, accent);
     }
@@ -170,7 +170,8 @@ public final class BottomTabBar {
         float inset = UiTokens.TAB_EDGE_PAD;
         float capsuleH = bar.h() - inset * 2.0F;
         float capsuleW = cellWidth - inset * 2.0F;
-        float radius = UiTokens.insetRadius(UiTokens.shellChromeRadius(AtomChatAppearance.theme()), inset, capsuleW, capsuleH);
+        float radius = ChromeMaterial.insetCornerRadius(capsuleW, capsuleH,
+                UiTokens.shellChromeRadius(AtomChatAppearance.theme()), inset);
 
         // The indicator IS the selected cell index, animated: it carries the
         // fractional slide between cells, so the pill is placed from it directly
@@ -185,7 +186,7 @@ public final class BottomTabBar {
         // capsule has no per-cell identity of its own while it slides.
         canvas.save();
         applyBounce(canvas, tabScale[selectedIndex].scale(), capsuleCenterX, barCenterY);
-        SkiaDraw.drawRoundedRect(canvas, capsuleX, bar.y() + inset, capsuleW, capsuleH, radius,
+        CornerGeometry.drawRoundedRect(canvas, capsuleX, bar.y() + inset, capsuleW, capsuleH, radius,
                 UiTokens.accentFill(AtomChatAppearance.theme()));
         canvas.restore();
 
@@ -204,7 +205,7 @@ public final class BottomTabBar {
             // would only dull it.
             if (i != selectedIndex && tabHover[i] > 0.01F) {
                 float x = bar.x() + cellWidth * i + inset;
-                SkiaDraw.drawRoundedRect(canvas, x, bar.y() + inset, capsuleW, capsuleH, radius,
+                CornerGeometry.drawRoundedRect(canvas, x, bar.y() + inset, capsuleW, capsuleH, radius,
                         UiTokens.cardHover(tabHover[i], AtomChatAppearance.theme()));
             }
 
@@ -271,25 +272,6 @@ public final class BottomTabBar {
 
     private static void drawIconCentered(Canvas canvas, Path icon, float cx, float cy,
                                          float size, int color) {
-        Rect b = icon.getBounds();
-        if (b == null || b.isEmpty()) {
-            return;
-        }
-        float scale = size / Math.max(b.getWidth(), b.getHeight());
-        canvas.save();
-        try {
-            canvas.translate(cx - (b.getLeft() + b.getRight()) / 2.0F * scale,
-                    cy - (b.getTop() + b.getBottom()) / 2.0F * scale);
-            canvas.scale(scale, scale);
-            try (Paint paint = new Paint().setColor(color).setAntiAlias(true)
-                    .setMode(PaintMode.STROKE)
-                    .setStrokeWidth(UiTokens.iconStroke(size) / scale)
-                    .setStrokeCap(PaintStrokeCap.ROUND)
-                    .setStrokeJoin(PaintStrokeJoin.ROUND)) {
-                canvas.drawPath(icon, paint);
-            }
-        } finally {
-            canvas.restore();
-        }
+        OutlineIcons.draw(canvas, icon, cx, cy, size, color);
     }
 }

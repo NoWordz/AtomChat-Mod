@@ -13,6 +13,7 @@ import org.lwjgl.system.MemoryStack;
 import java.nio.ByteBuffer;
 import java.nio.FloatBuffer;
 import java.nio.IntBuffer;
+import java.util.function.BooleanSupplier;
 
 /**
  * Captures and restores the OpenGL state around Skia rendering.
@@ -50,6 +51,45 @@ public final class GlStateUtil {
             throw new IllegalStateException("GlStateUtil.restore() called without save()");
         }
         savedState.restore();
+    }
+
+    /** Composite HUD world RGB while preserving the target's alpha and the caller's blend state. */
+    static boolean withRgbOnlyBlend(BooleanSupplier draw) {
+        try (MemoryStack stack = MemoryStack.stackPush()) {
+            ByteBuffer mask = stack.malloc(4);
+            GL11C.glGetBooleanv(GL11C.GL_COLOR_WRITEMASK, mask);
+            boolean red = mask.get(0) != 0;
+            boolean green = mask.get(1) != 0;
+            boolean blue = mask.get(2) != 0;
+            boolean alpha = mask.get(3) != 0;
+            int rgbEquation = GL11C.glGetInteger(GL20C.GL_BLEND_EQUATION_RGB);
+            int alphaEquation = GL11C.glGetInteger(GL20C.GL_BLEND_EQUATION_ALPHA);
+            int sourceRgb = GL11C.glGetInteger(GL14C.GL_BLEND_SRC_RGB);
+            int destinationRgb = GL11C.glGetInteger(GL14C.GL_BLEND_DST_RGB);
+            int sourceAlpha = GL11C.glGetInteger(GL14C.GL_BLEND_SRC_ALPHA);
+            int destinationAlpha = GL11C.glGetInteger(GL14C.GL_BLEND_DST_ALPHA);
+            boolean blendEnabled = GL11C.glIsEnabled(GL11C.GL_BLEND);
+            GL11C.glEnable(GL11C.GL_BLEND);
+            GlStateManager._enableBlend();
+            GL20C.glBlendEquationSeparate(GL14C.GL_FUNC_ADD, GL14C.GL_FUNC_ADD);
+            GL14C.glBlendFuncSeparate(GL11C.GL_SRC_ALPHA, GL11C.GL_ONE_MINUS_SRC_ALPHA, GL11C.GL_ONE, GL11C.GL_ZERO);
+            GlStateManager._blendFuncSeparate(GL11C.GL_SRC_ALPHA, GL11C.GL_ONE_MINUS_SRC_ALPHA, GL11C.GL_ONE, GL11C.GL_ZERO);
+            GL11C.glColorMask(red, green, blue, false);
+            GlStateManager._colorMask(red, green, blue, false);
+            try {
+                return draw.getAsBoolean();
+            } finally {
+                GL11C.glColorMask(red, green, blue, alpha);
+                GlStateManager._colorMask(red, green, blue, alpha);
+                GL20C.glBlendEquationSeparate(rgbEquation, alphaEquation);
+                GL14C.glBlendFuncSeparate(sourceRgb, destinationRgb, sourceAlpha, destinationAlpha);
+                GlStateManager._blendFuncSeparate(sourceRgb, destinationRgb, sourceAlpha, destinationAlpha);
+                if (!blendEnabled) {
+                    GL11C.glDisable(GL11C.GL_BLEND);
+                    GlStateManager._disableBlend();
+                }
+            }
+        }
     }
 
     /**

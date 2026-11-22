@@ -4,6 +4,7 @@ import com.atom.chat.AtomChat;
 import com.atom.chat.config.AtomChatConfig;
 import com.atom.chat.ui.PanelBackground;
 import com.atom.chat.ui.UiLayout;
+import com.atom.lib.design.atomchat.UiTokens;
 import io.github.humbleui.skija.*;
 import io.github.humbleui.types.IRect;
 import io.github.humbleui.types.RRect;
@@ -61,6 +62,7 @@ public final class CardBackdrop implements AutoCloseable {
     }
 
     public static Image captureWorld(Supplier<Image> capture) {
+        if (AtomChatConfig.performanceModeActive()) return null;
         try {
             return capture.get();
         } catch (RuntimeException | LinkageError failure) {
@@ -82,19 +84,21 @@ public final class CardBackdrop implements AutoCloseable {
             if (mainTarget) alphaPreservingBlender();
             Matrix33 panelMatrix = canvas.getLocalToDeviceAsMatrix33();
             float[] m = panelMatrix.getMat();
-            float sigma = 3.5F * strength * Math.max(m[0], m[4]);
-            int pad = (int) Math.ceil(3 * sigma);
-            int left = Math.max(0, (int) Math.floor(panel.x() * m[0] + m[2]) - pad);
-            int top = Math.max(0, (int) Math.floor(panel.y() * m[4] + m[5]) - pad);
-            int right = Math.min(target.getWidth(), (int) Math.ceil(panel.right() * m[0] + m[2]) + pad);
-            int bottom = Math.min(target.getHeight(), (int) Math.ceil(panel.bottom() * m[4] + m[5]) + pad);
+            // World glass has the same source crop as the GL panel pass.
+            // Clamp at that edge so moving the strength past the panel value cannot pull in outside colour.
+            float inset = wallpaper != null || config.halfScreenMode ? 0F : UiTokens.s(config.effectivePanelOutlineWidth());
+            int originX = Math.round((panel.x() + inset) * m[0] + m[2]);
+            int originY = Math.round((panel.y() + inset) * m[4] + m[5]);
+            int left = Math.max(0, originX);
+            int top = Math.max(0, originY);
+            int right = Math.min(target.getWidth(), originX + Math.round((panel.w() - 2F * inset) * m[0]));
+            int bottom = Math.min(target.getHeight(), originY + Math.round((panel.h() - 2F * inset) * m[4]));
             if (right <= left || bottom <= top) return NONE;
             Rect bounds = Rect.makeLTRB(left, top, right, bottom);
 
             // Blur at half resolution. Its radius is still expressed in physical pixels.
             int w = Math.max(1, (right - left + 1) / 2);
             int h = Math.max(1, (bottom - top + 1) / 2);
-            Rect raster = Rect.makeWH(w, h);
             try (Surface source = target.makeSurface(w, h);
                  Surface result = target.makeSurface(w, h)) {
                 if (source == null || result == null) return NONE;
@@ -108,13 +112,7 @@ public final class CardBackdrop implements AutoCloseable {
                 } else {
                     drawWorld(input, world, bounds, config);
                 }
-                try (Image original = source.makeImageSnapshot();
-                     ImageFilter blur = ImageFilter.makeBlur(sigma * w / bounds.getWidth(),
-                             sigma * h / bounds.getHeight(), FilterTileMode.CLAMP);
-                     Paint paint = new Paint().setImageFilter(blur)) {
-                    result.getCanvas().drawImageRect(original, raster, paint);
-                }
-                CardBackdrop frame = new CardBackdrop(result.makeImageSnapshot(), bounds, mainTarget);
+                CardBackdrop frame = new CardBackdrop(KawaseBlur.blur(source, result, bounds, strength), bounds, mainTarget);
                 FRAME.set(frame);
                 return frame;
             }
@@ -164,14 +162,14 @@ public final class CardBackdrop implements AutoCloseable {
         if (recorder != null) {
             float previous = pushMaskOpacity(opacity);
             try {
-                recorder.add(canvas, (mask, paint) -> mask.drawRRect(shape, paint));
+                recorder.add(canvas, (mask, paint) -> CornerGeometry.drawRRect(mask, shape, paint));
             } finally {
                 restoreMaskOpacity(previous);
             }
         } else {
             int save = canvas.save();
             try {
-                canvas.clipRRect(shape, true);
+                CornerGeometry.clipRRect(canvas, shape, true);
                 frame.drawDeviceImage(canvas, frame.composite.setAlphaf(opacity));
             } finally {
                 canvas.restoreToCount(save);

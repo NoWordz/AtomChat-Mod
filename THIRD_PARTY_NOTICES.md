@@ -8,12 +8,20 @@ its own copyright and license. This file collects the required notices.
 
 | Component | License | Purpose |
 |---|---|---|
-| AtomLib 0.1.0-local | Apache License 2.0 | Separate UI dependency; it owns Skija, Yoga and Windows x64/ARM64 natives |
+| AtomLib 0.7.1 | Apache License 2.0 | Separate UI dependency providing Skija, Yoga and platform natives |
 | Skija 0.143.18 (Java bindings for Skia) | Apache License 2.0 | Distributed by AtomLib, not embedded in the AtomChat consumer JAR |
 | HumbleUI types 0.2.0 | Apache License 2.0 | Distributed by AtomLib for geometry types |
 | FlatLaf | Apache License 2.0 | Modern Swing look and feel for the image picker |
-| [Tabler Icons](https://github.com/tabler/tabler-icons/tree/85e870dbe8680c2d6deefd062122d30ef1544a41) | MIT | Selected settings icons drawn by the existing icon painter. License included in `META-INF/licenses/Tabler-Icons.txt` |
+| [Native File Dialog Extended 1.4.1](https://github.com/btzy/nativefiledialog-extended/releases/tag/v1.4.1) | zlib | Windows x64 system file chooser. Notice included in `META-INF/licenses/NFDe.txt` |
+| Tabler Icons | MIT | Selected [v3.34.1 Outline paths](https://github.com/tabler/tabler-icons/tree/v3.34.1) in `TablerIcons` and retained [settings icons](https://github.com/tabler/tabler-icons/tree/85e870dbe8680c2d6deefd062122d30ef1544a41) in `SettingsIcons`. License included in `META-INF/licenses/Tabler-Icons.txt` |
+| [Lucide](https://lucide.dev/) and [Feather](https://feathericons.com/) | ISC and MIT | Retained SVG adaptations include the Feather-derived Lucide mention icon and the Lucide lightning glyph in server settings. Notices included in `META-INF/licenses/Lucide.txt` and `META-INF/licenses/Feather.txt` |
 | LWJGL Yoga (3.3.1 Forge, 3.3.3 1.21.1) | BSD 3-Clause for LWJGL, MIT for Yoga | Layout backend distributed by AtomLib |
+
+The Windows x64 picker DLL is built from the unmodified NFDe v1.4.1 tag using
+MinGW-w64. From the upstream clone, build the resource with
+`g++ -std=c++17 -O2 -shared -static -DNFD_EXPORT -DUNICODE -D_UNICODE -Isrc/include src/nfd_win.cpp -o atomchat-nfde.dll -lole32 -luuid -lshell32 -lshlwapi -luser32 -lcomctl32`,
+then run `strip --strip-unneeded atomchat-nfde.dll`. The JAR stores the DLL in
+`win32-x86-64/` and uses Minecraft's JNA runtime.
 
 ## Apache License 2.0 components
 
@@ -266,3 +274,13 @@ SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
 CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
 OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+## Project links in the About screen
+
+The project marks are displayed beside links to the respective projects for attribution.
+
+- [Skija README artwork](https://github.com/HumbleUI/Skija/blob/44c99d7a92fe68a29b3233f8ca55b0d29d8f6f68/extras/logo.png) fitted to a square with transparent padding.
+- [AtomLib project artwork](https://github.com/NoWordz/AtomLib-Mod/blob/22d304046494681e852dd3055b8f1fdb910a8154/assets/branding/logo-original.png) downsampled for the card.
+- [Tabler compact brand mark](https://github.com/tabler/tabler/blob/68c81fc9767f679eb3a0f312b79d80435d99e7f7/shared/static/logo-small.svg) rasterized to PNG.
+- [Lucide project favicon](https://github.com/lucide-icons/lucide/blob/c1a02a04d4f3f7049d44567d62b8b06cff0b9103/docs/public/favicon.svg) rasterized to PNG.
+- [Feather website favicon](https://feathericons.com/favicon-32x32.png) bundled as published.

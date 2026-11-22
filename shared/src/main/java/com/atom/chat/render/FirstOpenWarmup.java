@@ -71,15 +71,27 @@ public final class FirstOpenWarmup {
         startColdThread("AtomChat-FontPrewarm", () -> {
             long started = System.nanoTime();
             try {
-                FontManager.prewarmBlocking();
+                try {
+                    FontManager.prewarmBlocking();
+                } finally {
+                    FirstOpenBudget.setPrewarmFont(System.nanoTime() - started);
+                    fontReady.countDown();
+                }
+                if (AtomChatConfig.get().enabled) prewarmPickerGlyphs();
             } catch (Throwable ignored) {
-                // A missing native library is reported by SkiaSupport; the panel
-                // never opens in that case, and the synchronous path stays intact.
-            } finally {
-                FirstOpenBudget.setPrewarmFont(System.nanoTime() - started);
-                fontReady.countDown();
+                // SkiaSupport reports unavailable natives. The draw path can build
+                // any glyph whose background prewarm could not finish.
             }
         });
+    }
+
+    private static void prewarmPickerGlyphs() {
+        // The picker uses white glyphs and the same font size for emoji and reactions.
+        var glyphs = com.atom.chat.reaction.ReactionEmoji.ALL;
+        int twoPages = 2 * UiTokens.EMOJI_VISIBLE_ROWS * UiTokens.EMOJI_COLS;
+        var specs = EmojiPrewarmScanner.collect(glyphs.subList(0, Math.min(glyphs.size(), twoPages)),
+                new float[]{UiTokens.FONT_EMOJI}, new int[]{0xFFFFFF});
+        SkiaFontRenderer.prewarmEmojiGlyphs(specs);
     }
 
     /**

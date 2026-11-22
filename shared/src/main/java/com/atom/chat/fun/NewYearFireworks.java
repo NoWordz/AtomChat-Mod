@@ -48,7 +48,7 @@ public final class NewYearFireworks {
     private long nextAllowed = Long.MIN_VALUE;
 
     static boolean enabled(AtomChatConfig config) {
-        return config.enabled && config.experimentalEffectsEnabled && config.animationEnabled;
+        return config.enabled && config.experimentalEffectsEnabled && config.effectiveAnimationEnabled();
     }
 
     synchronized boolean onMessage(String body, boolean allowed, long nowMs) {

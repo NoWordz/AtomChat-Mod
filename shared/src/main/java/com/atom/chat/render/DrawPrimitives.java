@@ -1,8 +1,9 @@
 package com.atom.chat.render;
 
 
+import com.atom.chat.ui.TablerIcons;
+import com.atom.chat.ui.UiLayout;
 import com.atom.chat.ui.AtomChatAppearance;
-import com.atom.lib.design.atomchat.SkiaDraw;
 import com.atom.chat.config.AtomChatConfig;
 import com.atom.chat.ui.Animations;
 import com.atom.chat.ui.PressScale;
@@ -11,11 +12,7 @@ import com.atom.lib.design.atomchat.UiTokens;
 import io.github.humbleui.skija.Canvas;
 import io.github.humbleui.skija.Color;
 import io.github.humbleui.skija.Paint;
-import io.github.humbleui.skija.PaintMode;
-import io.github.humbleui.skija.PaintStrokeCap;
-import io.github.humbleui.skija.PaintStrokeJoin;
 import io.github.humbleui.skija.Path;
-import io.github.humbleui.types.Rect;
 
 /**
  * Drawing primitives and theme tokens (D9): the composer's icon row, the inline
@@ -108,10 +105,7 @@ public final class DrawPrimitives {
 
     // ------------------------------------------------------------------ icons
 
-    // Toolbar icons are kept as inline SVG path data (not assets): three tiny
-    // paths are cheaper than a resource pipeline, stay crisp at every scale,
-    // and are trivial to recolour for hover/pressed/theme states. The paths use
-    // a 20x20 logical space; drawIcon() fits them into the button bounds.
+    // Inline outline paths are fitted to the button bounds by drawIcon().
     // Landscape photo glyph: a wide rounded rect (14x9 on the 20 grid), sun
     // top-left, mountains inside — the old one was portrait and read as a
     // phone photo instead of an image.
@@ -123,40 +117,27 @@ public final class DrawPrimitives {
     private static final String ICON_EMOJI_SVG = "M10 3 a7 7 0 1 0 0 14 a7 7 0 1 0 0 -14"
             + " M7 8.6 v1.3 M13 8.6 v1.3"
             + " M6.8 12.2 C8.5 14.3 11.5 14.3 13.2 12.2";
-    // Feather-style send: one diagonal fold + the paper-plane outline.
-    private static final String ICON_SEND_SVG = "M18 2.5 L9.5 11"
-            + " M18 2.5 L13.5 18.5 L9.5 11 L2.5 7.5 Z";
-    // Context-menu icons, same 20x20 line-icon language as the toolbar.
-    private static final String ICON_COPY_SVG = "M5 3 L11 3 L11 9 L5 9 Z M8 7 L14 7 L14 13 L8 13 Z";
-    private static final String ICON_QUOTE_SVG = "M3 3 L17 3 L17 12 L10 12 L6 16 L7 12 L3 12 Z"
-            + " M7 6 L7 9 M10 6 L10 9";
-    private static final String ICON_SAVE_SVG = "M10 3 L10 11 M7 8 L10 11 L13 8"
-            + " M4 15 L4 17 L16 17 L16 15";
-    // Avatar context-menu icons, same 20x20 line-icon language.
-    // Lucide at-sign (ISC): a true "@" shape — inner circle plus the outer
+    // Lucide at-sign (Feather-derived): a true "@" shape — inner circle plus the outer
     // ring/tail stroke. Coordinates are in Lucide's 24x24 space and are fitted
     // by drawIconCentered exactly like the other icon paths.
     private static final String ICON_MENTION_SVG = "M12 8 a4 4 0 1 0 0 8 a4 4 0 1 0 0 -8"
             + " M16 8 v5 a3 3 0 0 0 6 0 v-1 a10 10 0 1 0 -4 8";
-    private static final String ICON_WHISPER_SVG = "M3 4 L17 4 L17 14 L10 14 L6 18 L7 14 L3 14 Z";
-    private static final String ICON_TP_SVG = "M3 17 L17 3 M17 3 L10 3 M17 3 L17 10";
-    private static final String ICON_BLOCK_SVG = "M10 3 a7 7 0 1 0 0 14 a7 7 0 1 0 0 -14"
-            + " M4.5 4.5 L15.5 15.5";
     public static final Path ICON_IMAGE_PATH = Path.makeFromSVGString(ICON_IMAGE_SVG);
     public static final Path ICON_TOOLS_PATH = Path.makeFromSVGString(
             "M10 2 A8 8 0 1 1 10 18 A8 8 0 1 1 10 2 M10 6 L10 14 M6 10 L14 10");
     public static final Path ICON_EMOJI_PATH = Path.makeFromSVGString(ICON_EMOJI_SVG);
-    /** Quick-phrase button: a lightning bolt (Lucide zap). */
+    /** Lightning glyph retained for the server quick-phrase settings (Lucide zap). */
     private static final String ICON_PHRASE_SVG = "M13 2 3 14h9l-1 8 10-12h-9l1-8z";
     public static final Path ICON_PHRASE_PATH = Path.makeFromSVGString(ICON_PHRASE_SVG);
-    public static final Path ICON_SEND_PATH = Path.makeFromSVGString(ICON_SEND_SVG);
-    public static final Path ICON_COPY_PATH = Path.makeFromSVGString(ICON_COPY_SVG);
-    public static final Path ICON_QUOTE_PATH = Path.makeFromSVGString(ICON_QUOTE_SVG);
-    public static final Path ICON_SAVE_PATH = Path.makeFromSVGString(ICON_SAVE_SVG);
+    public static final Path ICON_SEND_PATH = TablerIcons.SEND;
+    public static final Path ICON_COPY_PATH = TablerIcons.COPY;
+    public static final Path ICON_QUOTE_PATH = TablerIcons.MESSAGE_REPLY;
+    public static final Path ICON_SAVE_PATH = TablerIcons.DOWNLOAD;
     public static final Path ICON_MENTION_PATH = Path.makeFromSVGString(ICON_MENTION_SVG);
-    public static final Path ICON_WHISPER_PATH = Path.makeFromSVGString(ICON_WHISPER_SVG);
-    public static final Path ICON_TP_PATH = Path.makeFromSVGString(ICON_TP_SVG);
-    public static final Path ICON_BLOCK_PATH = Path.makeFromSVGString(ICON_BLOCK_SVG);
+    public static final Path ICON_WHISPER_PATH = TablerIcons.MESSAGE_DOTS;
+    public static final Path ICON_TP_PATH = TablerIcons.ARROW_UP_RIGHT;
+    public static final Path ICON_BLOCK_PATH = Path.makeFromSVGString(
+            "M10 3 a7 7 0 1 0 0 14 a7 7 0 1 0 0 -14 M4.5 4.5 L15.5 15.5");
     private static final String ICON_JUMP_DOWN_SVG = "M4 8 L10 14 M10 14 L16 8 M10 3 L10 14";
     public static final Path ICON_JUMP_DOWN_PATH = Path.makeFromSVGString(ICON_JUMP_DOWN_SVG);
 
@@ -184,26 +165,7 @@ public final class DrawPrimitives {
     /** Draws an icon centered on an arbitrary point; used by toolbar and menus. */
     public static void drawIconCentered(Canvas canvas, Path icon, float cx, float cy,
                                  float size, int color) {
-        Rect b = com.atom.chat.render.OutlineIconBounds.of(icon);
-        if (b == null || b.isEmpty()) {
-            return;
-        }
-        float scale = size / Math.max(b.getWidth(), b.getHeight());
-        canvas.save();
-        try {
-            canvas.translate(cx - (b.getLeft() + b.getRight()) / 2.0F * scale,
-                    cy - (b.getTop() + b.getBottom()) / 2.0F * scale);
-            canvas.scale(scale, scale);
-            try (Paint paint = new Paint().setColor(color).setAntiAlias(true)
-                    .setMode(PaintMode.STROKE)
-                    .setStrokeWidth(UiTokens.iconStroke(size) / scale)
-                    .setStrokeCap(PaintStrokeCap.ROUND)
-                    .setStrokeJoin(PaintStrokeJoin.ROUND)) {
-                canvas.drawPath(icon, paint);
-            }
-        } finally {
-            canvas.restore();
-        }
+        OutlineIcons.draw(canvas, icon, cx, cy, size, color);
     }
 
     // --------------------------------------------------------- composer row
@@ -244,7 +206,7 @@ public final class DrawPrimitives {
         float wash = Math.max(hoverWash, pressedWash);
         if (wash > 0.01F) {
             float inset = UiTokens.EDGE_CONTROL_INSET;
-            SkiaDraw.drawRoundedRect(canvas, bx + inset, by + inset,
+            CornerGeometry.drawRoundedRect(canvas, bx + inset, by + inset,
                     UiTokens.ACTION_BUTTON_SIZE - inset * 2.0F,
                     UiTokens.ACTION_BUTTON_SIZE - inset * 2.0F,
                     UiTokens.radius(8, AtomChatAppearance.theme()), UiTokens.cardHover(wash, AtomChatAppearance.theme()));
@@ -255,7 +217,7 @@ public final class DrawPrimitives {
                 || pressed;
         Path icon = switch (id) {
             case 0 -> ICON_TOOLS_PATH;
-            case 3 -> ICON_PHRASE_PATH;
+            case 3 -> TablerIcons.BOLT;
             default -> ICON_EMOJI_PATH;
         };
         drawIcon(canvas, icon, bx, by, activeTint ? accent() : textPrimary());
@@ -270,42 +232,52 @@ public final class DrawPrimitives {
         drawSendButton(canvas, bx, by, vmx, vmy, true);
     }
     public void drawSendButton(Canvas canvas, float bx, float by, float vmx, float vmy, boolean enabled) {
+        drawSendButton(canvas, new UiLayout.Rect(bx, by, UiTokens.BUTTON_W, UiTokens.BUTTON_H), vmx, vmy, enabled);
+    }
+
+    public void drawSendButton(Canvas canvas, UiLayout.Rect button, float vmx, float vmy, boolean enabled) {
+        float bx = button.x(), by = button.y();
+        float width = button.w(), height = button.h();
+        if (width <= 0F || height <= 0F) return;
         if (!enabled) {
-            com.atom.chat.ui.ClickRipples.block(new com.atom.chat.ui.UiLayout.Rect(bx, by, UiTokens.BUTTON_W, UiTokens.BUTTON_H));
+            com.atom.chat.ui.ClickRipples.block(button);
             int dimAccent = (accent() & 0xFFFFFF) | 0x55000000;
-            SkiaDraw.drawRoundedRect(canvas, bx, by, UiTokens.BUTTON_W, UiTokens.BUTTON_H, UiTokens.radius(9, AtomChatAppearance.theme()), dimAccent);
-            drawIcon(canvas, ICON_SEND_PATH, bx, by, UiTokens.BUTTON_W, UiTokens.BUTTON_H,
+            CornerGeometry.drawRoundedRect(canvas, bx, by, width, height, UiTokens.radius(9, AtomChatAppearance.theme()), dimAccent);
+            drawIcon(canvas, ICON_SEND_PATH, bx, by, width, height,
                     (UiTokens.onAccent(accent()) & 0xFFFFFF) | 0x66000000);
             return;
         }
-        com.atom.chat.ui.ClickRipples.region(bx, by, UiTokens.BUTTON_W, UiTokens.BUTTON_H,
+        com.atom.chat.ui.ClickRipples.region(bx, by, width, height,
                 UiTokens.radius(8, AtomChatAppearance.theme()), UiTokens.accentFill(AtomChatAppearance.theme()));
         float frameDt = host.frameDt();
-        boolean hover = inputButtonHovered(bx, by, UiTokens.BUTTON_W, UiTokens.BUTTON_H, vmx, vmy);
+        boolean hover = inputButtonHovered(bx, by, width, height, vmx, vmy);
         boolean pressed = buttonPressed(2);
         boolean pressedHeld = pressedButtonHeld == 2;
         buttonHover[2] = UiMotion.approach(buttonHover[2], hover ? 1.0F : 0.0F, frameDt, UiMotion.HOVER_MS);
         // Same press/hover scale as the icon buttons and the bottom tab bar.
         PressScale scale = iconButtonScale[2];
-        // The scaled shape is the send button itself (BUTTON_W capsule).
-        scale.update(hover, pressedHeld, frameDt, Animations.enabled(), UiTokens.BUTTON_W);
+        // The scaled shape follows the current composer layout.
+        scale.update(hover, pressedHeld, frameDt, Animations.enabled(), width);
         canvas.save();
         if (scale.scale() != 1.0F) {
-            canvas.translate(bx + UiTokens.BUTTON_W / 2.0F, by + UiTokens.BUTTON_H / 2.0F);
+            canvas.translate(bx + width / 2.0F, by + height / 2.0F);
             canvas.scale(scale.scale(), scale.scale());
-            canvas.translate(-(bx + UiTokens.BUTTON_W / 2.0F), -(by + UiTokens.BUTTON_H / 2.0F));
+            canvas.translate(-(bx + width / 2.0F), -(by + height / 2.0F));
         }
         float buttonRadius = UiTokens.radius(9, AtomChatAppearance.theme());
-        SkiaDraw.drawRoundedRect(canvas, bx, by, UiTokens.BUTTON_W, UiTokens.BUTTON_H, buttonRadius, accent());
+        HudShadow.drawPanel(canvas, bx, by, width, height,
+                buttonRadius, pressedHeld ? .40F : .75F);
+        CornerGeometry.drawRoundedRect(canvas, bx, by, width, height, buttonRadius, accent());
         float overlay = buttonHover[2] * 55.0F + (pressed ? 90.0F : 0.0F);
         if (overlay > 0.5F) {
-            SkiaDraw.drawRoundedRect(canvas, bx, by, UiTokens.BUTTON_W, UiTokens.BUTTON_H, buttonRadius,
+            CornerGeometry.drawRoundedRect(canvas, bx, by, width, height, buttonRadius,
                     Color.makeARGB((int) Math.min(160, overlay), 255, 255, 255));
         }
+        ChromeMaterial.drawDetails(canvas, bx, by, width, height, buttonRadius, 1F);
         // Icon ink derives from the solid accent fill it sits on (same language
         // as the selected bottom tab), not from the panel's text colour: a pale
         // accent capsule needs dark glyphs even on a dark panel.
-        drawIcon(canvas, ICON_SEND_PATH, bx, by, UiTokens.BUTTON_W, UiTokens.BUTTON_H,
+        drawIcon(canvas, ICON_SEND_PATH, bx, by, width, height,
                 UiTokens.onAccent(accent()));
         canvas.restore();
     }

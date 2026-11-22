@@ -42,6 +42,85 @@ class DotTextureBoundedRendererTest {
         }
     }
 
+    @Test void settledPanelEdgeUsesNativeCoverageAndKeepsTheBarInteriorClear() throws Exception {
+        var field = DotTexture.class.getDeclaredField("PANEL_EDGES");
+        field.setAccessible(true);
+        var masks = (Map<?, ?>) field.get(null);
+        var bar = new UiLayout.Rect(16, 90, 200, 60);
+        DotTexture.clearCache();
+        DotTexture.setDotsCached(true);
+        try (Surface surface = Surface.makeRasterN32Premul(300, 230); Bitmap pixels = new Bitmap()) {
+            Canvas canvas = surface.getCanvas();
+            canvas.scale(1.25F, 1.25F);
+            for (int i = 0; i < 3; i++) DotTexture.drawPanelEdge(canvas, bar, 25, true, 0xD839AC61, false);
+            assertTrue(masks.isEmpty(), "moving geometry must use vectors");
+            DotTexture.drawPanelEdge(canvas, bar, 25, true, 0xD839AC61, true);
+            assertTrue(masks.isEmpty(), "a single pose may still be changing");
+            canvas.clear(0);
+            DotTexture.drawPanelEdge(canvas, bar, 25, true, 0xD839AC61, true);
+            assertEquals(1, masks.size());
+            Image mask = (Image) masks.values().iterator().next();
+            assertEquals(250, mask.getWidth(), "one coverage texel per physical pixel");
+            pixels.allocN32Pixels(300, 230);
+            assertTrue(surface.readPixels(pixels, 0, 0));
+            assertEquals(0, pixels.getColor(150, 124), "no decoration inside the bar");
+            assertNotEquals(0, pixels.getColor(150, 111), "soft backing reaches the bar");
+            canvas.clear(0xFF243240);
+            DotTexture.drawPanelEdge(canvas, bar, 25, true, 0xD839AC61, true);
+            assertSame(mask, masks.values().iterator().next());
+            assertTrue(surface.readPixels(pixels, 0, 0));
+            try (Bitmap source = new Bitmap()) {
+                source.allocN32Pixels(mask.getWidth(), mask.getHeight());
+                assertTrue(mask.readPixels(source));
+                int left = (int) (bar.x() * 1.25F);
+                int top = (int) Math.floor((bar.y() - UiTokens.MESSAGE_DOT_DEPTH) * 1.25F);
+                boolean visible = false;
+                for (int y = 0; y < mask.getHeight(); y++) {
+                    for (int x = 0; x < mask.getWidth(); x++) {
+                        int alpha = source.getColor(x, y) >>> 24;
+                        if (alpha < 16) continue;
+                        visible = true;
+                        int actual = pixels.getColor(left + x, top + y);
+                        for (int shift : new int[]{0, 8, 16}) {
+                            int background = (0xFF243240 >>> shift) & 255;
+                            int ink = (0xD839AC61 >>> shift) & 255;
+                            int blended = (ink * alpha + background * (255 - alpha) + 127) / 255;
+                            assertEquals(blended, (actual >>> shift) & 255, 1, "use the mask alpha exactly once with the original tint");
+                        }
+                    }
+                }
+                assertTrue(visible, "the test must cover visible mask samples");
+            }
+            DotTexture.clearCache();
+            assertTrue(mask.isClosed());
+        }
+    }
+
+    @Test void recordedTitleUsesTheSettledPlaybackDensity() {
+        float previousDensity = UiPixelSnap.density();
+        UiPixelSnap.beginFrame(1.25F);
+        try {
+            var box = new UiLayout.Rect(20, 30.25F, 200, 24);
+            byte[] original = render(320, 120, canvas -> {
+                canvas.scale(1.25F, 1.25F);
+                DotTexture.drawTitleTrail(canvas, box, 0xFFFFFFFF);
+            });
+            byte[] settled = render(320, 120, canvas -> {
+                canvas.scale(1.25F, 1.25F);
+                try (var recorder = new PictureRecorder()) {
+                    Canvas recording = recorder.beginRecording(Rect.makeWH(250, 85));
+                    DotTexture.recordTitles(recording, canvas, () -> DotTexture.drawTitleTrail(recording, box, 0xFFFFFFFF));
+                    try (Picture picture = recorder.finishRecordingAsPicture()) {
+                        picture.playback(canvas);
+                    }
+                }
+            });
+            assertFalse(java.util.Arrays.equals(original, settled), "fractional device phase should change the title coverage");
+        } finally {
+            UiPixelSnap.beginFrame(previousDensity);
+        }
+    }
+
     @Test void largeTrailUsesOneLocalImageAcrossStableAndTranslatedFrames() throws Exception {
         DotTexture.clearCache();
         DotTexture.setDotsCached(true);
@@ -231,8 +310,8 @@ class DotTextureBoundedRendererTest {
              Paint glow = new Paint().setAntiAlias(true).setMaskFilter(blur)) {
             c.save();
             c.clipRect(Rect.makeXYWH(bar.x(), bar.y() - depth, bar.w(), depth + r));
-            c.clipRRect(outline, ClipMode.DIFFERENCE, true);
-            c.drawRRect(outline, glow.setMode(PaintMode.STROKE).setStrokeWidth(UiTokens.DOT_GLOW_STROKE)
+            CornerGeometry.clipRRect(c, outline, ClipMode.DIFFERENCE, true);
+            CornerGeometry.drawRRect(c, outline, glow.setMode(PaintMode.STROKE).setStrokeWidth(UiTokens.DOT_GLOW_STROKE)
                     .setColor(tint(color, UiTokens.DOT_GLOW_ALPHA)));
             int[] alphas = {19, 26, 32, 38, 45, 50, 54, 59, 64};
             for (int i = 0; i < Math.ceil(bar.w() / UiTokens.MESSAGE_DOT_GAP); i++) {

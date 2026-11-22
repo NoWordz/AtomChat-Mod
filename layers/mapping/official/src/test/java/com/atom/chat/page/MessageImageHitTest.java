@@ -102,7 +102,7 @@ class MessageImageHitTest {
                     (url, visible) -> {
                         asked.set(url);
                         askedVisible.set(visible);
-                        return bitmap;
+                        return new com.atom.chat.image.MessageImage(bitmap, false);
                     });
             draw(view, surface.getCanvas(), feed);
 
@@ -207,7 +207,7 @@ class MessageImageHitTest {
             Image bitmap = bitmapSurface.makeImageSnapshot();
             AtomChatConfig.get().imageMessagesEnabled = false;
             List<ChatMessage> feed = List.of(new ChatMessage(Component.literal(IMAGE_CODE), false));
-            view = new MessageListView(new OffscreenHost(openAfter(feed)), (url, visible) -> bitmap);
+            view = new MessageListView(new OffscreenHost(openAfter(feed)), (url, visible) -> new com.atom.chat.image.MessageImage(bitmap, false));
             draw(view, surface.getCanvas(), feed);
 
             MessageListView.MessageHit hit = view.hits().get(0);

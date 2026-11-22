@@ -6,6 +6,19 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 
 class ChatHudMotionTest {
+    @Test void changedCountReusesTheSameDeliveryMotionRow() {
+        var motion = new ChatHudMotion<String>();
+        motion.begin(0, false, false);
+        var row = motion.place(new String("delivery"), "x3", 125, 20);
+        motion.finish();
+
+        motion.begin(1000, true, false);
+        assertSame(row, motion.place(new String("delivery"), "x2", 125, 20));
+        motion.finish();
+        assertEquals("x2", row.content());
+        assertFalse(row.departing());
+    }
+
     @Test void expiryFadesLeftWithoutAnArrivalAndAnimationOffClearsTheFade() {
         var motion = new ChatHudMotion<String>();
         motion.begin(0, false, false);

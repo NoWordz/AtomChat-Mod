@@ -45,7 +45,7 @@ public final class SettingsTabDefaults {
             Map.entry("PRIVACY/privacy", List.of(
                 "hideBlockedMessages", "serverPacksEnabled")),
             Map.entry("ABOUT/about", List.of(
-                "debug")));
+                "debug", "performanceMode")));
     private static final Map<String, List<Field>> FIELDS = resolveFields();
 
     private static Map<String, List<Field>> resolveFields() {
@@ -77,6 +77,7 @@ public final class SettingsTabDefaults {
     public static boolean reset(AtomChatConfig config, SettingsSection section, String chip, BooleanSupplier save) {
         var fields = FIELDS.get(key(section, chip));
         if (fields == null || config == AtomChatConfig.DEFAULT) return false;
+        if (config.performanceMode) fields = fields.stream().filter(field -> !coveredByPerformanceMode(field)).toList();
         var before = new java.util.ArrayList<Object>(fields.size());
         boolean committed = false;
         try {
@@ -89,5 +90,13 @@ public final class SettingsTabDefaults {
                 if (!committed) for (int i=0; i<fields.size(); i++) fields.get(i).set(config, before.get(i));
             }
         } catch (IllegalAccessException error) { throw new IllegalStateException("Cannot restore tab settings", error); }
+    }
+
+    private static boolean coveredByPerformanceMode(Field field) {
+        return switch (field.getName()) {
+            case "blurEnabled", "blurStrength", "cardBlurStrength", "animationEnabled", "pageNavStyle",
+                 "messageEntryAnimation", "avatarPokeEnabled", "funEffectsEnabled", "experimentalEffectsEnabled" -> true;
+            default -> false;
+        };
     }
 }

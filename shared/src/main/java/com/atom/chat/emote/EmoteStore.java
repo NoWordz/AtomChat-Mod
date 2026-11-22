@@ -55,9 +55,18 @@ public final class EmoteStore {
     }
 
     public EmoteStore(Path dir, IntSupplier localMax) {
+        this(dir, localMax, true);
+    }
+
+    /** For a picker that refreshes when it first shows its sticker tab. */
+    public static EmoteStore deferred(Path dir, IntSupplier localMax) {
+        return new EmoteStore(dir, localMax, false);
+    }
+
+    private EmoteStore(Path dir, IntSupplier localMax, boolean scanInitially) {
         this.dir = dir;
         this.localMax = localMax == null ? () -> UNLIMITED : localMax;
-        refresh();
+        if (scanInitially) refresh();
     }
 
     public Path dir() {

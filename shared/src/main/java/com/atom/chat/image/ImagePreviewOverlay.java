@@ -1,8 +1,8 @@
 package com.atom.chat.image;
 
+import com.atom.chat.render.CornerGeometry;
 import com.atom.chat.ui.AtomChatAppearance;
 import com.atom.chat.render.SkiaImages;
-import com.atom.lib.design.atomchat.SkiaDraw;
 import com.atom.chat.ui.Animations;
 import com.atom.lib.design.atomchat.AppIcons;
 import com.atom.chat.ui.PressScale;
@@ -274,7 +274,7 @@ public final class ImagePreviewOverlay {
             PanelBackground.clipInterior(canvas, panel);
             // The dim backdrop: the panel-wide plate the other two modals use, so
             // a modal always reads as the same layer.
-            SkiaDraw.drawRoundedRect(canvas, panel.x(), panel.y(), panel.w(), panel.h(),
+            CornerGeometry.drawRoundedRect(canvas, panel.x(), panel.y(), panel.w(), panel.h(),
                     UiTokens.modalBackdropRadius(AtomChatAppearance.theme()), Color.makeARGB((int) (200.0F * anim), 8, 9, 14));
 
             Image current = image;
@@ -282,7 +282,7 @@ public final class ImagePreviewOverlay {
                 UiLayout.Rect rect = viewRect(panel);
                 canvas.save();
                 try (Paint opacity = anim < 1F ? new Paint().setAlphaf(anim) : null) {
-                    SkiaDraw.clip(canvas, box.x(), box.y(), box.w(), box.h(), 0F);
+                    CornerGeometry.clip(canvas, box.x(), box.y(), box.w(), box.h(), 0F);
                     if (opacity != null) canvas.saveLayer(Rect.makeXYWH(box.x(), box.y(), box.w(), box.h()), opacity);
                     try {
                         SkiaImages.drawRoundedImage(canvas, current, rect.x(), rect.y(),
@@ -318,10 +318,10 @@ public final class ImagePreviewOverlay {
     private void drawCloseKey(Canvas canvas, float cx, float cy, int alpha) {
         float r = s(CLOSE_RADIUS);
         float closeRadius = UiTokens.radius(CLOSE_RADIUS, AtomChatAppearance.theme());
-        SkiaDraw.drawRoundedRect(canvas, cx - r, cy - r, 2.0F * r, 2.0F * r, closeRadius,
+        CornerGeometry.drawRoundedRect(canvas, cx - r, cy - r, 2.0F * r, 2.0F * r, closeRadius,
                 Color.makeARGB((int) (0.92F * alpha), 35, 39, 47));
         if (closeHover > 0.01F) {
-            SkiaDraw.drawRoundedRect(canvas, cx - r, cy - r, 2.0F * r, 2.0F * r, closeRadius,
+            CornerGeometry.drawRoundedRect(canvas, cx - r, cy - r, 2.0F * r, 2.0F * r, closeRadius,
                     Color.makeARGB((int) (60.0F * closeHover), 255, 255, 255));
         }
         Path icon = AppIcons.ICON_CLOSE_PATH;

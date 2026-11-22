@@ -1,6 +1,7 @@
 package com.atom.chat.ui;
 
 
+import com.atom.chat.render.CornerGeometry;
 import com.atom.lib.design.atomchat.UiTokens;
 import io.github.humbleui.skija.Canvas;
 
@@ -96,9 +97,9 @@ public final class MenuPopup {
     public static void drawMaterial(Canvas canvas, float x, float y, float w, float h, float radius, int fill) {
         // The post-fill shadow also shades the interior, leaving the upper edge lit.
         // An outside-only shadow loses this accepted material on every popup consumer.
-        com.atom.lib.design.atomchat.SkiaDraw.drawRoundedRect(canvas, x, y, w, h,
+        CornerGeometry.drawRoundedRect(canvas, x, y, w, h,
                 radius, fill);
-        com.atom.lib.design.atomchat.SkiaDraw.drawRoundedShadow(canvas, x, y, w, h,
+        com.atom.chat.render.SoftShadow.drawRounded(canvas, x, y, w, h,
                 radius, UiTokens.s(SURFACE_SHADOW_BLUR), UiTokens.CHROME_SHADOW);
     }
 
@@ -182,7 +183,7 @@ public final class MenuPopup {
         }
         float a = Math.max(0.0F, Math.min(1.0F, hoverAlpha));
         float inset = rowInset(rowW);
-        com.atom.lib.design.atomchat.SkiaDraw.drawRoundedRect(canvas, rowX + inset, rowY + WASH_VERTICAL_INSET,
+        CornerGeometry.drawRoundedRect(canvas, rowX + inset, rowY + WASH_VERTICAL_INSET,
                 rowW - inset * 2.0F, rowH - WASH_VERTICAL_INSET * 2.0F, UiTokens.radius(WASH_RADIUS, AtomChatAppearance.theme()),
                 io.github.humbleui.skija.Color.makeARGB(Math.round(WASH_ALPHA * a), 255, 255, 255));
     }

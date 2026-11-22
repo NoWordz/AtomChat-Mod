@@ -16,6 +16,10 @@ import static org.junit.jupiter.api.Assertions.*;
 class ServerConfigPageTest {
     private Object oldConfig, oldProvider;
     private java.lang.reflect.Field configField, providerField;
+    @BeforeAll static void bootstrapMinecraft() throws Exception {
+        SharedSettingsFrontendTest.bootstrapMinecraft();
+    }
+
     @BeforeEach void setup(@TempDir Path directory) throws Exception {
         configField=AtomChatConfig.class.getDeclaredField("instance");configField.setAccessible(true);oldConfig=configField.get(null);
         configField.set(null,new AtomChatConfig());AtomChatConfig.get().animationEnabled=false;
@@ -141,6 +145,35 @@ class ServerConfigPageTest {
                 page.scroll(geometry.viewport().x()+1,geometry.viewport().y()+1,-100);
                 page.render(surface.getCanvas(),layout,-1,-1,16);
                 assertEquals(geometry.save(),ServerConfigLayout.of(layout).save());
+            }
+        }
+    }
+    @Test void messageTemplateGuideOpensFromTheRenderedTabAndPreservesTheDraft() throws Exception {
+        for (String locale : List.of("zh_cn", "en_us")) {
+            var host = new Host(locale);
+            var page = new ServerConfigPage(host, 1, values());
+            var layout = UiLayout.ofDetail(10, 10, 280, 820);
+            try (var surface = Surface.makeRasterN32Premul(300, 840)) {
+                page.render(surface.getCanvas(), layout, -1, -1, 16);
+                click(page, layout.chipRect(2, 3));
+                page.render(surface.getCanvas(), layout, -1, -1, 16);
+                var guides = groupHits(page, "template-guide-entry");
+                assertEquals(1, guides.size(), "the template tab has a visible tutorial entry");
+                var prior = page.draft().values();
+                click(page, guides.get(0));
+                page.render(surface.getCanvas(), layout, -1, -1, 16);
+                assertEquals(host.label("atomchat.admin.template_guide.title"), page.title());
+                assertEquals(prior, page.draft().values());
+
+                click(page, ServerConfigLayout.of(layout).save());
+                page.render(surface.getCanvas(), layout, -1, -1, 16);
+                assertEquals(2, page.chip());
+                assertEquals(1, groupHits(page, "template-guide-entry").size());
+                assertEquals(prior, page.draft().values());
+                assertFalse(page.draft().dirty());
+                assertEquals(0, host.saves);
+            } finally {
+                page.dispose();
             }
         }
     }

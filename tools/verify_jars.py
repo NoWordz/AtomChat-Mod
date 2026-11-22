@@ -187,7 +187,7 @@ def verify(project, platform="windows-x64"):
 
 
 def verify_consumer(project):
-    """The consumer owns business/FlatLaf only; AtomLib owns the UI runtime."""
+    """The consumer owns the file picker; AtomLib owns the UI runtime."""
     candidate = Path(project)
     jars = ([candidate] if candidate.suffix == '.jar' and candidate.is_file() else
             [p for p in sorted((ROOT / project / 'build/atomlib-consumer/libs').glob('*.jar'))
@@ -237,9 +237,13 @@ def verify_consumer(project):
                         manifest = archive.read('META-INF/MANIFEST.MF').decode('utf-8','replace')
                         flatlaf.append(MODULE_NAME in manifest and not any(n.startswith('com/formdev/flatlaf/') for n in names))
                 elif name.lower().endswith(('.dll','.so','.dylib')):
-                    # FlatLaf's private picker natives are unrelated and retain
-                    # their existing ownership. No Skija/Yoga native may remain.
-                    if (not name.startswith(SHADED+'natives/') or 'skija' in name.lower() or 'yoga' in name.lower()):
+                    picker_dll = depth == 0 and name == 'win32-x86-64/atomchat-nfde.dll'
+                    if picker_dll:
+                        pe_offset = int.from_bytes(data[60:64], 'little')
+                        if (not data.startswith(b'MZ') or data[pe_offset:pe_offset+6] != b'PE\x00\x00\x64\x86'
+                                or 'META-INF/licenses/NFDe.txt' not in names):
+                            bad.append(f'invalid Windows picker native: {location}!{name}')
+                    elif (not name.startswith(SHADED+'natives/') or 'skija' in name.lower() or 'yoga' in name.lower()):
                         bad.append(f'foreign native: {location}!{name}')
 
     try:
@@ -252,9 +256,8 @@ def verify_consumer(project):
             if 'fabric.mod.json' in names:
                 meta = json.loads(archive.read('fabric.mod.json'))
                 registered = {j['file'] for j in meta.get('jars', [])}
-                # The Fabric hint uses its loader's predicate syntax and the
-                # compiled input version. The client preflight checks the API.
-                fabric_range = f'>={required}'
+                upper = expected_range[1:-1].split(',')[1]
+                fabric_range = f'>={required}' + (f' <{upper}' if upper else '')
                 valid = (meta.get('environment') == '*' and
                          meta.get('suggests', {}).get('atomlib') == fabric_range and
                          meta.get('custom', {}).get('atomlib:client-required') == fabric_range and
@@ -277,6 +280,8 @@ def verify_consumer(project):
             check(f'{project}: client-scoped AtomLib dependency', valid)
             identity = properties(archive.read('atomchat-atomlib.properties').decode('utf-8'))
             check(f'{project}: compiled AtomLib input agrees with lock', identity.get('version') == required)
+            if 'fabric.mod.json' in names:
+                check(f'{project}: Fabric bootstrap range agrees with metadata', identity.get('fabricRange') == fabric_range)
     except (OSError, ValueError, KeyError, TypeError, zipfile.BadZipFile) as error:
         check(f'{project}: valid consumer archive', False, str(error))
 

@@ -1,8 +1,8 @@
 package com.atom.chat.settings;
 
+import com.atom.chat.render.CornerGeometry;
 import com.atom.chat.ui.AtomChatAppearance;
 import com.atom.chat.ui.UiLayout;
-import com.atom.lib.design.atomchat.SkiaDraw;
 import com.atom.lib.design.atomchat.UiTokens;
 import com.atom.lib.design.atomchat.Design;
 import com.atom.lib.design.atomchat.DesignHost;
@@ -23,11 +23,11 @@ public final class SettingsFieldPaint {
         float radius = UiTokens.radius(8, appearance);
         int base=UiTokens.cardCutout(appearance);boolean light=Design.isLight(base);
         int fill=light?0x0C000000:0x0EFFFFFF;
-        SkiaDraw.drawRoundedRect(canvas, field.x(), field.y(), field.w(), field.h(), radius,fill);
-        if(enabled&&hover>0)SkiaDraw.drawRoundedRect(canvas,field.x(),field.y(),field.w(),field.h(),radius,((Math.round(18*hover))<<24)|(accent&0xffffff));
+        CornerGeometry.drawRoundedRect(canvas, field.x(), field.y(), field.w(), field.h(), radius,fill);
+        if(enabled&&hover>0)CornerGeometry.drawRoundedRect(canvas,field.x(),field.y(),field.w(),field.h(),radius,((Math.round(18*hover))<<24)|(accent&0xffffff));
         try (Paint border = new Paint().setMode(PaintMode.STROKE).setAntiAlias(true)
                 .setStrokeWidth(focused||error?STROKE:UiTokens.s(.75f)).setColor(error?UiTokens.dangerColor():focused?accent:enabled?(light?0x55000000:0x55FFFFFF):(light?0x22000000:0x22FFFFFF))) {
-            canvas.drawRRect(RRect.makeXYWH(field.x(), field.y(), field.w(), field.h(), radius), border);
+            CornerGeometry.drawRRect(canvas, RRect.makeXYWH(field.x(), field.y(), field.w(), field.h(), radius), border);
         }
     }
 }

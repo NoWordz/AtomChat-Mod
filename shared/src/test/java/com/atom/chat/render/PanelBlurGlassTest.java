@@ -7,6 +7,7 @@ import java.nio.file.Path;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /** Checks all platform copies keep the unmodified RGB and mask alpha wiring. */
@@ -46,9 +47,12 @@ class PanelBlurGlassTest {
             assertFalse(fsh.contains("u_MaxLuma"), target);
             assertFalse(json.contains("u_MaxLuma"), target);
             assertFalse(renderer.contains("u_MaxLuma"), target);
-            assertTrue(renderer.contains("KAWASE_PASSES = 5;"), target);
-            assertTrue(renderer.contains("(2.0F + i * 1.5F) * strength"), target);
+            assertTrue(renderer.contains("KawaseBlur.PASSES"), target);
+            assertTrue(renderer.contains("KawaseBlur.spacing(i, strength)"), target);
         }
+        assertEquals(5, KawaseBlur.PASSES);
+        assertEquals(4F, KawaseBlur.spacing(0, 2F));
+        assertEquals(16F, KawaseBlur.spacing(4, 2F));
     }
     @Test
     void legacyLumaFieldIsIgnoredWhenReadingConfig() {

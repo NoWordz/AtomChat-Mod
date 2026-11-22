@@ -1,11 +1,11 @@
 package com.atom.chat.onboarding;
 
+import com.atom.chat.render.CornerGeometry;
 import com.atom.chat.ui.AtomChatAppearance;
 import com.atom.chat.config.AtomChatConfig;
 import com.atom.chat.font.FontManager;
 import com.atom.chat.render.SkiaFontRenderer;
 import com.atom.chat.ui.*;
-import com.atom.lib.design.atomchat.SkiaDraw;
 import com.atom.lib.design.atomchat.UiTokens;
 import io.github.humbleui.skija.*;
 import io.github.humbleui.types.RRect;
@@ -64,13 +64,13 @@ public final class TutorialOverlay {
         try {
             try(var shade=new Paint().setColor(0x8808090E).setAlphaf(progress*.53f)) {
                 int mask=canvas.save();
-                canvas.clipRRect(RRect.makeXYWH(panel.x(),panel.y(),panel.w(),panel.h(),UiTokens.panelRadius(AtomChatAppearance.theme())),ClipMode.INTERSECT,true);
-                canvas.clipRRect(contour,ClipMode.DIFFERENCE,true);
+                PanelBackground.clipExterior(canvas, panel);
+                CornerGeometry.clipRRect(canvas, contour,ClipMode.DIFFERENCE,true);
                 canvas.drawRect(io.github.humbleui.types.Rect.makeXYWH(panel.x(),panel.y(),panel.w(),panel.h()),shade);canvas.restoreToCount(mask);
             }
             var box=geometry.card();
             try(var ring=new Paint().setAntiAlias(true).setMode(PaintMode.STROKE).setStrokeWidth(UiTokens.CHROME_HAIRLINE + UiTokens.SCALE).setColor(AtomChatConfig.get().accentColor)) {
-                canvas.drawRRect(contour,ring);
+                CornerGeometry.drawRRect(canvas, contour,ring);
                 var movingBounds = moving.bounds();
                 float tx=movingBounds.x()+movingBounds.w()/2,ty=movingBounds.y()+movingBounds.h()/2;
                 var cardShape = new TutorialAnchor(box, PickerModalPaint.radius());
@@ -81,13 +81,13 @@ public final class TutorialOverlay {
             ConfirmationSurface.surface(canvas,box,progress);
             try(var opacity=new Paint().setAlphaf(progress)) {
                 canvas.saveLayer(io.github.humbleui.types.Rect.makeXYWH(box.x(),box.y(),box.w(),box.h()),opacity);
-                SkiaDraw.clip(canvas,box.x(),box.y(),box.w(),box.h(),PickerModalPaint.radius());
+                CornerGeometry.clip(canvas,box.x(),box.y(),box.w(),box.h(),PickerModalPaint.radius());
                 String title=entry.title()!=null?entry.title():tr.apply("atomchat.tutorial."+session.step().key()+".title");
                 text(canvas,FontManager.font(UiTokens.SETTINGS_TILE_TITLE),title,box.x()+pad,box.y()+pad+line/2,textWidth,0xFFFFFFFF);
                 text(canvas,font,(session.index()+1)+" / "+session.count(),box.x()+pad,box.y()+pad+line*1.5f,textWidth,0xFFB9C3D2);
                 float top=box.y()+pad+line*2,bottom=geometry.buttons().get(0).y()-UiTokens.BUTTON_GAP;
                 maxBodyScroll=Math.max(0,bodyLines.size()*line-Math.max(0,bottom-top));bodyScroll=Math.min(bodyScroll,maxBodyScroll);
-                int clip=canvas.save();SkiaDraw.clip(canvas,box.x()+pad,top,textWidth,Math.max(0,bottom-top),0);
+                int clip=canvas.save();CornerGeometry.clip(canvas,box.x()+pad,top,textWidth,Math.max(0,bottom-top),0);
                 float y=top+line/2-bodyScroll;for(var value:bodyLines){text(canvas,font,value,box.x()+pad,y,textWidth,0xFFB9C3D2);y+=line;}canvas.restoreToCount(clip);
                 boolean last=session.index()==session.count()-1;
                 for(int i=0;i<4;i++) {

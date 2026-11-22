@@ -3,7 +3,6 @@ package com.atom.chat.render;
 import com.atom.chat.config.AtomChatConfig;
 import com.atom.chat.platform.Platform;
 import com.atom.chat.ui.*;
-import com.atom.lib.design.atomchat.SkiaDraw;
 import com.atom.lib.design.atomchat.UiTokens;
 import io.github.humbleui.skija.*;
 import io.github.humbleui.types.Rect;
@@ -35,7 +34,7 @@ class BottomChromeDotsTest {
                 // Old HEAD layering: chat shadow + dots -> body -> plate/details;
                 // nav dots -> body -> nav shadow + plate/details.
                 Canvas expected=reference.getCanvas();expected.clear(0xFF414851);
-                float radius=UiTokens.shellChromeRadius(AtomChatAppearance.theme());
+                float radius=ChromeMaterial.cornerRadius(bar, UiTokens.shellChromeRadius(AtomChatAppearance.theme()));
                 if(mode==BottomChromeTransition.Mode.CHAT)shadow(expected,bar,radius);
                 DotTexture.drawEdge(expected,bar,radius,true,AtomChatConfig.get().textSecondaryColor);
                 realBody(expected,bar);
@@ -65,7 +64,7 @@ class BottomChromeDotsTest {
             for(long now:new long[]{1310,1370,1450,1550}) {
                 chrome.beginFrame(BottomChromeTransition.Mode.HIDDEN,CHAT,NAV,now,true);
                 var shape=chrome.paintedShape();var bar=chrome.paintedRect();
-                float radius=Math.min(UiTokens.shellChromeRadius(AtomChatAppearance.theme()),Math.min(bar.w(),bar.h())/2);
+                float radius=ChromeMaterial.cornerRadius(bar, UiTokens.shellChromeRadius(AtomChatAppearance.theme()));
                 actual.getCanvas().clear(0xFF414851);backdrop(chrome,actual.getCanvas());chrome.draw(actual.getCanvas(),c->updates.incrementAndGet());
                 expected.getCanvas().clear(0xFF414851);
                 // Unbounded DOT layer catches clipping. Keep the shadow's device
@@ -104,7 +103,7 @@ class BottomChromeDotsTest {
         com.atom.chat.render.ChatBubble.draw(canvas,270,bar.y()-30,180,22,AtomChatConfig.BubbleStyle.CORNER,false,0xFF67758A);
     }
     private static void shadow(Canvas canvas,UiLayout.Rect bar,float radius){ChromeMaterial.drawShadow(canvas,bar.x(),bar.y(),bar.w(),bar.h(),radius);}
-    private static void face(Canvas canvas,UiLayout.Rect bar,float radius){SkiaDraw.drawRoundedRect(canvas,bar.x(),bar.y(),bar.w(),bar.h(),radius,UiTokens.cardFill(AtomChatAppearance.theme()));ChromeMaterial.drawDetails(canvas,bar,radius);}
+    private static void face(Canvas canvas,UiLayout.Rect bar,float radius){CornerGeometry.drawRoundedRect(canvas,bar.x(),bar.y(),bar.w(),bar.h(),radius,UiTokens.cardFill(AtomChatAppearance.theme()));ChromeMaterial.drawDetails(canvas,bar,radius);}
     private static byte[] pixels(Surface surface){try(var bitmap=new Bitmap()){bitmap.allocN32Pixels(560,620);assertTrue(surface.readPixels(bitmap,0,0));return bitmap.readPixels();}}
     private static void save(Surface surface,String name)throws Exception{
         Path dir=Path.of(System.getProperty("atomchat.repoRoot","../.."),".work/v0.7.0-feedback/screenshots");Files.createDirectories(dir);

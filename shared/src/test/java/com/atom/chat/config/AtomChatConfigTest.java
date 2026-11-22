@@ -92,6 +92,18 @@ class AtomChatConfigTest {
                 "legacy large folds to 28 first, then rescales to the 20px default");
     }
 
+    @Test
+    void currentRadiusConfigurationAcceptsThirtyPixels() {
+        AtomChatConfig config = new AtomChatConfig();
+        config.pixelRadiusMigrated = true;
+        config.cornerRadius = 30F;
+        config.migratePixelRadius();
+        assertEquals(30F, config.cornerRadius);
+        config.cornerRadius = 31F;
+        config.migratePixelRadius();
+        assertEquals(30F, config.cornerRadius);
+    }
+
     /**
      * The migration has to carry the whole old span, not one value: the old
      * slider ran 0..s(28) and the new one 0..s(20) — the same span under two

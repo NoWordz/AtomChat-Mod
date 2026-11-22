@@ -1,6 +1,7 @@
 package com.atom.chat.settings;
 
 import com.atom.chat.platform.Platform;
+import com.atom.chat.ui.TablerIcons;
 import com.atom.lib.design.atomchat.AppIcons;
 import io.github.humbleui.skija.Path;
 import org.junit.jupiter.api.BeforeAll;
@@ -54,7 +55,7 @@ class SettingsGroupIconsTest {
             assertTrue(b.getLeft()>=0&&b.getTop()>=0&&b.getRight()<=20&&b.getBottom()<=20,field.getName());
             assertTrue(b.getWidth()>0&&b.getHeight()>0,field.getName());
         }
-        assertEquals(18,count);
+        assertEquals(10,count);
     }
     @Test void exportTheActualHeadingAssignmentsAtSmallUiAndLargeSizes() throws Exception {
         com.google.gson.JsonObject lang;
@@ -96,7 +97,7 @@ class SettingsGroupIconsTest {
         }
     }
     private static String name(Path glyph)throws Exception {
-        for(var type:new Class<?>[]{com.atom.chat.ui.SettingsGroupGlyphs.class,com.atom.chat.ui.SettingsIcons.class,AppIcons.class,com.atom.chat.render.DrawPrimitives.class})
+        for(var type:new Class<?>[]{com.atom.chat.ui.SettingsGroupGlyphs.class,com.atom.chat.ui.SettingsIcons.class,TablerIcons.class,AppIcons.class,com.atom.chat.render.DrawPrimitives.class})
             for(var field:type.getFields())if(field.getType()==Path.class&&field.get(null)==glyph)
                 return field.getName().replace("ICON_","").replace("_PATH","");
         throw new AssertionError("unregistered glyph");

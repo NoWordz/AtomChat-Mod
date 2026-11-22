@@ -24,7 +24,19 @@ public class AtomChatConfig {
     public float blurStrength = 2.0F;
 
     public float effectiveBlurStrength() {
+        return performanceMode ? 0F : storedBlurStrength();
+    }
+
+    private float storedBlurStrength() {
         return Float.isFinite(blurStrength) ? Math.max(0.25F, Math.min(3.0F, blurStrength)) : 2.0F;
+    }
+
+    public boolean effectiveBlurEnabled() {
+        return !performanceMode && blurEnabled;
+    }
+
+    public boolean effectiveAnimationEnabled() {
+        return !performanceMode && animationEnabled;
     }
 
     public float panelWidth = 480.0F;
@@ -151,6 +163,9 @@ public class AtomChatConfig {
     public float contentScale = 1.0F;
     /** Dumps avatar sampling PNGs to {@code <gameDir>/atomchat/cache/debug/} for color debugging. */
     public boolean debug = false;
+
+    /** Runtime override. The underlying appearance and motion values remain on disk. */
+    public boolean performanceMode = false;
     /**
      * 「四档归零对照」诊断实验兜底档位："A"=完整（产品默认，每帧新鲜毛玻璃）、
      * "B"=只跳背景模糊 pre-pass、"C"=整个 drawPanel 旁路、
@@ -238,15 +253,20 @@ public class AtomChatConfig {
      * Corner radius for the surrounding chrome (panel, cards, pills, popups —
      * chat bubbles excluded on purpose), in 1080p-basis pixels: the value
      * scales with the whole UI density (vanilla scale × uiScale ×
-     * contentScale), so it is not pinned to physical pixels. {@code 20} is
-     * the shipped default (factor 1, cards round at s(16)), {@code 0} means
-     * square corners on every surface, the slider tops out at {@code s(20)}.
+     * contentScale). Zero means square corners on every surface. The slider
+     * and preset format use {@link #MAX_CORNER_RADIUS} as their upper bound.
      * Replaces the old three-step {@code cornerStyle}, which lives on only
      * for the one-time file migration below and is never read or written
      * afterwards. Presets and the factory-default reset deliberately leave
      * this knob alone.
      */
     public float cornerRadius = 25f;
+    public static final float MAX_CORNER_RADIUS = 30F; // bare-value: stored 1080p-basis radius limit
+
+    public float effectiveCornerRadius() {
+        return Float.isFinite(cornerRadius) ? Math.max(0F, Math.min(cornerRadius, MAX_CORNER_RADIUS)) : 0F;
+    }
+
     /**
      * Legacy three-step corner style ({@code large}/{@code medium}/
      * {@code small}). Migration source only: {@link #load()} folds it into
@@ -298,16 +318,15 @@ public class AtomChatConfig {
      * is not idempotent over the span the two scales share, and {@link #load()}
      * runs this again on every screen open. Runs after
      * {@link #migrateCornerStyle()} so a legacy "large" file is on the old
-     * scale by the time it gets here. Values past the new slider span (0..s(20))
-     * still clamp into it, for hand-edited files.</p>
+     * scale by the time it gets here. Values from hand-edited files clamp to
+     * the current slider span.</p>
      */
     void migratePixelRadius() {
         if (!pixelRadiusMigrated) {
-            cornerRadius /= 1.4F;
+            cornerRadius = Math.min(cornerRadius / 1.4F, com.atom.lib.design.atomchat.UiTokens.s(20));
             pixelRadiusMigrated = true;
         }
-        cornerRadius = Math.max(0.0F, Math.min(cornerRadius,
-                com.atom.lib.design.atomchat.UiTokens.s(20)));
+        cornerRadius = effectiveCornerRadius();
     }
     /**
      * Clamps {@link #contentScale} into the slider span [0.8, 1.5], the same
@@ -346,6 +365,10 @@ public class AtomChatConfig {
     public float cardBlurStrength = 2F;
 
     public float effectiveCardBlurStrength() {
+        return performanceMode ? 0F : storedCardBlurStrength();
+    }
+
+    public float storedCardBlurStrength() {
         return Float.isFinite(cardBlurStrength) ? Math.max(0F, Math.min(3F, cardBlurStrength)) : 2F;
     }
 
@@ -391,6 +414,11 @@ public class AtomChatConfig {
      */
     public int secondaryCapsuleBg = 0x962C3E50;
     public int secondaryCapsuleText = 0xDCAAAABA;
+
+    public int effectiveSecondaryCapsuleBg() {
+        int alpha = Math.max(secondaryCapsuleBg >>> 24, Math.round(.85F * 255));
+        return (alpha << 24) | (secondaryCapsuleBg & 0xFFFFFF);
+    }
     /**
      * Last applied built-in theme ({@code frosted} / {@code modern}); empty
      * until the user picks one. Display only — the single knobs stay editable
@@ -505,7 +533,7 @@ public class AtomChatConfig {
     public int historyRetentionDays = 7;
 
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
-    private static AtomChatConfig instance;
+    private static volatile AtomChatConfig instance;
 
     /**
      * The width the panel actually opens at, per mode. Half-screen only honours
@@ -543,6 +571,12 @@ public class AtomChatConfig {
             instance = load();
         }
         return instance;
+    }
+
+    /** Render paths may run without a loader in offscreen tests and tools. */
+    public static boolean performanceModeActive() {
+        AtomChatConfig current = instance;
+        return current != null && current.performanceMode;
     }
 
     /**
@@ -710,8 +744,8 @@ public class AtomChatConfig {
                     config.avatarStyle = config.effectiveAvatarStyle();
                     config.bubbleStyle = config.effectiveBubbleStyle();
                     config.worldFeedFilter = config.effectiveWorldFeedFilter();
-                    config.blurStrength = config.effectiveBlurStrength();
-                    config.cardBlurStrength = config.effectiveCardBlurStrength();
+                    config.blurStrength = config.storedBlurStrength();
+                    config.cardBlurStrength = config.storedCardBlurStrength();
                     config.chatHudMaxMessages = config.effectiveChatHudMaxMessages();
                     config.migrateOutlineWidth(hasKey(json, "panelOutlineWidth"));
                     config.migrateCornerStyle();

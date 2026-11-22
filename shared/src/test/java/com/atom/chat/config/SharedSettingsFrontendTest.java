@@ -161,7 +161,9 @@ class SharedSettingsFrontendTest {
             boolean before=pane.server.draft().enabled("hostingEnabled");var toggle=rowBox(pane.server,pane.layout,"hostingEnabled").rect();
             pane.server.click(toggle.x()+toggle.w()/2,toggle.y()+toggle.h()/2,0);pane.server.release();
             assertEquals(4,cues.size(),"a committed toggle is one button cue");assertNotEquals(before,pane.server.draft().enabled("hostingEnabled"));
-            pane.chip(2);assertEquals(5,cues.size());for(int i=0;i<4;i++)pane.frame(surface,2100+i*16);
+            pane.chip(2);assertEquals(5,cues.size());
+            // rowBox supplies the settled positions, so sample past the template card's stagger.
+            for(int i=0;i<42;i++)pane.frame(surface,2100+i*16);
             var template=rowBox(pane.server,pane.layout,"template:0");var rowType=Class.forName("com.atom.chat.config.ServerConfigPage$Row");
             var inline=ServerConfigPage.class.getDeclaredMethod("inlineList",rowType,float.class);inline.setAccessible(true);
             float size=SettingsListAction.HEIGHT;boolean inLine=(Boolean)inline.invoke(pane.server,template.row(),template.rect().w());

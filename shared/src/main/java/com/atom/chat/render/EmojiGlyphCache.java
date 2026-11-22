@@ -99,16 +99,14 @@ final class EmojiGlyphCache {
     boolean prewarmOne(Font font, String text, int rgb, int scale) {
         if (text.isEmpty() || !SkiaFontRenderer.isEmojiCodepoint(text.codePointAt(0))) return false;
         PrewarmKey key = new PrewarmKey(font.getSize(), text, rgb & 0xFFFFFF, scale);
+        long generation;
         synchronized (prewarmLock) {
             if (prewarmed.containsKey(key)) return true;
             if (prewarmed.size() >= PREWARM_MAX_ENTRIES) return false;
+            generation = prewarmGeneration;
         }
         Glyph glyph = rasterize(font, text, rgb, scale);
         if (glyph == null) return false;
-        long generation;
-        synchronized (prewarmLock) {
-            generation = prewarmGeneration;
-        }
         synchronized (prewarmLock) {
             if (generation != prewarmGeneration
                     || prewarmed.size() >= PREWARM_MAX_ENTRIES

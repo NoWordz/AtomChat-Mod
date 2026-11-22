@@ -62,7 +62,7 @@ public final class EmoteImageCache {
         if (!DataMigration.allowPersonalPath(path)) return null;
         if (!Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS)) return null;
         try (var input = Files.newInputStream(path, LinkOption.NOFOLLOW_LINKS)) {
-            Image decoded = ImageLoader.decodeStatic(input.readAllBytes(), MAX_DIM);
+            Image decoded = ImageLoader.decodeStatic(input.readNBytes(ImageLoader.MAX_SOURCE_BYTES + 1), MAX_DIM);
             if (decoded != null) {
                 cache.put(file, decoded);
                 return decoded;

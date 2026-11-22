@@ -99,7 +99,10 @@ public final class ChatStore {
 
     public synchronized boolean replace(long id, ChatMessage corrected) {
         for (int i = 0; i < messages.size(); i++) if (messages.get(i).getId() == id) {
-            messages.set(i, corrected); changed(); com.atom.chat.history.ChatHistory.markDirty(); return true;
+            MessageMerge.replaceConfirmed(messages, i, corrected);
+            changed();
+            com.atom.chat.history.ChatHistory.markDirty();
+            return true;
         }
         return false;
     }

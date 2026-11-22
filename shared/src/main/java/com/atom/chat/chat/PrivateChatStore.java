@@ -53,7 +53,10 @@ public final class PrivateChatStore {
         var c = CONVERSATIONS.get(partner.key());
         if (c == null) return false;
         for (int i = 0; i < c.messages.size(); i++) if (c.messages.get(i).getId() == id) {
-            c.messages.set(i, corrected); c.changed(); com.atom.chat.history.ChatHistory.markDirty(); return true;
+            MessageMerge.replaceConfirmed(c.messages, i, corrected);
+            c.changed();
+            com.atom.chat.history.ChatHistory.markDirty();
+            return true;
         }
         return false;
     }

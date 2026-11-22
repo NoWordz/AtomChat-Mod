@@ -1,5 +1,6 @@
 package com.atom.chat.ui;
 
+import com.atom.chat.config.AtomChatConfig;
 import com.atom.chat.platform.Platform;
 import io.github.humbleui.skija.Bitmap;
 import io.github.humbleui.skija.Surface;
@@ -10,6 +11,34 @@ import java.nio.file.Path;
 import static org.junit.jupiter.api.Assertions.*;
 
 class ChatShortcutHintRenderTest {
+    @Test void performanceModeLeavesOnlyTheWhiteIconAndItsThreeHoles() throws Exception {
+        var field = AtomChatConfig.class.getDeclaredField("instance");
+        field.setAccessible(true);
+        var previous = field.get(null);
+        var config = new AtomChatConfig();
+        config.performanceMode = true;
+        field.set(null, config);
+        try (var surface = Surface.makeRasterN32Premul(180, 180); var pixels = new Bitmap()) {
+            var canvas = surface.getCanvas();
+            canvas.clear(0);
+            ChatShortcutHint.renderGuiScaled(canvas, 180, 180, 1, 3, "Y", 1);
+            pixels.allocN32Pixels(180, 180);
+            assertTrue(surface.readPixels(pixels, 0, 0));
+            assertEquals(0xFFFFFFFF, pixels.getColor(34, 139));
+            for (int dot : new int[]{30, 38, 45}) assertEquals(0, pixels.getColor(dot, 139));
+            for (int y = 120; y < 166; y++) {
+                for (int x = 13; x < 59; x++) {
+                    int pixel = pixels.getColor(x, y);
+                    assertTrue((pixel >>> 24) == 0 || (pixel & 0xFFFFFF) == 0xFFFFFF,
+                            "dark pixel around the white shortcut icon at " + x + "," + y);
+                }
+            }
+        } finally {
+            ChatShortcutHint.release();
+            field.set(null, previous);
+        }
+    }
+
     @Test void solidWhiteIconHasThreeRealHolesAndUsesOnlyVanillaScale(@TempDir Path tmp) throws Exception {
         var provider=Platform.class.getDeclaredField("provider");provider.setAccessible(true);
         Object previous=provider.get(null);

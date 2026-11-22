@@ -31,7 +31,7 @@ class MessageResponsiveLayoutTest {
             public String ownName(){return "Self";}
             public String senderName(ChatMessage m){return "A long player name";}
             public long openStart(){return msg.getTimestamp()+1;}
-        },(url,visible)->image);
+        }, (url, visible) -> image == null ? null : new com.atom.chat.image.MessageImage(image, false));
     }
 
     @Test void richQuoteAndNameLayoutsRefreshWhenInputsChange() throws Exception {

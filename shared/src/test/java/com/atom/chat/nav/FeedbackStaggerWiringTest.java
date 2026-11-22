@@ -13,7 +13,7 @@ class FeedbackStaggerWiringTest {
             for(String page:new String[]{"conversationListPage","settingsHomePage","profilePage","settingsSectionPage"})
                 assertTrue(code.contains(page+".markEntered(composite.entrance().enteredAtMs())"),relative+": "+page+" is never armed");
             assertTrue(code.contains("bodyPointer(x, y)"),relative+": page and item inverses must be composed once");
-            int backdrop=code.indexOf("bottomChrome.drawBackdrop(canvas)");
+            int backdrop=code.indexOf("bottomChrome.drawBackdrop(canvas, settledPanel)");
             int body=code.indexOf("composite.drawArrivingFrame(canvas");
             int foreground=code.indexOf("bottomChrome.draw(canvas");
             assertTrue(backdrop>=0 && backdrop<body && body<foreground,relative+": dots must stay below the page body");

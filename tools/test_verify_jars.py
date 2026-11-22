@@ -13,6 +13,8 @@ VERIFIER = Path(__file__).with_name('verify_jars.py')
 ROOT = Path(__file__).resolve().parent.parent
 LOCK_VERSION = json.loads((ROOT / 'versions/atomlib.json').read_text(encoding='utf-8'))['version']
 LOCK_RANGE = json.loads((ROOT / 'versions/atomlib.json').read_text(encoding='utf-8'))['compatibility_range']
+FABRIC_UPPER = LOCK_RANGE[1:-1].split(',')[1]
+FABRIC_RANGE = f'>={LOCK_VERSION}' + (f' <{FABRIC_UPPER}' if FABRIC_UPPER else '')
 
 
 def archive(entries):
@@ -202,13 +204,13 @@ def consumer_artifact(path, loader='Fabric', dependency=True, side='CLIENT', ext
         'META-INF/MANIFEST.MF': 'Automatic-Module-Name: com.atom.chat.shaded.flatlaf\n',
     })
     entries = {prefix+'flatlaf-private.jar': flatlaf,
-               'atomchat-atomlib.properties': ('version=' + LOCK_VERSION + '\n').encode(),
+               'atomchat-atomlib.properties': f'version={LOCK_VERSION}\nfabricRange={FABRIC_RANGE}\n'.encode(),
                'com/atom/chat/compat/AtomLibDependencyCheck.class': b'client bootstrap',
                'com/atom/chat/AtomChatClient.class': b'AtomLibDependencyCheck'}
     if loader == 'Fabric':
         meta = {'id':'atomchat', 'environment':'*', 'jars':[{'file':prefix+'flatlaf-private.jar'}]}
         if dependency:
-            range_value = f'>={LOCK_VERSION}' if range_override is None else range_override
+            range_value = FABRIC_RANGE if range_override is None else range_override
             meta['suggests'] = {'atomlib': range_value}
             meta['custom'] = {'atomlib:client-required': range_value}
         entries['fabric.mod.json'] = json.dumps(meta).encode()

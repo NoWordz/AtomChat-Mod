@@ -1,5 +1,6 @@
 package com.atom.chat.settings;
 
+import com.atom.chat.render.CornerGeometry;
 import com.atom.chat.font.FontManager;
 import com.atom.chat.render.*;
 import com.atom.chat.ui.UiLayout;
@@ -14,15 +15,31 @@ public final class SettingsGroupPaint {
         var config=com.atom.chat.config.AtomChatConfig.get();var font=FontManager.boldFont(UiTokens.SETTINGS_TILE_TITLE);
         float pad=UiTokens.SETTINGS_ROW_PAD,size=UiTokens.COMPOSER_ICON_SIZE,cy=rect.y()+rect.h()/2;
         float x=rect.x()+pad+(foldable?size+UiTokens.SETTINGS_TILE_TEXT_GAP:0),right=rect.right()-pad;
-        if(foldable){DrawPrimitives.drawIconCentered(canvas,icon,rect.x()+pad+size/2,cy,size,config.textPrimaryColor);
-            DotTexture.drawTrail(canvas,new UiLayout.Rect(x,cy-UiTokens.DOT_TRAIL_HEIGHT/2,Math.max(0,right-x-UiTokens.SETTINGS_FOLD_CHEVRON_SIZE-pad),UiTokens.DOT_TRAIL_HEIGHT),config.textSecondaryColor);}
-        SkiaFontRenderer.drawText(canvas,font,SkiaFontRenderer.truncate(font,text,Math.max(0,right-x-UiTokens.SETTINGS_FOLD_CHEVRON_SIZE-TITLE_END_GAP)),x,SkiaFontRenderer.centerBaselineY(font,cy),config.textPrimaryColor);
-        if(foldable)chevron(canvas,right-UiTokens.SETTINGS_FOLD_CHEVRON_SIZE/2,cy,UiTokens.SETTINGS_FOLD_CHEVRON_SIZE,expansion,config.textPrimaryColor);
+        float iconX = rect.x() + pad + size / 2F;
+        if (foldable) {
+            DotTexture.drawTitleTrail(canvas, new UiLayout.Rect(x, cy - UiTokens.DOT_TRAIL_HEIGHT / 2F,
+                    Math.max(0, right - x - UiTokens.SETTINGS_FOLD_CHEVRON_SIZE - pad), UiTokens.DOT_TRAIL_HEIGHT),
+                    config.textSecondaryColor);
+        }
+        String title = SkiaFontRenderer.truncate(font, text,
+                Math.max(0, right - x - UiTokens.SETTINGS_FOLD_CHEVRON_SIZE - TITLE_END_GAP));
+        float baseline = SkiaFontRenderer.centerBaselineY(font, cy);
+        if (foldable) {
+            if (TextSurface.CAPSULE.shadowed()) {
+                SettingsLabelShadow.draw(canvas, font, title, x, baseline, icon, iconX, cy, size);
+            }
+            DrawPrimitives.drawIconCentered(canvas, icon, iconX, cy, size, config.textPrimaryColor);
+        }
+        SkiaFontRenderer.drawText(canvas, font, title, x, baseline, config.textPrimaryColor);
+        if (foldable) {
+            chevron(canvas, right - UiTokens.SETTINGS_FOLD_CHEVRON_SIZE / 2F, cy,
+                    UiTokens.SETTINGS_FOLD_CHEVRON_SIZE, expansion, config.textPrimaryColor);
+        }
         float lineY=rect.bottom()-UiTokens.s(5); // bare-value: extracted SettingsSectionPage.drawLabel rule inset
-        SkiaDraw.drawRoundedRect(canvas,x,lineY,Math.max(0,right-x),UiTokens.s(1),UiTokens.s(.5f),(config.textSecondaryColor&0xffffff)|(120<<24)); // bare-value: unchanged settings group rule stroke/radius/alpha
+        CornerGeometry.drawRoundedRect(canvas,x,lineY,Math.max(0,right-x),UiTokens.s(1),UiTokens.s(.5f),(config.textSecondaryColor&0xffffff)|(120<<24)); // bare-value: unchanged settings group rule stroke/radius/alpha
     }
     public static void chevron(Canvas canvas,float cx,float cy,float size,float expansion,int color) {
-        try(var builder=new PathBuilder();var paint=new Paint().setColor(color)){
+        try(var builder=new PathBuilder();var paint=new Paint().setColor(color).setAntiAlias(CornerGeometry.ANTIALIAS)){
             builder.moveTo(cx-size/2,cy-size).lineTo(cx-size/2,cy+size).lineTo(cx+size/2,cy);
             canvas.save();canvas.translate(cx,cy);canvas.rotate(90*expansion);canvas.translate(-cx,-cy);
             try(var path=builder.detach()){canvas.drawPath(path,paint);}finally{canvas.restore();}

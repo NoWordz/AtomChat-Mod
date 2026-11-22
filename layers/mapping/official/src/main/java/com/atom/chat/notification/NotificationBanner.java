@@ -1,18 +1,20 @@
 package com.atom.chat.notification;
 
+import com.atom.chat.render.CornerGeometry;
 import com.atom.chat.ui.AtomChatAppearance;
 import com.atom.chat.chat.ChatMessage;
 import com.atom.chat.config.AtomChatConfig;
 import com.atom.chat.font.FontManager;
 import com.atom.chat.image.PlayerAvatar;
 import com.atom.chat.ui.PanelOpenMotion;
+import com.atom.chat.render.OutlineIconBounds;
 import com.atom.chat.render.RichTextRenderer;
 import com.atom.chat.render.SkiaImages;
-import com.atom.lib.design.atomchat.SkiaDraw;
 import com.atom.chat.render.SkiaFontRenderer;
 import com.atom.chat.text.RichText;
 import com.atom.chat.ui.Animations;
 import com.atom.chat.ui.PressScale;
+import com.atom.chat.ui.TablerIcons;
 import com.atom.chat.ui.UiLayout;
 import com.atom.chat.ui.UiMotion;
 import com.atom.lib.design.atomchat.UiTokens;
@@ -139,16 +141,9 @@ public final class NotificationBanner {
                 SkiaFontRenderer.textHeight(FontManager.font(UiTokens.FONT_QUOTE));
     }
 
-    /** Feather paper plane, same glyph as the composer send button (20x20).
-     *  Held lazily so class initialization (client tick) never loads the Skija
-     *  native library for users who never open the panel. */
+    /** Shares the composer glyph, loaded only when the banner draws it. */
     private static Path sendPath() {
-        return SendPathHolder.PATH;
-    }
-
-    private static final class SendPathHolder {
-        private static final Path PATH =
-                Path.makeFromSVGString("M18 2.5 L13.5 18.5 L9.5 11 L2.5 7.5 Z M18 2.5 L9.5 11");
+        return TablerIcons.SEND;
     }
 
     private final List<Active> banners = new ArrayList<>();
@@ -294,6 +289,10 @@ public final class NotificationBanner {
     }
 
     public void renderInHud(Canvas canvas, float width, float height) {
+        renderInHud(canvas, prepareHud(width, height));
+    }
+
+    HudFrame prepareHud(float width, float height) {
         var placement = hudPlacement(width, height);
         var rect = placement.rect();
         // A centre/bottom anchor moves the stack origin when its height changes.
@@ -304,15 +303,17 @@ public final class NotificationBanner {
             layoutYs.replaceAll((banner, oldY) -> oldY + shift);
         }
         lastHudOriginY = originY;
-        canvas.save();
-        try {
-            canvas.translate(rect.x(), rect.y());
-            canvas.scale(placement.scale(), placement.scale());
-            // The destination stack height is not a clip: displaced cards can
-            // still occupy their old slots while the shorter stack settles.
-            // The framebuffer itself clips the HUD to the visible viewport.
-            renderStack(canvas, 0, 0, rect.w() / placement.scale(), Float.POSITIVE_INFINITY, -1, -1, false);
-        } finally { canvas.restore(); }
+        return new HudFrame(placement,
+                prepareStack(0, 0, rect.w() / placement.scale(), Float.POSITIVE_INFINITY, false));
+    }
+
+    void renderInHud(Canvas canvas, HudFrame frame) {
+        paintStack(canvas, frame.stack(), -1, -1, false, frame.placement());
+    }
+
+    private static float hudCoordinate(float origin, float relative, float scale) {
+        // Keep the same fractional phase when the stack is rebased under a different anchor origin.
+        return Math.round((origin + relative * scale) * 256F) / 256F;
     }
 
     public static float hudBaseWidth(float viewportWidth) {
@@ -320,25 +321,11 @@ public final class NotificationBanner {
                 bannerWidth(com.atom.chat.screen.ScreenMetrics.panelWidthForViewport(viewportWidth)));
     }
 
-    /**
-     * Current HUD host-fade alpha, read by the overlay's pre-pass so the
-     * frosted backdrop follows the banner entrance and exit.
-     */
-    public static float hudBackdropAlpha() {
-        return INSTANCE.hostFade.alpha(NotificationHostFade.Host.HUD,
-                INSTANCE.clock.getAsLong(), Animations.enabled());
-    }
-
-    /**
-     * The HUD stack placement, shared with the HUD overlay's pre-pass frosted
-     * backdrop so both read the same rectangle. Reads the singleton's queue:
-     * the overlay blurs immediately before the same stack draws.
-     */
-    public static NotificationHudLayout.Placement hudPlacement(float width, float height) {
+    private NotificationHudLayout.Placement hudPlacement(float width, float height) {
         var cfg = AtomChatConfig.get();
         float gap = UiTokens.NOTIFICATION_STACK_GAP;
         return NotificationHudLayout.scaled(width, height, hudBaseWidth(width),
-                INSTANCE.banners.size() * bannerHeight() + Math.max(0, INSTANCE.banners.size() - 1) * gap,
+                banners.size() * bannerHeight() + Math.max(0, banners.size() - 1) * gap,
                 UiTokens.PANEL_TOP_GAP, cfg.notificationHudPosition,
                 UiTokens.s(cfg.notificationHudOffsetX), UiTokens.s(cfg.notificationHudOffsetY), cfg.notificationHudScale);
     }
@@ -349,24 +336,53 @@ public final class NotificationBanner {
         drawBanner(canvas, preview, 0, 0, width, bannerHeight(), 1, 0, 0, null, false, true);
     }
 
-    /** The same state objects and birth times serve both hosts. */
+    record HudFrame(NotificationHudLayout.Placement placement, StackFrame stack) {
+        List<com.atom.chat.render.BlurMask> blurMasks(float density, float guiScale) {
+            var theme = AtomChatAppearance.theme();
+            if ((UiTokens.notificationFill(theme) >>> 24) == 255) return List.of();
+            float ratio = density / guiScale;
+            float scale = placement.scale() * ratio;
+            float radius = UiTokens.cardRadius(theme);
+            var masks = new ArrayList<com.atom.chat.render.BlurMask>(stack.poses().size());
+            for (BannerPose pose : stack.poses()) {
+                var bounds = pose.paintedBounds();
+                masks.add(new com.atom.chat.render.BlurMask(new UiLayout.Rect(
+                        hudCoordinate(placement.rect().x(), bounds.x(), placement.scale()) * ratio,
+                        hudCoordinate(placement.rect().y(), bounds.y(), placement.scale()) * ratio,
+                        bounds.w() * scale, bounds.h() * scale),
+                        CornerGeometry.maskRadius(radius, pose.rect().w(), pose.rect().h()) * scale * pose.scale(), pose.alpha()));
+            }
+            return masks;
+        }
+    }
+
+    private record StackFrame(List<BannerPose> poses, long now) { }
+
+    private record BannerPose(Active banner, UiLayout.Rect rect, float scale, float slide, float alpha) {
+        UiLayout.Rect paintedBounds() {
+            float w = rect.w() * scale;
+            float h = rect.h() * scale;
+            return new UiLayout.Rect(rect.x() + (rect.w() - w) / 2 + slide,
+                    rect.y() + (rect.h() - h) / 2, w, h);
+        }
+    }
+
     private void renderStack(Canvas canvas, float x, float y, float bannerW, float bottom,
                              float vmx, float vmy, boolean interactive) {
-        Active hovered = interactive ? hitTest(vmx, vmy) : null;
-        Active hoveredButton = interactive ? buttonHit(vmx, vmy) : null;
-        hitRects.clear();
-        buttonRects.clear();
-        if (banners.isEmpty()) return;
+        paintStack(canvas, prepareStack(x, y, bannerW, bottom, interactive), vmx, vmy, interactive, null);
+    }
+
+    private StackFrame prepareStack(float x, float y, float bannerW, float bottom, boolean interactive) {
         long now = clock.getAsLong();
+        if (banners.isEmpty()) return new StackFrame(List.of(), now);
         float hostAlpha = hostFade.alpha(interactive ? NotificationHostFade.Host.PANEL : NotificationHostFade.Host.HUD,
                 now, Animations.enabled());
-        float hoverDt = Math.min(50.0F, Math.max(1.0F, now - lastHoverMs));
-        lastHoverMs = now;
         float layoutDt = lastLayoutMs < 0 ? 0 : Math.max(0, now - lastLayoutMs);
         lastLayoutMs = now;
         float bannerH = bannerHeight();
         float gap = UiTokens.NOTIFICATION_STACK_GAP;
         var style = AtomChatConfig.get().pageNavStyle;
+        var poses = new ArrayList<BannerPose>(banners.size());
         for (int i = banners.size() - 1; i >= 0; i--) {
             Active b = banners.get(i);
             float targetY = i * (bannerH + gap);
@@ -380,24 +396,53 @@ public final class NotificationBanner {
             if (drawY + bannerH > bottom + 0.01F) continue;
             float scale = PanelOpenMotion.openScale(progress, style);
             float slide = PanelOpenMotion.openSlidePx(progress, style);
+            poses.add(new BannerPose(b, new UiLayout.Rect(x, drawY, bannerW, bannerH), scale, slide, alpha));
+        }
+        return new StackFrame(poses, now);
+    }
+
+    private void paintStack(Canvas canvas, StackFrame frame, float vmx, float vmy, boolean interactive,
+                            NotificationHudLayout.Placement hud) {
+        Active hovered = interactive ? hitTest(vmx, vmy) : null;
+        Active hoveredButton = interactive ? buttonHit(vmx, vmy) : null;
+        hitRects.clear();
+        buttonRects.clear();
+        if (banners.isEmpty()) return;
+        long now = frame.now();
+        float hoverDt = Math.min(50.0F, Math.max(1.0F, now - lastHoverMs));
+        lastHoverMs = now;
+        for (BannerPose pose : frame.poses()) {
+            Active b = pose.banner();
+            var rect = pose.rect();
+            float x = rect.x(), drawY = rect.y(), bannerW = rect.w(), bannerH = rect.h();
+            float scale = pose.scale();
             float cx = x + bannerW / 2, cy = drawY + bannerH / 2;
-            float paintedX = cx + slide - bannerW * scale / 2;
-            float paintedY = cy - bannerH * scale / 2;
             float hover = advanceHover(hoverAlphas, b, b == hovered, hoverDt);
             float buttonHover = advanceHover(buttonHovers, b, b == hoveredButton, hoverDt);
             PressScale sendScale = buttonScales.computeIfAbsent(b, k -> PressScale.bounce());
             sendScale.update(b == hoveredButton, false, hoverDt, Animations.enabled(), BUTTON_SIZE);
             canvas.save();
             try {
-                canvas.translate(cx + slide, cy);
-                canvas.scale(scale, scale);
-                canvas.translate(-cx, -cy);
-                drawBanner(canvas, b, x, drawY, bannerW, bannerH, alpha, hover, buttonHover, sendScale, interactive, interactive);
+                if (hud != null) {
+                    var bounds = pose.paintedBounds();
+                    float left = hudCoordinate(hud.rect().x(), bounds.x(), hud.scale());
+                    float top = hudCoordinate(hud.rect().y(), bounds.y(), hud.scale());
+                    canvas.translate(left, top);
+                    float size = hud.scale() * scale;
+                    canvas.scale(size, size);
+                    drawBanner(canvas, b, 0F, 0F, bannerW, bannerH, pose.alpha(), hover, buttonHover, sendScale, false, false);
+                } else {
+                    canvas.translate(cx + pose.slide(), cy);
+                    canvas.scale(scale, scale);
+                    canvas.translate(-cx, -cy);
+                    drawBanner(canvas, b, x, drawY, bannerW, bannerH, pose.alpha(), hover, buttonHover, sendScale, interactive, interactive);
+                }
             } finally { canvas.restore(); }
             if (interactive) {
-                hitRects.add(new Hit(b, Rect.makeXYWH(paintedX, paintedY, bannerW * scale, bannerH * scale)));
-                float btnX = paintedX + (bannerW - UiTokens.s(14) - BUTTON_SIZE) * scale;
-                float btnY = paintedY + (bannerH - BUTTON_SIZE) * scale / 2;
+                var bounds = pose.paintedBounds();
+                hitRects.add(new Hit(b, Rect.makeXYWH(bounds.x(), bounds.y(), bounds.w(), bounds.h())));
+                float btnX = bounds.x() + (bannerW - UiTokens.s(14) - BUTTON_SIZE) * scale;
+                float btnY = bounds.y() + (bannerH - BUTTON_SIZE) * scale / 2;
                 buttonRects.add(new Hit(b, Rect.makeXYWH(btnX, btnY, BUTTON_SIZE * scale, BUTTON_SIZE * scale)));
             }
         }
@@ -586,8 +631,12 @@ public final class NotificationBanner {
             // old 10px pad clipped the shadow into a visible rectangle edge.
             canvas.saveLayer(shadowLayer(x, y, w, h), layer);
             try {
-                AtomChatAppearance.drawOverlayCard(canvas, x, y, w, h, radius, hover,
-                        UiTokens.CARD_SHADOW, UiTokens.NOTIFICATION_BLUR, fill);
+                if (localBlur) {
+                    AtomChatAppearance.drawPanelOverlayCard(canvas, x, y, w, h, radius, hover, fill);
+                } else {
+                    AtomChatAppearance.drawOverlayCard(canvas, x, y, w, h, radius, hover,
+                            UiTokens.CARD_SHADOW, UiTokens.NOTIFICATION_BLUR, fill);
+                }
 
                 float padX = UiTokens.s(14);
                 // The header's own control size: this bar is header-height now,
@@ -606,7 +655,7 @@ public final class NotificationBanner {
                         SkiaImages.drawRoundedImage(canvas, face, avatarX, avatarY, avatarSize, avatarSize,
                                 avatarSize / 2.0F, SamplingMode.LINEAR);
                     } else {
-                        SkiaDraw.drawRoundedRect(canvas, avatarX, avatarY, avatarSize, avatarSize,
+                        CornerGeometry.drawRoundedRect(canvas, avatarX, avatarY, avatarSize, avatarSize,
                                 avatarSize / 2.0F, UiTokens.onFloatSurfaceTint(fill));
                     }
                     // Hairline rim concentric with the bitmap (face or
@@ -617,9 +666,8 @@ public final class NotificationBanner {
                     // on purpose: that moves the ring and opens a one-side seam.
                     // Polarity-adaptive UiTokens.rim separates the circle from
                     // the banner card behind. Same ring language as the swatches.
-                    SkiaDraw.drawRing(canvas, avatarX + avatarSize / 2.0F, avatarY + avatarSize / 2.0F,
-                            com.atom.chat.render.AvatarRing.rimRadius(avatarSize / 2.0F),
-                            com.atom.chat.render.AvatarRing.RIM_STROKE_PX, UiTokens.rim(fill));
+                    com.atom.chat.render.AvatarRing.draw(canvas, avatarX + avatarSize / 2.0F, avatarY + avatarSize / 2.0F,
+                            avatarSize / 2.0F, UiTokens.rim(fill));
                 }
 
                 float btnX = x + w - padX - BUTTON_SIZE;
@@ -679,10 +727,10 @@ public final class NotificationBanner {
     private void drawRoundButton(Canvas canvas, float x, float y, float size, float hover) {
         AtomChatConfig config = AtomChatConfig.get();
         float radius = UiTokens.radius(size / (2.0F * UiTokens.SCALE), AtomChatAppearance.theme());
-        SkiaDraw.drawRoundedRect(canvas, x, y, size, size, radius, config.accentColor);
+        CornerGeometry.drawRoundedRect(canvas, x, y, size, size, radius, config.accentColor);
         float wash = hover * 55.0F;
         if (wash > 0.5F) {
-            SkiaDraw.drawRoundedRect(canvas, x, y, size, size, radius,
+            CornerGeometry.drawRoundedRect(canvas, x, y, size, size, radius,
                     Color.makeARGB((int) wash, 255, 255, 255));
         }
         drawIconCentered(canvas, sendPath(), x + size / 2.0F, y + size / 2.0F, UiTokens.s(12),
@@ -690,7 +738,7 @@ public final class NotificationBanner {
     }
 
     private static void drawIconCentered(Canvas canvas, Path icon, float cx, float cy, float size, int color) {
-        Rect b = icon.getBounds();
+        Rect b = OutlineIconBounds.of(icon);
         if (b == null || b.isEmpty()) {
             return;
         }

@@ -342,16 +342,16 @@ public class ChatMessage {
 
     /** Copy with a different anti-spam merge count (used when a duplicate lands). */
     public ChatMessage withDuplicateCount(int count) {
-        return new ChatMessage(component, own, system, quoteName, quoteText,
-                senderUuid, senderName, profileName, contentText,
-                senderRich, contentRich, timestamp, count, id).retainPresentation(capturedPresentation);
+        return withDuplicateCount(count, timestamp);
     }
 
     /** Copy with a different anti-spam merge count and an updated timestamp. */
     public ChatMessage withDuplicateCount(int count, long newTimestamp) {
-        return new ChatMessage(component, own, system, quoteName, quoteText,
+        ChatMessage copy = new ChatMessage(component, own, system, quoteName, quoteText,
                 senderUuid, senderName, profileName, contentText,
                 senderRich, contentRich, newTimestamp, count, id).retainPresentation(capturedPresentation);
+        copy.delivery = delivery;
+        return copy;
     }
 
     public long getId() {

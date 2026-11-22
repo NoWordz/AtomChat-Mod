@@ -3,13 +3,13 @@ package com.atom.chat.ui;
 
 
 
+import com.atom.chat.render.CornerGeometry;
 import com.atom.lib.design.atomchat.AppIcons;
-import com.atom.lib.design.atomchat.UiCards;
+import com.atom.chat.render.SoftShadow;
 import com.atom.lib.design.atomchat.UiTokens;
 import com.atom.chat.avatar.ColorUtil;
 import com.atom.chat.config.AtomChatConfig;
 import com.atom.chat.font.FontManager;
-import com.atom.lib.design.atomchat.SkiaDraw;
 import com.atom.chat.render.SkiaFontRenderer;
 import io.github.humbleui.skija.Canvas;
 import io.github.humbleui.skija.Color;
@@ -30,7 +30,7 @@ import java.util.List;
  * family, mirrored for an anchor at the bottom of the panel instead of the top.
  *
  * <p>Draws on the one float-surface family it shares with the notification
- * banner: {@link UiCards#drawFloatSurface} on {@link UiTokens#floatSurfaceFill()},
+ * banner: a cached floating shadow on {@link UiTokens#floatSurfaceFill()},
  * with its text and glyph inks derived from that fill by
  * {@link UiTokens#onFloatSurface(int)} rather than taken from the panel's text
  * colour. Success draws the accent check — the accent walked along its own
@@ -74,7 +74,7 @@ public final class ActionToast {
         float gap = UiTokens.s(8);
         canvas.save();
         try {
-            SkiaDraw.clip(canvas, panelX, clipTop, panelW, Math.max(0.0F, bottom - clipTop), 0.0F);
+            CornerGeometry.clip(canvas, panelX, clipTop, panelW, Math.max(0.0F, bottom - clipTop), 0.0F);
             for (int i = 0; i < entries.size(); i++) {
                 ActionFeedback.Entry entry = entries.get(i);
                 float alpha = entry.alpha(now, motion);
@@ -175,7 +175,9 @@ public final class ActionToast {
         // shadow, with its ink derived from that fill. The row's own fade rides the
         // caller's layer, so nothing here needs to know the current opacity.
         int fill = UiTokens.floatSurfaceFill(AtomChatAppearance.theme());
-        UiCards.drawFloatSurface(canvas, x, y, w, h, UiTokens.cardRadius(AtomChatAppearance.theme()), 0.0F, fill, AtomChatAppearance.theme());
+        float radius = UiTokens.cardRadius(AtomChatAppearance.theme());
+        SoftShadow.drawFloating(canvas, x, y, w, h, radius);
+        AtomChatAppearance.drawFlatCard(canvas, x, y, w, h, radius, 0F, fill, UiTokens.hairline(fill));
         float cy = y + h / 2.0F;
         float ix = x + PAD_X;
         drawGlyph(canvas, entry.outcome(), ix, cy, fill);

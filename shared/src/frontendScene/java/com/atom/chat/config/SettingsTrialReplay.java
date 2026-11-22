@@ -32,6 +32,10 @@ public final class SettingsTrialReplay {
         try(var language=PreviewLanguage.install(locale)){
             if(light)ThemeService.MINIMAL.applyTo(AtomChatConfig.get());AtomChatConfig.get().animationEnabled=true;AtomChatConfig.get().blurEnabled=false;
             for(String resource:List.of("/com/atom/lib/fonts/bundled-default.otf","/com/atom/lib/fonts/bundled-default-bold.otf"))if(SettingsTrialReplay.class.getResource(resource)==null)throw new AssertionError("MISSING_FONT "+resource);
+            if (page.equals("about")) {
+                AboutSettingsReplay.run(out, width, locale, light, capture);
+                return;
+            }
             var type=Class.forName("com.atom.chat.config.SharedSettingsFrontendTest$Pane");var create=type.getDeclaredConstructor(boolean.class,int.class,String.class);create.setAccessible(true);Object pane=create.newInstance(hosting,width,locale);
             var frame=type.getDeclaredMethod("frame",Surface.class,long.class);frame.setAccessible(true);var chip=type.getDeclaredMethod("chip",int.class);chip.setAccessible(true);var close=type.getDeclaredMethod("close");close.setAccessible(true);
             var timeline = interactions ? new Interactions(type, pane, hosting) : null;

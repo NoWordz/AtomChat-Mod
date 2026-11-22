@@ -1,5 +1,6 @@
 package com.atom.chat.settings;
 
+import com.atom.chat.render.CornerGeometry;
 import com.atom.chat.settings.contract.HistoryFieldsPage;
 import com.atom.chat.settings.contract.SettingsContractMount;
 import com.atom.chat.settings.contract.SettingsContractResources;
@@ -24,14 +25,13 @@ import com.atom.chat.render.Animator;
 import com.atom.chat.render.CardShadowReach;
 import com.atom.chat.render.Easing;
 import com.atom.chat.render.SkiaImages;
-import com.atom.lib.design.atomchat.SkiaDraw;
 import com.atom.chat.render.SkiaFontRenderer;
 import com.atom.chat.theme.ThemeService;
 import com.atom.chat.theme.AppearancePresetStore;
 import com.atom.chat.ui.Animations;
-import com.atom.lib.design.atomchat.AppIcons;
 import com.atom.chat.ui.PanelOpenMotion;
 import com.atom.chat.ui.PressScale;
+import com.atom.chat.ui.TablerIcons;
 import com.atom.chat.ui.ToggleSwitch;
 import com.atom.chat.wallpaper.WallpaperStore;
 
@@ -106,7 +106,7 @@ public final class SettingsSectionPage {
     public void markSettled() {
         entrance.markSettled();
     }
-    public enum RowKind { HERO, AUTHORS, SWITCH, SLIDER, COLOR, INFO, BLOCKED, BLOCKED_EMPTY, LABEL, ACTION, THEMES, BUBBLES, WALLPAPERS }
+    public enum RowKind { HERO, AUTHORS, SWITCH, SLIDER, COLOR, INFO, BLOCKED, BLOCKED_EMPTY, LABEL, ACTION, THEMES, BUBBLES, WALLPAPERS, CREDITS }
 
     public record Row(RowKind kind, SettingsItem item, SettingsSlider slider,
                       SettingsColor color, SettingsCatalog.InfoRow info, PlayerRef player,
@@ -198,13 +198,7 @@ public final class SettingsSectionPage {
     private static final int DANGER_RED = UiTokens.dangerColor();
     private static final String LABEL_BLOCKED = "atomchat.settings.privacy.list";
     private static final String LABEL_THIRD_PARTY = "atomchat.settings.about.thirdparty.group";
-    /** Fold-group id of the third-party block; its children render merged
-     *  into ONE card (see {@link #isAboutCardChild}). */
-    private static final String GROUP_THIRD_PARTY = "thirdparty";
     private static final String LABEL_MOD_INFO = "atomchat.settings.about.modinfo";
-    /** Fold-group id of the mod-info block; it shares the third-party
-     *  block's merged-card language (see {@link #isAboutCardChild}). */
-    private static final String GROUP_MOD_INFO = "modinfo";
     private static final String LABEL_MAINTENANCE = "atomchat.settings.group.about.maintenance";
     private static final String LABEL_APPEARANCE_ADVANCED = "atomchat.settings.group.advancedcolors";
     private static final String ACTION_WALLPAPER_PICK = "wallpaper_pick";
@@ -537,7 +531,8 @@ public final class SettingsSectionPage {
     private final CardStrip themeStrip = new CardStrip(RowKind.THEMES);
     private final CardStrip bubbleStrip = new CardStrip(RowKind.BUBBLES);
     private final CardStrip wallpaperStrip = new CardStrip(RowKind.WALLPAPERS);
-    private final CardStrip[] previewStrips = {themeStrip, bubbleStrip, wallpaperStrip};
+    private final CardStrip creditsStrip = new CardStrip(RowKind.CREDITS);
+    private final CardStrip[] previewStrips = {themeStrip, bubbleStrip, wallpaperStrip, creditsStrip};
     private CardStrip pointerStrip = themeStrip;
     private final Map<Integer, Float> themeDeleteHover = new HashMap<>();
     private boolean revealLatestPresetPending;
@@ -551,7 +546,7 @@ public final class SettingsSectionPage {
      *  dips 0.95 while pressed. */
     private final Map<Integer, PressScale> rowPress = new HashMap<>();
     /** Press springs of the merged about-page cards, keyed by each card's
-     *  first row index — modinfo and third-party today; the map keeps the
+     *  first row index. The map keeps the
      *  same reset() contract as the other per-row spring maps. Each card
      *  carries the one bounce: its child rows scale together, never each
      *  alone. */
@@ -642,6 +637,7 @@ public final class SettingsSectionPage {
             case BLOCKED_EMPTY -> s(160);
             case THEMES, WALLPAPERS -> UiTokens.SETTINGS_THEME_ROW_H;
             case BUBBLES -> UiTokens.SETTINGS_THEME_ROW_H;
+            case CREDITS -> AboutCreditCards.ROW_HEIGHT;
             case HERO -> UiTokens.SETTINGS_HERO_H;
             case AUTHORS -> UiTokens.SETTINGS_AUTHOR_ROW_H;
             default -> UiTokens.SETTINGS_ROW_H;
@@ -691,9 +687,9 @@ public final class SettingsSectionPage {
             case ACTION -> {
                 ActionCopy copy = actionCopy(row);
                 title = copy.title(); desc = copy.subtitle();
-                if (copy.available()) {
+                if (!copy.verb().isEmpty()) {
                     float valueWidth = SkiaFontRenderer.getStringWidth(titleFont, copy.verb());
-                    boolean stepper = SettingsStepper.supports(row.actionId());
+                    boolean stepper = copy.available() && SettingsStepper.supports(row.actionId());
                     reserved = (stepper ? SettingsStepper.preferredWidth(valueWidth) : valueWidth)
                             + UiTokens.SETTINGS_COMPACT_GAP;
                     controlH = stepper ? UiTokens.SETTINGS_STEPPER_ARROW : SkiaFontRenderer.getHeight(titleFont);
@@ -791,8 +787,9 @@ public final class SettingsSectionPage {
         String subtitle;
         String verb;
         if (!available) {
-            subtitle = tr(item.subtitleKey() + ".unavailable");
-            verb = "";
+            subtitle = tr(item.performanceLocked() ? "atomchat.settings.performance.locked"
+                    : item.subtitleKey() + ".unavailable");
+            verb = item.performanceLocked() ? tr("atomchat.settings.performance.off") : "";
         } else if (redConfirm) {
             subtitle = tr(item.subtitleKey());
             verb = tr("atomchat.settings.appearance.wallpaper.clear.confirm");
@@ -843,8 +840,8 @@ public final class SettingsSectionPage {
         return switch (row.kind()) {
             case SWITCH -> {
                 SettingsItem item = row.item();
-                String key = item.available()
-                        ? item.subtitleKey() : item.subtitleKey() + ".unavailable";
+                String key = item.performanceLocked() ? "atomchat.settings.performance.locked"
+                        : item.available() ? item.subtitleKey() : item.subtitleKey() + ".unavailable";
                 yield tr(key);
             }
             case ACTION -> actionCopy(row).subtitle();
@@ -864,10 +861,10 @@ public final class SettingsSectionPage {
             case ACTION -> {
                 ActionCopy copy = actionCopy(row);
                 float reserved = 0.0F;
-                if (copy.available()) {
+                if (!copy.verb().isEmpty()) {
                     Font verbFont = FontManager.font(UiTokens.SETTINGS_TILE_TITLE);
                     float valueWidth = SkiaFontRenderer.getStringWidth(verbFont, copy.verb());
-                    reserved = (SettingsStepper.supports(row.actionId())
+                    reserved = (copy.available() && SettingsStepper.supports(row.actionId())
                             ? SettingsStepper.preferredWidth(valueWidth) : valueWidth) + s(12);
                 }
                 yield Math.max(0.0F, rowW - padX * 2.0F - reserved);
@@ -1094,14 +1091,11 @@ public final class SettingsSectionPage {
                 rows.add(Row.ofInfo(info));
             }
         });
-        addGroup(rows, LABEL_THIRD_PARTY, () -> {
-            for (SettingsCatalog.InfoRow info : SettingsCatalog.thirdPartyRows()) {
-                rows.add(Row.ofInfo(info));
-            }
-        });
+        addGroup(rows, LABEL_THIRD_PARTY, () ->
+                rows.add(new Row(RowKind.CREDITS, null, null, null, null, null, null, null, null, null)));
         addGroup(rows, LABEL_MAINTENANCE, () -> {
             rows.add(Row.ofAction(ACTION_CACHE_CLEAR, cacheClearItem()));
-            addSwitches(rows, SettingsSection.ABOUT, "debug");
+            addSwitches(rows, SettingsSection.ABOUT, "debug", "performance_mode");
         });
         return rows;
     }
@@ -1208,7 +1202,7 @@ public final class SettingsSectionPage {
      */
     /**
      * True when the row at {@code index} is a child of one of the about
-     * page's merged-card fold groups (mod info, third party). Those children
+     * page's merged-card fold groups. Those children
      * render as one merged card ({@link #drawAboutCard}), so {@link
      * #rowAdvance} collapses the gap between two of them and the draw pass
      * routes the whole run through the card. Membership comes from the row
@@ -1521,7 +1515,7 @@ public final class SettingsSectionPage {
         try {
             // The chip band owns the top of the list: rows clip below it, so a
             // scrolled list never draws through the pills.
-            SkiaDraw.clip(canvas, layout.list.x() - CardShadowReach.PAD, layout.list.y() + barH,
+            CornerGeometry.clip(canvas, layout.list.x() - CardShadowReach.PAD, layout.list.y() + barH,
                     layout.list.w() + driftClipPad + CardShadowReach.PAD * 2, layout.list.h() - barH, 0.0F);
             // One draw of one row set: a chip switch re-armed the entrance, so
             // the new rows rise in per row rather than crossfading against the
@@ -1769,7 +1763,8 @@ public final class SettingsSectionPage {
             drawLabel(canvas, row, rect);
             return;
         }
-        if (row.kind() != RowKind.HERO && row.kind() != RowKind.AUTHORS && row.kind() != RowKind.BLOCKED_EMPTY) {
+        if (row.kind() != RowKind.HERO && row.kind() != RowKind.AUTHORS
+                && row.kind() != RowKind.BLOCKED_EMPTY) {
             AtomChatAppearance.drawCard(canvas, rect.x(), rect.y(), rect.w(), rect.h(),
                     UiTokens.settingsRowRadius(AtomChatAppearance.theme()), hover);
         }
@@ -1778,7 +1773,7 @@ public final class SettingsSectionPage {
 
     /** Draws content for a settings row. {@link #drawRow} paints its card
      *  surface where applicable; the About hero is a standalone brand row.
-     *  Split from {@link #drawRow} so the merged third-party card can lay
+     *  Split from {@link #drawRow} so a merged settings card can lay
      *  its child rows on one shared surface instead of a card each. */
     private void drawRowContent(Canvas canvas, Row row, UiLayout.Rect rect, float hover,
                                 Font buttonFont, int accent, float dtMs) {
@@ -1796,6 +1791,7 @@ public final class SettingsSectionPage {
             case THEMES -> drawThemes(canvas, rect, dtMs);
             case WALLPAPERS -> drawWallpapers(canvas, rect, dtMs);
             case BUBBLES -> drawBubblePreviews(canvas, rect, dtMs);
+            case CREDITS -> drawCredits(canvas, rect);
             case INFO -> drawInfo(canvas, row, rect);
             case BLOCKED -> drawBlocked(canvas, row, rect, hover, buttonFont);
             case BLOCKED_EMPTY -> drawEmptyState(canvas, rect, "atomchat.settings.privacy.empty");
@@ -1806,7 +1802,7 @@ public final class SettingsSectionPage {
     }
 
     /**
-     * One of the about page's merged-card blocks (mod info, third party):
+     * One of the settings page's merged-card blocks:
      * ONE card holding every child row of the fold group — the owner's
      * single-card + hairline language, the same structure {@code
      * ProfilePage.drawInfoRows} uses for its info card. Rows sit
@@ -1858,7 +1854,9 @@ public final class SettingsSectionPage {
                 ? aboutCardPress.computeIfAbsent(start, k -> PressScale.bounce())
                 : aboutCardPress.get(start);
         if (press != null && interactive) {
-            press.update(cardOver, pressedRow >= start && pressedRow < end,
+            boolean stripPressed = rows.get(start).kind() == RowKind.CREDITS
+                    && creditsStrip.pressed && !creditsStrip.dragged;
+            press.update(cardOver, stripPressed || pressedRow >= start && pressedRow < end,
                     dt, Animations.enabled(), Math.max(card.w(), card.h()));
         }
         final int initialHovered=hovered;
@@ -1887,14 +1885,14 @@ public final class SettingsSectionPage {
                         colorRowHovered = over && row.kind() == RowKind.COLOR;
                         float rowAlpha = rowHover.getOrDefault(j, 0.0F);
                         if (rowAlpha > 0.01F) {
-                            SkiaDraw.drawRoundedRect(canvas, rect.x(), rect.y(),
+                            CornerGeometry.drawRoundedRect(canvas, rect.x(), rect.y(),
                                     rect.w(), rect.h(), 0.0F, UiTokens.cardHover(rowAlpha, AtomChatAppearance.theme()));
                         }
                         if (j > start) {
                             // Hairline divider, 1px at the card-edge alpha,
                             // indented to the row pad on both sides — it owns
                             // the seam the inter-row gap gave up.
-                            SkiaDraw.drawRoundedRect(canvas, card.x() + pad, rect.y(),
+                            CornerGeometry.drawRoundedRect(canvas, card.x() + pad, rect.y(),
                                     card.w() - pad * 2.0F, UiTokens.s(1.0F), 0.0F,
                                     UiTokens.hairline(AtomChatAppearance.theme()));
                         }
@@ -1934,13 +1932,21 @@ public final class SettingsSectionPage {
     /** Content width of the card strip (both edge pads included). */
     private float stripContentWidth(CardStrip strip) {
         int count = stripCardCount(strip);
-        return UiTokens.SETTINGS_ROW_PAD + count * UiTokens.THEME_CARD_W
+        return UiTokens.SETTINGS_ROW_PAD + count * stripCardWidth(strip)
                 + (count - 1) * UiTokens.THEME_CARD_GAP + UiTokens.SETTINGS_ROW_PAD;
     }
 
     private int stripCardCount(CardStrip strip) {
-        return strip.kind == RowKind.BUBBLES ? AtomChatConfig.BubbleStyle.values().length
-                : strip.kind == RowKind.WALLPAPERS ? com.atom.chat.wallpaper.WallpaperPresets.presets().length : themeCardCount();
+        return switch (strip.kind) {
+            case CREDITS -> SettingsCatalog.thirdPartyRows().size();
+            case BUBBLES -> AtomChatConfig.BubbleStyle.values().length;
+            case WALLPAPERS -> com.atom.chat.wallpaper.WallpaperPresets.presets().length;
+            default -> themeCardCount();
+        };
+    }
+
+    private static float stripCardWidth(CardStrip strip) {
+        return strip.kind == RowKind.CREDITS ? AboutCreditCards.WIDTH : UiTokens.THEME_CARD_W;
     }
 
     private int builtInThemeCount() {
@@ -1961,8 +1967,12 @@ public final class SettingsSectionPage {
 
     /** X of card {@code index} inside the row rect, scroll offset applied. */
     private static float themeCardX(UiLayout.Rect rect, int index, float scroll) {
+        return stripCardX(rect, index, scroll, UiTokens.THEME_CARD_W);
+    }
+
+    private static float stripCardX(UiLayout.Rect rect, int index, float scroll, float width) {
         return rect.x() + UiTokens.SETTINGS_ROW_PAD
-                + index * (UiTokens.THEME_CARD_W + UiTokens.THEME_CARD_GAP) - scroll;
+                + index * (width + UiTokens.THEME_CARD_GAP) - scroll;
     }
 
     /** Top edge of the preview cards inside the row rect. */
@@ -1981,14 +1991,16 @@ public final class SettingsSectionPage {
         stripHitTests++;
         if (!rect.contains(vmx, vmy)) return -1;
         float scroll = strip.scroll;
-        float top = themeCardY(rect);
-        if (vmy < top || vmy > top + UiTokens.THEME_CARD_H + s(18)) {
-            return -1;
-        }
+        boolean credits = strip.kind == RowKind.CREDITS;
+        float top = credits ? rect.y() + AboutCreditCards.TOP : themeCardY(rect);
+        float height = credits ? AboutCreditCards.LOGO : UiTokens.THEME_CARD_H + s(18);
+        if (vmy < top || vmy > top + height) return -1;
+        float width = stripCardWidth(strip);
         int count = stripCardCount(strip);
         for (int i = 0; i < count; i++) {
-            float x = themeCardX(rect, i, scroll);
-            if (vmx >= x && vmx <= x + UiTokens.THEME_CARD_W) {
+            float x = stripCardX(rect, i, scroll, width);
+            if (credits ? AboutCreditCards.logoRect(x, rect.y()).contains(vmx, vmy)
+                    : vmx >= x && vmx <= x + width) {
                 return i;
             }
         }
@@ -2094,7 +2106,15 @@ public final class SettingsSectionPage {
     }
 
     /** Release: a press that never turned into a drag selects the card. */
-    public void endThemeStrip() {
+    public void endThemeStrip(float mx, float my, UiLayout layout) {
+        if (pointerStrip.kind == RowKind.CREDITS && (pointerStrip.rect == null || !layout.list.contains(mx, my)
+                || stripCardAt(pointerStrip, pointerStrip.rect, mx, my) != pointerStrip.pressedCard)) {
+            pointerStrip.pressedCard = -1;
+        }
+        endThemeStrip();
+    }
+
+    void endThemeStrip() {
         int card = pointerStrip.pressedCard;
         boolean select = pointerStrip.pressed && !pointerStrip.dragged && card >= 0;
         UiLayout.Rect rect = pointerStrip.rect;
@@ -2102,6 +2122,12 @@ public final class SettingsSectionPage {
                 ? themeDeleteAt(rect, pointerStrip.pressX, pointerStrip.pressY, pointerStrip.scroll) : -1;
         pointerStrip.pressed = false;
         pointerStrip.pressedCard = -1;
+        if (pointerStrip.kind == RowKind.CREDITS) {
+            if (select) {
+                openUri(SettingsCatalog.thirdPartyRows().get(card).uri());
+            }
+            return;
+        }
         if (select && pointerStrip.kind == RowKind.WALLPAPERS) {
             var presets = com.atom.chat.wallpaper.WallpaperPresets.presets();
             if (actionHandler != null && card < presets.length)
@@ -2154,8 +2180,20 @@ public final class SettingsSectionPage {
         revealLatestPresetPending = true;
     }
 
+    public boolean scrollCardStrip(float mx, float my, UiLayout layout, SettingsSection section,
+                                   float scrollY, float horizontal, float vertical) {
+        if (pointerStrip.pressed) return true;
+        if (!themesUnderPointer(mx, my, layout, section, scrollY)) return false;
+        boolean horizontalGesture = horizontal != 0F && Math.abs(horizontal) >= Math.abs(vertical);
+        if (stripMaxScroll(pointerStrip, pointerStrip.rect) <= 0F) {
+            return false;
+        }
+        wheelThemeStrip(horizontalGesture ? horizontal : vertical, pointerStrip.rect);
+        return true;
+    }
+
     /** Wheel over the strip: glide horizontally, one step per notch. */
-    public void wheelThemeStrip(float amount, UiLayout.Rect rect) {
+    void wheelThemeStrip(float amount, UiLayout.Rect rect) {
         if (pointerStrip.pressed || rect == null) {
             return;
         }
@@ -2164,6 +2202,7 @@ public final class SettingsSectionPage {
         pointerStrip.animFrom = pointerStrip.scroll;
         pointerStrip.animStart = System.currentTimeMillis();
         pointerStrip.animActive = Math.abs(pointerStrip.target - pointerStrip.scroll) > 0.5F;
+        if (!Animations.enabled()) advanceStrip(pointerStrip, rect);
     }
 
     /** Glides the offset toward its target; a drag owns the offset directly. */
@@ -2171,6 +2210,11 @@ public final class SettingsSectionPage {
         float max = stripMaxScroll(strip, rect);
         strip.target = clampScroll(strip.target, max);
         if (strip.pressed) {
+            return;
+        }
+        if (!Animations.enabled()) {
+            strip.scroll = strip.target;
+            strip.animActive = false;
             return;
         }
         if (strip.animActive) {
@@ -2205,6 +2249,7 @@ public final class SettingsSectionPage {
                 case THEMES -> themeStrip;
                 case BUBBLES -> bubbleStrip;
                 case WALLPAPERS -> wallpaperStrip;
+                case CREDITS -> creditsStrip;
                 default -> null;
             };
             if (strip != null) updatePreviewStrip(strip, rowRect(section, rows, i, scrollY, layout));
@@ -2236,7 +2281,7 @@ public final class SettingsSectionPage {
                 row.right() - UiTokens.SETTINGS_ROW_PAD, row.y() + WallpaperTokens.CAPTION_Y, sec(255));
         canvas.save();
         try {
-            SkiaDraw.clip(canvas, row.x(), themeCardY(row) - WallpaperTokens.CLIP_PAD, row.w(),
+            CornerGeometry.clip(canvas, row.x(), themeCardY(row) - WallpaperTokens.CLIP_PAD, row.w(),
                     UiTokens.THEME_CARD_H + WallpaperTokens.CLIP_EXTRA, UiTokens.radius(6, AtomChatAppearance.theme()));
             var presets = com.atom.chat.wallpaper.WallpaperPresets.presets();
             for (int i = 0; i < presets.length; i++) {
@@ -2271,7 +2316,7 @@ public final class SettingsSectionPage {
         }
         canvas.save();
         try {
-            SkiaDraw.clip(canvas, row.x(), themeCardY(row) - s(6), row.w(),
+            CornerGeometry.clip(canvas, row.x(), themeCardY(row) - s(6), row.w(),
                     UiTokens.THEME_CARD_H + s(30), UiTokens.radius(6, AtomChatAppearance.theme()));
             var styles = AtomChatConfig.BubbleStyle.values();
             for (int i = 0; i < styles.length; i++) {
@@ -2301,6 +2346,24 @@ public final class SettingsSectionPage {
             Canvas canvas = recorder.beginRecording(Rect.makeWH(width, height));
             drawThemePreviews(canvas, new CardStrip(RowKind.THEMES), new UiLayout.Rect(0, 0, width, height), 0F);
             recorder.finishRecordingAsPicture().close();
+        }
+    }
+
+    private void drawCredits(Canvas canvas, UiLayout.Rect rect) {
+        updatePreviewStrip(creditsStrip, rect);
+        var credits = SettingsCatalog.thirdPartyRows();
+        int secondary = sec(220);
+        int save = canvas.save();
+        try {
+            canvas.clipRect(Rect.makeXYWH(rect.x(), rect.y(), rect.w(), rect.h()));
+            for (int i = 0; i < credits.size(); i++) {
+                float x = stripCardX(rect, i, creditsStrip.scroll, AboutCreditCards.WIDTH);
+                if (x >= rect.right() || x + AboutCreditCards.WIDTH <= rect.x()) continue;
+                var credit = credits.get(i);
+                AboutCreditCards.draw(canvas, credit.titleKey(), credit.value(), x, rect.y(), secondary);
+            }
+        } finally {
+            canvas.restoreToCount(save);
         }
     }
 
@@ -2348,7 +2411,7 @@ public final class SettingsSectionPage {
 
         canvas.save();
         try {
-            SkiaDraw.clip(canvas, rect.x(), themeCardY(rect) - s(6), rect.w(),
+            CornerGeometry.clip(canvas, rect.x(), themeCardY(rect) - s(6), rect.w(),
                     UiTokens.THEME_CARD_H + s(30), UiTokens.radius(6, AtomChatAppearance.theme()));
             boolean frostedActive = matchingCustom == null
                     && (currentId.isEmpty() || ThemeService.FROSTED.equals(currentId));
@@ -2425,13 +2488,12 @@ public final class SettingsSectionPage {
                 strip.pressed && strip.pressedCard == index, dtMs, Animations.enabled(), w);
         press.begin(canvas, x + w / 2.0F, y + h / 2.0F);
         try {
-            SkiaDraw.drawRoundedShadow(canvas, x, y, w, h, radius, s(6), UiTokens.CARD_SHADOW);
-            SkiaDraw.drawRoundedRect(canvas, x, y, w, h, radius, preview.panelBg());
+            SettingsPreviewCard.drawSurface(canvas, x, y, w, h, radius, preview.panelBg());
             if (wallpaper) {
                 if (image != null) {
                     canvas.save();
                     try {
-                        SkiaDraw.clip(canvas, x, y, w, h, radius);
+                        CornerGeometry.clip(canvas, x, y, w, h, radius);
                         canvas.drawImageRect(image, io.github.humbleui.types.Rect.makeXYWH(x, y, w, h));
                     } finally { canvas.restore(); }
                 }
@@ -2439,7 +2501,7 @@ public final class SettingsSectionPage {
             // Title bar strip + its accent dot.
             float barH = s(12);
             float barY = y + s(7);
-            SkiaDraw.drawRoundedRect(canvas, x + s(7), barY, w - s(14), barH,
+            CornerGeometry.drawRoundedRect(canvas, x + s(7), barY, w - s(14), barH,
                     s(4) * preview.cornerFactor(), preview.card());
 
             // The other player's bubble on the left, the player's own on the right.
@@ -2455,16 +2517,16 @@ public final class SettingsSectionPage {
             // ground the composite equals the cardCutout weight of this card.
             float composerTint = Math.max(0.0F, Math.min(1.0F,
                     AtomChatConfig.get().cardTint));
-            SkiaDraw.drawRoundedRect(canvas, x + s(7), y + h - s(19), w - s(14), s(12),
+            CornerGeometry.drawRoundedRect(canvas, x + s(7), y + h - s(19), w - s(14), s(12),
                     s(4) * preview.cornerFactor(),
                     UiTokens.withAlpha(preview.card(), 255.0F * composerTint));
             }
             float dotR = WallpaperTokens.DOT_RADIUS;
             float dotY = y + WallpaperTokens.DOT_Y;
-            SkiaDraw.drawRoundedRect(canvas, x + w - WallpaperTokens.DOT_RIGHT - dotR, dotY - dotR,
+            CornerGeometry.drawRoundedRect(canvas, x + w - WallpaperTokens.DOT_RIGHT - dotR, dotY - dotR,
                     dotR * 2, dotR * 2, dotR, preview.accent());
             if (selected) {
-                SkiaDraw.drawEdgeHighlight(canvas, x, y, w, h, radius, s(1.5F), preview.accent());
+                CornerGeometry.drawEdgeHighlight(canvas, x, y, w, h, radius, s(1.5F), preview.accent());
             }
             if (deletable) {
                 int hoveredCard = strip.hoveredCard;
@@ -2474,7 +2536,7 @@ public final class SettingsSectionPage {
                 themeDeleteHover.put(index, fade);
                 if (fade > 0.01F) {
                     float rs = s(18);
-                    SkiaDraw.drawRoundedRect(canvas, x + w - rs - s(2), y + s(2), rs, rs,
+                    CornerGeometry.drawRoundedRect(canvas, x + w - rs - s(2), y + s(2), rs, rs,
                             UiTokens.radius(4, AtomChatAppearance.theme()), Color.makeARGB((int) (200.0F * fade), 214, 48, 48));
                     Font xFont = FontManager.font(UiTokens.FONT_QUOTE);
                     SkiaFontRenderer.drawTextCentered(canvas, xFont, "×",
@@ -2488,7 +2550,7 @@ public final class SettingsSectionPage {
         Font nameFont = FontManager.font(UiTokens.SETTINGS_TILE_SUB);
         SkiaFontRenderer.drawTextCentered(canvas, nameFont,
                 SkiaFontRenderer.truncate(nameFont, name, w + s(8)),
-                x + w / 2.0F, y + h + s(11),
+                x + w / 2.0F, SettingsPreviewCard.captionY(y, h),
                 selected ? textPrimary() : sec(220));
     }
 
@@ -2503,9 +2565,9 @@ public final class SettingsSectionPage {
                 strip.pressed && strip.pressedCard == index, dtMs, Animations.enabled(), w);
         press.begin(canvas, x + w / 2.0F, y + h / 2.0F);
         try {
-            SkiaDraw.drawRoundedRect(canvas, x, y, w, h, UiTokens.radius(10, AtomChatAppearance.theme()),
+            CornerGeometry.drawRoundedRect(canvas, x, y, w, h, UiTokens.radius(10, AtomChatAppearance.theme()),
                     UiTokens.trackRest(AtomChatAppearance.theme()));
-            drawIconCentered(canvas, AppIcons.ICON_PLUS_PATH, x + w / 2.0F, y + h / 2.0F,
+            drawIconCentered(canvas, TablerIcons.PLUS, x + w / 2.0F, y + h / 2.0F,
                     s(18), textPrimary());
         } finally {
             canvas.restore();
@@ -2540,11 +2602,11 @@ public final class SettingsSectionPage {
         try {
             var theme = AtomChatAppearance.theme();
             float radius = UiTokens.radius(4, theme);
-            SkiaDraw.drawRoundedRect(canvas, left - s(1), top - s(1), edge + s(2), edge + s(2),
+            CornerGeometry.drawRoundedRect(canvas, left - s(1), top - s(1), edge + s(2), edge + s(2),
                     radius + s(1), UiTokens.rim(theme));
-            SkiaDraw.drawRoundedRect(canvas, left, top, edge, edge, radius, color.value());
+            CornerGeometry.drawRoundedRect(canvas, left, top, edge, edge, radius, color.value());
             if (colorRowHovered) {
-                SkiaDraw.drawRoundedRect(canvas, left, top, edge, edge, radius, UiTokens.cardHover(.30F, theme));
+                CornerGeometry.drawRoundedRect(canvas, left, top, edge, edge, radius, UiTokens.cardHover(.30F, theme));
             }
         } finally {
             canvas.restore();
@@ -2553,7 +2615,7 @@ public final class SettingsSectionPage {
 
     private static void drawIconCentered(Canvas canvas, io.github.humbleui.skija.Path icon,
                                          float cx, float cy, float size, int color) {
-        io.github.humbleui.types.Rect b = icon.getBounds();
+        io.github.humbleui.types.Rect b = com.atom.chat.render.OutlineIconBounds.of(icon);
         if (b == null || b.isEmpty()) {
             return;
         }
@@ -2592,7 +2654,7 @@ public final class SettingsSectionPage {
                 AtomChatConfig.get().textSecondaryColor);
         Image icon = heroAppIcon();
         if (icon != null) {
-            SkiaDraw.drawRoundedShadow(canvas, iconX, top, iconSize, iconSize,
+            com.atom.chat.render.SoftShadow.drawRounded(canvas, iconX, top, iconSize, iconSize,
                     UiTokens.SETTINGS_HERO_ICON_RADIUS, UiTokens.SETTINGS_HERO_ICON_SHADOW,
                     UiTokens.CARD_SHADOW);
             SkiaImages.drawRoundedImage(canvas, icon, iconX, top, iconSize, iconSize,
@@ -2627,7 +2689,7 @@ public final class SettingsSectionPage {
                 + 2.0F * UiTokens.SETTINGS_HERO_VERSION_PAD);
         float versionX = rect.x() + (rect.w() - versionW) / 2.0F;
         float versionY = markY + UiTokens.SETTINGS_HERO_WORDMARK_MAX_H + UiTokens.SETTINGS_HERO_GAP;
-        SkiaDraw.drawRoundedRect(canvas, versionX, versionY, versionW,
+        CornerGeometry.drawRoundedRect(canvas, versionX, versionY, versionW,
                 UiTokens.SETTINGS_HERO_VERSION_H,
                 UiTokens.radius(UiTokens.SETTINGS_HERO_VERSION_RADIUS / UiTokens.SCALE, AtomChatAppearance.theme()), sec(12));
         SkiaFontRenderer.drawTextCentered(canvas, versionFont, version,
@@ -2718,7 +2780,7 @@ public final class SettingsSectionPage {
 
     private static Image heroAppIcon() {
         if (heroAppIcon == null) {
-            heroAppIcon = loadBundled("/assets/atomchat/logo.png");
+            heroAppIcon = loadBundled("/assets/atomchat/mod_logo.png");
         }
         return heroAppIcon;
     }
@@ -2727,9 +2789,8 @@ public final class SettingsSectionPage {
 
     /**
      * The bundled red {@code AtomChat} wordmark with its white ground keyed out
-     * to alpha, decoded once. Separate from {@code logo.png} (which stays the
-     * mod icon and keeps its white ground, because the loader's icon slot wants
-     * one). A null return is the caller's cue to fall back to text.
+     * to alpha, decoded once. The square mark uses the same resource as the
+     * loader's mod icon. A null return is the caller's cue to fall back to text.
      */
     private static Image heroWordmark() {
         if (heroWordmark != null) {
@@ -2777,7 +2838,7 @@ public final class SettingsSectionPage {
             for (int direction : new int[]{-1, 1}) {
                 UiLayout.Rect arrow = direction < 0 ? geometry.previous() : geometry.next();
                 float hover = stepperHover.weight(row.actionId(), direction);
-                if (hover > 0.0F) SkiaDraw.drawRoundedRect(canvas, arrow.x(), arrow.y(), arrow.w(), arrow.h(),
+                if (hover > 0.0F) CornerGeometry.drawRoundedRect(canvas, arrow.x(), arrow.y(), arrow.w(), arrow.h(),
                         UiTokens.settingsRowRadius(AtomChatAppearance.theme()), UiTokens.cardHover(hover, AtomChatAppearance.theme()));
                 float size = Math.min(UiTokens.SETTINGS_STEPPER_CHEVRON, arrow.w() / 4);
                 drawChevron(canvas, arrow.x() + arrow.w() / 2, arrow.y() + arrow.h() / 2,
@@ -2844,10 +2905,10 @@ public final class SettingsSectionPage {
         if (compact != null) {
             drawCompactText(canvas, rect, compact, copy.redConfirm() ? DANGER_RED : sec(200));
             if (copy.available() && stepper) drawStepper(canvas, row, rect, copy);
-            if (copy.available() && !stepper) SkiaFontRenderer.drawTextRight(canvas, titleFont, copy.verb(),
+            if ((!stepper || !copy.available()) && !copy.verb().isEmpty()) SkiaFontRenderer.drawTextRight(canvas, titleFont, copy.verb(),
                     rect.right() - UiTokens.SETTINGS_ROW_PAD,
                     rect.bottom() - UiTokens.SETTINGS_ROW_PAD - compact.controlH() / 2.0F,
-                    copy.redConfirm() ? DANGER_RED : textPrimary());
+                    copy.redConfirm() ? DANGER_RED : copy.available() ? textPrimary() : sec(130));
             return;
         }
 
@@ -2862,12 +2923,12 @@ public final class SettingsSectionPage {
         // Same treatment as the link cards' "Open": full-weight, centred —
         // the card's call to action, not a footnote.
         if (copy.available() && stepper) drawStepper(canvas, row, rect, copy);
-        if (copy.available() && !stepper) {
+        if ((!stepper || !copy.available()) && !copy.verb().isEmpty()) {
             Font verbFont = FontManager.font(UiTokens.SETTINGS_TILE_TITLE);
             SkiaFontRenderer.drawTextRight(canvas, verbFont, copy.verb(),
                     rect.right() - UiTokens.SETTINGS_ROW_PAD,
                     rect.y() + rect.h() / 2.0F,
-                    copy.redConfirm() ? DANGER_RED : textPrimary());
+                    copy.redConfirm() ? DANGER_RED : copy.available() ? textPrimary() : sec(130));
         }
         // Disabled rows dim their text/controls only (the sec(130) copy
         // above); the card base stays put so the list never turns patchy.
@@ -2952,8 +3013,8 @@ public final class SettingsSectionPage {
         float maxW = Math.max(0.0F, switchX - textX - s(10));
         float descMaxW = descriptionMaxWidth(row, rect.w());
         // An overridden option explains itself instead of silently doing nothing.
-        String subtitleKey = item.available()
-                ? item.subtitleKey() : item.subtitleKey() + ".unavailable";
+        String subtitleKey = item.performanceLocked() ? "atomchat.settings.performance.locked"
+                : item.available() ? item.subtitleKey() : item.subtitleKey() + ".unavailable";
         SkiaFontRenderer.drawText(canvas, titleFont,
                 SkiaFontRenderer.truncate(titleFont, tr(item.titleKey()), maxW), textX,
                 SkiaFontRenderer.centerBaselineY(titleFont, rect.y() + s(20)),
@@ -2969,7 +3030,8 @@ public final class SettingsSectionPage {
             drawInlineNumberSlider(canvas, row, rect, accent);
             return;
         }
-        boolean dragging = slider.id().equals(draggingSliderId);
+        boolean dragging = slider.available() && slider.id().equals(draggingSliderId);
+        if (!slider.available()) accent = sec(125);
         CompactText compact = compactText(row, rect.w());
         Font titleFont = FontManager.font(UiTokens.SETTINGS_TILE_TITLE);
         Font valueFont = FontManager.font(UiTokens.SETTINGS_TILE_SUB);
@@ -2997,20 +3059,20 @@ public final class SettingsSectionPage {
         UiLayout.Rect track = sliderTrackRect(rect);
         float t = knobPosition(slider, dragging);
         float radius = UiTokens.radius(UiTokens.SLIDER_TRACK_H / (2.0F * UiTokens.SCALE), AtomChatAppearance.theme());
-        SkiaDraw.drawRoundedRect(canvas, track.x(), track.y(), track.w(), track.h(), radius,
+        CornerGeometry.drawRoundedRect(canvas, track.x(), track.y(), track.w(), track.h(), radius,
                 UiTokens.trackRest(AtomChatAppearance.theme()));
         float fillW = Math.max(track.h(), track.w() * t);
-        SkiaDraw.drawRoundedRect(canvas, track.x(), track.y(), fillW, track.h(), radius, accent);
+        CornerGeometry.drawRoundedRect(canvas, track.x(), track.y(), fillW, track.h(), radius, accent);
 
         float knobX = track.x() + track.w() * t - UiTokens.SLIDER_KNOB / 2.0F;
         float knobY = track.y() + track.h() / 2.0F - UiTokens.SLIDER_KNOB / 2.0F;
-        SkiaDraw.drawRoundedRect(canvas, knobX, knobY, UiTokens.SLIDER_KNOB, UiTokens.SLIDER_KNOB,
+        CornerGeometry.drawRoundedRect(canvas, knobX, knobY, UiTokens.SLIDER_KNOB, UiTokens.SLIDER_KNOB,
                 UiTokens.handleRadius(UiTokens.SLIDER_KNOB, AtomChatAppearance.theme()),
-                Color.makeARGB(255, 255, 255, 255)); // knob: mechanical white
+                slider.available() ? 0xFFFFFFFF : sec(125)); // knob: mechanical white
         // The accent trace follows the same radius as the head. A circular
         // ring here would preserve the old circle after the fill itself had
         // gone square, which is exactly the leak this audit is closing.
-        SkiaDraw.drawEdgeHighlight(canvas, knobX, knobY,
+        CornerGeometry.drawEdgeHighlight(canvas, knobX, knobY,
                 UiTokens.SLIDER_KNOB, UiTokens.SLIDER_KNOB,
                 UiTokens.handleRadius(UiTokens.SLIDER_KNOB, AtomChatAppearance.theme()), s(1.8F), accent);
     }
@@ -3087,7 +3149,7 @@ public final class SettingsSectionPage {
                     link ? LINK_COLOR : sec(200));
             if (link) {
                 float underlineY = rect.y() + s(37) + SkiaFontRenderer.textHeight(valueFont) / 2.0F + s(2);
-                SkiaDraw.drawRoundedRect(canvas, textX, underlineY,
+                CornerGeometry.drawRoundedRect(canvas, textX, underlineY,
                         SkiaFontRenderer.getStringWidth(valueFont, valueText), s(1.5F), s(0.75F), LINK_COLOR);
             }
         } else {
@@ -3103,7 +3165,7 @@ public final class SettingsSectionPage {
                     float lineCenterY = top + (i + 0.5F) * lineH;
                     float baseline = SkiaFontRenderer.centerBaselineY(valueFont, lineCenterY);
                     float underlineY = baseline + SkiaFontRenderer.textHeight(valueFont) / 2.0F + s(2);
-                    SkiaDraw.drawRoundedRect(canvas, textX, underlineY,
+                    CornerGeometry.drawRoundedRect(canvas, textX, underlineY,
                             SkiaFontRenderer.getStringWidth(valueFont, lines.get(i)),
                             s(1.5F), s(0.75F), LINK_COLOR);
                 }
@@ -3136,7 +3198,7 @@ public final class SettingsSectionPage {
             } else {
                 // Avatar stand-in: an opaque neutral, fixed on purpose — it is a
                 // placeholder face, not a themed surface, and reads on any panel.
-                SkiaDraw.drawRoundedRect(canvas, rect.x() + UiTokens.SETTINGS_ROW_PAD, avatarY,
+                CornerGeometry.drawRoundedRect(canvas, rect.x() + UiTokens.SETTINGS_ROW_PAD, avatarY,
                         avatar, avatar, avatar / 2.0F, Color.makeARGB(255, 120, 130, 145));
             }
             // Hairline rim concentric with the bitmap (face or placeholder):
@@ -3147,9 +3209,8 @@ public final class SettingsSectionPage {
             // opens a one-side seam. Polarity-adaptive UiTokens.rim separates
             // the circle from the row card behind. Same ring language as the
             // color controls.
-            SkiaDraw.drawRing(canvas, rect.x() + UiTokens.SETTINGS_ROW_PAD + avatar / 2.0F, avatarY + avatar / 2.0F,
-                    com.atom.chat.render.AvatarRing.rimRadius(avatar / 2.0F),
-                    com.atom.chat.render.AvatarRing.RIM_STROKE_PX, UiTokens.rim(AtomChatAppearance.theme()));
+            com.atom.chat.render.AvatarRing.draw(canvas, rect.x() + UiTokens.SETTINGS_ROW_PAD + avatar / 2.0F, avatarY + avatar / 2.0F,
+                    avatar / 2.0F, UiTokens.rim(AtomChatAppearance.theme()));
         }
 
         String name = row.player() != null ? row.player().realName() : "";
@@ -3166,7 +3227,7 @@ public final class SettingsSectionPage {
 
         float buttonH = s(28);
         float buttonY = rect.y() + (rect.h() - buttonH) / 2.0F;
-        SkiaDraw.drawRoundedRect(canvas, buttonX, buttonY, buttonW, buttonH, UiTokens.radius(8, AtomChatAppearance.theme()),
+        CornerGeometry.drawRoundedRect(canvas, buttonX, buttonY, buttonW, buttonH, UiTokens.radius(8, AtomChatAppearance.theme()),
                 UiTokens.cardHover(hover, AtomChatAppearance.theme()));
         SkiaFontRenderer.drawTextCentered(canvas, buttonFont, label,
                 buttonX + buttonW / 2.0F, buttonY + buttonH / 2.0F,
@@ -3187,6 +3248,17 @@ public final class SettingsSectionPage {
             RowKind kind = rows.get(i).kind();
             if (kind == RowKind.AUTHORS || kind == RowKind.BLOCKED_EMPTY) {
                 continue;
+            }
+            if (kind == RowKind.CREDITS) {
+                if (!layout.list.contains(vmx, vmy)) continue;
+                int card = stripCardAt(creditsStrip, rect, vmx, vmy);
+                if (card < 0) continue;
+                float x = stripCardX(rect, card, creditsStrip.scroll, AboutCreditCards.WIDTH);
+                UiLayout.Rect logo = AboutCreditCards.logoRect(x, rect.y());
+                float left = Math.max(rect.x(), logo.x());
+                return new RowHit(Row.ofInfo(SettingsCatalog.thirdPartyRows().get(card)), i, left, logo.y(),
+                        Math.min(rect.right(), logo.right()) - left,
+                        Math.min(rect.bottom(), logo.bottom()) - logo.y(), left);
             }
             if (kind == RowKind.BUBBLES || kind == RowKind.WALLPAPERS) {
                 if (layout.list.contains(vmx, vmy)) {
@@ -3232,7 +3304,7 @@ public final class SettingsSectionPage {
         List<Row> rows = rows(section);
         for (int i = 0; i < rows.size(); i++) {
             Row row = rows.get(i);
-            if (row.kind() != RowKind.SLIDER) {
+            if (row.kind() != RowKind.SLIDER || !row.slider().available()) {
                 continue;
             }
             // Folded-away children are not draggable, same floor as drawing.
@@ -3255,6 +3327,7 @@ public final class SettingsSectionPage {
      * slider does exactly that), so the geometry must be recomputed every frame.
      */
     public void beginSliderDrag(int rowIndex, SettingsSlider slider, UiLayout.Rect rowRect, float vmx) {
+        if (!slider.available()) return;
         activeSliderIndex = rowIndex;
         draggingSliderId = slider.id();
         settleId = null;
@@ -3375,10 +3448,11 @@ public final class SettingsSectionPage {
      * the knob lag behind the finger.
      */
     private float knobPosition(SettingsSlider slider, boolean dragging) {
+        if (!slider.available()) return 0F;
         if (dragging) {
             return slider.normalize(dragValue);
         }
-        if (slider.id().equals(settleId)) {
+        if (!AtomChatConfig.get().performanceMode && slider.id().equals(settleId)) {
             return settleFrom + (settleTo - settleFrom)
                     * Easing.easeOutCubic(Math.min(1.0F, (System.currentTimeMillis() - settleStart) / 120.0F));
         }
@@ -3632,6 +3706,7 @@ public final class SettingsSectionPage {
         colorRowHovered = false;
         themeStrip.reset();
         bubbleStrip.reset();
+        creditsStrip.reset();
         pointerStrip = themeStrip;
         themeDeleteHover.clear();
         draggingSliderId = null;

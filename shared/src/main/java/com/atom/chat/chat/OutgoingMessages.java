@@ -1,5 +1,7 @@
 package com.atom.chat.chat;
 
+import com.atom.chat.reaction.ReactionClient;
+
 import java.util.*;
 
 /** Bounded in-flight sends. Sender and conversation proof precede content matching. */
@@ -38,6 +40,8 @@ public final class OutgoingMessages {
         }
         if (match == null || originalBody == null && now - match.sentAt() > TIMEOUT_MS) return false;
         ChatMessage corrected = match.local().withServerEcho(received);
+        ReactionClient.bind(received);
+        ReactionClient.bind(corrected);
         boolean replaced = partner == null ? ChatStore.get().replace(match.local().getId(), corrected)
                 : PrivateChatStore.replace(partner, match.local().getId(), corrected);
         if (!replaced) return false;

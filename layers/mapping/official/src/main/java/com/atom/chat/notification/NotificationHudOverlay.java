@@ -1,7 +1,8 @@
 package com.atom.chat.notification;
 
 import com.atom.chat.ui.Animations;
-import com.atom.chat.ui.AtomChatAppearance;
+import com.atom.chat.ui.ChatShortcutHint;
+import com.atom.chat.ui.HudTransform;
 import com.atom.chat.ui.PanelCloseOverlay;
 import com.atom.chat.AtomChat;
 import com.atom.chat.fun.NewYearFireworks;
@@ -9,7 +10,6 @@ import com.atom.chat.render.ItemIconRenderer;
 import com.atom.chat.render.PanelBlurRenderer;
 import com.atom.chat.render.SkiaGraphics;
 import com.atom.chat.screen.ScreenMetrics;
-import com.atom.lib.design.atomchat.UiTokens;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import org.joml.Matrix4f;
@@ -51,7 +51,7 @@ public final class NotificationHudOverlay {
             if (client.gui.getChat() instanceof PanelChatHud hud) {
                 hud.atomchat$renderPanelHud(gui, hint, now);
             }
-        } else if (client.screen == null) {
+        } else if (!(client.screen instanceof net.minecraft.client.gui.screens.ChatScreen)) {
             hint = gameplayChatVisibility(client, now);
         }
         if (failed) { PanelCloseOverlay.INSTANCE.clear(); return; }
@@ -71,6 +71,7 @@ public final class NotificationHudOverlay {
                 && !(client.screen instanceof com.atom.chat.screen.AtomChatScreen);
         if (!banner && hint <= 0F && !paintExit && !fireworks) return;
         float hintVisibility = hint;
+        var hudTransform = hintVisibility > 0F ? HudTransform.from(gui.pose().last().pose()) : null;
         long hudStart = com.atom.chat.diagnostics.FrameProfile.startHud();
         boolean exitGlass = paintExit && exit.hasCardMasks();
         float bannerBlur = com.atom.chat.config.AtomChatConfig.get().effectiveCardBlurStrength();
@@ -80,30 +81,23 @@ public final class NotificationHudOverlay {
                     ? com.atom.chat.render.CardBackdrop.captureWorld(
                             com.atom.lib.client.render.MinecraftRenderBridge.get()::captureFrame) : null) {
                 float guiScale=(float)client.getWindow().getGuiScale();
-                // The frosted backdrop is pre-drawn with raw GL (panel-blur style)
-                // before the Skia pass: a Skia backdrop filter would read the
-                // framebuffer as premul, and shader packs leave undefined per-frame
-                // alpha there — under Iris that flickered, and every attempt to
-                // normalize the framebuffer alpha blackened the display. The raw-GL
-                // pass samples RGB only and owns its own output alpha, so it never
-                // reads or writes the framebuffer alpha channel.
-                var blurPlacement = banner && bannerBlur > 0F
-                        ? NotificationBanner.hudPlacement(width, height).toGui(density, guiScale) : null;
+                // Both passes consume the same evaluated animation frame. The GL pass
+                // samples world RGB without depending on shader-pack framebuffer alpha.
+                var frame = banner ? NotificationBanner.INSTANCE.prepareHud(width, height) : null;
                 GRAPHICS.checkFrameBufferId();
                 GRAPHICS.draw(() -> {
                     if (paintExit && exit.blur() && PanelBlurRenderer.isAvailable()) {
                         var bounds = exit.bounds();
                         var capture = com.atom.chat.ui.PanelOpenMotion.blurCapture(exit.progress(now), exit.style(),
                                 bounds.x(), bounds.y(), bounds.w(), bounds.h(),
-                                com.atom.chat.ui.PanelBackground.outlineInset(), density, guiScale);
+                                com.atom.chat.ui.PanelBackground.renderOutlineInset(), density, guiScale);
                         PanelBlurRenderer.render(new Matrix4f(), capture.x(), capture.y(), capture.w(), capture.h(),
                                 capture.radius(), exit.progress(now), com.atom.chat.config.AtomChatConfig.get().effectiveBlurStrength());
                     }
-                    if (blurPlacement != null && PanelBlurRenderer.isAvailable()) {
-                        var rect = blurPlacement.rect();
-                        PanelBlurRenderer.render(new Matrix4f(), rect.x(), rect.y(),
-                                rect.w(), rect.h(), UiTokens.cardRadius(AtomChatAppearance.theme()) * blurPlacement.scale(),
-                                NotificationBanner.hudBackdropAlpha(), bannerBlur);
+                    // The banner can be the first blur consumer after startup or reload.
+                    // Let renderMasked load the shaders on Fabric independently of the panel.
+                    if (frame != null && bannerBlur > 0F) {
+                        PanelBlurRenderer.renderMasked(frame.blurMasks(density, guiScale), bannerBlur);
                     }
                     if (banner) ItemIconRenderer.prepare(gui, GRAPHICS);
                 }, density,
@@ -113,9 +107,11 @@ public final class NotificationHudOverlay {
                                         com.atom.chat.wallpaper.WallpaperStore.current()) : null;
                                 exit.draw(canvas, GRAPHICS.contextIdentity(), now, GRAPHICS.requireSurface(), cardWorld, wallpaper);
                             }
-                            if (banner) NotificationBanner.INSTANCE.renderInHud(canvas, width, height);
-                            com.atom.chat.ui.ChatShortcutHint.renderGuiScaled(canvas, width, height, density, guiScale,
-                                    com.atom.chat.AtomChatClient.OPEN_ATOMCHAT_KEY.getTranslatedKeyMessage().getString(), hintVisibility);
+                            if (frame != null) NotificationBanner.INSTANCE.renderInHud(canvas, frame);
+                            if (hudTransform != null) {
+                                ChatShortcutHint.renderOnHud(canvas, gui.guiHeight(), guiScale / density, guiScale,
+                                        hudTransform, com.atom.chat.AtomChatClient.OPEN_ATOMCHAT_KEY.getTranslatedKeyMessage().getString(), hintVisibility);
+                            }
                             if (fireworks) NewYearFireworks.INSTANCE.draw(canvas, width, height, fireworksTime);
                         });
             }

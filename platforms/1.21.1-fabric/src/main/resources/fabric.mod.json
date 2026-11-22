@@ -3,17 +3,15 @@
   "id": "atomchat",
   "version": "${version}",
   "name": "AtomChat",
-  "description": "A phone-app style chat experience for Minecraft, powered by Skia.",
-  "authors": [
-    "E33EPUS"
-  ],
+  "description": "${mod_description}",
+  "authors": ["${mod_authors}"],
   "license": "MIT",
   "environment": "*",
-  "icon": "assets/atomchat/logo.png",
+  "icon": "assets/atomchat/mod_logo.png",
   "contact": {
-    "homepage": "https://github.com/NoWordz/AtomChat-Mod",
-    "issues": "https://github.com/NoWordz/AtomChat-Mod/issues",
-    "sources": "https://github.com/NoWordz/AtomChat-Mod"
+    "homepage": "${mod_repository_url}",
+    "issues": "${mod_issues_url}",
+    "sources": "${mod_repository_url}"
   },
   "entrypoints": {
     "main": [
@@ -38,10 +36,10 @@
   ],
   "accessWidener": "atomchat.accesswidener",
   "suggests": {
-    "atomlib": ">=${atomlib_version}"
+    "atomlib": "${atomlib_fabric_range}"
   },
   "custom": {
-    "atomlib:client-required": ">=${atomlib_version}"
+    "atomlib:client-required": "${atomlib_fabric_range}"
   },
   "depends": {
     "fabricloader": ">=0.16.0",

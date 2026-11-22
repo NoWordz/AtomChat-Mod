@@ -3,6 +3,7 @@ package com.atom.chat.render;
 import com.atom.chat.chat.ChatMessage;
 import com.atom.chat.config.AtomChatConfig;
 import com.atom.chat.image.ChatHudGifFixture;
+import com.atom.chat.image.MessageImage;
 import com.atom.chat.platform.Platform;
 import com.atom.chat.text.RichText;
 import com.atom.chat.ui.ChatShortcutHint;
@@ -100,6 +101,70 @@ class ChatHudTest {
         assertTrue(selected.isEmpty());
     }
 
+    @Test void antiSpamCountsOnlyAdjacentHudMessagesAndPreservesStableFrameIdentity() throws Exception {
+        var history = new ChatHudHistory<String, String, ChatMessage>();
+        String older = "old";
+        String separator = "separator";
+        String first = "first";
+        String second = "second";
+        String third = "third";
+        var rows = List.of(third, second, first, separator, older);
+        for (int i = 0; i < rows.size(); i++) {
+            String row = rows.get(i);
+            var body = RichText.literal(row == separator ? "different" : "repeat");
+            var message = new ChatMessage(body.toText(), false, false, null, null, null,
+                    "Alice", "Alice", body.getString()).withDuplicateCount(1, 1_000L * (rows.size() - i));
+            history.stage(row, message);
+            history.bind(row, row, rows);
+        }
+        var hud = new ChatHudRenderer();
+        var previous = com.atom.chat.chat.MessageMerge.antiSpamEnabledSupplier;
+        var selection = ChatHudRenderer.class.getDeclaredField("recent");
+        selection.setAccessible(true);
+        try {
+            com.atom.chat.chat.MessageMerge.antiSpamEnabledSupplier = () -> true;
+            Object world = new Object();
+            hud.select(world, history, rows, 2, key -> fail("missing bound row"), false);
+            var selected = (List<?>) selection.get(hud);
+            assertEquals(2, selected.size());
+            var merged = (ChatMessage) selected.get(0);
+            assertEquals(3, merged.getDuplicateCount());
+            assertEquals(history.presentation(third, key -> fail()).getId(), merged.getId());
+            assertEquals("different", ((ChatMessage) selected.get(1)).getDisplayText());
+            hud.select(world, history, rows, 2, key -> fail("missing bound row"), false);
+            assertSame(merged, selected.get(0));
+
+            com.atom.chat.chat.MessageMerge.antiSpamEnabledSupplier = () -> false;
+            hud.select(world, history, rows, 2, key -> fail("missing bound row"), false);
+            assertEquals(1, ((ChatMessage) selected.get(0)).getDuplicateCount());
+        } finally {
+            hud.clear();
+            com.atom.chat.chat.MessageMerge.antiSpamEnabledSupplier = previous;
+        }
+    }
+
+    @Test void unstyledHudPlayerNameUsesWhiteEvenOnALightPanelTheme() {
+        var config = new AtomChatConfig();
+        config.panelBgColor = 0xFFF4F4F4;
+        config.textPrimaryColor = 0xFF141414;
+        config.otherBubbleColor = 0xFF282E41;
+        config.otherBubbleTextColor = 0xFF88CCEE;
+        var body = RichText.literal("HUD readability");
+        var row = new ChatMessage(body.toText(), false, false, null, null, null,
+                "HUD Tester", "HudTester", body.getString(), RichText.literal("HUD Tester"), body);
+        var hud = new ChatHudRenderer();
+        var view = new ChatHudRenderer.Viewport(8, 120, 240, 100, 1F, 1F);
+        try (var surface = Surface.makeRasterN32Premul(285, 155); var pixels = new Bitmap()) {
+            pixels.allocN32Pixels(285, 155);
+            hud.paint(surface.getCanvas(), List.of(row), view, null, "Local", "Player",
+                    config, 1, 255, 1F, false, 0);
+            assertTrue(surface.readPixels(pixels, 0, 0));
+            assertEquals(255, peakAlpha(pixels, pixel -> (pixel & 0xFFFFFF) == 0xFFFFFF));
+        } finally {
+            hud.clear();
+        }
+    }
+
     @Test void avatarUsesShortcutSizeAndScalesWithVanillaGuiAndChat() {
         var pose = new Matrix4f();
         var base = ChatHudRenderer.Viewport.of(pose, 480, 300, 3, 1, 320).fit(5);
@@ -112,6 +177,52 @@ class ChatHudTest {
         assertEquals(25F, 300F - chatScaled.bottom() * chatScaled.density() / 4F, 0.001F);
     }
 
+    @Test void transformedGlobalHudKeepsTheChatReplacementAndItsLocalLayout() {
+        var base = ChatHudRenderer.Viewport.of(new Matrix4f(), 480, 300, 3, 1, 320);
+        var zoomPose = new Matrix4f().translate(-34, -21, 0).scale(1.15F, 1.15F, 1);
+        var zoomed = ChatHudRenderer.Viewport.of(zoomPose, 480, 300, 3, 1, 320);
+        assertNotNull(zoomed, "a scaled HUD must keep AtomChat's renderer");
+        assertEquals(base.width(), zoomed.width());
+        assertEquals(base.bottom(), zoomed.bottom());
+        assertEquals(base.density(), zoomed.density(), "zoom must not change the cached raster density");
+    }
+
+    @Test void aForgeStyleChatOffsetKeepsTheBottomOfTheLatestMessageOnScreen() {
+        var pos = new Matrix4f().translate(10, 35, 0);
+        var view = ChatHudRenderer.Viewport.of(pos, 300, 180, 3, 1, 320);
+        assertEquals(14F, view.x() * view.guiPerUnit() + view.transform().x(), .001F);
+        assertEquals(180F, view.bottom() * view.guiPerUnit() + view.transform().y(), .001F);
+    }
+
+    @Test void zoomMovesTheChatAndShortcutInTheSameGuiCoordinates() {
+        var config = new AtomChatConfig();
+        config.secondaryCapsuleBg = 0xFF1655CC;
+        var hud = new ChatHudRenderer();
+        var row = new ChatMessage(RichText.literal("System message").toText(), false, true);
+        Matrix4f pose = new Matrix4f().translate(22, 8, 0).scale(.75F, .75F, 1F);
+        var view = ChatHudRenderer.Viewport.of(pose, 240, 150, 2, 1, 180);
+        try (var surface = Surface.makeRasterN32Premul(480, 300); var pixels = new Bitmap()) {
+            var canvas = surface.getCanvas();
+            canvas.clear(0);
+            canvas.save();
+            canvas.scale(view.density(), view.density());
+            hud.paint(canvas, List.of(row), view, null, "Local", "Player", config, 1, 255, 1, false, 0);
+            canvas.restore();
+            ChatShortcutHint.renderOnHud(canvas, 150, 2, 2, view.transform(), "Y", 1);
+            pixels.allocN32Pixels(480, 300);
+            assertTrue(surface.readPixels(pixels, 0, 0));
+            assertEquals(53, leftmostPixel(pixels, value -> value == 0xFFFFFFFF), 2);
+            assertEquals(50, leftmostPixel(pixels, value -> value == 0xFF1655CC), 2);
+            int capsuleBottom = -1, shortcutTop = 300;
+            for (int y = 0; y < 300; y++) {
+                if (pixels.getColor(75, y) == 0xFF1655CC) capsuleBottom = y;
+                if (pixels.getColor(61, y) == 0xFFFFFFFF) shortcutTop = Math.min(shortcutTop, y);
+            }
+            assertTrue(capsuleBottom >= 0 && shortcutTop < 300);
+            assertEquals(9, shortcutTop - capsuleBottom - 1, 3, "the six GUI pixel gap scales with the HUD");
+        }
+    }
+
     @Test void newestThumbnailLeavesSixGuiPixelsAboveTheShortcut() {
         var config = new AtomChatConfig();
         var imageMessage = player(false, "[[CICode,url=http://test/thumb.png,name=thumb]]");
@@ -122,7 +233,7 @@ class ChatHudTest {
                 for (int scale : new int[]{2, 3, 5}) {
                     int width = guiWidth * scale, height = guiHeight * scale;
                     var viewport = ChatHudRenderer.Viewport.of(new Matrix4f(), guiWidth, guiHeight, scale, 1, 200).fit(1);
-                    var hud = new ChatHudRenderer((url, visible) -> image);
+                    var hud = new ChatHudRenderer((url, visible) -> new MessageImage(image, false));
                     try (var surface = Surface.makeRasterN32Premul(width, height); var pixels = new Bitmap()) {
                         var canvas = surface.getCanvas();
                         canvas.save();
@@ -164,7 +275,7 @@ class ChatHudTest {
         var first = RichText.literal("first").mapStyles(style -> style.withColor(0xFF00AA).withBold(true));
         var text = RichText.concat(first, RichText.literal("\nsecond"));
         var font = com.atom.chat.font.FontManager.font(com.atom.lib.design.atomchat.UiTokens.FONT_QUOTE);
-        var lines = ChatHudRenderer.oneLine(text, font, 300);
+        var lines = MessagePaint.oneLine(text, font, 300);
         assertEquals(1, lines.size());
         assertEquals("first…", lines.get(0).getPlainText());
         assertEquals(first.runs().get(0).style(), lines.get(0).runs().get(0).style());
@@ -211,6 +322,60 @@ class ChatHudTest {
                     config, 1, 255, 1F, false, 150);
             assertTrue(surface.readPixels(pixels, 0, 0));
             assertEquals(-1, leftmostPixel(pixels, 0xFF00FF00));
+        }
+    }
+
+    @Test void hudKeepsOpaqueImageShadowAndDropsTransparentImageOutline() throws Exception {
+        int width = 340, height = 220, background = 0xFFE4D6B5, color = 0xFF216F9E;
+        var config = new AtomChatConfig();
+        var view = new ChatHudRenderer.Viewport(8, 200, 310, 190, 1, 1);
+        var row = player(false, "[[CICode,url=http://test/preview.png,name=preview,w=104,h=66]]");
+        try (var opaque = Surface.makeRasterN32Premul(104, 66);
+             var visibleAlpha = Surface.makeRasterN32Premul(104, 66);
+             var output = Surface.makeRasterN32Premul(width * 2, height);
+             var paint = new io.github.humbleui.skija.Paint();
+             var pixels = new Bitmap()) {
+            opaque.getCanvas().clear(color);
+            visibleAlpha.getCanvas().clear(0);
+            visibleAlpha.getCanvas().drawRect(io.github.humbleui.types.Rect.makeXYWH(20, 8, 64, 48), paint.setColor(color));
+            try (var solid = opaque.makeImageSnapshot(); var cutout = visibleAlpha.makeImageSnapshot()) {
+                var current = new java.util.concurrent.atomic.AtomicReference<>(new MessageImage(solid, false));
+                var hud = new ChatHudRenderer((url, visible) -> current.get());
+                try {
+                    var canvas = output.getCanvas();
+                    canvas.clear(background);
+                    hud.paint(canvas, List.of(row), view, null, "Local", "Player", config, 1, 255, 1F, false, 0);
+                    assertTrue(pixels.allocN32Pixels(width, height));
+                    assertTrue(output.readPixels(pixels, 0, 0));
+                    int x = leftmostPixel(pixels, color);
+                    assertTrue(x >= 0);
+                    int firstY = 0, lastY = height - 1;
+                    while (pixels.getColor(x + 8, firstY) != color) firstY++;
+                    while (pixels.getColor(x + 8, lastY) != color) lastY--;
+                    int y = (firstY + lastY) / 2, right = x;
+                    while (pixels.getColor(right, y) == color) right++;
+                    assertNotEquals(background, pixels.getColor(right + 1, y));
+
+                    current.set(new MessageImage(cutout, true));
+                    canvas.save();
+                    canvas.translate(width, 0);
+                    hud.paint(canvas, List.of(row), view, null, "Local", "Player", config, 1, 255, 1F, false, 0);
+                    canvas.restore();
+                    assertTrue(output.readPixels(pixels, width, 0));
+                    assertEquals(background, pixels.getColor(right + 1, y));
+                    assertEquals(color, pixels.getColor((x + right) / 2, y));
+                    assertTrue(leftmostPixel(pixels, 0xFFFF00FF) >= 0, "the player label remains");
+                    if ("1".equals(System.getenv("ATOMCHAT_MESSAGE_SHADOW_PREVIEW"))) {
+                        var path = visualPath("hud-alpha-preview.png");
+                        java.nio.file.Files.createDirectories(path.getParent());
+                        try (var frame = output.makeImageSnapshot(); var png = frame.encodeToData()) {
+                            java.nio.file.Files.write(path, png.getBytes());
+                        }
+                    }
+                } finally {
+                    hud.clear();
+                }
+            }
         }
     }
 
@@ -262,6 +427,65 @@ class ChatHudTest {
                 System.out.printf(Locale.ROOT, "CHAT_HUD_RASTER p50=%.4fms p95=%.4fms%n",
                         samples[samples.length / 2] / 1e6, samples[samples.length * 95 / 100] / 1e6);
             }
+            long[] coldSamples = new long[40];
+            for (int i = 0; i < coldSamples.length; i++) {
+                HudShadow.release();
+                var cold = new ChatHudRenderer();
+                canvas.clear(0);
+                long start = System.nanoTime();
+                cold.paint(canvas, rows, viewport, null, "Local", "Player", config, 10, 255, 1F, false, 0);
+                coldSamples[i] = System.nanoTime() - start;
+                cold.clear();
+            }
+            Arrays.sort(coldSamples);
+            System.out.printf(Locale.ROOT, "CHAT_HUD_COLD p50=%.4fms p95=%.4fms%n",
+                    coldSamples[coldSamples.length / 2] / 1e6, coldSamples[coldSamples.length * 95 / 100] / 1e6);
+            hud.clear();
+        }
+    }
+
+    @Test void captureShadowPreview() throws Exception {
+        assumeTrue("1".equals(System.getenv("ATOMCHAT_CHAT_HUD_BENCH")));
+        var rows = List.of(quotedPlayer(true, "This bubble has an outer shadow"),
+                player(false, "[[CICode,url=http://test/preview.png,name=preview]]"),
+                new ChatMessage(RichText.literal("System message").toText(), false, true));
+        var config = new AtomChatConfig();
+        var view = ChatHudRenderer.Viewport.of(new Matrix4f(), 220, 185, 2, 1, 180).fit(3);
+        try (var attachment = Surface.makeRasterN32Premul(160, 60);
+             var output = Surface.makeRasterN32Premul(880, 370);
+             var paint = new io.github.humbleui.skija.Paint()) {
+            for (int x = 0; x < 160; x += 4) {
+                attachment.getCanvas().drawRect(io.github.humbleui.types.Rect.makeXYWH(x, 0, 4, 60),
+                        paint.setColor(0xFF245D84 + x * 0x00010100));
+            }
+            try (var thumbnail = attachment.makeImageSnapshot()) {
+                var hud = new ChatHudRenderer((url, visible) -> new MessageImage(thumbnail, false));
+                var canvas = output.getCanvas();
+                for (int side = 0; side < 2; side++) {
+                    canvas.save();
+                    canvas.translate(440 * side, 0);
+                    for (int y = 0; y < 370; y += 24) {
+                        for (int x = 0; x < 440; x += 24) {
+                            boolean lighter = (x / 24 + y / 24) % 2 == 0;
+                            int color = side == 0 ? (lighter ? 0xFFE5D5AA : 0xFFCCBA8E)
+                                    : (lighter ? 0xFF384E42 : 0xFF27392F);
+                            canvas.drawRect(io.github.humbleui.types.Rect.makeXYWH(x, y, Math.min(24, 440 - x), 24),
+                                    paint.setColor(color));
+                        }
+                    }
+                    canvas.save();
+                    canvas.scale(view.density(), view.density());
+                    hud.paint(canvas, rows, view, null, "Local", "Player", config, 3, 255, 1, false, 0);
+                    canvas.restore();
+                    ChatShortcutHint.renderGuiScaled(canvas, 440, 370, 1, 2, "Y", 1);
+                    canvas.restore();
+                }
+                var path = Path.of(System.getProperty("atomchat.repoRoot", "../.."), "build/v093/hud-shadows/preview.png");
+                try (var image = output.makeImageSnapshot(); var png = image.encodeToData()) {
+                    java.nio.file.Files.createDirectories(path.getParent());
+                    java.nio.file.Files.write(path, png.getBytes());
+                }
+            }
         }
     }
     @Test void idleChatKeepsPaintedRichRowsBeyondVanillaLifetime() {
@@ -270,8 +494,9 @@ class ChatHudTest {
         config.ownBubbleColor = 0xFF1222EE;
         config.otherBubbleColor = 0xFFEE2212;
         config.secondaryCapsuleBg = 0xFF00FF00;
+        config.secondaryCapsuleText = 0xFFFFFFFF;
         var rows = List.of(
-                player(true, "Short own body"), player(false, "A noticeably longer body"),
+                quotedPlayer(true, "Short own body"), player(false, "A noticeably longer body"),
                 new ChatMessage(RichText.literal("A system message").toText(), false, true));
         var viewport = new ChatHudRenderer.Viewport(8, 380, 360, 370, 1, 1);
         var hud = new ChatHudRenderer();
@@ -293,9 +518,25 @@ class ChatHudTest {
                 int capsuleX = leftmostPixel(pixels, green);
                 assertTrue(capsuleX >= 0 && capsuleX < ownX, "the capsule starts in the left margin");
                 assertEquals(255, peakAlpha(pixels, green), "idle chat does not fade with age");
-                assertEquals(-1, leftmostPixel(pixels, 0xFFFFFF00), "quote capsule does not paint its styled text");
+                IntPredicate yellow = pixel -> (pixel >> 16 & 255) > 220 && (pixel >> 8 & 255) > 220 && (pixel & 255) < 80;
+                assertTrue(leftmostPixel(pixels, yellow) >= ownX, "the quote paints its styled text beside the avatar");
                 assertTrue(leftmostPixel(pixels, 0xFFFF00FF) >= ownX, "decorated sender retains its explicit color");
             }
+        }
+    }
+
+    @Test void translucentSystemCapsuleHasAnOpacityFloor() {
+        var config = new AtomChatConfig();
+        config.secondaryCapsuleBg = 0x4000FF00;
+        var viewport = new ChatHudRenderer.Viewport(8, 180, 310, 164, 1, 1);
+        var row = new ChatMessage(RichText.literal("A system message").toText(), false, true);
+        try (var surface = Surface.makeRasterN32Premul(340, 190); var pixels = new Bitmap()) {
+            pixels.allocN32Pixels(340, 190);
+            new ChatHudRenderer().paint(surface.getCanvas(), List.of(row), viewport, null, "Local", "Player",
+                    config, 1, 255, 1F, false, 0);
+            assertTrue(surface.readPixels(pixels, 0, 0));
+            assertEquals(217, peakAlpha(pixels, pixel -> (pixel & 0xFFFFFF) == 0x00FF00));
+            assertEquals(0x4000FF00, config.secondaryCapsuleBg);
         }
     }
 
@@ -388,10 +629,154 @@ class ChatHudTest {
         }
     }
 
+    @Test void zoomedHudGlyphsMatchNativeRenderingAtTheSamePhysicalDensity() throws Exception {
+        var config = new AtomChatConfig();
+        config.performanceMode = true;
+        var message = player(false, "Sharp edges");
+        var zoom = new com.atom.chat.ui.HudTransform(.25F, .375F, 1.25F, 1.25F);
+        var viewport = new ChatHudRenderer.Viewport(8.25F, 95.25F, 144, 88, 2, 1F, zoom);
+        byte[][] ink = new byte[2][];
+        try (var surface = Surface.makeRasterN32Premul(420, 260); var bitmap = new Bitmap()) {
+            bitmap.allocN32Pixels(420, 260);
+            var canvas = surface.getCanvas();
+            for (int pass = 0; pass < 2; pass++) {
+                canvas.clear(0);
+                var hud = new ChatHudRenderer();
+                int save = canvas.save();
+                try {
+                    canvas.scale(2, 2);
+                    if (pass == 1) zoom.apply(canvas, 1F);
+                    var view = pass == 0 ? viewport : new ChatHudRenderer.Viewport(
+                            viewport.x(), viewport.bottom(), viewport.width(), viewport.height(), 2.5F, 1F);
+                    hud.paint(canvas, List.of(message), view, null, "Local", "Player",
+                            config, 1, 255, 1F, false, 0);
+                    assertTrue(surface.readPixels(bitmap, 0, 0));
+                    ink[pass] = bitmap.readPixels();
+                    String stage = System.getenv("ATOMCHAT_VISUAL_FOLLOWUP");
+                    if (stage != null) {
+                        String run = System.getenv().getOrDefault("ATOMCHAT_VISUAL_RUN", "new");
+                        try (var image = surface.makeImageSnapshot(); var png = image.encodeToData()) {
+                            java.nio.file.Files.write(Path.of(stage, "hud-zoom-" + run + "-" + pass + ".png"), png.getBytes());
+                        }
+                    }
+                } finally {
+                    canvas.restoreToCount(save);
+                    hud.clear();
+                }
+            }
+        }
+        // Isolate the magenta sender glyph coverage from the live avatar and bubble.
+        int changed = 0;
+        for (int i = 0; i < ink[0].length; i += 4) {
+            int first = senderCoverage(ink[0], i);
+            int second = senderCoverage(ink[1], i);
+            if (Math.abs(first - second) > 10) changed++;
+        }
+        System.out.println("HUD zoom sender coverage differences >10: " + changed);
+        assertTrue(changed < 12, "the same physical sender glyphs changed in " + changed + " pixels");
+    }
+
+    private static int senderCoverage(byte[] pixels, int offset) {
+        return Math.max(0, Math.min(pixels[offset] & 255, pixels[offset + 2] & 255) - (pixels[offset + 1] & 255));
+    }
+
+    @Test void compactHudKeepsOneVisibleSenderAndPromotesTheOldestSurvivor() throws Exception {
+        var config = new AtomChatConfig();
+        var older = identifiedPlayer("First", 1_000L);
+        var newer = identifiedPlayer("Second", 2_000L);
+        var hud = new ChatHudRenderer();
+        try (var surface = Surface.makeRasterN32Premul(320, 240); var bitmap = new Bitmap()) {
+            bitmap.allocN32Pixels(320, 240);
+            var canvas = surface.getCanvas();
+            var viewport = new ChatHudRenderer.Viewport(8, 220, 280, 200, 1F, 1F);
+            for (int pass = 0; pass < 3; pass++) {
+                config.compactMessagesEnabled = pass != 0;
+                canvas.clear(0);
+                hud.paint(canvas, pass == 2 ? List.of(newer) : List.of(newer, older), viewport, null,
+                        "Local", "Player", config, 2, 255, 1F, false, pass);
+                assertTrue(surface.readPixels(bitmap, 0, 0));
+                assertEquals(pass == 0 ? 2 : 1, senderBands(bitmap),
+                        "one label per visible group, including when its original head leaves");
+                if (System.getenv("ATOMCHAT_VISUAL_FOLLOWUP") != null) {
+                    try (var image = surface.makeImageSnapshot(); var png = image.encodeToData()) {
+                        java.nio.file.Files.write(visualPath("hud-group-" + pass + ".png"), png.getBytes());
+                    }
+                }
+            }
+        } finally {
+            hud.clear();
+        }
+    }
+
+    @Test void hudReservesTheOldestBandBesideMediaAndReactsToAClockBoundary() {
+        var config = new AtomChatConfig();
+        config.compactMessagesEnabled = true;
+        config.timestampIntervalMinutes = 0;
+        var older = identifiedPlayer("First", 1_000L);
+        var middle = identifiedPlayer("Second", 62_000L);
+        var newest = identifiedPlayer("[[CICode,url=http://test/tall.png,name=tall,w=90,h=120]]", 62_500L);
+        var hud = new ChatHudRenderer((url, visible) -> null);
+        try (var surface = Surface.makeRasterN32Premul(320, 306); var bitmap = new Bitmap()) {
+            bitmap.allocN32Pixels(320, 306);
+            var canvas = surface.getCanvas();
+            for (int pass = 0; pass < 5; pass++) {
+                canvas.clear(0);
+                config.timestampIntervalMinutes = pass == 1 ? 1 : 0;
+                boolean departing = pass >= 3;
+                var viewport = new ChatHudRenderer.Viewport(8, 296, 280, pass < 2 ? 265 : 145, 1F, 1F);
+                hud.paint(canvas, departing ? List.of(newest, middle) : List.of(newest, middle, older),
+                        viewport, null, "Local", "Player", config, 3, 255, 1F, true, pass == 4 ? 400L : pass);
+                assertTrue(surface.readPixels(bitmap, 0, 0));
+                assertEquals(pass == 1 ? 2 : 1, senderBands(bitmap),
+                        "the visible head and the existing time threshold both keep their captions");
+            }
+        } finally {
+            hud.clear();
+        }
+    }
+
+    private static Path visualPath(String name) {
+        String stage = System.getenv("ATOMCHAT_VISUAL_FOLLOWUP");
+        return stage == null ? Path.of(System.getProperty("atomchat.repoRoot", "../.."),
+                "build/v093/performance-mode", name) : Path.of(stage, name);
+    }
+
+    private static int senderBands(Bitmap pixels) {
+        int count = 0;
+        boolean previous = false;
+        for (int y = 0; y < pixels.getHeight(); y++) {
+            boolean current = false;
+            for (int x = 0; x < pixels.getWidth(); x++) {
+                int argb = pixels.getColor(x, y);
+                if ((argb >>> 24) > 40 && (argb & 0xFFFFFF) == 0xFF00FF) {
+                    current = true;
+                    break;
+                }
+            }
+            if (current && !previous) count++;
+            previous = current;
+        }
+        return count;
+    }
+
+    private static ChatMessage identifiedPlayer(String value, long timestamp) {
+        var name = RichText.literal("Styled sender").mapStyles(style -> style.withColor(0xFF00FF));
+        var body = RichText.literal(value);
+        return new ChatMessage(body.toText(), false, false, null, null, null,
+                "Styled sender", "StableProfile", value, name, body, timestamp);
+    }
+
     private static ChatMessage player(boolean own, String value) {
         var name = RichText.literal("Styled sender").mapStyles(style -> style.withColor(0xFF00FF));
         var body = RichText.literal(value);
         // An unknown profile still has its captured rich label and the panel's avatar placeholder.
+        return new ChatMessage(body.toText(), own, false, null, null, null,
+                "Styled sender", "", body.getString(), name, body);
+    }
+
+    private static ChatMessage quotedPlayer(boolean own, String value) {
+        var name = RichText.literal("Styled sender").mapStyles(style -> style.withColor(0xFF00FF));
+        var body = RichText.literal(value);
         var quote = RichText.literal("「引用 @Quote sender: Quote」").mapStyles(style -> style.withColor(0xFFFF00));
         var wire = RichText.concat(quote, body);
         return new ChatMessage(wire.toText(), own, false, "Quote sender", "Quote", null,

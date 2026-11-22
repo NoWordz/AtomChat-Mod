@@ -1,8 +1,7 @@
 package com.atom.chat.render;
 
-
+import com.atom.chat.config.AtomChatConfig;
 import com.atom.chat.ui.AtomChatAppearance;
-import com.atom.lib.design.atomchat.SkiaDraw;
 import com.atom.chat.ui.UiLayout;
 import com.atom.lib.design.atomchat.UiTokens;
 import io.github.humbleui.skija.Canvas;
@@ -17,26 +16,35 @@ public final class ChromeMaterial {
             new int[]{0x16FFFFFF, 0x00FFFFFF}, new float[]{0F, 1F});
     private static final Shader SHADE = Shader.makeLinearGradient(0F, -UiTokens.CHROME_DETAIL_DEPTH, 0F, 0F,
             new int[]{0x00000000, 0x16000000}, new float[]{0F, 1F});
-    private static final Paint LIGHT_PAINT = new Paint().setAntiAlias(true).setMode(PaintMode.STROKE)
+    private static final Paint LIGHT_PAINT = new Paint().setAntiAlias(CornerGeometry.ANTIALIAS).setMode(PaintMode.STROKE)
             .setStrokeWidth(UiTokens.CHROME_HAIRLINE).setShader(LIGHT);
-    private static final Paint SHADE_PAINT = new Paint().setAntiAlias(true).setMode(PaintMode.STROKE)
+    private static final Paint SHADE_PAINT = new Paint().setAntiAlias(CornerGeometry.ANTIALIAS).setMode(PaintMode.STROKE)
             .setStrokeWidth(UiTokens.CHROME_INNER_SHADE).setShader(SHADE);
 
     private ChromeMaterial() { }
 
+    public static float cornerRadius(UiLayout.Rect bar, float requested) {
+        if (requested <= 0F) return 0F;
+        return CornerGeometry.fitRadius(requested, maximumRadius(requested), bar.w(), bar.h());
+    }
+
+    public static float insetCornerRadius(float width, float height, float outerRadius, float inset) {
+        // Fit the unclamped inner radius. Capping at half the height first loses the slider range.
+        if (outerRadius <= inset) return 0F;
+        return CornerGeometry.fitRadius(outerRadius - inset, maximumRadius(outerRadius) - inset, width, height);
+    }
+
+    private static float maximumRadius(float requested) {
+        float slider = AtomChatAppearance.theme().cornerRadius();
+        return requested / slider * AtomChatConfig.MAX_CORNER_RADIUS;
+    }
+
     public static void drawShadow(Canvas canvas, float x, float y, float width, float height, float radius) {
-        float opacity = cardOpacity();
-        if (opacity <= 0F) return;
-        SkiaDraw.drawChromeShadow(canvas, x, y, width, height, radius,
-                withAlpha(UiTokens.CHROME_SHADOW_INNER, opacity), withAlpha(UiTokens.CHROME_SHADOW_OUTER, opacity));
+        HudShadow.drawSurface(canvas, x, y, width, height, radius, ShadowTokens.CHROME, cardOpacity());
     }
 
     public static void drawBackdrop(Canvas canvas, float x, float y, float width, float height, float radius, float opacity) {
         if (cardOpacity() < 1F) CardBackdrop.draw(canvas, x, y, width, height, radius, opacity);
-    }
-
-    private static int withAlpha(int color, float opacity) {
-        return Math.round((color >>> 24) * opacity) << 24 | (color & 0xFFFFFF);
     }
 
     private static float cardOpacity() {
@@ -44,21 +52,27 @@ public final class ChromeMaterial {
     }
 
     public static void drawDetails(Canvas canvas, UiLayout.Rect bar, float radius) {
-        if (bar == null || bar.w() <= 0F || bar.h() <= 0F) return;
-        float opacity = cardOpacity();
-        if (opacity <= 0F) return;
+        if (bar != null) drawDetails(canvas, bar.x(), bar.y(), bar.w(), bar.h(), radius, cardOpacity());
+    }
+
+    static void drawDetails(Canvas canvas, float x, float y, float width, float height,
+                            float radius, float opacity) {
+        if (width <= 0F || height <= 0F || opacity <= 0F) return;
         canvas.save();
         try {
-            SkiaDraw.clip(canvas, bar.x(), bar.y(), bar.w(), bar.h(), radius);
-            canvas.translate(bar.x(), bar.y());
+            // A stroke around an inset that turns square can extend beyond the tiny face corner.
+            if (radius > 0F && radius < 1F + UiTokens.CHROME_INNER_SHADE / 2F) {
+                CornerGeometry.clip(canvas, x, y, width, height, radius);
+            }
+            canvas.translate(x, y);
             float inset = UiTokens.CHROME_HAIRLINE / 2F;
-            canvas.drawRRect(RRect.makeXYWH(inset, inset, Math.max(0F, bar.w() - inset * 2F),
-                    Math.max(0F, bar.h() - inset * 2F), Math.max(0F, radius - inset)),
+            CornerGeometry.drawRRect(canvas, RRect.makeXYWH(inset, inset, Math.max(0F, width - inset * 2F),
+                    Math.max(0F, height - inset * 2F), Math.max(0F, radius - inset)),
                     LIGHT_PAINT.setAlphaf(opacity));
-            canvas.translate(0F, bar.h());
+            canvas.translate(0F, height);
             inset = UiTokens.CHROME_INNER_SHADE / 2F;
-            canvas.drawRRect(RRect.makeXYWH(inset, -bar.h() + inset,
-                    Math.max(0F, bar.w() - inset * 2F), Math.max(0F, bar.h() - inset * 2F),
+            CornerGeometry.drawRRect(canvas, RRect.makeXYWH(inset, -height + inset,
+                    Math.max(0F, width - inset * 2F), Math.max(0F, height - inset * 2F),
                     Math.max(0F, radius - inset)), SHADE_PAINT.setAlphaf(opacity));
         } finally {
             canvas.restore();

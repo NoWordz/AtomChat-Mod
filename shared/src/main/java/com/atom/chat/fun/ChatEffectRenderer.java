@@ -1,9 +1,8 @@
 package com.atom.chat.fun;
-import com.atom.chat.ui.AtomChatAppearance;
 import com.atom.chat.font.FontManager;
-import com.atom.lib.design.atomchat.SkiaDraw;
 import com.atom.chat.render.SkiaFontRenderer;
 import com.atom.chat.ui.UiLayout;
+import com.atom.chat.ui.PanelBackground;
 import com.atom.lib.design.atomchat.UiTokens;
 import io.github.humbleui.skija.Canvas;
 /** Decorative overlay, clipped to the existing panel; never handles input. */
@@ -17,8 +16,11 @@ public final class ChatEffectRenderer {
         UiLayout.Rect area=type==ChatEffectType.STAR?layout.list:layout.rect();
         canvas.save();
         try {
-            SkiaDraw.clip(canvas,area.x(),area.y(),area.w(),area.h(),
-                    type==ChatEffectType.STAR?0.0f:UiTokens.panelRadius(AtomChatAppearance.theme()));
+            if (type == ChatEffectType.STAR) {
+                canvas.clipRect(io.github.humbleui.types.Rect.makeXYWH(area.x(), area.y(), area.w(), area.h()), true);
+            } else {
+                PanelBackground.clipExterior(canvas, area);
+            }
             for(var p:particles) {
                 canvas.save();
                 try {

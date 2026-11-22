@@ -2,11 +2,11 @@ package com.atom.chat.ui;
 
 
 
+import com.atom.chat.render.CornerGeometry;
 import com.atom.lib.design.atomchat.AppIcons;
 import com.atom.lib.design.atomchat.UiTokens;
 import com.atom.chat.config.AtomChatConfig;
 import com.atom.chat.font.FontManager;
-import com.atom.lib.design.atomchat.SkiaDraw;
 import com.atom.chat.render.SkiaFontRenderer;
 import static com.atom.lib.design.atomchat.UiTokens.s;
 import io.github.humbleui.skija.Canvas;
@@ -694,7 +694,7 @@ public final class QuickPhrasePanel {
                 // derives from the row's own bounce budget (so the capsule
                 // survives its press scale), the vertical one stays s(4).
                 float inset = MenuPopup.rowInset(r.getWidth());
-                SkiaDraw.drawRoundedRect(canvas, r.getLeft() + inset, r.getTop() + s(4),
+                CornerGeometry.drawRoundedRect(canvas, r.getLeft() + inset, r.getTop() + s(4),
                         r.getWidth() - inset * 2.0F, r.getHeight() - s(8), UiTokens.radius(6, AtomChatAppearance.theme()),
                         Color.makeARGB((int) (55.0F * fade), 255, 255, 255));
             }
@@ -709,20 +709,20 @@ public final class QuickPhrasePanel {
         if (rowA > 0.01F) {
             // Same MenuPopup row-wash inset as the server rows above.
             float inset = MenuPopup.rowInset(r.getWidth());
-            SkiaDraw.drawRoundedRect(canvas, r.getLeft() + inset, r.getTop() + s(4),
+            CornerGeometry.drawRoundedRect(canvas, r.getLeft() + inset, r.getTop() + s(4),
                     r.getWidth() - inset * 2.0F, r.getHeight() - s(8), UiTokens.radius(6, AtomChatAppearance.theme()),
                     Color.makeARGB((int) (55.0F * rowA), 255, 255, 255));
         }
         if (editing) {
             // The row being edited glows with the accent stroke; the composer
             // field below holds the live text.
-            SkiaDraw.drawRoundedRect(canvas, r.getLeft() + s(4), r.getTop() + s(4),
+            CornerGeometry.drawRoundedRect(canvas, r.getLeft() + s(4), r.getTop() + s(4),
                     r.getWidth() - s(8), r.getHeight() - s(8), UiTokens.radius(6, AtomChatAppearance.theme()),
                     Color.makeARGB(20, 255, 255, 255));
             try (Paint paint = new Paint().setColor(accentColor()).setAntiAlias(true)
                     .setMode(io.github.humbleui.skija.PaintMode.STROKE)
                     .setStrokeWidth(s(1.2F))) {
-                canvas.drawRRect(io.github.humbleui.types.RRect.makeXYWH(
+                CornerGeometry.drawRRect(canvas, io.github.humbleui.types.RRect.makeXYWH(
                         r.getLeft() + s(4), r.getTop() + s(4), r.getWidth() - s(8), r.getHeight() - s(8),
                         UiTokens.radius(6, AtomChatAppearance.theme())), paint);
             }
@@ -746,7 +746,7 @@ public final class QuickPhrasePanel {
             try {
                 float a = btnHover.getOrDefault(index * 2 + b, 0.0F);
                 if (a > 0.01F) {
-                    SkiaDraw.drawRoundedRect(canvas, hit.getLeft() + s(3), hit.getTop() + s(3),
+                    CornerGeometry.drawRoundedRect(canvas, hit.getLeft() + s(3), hit.getTop() + s(3),
                             hit.getWidth() - s(6), hit.getHeight() - s(6), UiTokens.radius(6, AtomChatAppearance.theme()),
                             Color.makeARGB((int) (55.0F * a), 255, 255, 255));
                 }
@@ -764,13 +764,13 @@ public final class QuickPhrasePanel {
         boolean active = isAddingNew();
         // Resting capsule so the row reads as a button, then the standard hover
         // wash; the composing state adds the accent ring on top.
-        SkiaDraw.drawRoundedRect(canvas, r.getLeft() + s(4), r.getTop() + s(4),
+        CornerGeometry.drawRoundedRect(canvas, r.getLeft() + s(4), r.getTop() + s(4),
                 r.getWidth() - s(8), r.getHeight() - s(8), UiTokens.radius(6, AtomChatAppearance.theme()),
                 Color.makeARGB((int) (28.0F + 27.0F * addHover), 255, 255, 255));
         if (addHover > 0.01F) {
             // Same MenuPopup row-wash inset as the phrase rows above.
             float inset = MenuPopup.rowInset(r.getWidth());
-            SkiaDraw.drawRoundedRect(canvas, r.getLeft() + inset, r.getTop() + s(4),
+            CornerGeometry.drawRoundedRect(canvas, r.getLeft() + inset, r.getTop() + s(4),
                     r.getWidth() - inset * 2.0F, r.getHeight() - s(8), UiTokens.radius(6, AtomChatAppearance.theme()),
                     Color.makeARGB((int) (55.0F * addHover), 255, 255, 255));
         }
@@ -778,7 +778,7 @@ public final class QuickPhrasePanel {
             try (Paint paint = new Paint().setColor(accentColor()).setAntiAlias(true)
                     .setMode(io.github.humbleui.skija.PaintMode.STROKE)
                     .setStrokeWidth(s(1.2F))) {
-                canvas.drawRRect(io.github.humbleui.types.RRect.makeXYWH(
+                CornerGeometry.drawRRect(canvas, io.github.humbleui.types.RRect.makeXYWH(
                         r.getLeft() + s(4), r.getTop() + s(4), r.getWidth() - s(8), r.getHeight() - s(8),
                         UiTokens.radius(6, AtomChatAppearance.theme())), paint);
             }

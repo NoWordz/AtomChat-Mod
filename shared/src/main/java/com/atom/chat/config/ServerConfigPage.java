@@ -1,9 +1,12 @@
 package com.atom.chat.config;
 
+import com.atom.chat.render.CornerGeometry;
+import com.atom.chat.render.ChromeMaterial;
 import com.atom.chat.ui.AtomChatAppearance;
 import com.atom.chat.chat.*;
 import com.atom.chat.font.FontManager;
 import com.atom.chat.nav.PageNavAxis;
+import com.atom.chat.onboarding.GuideIcon;
 import com.atom.chat.render.*;
 import com.atom.chat.settings.*;
 import com.atom.chat.settings.contract.HostingFieldsPage;
@@ -39,8 +42,12 @@ public final class ServerConfigPage {
         default void chooseImage(Consumer<Path> receive){}
         default void retrySync(){}
     }
-    private enum View { ROOT, PHRASES, PHRASE, TEMPLATE, EMOTES, IMAGE }
-    private enum Kind { TOGGLE, NUMBER, TEXT, MULTILINE, ACTION, PHRASE, TEMPLATE, ASSET, TYPES, FIELDS, PREVIEW, IMAGE, MEDIA }
+    private static final String TEMPLATE_GUIDE = "guide:templates";
+    private static final MessageTemplate GUIDE_EXAMPLE = new MessageTemplate(
+            "tutorial", "Tutorial", MessageTemplate.Kind.PUBLIC, "[{channel}] {sender}: {message}", true);
+
+    private enum View { ROOT, PHRASES, PHRASE, TEMPLATE, EMOTES, IMAGE, TEMPLATE_GUIDE }
+    private enum Kind { TOGGLE, NUMBER, TEXT, MULTILINE, ACTION, PHRASE, TEMPLATE, ASSET, TYPES, FIELDS, PREVIEW, IMAGE, MEDIA, INFO }
     private record Row(String id,String title,String description,Kind kind,String unit,int index){}
     private record Group(String id,String title,io.github.humbleui.skija.Path icon,List<Row> rows){}
     private record Motion(float cx,float cy,float scale,float dx,float dy){
@@ -172,7 +179,7 @@ public final class ServerConfigPage {
     public void bindNavigationDirection(Consumer<Boolean> direction){navigationDirection=Objects.requireNonNull(direction);}
     public String title(){return switch(view){
         case PHRASES->t("phrases"); case PHRASE->t("edit_phrase");
-        case TEMPLATE->t("edit_template"); case EMOTES->t("emotes");
+        case TEMPLATE->t("edit_template"); case TEMPLATE_GUIDE->t("template_guide.title"); case EMOTES->t("emotes");
         case IMAGE->t("preview_image"); default->host.label("atomchat.config.title");};}
     private String t(String key){return host.label("atomchat.admin."+key);}
     public void status(String summary){legacyPackSummary=summary;}
@@ -244,6 +251,7 @@ public final class ServerConfigPage {
         }
         if(view==View.PHRASE)return List.of(group("phrase",t("phrase_group"),DrawPrimitives.ICON_PHRASE_PATH,
                 new Row("phrase.value",t("phrase_content"),t("phrase_insert"),Kind.MULTILINE,"",editIndex)));
+        if (view == View.TEMPLATE_GUIDE) return tutorialGroups();
         if(view==View.TEMPLATE)return List.of(
                 group("template",t("template_settings"),SettingsGroupGlyphs.MESSAGE_LIST,
                         row("template.name",Kind.TEXT,""),row("template.kind",Kind.TYPES,""),
@@ -269,7 +277,24 @@ public final class ServerConfigPage {
             rows.add(new Row("template:"+i,r.name().isBlank()?t("empty_template"):r.name(),
                     templateSummary(r),Kind.TEMPLATE,"",i));
         }
-        return List.of(new Group("templates",t("templates"),SettingsGroupGlyphs.MESSAGE_LIST,rows));
+        return List.of(
+                group("template-guide-entry", "", GuideIcon.PATH,
+                        action(TEMPLATE_GUIDE, t("template_guide.title"), t("template_guide.entry"))),
+                new Group("templates", t("templates"), SettingsGroupGlyphs.MESSAGE_LIST, rows));
+    }
+
+    private List<Group> tutorialGroups() {
+        return List.of(group("template-guide", t("template_guide.title"), GuideIcon.PATH,
+                guideRow("create", t("template_guide.create.desc")),
+                guideRow("format", t("template_guide.format.desc").replace("{format}", GUIDE_EXAMPLE.format())),
+                guideRow("sample", t("template_guide.sample.desc").replace("{sample}", t("template_guide.example"))),
+                guideRow("save", t("template_guide.save.desc"))),
+                group("template-guide-result", "", GuideIcon.PATH,
+                        new Row("template-guide-result", "", "", Kind.PREVIEW, "", -1)));
+    }
+
+    private Row guideRow(String step, String description) {
+        return new Row("guide:" + step, t("template_guide." + step), description, Kind.INFO, "", -1);
     }
     private ArrayList<Row> assetRows(boolean root){
         var rows=new ArrayList<Row>();
@@ -356,9 +381,13 @@ public final class ServerConfigPage {
         return field;
     }
     private float editorHeight(Row row){return form(row).preferredHeight(value(row.id()),geometry.viewport().w()-UiTokens.SETTINGS_ROW_PAD*2);}
+    private static float guideIconInset(Row row) {
+        return TEMPLATE_GUIDE.equals(row.id()) ? UiTokens.COMPOSER_ICON_SIZE + UiTokens.SETTINGS_TILE_TEXT_GAP : 0;
+    }
+
     private SettingsRowText.Text rowText(Row row,float width){
         if(row.kind()==Kind.NUMBER)return numberRowText(row,width);
-        return SettingsRowText.measure(row.title(),description(row),width,reserved(row),row.kind()==Kind.TOGGLE?UiTokens.SWITCH_H:0,true);
+        return SettingsRowText.measure(row.title(),description(row),width-guideIconInset(row),reserved(row),row.kind()==Kind.TOGGLE?UiTokens.SWITCH_H:0,true);
     }
     private SettingsRowText.Text numberRowText(Row row,float width){
         boolean invalid = numericDraftError(row.id(), draft.text(row.id()));
@@ -402,6 +431,9 @@ public final class ServerConfigPage {
     private List<String> placeholderNames(){return rule().kind()==MessageTemplate.Kind.OUTGOING?
             List.of("target","message","sender","uuid","display","channel"):List.of("sender","message","channel","display","uuid","target");}
     private TemplateParser.Preview parsed(){
+        if (view == View.TEMPLATE_GUIDE) {
+            return TemplateParser.preview(GUIDE_EXAMPLE, t("template_guide.example"));
+        }
         var edited=rule();var rules=draft.templates();var config=AtomChatConfig.get();
         if(previewRules!=rules||previewConfig!=config||previewRule!=edited||!Objects.equals(previewSample,sample)){
             previewRules=rules;previewConfig=config;previewRule=edited;previewSample=sample;
@@ -485,7 +517,7 @@ public final class ServerConfigPage {
         var config=AtomChatConfig.get();int slot=0,index=0;String[] hoveredRow={null};float drift=axis==UiStagger.Axis.HORIZONTAL&&!UiStagger.itemsSettled(entrance,now)?UiStagger.ITEM_STYLE_SLIDE_PX:0;
         canvas.save();
         try{
-            SkiaDraw.clip(canvas,layout.list.x()-CardShadowReach.PAD,viewport.y(),layout.list.w()+drift+CardShadowReach.PAD*2,viewport.h(),0);
+            CornerGeometry.clip(canvas,layout.list.x()-CardShadowReach.PAD,viewport.y(),layout.list.w()+drift+CardShadowReach.PAD*2,viewport.h(),0);
             for(var group:groups){
                 float expansion=folds.get(foldOwner(group.id()));
                 if(headerHeight(group)>0){
@@ -519,7 +551,7 @@ public final class ServerConfigPage {
                         var box=new UiLayout.Rect(card.x(),top+slots.tops()[at]-scroll.getScrollY(),card.w(),slots.heights()[at]);at++;
                         var painted=m.map(box);if(painted.bottom()<viewport.y()||painted.y()>viewport.bottom())continue;
                         String key=group.id()+":"+row.id();float hover=hovers.getOrDefault(key,0f);
-                        if(hover>.01f)SkiaDraw.drawRoundedRect(canvas,box.x(),box.y(),box.w(),box.h(),0,UiTokens.cardHover(hover, AtomChatAppearance.theme()));
+                        if(hover>.01f)CornerGeometry.drawRoundedRect(canvas,box.x(),box.y(),box.w(),box.h(),0,UiTokens.cardHover(hover, AtomChatAppearance.theme()));
                         if(at>start+1)SettingsGroupFrontend.divider(canvas,card,box.y());
                         drawRow(canvas,row,box,m,card,m.x(mx),m.y(my),dt);
                         if(!draft.saving()&&box.contains(m.x(mx),m.y(my)))hoveredRow[0]=key;
@@ -540,15 +572,17 @@ public final class ServerConfigPage {
         float dt=Math.min(50,Math.max(1,elapsed));
         this.layout=layout;geometry=ServerConfigLayout.of(layout);var config=AtomChatConfig.get();
         if(view==View.ROOT)chips.render(canvas,layout,List.of(host.label("atomchat.config.tab.hosting"),host.label("atomchat.config.tab.pack"),t("templates")),mx,my,dt);
-        else{var breadcrumb=FontManager.font(UiTokens.SETTINGS_TILE_SUB);SkiaFontRenderer.drawText(canvas,breadcrumb,t(view==View.TEMPLATE?"breadcrumb.templates":"breadcrumb.pack"),layout.chipBar.x()+UiTokens.SETTINGS_ROW_PAD,SkiaFontRenderer.centerBaselineY(breadcrumb,layout.chipBar.y()+layout.chipBar.h()/2),config.textSecondaryColor);}
+        else{var breadcrumb=FontManager.font(UiTokens.SETTINGS_TILE_SUB);SkiaFontRenderer.drawText(canvas,breadcrumb,t(view==View.TEMPLATE||view==View.TEMPLATE_GUIDE?"breadcrumb.templates":"breadcrumb.pack"),layout.chipBar.x()+UiTokens.SETTINGS_ROW_PAD,SkiaFontRenderer.centerBaselineY(breadcrumb,layout.chipBar.y()+layout.chipBar.h()/2),config.textSecondaryColor);}
         var bar=geometry.bar();
-        com.atom.chat.render.ChromeMaterial.drawShadow(canvas,bar.x(),bar.y(),bar.w(),bar.h(),UiTokens.shellChromeRadius(AtomChatAppearance.theme()));
-        com.atom.chat.render.ChromeMaterial.drawBackdrop(canvas, bar.x(), bar.y(), bar.w(), bar.h(), UiTokens.shellChromeRadius(AtomChatAppearance.theme()), 1F);
-        SkiaDraw.drawRoundedRect(canvas,bar.x(),bar.y(),bar.w(),bar.h(),UiTokens.shellChromeRadius(AtomChatAppearance.theme()),UiTokens.cardFill(AtomChatAppearance.theme()));
+        float radius = ChromeMaterial.cornerRadius(bar, UiTokens.shellChromeRadius(AtomChatAppearance.theme()));
+        ChromeMaterial.drawShadow(canvas, bar.x(), bar.y(), bar.w(), bar.h(), radius);
+        ChromeMaterial.drawBackdrop(canvas, bar.x(), bar.y(), bar.w(), bar.h(), radius, 1F);
+        CornerGeometry.drawRoundedRect(canvas, bar.x(), bar.y(), bar.w(), bar.h(), radius, UiTokens.cardFill(AtomChatAppearance.theme()));
         boolean root=view==View.ROOT;
         boolean enabled=!draft.saving()&&!importing&&(!root||draft.dirty()&&draft.validation()==null);
-        String action=view==View.PHRASE||view==View.TEMPLATE?t("done"):view==View.PHRASES||view==View.EMOTES?t("back_pack"):!root?t("back"):host.label(draft.saving()?"atomchat.config.saving":"atomchat.config.save");
+        String action=view==View.PHRASE||view==View.TEMPLATE||view==View.TEMPLATE_GUIDE?t("done"):view==View.PHRASES||view==View.EMOTES?t("back_pack"):!root?t("back"):host.label(draft.saving()?"atomchat.config.saving":"atomchat.config.save");
         buttons.computeIfAbsent("save",k->new ConfirmationSurface.Button()).draw(canvas,geometry.save(),action,true,false,false,enabled&&geometry.save().contains(mx,my),dt,enabled?1:.45f);
+        if (view == View.TEMPLATE_GUIDE) return;
         String status=importing?t("importing"):draft.saving()?host.label("atomchat.config.saving"):!draft.error().isEmpty()?error(draft.error()):draft.dirty()&&draft.validation()!=null?error(draft.validation()):
                 !feedback.isEmpty()?(feedback.equals("saved")?t("saved_sync"):error(feedback)):t(view==View.TEMPLATE||view==View.PHRASE?"editor_commit_hint":draft.dirty()?(root?"dirty":"editor_draft"):"unchanged");
         if(host.administration()&&root&&feedback.equals("saved"))status+=" · "+syncText();
@@ -624,7 +658,14 @@ public final class ServerConfigPage {
         if(row.kind()==Kind.PREVIEW){previewLayout(canvas,left,rect.y()+pad,width);return;}
         if(row.kind()==Kind.IMAGE){drawImage(canvas,shownImage,new UiLayout.Rect(left,rect.y()+pad,width,rect.h()-pad*2));return;}
         if(row.kind()==Kind.ASSET){drawAsset(canvas,row,rect,motion,clip,mx,my,dt,enabled);return;}
-        float top=SettingsRowText.draw(canvas,rect,rowText(row,rect.w()),enabled?c.textPrimaryColor:c.textSecondaryColor,fieldError(row)?UiTokens.dangerColor():c.textSecondaryColor);
+        float guideInset = guideIconInset(row);
+        var textRect = rect;
+        if (guideInset > 0) {
+            DrawPrimitives.drawIconCentered(canvas, GuideIcon.PATH, left + UiTokens.COMPOSER_ICON_SIZE / 2,
+                    rect.y() + rect.h() / 2, UiTokens.COMPOSER_ICON_SIZE, c.textPrimaryColor);
+            textRect = new UiLayout.Rect(rect.x() + guideInset, rect.y(), rect.w() - guideInset, rect.h());
+        }
+        float top=SettingsRowText.draw(canvas,textRect,rowText(row,rect.w()),enabled?c.textPrimaryColor:c.textSecondaryColor,fieldError(row)?UiTokens.dangerColor():c.textSecondaryColor);
         if(row.kind()==Kind.TOGGLE){
             var toggle=switches.computeIfAbsent(row.id(),k->{var t=new ToggleSwitch();t.snapTo(draft.enabled(row.id()));return t;});
             var box=new UiLayout.Rect(rect.right()-pad-UiTokens.SWITCH_W,rowText(row,rect.w()).stacked()?rect.bottom()-pad-UiTokens.SWITCH_H:rect.y()+(rect.h()-UiTokens.SWITCH_H)/2,UiTokens.SWITCH_W,UiTokens.SWITCH_H);
@@ -730,6 +771,7 @@ public final class ServerConfigPage {
 
     private void act(String id){
         switch(id){
+            case TEMPLATE_GUIDE -> show(View.TEMPLATE_GUIDE);
             case "phrases:list"->show(View.PHRASES);
             case "assets:list"->show(View.EMOTES);
             case "asset:import"->{if(!importing){importing=true;host.chooseImage(this::importImage);}}
@@ -831,7 +873,7 @@ public final class ServerConfigPage {
             }
             return true;
         }
-        if(geometry.status().contains(x,y)&&feedback.equals("saved")){host.retrySync();return true;}
+        if(view!=View.TEMPLATE_GUIDE&&geometry.status().contains(x,y)&&feedback.equals("saved")){host.retrySync();return true;}
         if(!geometry.scrollViewport().contains(x,y)){blur();return true;}
         if(SettingsScrollbar.over(geometry.scrollViewport(),scroll,x,y)){scroll.beginDrag(y);return true;}
         for(int i=hits.size()-1;i>=0;i--){

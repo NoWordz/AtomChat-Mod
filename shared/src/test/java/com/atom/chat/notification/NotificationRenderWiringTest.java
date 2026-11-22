@@ -86,29 +86,27 @@ class NotificationRenderWiringTest {
             String s = Files.readString(root().resolve(twin[0]));
             assertFalse(s.contains("drawNotificationBackdrop"), twin[0]);
             assertFalse(s.contains("HudBackdropAlpha"), twin[0]);
-            assertTrue(s.contains("PanelBlurRenderer.render(new Matrix4f()"), twin[0]);
-            assertTrue(s.contains("NotificationBanner.hudPlacement(width, height).toGui(density, guiScale)"),
-                    "the blur rect must reuse the banner's own placement: " + twin[0]);
-            assertTrue(s.contains("banner && bannerBlur > 0F"), twin[0]);
-            assertTrue(s.contains("blurPlacement != null && PanelBlurRenderer.isAvailable()"), twin[0]);
-            assertTrue(s.contains("NotificationBanner.hudBackdropAlpha(), bannerBlur"), twin[0]);
+            assertTrue(s.contains("PanelBlurRenderer.renderMasked("), twin[0]);
+            assertTrue(s.contains("frame.blurMasks(density, guiScale)"), twin[0]);
             int flush = s.indexOf(twin[1]);
-            int blur = s.indexOf("PanelBlurRenderer.render(");
+            int blur = s.indexOf("PanelBlurRenderer.renderMasked(");
             int draw = s.indexOf("GRAPHICS.draw(");
-            int paint = s.indexOf("renderInHud(canvas, width, height)");
+            int paint = s.indexOf("renderInHud(canvas, frame)");
             assertTrue(flush >= 0 && flush < draw && draw < blur,
                     "the raw-GL backdrop must run inside the pre-pass, after the vanilla flush: " + twin[0]);
             assertTrue(blur < s.indexOf("ItemIconRenderer.prepare") && s.indexOf("ItemIconRenderer.prepare") < paint,
                     "the blur must precede the Skia paint lambda in the pre-pass: " + twin[0]);
+            int bannerGate = s.lastIndexOf("if (frame != null", blur);
+            assertTrue(bannerGate > draw, "the banner needs its own pre-pass gate: " + twin[0]);
+            assertFalse(s.substring(bannerGate, blur).contains("PanelBlurRenderer.isAvailable()"),
+                    "a HUD banner must be able to load Fabric shaders after a resource reload or with panel blur off: " + twin[0]);
         }
         // The panel blurs its own painted content. The game overlay has only the raw GL path.
         for (String path : List.of("layers/mapping/official/src/main/java/com/atom/chat/notification/NotificationBanner.java",
                 "platforms/1.21.1-fabric/src/main/java/com/atom/chat/notification/NotificationBanner.java")) {
             String s = Files.readString(root().resolve(path));
             assertTrue(s.contains("localBlur && (fill >>> 24) < 255"), path);
-            assertTrue(s.contains("sendScale, interactive, interactive"), path);
             assertTrue(s.contains("NotificationMaterial.drawPanelBlur("), path);
-            assertTrue(s.contains("public static float hudBackdropAlpha()"), path);
         }
     }
 
@@ -145,7 +143,7 @@ class NotificationRenderWiringTest {
         for (String path : List.of("layers/mapping/official/src/main/java/com/atom/chat/notification/NotificationBanner.java",
                 "platforms/1.21.1-fabric/src/main/java/com/atom/chat/notification/NotificationBanner.java")) {
             String s = Files.readString(root().resolve(path));
-            assertTrue(s.contains("public static NotificationHudLayout.Placement hudPlacement(float width, float height)"), path);
+            assertTrue(s.contains("NotificationHudLayout.Placement hudPlacement(float width, float height)"), path);
             assertTrue(s.contains("var placement = hudPlacement(width, height);"), path);
             assertEquals(1, s.split("NotificationHudLayout\\.scaled\\(", -1).length - 1,
                     "the scaled() expression must exist exactly once (in hudPlacement): " + path);

@@ -91,6 +91,14 @@ public final class SettingsContractScene {
                 }
             }
         }
+        for (boolean light : List.of(false, true)) {
+            int width = light ? WIDTH_NARROW : WIDTH_WIDE;
+            String locale = light ? "en_us" : "zh_cn";
+            String condition = locale + "-" + width + (light ? "-light" : "-dark");
+            var scene = new SettingsContractScene(samples, "about", condition, true, light);
+            SettingsTrialReplay.run(output.resolveSibling("scene-sandbox").resolve("about-" + condition),
+                    "about", locale, width, light, true, !frozen, scene);
+        }
         FixedHeaderClockAgent.requireSceneClocks();
         SceneCaptureIO.write(output, new SceneCaptureIO.Capture(arguments[1], arguments[2], samples));
         System.out.println("ATOMCHAT_SETTINGS_SCENES samples=" + samples.size() + " frozen=" + frozen);
@@ -243,6 +251,18 @@ public final class SettingsContractScene {
                     page, recipe, scenario, sequenceMillis * 1_000_000, phase, true, states,
                     ImageIO.read(new ByteArrayInputStream(png.getBytes())), observed, sounds,
                     buttonResolved ? Set.of(BUTTON) : Set.of()));
+        }
+    }
+
+    void recordAbout(int tick, Surface surface, Phase phase, String scenario,
+                     Map<String, Double> observed) throws Exception {
+        Map<String, Boolean> states = Map.of("lightCard", light, "decorativeMotion", Animations.enabled(),
+                "buttonFeedback", false);
+        long sequenceMillis = clock(tick) + (light ? 20_000 : 0);
+        try (var image = surface.makeImageSnapshot(); var png = image.encodeToData(EncodedImageFormat.PNG)) {
+            samples.add(new Sample("about/" + condition + "/input/" + tick, "about", "aboutCredits", scenario,
+                    sequenceMillis * 1_000_000, phase, true, states,
+                    ImageIO.read(new ByteArrayInputStream(png.getBytes())), observed, List.of(), Set.of()));
         }
     }
 

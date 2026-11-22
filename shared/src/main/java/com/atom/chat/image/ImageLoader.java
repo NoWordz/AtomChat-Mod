@@ -1,10 +1,14 @@
 package com.atom.chat.image;
 
 import com.atom.chat.AtomChat;
+import io.github.humbleui.skija.Bitmap;
 import io.github.humbleui.skija.Canvas;
+import io.github.humbleui.skija.Codec;
+import io.github.humbleui.skija.ColorAlphaType;
 import io.github.humbleui.skija.Data;
 import io.github.humbleui.skija.EncodedImageFormat;
 import io.github.humbleui.skija.Image;
+import io.github.humbleui.skija.ImageInfo;
 import io.github.humbleui.skija.Paint;
 import io.github.humbleui.skija.SamplingMode;
 import io.github.humbleui.skija.Surface;
@@ -161,9 +165,9 @@ public final class ImageLoader {
         }
     }
 
-    private final LinkedHashMap<String, Image> cache = new LinkedHashMap<>(64, 0.75F, true) {
+    private final LinkedHashMap<String, MessageImage> cache = new LinkedHashMap<>(64, 0.75F, true) {
         @Override
-        protected boolean removeEldestEntry(java.util.Map.Entry<String, Image> eldest) {
+        protected boolean removeEldestEntry(java.util.Map.Entry<String, MessageImage> eldest) {
             // No eager close(): the renderer may still hold this Image for the
             // current frame; Skija finalises the native memory instead.
             return size() > MAX_CACHED;
@@ -256,14 +260,14 @@ public final class ImageLoader {
      * {@code maxDim}. The emote grid renders at cell size, so it uses this
      * instead of the animated path.
      */
-    private static void validateSource(byte[] bytes) {
+    private static ImageInfo validateSource(byte[] bytes) {
         if(bytes==null || bytes.length==0 || bytes.length>MAX_SOURCE_BYTES) throw new IllegalArgumentException("image_source_bytes");
-        try(io.github.humbleui.skija.Data data=io.github.humbleui.skija.Data.makeFromBytes(bytes);
-            io.github.humbleui.skija.Codec codec=io.github.humbleui.skija.Codec.makeFromData(data)) {
+        try(Data data=Data.makeFromBytes(bytes); Codec codec=Codec.makeFromData(data)) {
             if(codec==null) throw new IllegalArgumentException("image_source_codec");
             var info=codec.getImageInfo();
             if(info.getWidth()<=0 || info.getHeight()<=0 || (long)info.getWidth()*info.getHeight()>MAX_SOURCE_PIXELS)
                 throw new IllegalArgumentException("image_source_pixels");
+            return info;
         }
     }
     private static byte[] readSource(java.io.InputStream input) throws java.io.IOException {
@@ -280,6 +284,33 @@ public final class ImageLoader {
         long startedAt = com.atom.chat.diagnostics.FrameProfile.start();
         try {
             return downscale(Image.makeFromEncoded(bytes), maxDim);
+        } finally {
+            com.atom.chat.diagnostics.FrameProfile.decode(startedAt);
+        }
+    }
+
+    /** Inspect the display-sized pixels on the image worker. Opaque codecs keep the lazy path. */
+    private static MessageImage decodeMessageImage(byte[] bytes, ImageInfo source) {
+        long startedAt = com.atom.chat.diagnostics.FrameProfile.start();
+        try {
+            Image displayed = downscale(Image.makeFromEncoded(bytes), MAX_DIM);
+            if (displayed == null) return null;
+            if (source.getColorAlphaType() == ColorAlphaType.OPAQUE) return new MessageImage(displayed, false);
+            MessageImage raster = MessageImage.fromRaster(displayed);
+            if (raster != null) return raster;
+
+            // Display-sized encoded images can still be lazy. Decode into one
+            // bounded CPU bitmap and keep its pixels for subsequent drawing.
+            try (var bitmap = new Bitmap()) {
+                var info = ImageInfo.makeN32(displayed.getWidth(), displayed.getHeight(), ColorAlphaType.PREMUL,
+                        displayed.getImageInfo().getColorSpace());
+                if (!bitmap.allocPixels(info) || !displayed.readPixels(bitmap)) return new MessageImage(displayed, true);
+                boolean transparent = !bitmap.computeIsOpaque();
+                Image image = Image.makeFromBitmap(bitmap.setImmutable());
+                if (image == null) return new MessageImage(displayed, true);
+                displayed.close();
+                return new MessageImage(image, transparent);
+            }
         } finally {
             com.atom.chat.diagnostics.FrameProfile.decode(startedAt);
         }
@@ -318,7 +349,8 @@ public final class ImageLoader {
     /** Seeds the normal draw and preview cache without I/O; tutorial-only state owns removal. */
     public void putMemoryImage(String url, Image image) {
         if(url==null||image==null)return;
-        synchronized(pending){cache.put(url,image);clearFailure(url);}
+        var entry = MessageImage.fromRaster(image);
+        synchronized(pending){cache.put(url, entry == null ? new MessageImage(image, true) : entry);clearFailure(url);}
     }
 
     /** Releases a memory-only seed; the cache holds the sole reference. */
@@ -334,12 +366,24 @@ public final class ImageLoader {
      * margin).
      */
     public Image get(String url, boolean visible) {
-        return get(url, visible, false);
+        return imageOf(getMessageImage(url, visible));
     }
 
     /** HUD reads cached external images, but only local sends and valid companion media can start another fetch. */
     public Image getHudImage(String url, boolean visible) {
+        return imageOf(getHudMessageImage(url, visible));
+    }
+
+    public MessageImage getMessageImage(String url, boolean visible) {
+        return get(url, visible, false);
+    }
+
+    public MessageImage getHudMessageImage(String url, boolean visible) {
         return get(url, visible, true);
+    }
+
+    private static Image imageOf(MessageImage attachment) {
+        return attachment == null ? null : attachment.image();
     }
 
     /** Called at the actual local send boundary, independently of how the server labels the echo. */
@@ -351,7 +395,7 @@ public final class ImageLoader {
         }
     }
 
-    private Image get(String url, boolean visible, boolean hud) {
+    private MessageImage get(String url, boolean visible, boolean hud) {
         if (url == null || url.isBlank()) {
             return null;
         }
@@ -359,16 +403,16 @@ public final class ImageLoader {
         Path disk;
         LoadTask task;
         synchronized (pending) {
-            Image cached = cache.get(url);
+            MessageImage cached = cache.get(url);
             if (cached != null) return cached;
             AnimatedImage thumbnail = hud ? hudAnimations.get(url) : null;
-            if (thumbnail != null) return thumbnail.frameAt(clock.getAsLong());
+            if (thumbnail != null) return thumbnail.messageFrameAt(clock.getAsLong());
             full = animatedCache.get(url);
-            if (full != null && (!hud || !visible)) return full.frameAt(clock.getAsLong());
+            if (full != null && (!hud || !visible)) return full.messageFrameAt(clock.getAsLong());
             if (hud && !visible) return null;
             long now = clock.getAsLong();
             Long failed = failedUntil.get(url);
-            if (failed != null && now < failed) return full == null ? null : full.frameAt(now);
+            if (failed != null && now < failed) return full == null ? null : full.messageFrameAt(now);
             if (failed != null) failedUntil.remove(url, failed);
             task = pending.get(url);
             if (task != null) {
@@ -377,9 +421,9 @@ public final class ImageLoader {
                 } else if (!task.fromHud) {
                     pending.remove(url, task);
                 }
-                return full == null ? null : full.frameAt(now);
+                return full == null ? null : full.messageFrameAt(now);
             }
-            if (!visible || pending.size() >= MAX_PENDING_LOADS) return full == null ? null : full.frameAt(now);
+            if (!visible || pending.size() >= MAX_PENDING_LOADS) return full == null ? null : full.messageFrameAt(now);
             boolean allowNetwork = !hud || knownNetworkSource(url);
             Long diskMiss = hud && !allowNetwork ? hudDiskMisses.get(url) : null;
             if (full == null && diskMiss != null && now < diskMiss) return null;
@@ -399,21 +443,21 @@ public final class ImageLoader {
             });
         } catch (java.util.concurrent.RejectedExecutionException rejected) {
             release(scheduled);
-            return full == null ? null : full.frameAt(clock.getAsLong());
+            return full == null ? null : full.messageFrameAt(clock.getAsLong());
         }
         {
             // The executor may be direct (tests) and complete synchronously;
             // re-check before reporting a miss so the first visible call can
             // already serve the image.
             synchronized (pending) {
-                Image loaded = cache.get(url);
+                MessageImage loaded = cache.get(url);
                 if (loaded != null) return loaded;
                 AnimatedImage animation = hud ? hudAnimations.get(url) : null;
                 if (animation == null) animation = animatedCache.get(url);
-                if (animation != null) return animation.frameAt(clock.getAsLong());
+                if (animation != null) return animation.messageFrameAt(clock.getAsLong());
             }
         }
-        return full == null ? null : full.frameAt(clock.getAsLong());
+        return full == null ? null : full.messageFrameAt(clock.getAsLong());
     }
 
     private void release(LoadTask task) {
@@ -451,7 +495,7 @@ public final class ImageLoader {
                 return;
             }
             if (!task.current()) return;
-            validateSource(bytes);
+            ImageInfo source = validateSource(bytes);
             if (fromDisk) {
                 // The stamp means "last used", not "first downloaded": a picture
                 // the player keeps scrolling past must not expire on age alone.
@@ -474,16 +518,16 @@ public final class ImageLoader {
                 publishAnimation(task, animated);
                 return;
             }
-            Image image = decodeStaticValidated(bytes, MAX_DIM);
+            MessageImage image = decodeMessageImage(bytes, source);
             if (image != null) {
-                if (disk != null && task.current() && (!fromDisk || !displaySized(bytes))) {
+                if (disk != null && task.current() && (!fromDisk || source.getWidth() > MAX_DIM || source.getHeight() > MAX_DIM)) {
                     // Store only the small display version, never the original
                     // download. Existing raw-format entries are converted to
                     // the processed format on their next load.
-                    writeDiskCache(disk, encodeForDisk(image));
+                    writeDiskCache(disk, encodeForDisk(image.image()));
                 }
                 synchronized (pending) {
-                    if (!task.current()) { image.close();return; }
+                    if (!task.current()) { image.image().close();return; }
                     cache.put(url, image);
                     clearFailure(url);
                 }
@@ -540,13 +584,6 @@ public final class ImageLoader {
             pixels += image.pixelCount();
         }
         return pixels;
-    }
-
-    private static boolean displaySized(byte[] bytes) {
-        try(Data data=Data.makeFromBytes(bytes);var codec=io.github.humbleui.skija.Codec.makeFromData(data)) {
-            var info=codec.getImageInfo();
-            return info.getWidth()<=MAX_DIM && info.getHeight()<=MAX_DIM;
-        }
     }
 
     /** Re-encodes a decoded image for disk at display size (WebP, PNG fallback). */

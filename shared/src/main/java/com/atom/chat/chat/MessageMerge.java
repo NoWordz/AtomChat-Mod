@@ -1,5 +1,8 @@
 package com.atom.chat.chat;
 
+import com.atom.chat.reaction.ReactionClient;
+
+import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.function.BooleanSupplier;
@@ -36,10 +39,19 @@ public final class MessageMerge {
 
     /** Whether {@code next} can be folded into the last stored message. */
     public static boolean canMerge(ChatMessage last, ChatMessage next) {
-        var aKey = com.atom.chat.reaction.ReactionClient.key(last);
-        var bKey = com.atom.chat.reaction.ReactionClient.key(next);
-        if ((aKey != null || bKey != null) && !java.util.Objects.equals(aKey, bKey)) return false;
+        return Objects.equals(ReactionClient.key(last), ReactionClient.key(next)) && sameMessage(last, next);
+    }
 
+    /** The view can collapse separate delivery IDs while both rows have no distinct reaction to show. */
+    public static boolean canMergeForDisplay(ChatMessage last, ChatMessage next) {
+        if (!sameMessage(last, next)) return false;
+        var left = ReactionClient.key(last);
+        var right = ReactionClient.key(next);
+        return Objects.equals(left, right)
+                || (ReactionClient.entries(left).isEmpty() && ReactionClient.entries(right).isEmpty());
+    }
+
+    private static boolean sameMessage(ChatMessage last, ChatMessage next) {
         if (last == null || next == null) {
             return false;
         }
@@ -75,8 +87,31 @@ public final class MessageMerge {
 
     /** Merges {@code next} into {@code last}, preserving the newer timestamp. */
     public static ChatMessage merge(ChatMessage last, ChatMessage next) {
-        int count = Math.max(1, last.getDuplicateCount()) + 1;
-        return last.withDuplicateCount(count, next.getTimestamp());
+        return last.withDuplicateCount(sumCounts(last, next), next.getTimestamp());
+    }
+
+    /** Actions on a display-only group target the newest original delivery. */
+    public static ChatMessage mergeForDisplay(ChatMessage last, ChatMessage next) {
+        return next.withDuplicateCount(sumCounts(last, next));
+    }
+
+    private static int sumCounts(ChatMessage last, ChatMessage next) {
+        return (int) Math.min(Integer.MAX_VALUE, (long) last.getDuplicateCount() + next.getDuplicateCount());
+    }
+
+    /** A proven echo can merge only after it has replaced its pending row. */
+    static void replaceConfirmed(List<ChatMessage> messages, int index, ChatMessage corrected) {
+        messages.set(index, corrected);
+        if (!antiSpamEnabled()) return;
+        if (index > 0 && canMerge(messages.get(index - 1), corrected)) {
+            corrected = merge(messages.get(index - 1), corrected);
+            messages.remove(index);
+            index--;
+            messages.set(index, corrected);
+        }
+        if (index + 1 < messages.size() && canMerge(corrected, messages.get(index + 1))) {
+            messages.set(index, merge(corrected, messages.remove(index + 1)));
+        }
     }
 
     /** Whether two messages come from the same speaker (UUID first, name fallback). */

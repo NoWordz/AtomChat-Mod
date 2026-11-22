@@ -1,9 +1,9 @@
 package com.atom.chat.avatar;
 
+import com.atom.chat.render.CornerGeometry;
 import com.atom.chat.ui.AtomChatAppearance;
 import com.atom.chat.font.FontManager;
 import com.atom.chat.settings.SettingsColor;
-import com.atom.lib.design.atomchat.SkiaDraw;
 import com.atom.chat.render.SkiaFontRenderer;
 import com.atom.chat.ui.Animations;
 import com.atom.lib.design.atomchat.AppIcons;
@@ -435,7 +435,7 @@ public final class ColorPickerOverlay {
             // Live preview dot hugging the hex's left side.
             float dotR = s(6);
             float dotCx = hexX - s(14);
-            SkiaDraw.drawRoundedRect(canvas, dotCx - dotR, textCyF - dotR, 2.0F * dotR, 2.0F * dotR,
+            CornerGeometry.drawRoundedRect(canvas, dotCx - dotR, textCyF - dotR, 2.0F * dotR, 2.0F * dotR,
                     dotR, (alpha << 24) | (live & 0x00FFFFFF));
             hexHitX = hexX - s(6);
             hexHitY = textCyF - s(11);
@@ -445,7 +445,7 @@ public final class ColorPickerOverlay {
             // SV square: base hue, white gradient left→right, black bottom→up.
             Rect sv = svRect(panel);
             canvas.save();
-            SkiaDraw.clip(canvas, sv.getLeft(), sv.getTop(), sv.getWidth(), sv.getHeight(),
+            CornerGeometry.clip(canvas, sv.getLeft(), sv.getTop(), sv.getWidth(), sv.getHeight(),
                     UiTokens.radius(8, AtomChatAppearance.theme()));
             int base = ColorUtil.hsvToRgb(hue, 1.0F, 1.0F);
             try (Paint p = new Paint().setColor(base).setAntiAlias(true)) {
@@ -481,7 +481,7 @@ public final class ColorPickerOverlay {
             // Hue bar: 7-stop rainbow gradient + cursor.
             Rect hueBar = hueRect(panel);
             canvas.save();
-            SkiaDraw.clip(canvas, hueBar.getLeft(), hueBar.getTop(), hueBar.getWidth(), hueBar.getHeight(),
+            CornerGeometry.clip(canvas, hueBar.getLeft(), hueBar.getTop(), hueBar.getWidth(), hueBar.getHeight(),
                     UiTokens.radius(7, AtomChatAppearance.theme()));
             try (Paint p = new Paint().setAntiAlias(true);
                  var sh = Shader.makeLinearGradient(hueBar.getLeft(), 0, hueBar.getRight(), 0, rainbow())) {
@@ -508,12 +508,12 @@ public final class ColorPickerOverlay {
             float icy = btnCy(panel);
             float ih = s(30);
             float inputRadius = UiTokens.radius(ih / (2.0F * UiTokens.SCALE), AtomChatAppearance.theme());
-            SkiaDraw.drawRoundedRect(canvas, ix, icy - ih / 2.0F, iw, ih, inputRadius,
+            CornerGeometry.drawRoundedRect(canvas, ix, icy - ih / 2.0F, iw, ih, inputRadius,
                     Color.makeARGB((int) (0.5F * alpha), 255, 255, 255));
             if (inputFocused) {
                 try (Paint ring = new Paint().setColor((alpha << 24) | (accent & 0x00FFFFFF))
                         .setMode(PaintMode.STROKE).setStrokeWidth(s(1.5F)).setAntiAlias(true)) {
-                    canvas.drawRRect(RRect.makeXYWH(ix, icy - ih / 2.0F, iw, ih, inputRadius), ring);
+                    CornerGeometry.drawRRect(canvas, RRect.makeXYWH(ix, icy - ih / 2.0F, iw, ih, inputRadius), ring);
                 }
             }
             Font inputFont = FontManager.font(UiTokens.FONT_BUTTON);
@@ -527,7 +527,7 @@ public final class ColorPickerOverlay {
                 SkiaFontRenderer.drawText(canvas, inputFont, inputBuffer.toString(), bufX,
                         SkiaFontRenderer.centerBaselineY(inputFont, textCy),
                         Color.makeARGB(alpha, 255, 255, 255));
-                if (System.currentTimeMillis() / 500L % 2L == 0L) {
+                if (Animations.caretVisible(System.currentTimeMillis())) {
                     float curX = bufX + SkiaFontRenderer.getStringWidth(inputFont, inputBuffer.toString()) + s(2);
                     try (Paint caret = new Paint().setColor(Color.makeARGB(alpha, 255, 255, 255))
                             .setStrokeWidth(s(1.5F)).setAntiAlias(true)) {

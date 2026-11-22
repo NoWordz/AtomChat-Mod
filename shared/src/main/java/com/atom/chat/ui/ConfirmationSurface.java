@@ -1,9 +1,9 @@
 package com.atom.chat.ui;
 
+import com.atom.chat.render.CornerGeometry;
 import com.atom.chat.config.AtomChatConfig;
 import com.atom.chat.font.FontManager;
 import com.atom.chat.render.SkiaFontRenderer;
-import com.atom.lib.design.atomchat.SkiaDraw;
 import com.atom.lib.design.atomchat.UiTokens;
 import io.github.humbleui.skija.Canvas;
 
@@ -28,8 +28,8 @@ public final class ConfirmationSurface {
             int color=actionColor(primary,dangerous);
             scale.begin(canvas,rect.x()+rect.w()/2,rect.y()+rect.h()/2);
             try {
-                SkiaDraw.drawRoundedRect(canvas,rect.x(),rect.y(),rect.w(),rect.h(),PickerModalPaint.buttonRadius(rect),UiTokens.withAlpha(color,255*opacity));
-                if(hover>.01f)SkiaDraw.drawRoundedRect(canvas,rect.x(),rect.y(),rect.w(),rect.h(),PickerModalPaint.buttonRadius(rect),io.github.humbleui.skija.Color.makeARGB((int)(60*hover*opacity),255,255,255));
+                CornerGeometry.drawRoundedRect(canvas,rect.x(),rect.y(),rect.w(),rect.h(),PickerModalPaint.buttonRadius(rect),UiTokens.withAlpha(color,255*opacity));
+                if(hover>.01f)CornerGeometry.drawRoundedRect(canvas,rect.x(),rect.y(),rect.w(),rect.h(),PickerModalPaint.buttonRadius(rect),io.github.humbleui.skija.Color.makeARGB((int)(60*hover*opacity),255,255,255));
                 ClickRipples.region(rect.x(),rect.y(),rect.w(),rect.h(),PickerModalPaint.buttonRadius(rect),color);
                 var font=FontManager.font(UiTokens.FONT_BUTTON);
                 String fitted=SkiaFontRenderer.truncate(font,label,Math.max(0,rect.w()-UiTokens.BUTTON_GAP));

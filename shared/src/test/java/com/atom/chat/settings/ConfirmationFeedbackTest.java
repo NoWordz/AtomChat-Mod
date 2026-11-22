@@ -57,7 +57,7 @@ class ConfirmationFeedbackTest {
         assertNotNull(spring);
         assertTrue(spring.scale()>1,"hover must recover after cancelling, actual scale="+spring.scale());
     }
-    @Test void foldedHeadingReservesItsLeftColumnForTheExistingClockGlyph() throws Exception {
+    @Test void foldedHeadingKeepsTheClockGlyphAndAddsTheCapsuleShadow() throws Exception {
         var page=history();var row=page.rows(SettingsSection.CHAT).stream()
                 .filter(r->"atomchat.settings.group.history.storage".equals(r.labelKey())).findFirst().orElseThrow();
         var rect=new UiLayout.Rect(20,20,400,UiTokens.SETTINGS_LABEL_H);
@@ -67,7 +67,15 @@ class ConfirmationFeedbackTest {
         try(var actual=Surface.makeRasterN32Premul(460,100);var expected=Surface.makeRasterN32Premul(460,100)) {
             actual.getCanvas().clear(0);expected.getCanvas().clear(0);
             draw.invoke(page,actual.getCanvas(),row,rect);
-            com.atom.chat.render.DrawPrimitives.drawIconCentered(expected.getCanvas(),AppIcons.ICON_CLOCK_PATH,x+size/2,cy,size,AtomChatConfig.get().textPrimaryColor);
+            Canvas reference = expected.getCanvas();
+            try (Paint paint = new Paint().setImageFilter(com.atom.chat.render.SkiaFontRenderer.backingShadow())) {
+                int layer = reference.saveLayer(null, paint);
+                com.atom.chat.render.DrawPrimitives.drawIconCentered(reference, AppIcons.ICON_CLOCK_PATH,
+                        x + size / 2F, cy, size, 0xFF000000);
+                reference.restoreToCount(layer);
+            }
+            com.atom.chat.render.DrawPrimitives.drawIconCentered(reference, AppIcons.ICON_CLOCK_PATH,
+                    x + size / 2F, cy, size, AtomChatConfig.get().textPrimaryColor);
             assertArrayEquals(pixels(expected,(int)x,(int)(cy-size/2),(int)size),pixels(actual,(int)x,(int)(cy-size/2),(int)size));
         }
     }

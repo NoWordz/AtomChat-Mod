@@ -1,5 +1,125 @@
 # Release Notes
 
+## v0.9.4
+
+**更改**
+
+- 聊天面板换用更干净的短软影，聊天 HUD 恢复原来更清晰的立体感。
+- 发送按钮加入与上下栏一致的细高光、暗边和短影。
+- 更新界面图标和模组标志，关于页的组件致谢可横向滚动并打开项目链接。
+- 圆角设置上限提高到 30 px，部分栏位和胶囊采用连续曲率。
+
+**修复**
+
+- 窄屏里发送按钮的可见范围和点击范围一致。
+- 面板通知的阴影不会压暗半透明内容区域。
+- 恢复面板和 HUD 的重复消息计数，以及 HUD 通知的背景模糊。
+- 性能模式立即切换设置页签，并去掉 HUD 快捷图标的黑边。
+- 底栏和设置页胶囊在高圆角档仍随滑块变化。
+
+**性能**
+
+- 复用已合成的面板阴影，减少重复绘制。
+- 面板与设置标题按设备像素复用点阵。
+
+**说明**
+
+- 配套使用 AtomLib 0.7.1。
+
+----
+
+**Changed**
+
+- The chat panel has shorter, softer shadows and the chat HUD restores its more distinct depth.
+- The Send button picks up the panel bars' fine highlight, shaded lower edge, and short shadow.
+- Updated the interface icons and mod logo, and made the About credits a scrollable strip of links.
+- Raised the corner-radius limit to 30 px and used continuous corners on some bars and pills.
+
+**Fixed**
+
+- The Send button's visible area and hit area line up in narrow layouts.
+- Panel notification shadows stay clear of the translucent content area.
+- Restored repeated-message counts in the panel and HUD, and backdrop blur on HUD notifications.
+- Performance mode switches settings tabs immediately and removes the black HUD shortcut outline.
+- Navigation and settings pills keep responding at high corner-radius values.
+
+**Performance**
+
+- Panel surfaces reuse composited shadows to reduce repeated drawing.
+- The panel and settings headers reuse dot patterns at device-pixel resolution.
+
+**Notes**
+
+- Pair this version with AtomLib 0.7.1.
+
+## v0.9.3
+
+**新增**
+
+- 服务端消息模板页加入新手教程，提供规则格式、例句和解析结果。
+- 游戏内聊天 HUD 显示单行引用胶囊，超出宽度时省略。
+- 关于页加入性能模式，开启时暂时关闭模糊、软阴影和界面动效，关闭后恢复原设置。
+
+**更改**
+
+- 切页时淡出旧标题和变化的图标，再淡入新内容。
+- 更新模组列表的作者署名、第三方鸣谢和仓库链接。
+- 关于页合并 Skija 说明，补充实际使用的图标和选择器致谢。
+- Windows x64 优先打开系统文件选择器，桌面选择器继续提供兼容回退。
+- 面板和 HUD 的次级胶囊共用 85% 的最低底色不透明度。
+- 面板和 HUD 的消息使用轻量软阴影，透明图跳过图片外框阴影。
+- HUD 跟随紧凑分组选项，组首离开后由最早可见的消息补回头像和名字。
+- 客户端前置更新至 AtomLib 0.7.0。
+
+**修复**
+
+- 修复聊天页与其他页面切换时头栏时钟的像素偏移。
+- Fabric 重载资源时释放旧的模糊着色器。
+- 面板和卡片采用相同的 Kawase 强度，较高的卡片强度不会再切回较弱的模糊。
+- 修复面板圆角描边外缘漏出亮色底边，并把返回底部按钮移回输入栏上方。
+- HUD 通知逐条裁切背景模糊，模糊随通知移动和淡出。
+- 聊天 HUD 和快捷键提示随游戏界面缩放，提示在暂停菜单和背包中仍可见。
+
+**性能**
+
+- 后台预热 Emoji 选择器前两屏的字形。
+- 将表情包目录扫描延迟到打开表情包页，并限制缩略图读取量。
+- 静止 HUD 消息按物理像素对齐后缓存，缩放或移动时直接绘制。
+
+----
+
+**Added**
+
+- The server message template page includes a tutorial with a sample rule, chat line and parsed result.
+- The in-game chat HUD shows quoted messages in a single capsule line and truncates long quotes.
+- Performance mode in About temporarily disables blur, soft shadows and interface animations, restoring the saved settings when switched off.
+
+**Changed**
+
+- Page switches fade out the previous title and changing icons before fading in the new content.
+- Updated the in-game mod list with author attribution, third-party credits and repository links.
+- The About page groups the Skija attribution and credits the icon sets and file picker in use.
+- Windows x64 opens the system file picker first and keeps the desktop picker as a compatibility fallback.
+- Secondary chat capsules use an 85% minimum background opacity in the panel and the HUD.
+- Panel and HUD messages use subtle soft shadows, and transparent images skip the image outline shadow.
+- The HUD follows compact grouping and restores the sender name and avatar on the oldest visible message when the group head leaves.
+- The client now requires AtomLib 0.7.0 or later.
+
+**Fixed**
+
+- Fixed a pixel shift in the header clock when switching between chat and other pages.
+- Fabric releases the old blur shaders when resources reload.
+- Panel and card backgrounds share the Kawase blur scale so a stronger card setting retains the stronger blur.
+- Fixed light pixels along the panel outline corners and moved the jump-to-latest button back above the composer.
+- HUD notifications clip background blur individually and move and fade it with each banner.
+- The chat HUD and shortcut hint follow in-game UI scaling, and the hint stays visible in the pause menu and inventory.
+
+**Performance**
+
+- The first two pages of emoji glyphs are prewarmed in the background.
+- Sticker directories are scanned when the sticker tab is opened, and thumbnail reads are bounded.
+- Settled HUD messages use a device-pixel-aligned cache and draw directly while scaling or moving.
+
 ## v0.9.2
 
 **新增**

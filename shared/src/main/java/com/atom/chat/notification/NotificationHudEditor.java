@@ -1,9 +1,9 @@
 package com.atom.chat.notification;
 
+import com.atom.chat.render.CornerGeometry;
 import com.atom.chat.ui.AtomChatAppearance;
 import com.atom.chat.config.AtomChatConfig;
 import com.atom.chat.font.FontManager;
-import com.atom.lib.design.atomchat.SkiaDraw;
 import com.atom.chat.render.SkiaFontRenderer;
 import com.atom.chat.ui.UiLayout;
 import com.atom.lib.design.atomchat.UiTokens;
@@ -50,9 +50,9 @@ public final class NotificationHudEditor {
         int saved=canvas.save();
         try(Paint opacity=new Paint().setAlphaf(progress)) {
         canvas.saveLayer(Rect.makeXYWH(0,0,width,height),opacity);
-        SkiaDraw.drawRoundedRect(canvas,0,0,width,height,0,0x66000000);
+        CornerGeometry.drawRoundedRect(canvas,0,0,width,height,0,0x66000000);
         var placement=model.bounds(width,height); var box=placement.rect();
-        try(Paint guide=new Paint().setColor(0x667AC8FF).setStrokeWidth(1).setMode(PaintMode.STROKE)) {
+        try(Paint guide=new Paint().setAntiAlias(true).setColor(0x667AC8FF).setStrokeWidth(1).setMode(PaintMode.STROKE)) {
             canvas.drawLine(width/2,0,width/2,height,guide);
             canvas.drawLine(0,height/2,width,height/2,guide);
             for(var anchor:NotificationHudLayout.Anchor.values()) {
@@ -67,12 +67,12 @@ public final class NotificationHudEditor {
             NotificationBanner.INSTANCE.renderPreview(canvas,baseWidth);
         } finally { canvas.restore(); }
         int accent=AtomChatConfig.get().accentColor;
-        try(Paint border=new Paint().setColor(accent).setMode(PaintMode.STROKE).setStrokeWidth(1)) {
+        try(Paint border=new Paint().setAntiAlias(true).setColor(accent).setMode(PaintMode.STROKE).setStrokeWidth(1)) {
             canvas.drawRect(Rect.makeXYWH(box.x(),box.y(),box.w(),box.h()),border);
         }
         var layout=NotificationHudEditorLayout.of(width,height,box);
         var handle=layout.handle();
-        SkiaDraw.drawRoundedRect(canvas,handle.x(),handle.y(),handle.w(),handle.h(),UiTokens.EDGE_CONTROL_INSET,accent);
+        CornerGeometry.drawRoundedRect(canvas,handle.x(),handle.y(),handle.w(),handle.h(),UiTokens.EDGE_CONTROL_INSET,accent);
         var toolbar=layout.toolbar();
         int fill=UiTokens.floatSurfaceFill(AtomChatAppearance.theme()), ink=UiTokens.onFloatSurface(fill);
         com.atom.chat.ui.ConfirmationSurface.surface(canvas,toolbar,progress);

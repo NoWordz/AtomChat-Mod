@@ -2,19 +2,16 @@ package com.atom.chat.ui;
 
 
 
-import com.atom.lib.design.atomchat.AppIcons;
+import com.atom.chat.render.OutlineIcons;
+import com.atom.chat.render.CornerGeometry;
+import com.atom.chat.render.ChromeMaterial;
 import com.atom.lib.design.atomchat.UiTokens;
 import com.atom.chat.font.FontManager;
-import com.atom.lib.design.atomchat.SkiaDraw;
 import com.atom.chat.render.SkiaFontRenderer;
 import io.github.humbleui.skija.Canvas;
 import io.github.humbleui.skija.Color;
 import io.github.humbleui.skija.Font;
 import io.github.humbleui.skija.Paint;
-import io.github.humbleui.skija.PaintMode;
-import io.github.humbleui.skija.PaintStrokeCap;
-import io.github.humbleui.skija.PaintStrokeJoin;
-import io.github.humbleui.types.Rect;
 
 import java.time.LocalTime;
 
@@ -73,31 +70,48 @@ public final class ShellHeader {
     public static void render(Canvas canvas, UiLayout.Rect header, String title, boolean showBack,
                               UiLayout.Rect backButton, float backHover, int textPrimary,
                               Boolean statusOnline, HeaderAction action) {
+        LocalTime now = LocalTime.now();
+        String time = String.format("%02d:%02d", now.getHour(), now.getMinute());
+        render(canvas, header, title, showBack ? backButton : null, backHover, textPrimary, statusOnline,
+                action, time, 1, 1, 1, true, true, false);
+    }
+
+    static void renderNavigation(Canvas canvas, UiLayout.Rect header, String title, UiLayout.Rect backButton,
+                                 float backHover, int textPrimary, Boolean statusOnline, HeaderAction action,
+                                 String time, float titleOpacity, float backOpacity, float actionOpacity,
+                                 boolean backInteractive, boolean actionInteractive) {
+        render(canvas, header, title, backButton, backHover, textPrimary, statusOnline, action,
+                time, titleOpacity, backOpacity, actionOpacity, backInteractive, actionInteractive, true);
+    }
+
+    private static void render(Canvas canvas, UiLayout.Rect header, String title, UiLayout.Rect backButton,
+                               float backHover, int textPrimary, Boolean statusOnline, HeaderAction action,
+                               String time, float titleOpacity, float backOpacity, float actionOpacity,
+                               boolean backInteractive, boolean actionInteractive, boolean keepClock) {
         if (header == null || header.w() <= 0.0F || header.h() <= 0.0F) {
             return;
         }
         // Floating chrome: same elevation language as the menus (two-tier
         // shadow behind an opaque-ish surface), unlike the edge-highlighted
         // content cards.
-        com.atom.chat.render.ChromeMaterial.drawShadow(canvas, header.x(), header.y(), header.w(), header.h(),
-                UiTokens.headerRadius(AtomChatAppearance.theme()));
-        com.atom.chat.render.ChromeMaterial.drawBackdrop(canvas, header.x(), header.y(), header.w(), header.h(),
-                UiTokens.headerRadius(AtomChatAppearance.theme()), 1F);
-        SkiaDraw.drawRoundedRect(canvas, header.x(), header.y(), header.w(), header.h(),
-                UiTokens.headerRadius(AtomChatAppearance.theme()), UiTokens.cardFill(AtomChatAppearance.theme()));
-        com.atom.chat.render.ChromeMaterial.drawDetails(canvas, header, UiTokens.headerRadius(AtomChatAppearance.theme()));
+        float radius = ChromeMaterial.cornerRadius(header, UiTokens.headerRadius(AtomChatAppearance.theme()));
+        ChromeMaterial.drawShadow(canvas, header.x(), header.y(), header.w(), header.h(), radius);
+        ChromeMaterial.drawBackdrop(canvas, header.x(), header.y(), header.w(), header.h(), radius, 1F);
+        CornerGeometry.drawRoundedRect(canvas, header.x(), header.y(), header.w(), header.h(),
+                radius, UiTokens.cardFill(AtomChatAppearance.theme()));
+        ChromeMaterial.drawDetails(canvas, header, radius);
 
-        if (showBack && backButton != null) {
+        if (backButton != null && backOpacity > 0) {
             boolean pressed = backPressedNow;
             backPressedNow = false;
             drawIconButton(canvas, backButton, backHover, pressed, BACK_SCALE,
-                    AppIcons.ICON_BACK_PATH, textPrimary);
+                    TablerIcons.ARROW_LEFT, textPrimary, backOpacity, backInteractive);
         }
-        if (action != null && action.rect() != null && action.icon() != null) {
+        if (action != null && action.rect() != null && action.icon() != null && actionOpacity > 0) {
             boolean pressed = actionPressedNow;
             actionPressedNow = false;
             drawIconButton(canvas, action.rect(), action.hover(), pressed, ACTION_SCALE,
-                    action.icon(), action.color());
+                    action.icon(), action.color(), actionOpacity, actionInteractive);
         } else {
             // No trailing action this frame: let the spring return to rest
             // under the real motion gate. Width is irrelevant here — the
@@ -105,34 +119,34 @@ public final class ShellHeader {
             // the budget formula total.
             ACTION_SCALE.update(false, false, FRAME_DT_MS, Animations.enabled(), 1.0F);
         }
-        LocalTime now = LocalTime.now();
-        String time = String.format("%02d:%02d", now.getHour(), now.getMinute());
         Font timeFont = FontManager.font(UiTokens.FONT_TIME);
         Font titleFont = FontManager.font(UiTokens.FONT_TITLE);
         float dotSpace = statusOnline == null ? 0.0F : UiTokens.HEADER_TEXT_GAP * 2.0F;
-        TextBounds bounds = textBounds(header, showBack ? backButton : null,
+        TextBounds bounds = textBounds(header, backButton,
                 action == null ? null : action.rect(),
-                SkiaFontRenderer.getStringWidth(titleFont, title) + dotSpace,
+                keepClock ? 0 : SkiaFontRenderer.getStringWidth(titleFont, title) + dotSpace,
                 SkiaFontRenderer.getStringWidth(timeFont, time));
-        String shown = SkiaFontRenderer.truncate(titleFont, title,
-                Math.max(0.0F, bounds.right() - bounds.left() - dotSpace));
-        float titleW = SkiaFontRenderer.getStringWidth(titleFont, shown);
-        float center = Math.max(bounds.left() + dotSpace + titleW / 2.0F,
-                Math.min(header.x() + header.w() / 2.0F, bounds.right() - titleW / 2.0F));
-        canvas.save();
-        canvas.clipRect(io.github.humbleui.types.Rect.makeXYWH(bounds.left(), header.y(),
-                Math.max(0.0F, bounds.right() - bounds.left()), header.h()));
-        SkiaFontRenderer.drawTextCentered(canvas, titleFont, shown,
-                center, header.y() + header.h() / 2.0F, textPrimary);
+        if (titleOpacity > 0) {
+            String shown = SkiaFontRenderer.truncate(titleFont, title,
+                    Math.max(0.0F, bounds.right() - bounds.left() - dotSpace));
+            float titleW = SkiaFontRenderer.getStringWidth(titleFont, shown);
+            float center = Math.max(bounds.left() + dotSpace + titleW / 2.0F,
+                    Math.min(header.x() + header.w() / 2.0F, bounds.right() - titleW / 2.0F));
+            canvas.save();
+            canvas.clipRect(io.github.humbleui.types.Rect.makeXYWH(bounds.left(), header.y(),
+                    Math.max(0.0F, bounds.right() - bounds.left()), header.h()));
+            SkiaFontRenderer.drawTextCentered(canvas, titleFont, shown,
+                    center, header.y() + header.h() / 2.0F, withOpacity(textPrimary, titleOpacity));
 
-        if (statusOnline != null) {
-            float dotR = UiTokens.s(5);
-            float dotX = center - titleW / 2.0F - UiTokens.HEADER_TEXT_GAP - dotR;
-            float dotY = header.y() + header.h() / 2.0F;
-            int dotColor = statusOnline ? Color.makeARGB(255, 82, 196, 110) : Color.makeARGB(255, 130, 140, 150);
-            SkiaDraw.drawRoundedRect(canvas, dotX - dotR, dotY - dotR, dotR * 2, dotR * 2, dotR, dotColor);
+            if (statusOnline != null) {
+                float dotR = UiTokens.s(5);
+                float dotX = center - titleW / 2.0F - UiTokens.HEADER_TEXT_GAP - dotR;
+                float dotY = header.y() + header.h() / 2.0F;
+                int dotColor = statusOnline ? Color.makeARGB(255, 82, 196, 110) : Color.makeARGB(255, 130, 140, 150);
+                CornerGeometry.drawRoundedRect(canvas, dotX - dotR, dotY - dotR, dotR * 2, dotR * 2, dotR, withOpacity(dotColor, titleOpacity));
+            }
+            canvas.restore();
         }
-        canvas.restore();
         if (bounds.showTime()) SkiaFontRenderer.drawTextRight(canvas, timeFont, time,
                 header.right() - UiTokens.HEADER_PAD_X,
                 header.y() + header.h() / 2.0F, textPrimary);
@@ -142,8 +156,13 @@ public final class ShellHeader {
 
     /** Page content must be drawn after this pass, even when the header itself is an overlay. */
     public static void drawBackdrop(Canvas canvas, UiLayout.Rect header) {
-        com.atom.chat.render.DotTexture.drawEdge(canvas, header, UiTokens.headerRadius(AtomChatAppearance.theme()), false,
-                com.atom.chat.config.AtomChatConfig.get().textSecondaryColor);
+        drawBackdrop(canvas, header, false);
+    }
+
+    public static void drawBackdrop(Canvas canvas, UiLayout.Rect header, boolean settled) {
+        float radius = ChromeMaterial.cornerRadius(header, UiTokens.headerRadius(AtomChatAppearance.theme()));
+        com.atom.chat.render.DotTexture.drawPanelEdge(canvas, header, radius, false,
+                com.atom.chat.config.AtomChatConfig.get().textSecondaryColor, settled);
     }
 
     static TextBounds textBounds(UiLayout.Rect header, UiLayout.Rect back, UiLayout.Rect action,
@@ -161,8 +180,11 @@ public final class ShellHeader {
     /** Hover wash + centred icon, the shared header-button recipe. */
     private static void drawIconButton(Canvas canvas, UiLayout.Rect rect, float hover,
                                        boolean pressed, PressScale scale,
-                                       io.github.humbleui.skija.Path icon, int color) {
-        ClickRipples.region(rect.x(), rect.y(), rect.w(), rect.h(), UiTokens.radius(8, AtomChatAppearance.theme()), UiTokens.cardFill(AtomChatAppearance.theme()));
+                                       io.github.humbleui.skija.Path icon, int color, float opacity, boolean interactive) {
+        if (interactive) {
+            ClickRipples.region(rect.x(), rect.y(), rect.w(), rect.h(), UiTokens.radius(8, AtomChatAppearance.theme()),
+                    UiTokens.cardFill(AtomChatAppearance.theme()));
+        }
         // The scaled shape is the inset wash, so the width budget is spent on
         // that surface (rect minus the inset on both sides), not on the outer
         // hit-test rect. Behaviour is unchanged at the default inset — this is
@@ -183,37 +205,22 @@ public final class ShellHeader {
             float y = rect.y() + inset;
             float w = rect.w() - inset * 2.0F;
             float h = rect.h() - inset * 2.0F;
-            SkiaDraw.drawRoundedRect(canvas, x, y, w, h, UiTokens.radius(8, AtomChatAppearance.theme()),
-                    UiTokens.cardHover(hover, AtomChatAppearance.theme()));
+            CornerGeometry.drawRoundedRect(canvas, x, y, w, h, UiTokens.radius(8, AtomChatAppearance.theme()),
+                    withOpacity(UiTokens.cardHover(hover, AtomChatAppearance.theme()), opacity));
         }
         drawIconCentered(canvas, icon,
                 rect.x() + rect.w() / 2.0F,
                 rect.y() + rect.h() / 2.0F,
-                UiTokens.s(18), color);
+                UiTokens.s(18), withOpacity(color, opacity));
         canvas.restore();
+    }
+
+    private static int withOpacity(int color, float opacity) {
+        return (color & 0x00FFFFFF) | (Math.round((color >>> 24) * opacity) << 24);
     }
 
     private static void drawIconCentered(Canvas canvas, io.github.humbleui.skija.Path icon,
                                          float cx, float cy, float size, int color) {
-        Rect b = com.atom.chat.render.OutlineIconBounds.of(icon);
-        if (b == null || b.isEmpty()) {
-            return;
-        }
-        float scale = size / Math.max(b.getWidth(), b.getHeight());
-        canvas.save();
-        try {
-            canvas.translate(cx - (b.getLeft() + b.getRight()) / 2.0F * scale,
-                    cy - (b.getTop() + b.getBottom()) / 2.0F * scale);
-            canvas.scale(scale, scale);
-            try (Paint paint = new Paint().setColor(color).setAntiAlias(true)
-                    .setMode(PaintMode.STROKE)
-                    .setStrokeWidth(UiTokens.iconStroke(size) / scale)
-                    .setStrokeCap(PaintStrokeCap.ROUND)
-                    .setStrokeJoin(PaintStrokeJoin.ROUND)) {
-                canvas.drawPath(icon, paint);
-            }
-        } finally {
-            canvas.restore();
-        }
+        OutlineIcons.draw(canvas, icon, cx, cy, size, color);
     }
 }

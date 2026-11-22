@@ -1,10 +1,10 @@
 package com.atom.chat.settings;
 
+import com.atom.chat.render.CornerGeometry;
 import com.atom.chat.font.FontManager;
 import com.atom.chat.render.SkiaFontRenderer;
 import com.atom.chat.ui.*;
 import com.atom.lib.design.atomchat.DesignHost;
-import com.atom.lib.design.atomchat.SkiaDraw;
 import com.atom.lib.design.atomchat.UiTokens;
 import io.github.humbleui.skija.Canvas;
 import io.github.humbleui.skija.Font;
@@ -81,13 +81,13 @@ public final class SettingsFormField {
         shift=!wrap&&focused?Math.max(0,lines.get(caretLine).x(edit.cursor())-bounds.w()+TEXT_INSET*2):0;
         canvas.save();
         try{
-            SkiaDraw.clip(canvas,bounds.x()+TEXT_INSET/2,bounds.y()+V_PAD/2,Math.max(0,bounds.w()-TEXT_INSET),Math.max(0,bounds.h()-V_PAD),0);
+            CornerGeometry.clip(canvas,bounds.x()+TEXT_INSET/2,bounds.y()+V_PAD/2,Math.max(0,bounds.w()-TEXT_INSET),Math.max(0,bounds.h()-V_PAD),0);
             for(int i=firstLine;i<firstLine+count;i++){
                 var line=lines.get(i);float cy=textTop+LINE_H/2+(i-firstLine)*LINE_H;
                 int a=Math.max(line.start(),edit.start()),b=Math.min(line.end(),edit.end());
-                if(focused&&a<b)SkiaDraw.drawRoundedRect(canvas,bounds.x()+TEXT_INSET+line.x(a)-shift,cy-LINE_H/2,line.x(b)-line.x(a),LINE_H,0,(accent&0xffffff)|0x55000000);
+                if(focused&&a<b)CornerGeometry.drawRoundedRect(canvas,bounds.x()+TEXT_INSET+line.x(a)-shift,cy-LINE_H/2,line.x(b)-line.x(a),LINE_H,0,(accent&0xffffff)|0x55000000);
                 SkiaFontRenderer.drawText(canvas,font,line.text(),bounds.x()+TEXT_INSET-shift,SkiaFontRenderer.centerBaselineY(font,cy),!enabled?secondary:number&&focused?accent:primary);
-                if(focused&&i==caretLine&&(millis/500)%2==0)SkiaDraw.drawRoundedRect(canvas,bounds.x()+TEXT_INSET+line.x(edit.cursor())-shift,cy-CARET_H/2,UiTokens.FOCUS_RING_WIDTH,CARET_H,0,accent);
+                if(focused&&i==caretLine&&Animations.caretVisible(millis))CornerGeometry.drawRoundedRect(canvas,bounds.x()+TEXT_INSET+line.x(edit.cursor())-shift,cy-CARET_H/2,UiTokens.FOCUS_RING_WIDTH,CARET_H,0,accent);
             }
         }finally{canvas.restore();}
     }

@@ -7,6 +7,7 @@ import com.atom.lib.design.atomchat.UiTokens;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 
 /** The newest targets and a bounded set of departing rows share the HUD's frame clock. */
 final class ChatHudMotion<T> {
@@ -36,6 +37,7 @@ final class ChatHudMotion<T> {
 
         T content() { return content; }
         boolean departing() { return departing; }
+        boolean settled(long now) { return !departing && y(now) == toY && xOffset(now) == 0F; }
 
         float y(long now) {
             if (fromY == toY) return toY;
@@ -95,7 +97,7 @@ final class ChatHudMotion<T> {
         Row<T> earliestExit = null;
         for (int i = 0; i < rows.size(); i++) {
             Row<T> row = rows.get(i);
-            if (row.key == key) {
+            if (Objects.equals(row.key, key)) {
                 if (!animate || row.departing) {
                     row.entryStart = Long.MIN_VALUE;
                     row.fromY = row.toY = top;

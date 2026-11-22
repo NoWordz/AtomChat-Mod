@@ -144,8 +144,9 @@ public final class PanelOpenMotion {
         if (AtomChatConfig.get().halfScreenMode) strokeWidth = 0F;
         float scale = openScale(progress, style);
         float slide = openSlidePx(progress, style);
-        float insetW = panelW - strokeWidth * 2.0F;
-        float insetH = panelH - strokeWidth * 2.0F;
+        var aperture = PanelBackground.contour(new UiLayout.Rect(panelX, panelY, panelW, panelH), strokeWidth);
+        float insetW = aperture.getWidth();
+        float insetH = aperture.getHeight();
         float cx = panelX + panelW / 2.0F;
         float cy = panelY + panelH / 2.0F;
         return new PanelRect(
@@ -153,7 +154,7 @@ public final class PanelOpenMotion {
                 cy - insetH * scale / 2.0F,
                 insetW * scale,
                 insetH * scale,
-                Math.max(0F, UiTokens.panelRadius(AtomChatAppearance.theme()) - strokeWidth) * scale);
+                aperture._radii[0] * scale);
     }
 
     /**

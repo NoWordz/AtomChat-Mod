@@ -30,6 +30,7 @@
     "org.apache.commons.lang3 — commons-lang3（StringUtils.normalizeSpace），由原版捆绑",
     "org.slf4j      — 日志门面，由加载器提供",
     "org.lwjgl      — GLFW / OpenGL 绑定，由原版提供",
+    "com.sun.jna    — 原版捆绑的 JNA，Windows 系统文件选择器使用，不额外打包",
     "it.unimi       — fastutil，由原版捆绑",
     "io.netty       — 网络栈，由原版捆绑；共享层用它的 DecoderException 表示「对端送来的东西坏了」",
     "org.objectweb  — ASM，mixin 运行时需要",

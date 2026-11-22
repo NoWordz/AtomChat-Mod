@@ -145,8 +145,7 @@ public final class SkiaPipelineWarmup {
              Paint fill = new Paint().setAntiAlias(true);
              Paint layer = new Paint();
              Shader gradient = Shader.makeLinearGradient(
-                     0F, 0F, SIDE, 0F, new int[]{0xFF335577, 0xFF88BBDD});
-             ImageFilter blur = ImageFilter.makeBlur(4F, 4F, FilterTileMode.CLAMP)) {
+                     0F, 0F, SIDE, 0F, new int[]{0xFF335577, 0xFF88BBDD})) {
             // Opaque background: never let the whole frame collapse into
             // nothingToDraw, and never draw into the host framebuffer.
             canvas.clear(0xFF101418);
@@ -154,7 +153,7 @@ public final class SkiaPipelineWarmup {
             // (1) The recorded-picture path — DOTS / _nDrawPicture, the single
             //     largest native hotspot (33.6% of render-thread samples).
             Canvas recording = recorder.beginRecording(Rect.makeWH(SIDE, SIDE));
-            recording.drawRRect(RRect.makeXYWH(4F, 4F, SIDE - 8F, SIDE - 8F, 12F),
+            CornerGeometry.drawRRect(recording, RRect.makeXYWH(4F, 4F, SIDE - 8F, SIDE - 8F, 12F),
                     fill.setColor(0xFF223244));
             recording.drawCircle(SIDE / 2F, 28F, 14F, fill.setColor(0xFFCC8844));
             Picture picture = recorder.finishRecordingAsPicture();
@@ -180,11 +179,15 @@ public final class SkiaPipelineWarmup {
                     "AtomChat 预热 123", 12F, 56F, 0xFFFFFFFF);
 
             // (4) saveLayer + ImageFilter, the frosted-card path.
-            canvas.saveLayer(Rect.makeXYWH(6F, 6F, SIDE - 12F, SIDE - 12F),
-                    layer.setImageFilter(blur));
-            canvas.drawRRect(RRect.makeXYWH(10F, 70F, SIDE - 20F, 20F, 8F),
-                    fill.setColor(0x80FFFFFF));
-            canvas.restore();
+            if (SoftShadow.enabled()) {
+                try (ImageFilter blur = ImageFilter.makeBlur(4F, 4F, FilterTileMode.CLAMP)) {
+                    canvas.saveLayer(Rect.makeXYWH(6F, 6F, SIDE - 12F, SIDE - 12F),
+                            layer.setImageFilter(blur));
+                    CornerGeometry.drawRRect(canvas, RRect.makeXYWH(10F, 70F, SIDE - 20F, 20F, 8F),
+                            fill.setColor(0x80FFFFFF));
+                    canvas.restore();
+                }
+            }
         }
     }
 

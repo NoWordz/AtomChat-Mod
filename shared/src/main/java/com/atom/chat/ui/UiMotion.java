@@ -122,7 +122,7 @@ public final class UiMotion {
      * target. Converges by snapping once within 0.001.
      */
     public static float expApproach(float value, float target, float dtMs, float tauMs) {
-        if (tauMs <= 0.0F) {
+        if (tauMs <= 0.0F || com.atom.chat.config.AtomChatConfig.performanceModeActive()) {
             return target;
         }
         if (dtMs <= 0.0F) {
@@ -145,7 +145,7 @@ public final class UiMotion {
      * highlight in the same wall-clock time, and both end at exactly 0.</p>
      */
     public static float approach(float value, float target, float elapsedMs, long durationMs) {
-        if (durationMs <= 0L) {
+        if (durationMs <= 0L || com.atom.chat.config.AtomChatConfig.performanceModeActive()) {
             return target;
         }
         float step = elapsedMs / (float) durationMs;

@@ -10,11 +10,23 @@ import java.util.Properties;
 public final class AtomLibDependencyCheck {
     private AtomLibDependencyCheck() {}
     public static String requiredVersion() {
+        return requirement("version");
+    }
+
+    public static String fabricRange() {
+        return requirement("fabricRange");
+    }
+
+    private static String requirement(String key) {
         try(var input=AtomLibDependencyCheck.class.getResourceAsStream("/atomchat-atomlib.properties")){
             if(input==null)throw new IllegalStateException("AtomChat is missing its AtomLib requirement metadata");
-            var properties=new Properties();properties.load(input);String version=properties.getProperty("version");
-            if(version==null||version.isBlank())throw new IllegalStateException("AtomChat has invalid AtomLib requirement metadata");
-            return version;
+            var properties = new Properties();
+            properties.load(input);
+            String value = properties.getProperty(key);
+            if (value == null || value.isBlank()) {
+                throw new IllegalStateException("AtomChat is missing AtomLib requirement " + key);
+            }
+            return value;
         }catch(IOException error){throw new IllegalStateException("Cannot read AtomChat's AtomLib requirement",error);}
     }
     public static void require(String installedVersion){

@@ -8,6 +8,7 @@ import io.github.humbleui.skija.FilterBlurMode;
 import io.github.humbleui.skija.Image;
 import io.github.humbleui.skija.ImageInfo;
 import io.github.humbleui.skija.MaskFilter;
+import io.github.humbleui.skija.Matrix33;
 import io.github.humbleui.skija.Paint;
 import io.github.humbleui.skija.PaintMode;
 import io.github.humbleui.skija.PaintStrokeCap;
@@ -28,6 +29,7 @@ public final class DotTexture {
     private static final Paint POINTS = new Paint().setAntiAlias(true).setStrokeCap(PaintStrokeCap.ROUND);
     private static final MaskFilter BLUR = MaskFilter.makeBlur(FilterBlurMode.NORMAL, UiTokens.DOT_GLOW_BLUR);
     private static final Paint GLOW = new Paint().setAntiAlias(true).setMaskFilter(BLUR);
+    private static final Paint COVERAGE = new Paint();
     private static final int[] ALPHAS = {19, 26, 32, 38, 45, 50, 54, 59, 64};
     // The paints and these point buffers are used only on the render thread.
     private static final float[] EDGE_POINTS = new float[512 * 2];
@@ -42,6 +44,10 @@ public final class DotTexture {
     /** Keep the previous oversized-field fallback; a cold bake stays below 512k logical pixels. */
     private static final int MAX_IMAGE_PIXELS = 512 * 1024;
     private static final float FIELD_IMAGE_MIN_AREA = 40_000.0F;
+    private static final int MAX_PANEL_EDGE_MASKS = 8;
+    private static final int MAX_PANEL_EDGE_PIXELS = 128 * 1024;
+    private static final PanelEdgeKey[] PREVIOUS_PANEL_EDGE = new PanelEdgeKey[2];
+    private static TitleProjection titleProjection;
     /** Covers every possible dot coordinate so the recorder never drops a command. */
     private static final Rect CULL_RECT = Rect.makeXYWH(-1_000_000F, -1_000_000F, 2_000_000F, 2_000_000F);
 
@@ -71,8 +77,40 @@ public final class DotTexture {
                     return drop;
                 }
             };
+    private static final LinkedHashMap<PanelEdgeKey, Image> PANEL_EDGES =
+            new LinkedHashMap<>(4, .75F, true) {
+                @Override
+                protected boolean removeEldestEntry(Map.Entry<PanelEdgeKey, Image> eldest) {
+                    boolean drop = size() > MAX_PANEL_EDGE_MASKS;
+                    if (drop) eldest.getValue().close();
+                    return drop;
+                }
+            };
 
     private record HaloKey(float width, float height, int tint, float density, boolean trail, int resolution) {}
+    private record PanelEdgeKey(UiLayout.Rect bar, float radius, boolean above, int tint, Matrix33 matrix) {}
+    private record TitleProjection(Canvas recording, Matrix33 playback) {}
+
+    private record DotGrid(float scale, float xPhase, float yPhase) {
+        private static DotGrid of(Matrix33 matrix) {
+            float[] m = matrix._mat;
+            float scale = m[0];
+            if (!(scale > 0F && scale <= 2F) || m[4] != scale || m[1] != 0F || m[3] != 0F
+                    || m[6] != 0F || m[7] != 0F || m[8] != 1F) return null;
+            return new DotGrid(scale, phase(m[2]), phase(m[5]));
+        }
+
+        private static float phase(float value) {
+            return value - (float) Math.floor(value);
+        }
+
+        private float center(float coordinate, float radius, float phase) {
+            float pixel = coordinate * scale + phase;
+            // Focus dots around one pixel across. Larger circles keep their full vector phase.
+            float weight = Math.max(0F, Math.min(1F, 2F - 2F * radius * scale));
+            return coordinate + ((float) Math.floor(pixel) + .5F - pixel) * weight / scale;
+        }
+    }
 
     /**
      * cacheKey: kind, strip origin/width/height, radius, theme tint (the
@@ -82,11 +120,11 @@ public final class DotTexture {
      * a Picture. 9 alphas are baked into the recorded commands, not the key.
      */
     private record Key(int kind, float x, float y, float w, float h, float radius,
-                       int themeTint, boolean above, float density) { }
+                       int themeTint, boolean above, float density, DotGrid grid) { }
 
     static boolean dotsCached() { return cached; }
     static void setDotsCached(boolean value) { cached = value; }
-    static int cacheSize() { return CACHE.size() + HALO_IMAGES.size(); }
+    static int cacheSize() { return CACHE.size() + HALO_IMAGES.size() + PANEL_EDGES.size(); }
     static long cacheBuildCount() { return buildCount; }
     static long cacheHitCount() { return hitCount; }
     static void clearCache() {
@@ -94,6 +132,13 @@ public final class DotTexture {
         CACHE.clear();
         for (Image image : HALO_IMAGES.values()) image.close();
         HALO_IMAGES.clear();
+        clearPanelEdges();
+    }
+
+    static void clearPanelEdges() {
+        for (Image image : PANEL_EDGES.values()) image.close();
+        PANEL_EDGES.clear();
+        java.util.Arrays.fill(PREVIOUS_PANEL_EDGE, null);
     }
 
     private static Picture picture(Key key, Consumer<Canvas> draw) {
@@ -119,22 +164,36 @@ public final class DotTexture {
 
     /** The bar's own rounded outline is also the origin of every dot column. */
     public static void drawEdge(Canvas canvas, UiLayout.Rect bar, float radius, boolean above, int tint) {
-        drawEdge(canvas, bar, radius, above, tint, true);
+        drawEdge(canvas, bar, radius, above, tint, true, false);
+    }
+
+    /** The live panel can reuse its native-pixel decoration once its bars have settled. */
+    public static void drawPanelEdge(Canvas canvas, UiLayout.Rect bar, float radius, boolean above, int tint, boolean settled) {
+        if (!settled) invalidatePanelEdgePose(above);
+        drawEdge(canvas, bar, radius, above, tint, true, settled);
+    }
+
+    /** Motion or a hidden bar breaks the cold mask's repeated-pose check. */
+    public static void invalidatePanelEdgePose(boolean above) {
+        PREVIOUS_PANEL_EDGE[above ? 1 : 0] = null;
     }
 
     /** Changing bar geometry uses the identical primitives without allocating transient Pictures. */
     public static void drawMovingEdge(Canvas canvas, UiLayout.Rect bar, float radius, boolean above, int tint) {
-        drawEdge(canvas, bar, radius, above, tint, false);
+        invalidatePanelEdgePose(above);
+        drawEdge(canvas, bar, radius, above, tint, false, false);
     }
 
-    private static void drawEdge(Canvas canvas, UiLayout.Rect bar, float radius, boolean above, int tint, boolean useCache) {
-        if (!visible(bar, tint)) return;
+    private static void drawEdge(Canvas canvas, UiLayout.Rect bar, float radius, boolean above, int tint,
+                                 boolean useCache, boolean settled) {
+        if (!SoftShadow.enabled() || !visible(bar, tint)) return;
         long segmentId = com.atom.chat.diagnostics.FrameSegments.current(), started = com.atom.chat.diagnostics.FrameSegments.start(segmentId);
         try {
             float r = Math.max(0F, Math.min(radius, Math.min(bar.w(), bar.h()) / 2F));
             RRect outline = RRect.makeXYWH(bar.x(), bar.y(), bar.w(), bar.h(), r);
+            if (cached && settled && drawPanelMask(canvas, bar, r, outline, above, tint)) return;
             if (cached && useCache) {
-                Key key = new Key(KIND_EDGE, bar.x(), bar.y(), bar.w(), bar.h(), radius, tint, above, UiTokens.SCALE);
+                Key key = new Key(KIND_EDGE, bar.x(), bar.y(), bar.w(), bar.h(), radius, tint, above, UiTokens.SCALE, null);
                 Picture picture = picture(key, c -> edgeBody(c, bar, r, outline, above, tint));
                 canvas.save();
                 try {
@@ -159,17 +218,71 @@ public final class DotTexture {
 
     private static void edgeClips(Canvas canvas, UiLayout.Rect bar, float r, RRect outline, boolean above) {
         float depth = UiTokens.MESSAGE_DOT_DEPTH;
-        canvas.clipRect(Rect.makeXYWH(bar.x(), above ? bar.y() - depth : bar.bottom() - r,
+        canvas.clipRect(Rect.makeXYWH(bar.x(), bandTop(bar, r, above),
                 bar.w(), depth + r));
-        canvas.clipRRect(outline, ClipMode.DIFFERENCE, true);
+        CornerGeometry.clipRRect(canvas, outline, ClipMode.DIFFERENCE, true);
+    }
+
+    private static float bandTop(UiLayout.Rect bar, float r, boolean above) {
+        return above ? bar.y() - UiTokens.MESSAGE_DOT_DEPTH : bar.bottom() - r;
+    }
+
+    private static boolean drawPanelMask(Canvas canvas, UiLayout.Rect bar, float r, RRect outline,
+                                         boolean above, int tint) {
+        Matrix33 matrix = canvas.getLocalToDeviceAsMatrix33();
+        DotGrid grid = DotGrid.of(matrix);
+        if (grid == null) return false;
+        float[] m = matrix._mat;
+        float scale = grid.scale();
+        float top = bandTop(bar, r, above);
+        int x = (int) Math.floor(bar.x() * scale + m[2]);
+        int y = (int) Math.floor(top * scale + m[5]);
+        int width = (int) Math.ceil(bar.right() * scale + m[2]) - x;
+        int height = (int) Math.ceil((top + UiTokens.MESSAGE_DOT_DEPTH + r) * scale + m[5]) - y;
+        if (width <= 0 || height <= 0 || (long) width * height > MAX_PANEL_EDGE_PIXELS) return false;
+        var key = new PanelEdgeKey(bar, r, above, tint, matrix);
+        Image image = PANEL_EDGES.get(key);
+        int side = above ? 1 : 0;
+        PanelEdgeKey previous = PREVIOUS_PANEL_EDGE[side];
+        PREVIOUS_PANEL_EDGE[side] = key;
+        if (image == null) {
+            if (!key.equals(previous)) return false;
+            try (Surface surface = Surface.makeRaster(ImageInfo.makeA8(width, height))) {
+                Canvas bake = surface.getCanvas();
+                bake.clear(0);
+                bake.translate(-x, -y);
+                bake.concat(matrix);
+                edgeClips(bake, bar, r, outline, above);
+                edgeGlow(bake, outline, tint);
+                edgePoints(bake, bar, r, above, tint, grid);
+                image = surface.makeImageSnapshot();
+                PANEL_EDGES.put(key, image);
+                buildCount++;
+            }
+        } else {
+            hitCount++;
+        }
+        int save = canvas.save();
+        try {
+            canvas.resetMatrix();
+            // The original alpha is already baked into the coverage; apply only the tint RGB.
+            canvas.drawImage(image, x, y, COVERAGE.setColor(tint | 0xFF000000));
+        } finally {
+            canvas.restoreToCount(save);
+        }
+        return true;
+    }
+
+    private static void edgeGlow(Canvas canvas, RRect outline, int tint) {
+        CornerGeometry.drawRRect(canvas, outline, GLOW.setMode(PaintMode.STROKE)
+                .setStrokeWidth(UiTokens.DOT_GLOW_STROKE).setColor(tinted(tint, UiTokens.DOT_GLOW_ALPHA)));
     }
 
     private static void edgeBody(Canvas canvas, UiLayout.Rect bar, float r, RRect outline, boolean above, int tint) {
         float depth = UiTokens.MESSAGE_DOT_DEPTH;
-        canvas.drawRRect(outline, GLOW.setMode(PaintMode.STROKE)
-                .setStrokeWidth(UiTokens.DOT_GLOW_STROKE).setColor(tinted(tint, UiTokens.DOT_GLOW_ALPHA)));
+        edgeGlow(canvas, outline, tint);
         if (cached) {
-            edgePoints(canvas, bar, r, above, tint);
+            edgePoints(canvas, bar, r, above, tint, null);
             return;
         }
         int columns = Math.min(512, (int) Math.ceil(bar.w() / UiTokens.MESSAGE_DOT_GAP));
@@ -189,7 +302,7 @@ public final class DotTexture {
     }
 
     /** Round points use the same circle primitive; one submission per full-opacity row. */
-    private static void edgePoints(Canvas canvas, UiLayout.Rect bar, float r, boolean above, int tint) {
+    private static void edgePoints(Canvas canvas, UiLayout.Rect bar, float r, boolean above, int tint, DotGrid grid) {
         int columns=Math.min(512,(int)Math.ceil(bar.w()/UiTokens.MESSAGE_DOT_GAP));
         float[] points = EDGE_POINTS;
         for(int row=0;row<ALPHAS.length;row++) {
@@ -203,6 +316,10 @@ public final class DotTexture {
                 float edge=above ? bar.y()+corner : bar.bottom()-corner;
                 float fade=Math.max(0F,Math.min(1F,Math.min(cx,bar.w()-cx)/UiTokens.MESSAGE_DOT_EDGE_FADE));
                 float x=bar.x()+cx,y=edge+(above ? -distance : distance);
+                if (grid != null) {
+                    x = grid.center(x, radius, grid.xPhase());
+                    y = grid.center(y, radius, grid.yPhase());
+                }
                 if(fade==1F) {points[count++]=x;points[count++]=y;}
                 else circle(canvas,x,y,radius,tint,ALPHAS[row]*fade);
             }
@@ -216,11 +333,34 @@ public final class DotTexture {
     }
 
     public static void drawHalo(Canvas canvas, UiLayout.Rect box, int tint) {
-        drawField(canvas, box, tint, false);
+        drawField(canvas, box, tint, false, null);
     }
 
     public static void drawTrail(Canvas canvas, UiLayout.Rect box, int tint) {
-        drawField(canvas, box, tint, true);
+        drawField(canvas, box, tint, true, null);
+    }
+
+    /** A picture records in local units. Its settled replay supplies the real device phase. */
+    public static void recordTitles(Canvas recording, Canvas playback, Runnable draw) {
+        TitleProjection previous = titleProjection;
+        titleProjection = new TitleProjection(recording, playback.getLocalToDeviceAsMatrix33());
+        try {
+            draw.run();
+        } finally {
+            titleProjection = previous;
+        }
+    }
+
+    public static void drawTitleTrail(Canvas canvas, UiLayout.Rect box, int tint) {
+        if (!visible(box, tint)) return;
+        DotGrid grid = titleProjection != null && titleProjection.recording() == canvas
+                && box.w() * box.h() < FIELD_IMAGE_MIN_AREA
+                ? DotGrid.of(titleProjection.playback().makeConcat(canvas.getLocalToDeviceAsMatrix33())) : null;
+        // Settings rows scroll vertically. Keep that axis continuous while aligning the columns.
+        if (grid != null && grid.scale() == UiPixelSnap.density() && grid.xPhase() == 0F)
+            grid = new DotGrid(grid.scale(), 0F, 0F);
+        else grid = null;
+        drawField(canvas, box, tint, true, grid);
     }
 
     /** A short bottom-edge trail towards the key that opened a floating panel. */
@@ -237,12 +377,12 @@ public final class DotTexture {
         } finally { canvas.restore(); }
     }
 
-    private static void drawField(Canvas canvas, UiLayout.Rect box, int tint, boolean trail) {
-        if (!visible(box, tint)) return;
+    private static void drawField(Canvas canvas, UiLayout.Rect box, int tint, boolean trail, DotGrid grid) {
+        if (!SoftShadow.enabled() || !visible(box, tint)) return;
         long segmentId = com.atom.chat.diagnostics.FrameSegments.current(), started = com.atom.chat.diagnostics.FrameSegments.start(segmentId);
         try {
             if (cached) {
-                boolean largeField = box.w() * box.h() >= FIELD_IMAGE_MIN_AREA;
+                boolean largeField = grid == null && box.w() * box.h() >= FIELD_IMAGE_MIN_AREA;
                 if (largeField) {
                     Image image = fieldImage(box, tint, trail, HALO_SUPERSAMPLE);
                     if (image != null) {
@@ -260,8 +400,8 @@ public final class DotTexture {
                     }
                 }
                 int kind = trail ? KIND_TRAIL : KIND_HALO;
-                Key key = new Key(kind, box.x(), box.y(), box.w(), box.h(), 0F, tint, false, UiTokens.SCALE);
-                Picture picture = picture(key, c -> fieldBody(c, box, tint, trail));
+                Key key = new Key(kind, box.x(), box.y(), box.w(), box.h(), 0F, tint, false, UiTokens.SCALE, grid);
+                Picture picture = picture(key, c -> fieldBody(c, box, tint, trail, grid));
                 canvas.save();
                 try {
                     canvas.clipRect(Rect.makeXYWH(box.x(), box.y(), box.w(), box.h()));
@@ -274,7 +414,7 @@ public final class DotTexture {
             canvas.save();
             try {
                 canvas.clipRect(Rect.makeXYWH(box.x(), box.y(), box.w(), box.h()));
-                fieldBody(canvas, box, tint, trail);
+                fieldBody(canvas, box, tint, trail, grid);
             } finally {
                 canvas.restore();
             }
@@ -304,7 +444,7 @@ public final class DotTexture {
             Canvas raster = surface.getCanvas();
             raster.clear(0);
             raster.scale(resolution, resolution);
-            fieldBody(raster, new UiLayout.Rect(0, 0, box.w(), box.h()), tint, trail);
+            fieldBody(raster, new UiLayout.Rect(0, 0, box.w(), box.h()), tint, trail, null);
             Image created = surface.makeImageSnapshot();
             java.util.Iterator<Map.Entry<HaloKey, Image>> eldest = HALO_IMAGES.entrySet().iterator();
             while (eldest.hasNext() && haloBytes() + bytes > MAX_HALO_BYTES) {
@@ -329,7 +469,7 @@ public final class DotTexture {
         return bytes;
     }
 
-    private static void fieldBody(Canvas canvas, UiLayout.Rect box, int tint, boolean trail) {
+    private static void fieldBody(Canvas canvas, UiLayout.Rect box, int tint, boolean trail, DotGrid grid) {
         GLOW.setMode(PaintMode.FILL).setColor(tinted(tint, UiTokens.DOT_FIELD_GLOW_ALPHA));
         float glowW = box.w() * (trail ? 0.65F : 0.7F);
         canvas.drawOval(Rect.makeXYWH(box.x() + (trail ? 0F : (box.w() - glowW) / 2F),
@@ -346,9 +486,10 @@ public final class DotTexture {
                         ? (1F - u) * Math.max(0F, 1F - v * v / Math.max(0.01F, 1F - u * 0.75F))
                         : 1F - (u * 2F - 1F) * (u * 2F - 1F) - v * v;
                 if (falloff <= 0F) continue;
-                circle(canvas, box.x() + cx, box.y() + cy,
-                        UiTokens.MESSAGE_DOT_RADII[8] * (0.35F + 0.65F * falloff),
-                        tint, UiTokens.DOT_FIELD_ALPHA * falloff);
+                float radius = UiTokens.MESSAGE_DOT_RADII[8] * (0.35F + 0.65F * falloff);
+                float x = box.x() + cx;
+                if (grid != null) x = grid.center(x, radius, grid.xPhase());
+                circle(canvas, x, box.y() + cy, radius, tint, UiTokens.DOT_FIELD_ALPHA * falloff);
             }
         }
     }

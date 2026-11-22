@@ -24,14 +24,15 @@ if (!propsFile.isFile()) {
         "那样出来的 jar 版本号没有来源。")
 }
 def repoProps = new Properties()
-propsFile.withInputStream { repoProps.load(it) }
+propsFile.withReader('UTF-8') { repoProps.load(it) }
 
-['mod_id', 'mod_name', 'mod_license', 'mod_group_id', 'mod_authors', 'mod_description', 'mod_version', 'skija_version'].each { k ->
+['mod_id', 'mod_name', 'mod_license', 'mod_group_id', 'mod_authors', 'mod_description', 'mod_credits', 'mod_repository_url', 'mod_version', 'skija_version'].each { k ->
     if (!repoProps.containsKey(k)) {
         throw new GradleException("仓库根的 gradle.properties 缺 ${k} —— 各平台不提供默认值，读不到就失败")
     }
     ext[k] = repoProps.getProperty(k)
 }
+ext.mod_issues_url = ext.mod_repository_url + '/issues'
 ext.maven_group = repoProps.getProperty('mod_group_id')   // Fabric 侧一直叫 maven_group
 ['curseforge_project_id', 'modrinth_project_id'].each { k ->
     if (repoProps.containsKey(k)) {

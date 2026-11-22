@@ -2,13 +2,13 @@ package com.atom.chat.tools;
 
 
 
+import com.atom.chat.render.CornerGeometry;
 import com.atom.chat.ui.AtomChatAppearance;
 import com.atom.lib.design.atomchat.AppIcons;
 import com.atom.lib.design.atomchat.UiTokens;
 import com.atom.chat.chat.PlayerRef;
 import com.atom.chat.font.FontManager;
 import com.atom.chat.render.DrawPrimitives;
-import com.atom.lib.design.atomchat.SkiaDraw;
 import com.atom.chat.render.SkiaFontRenderer;
 import com.atom.chat.ui.*;
 import io.github.humbleui.skija.Canvas;
@@ -79,7 +79,7 @@ public final class ToolMenu {
                 // Like context menus, complete rows fit by their bounce budget, without a contour clip.
                 // Only a scrolling player viewport needs to cut partially visible rows.
                 if (rows() * ToolLayout.MENU_ROW_H > box.h())
-                    SkiaDraw.clip(canvas, box.x(), box.y(), box.w(), box.h(), UiTokens.radius(MenuPopup.SURFACE_RADIUS, AtomChatAppearance.theme()));
+                    CornerGeometry.clip(canvas, box.x(), box.y(), box.w(), box.h(), UiTokens.radius(MenuPopup.SURFACE_RADIUS, AtomChatAppearance.theme()));
                 var font = FontManager.font(UiTokens.FONT_BUTTON);
                 int first = Math.max(0, (int) (scroll / ToolLayout.MENU_ROW_H));
                 int end = Math.min(rows(), first + (int) Math.ceil(box.h() / ToolLayout.MENU_ROW_H) + 1);
@@ -95,7 +95,7 @@ public final class ToolMenu {
                         MenuPopup.drawRowWash(canvas, box.x(), y, box.w(), ToolLayout.MENU_ROW_H, h);
                         int color = disabled ? 0xFF999DA6 : 0xFFF4F5F7;
                         Path icon = playersOpen ? i == 0 ? AppIcons.ICON_BACK_PATH : AppIcons.ICON_TAB_PROFILE_PATH
-                                : i == 0 ? SEARCH : i == 1 ? AppIcons.ICON_TAB_PROFILE_PATH : DrawPrimitives.ICON_IMAGE_PATH;
+                                : i == 0 ? SEARCH : i == 1 ? AppIcons.ICON_TAB_PROFILE_PATH : TablerIcons.PHOTO;
                         DrawPrimitives.drawIconCentered(canvas, icon, box.x() + ToolLayout.MENU_ROW_H / 2, rowCy,
                                 UiTokens.COMPOSER_ICON_SIZE, color);
                         String label = playersOpen ? i == 0 ? tr.apply("atomchat.tools.back")

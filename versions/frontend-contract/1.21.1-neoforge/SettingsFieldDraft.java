@@ -1,4 +1,3 @@
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import com.atom.lib.frontend.contract.ContractDesign;
@@ -6,12 +5,11 @@ import com.atom.lib.frontend.contract.ContractDesign.*;
 import com.atom.lib.frontend.contract.NamedCondition;
 
 /**
- * Proposed bindings for the two actual field projections. The existing Screen shell,
- * group decoration and scrolling semantics still need their own approved entries.
+ * Field projections and the About credits presentation exercised by the settings scenes.
  */
 final class SettingsFieldDraft {
     static final ContractDesign DESIGN = new ContractDesign(
-            1, "atomchat-settings", "1", "atomchat-settings/1", Map.of("root", ""),
+            1, "atomchat-settings", "3", "atomchat-settings/1", Map.of("root", ""),
             Set.of("lightCard", "decorativeMotion", "buttonFeedback"),
             Map.of(
                 "accent", new Parameter(0, 4294967295L, 0xff4a90e2L, Unit.ARGB),
@@ -25,6 +23,11 @@ final class SettingsFieldDraft {
                     "groupGap", new NumberValue(10, Unit.U), "max", new NumberValue(4096, Unit.U))),
                 "material", new Family("root", Aspect.MATERIAL, "",
                     Map.of("merged", new TextValue("merged-settings-card/1"))),
+                "creditsHover", new Family("root", Aspect.HOVER, "", Map.of("shared", new TextValue("group-spring-with-fixed-caption"))),
+                "creditsPress", new Family("root", Aspect.PRESS, "", Map.of("shared", new TextValue("group-spring"))),
+                "creditsScroll", new Family("root", Aspect.SCROLL, "", Map.of("shared", new TextValue("preset-strip-wheel-and-drag"))),
+                "creditsTransition", new Family("root", Aspect.TRANSITION, "", Map.of("shared", new TextValue("settings-fold"))),
+                "creditsPointer", new Family("root", Aspect.POINTER, "", Map.of("shared", new TextValue("activate-logo-on-release"))),
                 "edit", new Family("root", Aspect.EDITING, "", Map.of(
                     "boolean", new TextValue("commit-on-press"),
                     "historyDays", new TextValue("bounded-digits-commit-or-cancel"),
@@ -107,6 +110,30 @@ final class SettingsFieldDraft {
                     Map.entry(Aspect.TOOLTIP, Requirement.notApplicable("outside this field recipe draft")),
                     Map.entry(Aspect.POINTER, Requirement.notApplicable("outside this field recipe draft")),
                     Map.entry(Aspect.PREFERENCES, Requirement.notApplicable("outside this field recipe draft"))))),
+                Map.entry("aboutCredits", new Role(true, Map.ofEntries(
+                    Map.entry(Aspect.MATERIAL, Requirement.required()),
+                    Map.entry(Aspect.COLOR, Requirement.notApplicable("outside the credits strip interaction")),
+                    Map.entry(Aspect.TYPOGRAPHY, Requirement.notApplicable("outside the credits strip interaction")),
+                    Map.entry(Aspect.SIZE, Requirement.notApplicable("outside the credits strip interaction")),
+                    Map.entry(Aspect.SPACING, Requirement.notApplicable("outside the credits strip interaction")),
+                    Map.entry(Aspect.ICON, Requirement.notApplicable("outside the credits strip interaction")),
+                    Map.entry(Aspect.HOVER, Requirement.conditional(new NamedCondition.State("decorativeMotion"))),
+                    Map.entry(Aspect.PRESS, Requirement.conditional(new NamedCondition.State("decorativeMotion"))),
+                    Map.entry(Aspect.RIPPLE, Requirement.notApplicable("outside the credits strip interaction")),
+                    Map.entry(Aspect.HIGHLIGHT, Requirement.notApplicable("outside the credits strip interaction")),
+                    Map.entry(Aspect.BOUNCE, Requirement.notApplicable("outside the credits strip interaction")),
+                    Map.entry(Aspect.LAYOUT, Requirement.notApplicable("outside the credits strip interaction")),
+                    Map.entry(Aspect.SOUND, Requirement.notApplicable("outside the credits strip interaction")),
+                    Map.entry(Aspect.FOCUS, Requirement.notApplicable("outside the credits strip interaction")),
+                    Map.entry(Aspect.EDITING, Requirement.notApplicable("outside the credits strip interaction")),
+                    Map.entry(Aspect.SCROLL, Requirement.required()),
+                    Map.entry(Aspect.RESTORATION, Requirement.notApplicable("outside the credits strip interaction")),
+                    Map.entry(Aspect.TRANSITION, Requirement.conditional(new NamedCondition.State("decorativeMotion"))),
+                    Map.entry(Aspect.STATES, Requirement.notApplicable("outside the credits strip interaction")),
+                    Map.entry(Aspect.DEGRADATION, Requirement.notApplicable("outside the credits strip interaction")),
+                    Map.entry(Aspect.TOOLTIP, Requirement.notApplicable("outside the credits strip interaction")),
+                    Map.entry(Aspect.POINTER, Requirement.required()),
+                    Map.entry(Aspect.PREFERENCES, Requirement.notApplicable("outside the credits strip interaction"))))),
                 Map.entry("fieldGroup", new Role(false, Map.ofEntries(
                     Map.entry(Aspect.MATERIAL, Requirement.required()),
                     Map.entry(Aspect.COLOR, Requirement.notApplicable("outside this field recipe draft")),
@@ -147,6 +174,15 @@ final class SettingsFieldDraft {
                 Map.entry("number", new Recipe("root", "numberRow", Map.of(Aspect.EDITING, new Ref("edit", "hostingRawDigits")),
                     new Binding("com.atom.chat.settings.contract.HostingNumberComponent", "atomchat-settings/1"),
                     Map.of("title", new Slot(ContentKind.TEXT, true), "description", new Slot(ContentKind.TEXT, true), "value", new Slot(ContentKind.TEXT, true), "unit", new Slot(ContentKind.TEXT, true), "invalid", new Slot(ContentKind.BOOLEAN, true)), Set.of("hostingEdit"))),
+                Map.entry("aboutCredits", new Recipe("root", "aboutCredits", Map.of(
+                    Aspect.MATERIAL, new Ref("material", "merged"),
+                    Aspect.HOVER, new Ref("creditsHover", "shared"),
+                    Aspect.PRESS, new Ref("creditsPress", "shared"),
+                    Aspect.SCROLL, new Ref("creditsScroll", "shared"),
+                    Aspect.TRANSITION, new Ref("creditsTransition", "shared"),
+                    Aspect.POINTER, new Ref("creditsPointer", "shared")),
+                    new Binding("com.atom.chat.settings.AboutCreditCards", "atomchat-settings/1"),
+                    Map.of(), Set.of("creditsInput", "creditsImmediate"))),
                 Map.entry("fieldGroup", new Recipe("root", "fieldGroup", Map.of(Aspect.LAYOUT, new Ref("container", "fields"),
                     Aspect.MATERIAL, new Ref("material", "merged")),
                     new Binding("com.atom.chat.settings.contract.SettingsCardGroup", "atomchat-settings/1"),
@@ -162,10 +198,18 @@ final class SettingsFieldDraft {
                 "bold", new Asset(AssetKind.FONT, "classpath:com/atom/lib/fonts/bundled-default-bold.otf",
                     "Existing AtomChat settings bold font from AtomLib"),
                 "feedback", new Asset(AssetKind.SOUND, "atomchat:feedback_button",
-                    "Existing AtomChat button sound")),
+                    "Existing AtomChat button sound"),
+                "modLogo", new Asset(AssetKind.TEXTURE, "atomchat:mod_logo.png", "AtomChat mod logo"),
+                "creditSkija", new Asset(AssetKind.TEXTURE, "atomchat:creditmarks/skija.png", "Skija project mark"),
+                "creditAtomLib", new Asset(AssetKind.TEXTURE, "atomchat:creditmarks/atomlib.png", "AtomLib project mark"),
+                "creditTabler", new Asset(AssetKind.TEXTURE, "atomchat:creditmarks/tabler.png", "Tabler Icons project mark"),
+                "creditLucide", new Asset(AssetKind.TEXTURE, "atomchat:creditmarks/lucide.png", "Lucide project mark"),
+                "creditFeather", new Asset(AssetKind.TEXTURE, "atomchat:creditmarks/feather.png", "Feather project mark")),
             Map.of(
                 "history", new Page("root", Set.of("historyToggle", "historyNumber", "historyCleanup", "fieldGroup"),
                     "body", Set.of("historyEdit", "historyConfirm", "fieldGroup")),
                 "hosting", new Page("root", Set.of("toggle", "number", "fieldGroup"), "body",
-                    Set.of("hostingEdit", "fieldGroup"))));
+                    Set.of("hostingEdit", "fieldGroup")),
+                "about", new Page("root", Set.of("aboutCredits"), "body",
+                    Set.of("creditsInput", "creditsImmediate"))));
 }

@@ -1,10 +1,10 @@
 package com.atom.chat.ui;
 
 
+import com.atom.chat.render.CornerGeometry;
 import com.atom.lib.design.atomchat.UiTokens;
 import com.atom.chat.page.ProfilePage;
 import com.atom.chat.font.FontManager;
-import com.atom.lib.design.atomchat.SkiaDraw;
 import com.atom.chat.render.SkiaFontRenderer;
 import io.github.humbleui.skija.Canvas;
 import io.github.humbleui.skija.Font;
@@ -303,7 +303,7 @@ public final class ComposerPointer {
             float x0 = textX + com.atom.chat.render.PlainText.width(font, line.substring(0, c0));
             float x1 = textX + com.atom.chat.render.PlainText.width(font, line.substring(0, c1));
             float cy = centerY + (i - from) * lineH;
-            SkiaDraw.drawRoundedRect(canvas, x0, cy - lineH / 2.0F, Math.max(1.0F, x1 - x0), lineH,
+            CornerGeometry.drawRoundedRect(canvas, x0, cy - lineH / 2.0F, Math.max(1.0F, x1 - x0), lineH,
                     UiTokens.radius(2, AtomChatAppearance.theme()), 0xE02D6FD6);
         }
     }

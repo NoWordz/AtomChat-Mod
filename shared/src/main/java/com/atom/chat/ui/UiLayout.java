@@ -218,9 +218,9 @@ public final class UiLayout {
 
     public Rect jumpLatest() {
         float size = LayoutTokens.JUMP_SIZE;
-        float clearance = com.atom.chat.render.SoftShadow.jumpPad();
-        return new Rect(list.right() - size - clearance,
-                list.bottom() - size - clearance, size, size);
+        float inset = LayoutTokens.JUMP_EDGE_INSET;
+        return new Rect(list.right() - size - inset,
+                list.bottom() - size - inset, size, size);
     }
 
     /** Width of a card inside the list content column; see {@link #cardColumnX}. */

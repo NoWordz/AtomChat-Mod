@@ -1,11 +1,11 @@
 package com.atom.chat.settings;
 
+import com.atom.chat.render.CornerGeometry;
 import com.atom.chat.config.AtomChatConfig;
 import com.atom.chat.font.FontManager;
 import com.atom.chat.render.DrawPrimitives;
 import com.atom.chat.render.SkiaFontRenderer;
 import com.atom.chat.ui.*;
-import com.atom.lib.design.atomchat.SkiaDraw;
 import com.atom.lib.design.atomchat.UiTokens;
 import io.github.humbleui.skija.Canvas;
 import io.github.humbleui.skija.Path;
@@ -29,9 +29,9 @@ public final class SettingsListAction {
         var c=AtomChatConfig.get();float opacity=enabled?1:.4f;
         scale.begin(canvas,rect.x()+rect.w()/2,rect.y()+rect.h()/2);
         try{
-            SkiaDraw.drawRoundedRect(canvas,rect.x(),rect.y(),rect.w(),rect.h(),RADIUS,
+            CornerGeometry.drawRoundedRect(canvas,rect.x(),rect.y(),rect.w(),rect.h(),RADIUS,
                     UiTokens.withAlpha(selected?c.accentColor:UiTokens.cardCutout(AtomChatAppearance.theme()),255*opacity));
-            if(hover>.01f)SkiaDraw.drawRoundedRect(canvas,rect.x(),rect.y(),rect.w(),rect.h(),RADIUS,UiTokens.cardHover(hover, AtomChatAppearance.theme()));
+            if(hover>.01f)CornerGeometry.drawRoundedRect(canvas,rect.x(),rect.y(),rect.w(),rect.h(),RADIUS,UiTokens.cardHover(hover, AtomChatAppearance.theme()));
             int color=UiTokens.withAlpha(textColor(selected,danger,enabled),255*opacity);
             if(icon==null&&rotation!=0){
                 // Sorting uses the existing filled settings fold chevron, not a rotated back/navigation icon.

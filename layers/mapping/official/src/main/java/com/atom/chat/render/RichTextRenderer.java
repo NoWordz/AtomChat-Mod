@@ -119,7 +119,7 @@ public final class RichTextRenderer {
                 backing, SkiaFontRenderer.backingShadowFor(shadowSurfaceArgb));
     }
 
-    private static void drawLines(Canvas canvas, Font font, List<RichLine> lines,
+    public static void drawLines(Canvas canvas, Font font, List<RichLine> lines,
                                   float x, float centerY, float lineHeight, int fallbackColor,
                                   List<ClickableSpan> sink, boolean addClickable, boolean backing,
                                   io.github.humbleui.skija.ImageFilter shadow) {
@@ -129,7 +129,7 @@ public final class RichTextRenderer {
         float totalH = lines.size() * lineHeight;
         float blockTop = centerY - totalH / 2.0F;
         if (backing) {
-            drawShadowPass(canvas, font, lines, x, blockTop, lineHeight, shadow);
+            drawShadowPass(canvas, font, lines, x, blockTop, lineHeight, SoftShadow.enabled() ? shadow : null);
         }
         drawRunsPass(canvas, font, lines, x, blockTop, lineHeight, fallbackColor, sink, addClickable);
     }
@@ -174,6 +174,14 @@ public final class RichTextRenderer {
         }
     }
 
+    public static void drawBacking(Canvas canvas, Font font, List<RichLine> lines,
+                                   float x, float centerY, float lineHeight,
+                                   io.github.humbleui.skija.ImageFilter shadow) {
+        if (lines != null && !lines.isEmpty()) {
+            drawShadowPass(canvas, font, lines, x, centerY - lines.size() * lineHeight / 2F, lineHeight, shadow);
+        }
+    }
+
     /**
      * The shadow pre-pass as one filtered layer. Per-run {@code drawBackingText}
      * calls made every run push its own ImageFilter saveLayer — the overdraw
@@ -187,6 +195,10 @@ public final class RichTextRenderer {
     private static void drawShadowPass(Canvas canvas, Font font, List<RichLine> lines,
                                        float x, float blockTop, float lineHeight,
                                        io.github.humbleui.skija.ImageFilter shadow) {
+        if (shadow == null) {
+            drawShadowGlyphs(canvas, font, lines, x, blockTop + .85F, lineHeight, 0x66000000);
+            return;
+        }
         // Layer bounds before the first glyph: widest line horizontally, first
         // and last baseline vertically — padded like drawTextPass pads a run.
         float maxLineW = 0.0F;
@@ -206,23 +218,27 @@ public final class RichTextRenderer {
                         x - pad, topBaseline + metrics.getAscent() - pad,
                         maxLineW + pad * 2.0F,
                         (bottomBaseline - topBaseline) + (metrics.getDescent() - metrics.getAscent()) + pad * 2.0F), layer);
-                for (int i = 0; i < lines.size(); i++) {
-                    RichLine line = lines.get(i);
-                    float baseline = SkiaFontRenderer.centerBaselineY(font, blockTop + (i + 0.5F) * lineHeight);
-                    float runX = x;
-                    for (RichTextLayout.Part part : line.parts()) {
-                        if (!part.isItem() && !part.text().isEmpty()) {
-                            SkiaFontRenderer.drawText(canvas, font, part.text(), runX, baseline, 0xFF000000);
-                        }
-                        runX += part.width(s -> SkiaFontRenderer.getStringWidth(font, s));
-                    }
-                }
+                drawShadowGlyphs(canvas, font, lines, x, blockTop, lineHeight, 0xFF000000);
             } finally {
                 // Exactly one restore per saveLayer, before the bare save's own.
                 canvas.restore();
             }
         } finally {
             canvas.restore();
+        }
+    }
+
+    private static void drawShadowGlyphs(Canvas canvas, Font font, List<RichLine> lines,
+                                         float x, float blockTop, float lineHeight, int color) {
+        for (int i = 0; i < lines.size(); i++) {
+            float baseline = SkiaFontRenderer.centerBaselineY(font, blockTop + (i + 0.5F) * lineHeight);
+            float runX = x;
+            for (RichTextLayout.Part part : lines.get(i).parts()) {
+                if (!part.isItem() && !part.text().isEmpty()) {
+                    SkiaFontRenderer.drawText(canvas, font, part.text(), runX, baseline, color);
+                }
+                runX += part.width(s -> SkiaFontRenderer.getStringWidth(font, s));
+            }
         }
     }
 

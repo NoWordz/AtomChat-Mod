@@ -1,9 +1,9 @@
 package com.atom.chat.ui;
 
+import com.atom.chat.render.CornerGeometry;
 import com.atom.chat.config.AtomChatConfig;
 import com.atom.chat.font.FontManager;
 import com.atom.chat.render.SkiaFontRenderer;
-import com.atom.lib.design.atomchat.SkiaDraw;
 import com.atom.lib.design.atomchat.UiTokens;
 import io.github.humbleui.skija.Canvas;
 import io.github.humbleui.skija.Paint;
@@ -168,7 +168,7 @@ public final class PanelEditor {
             var r = grip.bounds();
             gripPress[i].update(hovered == grip.handle(), model.activeHandle() == grip.handle(), dt, Animations.enabled(), r.w());
             gripPress[i].begin(canvas, grip.x(), grip.y());
-            try { SkiaDraw.drawRoundedRect(canvas, r.x(), r.y(), r.w(), r.h(), UiTokens.EDGE_CONTROL_INSET, config.accentColor); }
+            try { CornerGeometry.drawRoundedRect(canvas, r.x(), r.y(), r.w(), r.h(), UiTokens.EDGE_CONTROL_INSET, config.accentColor); }
             finally { canvas.restore(); }
         }
         var move = PanelEditorGeometry.moveHandle(b, width);
@@ -176,8 +176,8 @@ public final class PanelEditor {
         movePress.update(move.contains(mx, my), model.moving(), dt, Animations.enabled(), move.w());
         movePress.begin(canvas, move.x() + move.w()/2, move.y() + move.h()/2);
         try {
-            SkiaDraw.drawRoundedRect(canvas, move.x(), move.y(), move.w(), move.h(), move.h()/2, config.accentColor);
-            if (moveHover > 0) SkiaDraw.drawRoundedRect(canvas, move.x(), move.y(), move.w(), move.h(), move.h()/2,
+            CornerGeometry.drawRoundedRect(canvas, move.x(), move.y(), move.w(), move.h(), move.h()/2, config.accentColor);
+            if (moveHover > 0) CornerGeometry.drawRoundedRect(canvas, move.x(), move.y(), move.w(), move.h(), move.h()/2,
                     io.github.humbleui.skija.Color.makeARGB((int)(60 * moveHover), 255, 255, 255));
             com.atom.chat.render.DrawPrimitives.drawIconCentered(canvas, EditorActionIcons.MOVE,
                     move.x() + move.w()/2, move.y() + move.h()/2, move.h()*.6F, UiTokens.onAccent(config.accentColor));

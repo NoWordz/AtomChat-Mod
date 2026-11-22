@@ -12,14 +12,28 @@ import org.junit.jupiter.api.io.TempDir;
 import static org.junit.jupiter.api.Assertions.*;
 
 class PickerModalShadowTest {
-    @Test void modalHasSoftTailOutsideItsSurface() {
-        try(var surface=Surface.makeRasterN32Premul(500,350);var pixels=new Bitmap()) {
+    @Test void modalHasSoftTailOutsideItsSurface(@TempDir Path dir) throws Exception {
+        var provider = Platform.class.getDeclaredField("provider");
+        provider.setAccessible(true);
+        Object previous = provider.get(null);
+        Platform.install(new Platform.Provider() {
+            public Path configDir() { return dir; }
+            public Path gameDir() { return dir; }
+            public boolean isModLoaded(String id) { return false; }
+        });
+        try (var surface = Surface.makeRasterN32Premul(500, 350); var pixels = new Bitmap()) {
             surface.getCanvas().clear(0);
-            PickerModalPaint.surface(surface.getCanvas(),new UiLayout.Rect(100,80,300,180),1F);
-            pixels.allocN32Pixels(500,350); assertTrue(surface.readPixels(pixels,0,0));
-            int near=pixels.getColor(90,170)>>>24, far=pixels.getColor(68,170)>>>24;
-            assertTrue(far>0,"shadow reaches beyond the old narrow rim");
-            assertTrue(near>far,"shadow fades with distance");
+            PickerModalPaint.surface(surface.getCanvas(), new UiLayout.Rect(100, 80, 300, 180), 1F);
+            pixels.allocN32Pixels(500, 350);
+            assertTrue(surface.readPixels(pixels, 0, 0));
+            int near = pixels.getColor(94, 170) >>> 24;
+            int tail = pixels.getColor(88, 170) >>> 24;
+            assertTrue(tail > 0, "the compact modal shadow retains a visible soft tail");
+            assertTrue(near > tail, "shadow fades with distance");
+            assertTrue((pixels.getColor(68, 170) >>> 24) <= 1,
+                    "the soft tail leaves the distant background clean");
+        } finally {
+            provider.set(null, previous);
         }
     }
 

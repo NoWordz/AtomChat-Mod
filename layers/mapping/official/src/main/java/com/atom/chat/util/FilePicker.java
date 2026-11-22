@@ -29,23 +29,9 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Predicate;
 
 /**
- * Image picker: a {@link JFileChooser} in a plain {@link JFrame}, skinned with
- * FlatLaf.
- *
- * <p>It took a while to get here, so the constraint is worth writing down: any
- * window <em>we</em> create can be made topmost and will then float above
- * Minecraft's topmost fullscreen window — that is proven. What cannot be done
- * is lifting a native {@code GetOpenFileName} dialog, which inherits neither
- * {@code WS_EX_TOPMOST} nor any hint we set, and sits at the bottom of the
- * z-order below the desktop. So the dialog is ours, and the look comes from
- * FlatLaf instead of Windows.
- *
- * <p>The look and feel is process-global: it has to be installed before any
- * Swing component exists, and it also affects the rest of the JVM. Minecraft
- * barely uses Swing, so that costs nothing in practice.
- *
- * <p>Runs on the EDT; the calling worker thread waits on a latch, so the render
- * thread keeps running and the game does not freeze.
+ * File dialogs run on the AWT event thread while the calling worker waits.
+ * Windows x64 uses an OS dialog owned by the Minecraft window. The Swing
+ * chooser keeps its own topmost frame for the fallback path.
  */
 public final class FilePicker {
     private static boolean lookAndFeelInstalled;
@@ -78,14 +64,20 @@ public final class FilePicker {
         CountDownLatch done = new CountDownLatch(1);
         SwingUtilities.invokeLater(() -> {
             try {
+                if (beforeShow != null) beforeShow.run();
+                Predicate<String> accept = nameFilter != null ? nameFilter : ImageFiles::isImageName;
+                String filter = tr(nameFilter == null ? "atomchat.picker.filter.image" : "atomchat.picker.filter.emote");
+                var nativeChoice = WindowsFileDialog.choose(Minecraft.getInstance().getWindow().getWindow(),
+                        defaultDirectory(), tr("atomchat.picker.title"), null, filter, accept);
+                if (nativeChoice.handled()) {
+                    result.set(nativeChoice.path());
+                    return;
+                }
                 if (!AwtDisplay.usable()) {
                     reportHeadless();
                     return;
                 }
-                if (beforeShow != null) {
-                    beforeShow.run();
-                }
-                result.set(showChooser(nameFilter));
+                result.set(showChooser(nameFilter, nativeChoice.invalidImage()));
             } catch (Throwable t) {
                 AtomChat.LOGGER.warn(com.atom.chat.diagnostics.AtomChatLog.message("compat", "Image picker failed"), t);
             } finally {
@@ -117,6 +109,13 @@ public final class FilePicker {
         CountDownLatch done = new CountDownLatch(1);
         SwingUtilities.invokeLater(() -> {
             try {
+                var nativeChoice = WindowsFileDialog.choose(Minecraft.getInstance().getWindow().getWindow(),
+                        defaultDirectory(), tr("atomchat.picker.save.title"), ImageFileNames.sanitize(suggestedName),
+                        null, null);
+                if (nativeChoice.handled()) {
+                    result.set(nativeChoice.path());
+                    return;
+                }
                 if (!AwtDisplay.usable()) {
                     reportHeadless();
                     return;
@@ -200,13 +199,24 @@ public final class FilePicker {
         }
     }
 
-    private static Path showChooser(Predicate<String> nameFilter) {
+    private static Path showChooser(Predicate<String> nameFilter, boolean invalidImage) {
         installLookAndFeel();
 
-        JFileChooser chooser = new JFileChooser();
-        chooser.setDialogTitle(tr("atomchat.picker.title"));
-        chooser.setAcceptAllFileFilterUsed(false);
         Predicate<String> accept = nameFilter != null ? nameFilter : ImageFiles::isImageName;
+        JFileChooser chooser = new JFileChooser() {
+            @Override
+            public void approveSelection() {
+                File file = getSelectedFile();
+                if (file != null && file.isFile() && accept.test(file.getName())) {
+                    super.approveSelection();
+                } else if (SwingUtilities.getWindowAncestor(this) instanceof java.awt.Dialog dialog) {
+                    dialog.setTitle(tr("atomchat.picker.invalid"));
+                }
+            }
+        };
+        String title = tr(invalidImage ? "atomchat.picker.invalid" : "atomchat.picker.title");
+        chooser.setDialogTitle(title);
+        chooser.setAcceptAllFileFilterUsed(false);
         String desc = nameFilter != null
                 ? tr("atomchat.picker.filter.emote")
                 : tr("atomchat.picker.filter.image");
@@ -229,7 +239,7 @@ public final class FilePicker {
         // so there is no need to click a file and look at the right-hand pane.
         chooser.setFileView(new ThumbnailFileView(chooser));
 
-        JFrame frame = new JFrame(tr("atomchat.picker.title"));
+        JFrame frame = new JFrame(title);
         frame.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
         frame.getContentPane().add(chooser, BorderLayout.CENTER);
         frame.pack();
@@ -245,7 +255,7 @@ public final class FilePicker {
         try {
             if (chooser.showOpenDialog(frame) == JFileChooser.APPROVE_OPTION) {
                 File file = chooser.getSelectedFile();
-                if (file != null && file.isFile()) {
+                if (file != null && file.isFile() && accept.test(file.getName())) {
                     result = file.toPath();
                 }
             }

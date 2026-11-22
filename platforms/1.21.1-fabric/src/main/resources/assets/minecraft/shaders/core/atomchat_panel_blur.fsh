@@ -17,11 +17,21 @@ void main() {
     vec4 texColor = texture(Sampler0, uv);
 
     vec2 p = guiPos - u_Rect.xy;
-    vec2 q = abs(p) - u_Rect.zw + u_Radius;
-    float dist = length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - u_Radius;
-
-    float aa = fwidth(dist);
-    float shapeAlpha = 1.0 - smoothstep(-aa, aa, dist);
+    float radius = abs(u_Radius);
+    vec2 q = abs(p) - u_Rect.zw + radius;
+    vec2 edge = max(q, 0.0);
+    float shapeAlpha;
+    if (u_Radius < 0.0) {
+        // Signed cubic field with the same corner reach as the vector contour.
+        vec2 s = edge / radius;
+        vec2 cubes = s * s * s;
+        float f = cubes.x + cubes.y - 1.0;
+        shapeAlpha = clamp(0.5 - f / max(fwidth(f), 0.00001), 0.0, 1.0);
+    } else {
+        float dist = length(edge) + min(max(q.x, q.y), 0.0) - radius;
+        float aa = max(fwidth(dist), 0.00001);
+        shapeAlpha = 1.0 - smoothstep(-aa, aa, dist);
+    }
 
     // The framebuffer copy's alpha channel is not meaningful (MC's main target
     // is often alpha=0), so the output alpha must come from the panel fade and

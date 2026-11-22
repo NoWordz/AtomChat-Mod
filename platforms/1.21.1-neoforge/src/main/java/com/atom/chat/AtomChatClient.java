@@ -209,7 +209,7 @@ public class AtomChatClient {
                     () -> firstOpenWarmupTexts());
         }
         if (com.atom.chat.render.FirstOpenWarmup.consumeGlWarmup()) {
-            warmupGl(client, com.atom.chat.config.AtomChatConfig.get().blurEnabled);
+            warmupGl(client, com.atom.chat.config.AtomChatConfig.get().effectiveBlurEnabled());
         }
         // First tick only (self-guarded): identity always, the detailed block
         // when debug is on. It lives here rather than in client setup because

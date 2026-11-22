@@ -7,6 +7,10 @@ import com.atom.chat.nav.NavPage;
 import com.atom.chat.settings.SettingsSection;
 import io.github.humbleui.skija.Canvas;
 
+import java.time.Instant;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
+
 /**
  * The header's own chrome (D20): the back button's rect and hover, the fixed
  * header a pushed page draws, and every title the shell bar can carry.
@@ -18,12 +22,9 @@ import io.github.humbleui.skija.Canvas;
  * vertically. A second hand-rolled size here is exactly the bug this comment
  * exists to prevent.</p>
  *
- * <p><b>The pushed header is fixed chrome, not part of the sliding page.</b>
- * {@link #drawPushedHeader} draws it through the shell's detail header rect and
- * never through anything that moves with the transition — during a push the
- * header is the "arriving" copy, in place from frame one. The hover spring it
- * steps is the same one {@link #stepBackButtonHover} advances on the settled
- * frames, so the two paths share one value instead of each keeping a copy.</p>
+ * <p>The screen supplies one device-aligned header for all navigation pages.
+ * Titles and changing controls fade through that fixed frame. The clock and
+ * controls shared by both pages keep their presentation during the fade.</p>
  *
  * <p><b>Titles say what the page is.</b> A private page names the partner by
  * <em>real</em> profile name (never a decorated label — that would leak display
@@ -68,7 +69,15 @@ public final class HeaderChrome {
         int textPrimary();
     }
 
+    private record Title(String text, Boolean online) {}
+
+    private static final DateTimeFormatter CLOCK = DateTimeFormatter.ofPattern("HH:mm");
     private final Host host;
+    private final HeaderFade<String, Title> titleFade = new HeaderFade<>();
+    private final HeaderFade<Boolean, UiLayout.Rect> backFade = new HeaderFade<>();
+    private final HeaderFade<NavPage, ShellHeader.HeaderAction> actionFade = new HeaderFade<>();
+    private long clockMinute = Long.MIN_VALUE;
+    private String clockText;
 
     /** Back-button hover wash, stepped by the shell's frame and by a pushed header. */
     private float backButtonHover;
@@ -124,6 +133,40 @@ public final class HeaderChrome {
         stepBackButtonHover(vmx, vmy);
         ShellHeader.render(canvas, host.pushedHeaderRect(), shellTitleFor(nav), true,
                 backButton(), backButtonHover, host.textPrimary(), null, action);
+    }
+
+    /** The shared fixed header for every navigation destination. */
+    public void drawNavigationHeader(Canvas canvas, UiLayout.Rect header, NavPage nav, float mx, float my,
+                                     Boolean online, ShellHeader.HeaderAction action, long nowMs) {
+        boolean showBack = !nav.isRoot();
+        if (showBack) stepBackButtonHover(mx, my);
+        long duration = Animations.ms(UiMotion.PAGE_NAV_MS);
+        String title = shellTitleFor(nav);
+        var titleLayer = titleFade.draw(title == null ? "" : title, new Title(title, online), nowMs, duration);
+        var backLayer = backFade.draw(showBack ? Boolean.TRUE : null, showBack ? backButton() : null, nowMs, duration);
+        var actionLayer = actionFade.draw(action == null ? null : nav, action, nowMs, duration);
+        Title visible = titleLayer.value();
+        ShellHeader.renderNavigation(canvas, header, visible.text(), backLayer.value(), backButtonHover,
+                host.textPrimary(), visible.online(), actionLayer.value(), clockAt(nowMs),
+                titleLayer.opacity(), backLayer.opacity(), actionLayer.opacity(),
+                backFade.accepts(Boolean.TRUE) && showBack, actionFade.accepts(nav));
+    }
+
+    public boolean isVisibleBackButtonHit(float mx, float my) {
+        return isBackButtonHit(mx, my) && (!Animations.enabled() || backFade.accepts(Boolean.TRUE));
+    }
+
+    public boolean isActionVisible(NavPage nav) {
+        return !Animations.enabled() || actionFade.accepts(nav);
+    }
+
+    private String clockAt(long nowMs) {
+        long minute = Math.floorDiv(nowMs, 60_000L);
+        if (clockMinute != minute) {
+            clockMinute = minute;
+            clockText = CLOCK.format(Instant.ofEpochMilli(nowMs).atZone(ZoneId.systemDefault()));
+        }
+        return clockText;
     }
 
     public String shellTitleFor(NavPage nav) {

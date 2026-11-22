@@ -240,6 +240,7 @@ public final class SettingsActions {
         } else if ("page_nav_style".equals(actionId) || "page_nav_style:prev".equals(actionId)) {
             // The two-option cycle wraps in either direction. Takes effect on the next nav.
             AtomChatConfig cfg = AtomChatConfig.get();
+            if (cfg.performanceMode) return;
             cfg.pageNavStyle = cfg.pageNavStyle == AtomChatConfig.PageNavStyle.ZOOM
                     ? AtomChatConfig.PageNavStyle.SLIDE
                     : AtomChatConfig.PageNavStyle.ZOOM;

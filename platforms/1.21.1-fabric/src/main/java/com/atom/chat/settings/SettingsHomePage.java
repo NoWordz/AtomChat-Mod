@@ -1,10 +1,11 @@
 package com.atom.chat.settings;
 
+import com.atom.chat.render.CornerGeometry;
 import com.atom.chat.ui.AtomChatAppearance;
 import com.atom.chat.font.FontManager;
-import com.atom.lib.design.atomchat.SkiaDraw;
 import com.atom.chat.nav.PageNavAxis;
 import com.atom.chat.render.SkiaFontRenderer;
+import com.atom.chat.render.OutlineIcons;
 import com.atom.chat.render.CardShadowReach;
 import com.atom.chat.ui.Animations;
 import com.atom.chat.ui.SettingsIcons;
@@ -13,15 +14,12 @@ import com.atom.chat.ui.PressScale;
 import com.atom.chat.ui.UiMotion;
 import com.atom.chat.ui.UiStagger;
 import com.atom.lib.design.atomchat.UiTokens;
+import com.atom.lib.design.atomchat.AppIcons;
 import io.github.humbleui.skija.Canvas;
 import io.github.humbleui.skija.Color;
 import io.github.humbleui.skija.Font;
 import io.github.humbleui.skija.Paint;
-import io.github.humbleui.skija.PaintMode;
-import io.github.humbleui.skija.PaintStrokeCap;
-import io.github.humbleui.skija.PaintStrokeJoin;
 import io.github.humbleui.skija.Path;
-import io.github.humbleui.types.Rect;
 import net.minecraft.text.Text;
 
 /**
@@ -135,7 +133,7 @@ public final class SettingsHomePage {
             // drops back to the viewport once every slot has landed.
             float driftClipPad = axis == UiStagger.Axis.HORIZONTAL && !UiStagger.itemsSettled(entrance, now)
                     ? UiStagger.ITEM_STYLE_SLIDE_PX : 0.0F;
-            SkiaDraw.clip(canvas, layout.list.x() - CardShadowReach.PAD, layout.list.y(),
+            CornerGeometry.clip(canvas, layout.list.x() - CardShadowReach.PAD, layout.list.y(),
                     layout.list.w() + driftClipPad + CardShadowReach.PAD * 2, layout.list.h(), 0.0F);
             for (int i = 0; i < sections.length; i++) {
                 UiLayout.Rect tile = tileRect(layout, i, scrollY);
@@ -239,7 +237,7 @@ public final class SettingsHomePage {
         return switch (section) {
             case APPEARANCE -> SettingsIcons.PALETTE;
             case CHAT -> SettingsIcons.MESSAGES;
-            case PRIVACY -> SettingsIcons.SHIELD_LOCK;
+            case PRIVACY -> AppIcons.ICON_SETTINGS_PRIVACY_PATH;
             case ABOUT -> SettingsIcons.INFO_CIRCLE;
         };
     }
@@ -262,25 +260,6 @@ public final class SettingsHomePage {
     }
 
     private static void drawIconCentered(Canvas canvas, Path icon, float cx, float cy, float size, int color) {
-        Rect b = icon.getBounds();
-        if (b == null || b.isEmpty()) {
-            return;
-        }
-        float scale = size / Math.max(b.getWidth(), b.getHeight());
-        canvas.save();
-        try {
-            canvas.translate(cx - (b.getLeft() + b.getRight()) / 2.0F * scale,
-                    cy - (b.getTop() + b.getBottom()) / 2.0F * scale);
-            canvas.scale(scale, scale);
-            try (Paint paint = new Paint().setColor(color).setAntiAlias(true)
-                    .setMode(PaintMode.STROKE)
-                    .setStrokeWidth(UiTokens.iconStroke(size) / scale)
-                    .setStrokeCap(PaintStrokeCap.ROUND)
-                    .setStrokeJoin(PaintStrokeJoin.ROUND)) {
-                canvas.drawPath(icon, paint);
-            }
-        } finally {
-            canvas.restore();
-        }
+        OutlineIcons.draw(canvas, icon, cx, cy, size, color);
     }
 }

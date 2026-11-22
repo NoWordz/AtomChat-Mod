@@ -1,8 +1,8 @@
 package com.atom.chat.image;
 
+import com.atom.chat.render.CornerGeometry;
 import com.atom.chat.config.AtomChatConfig;
 import com.atom.chat.render.SkiaImages;
-import com.atom.lib.design.atomchat.SkiaDraw;
 import com.atom.lib.design.atomchat.UiTokens;
 import io.github.humbleui.skija.Canvas;
 import io.github.humbleui.skija.Color;
@@ -66,7 +66,7 @@ public final class PlayerAvatar {
         }
         Image base = face(uuid, name);
         if (base == null) {
-            SkiaDraw.drawRoundedRect(canvas, x, y, size, size, 0.0F,
+            CornerGeometry.drawRoundedRect(canvas, x, y, size, size, 0.0F,
                     Color.makeARGB(255, 120, 130, 145));
             return true;
         }

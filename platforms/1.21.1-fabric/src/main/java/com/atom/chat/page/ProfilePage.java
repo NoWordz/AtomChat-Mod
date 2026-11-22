@@ -1,5 +1,6 @@
 package com.atom.chat.page;
 
+import com.atom.chat.render.CornerGeometry;
 import com.atom.chat.ui.AtomChatAppearance;
 import com.atom.chat.avatar.AvatarStore;
 import com.atom.chat.banner.BannerImage;
@@ -9,15 +10,16 @@ import com.atom.chat.chat.PlayerRef;
 import com.atom.chat.font.FontManager;
 import com.atom.chat.image.PlayerAvatar;
 import com.atom.chat.render.SkiaImages;
-import com.atom.lib.design.atomchat.SkiaDraw;
 import com.atom.chat.nav.PageNavAxis;
 import com.atom.chat.render.SkiaFontRenderer;
 import com.atom.chat.render.CardShadowReach;
+import com.atom.chat.render.OutlineIconBounds;
 import com.atom.chat.ui.Animations;
 import com.atom.lib.design.atomchat.AppIcons;
 import com.atom.chat.ui.MenuPopup;
 import com.atom.chat.ui.UiLayout;
 import com.atom.chat.ui.PressScale;
+import com.atom.chat.ui.TablerIcons;
 import com.atom.chat.ui.UiMotion;
 import com.atom.chat.ui.UiSpring;
 import com.atom.chat.ui.UiStagger;
@@ -354,13 +356,7 @@ public final class ProfilePage {
      */
     private static final int UUID_COPY_KEY = 0;
     private static final long COPIED_FEEDBACK_MS = 1_200L;
-    /**
-     * Two overlapping rects, normalised to a 9x9 box so the drawn glyph size
-     * is exact: scale = targetPx / 9, no empty viewBox margins shrinking it.
-     */
-    private static final io.github.humbleui.skija.Path ROW_COPY_ICON =
-            io.github.humbleui.skija.Path.makeFromSVGString("M0 0 L6 0 L6 6 L0 6 Z M3 3 L9 3 L9 9 L3 9 Z");
-    private static final float COPY_GLYPH_UNITS = 9.0F;
+    private static final Path ROW_COPY_ICON = TablerIcons.COPY;
 
     /** Copy button docked right after the identity card's UUID label. */
     private UiLayout.Rect copyButtonRect(UiLayout layout, float scrollY) {
@@ -397,7 +393,7 @@ public final class ProfilePage {
                 // cardHover wash (same family as the card it sits in). The old
                 // white-90 wash was a light-theme-only habit that lost the theme
                 // colour on hover.
-                SkiaDraw.drawRoundedRect(canvas, button.x() + inset, button.y() + inset,
+                CornerGeometry.drawRoundedRect(canvas, button.x() + inset, button.y() + inset,
                         button.w() - inset * 2.0F, button.h() - inset * 2.0F, UiTokens.radius(8, AtomChatAppearance.theme()),
                         UiTokens.cardHover(alpha, AtomChatAppearance.theme()));
             }
@@ -434,18 +430,19 @@ public final class ProfilePage {
                         accentColor());
                 return;
             }
+            Rect copyBounds = OutlineIconBounds.of(ROW_COPY_ICON);
+            float sc = s(13) / Math.max(copyBounds.getWidth(), copyBounds.getHeight());
             try (Paint paint = new Paint().setAntiAlias(true)
                     .setColor(iconColor)
                     .setMode(PaintMode.STROKE)
                     // Same scale compensation as the check glyph above: the canvas
                     // scale would otherwise fatten the 1.5-unit stroke to ~2.2.
-                    .setStrokeWidth(s(1.5F) / (s(13) / COPY_GLYPH_UNITS))
+                    .setStrokeWidth(s(1.5F) / sc)
                     .setStrokeCap(PaintStrokeCap.ROUND)
                     .setStrokeJoin(PaintStrokeJoin.ROUND)) {
                 canvas.save();
-                float sc = s(13) / COPY_GLYPH_UNITS;
-                canvas.translate(cx - COPY_GLYPH_UNITS / 2.0F * sc,
-                        cy - COPY_GLYPH_UNITS / 2.0F * sc);
+                canvas.translate(cx - (copyBounds.getLeft() + copyBounds.getRight()) / 2.0F * sc,
+                        cy - (copyBounds.getTop() + copyBounds.getBottom()) / 2.0F * sc);
                 canvas.scale(sc, sc);
                 canvas.drawPath(ROW_COPY_ICON, paint);
                 canvas.restore();
@@ -686,7 +683,7 @@ public final class ProfilePage {
                 ? client.player.networkHandler.getPlayerListEntry(uuid)
                 : null;
         String ping = tr("atomchat.profile.ping.value", entry != null ? entry.getLatency() : -1);
-        tiles.add(new StatTile(tr("atomchat.profile.ping"), ping, ping, AppIcons.ICON_SIGNAL_PATH));
+        tiles.add(new StatTile(tr("atomchat.profile.ping"), ping, ping, TablerIcons.ANTENNA_BARS_4));
         // The session timer counts the LOCAL player's join time, so on someone
         // else's profile it was showing your own uptime under their name. Hide it
         // for other players instead of guessing (same rule as the OP row).
@@ -701,10 +698,10 @@ public final class ProfilePage {
         if (totals != null) {
             tiles.add(new StatTile(tr("atomchat.profile.stats"),
                     tr("atomchat.profile.stats.mined", totals.mined()), statsValue(),
-                    AppIcons.ICON_STATS_PATH));
+                    TablerIcons.TRENDING_UP));
         } else {
             tiles.add(new StatTile(tr("atomchat.profile.stats"), "-", "-",
-                    AppIcons.ICON_STATS_PATH));
+                    TablerIcons.TRENDING_UP));
         }
         return tiles;
     }
@@ -1072,7 +1069,7 @@ public final class ProfilePage {
                 ? UiStagger.ITEM_STYLE_SLIDE_PX : 0.0F;
         canvas.save();
         try {
-            SkiaDraw.clip(canvas, layout.list.x() - CardShadowReach.PAD, layout.list.y(),
+            CornerGeometry.clip(canvas, layout.list.x() - CardShadowReach.PAD, layout.list.y(),
                     layout.list.w() + driftClipPad + CardShadowReach.PAD * 2, layout.list.h(), 0.0F);
             // Page-entrance stagger over the page's blocks in reading order:
             // banner, avatar row, stat tiles, info card, identity card. Each
@@ -1176,21 +1173,20 @@ public final class ProfilePage {
             return;
         }
         float radius = UiTokens.settingsTileRadius(AtomChatAppearance.theme());
-        SkiaDraw.drawRoundedShadow(canvas, banner.x(), banner.y(), banner.w(), banner.h(),
-                radius, UiTokens.s(6), UiTokens.CARD_SHADOW);
+        com.atom.chat.render.SoftShadow.drawCard(canvas, banner.x(), banner.y(), banner.w(), banner.h(), radius);
         canvas.save();
         try {
-            SkiaDraw.clip(canvas, banner.x(), banner.y(), banner.w(), banner.h(), radius);
+            CornerGeometry.clip(canvas, banner.x(), banner.y(), banner.w(), banner.h(), radius);
             Image custom = profileBannerImage();
             if (custom != null) {
                 // Cover crop at draw time: the banner's aspect follows the
                 // panel width, which the decode cache cannot know about. No
                 // melt gradient on top — the photo stays full bleed.
-                SkiaDraw.drawImageCover(canvas, custom,
+                SkiaImages.drawImageCover(canvas, custom,
                         banner.x(), banner.y(), banner.w(), banner.h(), 0.0F, SamplingMode.LINEAR);
             } else if (subjectIsSelf()) {
                 // Fallback: plain accent -> panelBg gradient, same melt.
-                SkiaDraw.drawVerticalGradient(canvas, banner.x(), banner.y(), banner.w(), banner.h(), 0.0F,
+                CornerGeometry.drawVerticalGradient(canvas, banner.x(), banner.y(), banner.w(), banner.h(), 0.0F,
                         accentColor(), UiTokens.withAlpha(panelRgb(), 255));
                 com.atom.chat.render.DotTexture.drawHalo(canvas,
                         new UiLayout.Rect(banner.x() + banner.w()*0.35F, banner.y() + banner.h()*0.06F,
@@ -1202,7 +1198,7 @@ public final class ProfilePage {
                 // enlargement is the honest ceiling of the current skin
                 // pipeline — nearest-neighbour keeps the pixels crisp instead
                 // of smearing them.
-                SkiaDraw.drawVerticalGradient(canvas, banner.x(), banner.y(), banner.w(), banner.h(), 0.0F,
+                CornerGeometry.drawVerticalGradient(canvas, banner.x(), banner.y(), banner.w(), banner.h(), 0.0F,
                         accentColor(), UiTokens.withAlpha(panelRgb(), 255));
                 Image face = PlayerAvatar.face(subjectUuid(), subjectName());
                 if (face != null) {
@@ -1218,7 +1214,7 @@ public final class ProfilePage {
                                 faceX, banner.y(), side, side, 0.0F, SamplingMode.DEFAULT);
                     }
                 }
-                SkiaDraw.drawVerticalGradient(canvas, banner.x(), banner.y(), banner.w(), banner.h(), 0.0F,
+                CornerGeometry.drawVerticalGradient(canvas, banner.x(), banner.y(), banner.w(), banner.h(), 0.0F,
                         UiTokens.withAlpha(panelRgb(), 140), UiTokens.withAlpha(panelRgb(), 255));
             }
             if (subjectIsSelf()) {
@@ -1226,7 +1222,7 @@ public final class ProfilePage {
                     // White image scrim, the avatar's hover language: a photo
                     // bitmap's polarity is unknown to the theme, so the lift
                     // is a literal white wash, weighted by the fade.
-                    SkiaDraw.drawRoundedRect(canvas, banner.x(), banner.y(), banner.w(), banner.h(),
+                    CornerGeometry.drawRoundedRect(canvas, banner.x(), banner.y(), banner.w(), banner.h(),
                             0.0F, Color.makeARGB((int) (24.0F * bannerHover), 255, 255, 255));
                 }
                 drawBannerBadge(canvas, layout, scrollY);
@@ -1234,7 +1230,7 @@ public final class ProfilePage {
         } finally {
             canvas.restore();
         }
-        SkiaDraw.drawEdgeHighlight(canvas, banner.x(), banner.y(), banner.w(), banner.h(),
+        CornerGeometry.drawEdgeHighlight(canvas, banner.x(), banner.y(), banner.w(), banner.h(),
                 radius, UiTokens.s(1.0F), UiTokens.hairline(AtomChatAppearance.theme()));
     }
 
@@ -1246,10 +1242,10 @@ public final class ProfilePage {
     private void drawBannerBadge(Canvas canvas, UiLayout layout, float scrollY) {
         UiLayout.Rect chip = bannerBadgeRect(layout, scrollY);
         float chipRadius = UiTokens.radius(chip.h() / (2.0F * UiTokens.SCALE), AtomChatAppearance.theme());
-        SkiaDraw.drawRoundedRect(canvas, chip.x(), chip.y(), chip.w(), chip.h(),
+        CornerGeometry.drawRoundedRect(canvas, chip.x(), chip.y(), chip.w(), chip.h(),
                 chipRadius, Color.makeARGB(215, 20, 22, 30));
         if (bannerHover > 0.01F) {
-            SkiaDraw.drawRoundedRect(canvas, chip.x(), chip.y(), chip.w(), chip.h(),
+            CornerGeometry.drawRoundedRect(canvas, chip.x(), chip.y(), chip.w(), chip.h(),
                     chipRadius, Color.makeARGB((int) (60.0F * bannerHover), 255, 255, 255));
         }
         Font font = FontManager.font(UiTokens.PROFILE_TILE_LABEL_FONT);
@@ -1276,7 +1272,7 @@ public final class ProfilePage {
             // (AvatarRing owns the pad) — the old s(2) pad plus the outline left
             // a visible strip of panel colour between bitmap and rim.
             float ring = com.atom.chat.render.AvatarRing.SEPARATOR_PX;
-            SkiaDraw.drawRoundedRect(canvas, avatar.x() - ring, avatar.y() - ring,
+            CornerGeometry.drawRoundedRect(canvas, avatar.x() - ring, avatar.y() - ring,
                     avatar.w() + ring * 2.0F, avatar.h() + ring * 2.0F,
                     (avatar.w() + ring * 2.0F) / 2.0F, UiTokens.withAlpha(panelRgb(), 255));
             // The local custom avatar when the subject is self and one is
@@ -1289,7 +1285,7 @@ public final class ProfilePage {
             } else {
                 // Fixed neutral placeholder for an absent face (content colour,
                 // not chrome): reads on both polarities, so it stays literal.
-                SkiaDraw.drawRoundedRect(canvas, avatar.x(), avatar.y(), avatar.w(), avatar.h(),
+                CornerGeometry.drawRoundedRect(canvas, avatar.x(), avatar.y(), avatar.w(), avatar.h(),
                         avatar.w() / 2.0F, Color.makeARGB(255, 120, 130, 145));
             }
             // Hover feedback regardless of whether an avatar is set: with no
@@ -1298,7 +1294,7 @@ public final class ProfilePage {
             if (avatarHover > 0.01F && avatarEditable()) {
                 // Image scrim, not a card wash: the white lift sits on the avatar
                 // bitmap itself, whose polarity no theme token knows about.
-                SkiaDraw.drawRoundedRect(canvas, avatar.x(), avatar.y(), avatar.w(), avatar.h(),
+                CornerGeometry.drawRoundedRect(canvas, avatar.x(), avatar.y(), avatar.w(), avatar.h(),
                         avatar.w() / 2.0F, Color.makeARGB((int) (40.0F * avatarHover), 255, 255, 255));
             }
             // Hairline rim concentric with the avatar's own edge: AvatarRing
@@ -1309,9 +1305,8 @@ public final class ProfilePage {
             // centre splits that boundary and leaves a seam on one side.
             // Polarity-adaptive UiTokens.rim, same ring language as the
             // swatches.
-            SkiaDraw.drawRing(canvas, avatar.x() + avatar.w() / 2.0F, avatar.y() + avatar.h() / 2.0F,
-                    com.atom.chat.render.AvatarRing.rimRadius(avatar.w() / 2.0F),
-                    com.atom.chat.render.AvatarRing.RIM_STROKE_PX, UiTokens.rim(AtomChatAppearance.theme()));
+            com.atom.chat.render.AvatarRing.draw(canvas, avatar.x() + avatar.w() / 2.0F, avatar.y() + avatar.h() / 2.0F,
+                    avatar.w() / 2.0F, UiTokens.rim(AtomChatAppearance.theme()));
         } finally {
             canvas.restore();
         }
@@ -1326,10 +1321,10 @@ public final class ProfilePage {
                 // Badge is a fixed dark glass chip over an arbitrary avatar
                 // bitmap: the fixed dark base plus white glyph/overlay is the
                 // polarity-independent scrim language, so it stays literal.
-                SkiaDraw.drawRoundedRect(canvas, badge.x(), badge.y(), badge.w(), badge.h(),
+                CornerGeometry.drawRoundedRect(canvas, badge.x(), badge.y(), badge.w(), badge.h(),
                         badgeRadius, Color.makeARGB(215, 20, 22, 30));
                 if (badgeHover > 0.01F) {
-                    SkiaDraw.drawRoundedRect(canvas, badge.x(), badge.y(), badge.w(), badge.h(),
+                    CornerGeometry.drawRoundedRect(canvas, badge.x(), badge.y(), badge.w(), badge.h(),
                             badgeRadius, Color.makeARGB((int) (60.0F * badgeHover), 255, 255, 255));
                 }
                 drawIconCentered(canvas, AppIcons.ICON_EDIT_PATH,
@@ -1424,15 +1419,15 @@ public final class ProfilePage {
         SkiaFontRenderer.drawText(canvas, signFont, shown, anchor.textX(), signBaseline, textPrimary());
         // Caret: the borrowed field is focused, so blink at the shown text's
         // end (the composer's own blink cadence, 500ms half-period).
-        if (signatureFieldFocused && (System.currentTimeMillis() / 500L) % 2L == 0L) {
+        if (signatureFieldFocused && Animations.caretVisible(System.currentTimeMillis())) {
             float caretX = anchor.textX() + SkiaFontRenderer.getStringWidth(signFont, shown);
             float h = SkiaFontRenderer.textHeight(signFont);
-            SkiaDraw.drawRoundedRect(canvas, caretX, signBaseline - h * 0.85F, s(1.5F), h, s(0.75F),
+            CornerGeometry.drawRoundedRect(canvas, caretX, signBaseline - h * 0.85F, s(1.5F), h, s(0.75F),
                     accentColor());
         }
         SkiaFontRenderer.drawText(canvas, hintFont, hint,
                 layout.list.right() - pad - hintW, signBaseline, sec(170));
-        SkiaDraw.drawRoundedRect(canvas, layout.list.x() + pad, signBaseline + s(4),
+        CornerGeometry.drawRoundedRect(canvas, layout.list.x() + pad, signBaseline + s(4),
                 layout.list.w() - pad * 2.0F, s(1.5F), s(0.75F), accentColor());
     }
 
@@ -1563,7 +1558,7 @@ public final class ProfilePage {
             try {
                 // Hover washes and dividers clip to the card's rounding, so the
                 // first and last rows' bands never bleed past the corners.
-                SkiaDraw.clip(canvas, card.x(), card.y(), card.w(), card.h(),
+                CornerGeometry.clip(canvas, card.x(), card.y(), card.w(), card.h(),
                         UiTokens.profileRowRadius(AtomChatAppearance.theme()));
                 float pad = UiTokens.PROFILE_ROW_PAD;
                 for (int i = 0; i < rows.size(); i++) {
@@ -1574,13 +1569,13 @@ public final class ProfilePage {
                     float rowAlpha = rowHover.computeIfAbsent(i, k -> 0.0F);
                     if (rowAlpha > 0.01F) {
                         // Whole-row hover wash, the accent-dyed cardHover family.
-                        SkiaDraw.drawRoundedRect(canvas, row.x(), row.y(), row.w(), row.h(),
+                        CornerGeometry.drawRoundedRect(canvas, row.x(), row.y(), row.w(), row.h(),
                                 0.0F, UiTokens.cardHover(rowAlpha, AtomChatAppearance.theme()));
                     }
                     if (i > 0) {
                         // Hairline divider, 1px at the card-edge alpha, indented
                         // to the row pad on both sides.
-                        SkiaDraw.drawRoundedRect(canvas, card.x() + pad, row.y(),
+                        CornerGeometry.drawRoundedRect(canvas, card.x() + pad, row.y(),
                                 card.w() - pad * 2.0F, UiTokens.s(1.0F), 0.0F, UiTokens.hairline(AtomChatAppearance.theme()));
                     }
                     float cy = row.y() + row.h() / 2.0F;
@@ -1726,7 +1721,7 @@ public final class ProfilePage {
     }
 
     private static void drawIconCentered(Canvas canvas, Path icon, float cx, float cy, float size, int color) {
-        Rect b = icon.getBounds();
+        Rect b = OutlineIconBounds.of(icon);
         if (b == null || b.isEmpty()) {
             return;
         }

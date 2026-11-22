@@ -308,7 +308,7 @@ public final class ThemeService {
         switch (themeId == null ? "" : themeId) {
             case MODERN -> {
                 config.panelOpacity = 1.0F;
-                config.blurEnabled = false;
+                if (!config.performanceMode) config.blurEnabled = false;
                 config.setPanelOutlineWidth(AtomChatConfig.DEFAULT.panelOutlineWidth);
                 config.cardTint = 1.0F;
                 config.cardColor = 0xFF222831;
@@ -326,9 +326,10 @@ public final class ThemeService {
                 // (PanelBackground.tintFor composes the two).
                 config.panelOpacity = preset.panelOpacity() != null
                         ? preset.panelOpacity() : 1.0F;
-                config.blurEnabled = Boolean.TRUE.equals(preset.blurEnabled());
+                boolean blur = Boolean.TRUE.equals(preset.blurEnabled());
+                if (!config.performanceMode) config.blurEnabled = blur;
                 config.setPanelOutlineWidth(AtomChatConfig.DEFAULT.panelOutlineWidth);
-                config.cardTint = config.blurEnabled ? AtomChatConfig.DEFAULT.cardTint : 1.0F;
+                config.cardTint = blur ? AtomChatConfig.DEFAULT.cardTint : 1.0F;
                 preset.applyTo(config);
             }
         }
@@ -361,9 +362,11 @@ public final class ThemeService {
         config.secondaryCapsuleBg = def.secondaryCapsuleBg;
         config.secondaryCapsuleText = def.secondaryCapsuleText;
         config.panelOpacity = def.panelOpacity;
-        config.blurEnabled = def.blurEnabled;
+        if (!config.performanceMode) {
+            config.blurEnabled = def.blurEnabled;
+            config.cardBlurStrength = def.cardBlurStrength;
+        }
         config.setPanelOutlineWidth(def.effectivePanelOutlineWidth());
         config.cardTint = def.cardTint;
-        config.cardBlurStrength = def.cardBlurStrength;
     }
 }
