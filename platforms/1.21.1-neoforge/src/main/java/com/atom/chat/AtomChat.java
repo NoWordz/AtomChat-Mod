@@ -54,6 +54,7 @@ public class AtomChat {
         NeoForge.EVENT_BUS.addListener((PlayerEvent.PlayerLoggedOutEvent event) -> {
             if (event.getEntity() != null) {
                 com.atom.chat.net.CompanionMaintenance.onPlayerLogout(event.getEntity().getUUID());
+                com.atom.chat.net.CardCompanionServer.onPlayerLogout(event.getEntity().getUUID());
             }
         });
         version = modContainer.getModInfo().getVersion().toString();
@@ -75,6 +76,8 @@ public class AtomChat {
         // Media companion: server-hosted chat images / GIFs, same dual
         // entrypoint pattern and master hosting switch as the avatar side.
         com.atom.chat.net.MediaPayloads.register(event);
+        // Share Card API: server-authoritative rich cards, live state sync and safe client shares.
+        com.atom.chat.net.CardPayloads.register(event);
     }
 
     /**

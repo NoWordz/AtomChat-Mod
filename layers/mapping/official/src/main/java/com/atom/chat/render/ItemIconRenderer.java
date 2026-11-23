@@ -132,12 +132,16 @@ public final class ItemIconRenderer {
 
     /** No GL changes; current Canvas transforms, rounded clips and saveLayer alpha apply. */
     public static void draw(Canvas canvas, RichText.RichRun source, float x, float y, float size) {
-        if (failed || canvas == null || source == null || source.style() == null
-                || !Float.isFinite(x) || !Float.isFinite(y) || !Float.isFinite(size) || size <= 0) return;
+        if (source == null || source.style() == null) return;
         var hover = source.style().getHoverEvent();
         if (hover == null) return;
-        var info = hover.getValue(HoverEvent.Action.SHOW_ITEM);
-        if (info == null) return;
+        draw(canvas, hover.getValue(HoverEvent.Action.SHOW_ITEM), x, y, size);
+    }
+
+    /** Direct item-stack info entry point for rich share cards (reuses the same offscreen cache). */
+    public static void draw(Canvas canvas, HoverEvent.ItemStackInfo info, float x, float y, float size) {
+        if (failed || canvas == null || info == null
+                || !Float.isFinite(x) || !Float.isFinite(y) || !Float.isFinite(size) || size <= 0) return;
         try {
             Image image = CACHE.request(info);
             if (image == null) com.atom.chat.diagnostics.FrameSegments.count(com.atom.chat.diagnostics.FrameSegments.Counter.ICON_COLD);

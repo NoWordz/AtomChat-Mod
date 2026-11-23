@@ -144,7 +144,7 @@ public final class ChatHudRenderer {
     private float inlineItemGap;
     private String layoutOwnName, layoutUnknownName, layoutImageLabel;
     private int lastLimit;
-    private boolean lastAnimationEnabled, lastImagesEnabled, lastPerformanceMode;
+    private boolean lastAnimationEnabled, lastImagesEnabled, lastShareCardsEnabled, lastPerformanceMode;
     private boolean lastCompact;
     private int lastTimestampInterval;
     private boolean departingRows;
@@ -329,6 +329,7 @@ public final class ChatHudRenderer {
         }
         boolean sameGeometry = viewport.equals(lastViewport) && limit == lastLimit && !invalidateLayout && !performanceChanged
                 && lastImagesEnabled == config.imageMessagesEnabled
+                && lastShareCardsEnabled == config.shareCardsEnabled
                 && lastCompact == config.compactMessagesEnabled && lastTimestampInterval == config.timestampIntervalMinutes;
         // Keep an in-progress row animation behind the panel's group slide.
         if (panelFrame && sameGeometry && (!visibleRows.isEmpty() || departingRows)) return;
@@ -403,6 +404,7 @@ public final class ChatHudRenderer {
         lastViewport = viewport;
         lastLimit = limit;
         lastImagesEnabled = config.imageMessagesEnabled;
+        lastShareCardsEnabled = config.shareCardsEnabled;
         lastCompact = config.compactMessagesEnabled;
         lastTimestampInterval = config.timestampIntervalMinutes;
         lastAnimationEnabled = animationEnabled;
@@ -447,7 +449,12 @@ public final class ChatHudRenderer {
         String content = message.getContentRich().getString();
         ImageCode.Meta image = null;
         boolean imagePlaceholder = !message.isSystem() && ImageCode.contains(content);
-        if (message.isSystem()) {
+        if (message.hasCard() && AtomChatConfig.get().shareCardsEnabled) {
+            com.atom.chat.api.card.ShareCard card = message.getCard();
+            String label = card.hudTag() + " " + card.hudSummary();
+            body = RichText.literal(label.trim());
+            imagePlaceholder = false;
+        } else if (message.isSystem()) {
             var ranges = ImageCode.ranges(content);
             for (int i = ranges.size() - 1; i >= 0; i--) {
                 int[] range = ranges.get(i);

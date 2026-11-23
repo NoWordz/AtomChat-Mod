@@ -436,6 +436,18 @@ public class AtomChatConfig {
      * downloaded or cached (saving one by hand still fetches on demand).
      */
     public boolean imageMessagesEnabled = true;
+    /** Whether rich share cards (location, red packet, item, TPA, custom API) are rendered as cards. */
+    public boolean shareCardsEnabled = true;
+    /** Whether coordinate/waypoint shares (Xaero/JourneyMap/VoxelMap/FTB/generic) auto-upgrade to minimap cards. */
+    public boolean autoConvertLocationCards = true;
+    /** Whether compact single-item SHOW_ITEM chat shares auto-upgrade to equipment share cards. */
+    public boolean autoConvertItemLinksToCards = true;
+    /** Whether universal pair-button requests (TPA, Party, Guild, Trade, Duel, Friend) auto-upgrade to interactive cards. */
+    public boolean autoConvertRequestCards = true;
+    /** Whether single-button system action notifications (Mail, Auction, Quest, Reward) auto-upgrade to action cards. */
+    public boolean autoConvertActionCards = true;
+    /** Whether user/server-defined JSON rules in config/atomchat/card_rules.json are evaluated. */
+    public boolean customCardRulesEnabled = true;
     /**
      * Time divider between messages, in minutes; 0 disables the divider. A
      * pill with the clock time is drawn above a message when this many minutes

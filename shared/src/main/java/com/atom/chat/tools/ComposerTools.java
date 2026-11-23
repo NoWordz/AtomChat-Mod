@@ -24,6 +24,8 @@ public final class ComposerTools implements InputHandler {
         void pressTool();
         void releaseTool();
         void pickImage();
+        default void shareLocation() {}
+        default void shareHeldItem() {}
         void dismissOtherPopups();
     }
     private final Host host;
@@ -83,6 +85,8 @@ public final class ComposerTools implements InputHandler {
                 if (row == 0) search.open();
                 if (row == 1) { search.close(); menu.toggle(); menu.showPlayers(host.onlinePlayers()); }
                 if (row == 2) { search.close(); if(com.atom.chat.onboarding.TutorialSandbox.active()){com.atom.chat.onboarding.TutorialSandbox.imageAction();host.feedback("atomchat.tutorial.preview_only");}else host.pickImage(); }
+                if (row == 3) { search.close(); if(com.atom.chat.onboarding.TutorialSandbox.active()){host.feedback("atomchat.tutorial.preview_only");}else host.shareLocation(); }
+                if (row == 4) { search.close(); if(com.atom.chat.onboarding.TutorialSandbox.active()){host.feedback("atomchat.tutorial.preview_only");}else host.shareHeldItem(); }
             }
             return true;
         }

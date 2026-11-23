@@ -22,6 +22,8 @@ import java.util.function.Function;
 /** Compact action menu with the composer entrance and the complete context-menu surface/row language. */
 public final class ToolMenu {
     private static final Path SEARCH = Path.makeFromSVGString("M8.5 3a5.5 5.5 0 1 0 0 11a5.5 5.5 0 1 0 0-11 M12.5 12.5L18 18");
+    private static final Path PIN_ICON = Path.makeFromSVGString("M10 2a5.5 5.5 0 0 0-5.5 5.5c0 4.2 5.5 10.5 5.5 10.5s5.5-6.3 5.5-10.5A5.5 5.5 0 0 0 10 2z M10 5.5a2 2 0 1 1 0 4a2 2 0 0 1 0-4z");
+    private static final Path ITEM_ICON = Path.makeFromSVGString("M10 2L17 6v8l-7 4l-7-4V6l7-4z M10 10L17 6 M10 10L3 6 M10 10v8");
     private boolean open, playersOpen;
     private float anim, scroll;
     private List<PlayerRef> players = List.of();
@@ -38,7 +40,7 @@ public final class ToolMenu {
                 .sorted(Comparator.comparing(PlayerRef::realName, String.CASE_INSENSITIVE_ORDER)).toList();
     }
     public PlayerRef playerAt(int row) { return playersOpen && row > 0 && row <= players.size() ? players.get(row - 1) : null; }
-    private int rows() { return playersOpen ? Math.max(2, players.size() + 1) : 3; }
+    private int rows() { return playersOpen ? Math.max(2, players.size() + 1) : 5; }
     public UiLayout.Rect paintedBounds(UiLayout source){return ComposerPopupTransform.of(bounds(source),anim).paintedBounds(bounds(source));}
     public UiLayout.Rect paintedRow(UiLayout source, int row) {
         if (!open || playersOpen || row < 0 || row >= rows()) return null;
@@ -103,12 +105,15 @@ public final class ToolMenu {
                 MenuPopup.drawRowWash(canvas, box.x(), y, box.w(), ToolLayout.MENU_ROW_H, h);
                 int color = disabled ? 0xFF999DA6 : 0xFFF4F5F7;
                 Path icon = playersOpen ? i == 0 ? AppIcons.ICON_BACK_PATH : AppIcons.ICON_TAB_PROFILE_PATH
-                        : i == 0 ? SEARCH : i == 1 ? AppIcons.ICON_TAB_PROFILE_PATH : TablerIcons.PHOTO;
+                        : i == 0 ? SEARCH
+                        : i == 1 ? AppIcons.ICON_TAB_PROFILE_PATH
+                        : i == 2 ? TablerIcons.PHOTO
+                        : i == 3 ? PIN_ICON : ITEM_ICON;
                 DrawPrimitives.drawIconCentered(canvas, icon, box.x() + ToolLayout.MENU_ROW_H / 2, rowCy,
                         UiTokens.COMPOSER_ICON_SIZE, color);
                 String label = playersOpen ? i == 0 ? tr.apply("atomchat.tools.back")
                         : players.isEmpty() ? tr.apply("atomchat.tools.players.empty") : players.get(i - 1).displayName()
-                        : tr.apply("atomchat.tools." + new String[]{"search", "players", "image"}[i]);
+                        : tr.apply("atomchat.tools." + new String[]{"search", "players", "image", "share_location", "share_item"}[i]);
                 SkiaFontRenderer.drawText(canvas, font, SkiaFontRenderer.truncate(font, label,
                                 box.w() - ToolLayout.MENU_ROW_H - MenuPopup.rowInset(box.w())),
                         box.x() + ToolLayout.MENU_ROW_H, SkiaFontRenderer.centerBaselineY(font, rowCy), color);

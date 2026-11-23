@@ -1,5 +1,6 @@
 package com.atom.chat.chat;
 
+import com.atom.chat.api.card.ShareCard;
 import com.atom.chat.text.RichText;
 import net.minecraft.network.chat.Component;
 
@@ -35,6 +36,7 @@ public class ChatMessage {
      * carry this id over.
      */
     private final long id;
+    private final ShareCard card;
     private boolean capturedPresentation;
     private volatile OutgoingMessages.State delivery = OutgoingMessages.State.RECEIVED;
     public OutgoingMessages.State deliveryState() {
@@ -54,10 +56,27 @@ public class ChatMessage {
     public ChatMessage withServerEcho(ChatMessage server) {
         ChatMessage corrected = new ChatMessage(server.component, own, server.system, server.quoteName, server.quoteText,
                 server.senderUuid, server.senderName, server.profileName, server.contentText, server.senderRich,
-                server.contentRich, timestamp, duplicateCount, id);
+                server.contentRich, timestamp, duplicateCount, id, server.card != null ? server.card : this.card);
         corrected.delivery = OutgoingMessages.State.CONFIRMED;
         corrected.capturedPresentation = server.capturedPresentation;
         return corrected;
+    }
+
+    /** Copy attaching (or replacing) a rich {@link ShareCard} while keeping message identity. */
+    public ChatMessage withCard(ShareCard card) {
+        ChatMessage copy = new ChatMessage(component, own, system, quoteName, quoteText,
+                senderUuid, senderName, profileName, contentText,
+                senderRich, contentRich, timestamp, duplicateCount, id, card).retainPresentation(capturedPresentation);
+        copy.delivery = delivery;
+        return copy;
+    }
+
+    public ShareCard getCard() {
+        return card;
+    }
+
+    public boolean hasCard() {
+        return card != null;
     }
 
 
@@ -116,13 +135,14 @@ public class ChatMessage {
                        UUID senderUuid, String senderName, String profileName, String contentText,
                        RichText senderRich, RichText contentRich, long timestamp, int duplicateCount) {
         this(component, own, system, quoteName, quoteText, senderUuid, senderName, profileName, contentText,
-                senderRich, contentRich, timestamp, duplicateCount, ID_SEQUENCE.incrementAndGet());
+                senderRich, contentRich, timestamp, duplicateCount, ID_SEQUENCE.incrementAndGet(), null);
     }
 
     /** Private tail: {@code id} lets merge copies keep the original identity. */
     private ChatMessage(Component component, boolean own, boolean system, String quoteName, String quoteText,
                         UUID senderUuid, String senderName, String profileName, String contentText,
-                        RichText senderRich, RichText contentRich, long timestamp, int duplicateCount, long id) {
+                        RichText senderRich, RichText contentRich, long timestamp, int duplicateCount, long id,
+                        ShareCard card) {
         this.component = component;
         this.rawText = component.getString();
         this.timestamp = timestamp > 0 ? timestamp : System.currentTimeMillis();
@@ -152,6 +172,7 @@ public class ChatMessage {
         this.quoteTextRich = quoteParts != null ? quoteParts.text() : null;
         this.duplicateCount = Math.max(1, duplicateCount);
         this.id = id;
+        this.card = card;
     }
 
     private static String clean(String s) {
@@ -308,6 +329,10 @@ public class ChatMessage {
      * recursively so a quoted quote shows only the original message.
      */
     public String getContentText() {
+        if (card != null) {
+            String fb = card.fallbackPlainText();
+            if (fb != null && !fb.isBlank()) return fb;
+        }
         return legacyContentText(rawText, contentText);
     }
 
@@ -349,7 +374,7 @@ public class ChatMessage {
     public ChatMessage withDuplicateCount(int count, long newTimestamp) {
         ChatMessage copy = new ChatMessage(component, own, system, quoteName, quoteText,
                 senderUuid, senderName, profileName, contentText,
-                senderRich, contentRich, newTimestamp, count, id).retainPresentation(capturedPresentation);
+                senderRich, contentRich, newTimestamp, count, id, card).retainPresentation(capturedPresentation);
         copy.delivery = delivery;
         return copy;
     }

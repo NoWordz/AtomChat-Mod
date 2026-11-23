@@ -11,7 +11,7 @@ public final class ToolLayout {
     public static final float GAP = UiTokens.PANEL_TOP_GAP;
 
     public static UiLayout.Rect menu(UiLayout source) {
-        return menu(source, 3);
+        return menu(source, 5);
     }
     public static UiLayout.Rect menu(UiLayout source, int rows) {
         float width = Math.min(UiTokens.TOOL_MENU_WIDTH, source.panelW - UiTokens.LIST_PAD_X * 2);

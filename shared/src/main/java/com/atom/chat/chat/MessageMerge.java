@@ -55,6 +55,9 @@ public final class MessageMerge {
         if (last == null || next == null) {
             return false;
         }
+        if (last.hasCard() || next.hasCard()) {
+            return false;
+        }
         if (unsettled(last) || unsettled(next)) return false;
         if (last.isSystem() || next.isSystem()) {
             return false;

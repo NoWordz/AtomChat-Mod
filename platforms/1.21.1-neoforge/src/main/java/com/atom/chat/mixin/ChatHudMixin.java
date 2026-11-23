@@ -192,6 +192,13 @@ public class ChatHudMixin implements NotificationHudOverlay.PanelChatHud {
             return;
         }
 
+        // Server-delivered ShareCard queued for gameplay HUD only (already stored in ChatStore).
+        ChatMessage stagedCard = com.atom.chat.card.CardHudBridge.consumeStaged();
+        if (stagedCard != null) {
+            atomchat$hudHistory.stage(message, stagedCard);
+            return;
+        }
+
         // Store the original message first; the vanilla HUD copy is rewritten
         // below only after capture has already decided what belongs in ChatStore.
         ChatMessage presentation = atomchat$captureAndStore(message);
@@ -245,6 +252,13 @@ public class ChatHudMixin implements NotificationHudOverlay.PanelChatHud {
         if (ChatClassifier.isXaeroWaypointData(raw)
                 || (meta != null && meta.contentText() != null
                 && ChatClassifier.isXaeroWaypointData(meta.contentText()))) {
+            com.atom.chat.api.card.ShareCard xaeroCard =
+                    com.atom.chat.card.BuiltInCardAdapter.adapt(message, meta != null ? meta.senderName() : null, false);
+            if (xaeroCard != null) {
+                ChatMessage cardMsg = atomchat$xaeroCardMessage(message, meta, raw, client, xaeroCard);
+                ChatStore.get().add(cardMsg);
+                return cardMsg;
+            }
             return addSystemMessage(message);
         }
         if (meta != null && meta.system()) { return addSystemMessage(message); }
@@ -353,6 +367,11 @@ public class ChatHudMixin implements NotificationHudOverlay.PanelChatHud {
                 quote != null ? quote.quoteText() : null,
                 meta.senderUuid(), displayName, unknown ? "" : meta.profileName(), body,
                 senderRich, contentRich).retainPresentation(configured || unknown);
+        com.atom.chat.api.card.ShareCard adaptedCard =
+                com.atom.chat.card.BuiltInCardAdapter.adapt(message, displayName, meta.system());
+        if (adaptedCard != null) {
+            presentation = presentation.withCard(adaptedCard);
+        }
         atomchat$addPublic(presentation, body, meta.system() || unknown,
                 meta.evidence().confirmsIdentity(), meta.originalContent());
         return presentation;
@@ -601,8 +620,48 @@ public class ChatHudMixin implements NotificationHudOverlay.PanelChatHud {
         return privateMessage;
     }
 
+    @Unique
+    private static ChatMessage atomchat$xaeroCardMessage(Component message, SenderMeta meta, String raw,
+                                                         Minecraft client, com.atom.chat.api.card.ShareCard card) {
+        String senderName = meta != null ? meta.senderName() : null;
+        UUID senderUuid = meta != null ? meta.senderUuid() : null;
+        if (senderName == null) {
+            FallbackIdentity fb = parseAngleFallback(raw);
+            if (fb != null) senderName = fb.name();
+        }
+        boolean hasSender = senderName != null && !senderName.isBlank();
+        if (hasSender && senderUuid == null) {
+            senderUuid = ChatClassifier.resolveAccountUuid(senderName);
+        }
+        boolean own = hasSender && client != null && client.player != null
+                && ((senderUuid != null && senderUuid.equals(client.player.getUUID()))
+                || OwnNameMatcher.matches(senderName, OwnIdentity.wireNameCandidates()));
+        RichText senderRich = hasSender ? RichText.literal(senderName) : RichText.empty();
+        RichText contentRich = RichText.literal(card.fallbackPlainText());
+        return new ChatMessage(message, own, !hasSender, null, null,
+                senderUuid, hasSender ? senderName : null, hasSender ? senderName : null,
+                card.fallbackPlainText(), senderRich, contentRich).withCard(card);
+    }
+
     private static ChatMessage addSystemMessage(Component message) {
         ChatMessage presentation = atomchat$systemPresentation(message);
+        com.atom.chat.api.card.ShareCard card = com.atom.chat.card.BuiltInCardAdapter.adapt(message, null, true);
+        if (card != null) {
+            String cardSender = com.atom.chat.card.BuiltInCardAdapter.cardSenderOf(card);
+            if (cardSender != null && !cardSender.isBlank()) {
+                UUID senderUuid = ChatClassifier.resolveAccountUuid(cardSender);
+                Minecraft client = Minecraft.getInstance();
+                boolean own = client != null && client.player != null
+                        && ((senderUuid != null && senderUuid.equals(client.player.getUUID()))
+                        || OwnNameMatcher.matches(cardSender, OwnIdentity.wireNameCandidates()));
+                presentation = new ChatMessage(message, own, false, null, null,
+                        senderUuid, cardSender, cardSender, card.fallbackPlainText(),
+                        RichText.literal(cardSender), RichText.literal(card.fallbackPlainText()))
+                        .withCard(card);
+            } else {
+                presentation = presentation.withCard(card);
+            }
+        }
         ChatStore.get().add(presentation);
         return presentation;
     }

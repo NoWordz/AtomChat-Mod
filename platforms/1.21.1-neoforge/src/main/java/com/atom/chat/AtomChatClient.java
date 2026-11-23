@@ -113,6 +113,8 @@ public class AtomChatClient {
 
     private static void onClientSetup(net.neoforged.fml.event.lifecycle.FMLClientSetupEvent event) {
         AtomChatConfig.get();
+        com.atom.chat.api.card.CardRuleEngine.loadFrom(
+                com.atom.chat.platform.Platform.configDir().resolve("atomchat").resolve("card_rules.json"));
         CacheDirs.migrateFromOldConfigPaths();
         CacheDirs.initializePersonalDirectories();
         WallpaperStore.init(CacheDirs.wallpaperDir());
@@ -150,6 +152,7 @@ public class AtomChatClient {
             com.atom.chat.render.ImageQuality.release();
             com.atom.chat.render.SoftShadow.release();
             com.atom.chat.settings.SettingsSectionPage.clearTranslationCache();
+            com.atom.chat.api.card.CardRuleEngine.reload();
         });
     }
 
@@ -168,6 +171,8 @@ public class AtomChatClient {
         com.atom.chat.net.ConfigAdminClient.onJoin();
         com.atom.chat.chat.OwnIdentity.reset();
         com.atom.chat.chat.TeleportCommands.reset();
+        com.atom.chat.api.card.CardStateStore.clear();
+        com.atom.chat.card.BuiltInCardAdapter.resetSession();
         com.atom.chat.render.FirstOpenWarmup.requestGlWarmup();
     }
 
@@ -188,6 +193,8 @@ public class AtomChatClient {
         com.atom.chat.net.MediaCompanionClient.onDisconnect();
             com.atom.chat.net.ProfileCompanionClient.onLeave();
             com.atom.chat.reaction.ReactionClient.reset();
+        com.atom.chat.api.card.CardStateStore.clear();
+        com.atom.chat.card.BuiltInCardAdapter.resetSession();
         com.atom.chat.net.PokeCompanionClient.setHandler(null);
         com.atom.chat.net.PackSyncClient.onDisconnect();
         com.atom.chat.net.ConfigScreenClient.onDisconnect();

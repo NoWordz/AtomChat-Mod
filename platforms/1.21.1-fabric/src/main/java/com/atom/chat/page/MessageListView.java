@@ -100,6 +100,8 @@ public final class MessageListView {
 
     private final List<MessageHit> hits = new ArrayList<>();
     private final List<ClickableSpan> clickableSpans = new ArrayList<>();
+    private final List<com.atom.chat.card.CardHitRegion> cardHits = new ArrayList<>();
+    private float listClipX, listClipY, listClipW, listClipH;
 
     /**
      * Wrapped content lines keyed by (message id, wrap width). Measure, draw
@@ -185,7 +187,10 @@ public final class MessageListView {
 
     /** Cached {@link #kindOf}; see {@link #kindCache}. */
     private BubbleKind kindOfCached(ChatMessage msg) {
-        long key = msg.getId() * 2L + (AtomChatConfig.get().imageMessagesEnabled ? 1L : 0L);
+        long flags = (AtomChatConfig.get().imageMessagesEnabled ? 1L : 0L)
+                | (AtomChatConfig.get().shareCardsEnabled ? 2L : 0L)
+                | (msg.hasCard() ? 4L : 0L);
+        long key = msg.getId() * 8L + flags;
         BubbleKind cached = kindCache.get(key);
         if (cached != null) {
             return cached;
@@ -349,6 +354,11 @@ public final class MessageListView {
         hits.clear();
         reactionChips.begin(x, y, width, height);
         clickableSpans.clear();
+        cardHits.clear();
+        listClipX = x;
+        listClipY = y;
+        listClipW = width;
+        listClipH = height;
         currentMessages = messages;
         // Drop an expired jump highlight even when its message left the list;
         // the per-message draw path would otherwise never reach the expiry check.
@@ -457,6 +467,7 @@ public final class MessageListView {
                     }
                     drawJumpHighlight(canvas, msg, x, cursorY, width, h);
                     int spanStart = clickableSpans.size();
+                    int cardHitStart = cardHits.size();
                     MessageHit hit = drawMessage(canvas, msg, x, cursorY, width, hits.size(), grouped);
                     reactionChips.draw(canvas, msg, msg.isOwn() ? hit.bubbleX()+hit.bubbleWidth() : hit.bubbleX(), hit.bubbleBottom(),
                             Math.max(UiTokens.REACTION_MIN_WIDTH, bubbleMaxWidth(msg, width)), scroll.getScrollY());
@@ -466,6 +477,12 @@ public final class MessageListView {
                     for (int i = spanStart; i < clickableSpans.size(); i++) {
                         ClickableSpan s = clickableSpans.get(i);
                         clickableSpans.set(i, new ClickableSpan(s.x(), s.y() - scroll.getScrollY(), s.w(), s.h(), s.style()));
+                    }
+                    for (int i = cardHitStart; i < cardHits.size(); i++) {
+                        com.atom.chat.card.CardHitRegion ch = cardHits.get(i);
+                        cardHits.set(i, new com.atom.chat.card.CardHitRegion(
+                                ch.x(), ch.y() - scroll.getScrollY(), ch.w(), ch.h(),
+                                ch.card(), ch.state(), ch.action(), ch.hoverStyle()));
                     }
                     if (layered) {
                         canvas.restore();
@@ -884,6 +901,33 @@ public final class MessageListView {
         return Optional.ofNullable(findClickableSpan(mx, my));
     }
 
+    /** First interactive card region under {@code (mx, my)} inside the visible list clip. */
+    public com.atom.chat.card.CardHitRegion cardHitAt(float mx, float my) {
+        if (!inListClip(mx, my)) return null;
+        for (com.atom.chat.card.CardHitRegion hit : cardHits) {
+            if (hit.action() != null && hit.contains(mx, my)) {
+                return hit;
+            }
+        }
+        return null;
+    }
+
+    /** Native MC hover style (e.g. SHOW_ITEM tooltip) for any card under {@code (mx, my)} inside the visible list clip. */
+    public net.minecraft.text.Style cardHoverStyleAt(float mx, float my) {
+        if (!inListClip(mx, my)) return null;
+        for (com.atom.chat.card.CardHitRegion hit : cardHits) {
+            if (hit.hoverStyle() != null && hit.hoverStyle().getHoverEvent() != null && hit.contains(mx, my)) {
+                return hit.hoverStyle();
+            }
+        }
+        return null;
+    }
+
+    private boolean inListClip(float mx, float my) {
+        return mx >= listClipX && mx <= listClipX + listClipW
+                && my >= listClipY && my <= listClipY + listClipH;
+    }
+
     /** Drops entrance-animation bookkeeping; called when the screen is removed. */
     public void dispose() {
         nameShadows.clear();
@@ -1022,7 +1066,7 @@ public final class MessageListView {
     }
 
     /** How a message is painted. Draw, measure and hit-test all read this one answer. */
-    private enum BubbleKind { SYSTEM, IMAGE, IMAGE_PLACEHOLDER, TEXT }
+    private enum BubbleKind { SYSTEM, CARD, IMAGE, IMAGE_PLACEHOLDER, TEXT }
 
     /** Once per launch; see {@link #noteImageMessagesDisabled()}. */
     private static final AtomicBoolean IMAGE_MESSAGES_OFF_NOTED = new AtomicBoolean();
@@ -1035,6 +1079,9 @@ public final class MessageListView {
      * cannot turn into an image now still gets the placeholder.
      */
     private static BubbleKind kindOf(ChatMessage msg) {
+        if (msg.hasCard() && AtomChatConfig.get().shareCardsEnabled) {
+            return BubbleKind.CARD;
+        }
         if (msg.isSystem()) {
             return BubbleKind.SYSTEM;
         }
@@ -1066,13 +1113,16 @@ public final class MessageListView {
 
     private MessageHit drawMessage(Canvas canvas, ChatMessage msg, float x, float y, float maxWidth, int index,
                                    boolean grouped) {
+        BubbleKind kind = kindOfCached(msg);
+        if (kind == BubbleKind.CARD) {
+            return drawCardMessage(canvas, msg, x, y, maxWidth, index, grouped);
+        }
         if (msg.isSystem()) {
             return drawSystemMessage(canvas, msg, x, y, maxWidth, index);
         }
         Font font = FontManager.font(UiTokens.FONT_BODY);
         float bubbleMaxWidth = bubbleMaxWidth(msg, maxWidth);
         String raw = msg.getRawText();
-        BubbleKind kind = kindOfCached(msg);
         if (kind == BubbleKind.IMAGE_PLACEHOLDER) {
             return drawImagePlaceholderMessage(canvas, msg, x, y, maxWidth, index, grouped);
         }
@@ -1350,6 +1400,48 @@ public final class MessageListView {
                 SkiaFontRenderer.centerBaselineY(font, centerY), accent(), true);
     }
 
+    private MessageHit drawCardMessage(Canvas canvas, ChatMessage msg, float x, float y, float maxWidth,
+                                       int index, boolean grouped) {
+        com.atom.chat.api.card.ShareCard card = msg.getCard();
+        boolean hasSender = !msg.isSystem() && msg.getSenderName() != null && !msg.getSenderName().isBlank();
+        boolean hasQuote = hasSender && msg.getQuoteName() != null;
+        float quoteH = hasQuote ? UiTokens.QUOTE_HEIGHT + UiTokens.QUOTE_GAP : 0.0F;
+        float band = !hasSender ? s(2) : (grouped ? 0.0F : UiTokens.NAME_BAND);
+        float nameOffset = UiTokens.AVATAR_SIZE + UiTokens.AVATAR_GAP + avatarEdgeInset();
+        // Every card (player-sent OR system-sent like TPA) uses the exact same lane width
+        // so all cards in the stream stay strictly uniform in width and alignment.
+        float budgetW = bubbleMaxWidth(msg, maxWidth);
+        float[] size = com.atom.chat.card.BuiltInCardRenderer.measure(card, budgetW);
+        float cardW = size[0];
+        float cardH = size[1];
+        float bubbleTop = y + band + quoteH;
+        float bubbleX = !hasSender
+                ? x + nameOffset
+                : (msg.isOwn() ? x + maxWidth - cardW - nameOffset : x + nameOffset);
+
+        float avatarX = 0.0F;
+        float avatarY = 0.0F;
+        float avatarSize = 0.0F;
+        if (hasSender && !grouped) {
+            drawMessageName(canvas, msg, y, bubbleX, bubbleX + cardW);
+            avatarX = msg.isOwn() ? x + maxWidth - UiTokens.AVATAR_SIZE - avatarEdgeInset()
+                    : x + avatarEdgeInset();
+            avatarY = y + s(4);
+            avatarSize = UiTokens.AVATAR_SIZE;
+            drawAvatarWithPoke(canvas, msg, index, avatarX, avatarY);
+        }
+        if (hasQuote) {
+            drawQuotePill(canvas, msg, x, maxWidth, y + band, msg.isOwn());
+        }
+        com.atom.chat.card.BuiltInCardRenderer.draw(canvas, card, bubbleX, bubbleTop, cardW, cardH,
+                msg.isOwn(), cardHits);
+        drawDuplicateBadge(canvas, msg, bubbleX, cardW, bubbleTop, cardH);
+
+        float bottom = bubbleTop + cardH;
+        return new MessageHit(msg, index, x, y, maxWidth, bottom, avatarX, avatarY, avatarSize,
+                bubbleTop, bubbleX, cardW, bottom, null);
+    }
+
     private MessageHit drawImageMessage(Canvas canvas, ChatMessage msg, String raw, String imageUrl,
                                         float x, float y, float maxWidth, int index, boolean grouped) {
         // Bubble offset from the list edge; includes the avatar's edge inset so
@@ -1500,8 +1592,11 @@ public final class MessageListView {
     private float measureContentHeight(List<ChatMessage> messages, float width, int from) {
         int config = (AtomChatConfig.get().imageMessagesEnabled ? 1 : 0)
                 | (AtomChatConfig.get().compactMessagesEnabled ? 2 : 0)
-                | (AtomChatConfig.get().effectiveBubbleStyle().ordinal() << 2);
-        long reaction = com.atom.chat.reaction.ReactionClient.revision() + reactionChips.geometryEpoch() * 1_000_003L;
+                | (AtomChatConfig.get().shareCardsEnabled ? 4 : 0)
+                | (AtomChatConfig.get().effectiveBubbleStyle().ordinal() << 3);
+        long reaction = com.atom.chat.reaction.ReactionClient.revision()
+                + reactionChips.geometryEpoch() * 1_000_003L
+                + com.atom.chat.api.card.CardStateStore.revision() * 31L;
         if (heightValue >= 0.0F && heightList == messages && heightSize == messages.size()
                 && heightFrom == from && heightWidth == width
                 && heightConfig == config && heightReaction == reaction) {
@@ -1516,7 +1611,9 @@ public final class MessageListView {
         heightFrom = from;
         heightWidth = width;
         heightConfig = config;
-        heightReaction = com.atom.chat.reaction.ReactionClient.revision() + reactionChips.geometryEpoch() * 1_000_003L;
+        heightReaction = com.atom.chat.reaction.ReactionClient.revision()
+                + reactionChips.geometryEpoch() * 1_000_003L
+                + com.atom.chat.api.card.CardStateStore.revision() * 31L;
         heightValue = measured;
         return measured;
     }
@@ -1566,6 +1663,14 @@ public final class MessageListView {
     }
 
     private float messageBodyHeight(ChatMessage msg, float maxWidth, boolean grouped) {
+        BubbleKind kind = kindOfCached(msg);
+        if (kind == BubbleKind.CARD) {
+            boolean hasSender = !msg.isSystem() && msg.getSenderName() != null && !msg.getSenderName().isBlank();
+            float quoteH = hasSender && msg.getQuoteName() != null ? UiTokens.QUOTE_HEIGHT + UiTokens.QUOTE_GAP : 0.0F;
+            float band = !hasSender ? s(2) : (grouped ? 0.0F : UiTokens.NAME_BAND);
+            float budgetW = bubbleMaxWidth(msg, maxWidth);
+            return band + quoteH + com.atom.chat.card.BuiltInCardRenderer.measure(msg.getCard(), budgetW)[1];
+        }
         if (msg.isSystem()) {
             Font font = FontManager.font(UiTokens.FONT_QUOTE);
             float lineHeight = SkiaFontRenderer.getHeight(font);
@@ -1574,7 +1679,6 @@ public final class MessageListView {
         }
         float quoteH = msg.getQuoteName() != null ? UiTokens.QUOTE_HEIGHT + UiTokens.QUOTE_GAP : 0.0F;
         float band = grouped ? 0.0F : UiTokens.NAME_BAND;
-        BubbleKind kind = kindOfCached(msg);
         if (kind == BubbleKind.IMAGE_PLACEHOLDER) {
             Font font = FontManager.font(UiTokens.FONT_QUOTE);
             return band + quoteH
@@ -1597,7 +1701,7 @@ public final class MessageListView {
         List<MessageTextLine> out = new ArrayList<>();
         ChatMessage msg = hit.message();
         BubbleKind kind = kindOfCached(msg);
-        if (kind == BubbleKind.IMAGE || kind == BubbleKind.IMAGE_PLACEHOLDER) {
+        if (kind == BubbleKind.IMAGE || kind == BubbleKind.IMAGE_PLACEHOLDER || kind == BubbleKind.CARD) {
             return out;
         }
         Font font = FontManager.font(msg.isSystem() ? UiTokens.FONT_QUOTE : UiTokens.FONT_BODY);

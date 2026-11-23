@@ -913,6 +913,35 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         }
         public void releaseTool() { primitives.setButtonHeld(-1); }
         public void pickImage() { if (!isPrivateReadOnly()) pickAndUploadImage(); }
+        @Override
+        public void shareLocation() {
+            if (isPrivateReadOnly()) return;
+            if (activePrivateTarget() != null) {
+                AtomChatScreen.this.feedback("atomchat.card.public_only", false);
+                return;
+            }
+            com.atom.chat.api.card.ShareCard card = com.atom.chat.card.BuiltInCardAdapter.fromPlayerLocation(client);
+            if (card != null && com.atom.chat.api.card.AtomChatCards.shareFromClient(card)) {
+                AtomChatScreen.this.feedback("atomchat.card.shared", true);
+            }
+        }
+        @Override
+        public void shareHeldItem() {
+            if (isPrivateReadOnly() || client.player == null) return;
+            if (activePrivateTarget() != null) {
+                AtomChatScreen.this.feedback("atomchat.card.public_only", false);
+                return;
+            }
+            net.minecraft.world.item.ItemStack held = client.player.getMainHandItem();
+            if (held.isEmpty()) {
+                AtomChatScreen.this.feedback("atomchat.card.no_held_item", false);
+                return;
+            }
+            com.atom.chat.api.card.ShareCard card = com.atom.chat.card.BuiltInCardAdapter.fromItemStack(held, "装备分享");
+            if (card != null && com.atom.chat.api.card.AtomChatCards.shareFromClient(card)) {
+                AtomChatScreen.this.feedback("atomchat.card.shared", true);
+            }
+        }
         public void dismissOtherPopups() { emojiPanel.close(); closePhrasePanel(); contextMenu.close(); dismissSuggestor(); }
     });
 
@@ -2444,6 +2473,11 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         ClickableSpan hoveredSpan = messageWiring.hoverSpan(isWorldChatPage() && !composerTools.active(),
                 toVirtualX(mouseX), toVirtualY(mouseY));
         Style hovered = hoveredSpan != null ? hoveredSpan.style() : null;
+        if (hovered == null && isWorldChatPage() && !composerTools.active()
+                && !contextMenu.hasMessageMenu() && !contextMenu.hasPlayerCardMenu()
+                && !emojiPanel.isOpen() && !quickPhrasePanel.isOpen()) {
+            hovered = messageListView.cardHoverStyleAt(toVirtualX(mouseX), toVirtualY(mouseY));
+        }
         if (hovered != null && hovered.getHoverEvent() != null && !foreignChatUiHovered(mouseX, mouseY)
                 && !imagePreview.isActive() && !imageCropper.isActive() && !colorPicker.isActive()) {
             context.renderComponentHoverEffect(this.font, hovered, mouseX, mouseY);
@@ -4674,6 +4708,39 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
                         messageWiring.clearClick();
                         return true;
                     }
+                }
+                com.atom.chat.card.CardHitRegion cardHit = messageListView.cardHitAt(mx, my);
+                if (cardHit != null && cardHit.action() != null) {
+                    com.atom.chat.audio.FeedbackSoundController.play(com.atom.chat.audio.FeedbackCue.BUTTON);
+                    com.atom.chat.card.CardActionExecutor.execute(cardHit.card(), cardHit.state(), cardHit.action(),
+                            new com.atom.chat.card.CardActionExecutor.FeedbackSink() {
+                                @Override
+                                public void toast(String message) {
+                                    notificationJump.feedback("atomchat.card.notice", message, true);
+                                }
+
+                                @Override
+                                public void suggestInComposer(String text) {
+                                    composer.setText(text);
+                                    composer.focus();
+                                }
+
+                                @Override
+                                public void openUrl(String url) {
+                                    handleComponentClicked(Style.EMPTY.withClickEvent(
+                                            new net.minecraft.network.chat.ClickEvent(
+                                                    net.minecraft.network.chat.ClickEvent.Action.OPEN_URL, url)));
+                                }
+
+                                @Override
+                                public void runComponentCommand(String slashCommand) {
+                                    handleComponentClicked(Style.EMPTY.withClickEvent(
+                                            new net.minecraft.network.chat.ClickEvent(
+                                                    net.minecraft.network.chat.ClickEvent.Action.RUN_COMMAND, slashCommand)));
+                                }
+                            });
+                    messageWiring.clearClick();
+                    return true;
                 }
             }
 
