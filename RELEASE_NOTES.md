@@ -20,6 +20,14 @@
 - 减少文字装饰线绘制时的对象分配，保留现有视觉效果。
 - 复用字体路由结果，并按实际待绘制消息准备原生字形。
 
+**说明**
+
+- Modern UI 接管的普通聊天使用 AC 字体，其特殊称号图标暂未完整适配。
+
+**安装**
+
+- 选择对应 Minecraft 版本和加载器的 AtomChat，以及本发布页配套的 AtomLib 0.7.1。
+
 ----
 
 **Changed**
@@ -39,6 +47,11 @@
 
 - Reduced allocations when drawing text decorations without changing their appearance.
 - Reuse font-routing results and prepare native glyphs for the messages actually being painted.
+
+**Notes**
+
+- Ordinary chat uses AC fonts with Modern UI; its special title icons are not fully supported.
+- Install the AtomChat JAR for your Minecraft version and loader together with the matching AtomLib 0.7.1 JAR from this release.
 
 ## v0.9.5
 

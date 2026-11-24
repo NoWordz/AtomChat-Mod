@@ -1,5 +1,13 @@
 # AtomChat 当前状态
 
+## 2026-11-24 · 0.9.6 已实测确认，准备发布
+
+- 用户确认本轮实测正常，授权提交、推送与正式发布0.9.6。Modern UI 下正文、名字和数字全变方框的回归已修复并获现场确认，未损坏聊天记录。 [字体回归与验证](verification/2026-11-24-v096-font-regression.md)
+- 本版包括 HUD 按 GUI 缩放避让原版快捷栏、单行省略，紧凑单尖气泡四状态普通圆弧，富文本名字和字体、原版消息标记与撤回同步，以及原始消息500条容量和绘制分配优化。CLASSIC/ROUND造型保持原样；移动或加宽快捷栏模组、阿拉伯/希伯来双向排版不在本版范围。 [需求与验收](verification/2026-11-23-v096-progress.md)
+- 沿用11月24日13:32核对的三端严格构建结果：6,980项测试含56项既有跳过，6,924项实际通过、零失败/错误，各196个正式设置场景；19项字体定向回归全部通过。独立审查及旧实现失败、新实现通过的证据已归档。本次只更新验收与发布文档，未改变已验收的行为代码。 [冻结证据](D:/AtomChat-Backups/2026-11-24-v096-font-hotfix/verification.json)
+- 13:31/13:34三端修复包已部署，CCB `62b6ae65a444`、Forge主实例 `bbd900eb29f7`、NeoForge航空学 `becc1c0287c1`，均配原AtomLib0.7.1。 [部署回执](D:/AtomChat-Backups/2026-11-24-v096-font-hotfix/deployment-readback.json)
+- 图片上传故障仅完成静态归因，未取得故障服现场证据；Modern UI 私有字体集合的特殊图标仍未完整适配。游戏帧时及未单列的资源包/Shift/原版Tag专项不以自动化绿灯冒充实测。此前公开发行仍是0.9.5，本轮将由既有CI生成正式0.9.6配套包。
+
 ## 2026-11-23 · 0.9.5 正式发布
 
 - GitHub Latest 已更新至 `v0.9.5`，标签指向 `9bbd098d3f3aa4241211bedea210bd7cb9f931e5`。双语发布说明和 6 个公开附件均已核对。三份 AtomChat 附件的构建戳指向发布提交，关键渲染与兼容类同本地验收包一致，三份 AtomLib 附件的摘要与固定输入一致。 [公开发布](https://github.com/NoWordz/AtomChat-Mod/releases/tag/v0.9.5) · [发布回执](D:/AtomChat-Backups/2026-11-22-v095-release/release-verification.json)

@@ -23,6 +23,10 @@
 - 复用文字装饰线画笔，减少重复绘制时的对象分配。
 - 复用字体路由结果，仅为可见消息及退场消息准备原生字形。
 
+**说明**
+
+- Modern UI 接管的普通聊天使用 AC 字体，其私有字体集合中的特殊称号和图标暂未完整适配。
+
 ----
 
 **Changed**
@@ -45,6 +49,10 @@
 
 - Reuse text-decoration paints to reduce allocations during repeated drawing.
 - Reuse font-routing results and prepare native glyphs only for visible and departing messages.
+
+**Notes**
+
+- Ordinary chat uses AC fonts when Modern UI manages glyphs; special titles and icons in its private font collections are not fully supported.
 
 ## v0.9.5
 
