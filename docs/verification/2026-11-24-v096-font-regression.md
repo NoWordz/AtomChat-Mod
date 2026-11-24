@@ -2,6 +2,8 @@
 
 2026-11-24。源版本 `2a2d8782` 部署后，用户在 Fabric CCB 反馈正文、玩家名和系统消息全部成为方框，标题和时间正常。用户截图与当次客户端日志保存在 `build/v096-font-tofu/`。这是新增字体兼容路径的回归，先前的自动化检查未覆盖外部字体系统替代原版 FontStorage 的场景。
 
+临时工作副本后来按用户要求移入回收站；关键截图、日志、XML、制品与回执继续保留在 `D:/AtomChat-Backups/2026-11-24-v096-font-hotfix/`。下文 `build/v096-font-tofu/` 是当时的执行位置，不再是当前读取入口。
+
 ## 根因与修正
 
 CCB 安装的 Modern UI 3.11.1.9 用 StandardFontSet 的独立字体集合供字，先对 superclass FontStorage 调用空 provider 列表的 setFonts。直接读取其 JAR 字节码确认：公开 getGlyph 使用独立缓存，普通 outline glyph 的 bake 不调用原版 baker。

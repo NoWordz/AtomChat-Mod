@@ -163,8 +163,12 @@ class NativeFontProviderTest {
             var scroll=new com.atom.chat.ui.ScrollController();
             try(var surface=Surface.makeRasterN32Premul(360,150);var pixels=new Bitmap()) {
                 pixels.allocN32Pixels(360,150);
+                for(var locale:List.of("en_us","zh_cn"))try(var language=PreviewLanguage.install(locale)) {
                 for(var state:List.of(com.atom.chat.chat.OutgoingMessages.State.PENDING,com.atom.chat.chat.OutgoingMessages.State.UNCONFIRMED,com.atom.chat.chat.OutgoingMessages.State.FAILED)) {
                     message.delivery(state);NativeFontRenderer.invalidate();
+                    String statusKey=com.atom.chat.render.MessagePaint.deliveryStatusKey(message);
+                    String status=net.minecraft.text.Text.translatable(statusKey).getString();
+                    assertNotEquals(statusKey,status,"the visual fixture must load the actual mod locale");
                     byte[] first=null;
                     for(int frame=0;frame<2;frame++) {
                         surface.getCanvas().clear(0);NativeFontRenderer.beginFrame();
@@ -176,10 +180,11 @@ class NativeFontProviderTest {
                             int color=pixels.getColor(x,y),red=(color>>>16)&255,green=(color>>>8)&255,blue=color&255;
                             if((color>>>24)>0 && green>red*2 && blue>green)colored++;
                         }
-                        assertTrue(colored>0,"the newly native middle dot must appear on the first status frame: "+state);
+                        assertTrue(colored>0,"the newly native middle dot must appear on the first status frame: "+locale+" / "+state);
                         if(first==null)first=pixels.readPixels();else assertArrayEquals(first,pixels.readPixels());
                         NativeFontRenderer.endFrame();
                     }
+                }
                 }
             } finally {view.dispose();NativeFontRenderer.invalidate();}
         }
