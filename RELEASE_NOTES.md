@@ -1,5 +1,43 @@
 # Release Notes
 
+## v0.9.6
+
+**更改**
+
+- 紧凑消息的单尖气泡按首条、中间和末条衔接，圆角保持普通圆弧。
+- 聊天历史保留最多 500 条原始消息，重复消息仅在显示时合并。
+
+**修复**
+
+- 聊天 HUD 的长消息随 GUI 缩放省略，为原版快捷栏和副手槽留出间隙。
+- 聊天面板和 HUD 正确绘制粗体、斜体、删除线及混淆文字，并保留服务器指定的名字颜色与下划线。
+- 聊天文字支持资源包字体和自定义称号字形，恢复插入内容的 Shift 点击，并保留原版消息标记与提示。
+- 原版撤回同步替换面板和本地历史记录，并清除对应正文、引用和交互缓存。
+
+**性能**
+
+- 减少文字装饰线绘制时的对象分配，保留现有视觉效果。
+- 复用字体路由结果，并按实际待绘制消息准备原生字形。
+
+----
+
+**Changed**
+
+- Compact single-tip bubbles now connect according to their first, middle, and last positions while retaining circular corners.
+- Chat history retains up to 500 original messages, merging duplicates only for display.
+
+**Fixed**
+
+- Long HUD messages now truncate at each GUI scale, leaving room for the vanilla hotbar and offhand slot.
+- The panel and HUD render bold, italic, strikethrough, and obfuscated text while preserving server-defined name colors and underlines.
+- Chat text supports resource-pack fonts and custom title glyphs, restores insertion Shift-clicks, and preserves vanilla message indicators and tooltips.
+- Vanilla message deletion replaces matching panel and local-history records and clears their original bodies, quotes, and interaction caches.
+
+**Performance**
+
+- Reduced allocations when drawing text decorations without changing their appearance.
+- Reuse font-routing results and prepare native glyphs for the messages actually being painted.
+
 ## v0.9.5
 
 **更改**

@@ -173,6 +173,24 @@ public final class NotificationBanner {
     private record Hit(Active banner, Rect rect) {
     }
 
+    public void deleted(String signature,RichText marker) {
+        for(int i=0;i<banners.size();i++) {
+            var active=banners.get(i);var message=active.message();
+            if(message!=null && signature.equals(message.nativeMeta().signature())) {
+                var clean=message.asDeleted(marker);
+                banners.set(i,new Active(active.type(),clean.getSenderRich(),clean.getContentRich(),active.born(),clean));
+            }
+        }
+        hitRects.clear();buttonRects.clear();hoverAlphas.clear();buttonHovers.clear();buttonScales.clear();layoutYs.clear();
+    }
+
+    public void requestFonts() {
+        for(var banner:banners) {
+            com.atom.chat.render.NativeFontRenderer.request(titleRich(banner.type(),banner.sender()));
+            com.atom.chat.render.NativeFontRenderer.request(bodyRich(banner.content()));
+        }
+    }
+
     private NotificationBanner() { this(System::currentTimeMillis); }
 
     NotificationBanner(java.util.function.LongSupplier clock) {

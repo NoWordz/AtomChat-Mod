@@ -30,6 +30,14 @@ public final class CornerGeometry {
         return new CircularRect(x, y, x + width, y + height, new float[]{fitted});
     }
 
+    public static RRect circularRect(float x, float y, float width, float height,
+                                     float topLeft, float topRight, float bottomRight, float bottomLeft) {
+        float half = Math.max(0F, Math.min(width, height) / 2F);
+        float tl = Math.max(0F, Math.min(topLeft, half)), tr = Math.max(0F, Math.min(topRight, half));
+        float br = Math.max(0F, Math.min(bottomRight, half)), bl = Math.max(0F, Math.min(bottomLeft, half));
+        return new CircularRect(x, y, x + width, y + height, new float[]{tl, tl, tr, tr, br, br, bl, bl});
+    }
+
     static boolean usesCircularArcs(RRect rect) {
         return rect instanceof CircularRect;
     }
@@ -45,9 +53,9 @@ public final class CornerGeometry {
         }
 
         @Override public RRect scale(float sx, float sy) {
-            float ry = _radii.length == 1 ? _radii[0] : _radii[1];
-            return new CircularRect(getLeft() * sx, getTop() * sy, getRight() * sx, getBottom() * sy,
-                    new float[]{_radii[0] * Math.abs(sx), ry * Math.abs(sy)});
+            float[] radii = _radii.length == 1 ? new float[]{_radii[0], _radii[0]} : _radii.clone();
+            for (int i = 0; i < radii.length; i++) radii[i] *= Math.abs(i % 2 == 0 ? sx : sy);
+            return new CircularRect(getLeft() * sx, getTop() * sy, getRight() * sx, getBottom() * sy, radii);
         }
     }
 
@@ -191,6 +199,10 @@ public final class CornerGeometry {
 
     static Radii circularCorners(RRect rect) {
         var radii = rect._radii;
+        if (usesCircularArcs(rect) && radii.length == 8) {
+            for (int i = 0; i < 8; i += 2) if (radii[i] != radii[i + 1]) return null;
+            return new Radii(-radii[0], -radii[2], -radii[4], -radii[6]);
+        }
         float radius = radii[0];
         if (radius <= 0F || Math.min(rect.getWidth(), rect.getHeight()) <= 0F) return null;
         for (float value : radii) if (value != radius) return null;

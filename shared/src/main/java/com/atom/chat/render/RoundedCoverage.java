@@ -56,7 +56,7 @@ final class RoundedCoverage {
                 bool right = p.x > size.x * 0.5;
                 float upper = right ? radii.y : radii.x;
                 float lower = right ? radii.z : radii.w;
-                bool top = p.y <= abs(upper) || p.y < size.y - abs(lower);
+                bool top = p.y <= size.y * 0.5;
                 float r = top ? upper : lower;
                 float reach = abs(r);
                 float2 edge = float2(right ? p.x - size.x : -p.x, top ? -p.y : p.y - size.y);

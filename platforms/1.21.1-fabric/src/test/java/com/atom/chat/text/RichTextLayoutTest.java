@@ -156,4 +156,18 @@ class RichTextLayoutTest {
         assertEquals(2, RichTextLayout.charAt(line, CHAR_10, 20f));
         assertEquals(2, RichTextLayout.charAt(line, CHAR_10, 25f));
     }
+    @Test void backwardsAdvanceKeepsNativeSpacingAndLastPaintedHit() {
+        TextMeasurer nativeSpacing=new TextMeasurer(){
+            public float measure(String text){float x=0;for(char cp:text.toCharArray())x+=cp==' '?-8:10;return x;}
+            public boolean collapsibleSpace(RichText.RichRun source){return false;}
+        };
+        var line=RichTextLayout.wrap(RichText.literal("A B"),nativeSpacing,100).get(0);
+        assertEquals("A B",line.getPlainText());
+        assertEquals(12,RichTextLayout.width(line,nativeSpacing));
+        assertEquals(2,RichTextLayout.advanceTo(line,nativeSpacing,2));
+        assertEquals(2,RichTextLayout.charAt(line,nativeSpacing,3),"later glyph over the negative space wins");
+        assertEquals(2,RichTextLayout.caretAt(line,nativeSpacing,2));
+        var wrapped=RichTextLayout.wrap(RichText.literal("A  B"),nativeSpacing,10);
+        assertTrue(wrapped.stream().anyMatch(value->value.getPlainText().contains("  ")));
+    }
 }

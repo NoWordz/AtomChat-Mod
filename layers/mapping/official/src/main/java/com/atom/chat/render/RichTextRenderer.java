@@ -23,14 +23,49 @@ import java.util.List;
  * drawing and width queries all agree with the existing Skia font renderer.
  */
 public final class RichTextRenderer {
+    private static final Paint DECORATION = new Paint().setAntiAlias(true).setStroke(true);
+    private static final java.util.Map<Font, TextMeasurer> MEASURERS =
+            new java.util.IdentityHashMap<>();
+
     private RichTextRenderer() {
+    }
+
+    /** Layout, truncation and hit testing share the exact font selected for each run. */
+    public static TextMeasurer measurer(Font font) {
+        TextMeasurer result = MEASURERS.get(font);
+        if (result != null) return result;
+        if (MEASURERS.size() >= 128) MEASURERS.remove(MEASURERS.keySet().iterator().next());
+        result = new TextMeasurer() {
+            public float measure(String text) { return NativeFontRenderer.width(font,text,Style.EMPTY); }
+            public boolean collapsibleSpace(RichText.RichRun source) { return !NativeFontRenderer.hasNative(source.style(),32); }
+            public float measure(String text, RichText.RichRun source) {
+                return NativeFontRenderer.width(font, text, source.style());
+            }
+        };
+        MEASURERS.put(font, result);
+        return result;
+    }
+
+    private static Font runFont(Font font, Style style) {
+        return style.isBold() ? com.atom.chat.font.FontManager.boldFont(font.getSize()) : font;
+    }
+
+    private static void drawGlyphs(Canvas canvas, Font font, String text, float x, float baseline, int color, Style style, long phase) {
+        NativeFontRenderer.draw(canvas, font, text, x, baseline, color, style, phase);
+    }
+
+    public static boolean hasObfuscated(List<RichLine> lines) {
+        for (var line : lines) for (var part : line.parts()) {
+            if (!part.isItem() && part.source().style().isObfuscated()) return true;
+        }
+        return false;
     }
 
     /**
      * Wraps rich text to the given width using the supplied Skia font.
      */
     public static List<RichLine> wrapFor(RichText text, Font font, float maxWidth) {
-        TextMeasurer measurer = s -> SkiaFontRenderer.getStringWidth(font, s);
+        TextMeasurer measurer = measurer(font);
         return RichTextLayout.wrapWithItems(text, measurer, maxWidth,
                 font.getSize() + com.atom.lib.design.atomchat.UiTokens.INLINE_ITEM_GAP);
     }
@@ -39,7 +74,7 @@ public final class RichTextRenderer {
      * Returns the on-screen width of one already-wrapped rich line.
      */
     public static float width(Font font, RichLine line) {
-        return RichTextLayout.width(line, s -> SkiaFontRenderer.getStringWidth(font, s));
+        return RichTextLayout.width(line, measurer(font));
     }
 
     /** Single-row truncation uses the same item slots and source indices as paint. */
@@ -48,11 +83,11 @@ public final class RichTextRenderer {
         if (lines.isEmpty() || width(font, lines.get(0)) <= maxWidth) return text;
         if (maxWidth <= 0) return RichText.concat(text.slice(0, 1), RichText.literal("…"));
         RichLine line = lines.get(0);
-        float ellipsis = SkiaFontRenderer.getStringWidth(font, "…");
-        TextMeasurer measurer = value -> SkiaFontRenderer.getStringWidth(font, value);
+        float ellipsis = measurer(font).measure("…");
+        TextMeasurer measurer = measurer(font);
         int end = 0;
         float precedingWidth = 0.0F;
-        outer: for (RichTextLayout.Part part : line.parts()) {
+        for (RichTextLayout.Part part : line.parts()) {
             if (part.isItem()) {
                 precedingWidth += part.itemWidth();
                 continue;
@@ -60,8 +95,8 @@ public final class RichTextRenderer {
             for (int i = 0; i < part.text().length();) {
                 i += Character.charCount(part.text().codePointAt(i));
                 int next = part.textStart() + i;
-                float advance = precedingWidth + measurer.measure(part.text().substring(0, i));
-                if (advance + ellipsis > maxWidth) break outer;
+                float advance = precedingWidth + measurer.measure(part.text().substring(0, i), part.source());
+                if (advance + ellipsis > maxWidth) continue;
                 end = next;
             }
             precedingWidth += part.width(measurer);
@@ -128,10 +163,11 @@ public final class RichTextRenderer {
         }
         float totalH = lines.size() * lineHeight;
         float blockTop = centerY - totalH / 2.0F;
+        long phase = ObfuscatedText.clock.getAsLong();
         if (backing) {
-            drawShadowPass(canvas, font, lines, x, blockTop, lineHeight, SoftShadow.enabled() ? shadow : null);
+            drawShadowPass(canvas, font, lines, x, blockTop, lineHeight, SoftShadow.enabled() ? shadow : null, phase);
         }
-        drawRunsPass(canvas, font, lines, x, blockTop, lineHeight, fallbackColor, sink, addClickable);
+        drawRunsPass(canvas, font, lines, x, blockTop, lineHeight, fallbackColor, sink, addClickable, phase);
     }
 
     /**
@@ -141,7 +177,7 @@ public final class RichTextRenderer {
      */
     private static void drawRunsPass(Canvas canvas, Font font, List<RichLine> lines,
                                      float x, float blockTop, float lineHeight, int fallbackColor,
-                                     List<ClickableSpan> sink, boolean addClickable) {
+                                     List<ClickableSpan> sink, boolean addClickable, long phase) {
         for (int i = 0; i < lines.size(); i++) {
             RichLine line = lines.get(i);
             float lineCenterY = blockTop + (i + 0.5F) * lineHeight;
@@ -155,19 +191,31 @@ public final class RichTextRenderer {
                     continue;
                 }
                 int color = effectiveColor(run.style(), fallbackColor);
-                float runWidth = part.width(s -> SkiaFontRenderer.getStringWidth(font, s));
+                float runWidth = part.width(measurer(font));
                 if (part.isItem()) {
                     ItemIconRenderer.draw(canvas, run, runX, lineCenterY - font.getSize() / 2, font.getSize());
                 } else {
-                    SkiaFontRenderer.drawText(canvas, font, text, runX, baseline, color);
+                    drawGlyphs(canvas, font, text, runX, baseline, color, run.style(), phase);
                 }
                 if (!part.isItem() && (run.style().getClickEvent() != null || run.style().isUnderlined())) {
-                    drawUnderline(canvas, font, runX, baseline, runWidth, color);
+                    drawUnderline(canvas, runFont(font, run.style()), runX, baseline, runWidth, color);
+                }
+                if (!part.isItem() && run.style().isStrikethrough()) {
+                    Font selected = runFont(font, run.style());
+                    float strikeY = baseline - selected.getMetrics().getCapHeight() / 2F;
+                    canvas.drawLine(runX, strikeY, runX + runWidth, strikeY,
+                            DECORATION.setColor(color).setStrokeWidth(Math.max(1F, selected.getSize() / 14F)));
                 }
                 if (addClickable && sink != null
-                        && (run.style().getClickEvent() != null || run.style().getHoverEvent() != null)) {
+                        && (run.style().getClickEvent() != null || run.style().getHoverEvent() != null
+                        || run.style().getInsertion() != null)) {
                     Style spanStyle = withUrlHover(run.style());
-                    sink.add(new ClickableSpan(runX, lineTop, runWidth, lineHeight, spanStyle));
+                    var ink = part.isItem() ? null : NativeFontRenderer.bounds(font,text,run.style());
+                    if(ink==null) sink.add(new ClickableSpan(runX,lineTop,runWidth,lineHeight,spanStyle));
+                    else {
+                        float top=Math.min(lineTop,baseline+ink.getTop()),bottom=Math.max(lineTop+lineHeight,baseline+ink.getBottom());
+                        sink.add(new ClickableSpan(runX+ink.getLeft(),top,ink.getWidth(),bottom-top,spanStyle));
+                    }
                 }
                 runX += runWidth;
             }
@@ -178,7 +226,8 @@ public final class RichTextRenderer {
                                    float x, float centerY, float lineHeight,
                                    io.github.humbleui.skija.ImageFilter shadow) {
         if (lines != null && !lines.isEmpty()) {
-            drawShadowPass(canvas, font, lines, x, centerY - lines.size() * lineHeight / 2F, lineHeight, shadow);
+            drawShadowPass(canvas, font, lines, x, centerY - lines.size() * lineHeight / 2F, lineHeight, shadow,
+                    ObfuscatedText.clock.getAsLong());
         }
     }
 
@@ -194,9 +243,9 @@ public final class RichTextRenderer {
      */
     private static void drawShadowPass(Canvas canvas, Font font, List<RichLine> lines,
                                        float x, float blockTop, float lineHeight,
-                                       io.github.humbleui.skija.ImageFilter shadow) {
+                                       io.github.humbleui.skija.ImageFilter shadow, long phase) {
         if (shadow == null) {
-            drawShadowGlyphs(canvas, font, lines, x, blockTop + .85F, lineHeight, 0x66000000);
+            drawShadowGlyphs(canvas, font, lines, x, blockTop + .85F, lineHeight, 0x66000000, phase);
             return;
         }
         // Layer bounds before the first glyph: widest line horizontally, first
@@ -214,11 +263,11 @@ public final class RichTextRenderer {
         try {
             try (Paint layer = new Paint()) {
                 layer.setImageFilter(shadow);
-                canvas.saveLayer(io.github.humbleui.types.Rect.makeXYWH(
+                canvas.saveLayer(NativeFontRenderer.hasNative(lines) ? null : io.github.humbleui.types.Rect.makeXYWH(
                         x - pad, topBaseline + metrics.getAscent() - pad,
                         maxLineW + pad * 2.0F,
                         (bottomBaseline - topBaseline) + (metrics.getDescent() - metrics.getAscent()) + pad * 2.0F), layer);
-                drawShadowGlyphs(canvas, font, lines, x, blockTop, lineHeight, 0xFF000000);
+                drawShadowGlyphs(canvas, font, lines, x, blockTop, lineHeight, 0xFF000000, phase);
             } finally {
                 // Exactly one restore per saveLayer, before the bare save's own.
                 canvas.restore();
@@ -229,15 +278,15 @@ public final class RichTextRenderer {
     }
 
     private static void drawShadowGlyphs(Canvas canvas, Font font, List<RichLine> lines,
-                                         float x, float blockTop, float lineHeight, int color) {
+                                         float x, float blockTop, float lineHeight, int color, long phase) {
         for (int i = 0; i < lines.size(); i++) {
             float baseline = SkiaFontRenderer.centerBaselineY(font, blockTop + (i + 0.5F) * lineHeight);
             float runX = x;
             for (RichTextLayout.Part part : lines.get(i).parts()) {
                 if (!part.isItem() && !part.text().isEmpty()) {
-                    SkiaFontRenderer.drawText(canvas, font, part.text(), runX, baseline, color);
+                    drawGlyphs(canvas, font, part.text(), runX, baseline, color, part.source().style(), phase);
                 }
-                runX += part.width(s -> SkiaFontRenderer.getStringWidth(font, s));
+                runX += part.width(measurer(font));
             }
         }
     }
@@ -278,9 +327,6 @@ public final class RichTextRenderer {
         float y = baseline + (underlinePos != null ? underlinePos : 1.5F);
         float strokeWidth = underlineThickness != null && underlineThickness > 0.0F
                 ? underlineThickness : Math.max(1.0F, font.getSize() / 14.0F);
-        try (Paint paint = new Paint().setColor(color).setAntiAlias(true)
-                .setStroke(true).setStrokeWidth(strokeWidth)) {
-            canvas.drawLine(x, y, x + width, y, paint);
-        }
+        canvas.drawLine(x, y, x + width, y, DECORATION.setColor(color).setStrokeWidth(strokeWidth));
     }
 }

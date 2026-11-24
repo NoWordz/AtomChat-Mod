@@ -89,6 +89,12 @@ public final class ChatHudHistory<K, C, V> {
         return value;
     }
 
+    public void invalidate(java.util.function.Predicate<V> affected) {
+        presentations.entrySet().removeIf(entry->entry.getValue()!=null && affected.test(entry.getValue()));
+        mergedRows.clear();
+        if(pendingPresentation!=null && affected.test(pendingPresentation))stage(null,null);
+    }
+
     public void clear() {
         presentations.clear();
         mergedRows.clear();

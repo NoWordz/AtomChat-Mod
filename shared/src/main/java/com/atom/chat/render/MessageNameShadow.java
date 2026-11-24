@@ -27,8 +27,8 @@ public final class MessageNameShadow {
     void draw(Canvas canvas, Font font, List<RichLine> lines, float width,
               float x, float centerY, float lineHeight, float density, ImageFilter filter) {
         if (lines.isEmpty()) return;
-        if (filter == null) {
-            RichTextRenderer.drawBacking(canvas, font, lines, x, centerY, lineHeight, null);
+        if (filter == null || NativeFontRenderer.hasNative(lines)) {
+            RichTextRenderer.drawBacking(canvas, font, lines, x, centerY, lineHeight, filter);
             return;
         }
         if (this.density != density || lastFilter != filter) {

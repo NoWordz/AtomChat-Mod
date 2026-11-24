@@ -13,7 +13,7 @@
 分组是编译期事实：甲组少一个类型，那个目标当场编不过。判据用简单名的词边界匹配
 （覆盖 import 全限定名与同包简单名两种写法），偏保守 —— 注释里的提及也算，宁可多列。
 
-当前：甲组 **157** 个，乙组 **94** 个。
+当前：甲组 **177** 个，乙组 **110** 个。
 
 ## 甲：共用代码引用了的（接缝）
 
@@ -38,6 +38,9 @@
 | `com.atom.chat.chat.MessageFilterTest` | 1.21.1-fabric |
 | `com.atom.chat.chat.MessageGroupingTest` | 1.21.1-fabric |
 | `com.atom.chat.chat.MessageMergeTest` | 1.21.1-fabric |
+| `com.atom.chat.chat.NativeDeletionHookTest` | 1.21.1-fabric |
+| `com.atom.chat.chat.NativeMessageBehaviorTest` | 1.21.1-fabric |
+| `com.atom.chat.chat.NativeMessageBridge` | 1.20.1-forge, 1.21.1-fabric, 1.21.1-neoforge |
 | `com.atom.chat.chat.OutgoingMessagesTest` | 1.21.1-fabric |
 | `com.atom.chat.chat.OwnIdentity` | 1.20.1-forge, 1.21.1-fabric, 1.21.1-neoforge |
 | `com.atom.chat.chat.PrivateChatParser` | 1.21.1-fabric |
@@ -49,6 +52,7 @@
 | `com.atom.chat.chat.SendPipelineTest` | 1.21.1-fabric |
 | `com.atom.chat.chat.SenderMeta` | 1.21.1-fabric |
 | `com.atom.chat.chat.SenderMetaTest` | 1.21.1-fabric |
+| `com.atom.chat.chat.SenderNamePresentationTest` | 1.21.1-fabric |
 | `com.atom.chat.chat.ServerTemplateRecognition` | 1.21.1-fabric |
 | `com.atom.chat.chat.ServerTemplateRecognitionTest` | 1.21.1-fabric |
 | `com.atom.chat.chat.StructuredPlayerMessageTest` | 1.21.1-fabric |
@@ -70,6 +74,8 @@
 | `com.atom.chat.mixin.MessageHandlerMixin` | 1.21.1-fabric |
 | `com.atom.chat.mixin.MinecraftClientMixin` | 1.21.1-fabric |
 | `com.atom.chat.mixin.MouseHandlerAccessor` | 1.21.1-fabric |
+| `com.atom.chat.mixin.NativeFontAccess` | 1.20.1-forge, 1.21.1-fabric, 1.21.1-neoforge |
+| `com.atom.chat.mixin.NativeFontStorageAccess` | 1.20.1-forge, 1.21.1-fabric, 1.21.1-neoforge |
 | `com.atom.chat.mixin.SuggestionWindowAccessor` | 1.21.1-fabric |
 | `com.atom.chat.net.AvatarCompanionClient` | 1.20.1-forge, 1.21.1-fabric, 1.21.1-neoforge |
 | `com.atom.chat.net.AvatarCompanionServer` | 1.20.1-forge, 1.21.1-fabric, 1.21.1-neoforge |
@@ -102,6 +108,11 @@
 | `com.atom.chat.render.GoldenFrameTest` | 1.21.1-fabric |
 | `com.atom.chat.render.ItemIconModelView` | 1.20.1-forge, 1.21.1-fabric, 1.21.1-neoforge |
 | `com.atom.chat.render.ItemIconRenderer` | 1.21.1-fabric |
+| `com.atom.chat.render.NativeFontOptions` | 1.20.1-forge, 1.21.1-neoforge |
+| `com.atom.chat.render.NativeFontRenderer` | 1.21.1-fabric |
+| `com.atom.chat.render.NativeGlyphSource` | 1.20.1-forge, 1.21.1-fabric, 1.21.1-neoforge |
+| `com.atom.chat.render.NativeGlyphUpload` | 1.21.1-fabric |
+| `com.atom.chat.render.NativeTagIconRenderer` | 1.21.1-fabric |
 | `com.atom.chat.render.OffscreenRenderTest` | 1.21.1-fabric |
 | `com.atom.chat.render.PanelBlurRenderer` | 1.20.1-forge, 1.21.1-fabric, 1.21.1-neoforge |
 | `com.atom.chat.render.RichTextRenderer` | 1.21.1-fabric |
@@ -137,6 +148,9 @@
 | 目标 | 类型 |
 |---|---|
 | 1.20.1-forge | `com.atom.chat.mixin.AtomChatMixinPlugin` |
+| 1.20.1-forge | `com.atom.chat.mixin.NativeFontManagerMixin` |
+| 1.20.1-forge | `com.atom.chat.mixin.NativeFontPreparationAccess` |
+| 1.20.1-forge | `com.atom.chat.mixin.NativeFontStorageMixin` |
 | 1.20.1-forge | `com.atom.chat.mixin.ReactionClientPacketMixin` |
 | 1.20.1-forge | `com.atom.chat.mixin.ReactionPrivateMessageMixin` |
 | 1.20.1-forge | `com.atom.chat.mixin.ReactionServerSendMixin` |
@@ -163,11 +177,16 @@
 | 1.20.1-forge | `com.atom.chat.platform.ForgePlatform` |
 | 1.20.1-forge | `com.atom.chat.screen.CompletionVersionPolicy` |
 | 1.20.1-forge | `com.atom.chat.net.AvatarCompanionServerTest` |
+| 1.20.1-forge | `com.atom.chat.render.NativeFontProviderTest` |
 | 1.20.1-forge | `com.atom.chat.screen.AtomChatScreenMessageLookupTest` |
+| 1.20.1-forge | `com.atom.chat.screen.NativeScreenRedactionTest` |
 | 1.20.1-forge | `com.atom.chat.testing.ForgeEventBusAgent` |
 | 1.20.1-forge | `com.atom.chat.testing.ForgeEventBusAgentProbe` |
 | 1.21.1-fabric | `com.atom.chat.compat.FabricAtomLibVersion` |
 | 1.21.1-fabric | `com.atom.chat.mixin.AtomChatMixinPlugin` |
+| 1.21.1-fabric | `com.atom.chat.mixin.NativeFontManagerMixin` |
+| 1.21.1-fabric | `com.atom.chat.mixin.NativeFontPreparationAccess` |
+| 1.21.1-fabric | `com.atom.chat.mixin.NativeFontStorageMixin` |
 | 1.21.1-fabric | `com.atom.chat.mixin.ReactionClientPacketMixin` |
 | 1.21.1-fabric | `com.atom.chat.mixin.ReactionPrivateMessageMixin` |
 | 1.21.1-fabric | `com.atom.chat.mixin.ReactionServerSendMixin` |
@@ -196,14 +215,20 @@
 | 1.21.1-fabric | `com.atom.chat.compat.FabricAtomLibVersionTest` |
 | 1.21.1-fabric | `com.atom.chat.net.AvatarCompanionServerTest` |
 | 1.21.1-fabric | `com.atom.chat.page.MessageListViewSelectionCopyTest` |
+| 1.21.1-fabric | `com.atom.chat.render.NativeFontProviderTest` |
+| 1.21.1-fabric | `com.atom.chat.render.NativeFontReloadTargetTest` |
 | 1.21.1-fabric | `com.atom.chat.render.PanelBlurReloadTest` |
 | 1.21.1-fabric | `com.atom.chat.settings.SettingsHomeReplicationTest` |
 | 1.21.1-fabric | `com.atom.chat.testing.FabricPackageAccessAgent` |
 | 1.21.1-fabric | `com.atom.chat.text.RichTextSectionCodeTest` |
 | 1.21.1-fabric | `com.atom.chat.ui.QuickPhrasePanelHitZoneTest` |
 | 1.21.1-fabric | `net.minecraft.client.gui.screen.AtomChatScreenMessageLookupTest` |
+| 1.21.1-fabric | `net.minecraft.client.gui.screen.NativeScreenRedactionTest` |
 | 1.21.1-neoforge | `com.atom.chat.mixin.AtomChatMixinPlugin` |
 | 1.21.1-neoforge | `com.atom.chat.mixin.GnetumChatLayerMixin` |
+| 1.21.1-neoforge | `com.atom.chat.mixin.NativeFontManagerMixin` |
+| 1.21.1-neoforge | `com.atom.chat.mixin.NativeFontPreparationAccess` |
+| 1.21.1-neoforge | `com.atom.chat.mixin.NativeFontStorageMixin` |
 | 1.21.1-neoforge | `com.atom.chat.mixin.ReactionClientPacketMixin` |
 | 1.21.1-neoforge | `com.atom.chat.mixin.ReactionPrivateMessageMixin` |
 | 1.21.1-neoforge | `com.atom.chat.mixin.ReactionServerSendMixin` |
@@ -229,4 +254,6 @@
 | 1.21.1-neoforge | `com.atom.chat.notification.NotificationController` |
 | 1.21.1-neoforge | `com.atom.chat.screen.CompletionVersionPolicy` |
 | 1.21.1-neoforge | `com.atom.chat.net.AvatarCompanionServerTest` |
+| 1.21.1-neoforge | `com.atom.chat.render.NativeFontProviderTest` |
 | 1.21.1-neoforge | `com.atom.chat.screen.AtomChatScreenMessageLookupTest` |
+| 1.21.1-neoforge | `com.atom.chat.screen.NativeScreenRedactionTest` |

@@ -221,6 +221,49 @@ class HistoryFoldStoreTest {
     }
 
     @Test
+    void revealingARealFoldedGroupKeepsItsOldBubbleAtTheSameScreenPosition() {
+        var config = com.atom.chat.config.AtomChatConfig.get();
+        boolean oldCompact = config.compactMessagesEnabled, oldPerformance = config.performanceMode;
+        int oldInterval = config.timestampIntervalMinutes;
+        config.compactMessagesEnabled = true;
+        config.performanceMode = true;
+        config.timestampIntervalMinutes = 0;
+        try {
+            for (int total : new int[]{101, 201}) {
+                var store = new HistoryFoldStore();
+                var messages = feed(total);
+                var window = store.historyWindowForNav(world(), total);
+                var view = view();
+                var scroll = new ScrollController();
+                var bounds = new UiLayout.Rect(10, 10, 400, 240);
+                var anchor = messages.get(window.visibleStart());
+                try (var surface = io.github.humbleui.skija.Surface.makeRasterN32Premul(430, 270)) {
+                    view.setVisibleStart(window.visibleStart());
+                    view.draw(surface.getCanvas(), bounds.x(), bounds.y(), bounds.w(), bounds.h(), messages, scroll);
+                    scroll.scrollTo(0, false);
+                    surface.getCanvas().clear(0);
+                    view.draw(surface.getCanvas(), bounds.x(), bounds.y(), bounds.w(), bounds.h(), messages, scroll);
+                    var before = view.hits().stream().filter(hit -> hit.message().sameAs(anchor)).findFirst().orElseThrow();
+                    assertTrue(before.avatarSize() > 0, "a real folded head owns the name/avatar band");
+                    float bubbleY = before.bubbleY();
+                    view.requestLoadEarlier();
+                    store.applyLoadEarlierRequest(world(), messages, window, bounds, scroll, view);
+                    surface.getCanvas().clear(0);
+                    view.draw(surface.getCanvas(), bounds.x(), bounds.y(), bounds.w(), bounds.h(), messages, scroll);
+                    var after = view.hits().stream().filter(hit -> hit.message().sameAs(anchor)).findFirst().orElseThrow();
+                    assertEquals(0F, after.avatarSize(), "the old head becomes a continuation");
+                    assertEquals(bubbleY, after.bubbleY(), .01F,
+                            "prepend compensation preserves the bubble, including its removed name band and new scroll range");
+                } finally { view.dispose(); }
+            }
+        } finally {
+            config.compactMessagesEnabled = oldCompact;
+            config.performanceMode = oldPerformance;
+            config.timestampIntervalMinutes = oldInterval;
+        }
+    }
+
+    @Test
     void withoutARequestNothingMoves() {
         HistoryFoldStore store = new HistoryFoldStore();
         List<ChatMessage> messages = feed(500);

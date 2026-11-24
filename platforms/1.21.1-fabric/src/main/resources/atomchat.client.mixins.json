@@ -10,7 +10,12 @@
     "MessageHandlerMixin",
     "MouseHandlerAccessor",
     "SuggestionWindowAccessor",
-    "ComposerSuggestionAccessor"
+    "ComposerSuggestionAccessor",
+    "NativeFontAccess",
+    "NativeFontStorageAccess",
+    "NativeFontManagerMixin",
+    "NativeFontPreparationAccess",
+    "NativeFontStorageMixin"
   ],
   "injectors": {
     "defaultRequire": 1

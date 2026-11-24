@@ -107,6 +107,7 @@ public final class HistoryStore {
         public final String componentJson;
         public final String senderComponentJson;
         public final String bodyComponentJson;
+        public final com.atom.chat.chat.NativeMessageMeta nativeMeta;
 
         public Entry(long timestamp, boolean priv, String peer, boolean own, boolean system,
                      String quoteName, String quoteText, String senderUuid, String senderName,
@@ -119,6 +120,20 @@ public final class HistoryStore {
                      String quoteName, String quoteText, String senderUuid, String senderName,
                      String profileName, String contentText, String componentJson,
                      String senderComponentJson, String bodyComponentJson) {
+            this(timestamp,priv,peer,own,system,quoteName,quoteText,senderUuid,senderName,profileName,
+                    contentText,componentJson,senderComponentJson,bodyComponentJson,com.atom.chat.chat.NativeMessageMeta.UNKNOWN);
+        }
+
+        public Entry(long timestamp, boolean priv, String peer, boolean own, boolean system,
+                     String quoteName, String quoteText, String senderUuid, String senderName,
+                     String profileName, String contentText, String componentJson,
+                     String senderComponentJson, String bodyComponentJson, com.atom.chat.chat.NativeMessageMeta metadata) {
+            nativeMeta=(metadata==null?com.atom.chat.chat.NativeMessageMeta.UNKNOWN:metadata).persisted();
+            if(nativeMeta.deleted()) {
+                quoteName=null;quoteText=null;contentText=com.atom.chat.chat.NativeMessageMeta.DELETED_TEXT;
+                componentJson=com.atom.chat.chat.NativeMessageMeta.DELETED_JSON;
+                senderComponentJson=cleanSender(senderComponentJson);bodyComponentJson=null;
+            }
             this.timestamp = timestamp;
             this.priv = priv;
             this.peer = peer;
@@ -136,13 +151,23 @@ public final class HistoryStore {
         }
     }
 
+    public static Entry deleted(Entry e) {
+        return new Entry(e.timestamp,e.priv,e.peer,e.own,e.system,null,null,e.senderUuid,e.senderName,e.profileName,
+                null,null,e.senderComponentJson,null,e.nativeMeta.asDeleted());
+    }
+
     public static String toLine(Entry e) {
         return toLine(e, true);
     }
 
     static String toLine(Entry e, boolean includePresentation) {
+        if(e.nativeMeta.deleted())e=deleted(e);
         JsonObject o = new JsonObject();
         o.addProperty("v", FORMAT_VERSION);
+        if(e.nativeMeta.signature()!=null)o.addProperty("sig",e.nativeMeta.signature());
+        if(e.nativeMeta.captured())o.addProperty("nativeKnown",true);
+        if(e.nativeMeta.tag()!=null)o.add("tag",GSON.toJsonTree(e.nativeMeta.tag()));
+        if(e.nativeMeta.deleted())o.addProperty("deleted",true);
         o.addProperty("ts", e.timestamp);
         o.addProperty("ch", e.priv ? CHANNEL_PRIVATE : CHANNEL_PUBLIC);
         if (e.peer != null) {
@@ -204,10 +229,30 @@ public final class HistoryStore {
             String comp = o.has("comp") ? o.get("comp").toString() : null;
             String senderComp = o.has("senderComp") ? o.get("senderComp").toString() : null;
             String bodyComp = o.has("bodyComp") ? o.get("bodyComp").toString() : null;
+            var metadata=readNativeMeta(o);
             return new Entry(ts, priv, peer, own, system, qn, qt, uuid, sender, profile, content, comp,
-                    senderComp, bodyComp);
+                    senderComp, bodyComp,metadata);
         } catch (Exception e) {
             return null;
         }
+    }
+    private static String cleanSender(String json) {
+        if(json==null)return null;
+        try{var element=JsonParser.parseString(json);removeActions(element);return element.toString();}
+        catch(RuntimeException invalid){return null;}
+    }
+    private static void removeActions(com.google.gson.JsonElement value) {
+        if(value.isJsonObject()) {
+            var object=value.getAsJsonObject();object.remove("clickEvent");object.remove("hoverEvent");object.remove("insertion");
+            for(var entry:object.entrySet())removeActions(entry.getValue());
+        }else if(value.isJsonArray())for(var child:value.getAsJsonArray())removeActions(child);
+    }
+    private static com.atom.chat.chat.NativeMessageMeta readNativeMeta(JsonObject value) {
+        String signature=null;boolean known=false,deleted=false;com.atom.chat.chat.NativeMessageMeta.Tag tag=null;
+        try{if(value.has("sig"))signature=value.get("sig").getAsString();}catch(RuntimeException invalid){}
+        try{known=value.has("nativeKnown") && value.get("nativeKnown").getAsBoolean();}catch(RuntimeException invalid){}
+        try{deleted=value.has("deleted") && value.get("deleted").getAsBoolean();}catch(RuntimeException invalid){}
+        try{if(value.has("tag"))tag=GSON.fromJson(value.get("tag"),com.atom.chat.chat.NativeMessageMeta.Tag.class);}catch(RuntimeException invalid){}
+        return new com.atom.chat.chat.NativeMessageMeta(signature,known,tag,deleted,-1,0);
     }
 }

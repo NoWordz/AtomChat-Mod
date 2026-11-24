@@ -165,6 +165,27 @@ class ChatHudTest {
         }
     }
 
+    @Test void hudWidthUsesTheSpaceBeforeTheVanillaHotbarAtEveryGuiScale() {
+        float previousWidth = Float.POSITIVE_INFINITY;
+        for (int guiScale = 1; guiScale <= 4; guiScale++) {
+            int guiWidth = (int)Math.ceil(1920D / guiScale);
+            int guiHeight = (int)Math.ceil(1080D / guiScale);
+            for (double chatScale : new double[]{.5D, 1D}) {
+                var view = ChatHudRenderer.Viewport.of(new Matrix4f(), guiWidth, guiHeight,
+                        guiScale, chatScale, guiWidth).fit(5);
+                float rightGui = (view.x() + view.width()) * view.guiPerUnit();
+                assertTrue(rightGui <= guiWidth / 2F - 91F - 6F,
+                        "GUI " + guiScale + ", chat " + chatScale + ": right=" + rightGui);
+                assertTrue(rightGui + UiTokens.MESSAGE_SLIDE * view.guiPerUnit() <= guiWidth / 2F - 91F,
+                        "the full own-message entrance must remain outside the hotbar");
+            }
+            var view = ChatHudRenderer.Viewport.of(new Matrix4f(), guiWidth, guiHeight,
+                    guiScale, 1D, guiWidth);
+            assertTrue(view.width() < previousWidth, "lower GUI scale must reveal more text");
+            previousWidth = view.width();
+        }
+    }
+
     @Test void avatarUsesShortcutSizeAndScalesWithVanillaGuiAndChat() {
         var pose = new Matrix4f();
         var base = ChatHudRenderer.Viewport.of(pose, 480, 300, 3, 1, 320).fit(5);
@@ -175,6 +196,14 @@ class ChatHudTest {
         assertEquals(52F, guiScaled.density() * UiTokens.AVATAR_SIZE, 0.001F);
         assertEquals(26F, chatScaled.density() * UiTokens.AVATAR_SIZE, 0.001F);
         assertEquals(25F, 300F - chatScaled.bottom() * chatScaled.density() / 4F, 0.001F);
+    }
+
+    @Test void leftOffhandReservesItsRealSlotWithoutChangingTheHudScale() {
+        var ordinary = ChatHudRenderer.Viewport.of(new Matrix4f(), 427, 240, 3, 1, 320);
+        var offhand = ChatHudRenderer.Viewport.of(new Matrix4f(), 427, 240, 3, 1, 320, true);
+        assertEquals(29F, (ordinary.width() - offhand.width()) * offhand.guiPerUnit(), .001F);
+        assertEquals(ordinary.density(), offhand.density());
+        assertEquals(ordinary.bottom(), offhand.bottom());
     }
 
     @Test void transformedGlobalHudKeepsTheChatReplacementAndItsLocalLayout() {
@@ -200,25 +229,25 @@ class ChatHudTest {
         var hud = new ChatHudRenderer();
         var row = new ChatMessage(RichText.literal("System message").toText(), false, true);
         Matrix4f pose = new Matrix4f().translate(22, 8, 0).scale(.75F, .75F, 1F);
-        var view = ChatHudRenderer.Viewport.of(pose, 240, 150, 2, 1, 180);
-        try (var surface = Surface.makeRasterN32Premul(480, 300); var pixels = new Bitmap()) {
+        var view = ChatHudRenderer.Viewport.of(pose, 320, 240, 2, 1, 180);
+        try (var surface = Surface.makeRasterN32Premul(640, 480); var pixels = new Bitmap()) {
             var canvas = surface.getCanvas();
             canvas.clear(0);
             canvas.save();
             canvas.scale(view.density(), view.density());
             hud.paint(canvas, List.of(row), view, null, "Local", "Player", config, 1, 255, 1, false, 0);
             canvas.restore();
-            ChatShortcutHint.renderOnHud(canvas, 150, 2, 2, view.transform(), "Y", 1);
-            pixels.allocN32Pixels(480, 300);
+            ChatShortcutHint.renderOnHud(canvas, 240, 2, 2, view.transform(), "Y", 1);
+            pixels.allocN32Pixels(640, 480);
             assertTrue(surface.readPixels(pixels, 0, 0));
             assertEquals(53, leftmostPixel(pixels, value -> value == 0xFFFFFFFF), 2);
             assertEquals(50, leftmostPixel(pixels, value -> value == 0xFF1655CC), 2);
-            int capsuleBottom = -1, shortcutTop = 300;
-            for (int y = 0; y < 300; y++) {
+            int capsuleBottom = -1, shortcutTop = 480;
+            for (int y = 0; y < 480; y++) {
                 if (pixels.getColor(75, y) == 0xFF1655CC) capsuleBottom = y;
                 if (pixels.getColor(61, y) == 0xFFFFFFFF) shortcutTop = Math.min(shortcutTop, y);
             }
-            assertTrue(capsuleBottom >= 0 && shortcutTop < 300);
+            assertTrue(capsuleBottom >= 0 && shortcutTop < 480);
             assertEquals(9, shortcutTop - capsuleBottom - 1, 3, "the six GUI pixel gap scales with the HUD");
         }
     }
@@ -226,7 +255,8 @@ class ChatHudTest {
     @Test void newestThumbnailLeavesSixGuiPixelsAboveTheShortcut() {
         var config = new AtomChatConfig();
         var imageMessage = player(false, "[[CICode,url=http://test/thumb.png,name=thumb]]");
-        int guiWidth = 240, guiHeight = 160;
+        // Minecraft caps GUI scaling at a minimum logical window of 320x240.
+        int guiWidth = 320, guiHeight = 240;
         try (var source = Surface.makeRasterN32Premul(32, 32)) {
             source.getCanvas().clear(0xFFFF0000);
             try (var image = source.makeImageSnapshot()) {

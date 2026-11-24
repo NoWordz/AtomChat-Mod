@@ -108,6 +108,7 @@ public final class SkiaGraphics {
         } finally {
             borrowedSurface.remove();
             borrowedBackend.remove();
+            NativeFontRenderer.endFrame();
             com.atom.chat.diagnostics.FrameSegments.finish(segmentId, segmentSuccess);
             if (outerSurface != null) FrameProfile.restoreSurface(outerSurface);
         }

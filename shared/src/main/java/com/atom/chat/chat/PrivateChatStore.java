@@ -12,8 +12,8 @@ import java.util.Map;
  * message list (incoming + outgoing), unread counter, and latest preview/time.
  *
  * <p>Lifetime is intentionally scoped to the current server/world connection:
- * {@link #reset()} is called on disconnect/world leave. No disk persistence in
- * v0.1.5 (offline "recent chats" only survive the current connection).
+ * {@link #reset()} is called on disconnect/world leave. ChatHistory persists
+ * original deliveries separately from the anti-spam display projection.
  */
 public final class PrivateChatStore {
     public static final int MAX_MESSAGES_PER_CONVERSATION = 500;
@@ -31,6 +31,8 @@ public final class PrivateChatStore {
         int unread;
         /** Immutable view of {@link #messages}; see {@link #messages(PlayerRef)}. */
         List<ChatMessage> published;
+        List<ChatMessage> originals;
+        boolean publishedAntiSpam;
 
         Conversation(PlayerRef partner) {
             this.partner = partner;
@@ -38,6 +40,7 @@ public final class PrivateChatStore {
 
         void changed() {
             published = null;
+            originals = null;
             generation++;
         }
     }
@@ -49,11 +52,26 @@ public final class PrivateChatStore {
      */
     private static volatile long generation;
 
+    public static synchronized int deleteSignature(String signature, com.atom.chat.text.RichText marker) {
+        int count=0;
+        for(var conversation:CONVERSATIONS.values()) {
+            boolean changed=false;
+            for(int i=0;i<conversation.messages.size();i++) {
+                var message=conversation.messages.get(i);
+                if(!message.isDeleted() && signature.equals(message.nativeMeta().signature())) {
+                    conversation.messages.set(i,message.asDeleted(marker));changed=true;count++;
+                }
+            }
+            if(changed)conversation.changed();
+        }
+        return count;
+    }
+
     public static synchronized boolean replace(PlayerRef partner, long id, ChatMessage corrected) {
         var c = CONVERSATIONS.get(partner.key());
         if (c == null) return false;
         for (int i = 0; i < c.messages.size(); i++) if (c.messages.get(i).getId() == id) {
-            MessageMerge.replaceConfirmed(c.messages, i, corrected);
+            c.messages.set(i, corrected);
             c.changed();
             com.atom.chat.history.ChatHistory.markDirty();
             return true;
@@ -90,28 +108,22 @@ public final class PrivateChatStore {
         if (partner == null || message == null) {
             return false;
         }
+        if(message.isDeleted()) return true;
         com.atom.chat.reaction.ReactionClient.bind(message);
         Conversation c = conversation(partner);
-        if (message.deliveryState() != OutgoingMessages.State.PENDING && MessageMerge.antiSpamEnabled() && !c.messages.isEmpty()) {
-            ChatMessage last = c.messages.get(c.messages.size() - 1);
-            if (MessageMerge.canMerge(last, message)) {
-                c.messages.set(c.messages.size() - 1, MessageMerge.merge(last, message));
-                c.changed();
-                com.atom.chat.history.ChatHistory.markDirty();
-                return true;
-            }
-        }
+        boolean folded = MessageMerge.antiSpamEnabled() && !c.messages.isEmpty()
+                && MessageMerge.canMerge(c.messages.get(c.messages.size() - 1), message);
         c.messages.add(message);
         c.changed();
-        com.atom.chat.fun.ChatEffectEvents.publish(message, partner);
+        if (!folded) com.atom.chat.fun.ChatEffectEvents.publish(message, partner);
         com.atom.chat.history.ChatHistory.markDirty();
         if (c.messages.size() > MAX_MESSAGES_PER_CONVERSATION) {
             c.messages.remove(0);
         }
-        if (!partner.equals(activePartner)) {
+        if (!folded && !partner.equals(activePartner)) {
             c.unread++;
         }
-        return false;
+        return folded;
     }
 
     /**
@@ -122,25 +134,19 @@ public final class PrivateChatStore {
         if (partner == null || message == null) {
             return false;
         }
+        if(message.isDeleted()) return true;
         com.atom.chat.reaction.ReactionClient.bind(message);
         Conversation c = conversation(partner);
-        if (message.deliveryState() != OutgoingMessages.State.PENDING && MessageMerge.antiSpamEnabled() && !c.messages.isEmpty()) {
-            ChatMessage last = c.messages.get(c.messages.size() - 1);
-            if (MessageMerge.canMerge(last, message)) {
-                c.messages.set(c.messages.size() - 1, MessageMerge.merge(last, message));
-                c.changed();
-                com.atom.chat.history.ChatHistory.markDirty();
-                return true;
-            }
-        }
+        boolean folded = MessageMerge.antiSpamEnabled() && !c.messages.isEmpty()
+                && MessageMerge.canMerge(c.messages.get(c.messages.size() - 1), message);
         c.messages.add(message);
         c.changed();
-        com.atom.chat.fun.ChatEffectEvents.publish(message, partner);
+        if (!folded) com.atom.chat.fun.ChatEffectEvents.publish(message, partner);
         com.atom.chat.history.ChatHistory.markDirty();
         if (c.messages.size() > MAX_MESSAGES_PER_CONVERSATION) {
             c.messages.remove(0);
         }
-        return false;
+        return folded;
     }
 
     /**
@@ -192,11 +198,21 @@ public final class PrivateChatStore {
             return List.of();
         }
         List<ChatMessage> published = c.published;
-        if (published == null) {
-            published = Collections.unmodifiableList(new ArrayList<>(c.messages));
+        boolean antiSpam = MessageMerge.antiSpamEnabled();
+        if (published == null || c.publishedAntiSpam != antiSpam) {
+            published = MessageMerge.project(rawMessages(partner), antiSpam);
             c.published = published;
+            c.publishedAntiSpam = antiSpam;
         }
         return published;
+    }
+
+    /** Originals, never the display-only duplicate count row. */
+    public static synchronized List<ChatMessage> rawMessages(PlayerRef partner) {
+        Conversation c = partner == null ? null : CONVERSATIONS.get(partner.key());
+        if (c == null || c.messages.isEmpty()) return List.of();
+        if (c.originals == null) c.originals = Collections.unmodifiableList(new ArrayList<>(c.messages));
+        return c.originals;
     }
 
     /** Latest private message with the partner, or null. */

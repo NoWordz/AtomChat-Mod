@@ -87,7 +87,12 @@ public final class HistoryFoldStore {
         if (!window.loadEarlier()) {
             return;
         }
-        float inserted = view.offsetBetween(messages, window.visibleStart(), oldStart, list.w());
-        scroll.scrollTo(scroll.getScrollY() + inserted, false);
+        float previousY = scroll.getScrollY();
+        float inserted = view.prependOffset(messages, window.visibleStart(), oldStart, list.w());
+        view.setVisibleStart(window.visibleStart());
+        // Grow the real scroll range before applying the prepend, or the old
+        // maximum can clamp a whole revealed batch.
+        scroll.setContent(view.visibleContentHeight(messages, list.w()), list.h());
+        scroll.scrollTo(previousY + inserted, false);
     }
 }

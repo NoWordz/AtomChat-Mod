@@ -209,6 +209,13 @@ public final class ContextMenuController<M> {
     }
 
     /** Drops everything, including the closing animation: the world page is leaving. */
+    public void invalidate(java.util.function.Predicate<M> affected) {
+        if(subject!=null && affected.test(subject.row()))resetTransient();
+        else if(lastSubject!=null && affected.test(lastSubject.row())) {
+            lastSubject=null;
+            if(subject==null && player==null && lastPlayer==null)anim=0;
+        }
+    }
     public void resetTransient() {
         close();
         lastSubject = null;

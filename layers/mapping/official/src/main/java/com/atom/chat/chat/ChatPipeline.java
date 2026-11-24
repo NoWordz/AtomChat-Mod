@@ -23,6 +23,11 @@ public final class ChatPipeline {
     private ChatPipeline() {
     }
 
+    /** The received name owns its colors and decorations; surfaces supply unstyled defaults. */
+    public static RichText senderPresentation(RichText sender) {
+        return sender.withoutEvents();
+    }
+
     /** Preserve the wire styles if the usual sender/body split cannot be proven. */
     public static RichText preserveRichBody(Component line, String body) {
         RichText rich = RichText.of(line);

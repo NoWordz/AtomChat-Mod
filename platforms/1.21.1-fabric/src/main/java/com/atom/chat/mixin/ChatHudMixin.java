@@ -52,6 +52,10 @@ import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.Redirect;
+import com.atom.chat.chat.NativeMessageMeta;
+import com.atom.chat.chat.NativeMessageBridge;
+import com.atom.chat.chat.NativeMessageSync;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
@@ -72,8 +76,14 @@ public class ChatHudMixin implements NotificationHudOverlay.PanelChatHud {
 
     @Unique private final ChatHudHistory<ChatHudLine, Text, ChatMessage> atomchat$hudHistory = new ChatHudHistory<>();
     @Unique private final ChatHudRenderer atomchat$hudRenderer = new ChatHudRenderer();
+    @Unique private final java.util.function.Consumer<String> atomchat$deletionListener=signature->{
+        atomchat$hudHistory.invalidate(message->signature.equals(message.nativeMeta().signature()));
+        atomchat$hudRenderer.clear();
+    };
+    @Inject(method="<init>",at=@At("RETURN"))
+    private void atomchat$listenDeletions(CallbackInfo info){NativeMessageSync.listen(atomchat$deletionListener);}
     @Unique private static final Function<ChatHudLine, ChatMessage> atomchat$hudFallback =
-            row -> atomchat$systemPresentation(row.content());
+            row -> atomchat$systemPresentation(row.content()).withNativeMeta(NativeMessageBridge.capture(row.signature(),row.indicator()));
 
     @Inject(method = "render", at = @At("HEAD"), cancellable = true)
     private void atomchat$renderChatHud(DrawContext context, int currentTick, int mouseX, int mouseY, boolean focused, CallbackInfo ci) {
@@ -120,12 +130,13 @@ public class ChatHudMixin implements NotificationHudOverlay.PanelChatHud {
 
         ChatHud hud = (ChatHud) (Object) this;
         var viewport = ChatHudRenderer.Viewport.of(context.getMatrices().peek().getPositionMatrix(),
-                context.getScaledWindowWidth(), context.getScaledWindowHeight(), client.getWindow().getScaleFactor(), hud.getChatScale(), hud.getWidth());
+                context.getScaledWindowWidth(), context.getScaledWindowHeight(), client.getWindow().getScaleFactor(), hud.getChatScale(), hud.getWidth(),
+                !client.player.getOffHandStack().isEmpty() && client.player.getMainArm() == net.minecraft.util.Arm.RIGHT);
         int opacity = (int) (255D * (client.options.getChatOpacity().getValue() * 0.9D + 0.1D));
         return atomchat$hudRenderer.render(viewport, client.player.getUuid(), OwnIdentity.bareName(),
                 net.minecraft.client.resource.language.I18n.translate("atomchat.sender.player"), net.minecraft.client.resource.language.I18n.translate("atomchat.hud.image"),
                 client.getFramebuffer().fbo,
-                context::draw, graphics -> ItemIconRenderer.prepare(context, graphics),
+                context::draw, graphics -> { com.atom.chat.render.NativeTagIconRenderer.prepare(context,graphics); ItemIconRenderer.prepare(context, graphics); },
                 limit, opacity, visibility, animate, now / 1_000_000L);
     }
 
@@ -194,7 +205,7 @@ public class ChatHudMixin implements NotificationHudOverlay.PanelChatHud {
 
         // Store the original message first; the vanilla HUD copy is rewritten
         // below only after capture has already decided what belongs in ChatStore.
-        ChatMessage presentation = atomchat$captureAndStore(message);
+        ChatMessage presentation = atomchat$captureAndStore(message, NativeMessageBridge.capture(signatureData,indicator));
 
         MinecraftClient client = MinecraftClient.getInstance();
         String ownName = client.player != null ? client.player.getName().getString() : null;
@@ -224,7 +235,9 @@ public class ChatHudMixin implements NotificationHudOverlay.PanelChatHud {
     }
 
     @Unique
-    private ChatMessage atomchat$captureAndStore(Text message) {
+    private ChatMessage atomchat$captureAndStore(Text message, NativeMessageMeta nativeMeta) {
+        ChatMessage deleted=NativeMessageSync.knownDeleted(nativeMeta.signature());
+        if(deleted!=null){MessageCapture.consume();return deleted;}
         String raw = message.getString();
         MinecraftClient client = MinecraftClient.getInstance();
         // Teleport failure watch: a "unknown command/no permission" reply right
@@ -245,37 +258,37 @@ public class ChatHudMixin implements NotificationHudOverlay.PanelChatHud {
         if (ChatClassifier.isXaeroWaypointData(raw)
                 || (meta != null && meta.contentText() != null
                 && ChatClassifier.isXaeroWaypointData(meta.contentText()))) {
-            return addSystemMessage(message);
+            return addSystemMessage(message,nativeMeta);
         }
-        if (meta != null && meta.system()) { return addSystemMessage(message); }
+        if (meta != null && meta.system()) { return addSystemMessage(message,nativeMeta); }
         if (meta != null && meta.evidence() == IdentityEvidence.TRANSLATION
                 && (meta.senderUuid() == null || meta.whisper() && meta.whisperPartner() == null)
                 && meta.senderComponent() != null && meta.contentComponent() != null) {
             meta = ServerTemplateRecognition.unknown(meta.senderComponent(), meta.contentComponent());
         }
         if (meta != null && meta.whisper()) {
-            return atomchat$routePrivate(message, meta, client);
+            return atomchat$routePrivate(message, meta, client, nativeMeta);
         }
         if (meta == null) {
             meta = PrivateChatParser.tryParse(message);
             if (meta != null) {
-                if (meta.system()) { return addSystemMessage(message); }
-                if (meta.senderUuid() != null && meta.whisperPartner() != null) { return atomchat$routePrivate(message, meta, client); }
+                if (meta.system()) { return addSystemMessage(message,nativeMeta); }
+                if (meta.senderUuid() != null && meta.whisperPartner() != null) { return atomchat$routePrivate(message, meta, client, nativeMeta); }
                 meta = ServerTemplateRecognition.unknown(meta.senderComponent(), meta.contentComponent());
             }
             if (meta == null) {
                 String ownName = client.player == null ? null : client.player.getName().getString();
                 if (ChatClassifier.classifyByKey(message) == ChatClassifier.Route.SYSTEM
                         || WhisperTextParser.isSpyEnvelope(raw)) {
-                    return addSystemMessage(message);
+                    return addSystemMessage(message,nativeMeta);
                 }
                 var inspected = com.atom.chat.chat.ComponentIdentity.inspect(message);
-                if (inspected.conflict()) { return addSystemMessage(message); }
+                if (inspected.conflict()) { return addSystemMessage(message,nativeMeta); }
                 meta = ServerTemplateRecognition.parseConfigured(message, inspected);
-                if (meta != null && meta.system()) { return addSystemMessage(message); }
+                if (meta != null && meta.system()) { return addSystemMessage(message,nativeMeta); }
                 configured = meta != null;
                 if (meta == null && WhisperTextParser.isThirdPartyEnvelope(raw, ownName)) {
-                    return addSystemMessage(message);
+                    return addSystemMessage(message,nativeMeta);
                 }
                 if (meta == null) meta = inspected.meta();
                 if (meta == null) {
@@ -284,24 +297,24 @@ public class ChatHudMixin implements NotificationHudOverlay.PanelChatHud {
                         meta = ServerTemplateRecognition.unknown(learned.senderComponent(), learned.contentComponent());
                     }
                 }
-                if (meta == null && ChatPipeline.hasUnmappedTranslation(message)) { return addSystemMessage(message); }
+                if (meta == null && ChatPipeline.hasUnmappedTranslation(message)) { return addSystemMessage(message,nativeMeta); }
                 if (meta == null) {
                     SenderMeta whisper = atomchat$parseTextWhisper(message, client, null);
-                    if (whisper != null) return atomchat$storeTextWhisper(message, whisper, client);
+                    if (whisper != null) return atomchat$storeTextWhisper(message, whisper, client, nativeMeta);
                 }
                 if (meta == null) meta = TellClickDetector.detectByTellClick(message, raw);
                 if (meta == null) meta = ChatPipeline.tryParsePlayerLine(raw);
                 if (meta == null) meta = EasyBotParser.tryParse(raw);
-                if (meta == null) { atomchat$logParseMiss(raw); return addSystemMessage(message); }
+                if (meta == null) { atomchat$logParseMiss(raw); return addSystemMessage(message,nativeMeta); }
             }
         }
 
-        if (meta.whisper()) { return atomchat$routePrivate(message, meta, client, configured); }
+        if (meta.whisper()) { return atomchat$routePrivate(message, meta, client, configured, nativeMeta); }
         // A click/hover attributes a name, but does not declare a public channel.
         if (!configured && (meta.evidence() == IdentityEvidence.ENTITY
                 || meta.evidence() == IdentityEvidence.CLICK)) {
             SenderMeta whisper = atomchat$parseTextWhisper(message, client, meta);
-            if (whisper != null) return atomchat$storeTextWhisper(message, whisper, client);
+            if (whisper != null) return atomchat$storeTextWhisper(message, whisper, client, nativeMeta);
         }
         String content = ChatPipeline.extractContent(raw, meta);
         boolean own = isOwn(meta, raw, client);
@@ -347,12 +360,12 @@ public class ChatHudMixin implements NotificationHudOverlay.PanelChatHud {
         if (quote != null) {
             contentRich = ChatPipeline.quoteBodyRich(contentRich, body);
         }
-        senderRich = atomchat$ensureSenderColor(senderRich, meta.profileName());
+        senderRich = ChatPipeline.senderPresentation(senderRich);
         ChatMessage presentation = new ChatMessage(message, own, meta.system(),
                 quote != null ? quote.quoteName() : null,
                 quote != null ? quote.quoteText() : null,
                 meta.senderUuid(), displayName, unknown ? "" : meta.profileName(), body,
-                senderRich, contentRich).retainPresentation(configured || unknown);
+                senderRich, contentRich).retainPresentation(configured || unknown).withNativeMeta(nativeMeta);
         atomchat$addPublic(presentation, body, meta.system() || unknown,
                 meta.evidence().confirmsIdentity(), meta.originalContent());
         return presentation;
@@ -365,7 +378,7 @@ public class ChatHudMixin implements NotificationHudOverlay.PanelChatHud {
      */
     @Unique
     private static void atomchat$addPublic(ChatMessage message, String body, boolean system, boolean provenSender, String originalBody) {
-        if (message.isOwn() && provenSender) OwnIdentity.cache(message.getSenderRich().stripInteractions());
+        if (message.isOwn() && provenSender) OwnIdentity.cache(ChatPipeline.senderPresentation(message.getSenderRich()));
         if (com.atom.chat.chat.OutgoingMessages.reconcile(message, null, provenSender, originalBody)) return;
         boolean merged = ChatStore.get().add(message);
         if (system || merged || message.isOwn()) {
@@ -467,37 +480,6 @@ public class ChatHudMixin implements NotificationHudOverlay.PanelChatHud {
         return false;
     }
 
-    /**
-     * Team-colour fallback for sender names: when a captured/sliced sender
-     * carries no colour at all — the server stripped the run styles, or the
-     * label only exists as text — recolour it with the sender's scoreboard
-     * team colour so titled/coloured names don't collapse into the plain text
-     * colour. Senders that already have colour are left untouched.
-     */
-    @Unique
-    private static RichText atomchat$ensureSenderColor(RichText sender, String profileName) {
-        if (sender == null || sender.isEmpty() || sender.hasColor()) {
-            return sender;
-        }
-        MinecraftClient client = MinecraftClient.getInstance();
-        if (client == null || client.world == null) {
-            return sender;
-        }
-        var team = client.world.getScoreboard().getTeam(
-                profileName != null ? profileName : "");
-        if (team == null || team.getColor() == null) {
-            return sender;
-        }
-        var color = net.minecraft.text.TextColor.fromFormatting(team.getColor());
-        if (color == null) {
-            return sender;
-        }
-        if (AtomChatConfig.get().debug) {
-            AtomChat.LOGGER.info(com.atom.chat.diagnostics.AtomChatLog.message("sender", "[sender] team colour fallback applied ({})"), team.getName());
-        }
-        return sender.mapStyles(style -> style.getColor() != null ? style : style.withColor(color));
-    }
-
     @Unique
     private static SenderMeta atomchat$parseTextWhisper(Text message, MinecraftClient client, SenderMeta identity) {
         String ownName = client.player == null ? null : client.player.getName().getString();
@@ -507,8 +489,8 @@ public class ChatHudMixin implements NotificationHudOverlay.PanelChatHud {
     }
 
     @Unique
-    private static ChatMessage atomchat$storeTextWhisper(Text message, SenderMeta parsed, MinecraftClient client) {
-        return parsed.system() ? addSystemMessage(message) : atomchat$routePrivate(message, parsed, client);
+    private static ChatMessage atomchat$storeTextWhisper(Text message, SenderMeta parsed, MinecraftClient client, NativeMessageMeta nativeMeta) {
+        return parsed.system() ? addSystemMessage(message,nativeMeta) : atomchat$routePrivate(message, parsed, client, nativeMeta);
     }
 
     /**
@@ -534,12 +516,12 @@ public class ChatHudMixin implements NotificationHudOverlay.PanelChatHud {
     }
 
     @Unique
-    private static ChatMessage atomchat$routePrivate(Text message, SenderMeta meta, MinecraftClient client) {
-        return atomchat$routePrivate(message, meta, client, false);
+    private static ChatMessage atomchat$routePrivate(Text message, SenderMeta meta, MinecraftClient client, NativeMessageMeta nativeMeta) {
+        return atomchat$routePrivate(message, meta, client, false, nativeMeta);
     }
 
     @Unique
-    private static ChatMessage atomchat$routePrivate(Text message, SenderMeta meta, MinecraftClient client, boolean configured) {
+    private static ChatMessage atomchat$routePrivate(Text message, SenderMeta meta, MinecraftClient client, boolean configured, NativeMessageMeta nativeMeta) {
         // Suppressed outgoing echo sentinel: the local bubble already exists.
         if (meta.system()) {
             return null;
@@ -563,7 +545,7 @@ public class ChatHudMixin implements NotificationHudOverlay.PanelChatHud {
         QuoteParser.Quote quote = atomchat$quoteOf(content);
         String body = quote != null ? quote.body() : content;
         RichText senderRich = meta.senderComponent() != null
-                ? RichText.of(meta.senderComponent()).stripInteractions()
+                ? ChatPipeline.senderPresentation(RichText.of(meta.senderComponent()))
                 : RichText.literal(displayName);
         RichText contentRich;
         if (quote != null) {
@@ -579,7 +561,7 @@ public class ChatHudMixin implements NotificationHudOverlay.PanelChatHud {
         ChatMessage privateMessage = new ChatMessage(message, own, false,
                 quote != null ? quote.quoteName() : null,
                 quote != null ? quote.quoteText() : null,
-                meta.senderUuid(), displayName, meta.profileName(), body, senderRich, contentRich).retainPresentation(configured);
+                meta.senderUuid(), displayName, meta.profileName(), body, senderRich, contentRich).retainPresentation(configured).withNativeMeta(nativeMeta);
         if (own) {
             if (!com.atom.chat.chat.OutgoingMessages.reconcile(privateMessage, partner,
                     meta.whisperPartnerUuid() != null && meta.evidence().confirmsIdentity(),
@@ -601,8 +583,8 @@ public class ChatHudMixin implements NotificationHudOverlay.PanelChatHud {
         return privateMessage;
     }
 
-    private static ChatMessage addSystemMessage(Text message) {
-        ChatMessage presentation = atomchat$systemPresentation(message);
+    private static ChatMessage addSystemMessage(Text message, NativeMessageMeta nativeMeta) {
+        ChatMessage presentation = atomchat$systemPresentation(message).withNativeMeta(nativeMeta);
         ChatStore.get().add(presentation);
         return presentation;
     }
@@ -648,4 +630,25 @@ public class ChatHudMixin implements NotificationHudOverlay.PanelChatHud {
         }
         return null;
     }
+
+    @Redirect(method="queueForRemoval",at=@At(value="INVOKE",target="Ljava/util/ListIterator;set(Ljava/lang/Object;)V"))
+    private void atomchat$afterNativeSet(java.util.ListIterator<net.minecraft.client.gui.hud.ChatHudLine> iterator,Object replacement,MessageSignatureData signature){
+        var marker=(net.minecraft.client.gui.hud.ChatHudLine)replacement;
+        iterator.set(marker);
+        NativeMessageSync.applied(NativeMessageMeta.signature(signature.data()),RichText.of(marker.content()));
+        String key=NativeMessageMeta.signature(signature.data());
+        atomchat$hudHistory.invalidate(message->key.equals(message.nativeMeta().signature()));
+        atomchat$hudRenderer.clear();
+    }
+    @Inject(method="queueForRemoval",at=@At("RETURN"))
+    private void atomchat$missingRetainedEntry(MessageSignatureData signature,CallbackInfoReturnable<Object> info){
+        boolean present=messages.stream().anyMatch(entry->signature.equals(entry.signature()));
+        NativeMessageSync.request(NativeMessageMeta.signature(signature.data()),NativeMessageBridge.tick(),present);
+    }
+    @Inject(method="tickRemovalQueueIfExists",at=@At("RETURN"))
+    private void atomchat$retainedDeletionTick(CallbackInfo info){
+        NativeMessageSync.tick(NativeMessageBridge.tick(),signature->messages.stream()
+                .anyMatch(entry->entry.signature()!=null && signature.equals(NativeMessageMeta.signature(entry.signature().data()))));
+    }
+
 }

@@ -109,15 +109,22 @@ public final class MessageListView {
      * never change the text, so entries stay valid until evicted (LRU).
      */
     private static final int LAYOUT_CACHE_MAX = 512;
-    private final Map<Long, List<RichLine>> layoutCache =
+    private record LayoutKey(ChatMessage message,Font font,int width){
+        @Override public boolean equals(Object value){return value instanceof LayoutKey key && message==key.message && font==key.font && width==key.width;}
+        @Override public int hashCode(){return 31*(31*System.identityHashCode(message)+System.identityHashCode(font))+width;}
+    }
+    private final Map<LayoutKey, List<RichLine>> layoutCache =
             new LinkedHashMap<>(128, 0.75F, true) {
                 @Override
-                protected boolean removeEldestEntry(Map.Entry<Long, List<RichLine>> eldest) {
+                protected boolean removeEldestEntry(Map.Entry<LayoutKey, List<RichLine>> eldest) {
                     return size() > LAYOUT_CACHE_MAX;
                 }
             };
 
-    private record QuoteKey(ChatMessage message, Font font, float width, float itemGap) {}
+    private record QuoteKey(ChatMessage message, Font font, float width, float itemGap) {
+        @Override public boolean equals(Object value){return value instanceof QuoteKey key && message==key.message && font==key.font && Float.compare(width,key.width)==0 && Float.compare(itemGap,key.itemGap)==0;}
+        @Override public int hashCode(){return 31*(31*(31*System.identityHashCode(message)+System.identityHashCode(font))+Float.hashCode(width))+Float.hashCode(itemGap);}
+    }
     private record QuoteLayout(List<RichLine> lines, float width) {}
     private final Map<QuoteKey, QuoteLayout> quoteCache = new LinkedHashMap<>(128, 0.75F, true) {
         @Override
@@ -140,7 +147,10 @@ public final class MessageListView {
         return result;
     }
 
-    private record NameKey(ChatMessage message, Font font, String fallback, String status, float itemGap) {}
+    private record NameKey(ChatMessage message, Font font, String fallback, String status, float itemGap) {
+        @Override public boolean equals(Object value){return value instanceof NameKey key && message==key.message && font==key.font && java.util.Objects.equals(fallback,key.fallback) && java.util.Objects.equals(status,key.status) && Float.compare(itemGap,key.itemGap)==0;}
+        @Override public int hashCode(){int value=31*System.identityHashCode(message)+System.identityHashCode(font);value=31*value+java.util.Objects.hashCode(fallback);value=31*value+java.util.Objects.hashCode(status);return 31*value+Float.hashCode(itemGap);}
+    }
     private record NameLayout(List<RichLine> lines, float width) {}
     private final MessageNameShadow nameShadows = new MessageNameShadow(128);
     private final java.util.function.DoubleSupplier shadowDensity;
@@ -155,9 +165,7 @@ public final class MessageListView {
         NameKey key = new NameKey(message, font, fallback, status, UiTokens.INLINE_ITEM_GAP);
         NameLayout cached = nameCache.get(key);
         if (cached != null) return cached;
-        RichText sender = message.getSenderRich().stripInteractions();
-        if (sender.isEmpty()) sender = RichText.literal(fallback);
-        if (status != null) sender = RichText.concat(sender, RichText.literal(" · " + status));
+        RichText sender = MessagePaint.displayName(message,fallback,status);
         List<RichLine> lines = RichTextRenderer.wrapFor(sender, font, Float.MAX_VALUE);
         float width = 0.0F;
         for (RichLine line : lines) width = Math.max(width, RichTextRenderer.width(font, line));
@@ -175,17 +183,18 @@ public final class MessageListView {
      * next frame. Same LRU shape as layoutCache.
      */
     private static final int KIND_CACHE_MAX = 512;
-    private final Map<Long, BubbleKind> kindCache =
+    private record KindKey(ChatMessage message,boolean images){}
+    private final Map<KindKey, BubbleKind> kindCache =
             new LinkedHashMap<>(128, 0.75F, true) {
                 @Override
-                protected boolean removeEldestEntry(Map.Entry<Long, BubbleKind> eldest) {
+                protected boolean removeEldestEntry(Map.Entry<KindKey, BubbleKind> eldest) {
                     return size() > KIND_CACHE_MAX;
                 }
             };
 
     /** Cached {@link #kindOf}; see {@link #kindCache}. */
     private BubbleKind kindOfCached(ChatMessage msg) {
-        long key = msg.getId() * 2L + (AtomChatConfig.get().imageMessagesEnabled ? 1L : 0L);
+        var key = new KindKey(msg,AtomChatConfig.get().imageMessagesEnabled);
         BubbleKind cached = kindCache.get(key);
         if (cached != null) {
             return cached;
@@ -209,8 +218,8 @@ public final class MessageListView {
     /**
      * First visible row: rows before it are folded behind the "load earlier"
      * button. Kept as a plain index (not a bare list window) so divider and
-     * grouping decisions still look at the preceding message and the window
-     * boundary never changes how a visible row is laid out.
+     * grouping decisions retain chronology, while the folded window head owns
+     * its sender band. Revealing earlier rows compensates that band change.
      */
     private int visibleStart;
     /** Screen-space rect of the "load earlier" button drawn last frame; empty when hidden. */
@@ -314,8 +323,8 @@ public final class MessageListView {
             if (dividerBefore(messages, i)) {
                 cursor += TIME_DIVIDER_H + UiTokens.LIST_GAP;
             }
-            cursor += messageHeight(messages.get(i), width, isCompactGrouped(messages, i));
-            cursor += isCompactGrouped(messages, i + 1)
+            cursor += messageHeight(messages.get(i), width, isCompactGrouped(messages, i, 0));
+            cursor += isCompactGrouped(messages, i + 1, 0)
                     ? MessageGeometry.groupedGap()
                     : UiTokens.LIST_GAP;
         }
@@ -341,20 +350,20 @@ public final class MessageListView {
     }
 
     private final com.atom.chat.ui.ReactionChips reactionChips = new com.atom.chat.ui.ReactionChips();
-    public boolean clickReaction(float x, float y) { return reactionChips.click(x, y); }
-    public void drawReactionHover(Canvas canvas, float x, float y, boolean suppress) { reactionChips.hover(canvas, x, y, suppress); }
+    public boolean clickReaction(float x, float y) { refreshFontEpoch(); return reactionChips.click(x, y); }
+    public void drawReactionHover(Canvas canvas, float x, float y, boolean suppress) {
+        refreshFontEpoch();
+        reactionChips.hover(canvas,x,y,suppress);
+        if(!suppress)for(var hit:hits)if(y>=hit.bubbleY() && y<=hit.bubbleBottom()
+                && x>=hit.x() && x<=hit.x()+hit.maxWidth()+UiTokens.FONT_BODY)
+            MessagePaint.nativeTagIcon(canvas,hit.message(),hit.bubbleX(),hit.bubbleY(),hit.bubbleWidth(),hit.bubbleBottom()-hit.bubbleY());
+    }
 
-    public void draw(Canvas canvas, float x, float y, float width, float height,
-                     List<ChatMessage> messages, ScrollController scroll) {
-        hits.clear();
-        reactionChips.begin(x, y, width, height);
-        clickableSpans.clear();
-        currentMessages = messages;
-        // Drop an expired jump highlight even when its message left the list;
-        // the per-message draw path would otherwise never reach the expiry check.
-        if (highlightMessage != null && System.currentTimeMillis() > highlightUntil) {
-            highlightMessage = null;
-        }
+    private List<ChatMessage> preparedMessages;
+    private ScrollController preparedScroll;
+    private float preparedWidth,preparedHeight;
+    private void prepareViewport(List<ChatMessage> messages,float width,float height,ScrollController scroll) {
+        refreshFontEpoch();
         // Snapshot "was at bottom" before maxScroll grows: after new messages
         // arrive the old target is no longer near the new max, so comparing after
         // recompute would make us miss the follow and leave a growing gap.
@@ -375,6 +384,41 @@ public final class MessageListView {
             }
         }
         scroll.updateAnimation(System.currentTimeMillis());
+        preparedMessages=messages;preparedScroll=scroll;preparedWidth=width;preparedHeight=height;
+    }
+    /** CPU layout first, then request only rows that this exact viewport will paint. */
+    public void requestFonts(float width,float height,List<ChatMessage> messages,ScrollController scroll) {
+        prepareViewport(messages,width,height,scroll);
+        int from=Math.max(0,Math.min(visibleStart,messages.size()));
+        float top=scroll.getScrollY()-80F,bottom=scroll.getScrollY()+height+80F;
+        int first=firstRowEndingAfter(from,messages.size(),top);
+        for(int i=first;i<messages.size() && rowTop[i]<=bottom;i++) {
+            var message=messages.get(i);
+            if(rowTop[i]+rowHeight[i]<top)continue;
+            // Existing body/name/quote formatting is shared with paint; no hidden history scan.
+            MessagePaint.requestFonts(List.of(message),host::senderName);
+            String key=MessagePaint.deliveryStatusKey(message);
+            com.atom.chat.render.NativeFontRenderer.request(MessagePaint.displayName(message,
+                    message.getSenderRich().isEmpty()?host.senderName(message):null,key==null?null:tr(key)));
+        }
+    }
+
+    public void draw(Canvas canvas, float x, float y, float width, float height,
+                     List<ChatMessage> messages, ScrollController scroll) {
+        refreshFontEpoch();
+        hits.clear();
+        reactionChips.begin(x, y, width, height);
+        clickableSpans.clear();
+        currentMessages = messages;
+        // Drop an expired jump highlight even when its message left the list;
+        // the per-message draw path would otherwise never reach the expiry check.
+        if (highlightMessage != null && System.currentTimeMillis() > highlightUntil) {
+            highlightMessage = null;
+        }
+        if(preparedMessages!=messages || preparedScroll!=scroll || preparedWidth!=width || preparedHeight!=height)
+            prepareViewport(messages,width,height,scroll);
+        preparedMessages=null;preparedScroll=null;
+        int from = Math.max(0, Math.min(visibleStart, messages.size()));
         canvas.save();
         try {
             CornerGeometry.clip(canvas, x, y, width, height, 0.0F);
@@ -402,7 +446,7 @@ public final class MessageListView {
             }
             for (int mi = first; mi < last; mi++) {
                 ChatMessage msg = messages.get(mi);
-                boolean grouped = isCompactGrouped(messages, mi);
+                boolean grouped = isCompactGrouped(messages, mi, from);
                 if (!Float.isNaN(dividerTop[mi])) {
                     // Clock pill between messages. Drawn only when its own
                     // message is in the extended viewport, so occluded
@@ -457,7 +501,9 @@ public final class MessageListView {
                     }
                     drawJumpHighlight(canvas, msg, x, cursorY, width, h);
                     int spanStart = clickableSpans.size();
-                    MessageHit hit = drawMessage(canvas, msg, x, cursorY, width, hits.size(), grouped);
+                    var bubbleGroup = ChatBubble.Group.of(grouped, isCompactGrouped(messages, mi + 1, from));
+                    MessageHit hit = drawMessage(canvas, msg, x, cursorY, width, hits.size(), grouped, bubbleGroup);
+                    MessagePaint.nativeTag(canvas,msg,hit.bubbleX(),hit.bubbleY(),hit.bubbleWidth(),hit.bubbleBottom()-hit.bubbleY(),clickableSpans);
                     reactionChips.draw(canvas, msg, msg.isOwn() ? hit.bubbleX()+hit.bubbleWidth() : hit.bubbleX(), hit.bubbleBottom(),
                             Math.max(UiTokens.REACTION_MIN_WIDTH, bubbleMaxWidth(msg, width)), scroll.getScrollY());
                     // Clickable spans are recorded in content space (like hits
@@ -547,12 +593,27 @@ public final class MessageListView {
     }
 
     /** Cached wrap; see {@link #layoutCache}. */
+    private long messageRevision = -1;
+    private long fontEpoch = -1;
+    public void redactNativeMessages(){refreshFontEpoch();}
+    private void refreshFontEpoch() {
+        long current = com.atom.chat.render.NativeFontRenderer.epoch();
+        long revision=com.atom.chat.chat.NativeMessageSync.revision();
+        if (fontEpoch == current && messageRevision==revision) return;
+        if(messageRevision!=revision){
+            preparedMessages=null;preparedScroll=null;
+            messageRevision=revision;hits.clear();clickableSpans.clear();currentMessages=List.of();
+            clearSelection();highlightMessage=null;kindCache.clear();heightList=null;reactionChips.begin(0,0,0,0);
+        }
+        fontEpoch = current;
+        layoutCache.clear(); nameCache.clear(); quoteCache.clear();
+        nameShadows.clear(); heightValue = -1;
+    }
+
     private List<RichLine> wrappedLines(ChatMessage msg, Font font, float wrapWidth) {
+        refreshFontEpoch();
         int w = Math.max(0, Math.round(wrapWidth));
-        // The size is part of the key: a wrap measured at FONT_BODY must not be
-        // served to a caller that draws at a different size. The id field is
-        // 20 bits wide in the high half, so both halves stay collision-free.
-        long key = ((msg.getId() & 0xFFFFFL) << 40) | ((Math.round(font.getSize()) & 0xFFFFL) << 20) | Math.min(w, 0xFFFFF);
+        var key = new LayoutKey(msg,font,w);
         List<RichLine> cached = layoutCache.get(key);
         if (cached != null) {
             return cached;
@@ -564,6 +625,7 @@ public final class MessageListView {
 
     /** Hit geometry from the most recent {@link #draw}; valid for the same frame. */
     public List<MessageHit> hits() {
+        refreshFontEpoch();
         return hits;
     }
 
@@ -578,6 +640,7 @@ public final class MessageListView {
      * ones the screen already converts its mouse position into.
      */
     public MessageHit imageHitAt(float mx, float my) {
+        refreshFontEpoch();
         for (MessageHit hit : hits) {
             if (hit.imageUrl() == null) {
                 continue;
@@ -594,6 +657,7 @@ public final class MessageListView {
     }
 
     public boolean hasSelection() {
+        refreshFontEpoch();
         if (selectionAnchorMessage == null || selectionFocusMessage == null
                 || selectionAnchorLine < 0 || selectionFocusLine < 0) {
             return false;
@@ -647,9 +711,9 @@ public final class MessageListView {
                 continue;
             }
             for (MessageTextLine line : textLinesForHit(hit)) {
-                float lineRight = line.x() + SkiaFontRenderer.getStringWidth(
+                float lineRight = line.x() + RichTextRenderer.width(
                         FontManager.font(line.message().isSystem() ? UiTokens.FONT_QUOTE : UiTokens.FONT_BODY),
-                        line.text());
+                        line.richLine());
                 if (mx >= line.x() && mx <= lineRight && my >= line.y() && my <= line.y() + line.height()) {
                     int ch = charAtLine(line, mx);
                     boolean changed = !line.message().sameAs(selectionFocusMessage)
@@ -834,12 +898,27 @@ public final class MessageListView {
             if (dividerBefore(messages, i)) {
                 cursor += TIME_DIVIDER_H + UiTokens.LIST_GAP;
             }
-            cursor += messageHeight(messages.get(i), width, isCompactGrouped(messages, i));
-            cursor += isCompactGrouped(messages, i + 1)
+            cursor += messageHeight(messages.get(i), width, isCompactGrouped(messages, i, from));
+            cursor += isCompactGrouped(messages, i + 1, from)
                     ? MessageGeometry.groupedGap()
                     : UiTokens.LIST_GAP;
         }
         return cursor;
+    }
+
+    /** Keep the previously visible bubble fixed when its sender band becomes a continuation. */
+    public float prependOffset(List<ChatMessage> messages, int fromIndex, int oldStart, float width) {
+        float inserted = offsetBetween(messages, fromIndex, oldStart, width);
+        if (oldStart >= 0 && oldStart < messages.size() && !messages.get(oldStart).isSystem()) {
+            float beforeBand = isCompactGrouped(messages, oldStart, visibleStart) ? 0F : UiTokens.NAME_BAND;
+            float afterBand = isCompactGrouped(messages, oldStart, Math.max(0, fromIndex)) ? 0F : UiTokens.NAME_BAND;
+            inserted += afterBand - beforeBand;
+        }
+        return inserted;
+    }
+
+    public float visibleContentHeight(List<ChatMessage> messages, float width) {
+        return measureContentHeight(messages, width, Math.max(0, Math.min(visibleStart, messages.size())));
     }
 
     /** Whether the pointer is over the folded-history button (drives its hover wash). */
@@ -881,11 +960,13 @@ public final class MessageListView {
     }
 
     public Optional<ClickableSpan> clickableSpanAt(float mx, float my) {
+        refreshFontEpoch();
         return Optional.ofNullable(findClickableSpan(mx, my));
     }
 
     /** Drops entrance-animation bookkeeping; called when the screen is removed. */
     public void dispose() {
+        preparedMessages=null;preparedScroll=null;
         nameShadows.clear();
         messageEnterStart.clear();
         messageEnterSettled.clear();
@@ -953,8 +1034,8 @@ public final class MessageListView {
      * timestamps entirely.
      */
     /** Whether this row follows a same-sender row without an intervening clock pill. */
-    private static boolean isCompactGrouped(List<ChatMessage> messages, int index) {
-        return AtomChatConfig.get().compactMessagesEnabled && index > 0 && index < messages.size()
+    private static boolean isCompactGrouped(List<ChatMessage> messages, int index, int from) {
+        return AtomChatConfig.get().compactMessagesEnabled && index > from && index < messages.size()
                 && MessageGrouping.continues(messages.get(index - 1), messages.get(index),
                         AtomChatConfig.get().timestampIntervalMinutes);
     }
@@ -1065,7 +1146,7 @@ public final class MessageListView {
     }
 
     private MessageHit drawMessage(Canvas canvas, ChatMessage msg, float x, float y, float maxWidth, int index,
-                                   boolean grouped) {
+                                   boolean grouped, ChatBubble.Group bubbleGroup) {
         if (msg.isSystem()) {
             return drawSystemMessage(canvas, msg, x, y, maxWidth, index);
         }
@@ -1074,11 +1155,11 @@ public final class MessageListView {
         String raw = msg.getRawText();
         BubbleKind kind = kindOfCached(msg);
         if (kind == BubbleKind.IMAGE_PLACEHOLDER) {
-            return drawImagePlaceholderMessage(canvas, msg, x, y, maxWidth, index, grouped);
+            return drawImagePlaceholderMessage(canvas, msg, x, y, maxWidth, index, grouped, bubbleGroup);
         }
         if (kind == BubbleKind.IMAGE) {
             return drawImageMessage(canvas, msg, raw, Cicodes.extractImageUrl(raw),
-                    x, y, maxWidth, index, grouped);
+                    x, y, maxWidth, index, grouped, bubbleGroup);
         }
         float textMaxWidth = Math.max(1F, bubbleMaxWidth(msg, maxWidth) - UiTokens.BUBBLE_PAD * 2F);
         List<RichLine> richLines = wrappedLines(msg, font, textMaxWidth);
@@ -1132,9 +1213,9 @@ public final class MessageListView {
             drawQuotePill(canvas, msg, x, maxWidth, y + band, msg.isOwn());
         }
         var style = AtomChatConfig.get().effectiveBubbleStyle();
-        HudShadow.drawPanel(canvas, ChatBubble.outline(bubbleX, bubbleTop, bubbleWidth, bubbleHeight, style, msg.isOwn(), 1F));
+        HudShadow.drawPanel(canvas, ChatBubble.outline(bubbleX, bubbleTop, bubbleWidth, bubbleHeight, style, msg.isOwn(), 1F, bubbleGroup));
         ChatBubble.draw(canvas, bubbleX, bubbleTop, bubbleWidth, bubbleHeight,
-                style, msg.isOwn(), msg.isOwn() ? ownBubble() : otherBubble());
+                style, msg.isOwn(), msg.isOwn() ? ownBubble() : otherBubble(), bubbleGroup);
         drawMessageSelection(canvas, msg, richLines, bubbleX + UiTokens.BUBBLE_PAD, bubbleTop + bubbleHeight / 2.0F, lineHeight, font);
         // No backing shadow on bubble text (TextSurface.BUBBLE): the soft shadow
         // is reserved for the capsule family and the name band. A bubble fill and
@@ -1293,16 +1374,8 @@ public final class MessageListView {
         // Name chrome omits server-attached interactions, while delivery labels
         // and fallback names can change independently of the message object.
         String fallback = msg.getSenderRich().isEmpty() ? host.senderName(msg) : null;
-        String status = null;
-        if (msg.isOwn()) {
-            String statusKey = switch (msg.deliveryState()) {
-                case PENDING -> "atomchat.message.pending";
-                case UNCONFIRMED -> "atomchat.message.unconfirmed";
-                case FAILED -> "atomchat.message.failed";
-                default -> null;
-            };
-            if (statusKey != null) status = tr(statusKey);
-        }
+        String statusKey=MessagePaint.deliveryStatusKey(msg);
+        String status=statusKey==null?null:tr(statusKey);
         NameLayout name = nameLayout(msg, nameFont, fallback, status);
         List<RichLine> lines = name.lines();
         if (lines.isEmpty()) return;
@@ -1312,6 +1385,11 @@ public final class MessageListView {
         // RichTextRenderer.drawLines takes a centerY and internally converts
         // it to the cap-height baseline, matching the old drawText helper.
         float centerY = rowY + UiTokens.NAME_BAND / 2.0F;
+        if (RichTextRenderer.hasObfuscated(lines)) {
+            RichTextRenderer.drawLines(canvas, nameFont, lines, x, centerY, lineHeight, textPrimary(),
+                    clickableSpans, true, true);
+            return;
+        }
         nameShadows.draw(canvas, nameFont, lines, nameWidth, x, centerY, lineHeight,
                 Math.max(1F, (float) shadowDensity.getAsDouble()), SoftShadow.enabled());
         RichTextRenderer.drawLines(canvas, nameFont, lines, x, centerY, lineHeight, textPrimary(),
@@ -1351,7 +1429,7 @@ public final class MessageListView {
     }
 
     private MessageHit drawImageMessage(Canvas canvas, ChatMessage msg, String raw, String imageUrl,
-                                        float x, float y, float maxWidth, int index, boolean grouped) {
+                                        float x, float y, float maxWidth, int index, boolean grouped, ChatBubble.Group bubbleGroup) {
         // Bubble offset from the list edge; includes the avatar's edge inset so
         // the avatar-bubble gap stays AVATAR_GAP after the avatar moved inward.
         float nameOffset = UiTokens.AVATAR_SIZE + UiTokens.AVATAR_GAP + avatarEdgeInset();
@@ -1382,7 +1460,7 @@ public final class MessageListView {
         var style = AtomChatConfig.get().effectiveBubbleStyle();
         MessageImage image = images.get(imageUrl, true);
         if (image == null || !image.transparent()) {
-            HudShadow.drawPanel(canvas, ChatBubble.outline(bubbleX, bubbleTop, imageW, imageH, style, msg.isOwn(), 1F));
+            HudShadow.drawPanel(canvas, ChatBubble.outline(bubbleX, bubbleTop, imageW, imageH, style, msg.isOwn(), 1F, bubbleGroup));
         }
         if (image != null) {
             // No bubble fill behind a loaded image: a transparent PNG/GIF must
@@ -1393,11 +1471,11 @@ public final class MessageListView {
             // the bubble already has the image's proportions and the bitmap is
             // simply fitted to it. Stretching only happened because the box used
             // to be a fixed 275x175 with the height clamped rather than scaled.
-            ChatBubble.drawImage(canvas, image.image(), bubbleX, bubbleTop, imageW, imageH, style, msg.isOwn());
+            ChatBubble.drawImage(canvas, image.image(), bubbleX, bubbleTop, imageW, imageH, style, msg.isOwn(), bubbleGroup);
         } else {
             // Placeholder only while the download is in flight: once an image
             // is loaded it must not keep a plate behind its transparent pixels.
-            ChatBubble.draw(canvas, bubbleX, bubbleTop, imageW, imageH, style, msg.isOwn(), otherBubble());
+            ChatBubble.draw(canvas, bubbleX, bubbleTop, imageW, imageH, style, msg.isOwn(), otherBubble(), bubbleGroup);
             Font loadingFont = FontManager.font(UiTokens.FONT_QUOTE);
             SkiaFontRenderer.drawTextCentered(canvas, loadingFont, tr("atomchat.image.loading"),
                     bubbleX + imageW / 2.0F, bubbleTop + imageH / 2.0F, textSecondary());
@@ -1420,7 +1498,7 @@ public final class MessageListView {
      * still readable.
      */
     private MessageHit drawImagePlaceholderMessage(Canvas canvas, ChatMessage msg, float x, float y,
-                                                   float maxWidth, int index, boolean grouped) {
+                                                   float maxWidth, int index, boolean grouped, ChatBubble.Group bubbleGroup) {
         boolean hasQuote = msg.getQuoteName() != null;
         float quoteH = hasQuote ? UiTokens.QUOTE_HEIGHT + UiTokens.QUOTE_GAP : 0.0F;
         float band = grouped ? 0.0F : UiTokens.NAME_BAND;
@@ -1451,8 +1529,8 @@ public final class MessageListView {
             drawQuotePill(canvas, msg, x, maxWidth, y + band, msg.isOwn());
         }
         var style = AtomChatConfig.get().effectiveBubbleStyle();
-        HudShadow.drawPanel(canvas, ChatBubble.outline(pillX, pillTop, pillW, pillH, style, msg.isOwn(), 1F));
-        ChatBubble.draw(canvas, pillX, pillTop, pillW, pillH, style, msg.isOwn(), secondaryCapsuleBg());
+        HudShadow.drawPanel(canvas, ChatBubble.outline(pillX, pillTop, pillW, pillH, style, msg.isOwn(), 1F, bubbleGroup));
+        ChatBubble.draw(canvas, pillX, pillTop, pillW, pillH, style, msg.isOwn(), secondaryCapsuleBg(), bubbleGroup);
         SkiaFontRenderer.drawTextCentered(canvas, font, placeholder,
                 pillX + pillW / 2.0F, pillTop + pillH / 2.0F,
                 placeholderGreen(secondaryCapsuleBg()), TextSurface.CAPSULE.shadowed(), secondaryCapsuleBg());
@@ -1498,6 +1576,7 @@ public final class MessageListView {
     }
 
     private float measureContentHeight(List<ChatMessage> messages, float width, int from) {
+        refreshFontEpoch();
         int config = (AtomChatConfig.get().imageMessagesEnabled ? 1 : 0)
                 | (AtomChatConfig.get().compactMessagesEnabled ? 2 : 0)
                 | (AtomChatConfig.get().effectiveBubbleStyle().ordinal() << 2);
@@ -1542,12 +1621,12 @@ public final class MessageListView {
                 dividerTop[i] = contentHeight;
                 contentHeight += TIME_DIVIDER_H + UiTokens.LIST_GAP;
             }
-            boolean grouped = isCompactGrouped(messages, i);
+            boolean grouped = isCompactGrouped(messages, i, from);
             rowTop[i] = contentHeight;
             float h = messageHeight(messages.get(i), width, grouped);
             rowHeight[i] = h;
             contentHeight += h;
-            boolean nextGrouped = isCompactGrouped(messages, i + 1);
+            boolean nextGrouped = isCompactGrouped(messages, i + 1, from);
             contentHeight += nextGrouped
                     ? MessageGeometry.groupedGap()
                     : UiTokens.LIST_GAP;
@@ -1627,7 +1706,7 @@ public final class MessageListView {
     private int charAtLine(MessageTextLine line, float mx) {
         Font font = FontManager.font(line.message().isSystem() ? UiTokens.FONT_QUOTE : UiTokens.FONT_BODY);
         return RichTextLayout.caretAt(line.richLine(),
-                text -> SkiaFontRenderer.getStringWidth(font, text), mx - line.x()) - line.richLine().textStart();
+                RichTextRenderer.measurer(font), mx - line.x()) - line.richLine().textStart();
     }
 
     /**
@@ -1684,11 +1763,11 @@ public final class MessageListView {
             String line = lines.get(i);
             RichLine richLine = richLines.get(i);
             float x0 = textX + RichTextLayout.advanceTo(richLine,
-                    text -> SkiaFontRenderer.getStringWidth(font, text), richLine.textStart() + start);
+                    RichTextRenderer.measurer(font), richLine.textStart() + start);
             float x1 = textX + RichTextLayout.advanceTo(richLine,
-                    text -> SkiaFontRenderer.getStringWidth(font, text), richLine.textStart() + end);
+                    RichTextRenderer.measurer(font), richLine.textStart() + end);
             float y = blockTop + i * lineHeight;
-            CornerGeometry.drawRoundedRect(canvas, x0, y, Math.max(1.0F, x1 - x0), lineHeight, s(1), 0xE02D6FD6);
+            CornerGeometry.drawRoundedRect(canvas, Math.min(x0,x1), y, Math.max(1.0F, Math.abs(x1 - x0)), lineHeight, s(1), 0xE02D6FD6);
         }
     }
 

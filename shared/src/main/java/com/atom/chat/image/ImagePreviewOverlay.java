@@ -111,6 +111,9 @@ public final class ImagePreviewOverlay {
     }
 
     /** Requests the fade-out (Esc, the close key, or a click on the backdrop). */
+    /** A deleted source has no exit frame in which its former picture remains visible. */
+    public void discard() {image=null;active=false;closing=false;dragging=false;}
+
     public void close() {
         if (active && !closing) {
             closing = true;

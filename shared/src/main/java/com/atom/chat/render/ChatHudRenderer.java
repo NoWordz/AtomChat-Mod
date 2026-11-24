@@ -52,6 +52,11 @@ public final class ChatHudRenderer {
 
         public static Viewport of(Matrix4f pose, int guiWidth, int guiHeight, double guiScale, double chatScale,
                                   int chatWidth) {
+            return of(pose, guiWidth, guiHeight, guiScale, chatScale, chatWidth, false);
+        }
+
+        public static Viewport of(Matrix4f pose, int guiWidth, int guiHeight, double guiScale, double chatScale,
+                                  int chatWidth, boolean offhandOnLeft) {
             HudTransform transform = HudTransform.from(pose);
             if (!(chatScale > 0) || !(guiScale > 0) || transform == null) return null;
             float guiPerUnit = (float) chatScale * LayoutTokens.HUD_ICON_GUI / UiTokens.AVATAR_SIZE;
@@ -64,7 +69,11 @@ public final class ChatHudRenderer {
                 bottom = Math.min(guiHeight, bottom + transform.y());
                 transform = HudTransform.IDENTITY;
             }
-            return new Viewport(x / guiPerUnit, bottom / guiPerUnit, Math.min(guiWidth - x, chatWidth) / guiPerUnit,
+            float hotbarLeft = guiWidth / 2 - 91F - (offhandOnLeft ? 29F : 0F);
+            // Leave one physical pixel for edge coverage and float round-off.
+            float availableWidth = Math.max(0F, Math.min(chatWidth,
+                    hotbarLeft - LayoutTokens.HUD_MESSAGE_GAP_GUI - x - 1F / (float) guiScale));
+            return new Viewport(x / guiPerUnit, bottom / guiPerUnit, availableWidth / guiPerUnit,
                     bottom / guiPerUnit, (float) guiScale * guiPerUnit, guiPerUnit, transform);
         }
 
@@ -88,10 +97,16 @@ public final class ChatHudRenderer {
 
     private record Measured(ChatMessage message, List<RichLine> name, List<RichLine> body, Font bodyFont,
                             float lineHeight, float width, float bubbleHeight, float nameWidth,
-                            boolean hasItems, ImageCode.Meta image, boolean imagePlaceholder, List<RichLine> quote, float quoteWidth,
-                            float quoteHeight, String repeatLabel, float repeatLane, Object continuationInk) {}
+                            boolean hasItems, boolean animatedText, boolean animatedName, ImageCode.Meta image, boolean imagePlaceholder, List<RichLine> quote, float quoteWidth,
+                            float quoteHeight, String repeatLabel, float repeatLane, Object[] inkKeys) {
+        Object inkKey(ChatBubble.Group group) {
+            int index = group.ordinal();
+            if (inkKeys[index] == null) inkKeys[index] = new Object();
+            return inkKeys[index];
+        }
+    }
     private record Placed(Measured measured, boolean showSender, float thumbnailWidth, float thumbnailHeight,
-                          float height) {
+                          float height, ChatBubble.Group group) {
         float nameBand() {
             return showSender ? UiTokens.NAME_BAND : 0F;
         }
@@ -139,6 +154,8 @@ public final class ChatHudRenderer {
     private Font fittedBodyFont;
     private float fittedAvatarInset, fittedListGap, fittedNewestQuoteHeight;
     private Font layoutBodyFont, layoutNameFont, layoutCapsuleFont;
+    private long messageRevision = -1L;
+    private long fontEpoch = -1L;
     private float layoutWidth;
     private float layoutAvatarInset;
     private float inlineItemGap;
@@ -193,6 +210,8 @@ public final class ChatHudRenderer {
 
     public <K, C> void select(Object world, ChatHudHistory<K, C, ChatMessage> history, List<K> entries, int limit,
                               Function<K, ChatMessage> fallback, boolean panel, ToIntFunction<K> receivedTick, int tick) {
+        long revision=com.atom.chat.chat.NativeMessageSync.revision();
+        if(messageRevision!=revision){clear();messageRevision=revision;}
         if ((this.world == null ? null : this.world.get()) != world) {
             clear();
             if (world != null) this.world = new WeakReference<>(world);
@@ -235,11 +254,17 @@ public final class ChatHudRenderer {
                     || GL11C.glIsEnabled(GL11C.GL_SCISSOR_TEST)) return false;
             Viewport fittedViewport = fittedViewport(viewport.local(), limit);
             var config = AtomChatConfig.get();
+            NativeFontRenderer.beginFrame();
             prepareRows(recent, fittedViewport, ownName, unknownName, imageLabel, config, limit, animationEnabled, now);
             if (visibleRows.isEmpty() && !departingRows) return recent.isEmpty();
             boolean prepare = hasInlineItems();
+            for(var row:visibleRows)requestFonts(row.content().measured());
+            if(departingRows)for(var row:motion.rows())if(row.departing())requestFonts(row.content().measured());
             flush.run();
-            graphics.draw(prepare ? () -> prepareIcons.accept(graphics) : null, fittedViewport.density(), (canvas, ignored) -> {
+            graphics.draw(() -> {
+                NativeFontRenderer.prepare();
+                if (prepare || NativeTagIconRenderer.hasRequests()) prepareIcons.accept(graphics);
+            }, fittedViewport.density(), (canvas, ignored) -> {
                 paintingStarted = true;
                 prepareInk(config, fittedViewport, graphics.inkGeneration());
                 paintRows(canvas, fittedViewport, viewport.transform(), ownUuid, ownName, unknownName,
@@ -310,12 +335,14 @@ public final class ChatHudRenderer {
         Font bodyFont = FontManager.font(UiTokens.FONT_BODY);
         Font capsuleFont = FontManager.font(UiTokens.FONT_QUOTE);
         float avatarInset = MessageGeometry.avatarInset();
-        boolean invalidateLayout = layoutWidth != viewport.width() || layoutBodyFont != bodyFont
+        long currentFontEpoch = NativeFontRenderer.epoch();
+        boolean invalidateLayout = fontEpoch != currentFontEpoch || layoutWidth != viewport.width() || layoutBodyFont != bodyFont
                 || layoutNameFont != nameFont || layoutCapsuleFont != capsuleFont || inlineItemGap != UiTokens.INLINE_ITEM_GAP
                 || layoutAvatarInset != avatarInset || !Objects.equals(layoutOwnName, ownName)
                 || !Objects.equals(layoutUnknownName, unknownName) || !Objects.equals(layoutImageLabel, imageLabel);
         if (invalidateLayout) {
             layouts.clear();
+            fontEpoch = currentFontEpoch;
             clearRasterInk();
             layoutBodyFont = bodyFont;
             layoutNameFont = nameFont;
@@ -392,7 +419,8 @@ public final class ChatHudRenderer {
             float rowHeight = Math.max(minHeight, band + row.quoteHeight() + thumbnailHeight);
             float rowTop = bottom - rowHeight;
             float entryX = message.isSystem() ? 0F : message.isOwn() ? UiTokens.MESSAGE_SLIDE : -UiTokens.MESSAGE_SLIDE;
-            visibleRows.add(motion.place(message.getId(), new Placed(row, showSender, thumbnailWidth, thumbnailHeight, rowHeight),
+            var group = ChatBubble.Group.of(grouped, i > 0 && continuations[i - 1]);
+            visibleRows.add(motion.place(message.getId(), new Placed(row, showSender, thumbnailWidth, thumbnailHeight, rowHeight, group),
                     rowTop, entryX));
             bottom = rowTop - gap;
         }
@@ -458,17 +486,18 @@ public final class ChatHudRenderer {
             image = ImageCode.parse(content);
             body = RichText.literal(imageLabel);
         }
-        RichText name = message.getSenderRich().stripInteractions();
+        RichText name = message.getSenderRich();
         if (!message.isSystem() && name.isEmpty()) {
             name = message.isOwn() ? OwnIdentity.displayNameRich() : RichText.literal(senderName(message, ownName, unknownName));
         }
+        name = MessagePaint.name(name);
         String repeatLabel = message.getDuplicateCount() > 1 ? "x" + message.getDuplicateCount() : null;
         float repeatLane = repeatLabel == null ? 0F
                 : UiTokens.INLINE_ITEM_GAP + SkiaFontRenderer.getStringWidth(nameFont, repeatLabel);
         maxBubbleWidth = Math.max(1F, maxBubbleWidth - repeatLane);
         float textWidth = Math.max(1F, maxBubbleWidth - 2F * UiTokens.BUBBLE_PAD);
-        List<RichLine> lines = MessagePaint.oneLine(body, font, textWidth);
-        List<RichLine> caption = MessagePaint.oneLine(name, nameFont, textWidth);
+        List<RichLine> lines = MessagePaint.hudLine(body, font, textWidth);
+        List<RichLine> caption = MessagePaint.hudLine(name, nameFont, textWidth);
         float bodyWidth = lines.isEmpty() ? 0F : RichTextRenderer.width(font, lines.get(0));
         float nameWidth = caption.isEmpty() ? 0F : RichTextRenderer.width(nameFont, caption.get(0));
         float bubbleWidth = Math.min(maxBubbleWidth, Math.max(UiTokens.BUBBLE_MIN_W, bodyWidth + 2F * UiTokens.BUBBLE_PAD));
@@ -487,17 +516,28 @@ public final class ChatHudRenderer {
                 text = RichText.literal(prefix + quotedName + ": " + Objects.toString(message.getQuoteText(), ""));
             }
             float quotePadding = MessagePaint.quoteTextInset() + UiTokens.QUOTE_PAD_X;
-            quote = MessagePaint.oneLine(text, layoutCapsuleFont, Math.max(1F, maxBubbleWidth - quotePadding));
+            quote = MessagePaint.hudLine(text, layoutCapsuleFont, Math.max(1F, maxBubbleWidth - quotePadding));
             float quoteTextWidth = quote.isEmpty() ? 0F : RichTextRenderer.width(layoutCapsuleFont, quote.get(0));
             quoteWidth = Math.min(maxBubbleWidth, quoteTextWidth + quotePadding);
             hasItems |= !quote.isEmpty() && quote.get(0).parts().stream().anyMatch(part -> part.isItem());
         }
         var result = new Measured(message, caption, lines, font, lineHeight, bubbleWidth, bubbleHeight,
-                nameWidth, hasItems, image, imagePlaceholder,
-                quote, quoteWidth, quoteHeight, repeatLabel, repeatLane, new Object());
+                nameWidth, hasItems,
+                RichTextRenderer.hasObfuscated(lines) || RichTextRenderer.hasObfuscated(caption) || RichTextRenderer.hasObfuscated(quote)
+                        || NativeFontRenderer.hasNative(lines) || NativeFontRenderer.hasNative(caption) || NativeFontRenderer.hasNative(quote),
+                RichTextRenderer.hasObfuscated(caption) || NativeFontRenderer.hasNative(caption), image, imagePlaceholder,
+                quote, quoteWidth, quoteHeight, repeatLabel, repeatLane, new Object[ChatBubble.Group.values().length]);
         if (layouts.size() >= MAX_LAYOUTS) layouts.clear();
         layouts.put(message, result);
         return result;
+    }
+
+    private static void requestFonts(Measured row) {
+        NativeFontRenderer.requestLines(row.body());
+        NativeFontRenderer.requestLines(row.name());
+        NativeFontRenderer.requestLines(row.quote());
+        var meta=row.message().nativeMeta();
+        if(meta.captured() && meta.tag()!=null)NativeTagIconRenderer.request(meta.tag().icon());
     }
 
     private void prepareInk(AtomChatConfig config, Viewport viewport, long generation) {
@@ -622,7 +662,7 @@ public final class ChatHudRenderer {
             MessageImage attachment = placed.thumbnailHeight() > 0F
                     ? visibleImage.apply(measured.image().url(), !row.departing()) : null;
             Image image = attachment == null ? null : attachment.image();
-            boolean cacheable = grid != null && row.settled(now) && !measured.hasItems();
+            boolean cacheable = grid != null && row.settled(now) && !measured.hasItems() && !measured.animatedText();
             float repeatX = bubbleX + measured.width();
             float repeatY = y + placed.nameBand() + measured.quoteHeight() + measured.bubbleHeight() / 2F;
             if (image != null) {
@@ -633,14 +673,15 @@ public final class ChatHudRenderer {
                 float imageY = y + placed.nameBand() + measured.quoteHeight();
                 float width = image.getWidth() * scale, height = image.getHeight() * scale;
                 if (lastInk.shadow() && !attachment.transparent()) {
-                    HudShadow.draw(canvas, ChatBubble.outline(bubbleX, imageY, width, height, lastInk.shape(), false, 1F));
+                    HudShadow.draw(canvas, ChatBubble.outline(bubbleX, imageY, width, height, lastInk.shape(), false, 1F, placed.group()));
                 }
-                ChatBubble.drawImage(canvas, image, bubbleX, imageY, width, height, lastInk.shape(), false);
+                ChatBubble.drawImage(canvas, image, bubbleX, imageY, width, height, lastInk.shape(), false, placed.group());
                 repeatX = bubbleX + width;
                 repeatY = imageY + height / 2F;
             } else if (!cacheable || !drawStaticInk(canvas, placed, bubbleX, y, grid, inkSurface, false)) {
                 drawInk(canvas, placed, bubbleX, y, viewport.density());
             }
+            MessagePaint.nativeTag(canvas,message,bubbleX,y+placed.nameBand()+measured.quoteHeight(),measured.width(),measured.bubbleHeight(),null);
             if (measured.repeatLabel() != null) {
                 SkiaFontRenderer.drawText(canvas, layoutNameFont, measured.repeatLabel(),
                         repeatX + UiTokens.INLINE_ITEM_GAP, SkiaFontRenderer.centerBaselineY(layoutNameFont, repeatY),
@@ -654,7 +695,7 @@ public final class ChatHudRenderer {
     private boolean drawStaticInk(Canvas canvas, Placed placed, float x, float y, ChatHudRasterCache.PixelGrid grid,
                                   ChatHudRasterCache.SurfaceFactory inkSurface, boolean captionOnly) {
         Measured measured = placed.measured();
-        Object key = placed.showSender() || measured.message().isSystem() ? measured : measured.continuationInk();
+        Object key = measured.inkKey(placed.group());
         float captionHeight = placed.nameBand() + measured.quoteHeight();
         if (captionOnly) {
             if (captionHeight <= 0F) return true;
@@ -683,6 +724,11 @@ public final class ChatHudRenderer {
     private void drawSender(Canvas canvas, Measured measured, float x, float y, float liveDensity) {
         float lineHeight = SkiaFontRenderer.getHeight(layoutNameFont);
         float centerY = y + UiTokens.NAME_BAND / 2F;
+        if (measured.animatedName()) {
+            RichTextRenderer.drawLines(canvas, layoutNameFont, measured.name(), x, centerY,
+                    lineHeight, DEFAULT_NAME_INK, null, false, true, lastInk.nameFilter());
+            return;
+        }
         if (liveDensity > 0F) {
             nameShadow.draw(canvas, layoutNameFont, measured.name(), measured.nameWidth(), x,
                     centerY, lineHeight, liveDensity, lastInk.nameFilter());
@@ -707,10 +753,10 @@ public final class ChatHudRenderer {
             float bubbleY = y + placed.nameBand() + measured.quoteHeight();
             boolean placeholder = measured.imagePlaceholder();
             if (lastInk.shadow()) {
-                HudShadow.draw(canvas, ChatBubble.outline(x, bubbleY, measured.width(), height, lastInk.shape(), false, 1F));
+                HudShadow.draw(canvas, ChatBubble.outline(x, bubbleY, measured.width(), height, lastInk.shape(), false, 1F, placed.group()));
             }
             ChatBubble.draw(canvas, x, bubbleY, measured.width(), height, lastInk.shape(), false,
-                    placeholder ? lastInk.capsule() : own ? lastInk.own() : lastInk.other());
+                    placeholder ? lastInk.capsule() : own ? lastInk.own() : lastInk.other(), placed.group());
             RichTextRenderer.drawLines(canvas, measured.bodyFont(), measured.body(), x + UiTokens.BUBBLE_PAD,
                     bubbleY + height / 2F, measured.lineHeight(),
                     placeholder ? lastInk.capsuleText() : own ? lastInk.ownText() : lastInk.otherText(),

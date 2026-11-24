@@ -144,6 +144,30 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
      * {@link ModalInput} hands it every event.
      */
     private final ImagePreviewOverlay imagePreview = new ImagePreviewOverlay();
+    private ChatMessage imagePreviewMessage;
+    private final java.util.function.Consumer<String> nativeDeletionListener=this::redactNativeState;
+    private long nativeMessageRevision=-1;
+    private void redactNativeState(String signature){
+        java.util.function.Predicate<ChatMessage> affected=message->message!=null && signature.equals(message.nativeMeta().signature());
+        if(contextMenu!=null)contextMenu.invalidate(affected);
+        if(messageWiring!=null)messageWiring.clearClick();
+        if(messageListView!=null)messageListView.redactNativeMessages();
+        if(replySlots!=null)replySlots.redact(signature);
+        if(tutorialSavedReplies!=null)tutorialSavedReplies=ReplySlotStore.redacted(tutorialSavedReplies,signature);
+        if(composerTools!=null)composerTools.update();
+        if(affected.test(reactionTarget)){reactionTarget=null;if(emojiPanel!=null)emojiPanel.close();}
+        if(affected.test(imagePreviewMessage)){imagePreviewMessage=null;if(imagePreview!=null)imagePreview.discard();}
+        nativeMessageRevision=com.atom.chat.chat.NativeMessageSync.revision();
+    }
+    private void syncNativeMessages(){
+        long current=com.atom.chat.chat.NativeMessageSync.revision();if(nativeMessageRevision==current)return;nativeMessageRevision=current;
+        if(contextMenu!=null)contextMenu.invalidate(com.atom.chat.chat.NativeMessageSync::deleted);
+        if(messageWiring!=null)messageWiring.clearClick();
+        if(replySlots!=null)replySlots.replyTarget();
+        if(composerTools!=null)composerTools.update();
+        if(com.atom.chat.chat.NativeMessageSync.deleted(reactionTarget)){reactionTarget=null;if(emojiPanel!=null)emojiPanel.close();}
+        if(com.atom.chat.chat.NativeMessageSync.deleted(imagePreviewMessage)){imagePreviewMessage=null;if(imagePreview!=null)imagePreview.discard();}
+    }
 
     /**
      * The profile page's avatar-and-banner half, the avatar click competition
@@ -1022,7 +1046,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
 
         @Override
         public boolean hasClickEvent(ClickableSpan span) {
-            return span.style().getClickEvent() != null;
+            return span.style().getClickEvent() != null || span.style().getInsertion() != null;
         }
     });
 
@@ -2267,6 +2291,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
 
     @Override
     public void render(GuiGraphics context, int mouseX, int mouseY, float delta) {
+        syncNativeMessages();
         rememberPointer(mouseX, mouseY);
         // First-open attribution: how long the first render() call takes.
         // The clock lives in the budget so the screen stays free of nanoTime.
@@ -2391,7 +2416,11 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
                 }
                 long started = com.atom.chat.diagnostics.FrameSegments.start(segmentId);
                 long iconBudget = FirstOpenBudget.active() ? System.nanoTime() : 0L;
-                try { com.atom.chat.render.ItemIconRenderer.prepare(context, graphics); }
+                try {
+                    preparePanelFonts();
+                    com.atom.chat.render.NativeTagIconRenderer.prepare(context,graphics);
+                    com.atom.chat.render.ItemIconRenderer.prepare(context, graphics);
+                }
                 finally {
                     com.atom.chat.diagnostics.FrameSegments.end(segmentId, com.atom.chat.diagnostics.FrameSegments.Stage.ICONS, started);
                     if (iconBudget != 0L) FirstOpenBudget.addIcons(System.nanoTime() - iconBudget);
@@ -2563,6 +2592,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
 
     @Override
     protected void init() {
+        com.atom.chat.chat.NativeMessageSync.listen(nativeDeletionListener);
         tutorial.initialize(com.atom.chat.util.CacheDirs.clientRoot().resolve("onboarding.json"));
         composite.reset();
         bottomChrome.reset();
@@ -2751,7 +2781,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         boolean captured = false;
         try {
             if (Animations.enabled() && panelProgress > 0F && minecraft.level != null) {
-                graphics.draw(null, uiDensity(), (canvas, snapshot) -> {
+                graphics.draw(this::preparePanelFonts, uiDensity(), (canvas, snapshot) -> {
                     float previous = panelProgress;
                     long previousDt = frameDt;
                     panelProgress = 1F;
@@ -2809,6 +2839,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
 
     @Override
     public void removed() {
+        com.atom.chat.chat.NativeMessageSync.unlisten(nativeDeletionListener);
         if (panelEditor != null) { panelEditor.cancel(); panelEditor = null; }
         if(!tutorial.suspended())tutorial.reset();
         composite.close();
@@ -2851,7 +2882,6 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
     }
 
     private void drawPanel(Canvas canvas, io.github.humbleui.skija.Surface target, float x, float y, Image worldSnapshot, int mouseX, int mouseY, float delta, Canvas exitBackground, boolean mainTarget) {
-        flushUploadedAttachments();
         if (com.atom.chat.diagnostics.FrameProfile.enabled()) com.atom.chat.diagnostics.FaultTrace.focus(
                 topPage().name(),composer.focused(),composer.fieldFocused(),isPrivateReadOnly(),
                 imagePreview.isActive() || imageCropper.isActive() || colorPicker.isActive() || settingsSectionPage.confirmation().isActive(),tutorial.active());
@@ -2865,14 +2895,12 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         // arrived within the threshold. The verdict stays inside this frame —
         // the domain only decides, the frame order is this method's.
         avatarWiring.settlePendingAvatarClick(nowMs, closing);
-        syncScrollMotion();
         String reactionFailure = com.atom.chat.reaction.ReactionClient.takeError();
         if (reactionFailure != null) feedback("atomchat.reaction." + reactionFailure, false);
         if (!PanelOpenMotion.animating(panelProgress, closing)
                 && com.atom.chat.util.DataMigration.takeWarning()) {
             feedback("atomchat.data.migration_warning", false);
         }
-        composerTools.update();
         com.atom.chat.diagnostics.FrameProfile.surface(
                 settingsSectionPage.confirmation().isActive() ? com.atom.chat.diagnostics.FrameProfile.Surface.CONFIRMATION
                 : emojiPanel.isOpen() ? switch (emojiPanel.diagnosticTab()) {
@@ -3029,6 +3057,26 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
      * overlays stay with the caller: the header belongs to the arriving page's
      * envelope, and the overlays belong to the screen, not the page.
      */
+    private void preparePanelFonts() {
+        flushUploadedAttachments();
+        syncScrollMotion();
+        composerTools.update();
+        com.atom.chat.render.NativeFontRenderer.beginFrame();
+        prepareVisibleMessageFonts();
+        com.atom.chat.notification.NotificationBanner.INSTANCE.requestFonts();
+        com.atom.chat.render.NativeFontRenderer.prepare();
+    }
+
+    private void prepareVisibleMessageFonts() {
+        var view=chatPageViewFor(topNav());
+        if(view==null)return;
+        var messages=messageWiring.messagesForNav(view.page());
+        var window=historyWindowForNav(view.page(),messages.size());
+        messageListView.setVisibleStart(window.visibleStart());
+        UiLayout frame=layout();
+        messageListView.requestFonts(frame.list.w(),frame.list.h(),messages,view.scroll());
+    }
+
     private void drawChatPageBody(Canvas canvas, UiLayout layout, int mouseX, int mouseY,
                                   ChatPageView view) {
         if (view == null) {
@@ -3546,6 +3594,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
 
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double verticalAmount) {
+        syncNativeMessages();
         rememberPointer(mouseX, mouseY);
         // 1.20.1 has no horizontal scroll delta; the gate only reads vertical.
         Boolean direct = gate.scroll(mouseX, mouseY, 0.0, verticalAmount);
@@ -3557,6 +3606,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
 
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
+        syncNativeMessages();
         rememberPointer(mouseX, mouseY);
 
         // Completes the input trio next to keyPressed:/charTyped:. The whole UI is
@@ -3587,6 +3637,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
 
     @Override
     public boolean mouseDragged(double mouseX, double mouseY, int button, double dragX, double dragY) {
+        syncNativeMessages();
         rememberPointer(mouseX, mouseY);
         Boolean direct = gate.drag(mouseX, mouseY, button, dragX, dragY);
         if (direct != null) {
@@ -3597,6 +3648,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
 
     @Override
     public boolean mouseReleased(double mouseX, double mouseY, int button) {
+        syncNativeMessages();
         rememberPointer(mouseX, mouseY);
         foreignPointer.release(button);
         Boolean direct = gate.release(mouseX, mouseY, button);
@@ -3608,6 +3660,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
 
     @Override
     public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
+        syncNativeMessages();
         com.atom.chat.audio.FeedbackSoundController.beginAction();
         try { return handleKeyPressed(keyCode, scanCode, modifiers); }
         finally { com.atom.chat.audio.FeedbackSoundController.endAction(); }
@@ -3641,6 +3694,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
 
     @Override
     public boolean charTyped(char chr, int modifiers) {
+        syncNativeMessages();
         Boolean direct = gate.charTyped(chr, modifiers);
         if (direct != null) {
             return direct;
@@ -4669,6 +4723,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
                     // opening the preview downloads nothing a second time.
                     Image bitmap = ImageLoader.get().get(imageHit.imageUrl(), true);
                     if (bitmap != null) {
+                        imagePreviewMessage=imageHit.message();
                         imagePreview.open(bitmap);
                         // This press belongs to the modal now: nothing was armed
                         // for a clickable span or a selection on the way here.

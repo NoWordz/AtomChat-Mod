@@ -230,6 +230,18 @@ public final class RichText {
         return new RichText(out, rootStyle);
     }
 
+    /** Remove actions from a display-only name without changing any visible wire styling. */
+    public RichText withoutEvents() {
+        boolean events = rootStyle.getClickEvent() != null || rootStyle.getHoverEvent() != null;
+        for (RichRun run : runs) events |= run.style().getClickEvent() != null || run.style().getHoverEvent() != null;
+        if (!events) return this;
+        List<RichRun> out = new ArrayList<>(runs.size());
+        for (RichRun run : runs) {
+            out.add(new RichRun(run.text(), run.style().withClickEvent(null).withHoverEvent(null)));
+        }
+        return new RichText(out, rootStyle.withClickEvent(null).withHoverEvent(null));
+    }
+
     public RichText linkifyUrls() {
         List<RichRun> out = new ArrayList<>();
         for (RichRun run : runs) {

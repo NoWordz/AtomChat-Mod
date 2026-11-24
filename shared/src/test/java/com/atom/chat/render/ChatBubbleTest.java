@@ -58,11 +58,13 @@ class ChatBubbleTest {
             b.allocN32Pixels(width * samples, height * samples);
             actual.getCanvas().scale(1.25F, 1.25F);
             reference.getCanvas().scale(1.25F * samples, 1.25F * samples);
-            for (boolean own : new boolean[]{false, true}) {
+            for (var group : ChatBubble.Group.values()) for (boolean own : new boolean[]{false, true}) {
                 actual.getCanvas().clear(0);
                 reference.getCanvas().clear(0);
-                ChatBubble.draw(actual.getCanvas(), 10.25F, 10.5F, 120, 50, BubbleStyle.CORNER, own, -1);
-                reference.getCanvas().drawRRect(ChatBubble.outline(10.25F, 10.5F, 120, 50, BubbleStyle.CORNER, own, 1F), paint);
+                ChatBubble.draw(actual.getCanvas(), 10.25F, 10.5F, 120, 50, BubbleStyle.CORNER, own, -1, group);
+                var outline = ChatBubble.outline(10.25F, 10.5F, 120, 50, BubbleStyle.CORNER, own, 1F, group);
+                assertTrue(CornerGeometry.usesCircularArcs(outline), group + ": every single-tip contour must stay circular");
+                reference.getCanvas().drawRRect(outline, paint);
                 assertTrue(actual.readPixels(a, 0, 0));
                 assertTrue(reference.readPixels(b, 0, 0));
                 byte[] low = a.readPixels(), high = b.readPixels();
@@ -82,7 +84,8 @@ class ChatBubbleTest {
                     }
                 }
                 assertTrue(edgePixels > 200);
-                assertTrue(error / edgePixels < 3F, "edge alpha MAE " + error / edgePixels);
+                System.out.println(group + "/own=" + own + ": edge alpha MAE=" + error / edgePixels);
+                assertTrue(error / edgePixels < 3F, group + "/own=" + own + ": edge alpha MAE " + error / edgePixels);
             }
         }
     }
@@ -114,7 +117,7 @@ class ChatBubbleTest {
             textPixels.allocN32Pixels(190, 100);
             photoPixels.allocN32Pixels(190, 100);
             try (Image image = source.makeImageSnapshot()) {
-                for (float phase : new float[]{0F, .25F, .5F, .75F}) {
+                for (var group : ChatBubble.Group.values()) for (float phase : new float[]{0F, .25F, .5F, .75F}) {
                     var textCanvas = text.getCanvas();
                     var photoCanvas = photo.getCanvas();
                     textCanvas.clear(0);
@@ -123,8 +126,8 @@ class ChatBubbleTest {
                     photoCanvas.save();
                     textCanvas.scale(1.25F, 1.25F);
                     photoCanvas.scale(1.25F, 1.25F);
-                    ChatBubble.draw(textCanvas, 10F + phase, 10F + phase, 120F, 50F, BubbleStyle.CORNER, false, -1);
-                    ChatBubble.drawImage(photoCanvas, image, 10F + phase, 10F + phase, 120F, 50F, BubbleStyle.CORNER, false);
+                    ChatBubble.draw(textCanvas, 10F + phase, 10F + phase, 120F, 50F, BubbleStyle.CORNER, false, -1, group);
+                    ChatBubble.drawImage(photoCanvas, image, 10F + phase, 10F + phase, 120F, 50F, BubbleStyle.CORNER, false, group);
                     textCanvas.restore();
                     photoCanvas.restore();
                     assertTrue(text.readPixels(textPixels, 0, 0));

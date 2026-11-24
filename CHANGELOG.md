@@ -1,5 +1,49 @@
 # Changelog
 
+## v0.9.6
+
+**更改**
+
+- 紧凑消息的单尖气泡按分组位置调整尖角，中间消息使用小连接圆角，全部沿用普通圆弧。
+- 面板和聊天 HUD 的文字、图片及占位气泡共用分组轮廓。
+- 聊天历史按最多 500 条原始消息保留，重复消息仅在显示时合并。
+
+**修复**
+
+- 聊天 HUD 按 GUI 缩放限制单行宽度，为原版快捷栏和左侧副手槽留出间隙，超长内容显示省略号。
+- 补齐聊天富文本的粗体、斜体、删除线和混淆文字绘制，保留服务器指定的名字颜色与下划线。
+- 修复静止 HUD 的缓存冻结混淆文字和下尖气泡底边覆盖不准确的问题。
+- 聊天文字兼容资源包自定义字体和称号字形，并在资源重载或字体选项变化后刷新排版。
+- 恢复富文本仅包含插入内容时的 Shift 点击交互，并显示原版消息标记与提示。
+- 原版撤回消息同步替换面板和本地历史中的对应记录，清除原正文、引用及交互缓存。
+
+**性能**
+
+- 复用文字装饰线画笔，减少重复绘制时的对象分配。
+- 复用字体路由结果，仅为可见消息及退场消息准备原生字形。
+
+----
+
+**Changed**
+
+- Compact single-tip bubbles now follow their group position, with small joining corners on middle messages and circular arcs throughout.
+- Panel and HUD text, images, and placeholders share the grouped outline.
+- Chat history retains up to 500 original messages, merging duplicates only for display.
+
+**Fixed**
+
+- The chat HUD now limits single-line width at each GUI scale, leaving room for the vanilla hotbar and left offhand slot and truncating long content with an ellipsis.
+- Chat rich text now renders bold, italic, strikethrough, and obfuscated text while preserving server-defined name colors and underlines.
+- Fixed static HUD caches freezing obfuscated text and inaccurate lower edges on downward-tip bubbles.
+- Chat text supports resource-pack fonts and custom title glyphs, refreshing layout after resource reloads or font-option changes.
+- Restored Shift-click interaction for insertion-only rich text and added vanilla message indicators and tooltips.
+- Vanilla message deletion now replaces matching panel and local-history records, clearing their original bodies, quotes, and interaction caches.
+
+**Performance**
+
+- Reuse text-decoration paints to reduce allocations during repeated drawing.
+- Reuse font-routing results and prepare native glyphs only for visible and departing messages.
+
 ## v0.9.5
 
 **更改**

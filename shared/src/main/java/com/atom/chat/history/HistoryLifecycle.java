@@ -43,6 +43,9 @@ public final class HistoryLifecycle {
     private boolean scheduled;
     private Runnable publication;
     private boolean publicationScheduled;
+    private final java.util.concurrent.ConcurrentMap<String,Long> contentRevisions=new java.util.concurrent.ConcurrentHashMap<>();
+    /** Targets owned by an unfinished disk batch, never a session-wide deletion blacklist. */
+    private final java.util.Map<String,java.util.Set<String>> pendingRedactions=new java.util.HashMap<>();
     private volatile long epoch;
     private volatile String currentKey;
     private boolean savedHistory, loading;
@@ -84,7 +87,8 @@ public final class HistoryLifecycle {
                     loading = false;
                     if (!enabled.getAsBoolean() || !Objects.equals(actualWorld.get(), key)) return;
                     savedHistory = loaded.exists();
-                    publish.accept(loaded.entries());
+                    HistoryFiles.Loaded visible=state.base;
+                    publish.accept(redacted(visible.entries(),state.redactions));
                 });
             } catch (Exception e) {
                 failure.accept(e);
@@ -107,6 +111,54 @@ public final class HistoryLifecycle {
         return savedHistory;
     }
 
+    public boolean redact(List<Entry> snapshot) {
+        return redact(snapshot,null);
+    }
+    public boolean redact(List<Entry> snapshot,String signature) {
+        String key=currentKey;
+        if(!HistoryStore.isWorldSpecific(key))return false;
+        var signatures=new java.util.HashSet<String>();
+        for(var entry:snapshot)if(entry.nativeMeta.deleted() && entry.nativeMeta.signature()!=null)signatures.add(entry.nativeMeta.signature());
+        signature=com.atom.chat.chat.NativeMessageMeta.validSignature(signature);
+        if(signature!=null)signatures.add(signature);
+        final java.util.Set<String> redactions;
+        final long contentRevision;
+        synchronized(lifecycleLock) {
+            signatures.addAll(pendingRedactions.getOrDefault(key,java.util.Set.of()));
+            redactions=java.util.Set.copyOf(signatures);
+            pendingRedactions.put(key,redactions);
+            contentRevision=contentRevisions.merge(key,1L,Long::sum);
+            if(loadState!=null) {
+                loadState.redactions=redactions;
+                if(loadState.base!=null)loadState.base=new HistoryFiles.Loaded(loadState.base.exists(),redacted(loadState.base.entries(),loadState.redactions));
+            }
+        }
+        if(enabled.getAsBoolean())return save(snapshot);
+        long generation=generation(key);
+        // Turning history off stops recording new rows; it must not retain a revoked saved body.
+        return submit("write:"+key,()->{
+            BooleanSupplier valid=()->generation(key)==generation && contentRevisions.getOrDefault(key,0L)==contentRevision;
+            if(!valid.getAsBoolean())return;
+            try {
+                var saved=storage.read(key);
+                if(!saved.exists()){finishRedactions(key,contentRevision);return;}
+                var clean=redacted(saved.entries(),redactions);
+                if(clean.equals(saved.entries()) || storage.write(key,clean,valid))finishRedactions(key,contentRevision);
+            }catch(Exception error){failure.accept(error);}
+        });
+    }
+    private void finishRedactions(String key,long revision) {
+        synchronized(lifecycleLock) {
+            if(contentRevisions.getOrDefault(key,0L)==revision)pendingRedactions.remove(key);
+        }
+    }
+    private static List<Entry> redacted(List<Entry> entries,java.util.Set<String> signatures) {
+        if(signatures.isEmpty())return entries;
+        var result=new java.util.ArrayList<Entry>(entries.size());
+        for(var entry:entries)result.add(!entry.nativeMeta.deleted() && signatures.contains(entry.nativeMeta.signature())?HistoryStore.deleted(entry):entry);
+        return List.copyOf(result);
+    }
+
     /** Input must already contain immutable DTOs, with all Minecraft conversion done on the client. */
     public boolean save(List<Entry> snapshot) {
         String key = currentKey;
@@ -115,12 +167,17 @@ public final class HistoryLifecycle {
                 snapshot.size() - HistorySnapshot.MAX_ENTRIES), snapshot.size()));
         Ticket ticket = new Ticket(epoch, generation(key), key);
         LoadState pendingLoad = loading ? loadState : null;
+        long contentRevision=contentRevisions.getOrDefault(key,0L);
+        final java.util.Set<String> redactions;
+        synchronized(lifecycleLock){redactions=pendingRedactions.getOrDefault(key,java.util.Set.of());}
         return submit("write:" + key, () -> {
-            if (generation(key) != ticket.generation) return;
+            if (generation(key) != ticket.generation || contentRevisions.getOrDefault(key,0L)!=contentRevision) return;
             try {
                 List<Entry> entries = pendingLoad == null ? selected
                         : HistorySnapshot.prepend(base(pendingLoad).entries(), selected);
-                if (storage.write(key, entries, () -> generation(key) == ticket.generation)) {
+                entries=redacted(entries,redactions);
+                if (storage.write(key, entries, () -> generation(key) == ticket.generation && contentRevisions.getOrDefault(key,0L)==contentRevision)) {
+                    finishRedactions(key,contentRevision);
                     main.execute(() -> {
                         if (current(ticket) && enabled.getAsBoolean() && Objects.equals(actualWorld.get(), key))
                             savedHistory = true;
@@ -139,6 +196,7 @@ public final class HistoryLifecycle {
         synchronized (lifecycleLock) {
             key = currentKey;
             if (key != null) clearGenerations.merge(key, 1L, Long::sum);
+            pendingRedactions.remove(key);
             savedHistory = false;
             loading = false;
             loadState = null;
@@ -156,7 +214,10 @@ public final class HistoryLifecycle {
     }
 
     private HistoryFiles.Loaded base(LoadState state) throws Exception {
-        if (state.base == null) state.base = storage.read(state.ticket.key);
+        if(state.base==null) {
+            var loaded=storage.read(state.ticket.key);
+            synchronized(lifecycleLock){if(state.base==null)state.base=new HistoryFiles.Loaded(loaded.exists(),redacted(loaded.entries(),state.redactions));}
+        }
         return state.base;
     }
 
@@ -290,7 +351,8 @@ public final class HistoryLifecycle {
     private record Ticket(long epoch, long generation, String key) {}
     private static final class LoadState {
         final Ticket ticket;
-        HistoryFiles.Loaded base;
+        volatile HistoryFiles.Loaded base;
+        volatile java.util.Set<String> redactions=java.util.Set.of();
         LoadState(Ticket ticket) { this.ticket = ticket; }
     }
 }

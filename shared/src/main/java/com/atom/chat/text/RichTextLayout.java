@@ -30,7 +30,7 @@ public final class RichTextLayout {
     /** Visual pieces retain source indices; item padding never changes copied text. */
     public record Part(String text, RichText.RichRun source, int textStart, int textEnd, float itemWidth) {
         public boolean isItem() { return itemWidth > 0; }
-        public float width(TextMeasurer measurer) { return isItem() ? itemWidth : measurer.measure(text); }
+        public float width(TextMeasurer measurer) { return isItem() ? itemWidth : measurer.measure(text, source); }
     }
 
     public record RichLine(List<RichText.RichRun> runs, int textStart, int textEnd, List<Part> parts) {
@@ -92,7 +92,7 @@ public final class RichTextLayout {
         for (int i = 0; i < atoms.size(); i++) {
             Part part = atoms.get(i);
             if (part.text().equals("\n")) {
-                emitItemLine(lines, line, text.runs());
+                emitItemLine(lines, line, text.runs(), measurer, true);
                 line.clear();
                 width = 0;
                 continue;
@@ -105,27 +105,24 @@ public final class RichTextLayout {
             boolean firstLabelAfterSlot = line.size() == 1 && line.get(0).isItem() && !part.isItem()
                     && line.get(0).textEnd() == part.textStart();
             if (!line.isEmpty() && !firstLabelAfterSlot && width + needed > maxWidth) {
-                emitItemLine(lines, line, text.runs());
+                emitItemLine(lines, line, text.runs(), measurer, true);
                 line.clear();
                 width = 0;
             }
-            if (line.isEmpty() && !lines.isEmpty() && part.text().equals(" ")) continue;
+            if (line.isEmpty() && !lines.isEmpty() && part.text().equals(" ") && measurer.collapsibleSpace(part.source())) continue;
             line.add(part);
             width += advance;
         }
         // Ordinary trailing spaces on the final line retain the existing contract.
-        emitItemLine(lines, line, text.runs(), false);
+        emitItemLine(lines, line, text.runs(), measurer, false);
         return lines;
     }
 
-    private static void emitItemLine(List<RichLine> lines, List<Part> parts, List<RichText.RichRun> source) {
-        emitItemLine(lines, parts, source, true);
-    }
-
     private static void emitItemLine(List<RichLine> lines, List<Part> parts,
-                                     List<RichText.RichRun> source, boolean trim) {
+                                     List<RichText.RichRun> source, TextMeasurer measurer, boolean trim) {
         int count = parts.size();
-        while (trim && count > 0 && parts.get(count - 1).text().equals(" ")) count--;
+        while (trim && count > 0 && parts.get(count - 1).text().equals(" ")
+                && measurer.collapsibleSpace(parts.get(count-1).source())) count--;
         if (count == 0) return;
         List<Part> merged = new ArrayList<>();
         for (Part part : parts.subList(0, count)) {
@@ -160,7 +157,7 @@ public final class RichTextLayout {
                 width += part.itemWidth();
             } else {
                 int chars = Math.min(part.text().length(), absoluteIndex - part.textStart());
-                width += measurer.measure(part.text().substring(0, chars));
+                width += measurer.measure(part.text().substring(0, chars), part.source());
                 if (absoluteIndex < part.textEnd()) break;
             }
         }
@@ -175,6 +172,8 @@ public final class RichTextLayout {
         }
 
         List<RichText.RichRun> sourceRuns = text.runs();
+        int sourceIndex = 0;
+        int sourceEnd = sourceRuns.isEmpty() ? 0 : sourceRuns.get(0).text().length();
         int lineStart = 0;
         int lineEnd = 0;
         float lineWidth = 0f;
@@ -186,7 +185,7 @@ public final class RichTextLayout {
 
             if (codePoint == '\n') {
                 if (lineEnd > lineStart) {
-                    emitTrimmedLine(lines, sourceRuns, full, lineStart, lineEnd);
+                    emitTrimmedLine(lines, sourceRuns, full, lineStart, lineEnd, measurer);
                 }
                 lineStart = codePointEnd;
                 lineEnd = codePointEnd;
@@ -196,8 +195,13 @@ public final class RichTextLayout {
             }
 
             String codePointText = full.substring(index, codePointEnd);
-            float codePointWidth = measurer.measure(codePointText);
-            boolean space = codePoint == ' ';
+            while (sourceIndex + 1 < sourceRuns.size() && index >= sourceEnd) {
+                sourceEnd += sourceRuns.get(++sourceIndex).text().length();
+            }
+            int segmentStart = Math.max(lineStart, sourceEnd - sourceRuns.get(sourceIndex).text().length());
+            float codePointWidth = measurer.measure(full.substring(segmentStart, codePointEnd), sourceRuns.get(sourceIndex))
+                    - measurer.measure(full.substring(segmentStart, index), sourceRuns.get(sourceIndex));
+            boolean space = codePoint == ' ' && measurer.collapsibleSpace(sourceRuns.get(sourceIndex));
 
             if (space) {
                 if (lineEnd == lineStart) {
@@ -213,7 +217,7 @@ public final class RichTextLayout {
                     continue;
                 }
                 if (lineWidth + codePointWidth > maxWidth) {
-                    emitTrimmedLine(lines, sourceRuns, full, lineStart, lineEnd);
+                    emitTrimmedLine(lines, sourceRuns, full, lineStart, lineEnd, measurer);
                     lineStart = codePointEnd;
                     lineEnd = codePointEnd;
                     lineWidth = 0f;
@@ -225,10 +229,10 @@ public final class RichTextLayout {
                 index = codePointEnd;
             } else {
                 if (lineEnd > lineStart && lineWidth + codePointWidth > maxWidth) {
-                    emitTrimmedLine(lines, sourceRuns, full, lineStart, lineEnd);
+                    emitTrimmedLine(lines, sourceRuns, full, lineStart, lineEnd, measurer);
                     lineStart = index;
                     lineEnd = codePointEnd;
-                    lineWidth = codePointWidth;
+                    lineWidth = measurer.measure(codePointText, sourceRuns.get(sourceIndex));
                 } else {
                     if (lineEnd == lineStart) {
                         lineStart = index;
@@ -268,31 +272,41 @@ public final class RichTextLayout {
     }
 
     private static int hit(RichLine line, TextMeasurer measurer, float localX, boolean caret) {
-        if (localX <= 0) return line.textStart();
-        float x = 0;
+        float x = 0, nearest = Float.POSITIVE_INFINITY;
+        int boundary = line.textStart(), hit = -1;
         for (Part part : line.parts()) {
-            if (part.isItem()) {
-                if (localX < x + part.itemWidth()) {
-                    return caret && localX >= x + part.itemWidth() / 2 ? part.textEnd() : part.textStart();
-                }
-                x += part.itemWidth();
-                continue;
-            }
-            for (int i = 0; i < part.text().length();) {
-                int end = i + Character.charCount(part.text().codePointAt(i));
-                float width = measurer.measure(part.text().substring(i, end));
-                if (localX < x + width * (caret ? 0.5f : 1)) return part.textStart() + i;
-                x += width;
-                i = end;
+            int count = part.isItem() ? 1 : part.text().codePointCount(0,part.text().length());
+            int index = 0;
+            for(int c=0;c<count;c++) {
+                int end = part.isItem() ? 0 : index + Character.charCount(part.text().codePointAt(index));
+                float next = part.isItem() ? x + part.itemWidth()
+                        : x + measurer.measure(part.text().substring(0,end),part.source())
+                              - measurer.measure(part.text().substring(0,index),part.source());
+                int before=part.isItem()?part.textStart():part.textStart()+index;
+                int after=part.isItem()?part.textEnd():part.textStart()+end;
+                float d=Math.abs(localX-x);
+                if(d<=nearest){nearest=d;boundary=before;}
+                d=Math.abs(localX-next);
+                if(d<=nearest){nearest=d;boundary=after;}
+                // Later positive ink wins overlaps caused by a negative space provider.
+                if(next>x && localX>=x && localX<next)hit=before;
+                x=next;index=end;
             }
         }
-        return line.textEnd();
+        return caret || hit<0 ? boundary : hit;
+    }
+
+    private static RichText.RichRun runAt(List<RichText.RichRun> runs, int index) {
+        int offset=0;
+        for(var run:runs){offset+=run.text().length();if(index<offset)return run;}
+        return runs.get(runs.size()-1);
     }
 
     private static void emitTrimmedLine(List<RichLine> lines, List<RichText.RichRun> sourceRuns,
-                                        String full, int start, int end) {
+                                        String full, int start, int end, TextMeasurer measurer) {
         int visibleEnd = end;
-        while (visibleEnd > start && full.charAt(visibleEnd - 1) == ' ') {
+        while (visibleEnd > start && full.charAt(visibleEnd - 1) == ' '
+                && measurer.collapsibleSpace(runAt(sourceRuns, visibleEnd - 1))) {
             visibleEnd--;
         }
         if (visibleEnd > start) {

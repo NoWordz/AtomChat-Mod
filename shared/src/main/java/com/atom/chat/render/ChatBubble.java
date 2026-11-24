@@ -13,27 +13,55 @@ import io.github.humbleui.types.Rect;
 public final class ChatBubble {
     private static final Paint PAINT = new Paint().setAntiAlias(CornerGeometry.ANTIALIAS);
 
+    public enum Group {
+        SINGLE, FIRST, MIDDLE, LAST;
+
+        public static Group of(boolean previous, boolean next) {
+            return previous ? (next ? MIDDLE : LAST) : (next ? FIRST : SINGLE);
+        }
+    }
+
     private ChatBubble() { }
 
     private static RRect outline(float x, float y, float w, float h, BubbleStyle style, boolean own) {
         return outline(x,y,w,h,style,own,1);
     }
     public static RRect outline(float x,float y,float w,float h,BubbleStyle style,boolean own,float scale) {
+        return outline(x, y, w, h, style, own, scale, Group.SINGLE);
+    }
+
+    public static RRect outline(float x, float y, float w, float h, BubbleStyle style, boolean own,
+                                float scale, Group group) {
         float r = Math.min(Math.min(w, h) / 2F,
                 (style == null || style == BubbleStyle.CLASSIC ? UiTokens.BUBBLE_RADIUS : UiTokens.BUBBLE_ROUND_RADIUS)*scale);
-        float tl = style == BubbleStyle.CORNER && !own ? 0F : r;
-        float tr = style == BubbleStyle.CORNER && own ? 0F : r;
-        return RRect.makeComplexLTRB(x, y, x + w, y + h, new float[]{tl, tl, tr, tr, r, r, r, r});
+        if (style == BubbleStyle.CORNER) {
+            float join = Math.min(r, 6F * scale);
+            float top = group == Group.FIRST ? r : group == Group.MIDDLE ? join : 0F;
+            float bottom = group == Group.FIRST ? 0F : group == Group.MIDDLE ? join : r;
+            return CornerGeometry.circularRect(x, y, w, h,
+                    own ? r : top, own ? top : r, own ? bottom : r, own ? r : bottom);
+        }
+        return RRect.makeComplexLTRB(x, y, x + w, y + h, new float[]{r, r, r, r, r, r, r, r});
     }
 
     public static void draw(Canvas canvas, float x, float y, float w, float h,
                             BubbleStyle style, boolean own, int color) {
+        draw(canvas, x, y, w, h, style, own, color, Group.SINGLE);
+    }
+
+    public static void draw(Canvas canvas, float x, float y, float w, float h,
+                            BubbleStyle style, boolean own, int color, Group group) {
         if (w <= 0F || h <= 0F) return;
-        CornerGeometry.drawRRect(canvas, outline(x, y, w, h, style, own), PAINT.setColor(color));
+        CornerGeometry.drawRRect(canvas, outline(x, y, w, h, style, own, 1F, group), PAINT.setColor(color));
     }
 
     public static void drawImage(Canvas canvas, Image image, float x, float y, float w, float h,
                                  BubbleStyle style, boolean own) {
+        drawImage(canvas, image, x, y, w, h, style, own, Group.SINGLE);
+    }
+
+    public static void drawImage(Canvas canvas, Image image, float x, float y, float w, float h,
+                                 BubbleStyle style, boolean own, Group group) {
         if (image == null || w <= 0F || h <= 0F) return;
         // An inline picture is often a full-resolution photo shown in a ~300 px
         // bubble. Handing the GPU a 2x2 bilinear tap over a 4-8x minification
@@ -41,6 +69,6 @@ public final class ChatBubble {
         // step at 2x, where bilinear is exact.
         Image source = ImageQuality.scaledForLogical(image, Math.max(w, h));
         SkiaImages.drawShape(canvas, source, Rect.makeWH(source.getWidth(), source.getHeight()),
-                outline(x, y, w, h, style, own), SamplingMode.LINEAR);
+                outline(x, y, w, h, style, own, 1F, group), SamplingMode.LINEAR);
     }
 }

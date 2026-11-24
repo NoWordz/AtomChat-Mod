@@ -43,6 +43,24 @@ public final class ReplySlotStore {
 
     /** Armed reply of the page that currently owns the shared composer. */
     private ChatMessage replyTarget;
+    private long nativeRevision=-1;
+    public void redact(String signature){
+        replies.replaceAll((key,message)->matches(message,signature)?message.asDeleted(NativeMessageBridge.deletedMarker()):message);
+        if(matches(replyTarget,signature))replyTarget=replyTarget.asDeleted(NativeMessageBridge.deletedMarker());
+        nativeRevision=NativeMessageSync.revision();
+    }
+    public static Snapshot redacted(Snapshot snapshot,String signature){
+        var slots=new HashMap<>(snapshot.slots());
+        slots.replaceAll((key,message)->matches(message,signature)?message.asDeleted(NativeMessageBridge.deletedMarker()):message);
+        var target=snapshot.target();if(matches(target,signature))target=target.asDeleted(NativeMessageBridge.deletedMarker());
+        return new Snapshot(Map.copyOf(slots),target);
+    }
+    private static boolean matches(ChatMessage message,String signature){return message!=null && signature.equals(message.nativeMeta().signature());}
+    private void refreshNativeMessages(){
+        long current=NativeMessageSync.revision();if(nativeRevision==current)return;nativeRevision=current;
+        replies.replaceAll((key,message)->NativeMessageSync.presentation(message));
+        replyTarget=NativeMessageSync.presentation(replyTarget);
+    }
 
     /** Reply slot key, using the conversation keys' convention ({@link ConversationKeys}). */
     public String replyKeyForNav(NavPage page) {
@@ -85,6 +103,7 @@ public final class ReplySlotStore {
      *                       composer (the caller's {@code ownsInputField(page)})
      */
     public ChatMessage replyForNav(NavPage page, boolean ownsInputField) {
+        refreshNativeMessages();
         return ownsInputField ? replyTarget : replies.get(replyKeyForNav(page));
     }
 
@@ -97,11 +116,13 @@ public final class ReplySlotStore {
      * @param page the page whose slot counts (may be null)
      */
     public boolean replyBarVisible(NavPage page) {
+        refreshNativeMessages();
         return replyTarget != null || replySlotArmed(page);
     }
 
     /** True when a chat page still holds an armed reply in its slot. */
     public boolean replySlotArmed(NavPage page) {
+        refreshNativeMessages();
         if (page == null || (page.page() != AppPage.WORLD_CHAT && page.page() != AppPage.PRIVATE_CHAT)) {
             return false;
         }
@@ -109,17 +130,18 @@ public final class ReplySlotStore {
     }
 
     public record Snapshot(Map<String,ChatMessage> slots,ChatMessage target) { }
-    public Snapshot snapshot(){return new Snapshot(Map.copyOf(replies),replyTarget);}
-    public void restore(Snapshot snapshot){replies.clear();replies.putAll(snapshot.slots());replyTarget=snapshot.target();}
+    public Snapshot snapshot(){refreshNativeMessages();return new Snapshot(Map.copyOf(replies),replyTarget);}
+    public void restore(Snapshot snapshot){replies.clear();replies.putAll(snapshot.slots());replyTarget=snapshot.target();nativeRevision=-1;refreshNativeMessages();}
 
     /** The live reply of the page owning the composer (null when none is armed). */
     public ChatMessage replyTarget() {
+        refreshNativeMessages();
         return replyTarget;
     }
 
     /** Arms {@code message} for the page that owns the composer ("quote this"). */
     public void arm(ChatMessage message) {
-        this.replyTarget = message;
+        this.replyTarget = NativeMessageSync.presentation(message);
     }
 
     /** Drops the live reply; the page's slot is left alone until the next sync. */

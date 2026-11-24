@@ -35,6 +35,25 @@ public class ChatMessage {
      * carry this id over.
      */
     private final long id;
+    private NativeMessageMeta nativeMeta = NativeMessageMeta.UNKNOWN;
+    public NativeMessageMeta nativeMeta() { return nativeMeta; }
+    public boolean isDeleted() { return nativeMeta.deleted(); }
+    /** Explicit attachment must happen before reconcile or Store.add. */
+    public ChatMessage withNativeMeta(NativeMessageMeta value) {
+        nativeMeta=value==null?NativeMessageMeta.UNKNOWN:value;
+        return nativeMeta.deleted()?asDeleted(NativeMessageBridge.deletedMarker()):this;
+    }
+    public ChatMessage asDeleted(RichText marker) {
+        RichText safe=RichText.empty();
+        for(var run:senderRich.runs()) {
+            var style=run.style().withClickEvent(null).withHoverEvent(null).withInsertion(null);
+            safe=RichText.concat(safe,RichText.of(net.minecraft.network.chat.Component.literal(run.text()).setStyle(style)));
+        }
+        ChatMessage copy=new ChatMessage(marker.toText(),own,system,null,null,senderUuid,senderName,profileName,
+                marker.getString(),safe,marker,timestamp,1,id);
+        copy.nativeMeta=nativeMeta.asDeleted();copy.delivery=delivery;copy.capturedPresentation=true;
+        return copy;
+    }
     private boolean capturedPresentation;
     private volatile OutgoingMessages.State delivery = OutgoingMessages.State.RECEIVED;
     public OutgoingMessages.State deliveryState() {
@@ -57,6 +76,7 @@ public class ChatMessage {
                 server.contentRich, timestamp, duplicateCount, id);
         corrected.delivery = OutgoingMessages.State.CONFIRMED;
         corrected.capturedPresentation = server.capturedPresentation;
+        corrected.nativeMeta = server.nativeMeta;
         return corrected;
     }
 
@@ -351,6 +371,7 @@ public class ChatMessage {
                 senderUuid, senderName, profileName, contentText,
                 senderRich, contentRich, newTimestamp, count, id).retainPresentation(capturedPresentation);
         copy.delivery = delivery;
+        copy.nativeMeta = nativeMeta;
         return copy;
     }
 

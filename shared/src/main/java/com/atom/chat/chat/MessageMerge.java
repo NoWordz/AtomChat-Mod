@@ -55,6 +55,9 @@ public final class MessageMerge {
         if (last == null || next == null) {
             return false;
         }
+        if (last.isDeleted() || next.isDeleted()) return false;
+        if(last.nativeMeta().captured()!=next.nativeMeta().captured()
+                || !Objects.equals(last.nativeMeta().tag(),next.nativeMeta().tag()))return false;
         if (unsettled(last) || unsettled(next)) return false;
         if (last.isSystem() || next.isSystem()) {
             return false;
@@ -99,19 +102,29 @@ public final class MessageMerge {
         return (int) Math.min(Integer.MAX_VALUE, (long) last.getDuplicateCount() + next.getDuplicateCount());
     }
 
-    /** A proven echo can merge only after it has replaced its pending row. */
-    static void replaceConfirmed(List<ChatMessage> messages, int index, ChatMessage corrected) {
-        messages.set(index, corrected);
-        if (!antiSpamEnabled()) return;
-        if (index > 0 && canMerge(messages.get(index - 1), corrected)) {
-            corrected = merge(messages.get(index - 1), corrected);
-            messages.remove(index);
-            index--;
-            messages.set(index, corrected);
+    /** Preserve the established first-row identity without discarding any original delivery. */
+    static List<ChatMessage> project(List<ChatMessage> messages, boolean enabled) {
+        if (!enabled || messages.size() < 2) return messages;
+        java.util.ArrayList<ChatMessage> result = null;
+        int start = 0;
+        int count = messages.get(0).getDuplicateCount();
+        for (int i = 1; i <= messages.size(); i++) {
+            if (i < messages.size() && canMerge(messages.get(i - 1), messages.get(i))) {
+                count = (int) Math.min(Integer.MAX_VALUE, (long) count + messages.get(i).getDuplicateCount());
+                continue;
+            }
+            ChatMessage first = messages.get(start);
+            if (i - start > 1) {
+                if (result == null) result = new java.util.ArrayList<>(messages.subList(0, start));
+                // One presentation copy per group, even when all 500 originals are identical.
+                result.add(first.withDuplicateCount(count, messages.get(i - 1).getTimestamp()));
+            } else if (result != null) result.add(first);
+            if (i < messages.size()) {
+                start = i;
+                count = messages.get(i).getDuplicateCount();
+            }
         }
-        if (index + 1 < messages.size() && canMerge(corrected, messages.get(index + 1))) {
-            messages.set(index, merge(corrected, messages.remove(index + 1)));
-        }
+        return result == null ? messages : List.copyOf(result);
     }
 
     /** Whether two messages come from the same speaker (UUID first, name fallback). */

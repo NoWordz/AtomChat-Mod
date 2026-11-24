@@ -78,6 +78,7 @@ public final class ChatHistory {
 
     public static void onJoin(Minecraft client) {
         if (enabled() && HistoryStore.isWorldSpecific(currentKey)) saveNow(client);
+        com.atom.chat.chat.NativeMessageSync.start();
         currentKey = keyFor(client);
         com.atom.chat.image.SkinResolver.clear();
         com.atom.chat.chat.RecognitionMemory.join(recognitionKeyFor(client), client::execute);
@@ -91,6 +92,7 @@ public final class ChatHistory {
         com.atom.chat.chat.RecognitionMemory.disconnect();
         com.atom.chat.image.SkinResolver.clear();
         HISTORY.disconnect();
+        com.atom.chat.chat.NativeMessageSync.start();
         currentKey = null;
         dirty = false;
     }
@@ -111,21 +113,26 @@ public final class ChatHistory {
 
     public static void clearCurrent() {
         HISTORY.clear();
+        com.atom.chat.chat.NativeMessageSync.start();
         dirty = false;
         ChatStore.get().reset();
         PrivateChatStore.reset();
     }
 
-    private static void saveNow(Minecraft client) {
+    public static void redactNow(String signature) {
+        if(HistoryStore.isWorldSpecific(currentKey))saveNow(Minecraft.getInstance(),signature);
+    }
+    private static void saveNow(Minecraft client) {saveNow(client,null);}
+    private static void saveNow(Minecraft client, String deletedSignature) {
         if (!HistoryStore.isWorldSpecific(currentKey)) return;
         net.minecraft.core.HolderLookup.Provider lookup = lookup(client);
         // Only these selected <=500 messages touch Minecraft component/registry serialization.
-        List<Entry> entries = HistorySnapshot.capture(ChatStore.get().snapshot(), PrivateChatStore.knownPartners(),
-                PrivateChatStore::messages, (partner, message) -> {
+        List<Entry> entries = HistorySnapshot.capture(ChatStore.get().rawSnapshot(), PrivateChatStore.knownPartners(),
+                PrivateChatStore::rawMessages, (partner, message) -> {
                     String peer = partner == null ? null : peerKey(partner);
                     return toEntry(message, lookup, peer);
                 });
-        dirty = !HISTORY.save(entries);
+        dirty = !(deletedSignature!=null?HISTORY.redact(entries,deletedSignature):HISTORY.save(entries));
     }
 
     /** Invoked by HistoryLifecycle only on the MC thread after epoch/clear/world/enabled checks. */
@@ -189,7 +196,7 @@ public final class ChatHistory {
         return new Entry(m.getTimestamp(), peer != null, peer, m.isOwn(), m.isSystem(),
                 m.getQuoteName(), m.getQuoteText(),
                 uuid != null ? uuid.toString() : null,
-                sender, m.isIdentityUnknown() ? "" : m.getProfileName(), body, comp, senderComp, bodyComp);
+                sender, m.isIdentityUnknown() ? "" : m.getProfileName(), body, comp, senderComp, bodyComp,m.nativeMeta());
     }
 
     private static ChatMessage fromEntry(Entry e, net.minecraft.core.HolderLookup.Provider lookup) {
@@ -208,15 +215,25 @@ public final class ChatHistory {
         }
         Component sender = decode(e.senderComponentJson, lookup);
         Component body = decode(e.bodyComponentJson, lookup);
-        return new ChatMessage(component, e.own, e.system, e.quoteName, e.quoteText,
+        ChatMessage restored = new ChatMessage(component, e.own, e.system, e.quoteName, e.quoteText,
                 uuid, e.senderName, e.profileName, e.contentText,
-                sender == null ? null : RichText.of(sender), body == null ? null : RichText.of(body), e.timestamp).retainPresentation(sender != null || body != null);
+                sender == null ? null : RichText.of(sender), body == null ? null : RichText.of(body), e.timestamp).retainPresentation(sender != null || body != null).withNativeMeta(e.nativeMeta);
+        return com.atom.chat.chat.NativeMessageSync.loaded(restored,com.atom.chat.chat.NativeMessageBridge.tick());
     }
 
     private static boolean uniqueWithin(String line, String part) {
         if (part == null || part.isEmpty()) return true;
         int first = line.indexOf(part);
         return first >= 0 && line.indexOf(part, first + 1) < 0;
+    }
+
+    public static String encodeNative(Component value){
+        var registries=lookup(Minecraft.getInstance());
+        return encode(value,registries==null?net.minecraft.core.RegistryAccess.EMPTY:registries);
+    }
+    public static Component decodeNative(String value){
+        var registries=lookup(Minecraft.getInstance());
+        return decode(value,registries==null?net.minecraft.core.RegistryAccess.EMPTY:registries);
     }
 
     private static String encode(Component value, net.minecraft.core.HolderLookup.Provider lookup) {

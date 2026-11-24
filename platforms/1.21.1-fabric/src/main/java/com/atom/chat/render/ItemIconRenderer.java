@@ -287,7 +287,7 @@ public final class ItemIconRenderer {
     }
 
     /** Local snapshot; the outer GlStateUtil snapshot remains untouched. */
-    private static final class NativeState implements AutoCloseable {
+    static final class NativeState implements AutoCloseable {
         private final int drawFbo = GL11C.glGetInteger(GL30C.GL_DRAW_FRAMEBUFFER_BINDING);
         private final int readFbo = GL11C.glGetInteger(GL30C.GL_READ_FRAMEBUFFER_BINDING);
         private final int renderbuffer = GL11C.glGetInteger(GL30C.GL_RENDERBUFFER_BINDING);

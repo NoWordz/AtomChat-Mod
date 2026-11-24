@@ -101,7 +101,12 @@ public final class NotificationHudOverlay {
                     if (frame != null && bannerBlur > 0F) {
                         PanelBlurRenderer.renderMasked(frame.blurMasks(density, guiScale), bannerBlur);
                     }
-                    if (banner) ItemIconRenderer.prepare(gui, GRAPHICS);
+                    if (banner) {
+                        com.atom.chat.render.NativeFontRenderer.beginFrame();
+                        NotificationBanner.INSTANCE.requestFonts();
+                        com.atom.chat.render.NativeFontRenderer.prepare();
+                        ItemIconRenderer.prepare(gui, GRAPHICS);
+                    }
                 }, density,
                         (canvas, snapshot) -> {
                             if (paintExit) {

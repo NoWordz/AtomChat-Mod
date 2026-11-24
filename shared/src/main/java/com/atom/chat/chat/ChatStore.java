@@ -8,12 +8,14 @@ public final class ChatStore {
     private static final ChatStore INSTANCE = new ChatStore();
     private final List<ChatMessage> messages = new ArrayList<>();
     /**
-     * Immutable view of {@link #messages}, rebuilt on the first read after a
+     * Immutable display projection of {@link #messages}, rebuilt on the first read after a
      * mutation. The list view asks for a snapshot every frame (twice, for the
      * conversation-list preview), and copying up to 500 references each time was
      * pure churn; a published snapshot makes the steady state allocation-free.
      */
     private List<ChatMessage> published;
+    private List<ChatMessage> originals;
+    private boolean publishedAntiSpam;
     /**
      * Bumped on every mutation. The message list keys its cached content height
      * on this, so a new or folded message re-measures while a plain repaint of
@@ -29,34 +31,26 @@ public final class ChatStore {
     }
 
     /**
-     * Adds a public/feed message. Returns true when the message was folded into
+     * Adds an original public/feed message. Returns true when its display folds into
      * the previous identical one by anti-spam (no new row, no new unread).
      */
     public synchronized boolean add(ChatMessage message) {
         if (message == null) {
             return false;
         }
+        if(message.isDeleted()) return true;
         com.atom.chat.reaction.ReactionClient.bind(message);
-        if (message.deliveryState() != OutgoingMessages.State.PENDING && MessageMerge.antiSpamEnabled() && !messages.isEmpty()) {
-            ChatMessage last = messages.get(messages.size() - 1);
-            if (MessageMerge.canMerge(last, message)) {
-                messages.set(messages.size() - 1, MessageMerge.merge(last, message));
-                changed();
-                com.atom.chat.history.ChatHistory.markDirty();
-                return true;
-            }
-        }
+        boolean folded = MessageMerge.antiSpamEnabled() && !messages.isEmpty()
+                && MessageMerge.canMerge(messages.get(messages.size() - 1), message);
         messages.add(message);
+        if (messages.size() > 500) messages.remove(0);
         changed();
-        com.atom.chat.fun.ChatEffectEvents.publish(message);
         com.atom.chat.history.ChatHistory.markDirty();
-        if (!message.isOwn() && !publicActive) {
+        if (!folded) com.atom.chat.fun.ChatEffectEvents.publish(message);
+        if (!folded && !message.isOwn() && !publicActive) {
             publicUnread++;
         }
-        if (messages.size() > 500) {
-            messages.remove(0);
-        }
-        return false;
+        return folded;
     }
 
     /**
@@ -97,9 +91,21 @@ public final class ChatStore {
         return mentionUnread;
     }
 
+    public synchronized int deleteSignature(String signature, com.atom.chat.text.RichText marker) {
+        int changed=0;
+        for(int i=0;i<messages.size();i++) {
+            ChatMessage message=messages.get(i);
+            if(!message.isDeleted() && signature.equals(message.nativeMeta().signature())) {
+                messages.set(i,message.asDeleted(marker));changed++;
+            }
+        }
+        if(changed>0)changed();
+        return changed;
+    }
+
     public synchronized boolean replace(long id, ChatMessage corrected) {
         for (int i = 0; i < messages.size(); i++) if (messages.get(i).getId() == id) {
-            MessageMerge.replaceConfirmed(messages, i, corrected);
+            messages.set(i, corrected);
             changed();
             com.atom.chat.history.ChatHistory.markDirty();
             return true;
@@ -108,12 +114,20 @@ public final class ChatStore {
     }
 
     public synchronized List<ChatMessage> snapshot() {
+        boolean antiSpam = MessageMerge.antiSpamEnabled();
         List<ChatMessage> current = published;
-        if (current == null) {
-            current = Collections.unmodifiableList(new ArrayList<>(messages));
+        if (current == null || publishedAntiSpam != antiSpam) {
+            current = MessageMerge.project(rawSnapshot(), antiSpam);
             published = current;
+            publishedAntiSpam = antiSpam;
         }
         return current;
+    }
+
+    /** Original deliveries, used for exact replacement and bounded disk history. */
+    public synchronized List<ChatMessage> rawSnapshot() {
+        if (originals == null) originals = Collections.unmodifiableList(new ArrayList<>(messages));
+        return originals;
     }
 
     /** Mutation counter for readers that cache derived geometry. */
@@ -124,6 +138,7 @@ public final class ChatStore {
     /** Invalidates the published snapshot and bumps the generation. Caller holds the monitor. */
     private void changed() {
         published = null;
+        originals = null;
         generation++;
     }
 
