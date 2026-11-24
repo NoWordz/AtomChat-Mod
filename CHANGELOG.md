@@ -14,6 +14,7 @@
 - 补齐聊天富文本的粗体、斜体、删除线和混淆文字绘制，保留服务器指定的名字颜色与下划线。
 - 修复静止 HUD 的缓存冻结混淆文字和下尖气泡底边覆盖不准确的问题。
 - 聊天文字兼容资源包自定义字体和称号字形，并在资源重载或字体选项变化后刷新排版。
+- 修复 Modern UI 接管字体时，聊天正文和玩家名全部显示为方框的问题。
 - 恢复富文本仅包含插入内容时的 Shift 点击交互，并显示原版消息标记与提示。
 - 原版撤回消息同步替换面板和本地历史中的对应记录，清除原正文、引用及交互缓存。
 
@@ -36,6 +37,7 @@
 - Chat rich text now renders bold, italic, strikethrough, and obfuscated text while preserving server-defined name colors and underlines.
 - Fixed static HUD caches freezing obfuscated text and inaccurate lower edges on downward-tip bubbles.
 - Chat text supports resource-pack fonts and custom title glyphs, refreshing layout after resource reloads or font-option changes.
+- Fixed chat messages and player names turning into missing-glyph boxes when Modern UI manages fonts.
 - Restored Shift-click interaction for insertion-only rich text and added vanilla message indicators and tooltips.
 - Vanilla message deletion now replaces matching panel and local-history records, clearing their original bodies, quotes, and interaction caches.
 

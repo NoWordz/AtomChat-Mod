@@ -89,7 +89,13 @@ public final class NativeFontRenderer {
             var candidate = provider.getGlyph(cp);
             if (candidate != null) { selected = candidate; changed = NativeFontProvenance.changedChoice(provider,cp,NativeFontOptions.values(client), ((NativeFontStorageAccess)(Object)storage).atomchat$fontId().toString(), (source,code)->((com.mojang.blaze3d.font.GlyphProvider)source).getGlyph(code)!=null); break; }
         }
-        if(selected==null || selected==net.minecraft.client.gui.font.glyphs.SpecialGlyphs.MISSING)changed|=NativeFontProvenance.removedDefault(storage);
+        if(selected==null || selected==net.minecraft.client.gui.font.glyphs.SpecialGlyphs.MISSING) {
+            // External font systems can supply glyphs without populating vanilla's provider lists.
+            // Their public glyph may not have a vanilla upload recipe; keep AC's existing font.
+            var resolved=storage.getGlyphInfo(cp,false);
+            if(resolved!=null && resolved!=net.minecraft.client.gui.font.glyphs.SpecialGlyphs.MISSING) {cache(key,AC);return null;}
+            changed|=NativeFontProvenance.removedDefault(storage);
+        }
         if (!key.explicit() && !changed) { cache(key, AC); return null; }
         if (selected == null) selected = net.minecraft.client.gui.font.glyphs.SpecialGlyphs.MISSING;
         var plan = new GlyphPlan(selected);
@@ -114,7 +120,8 @@ public final class NativeFontRenderer {
         var choices=((NativeFontStorageAccess)(Object)storage).atomchat$byWidth().get((int)Math.ceil(original.glyph().getAdvance(false)));
         if(choices==null || choices.isEmpty())return original;
         int index=Math.floorMod(Long.hashCode(framePhase)+cp,choices.size());
-        return glyph(style,choices.getInt(index),true);
+        var replacement=glyph(style,choices.getInt(index),true);
+        return replacement==null?original:replacement;
     }
     private static void requestGlyph(GlyphPlan plan) {
         FRAME.add(plan);PINNED.put(plan.key,plan);RASTERS.put(plan,Boolean.TRUE);

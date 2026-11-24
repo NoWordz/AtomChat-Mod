@@ -12,6 +12,7 @@
 - 聊天 HUD 的长消息随 GUI 缩放省略，为原版快捷栏和副手槽留出间隙。
 - 聊天面板和 HUD 正确绘制粗体、斜体、删除线及混淆文字，并保留服务器指定的名字颜色与下划线。
 - 聊天文字支持资源包字体和自定义称号字形，恢复插入内容的 Shift 点击，并保留原版消息标记与提示。
+- 修复与 Modern UI 同用时聊天文字全部变为方框的问题。
 - 原版撤回同步替换面板和本地历史记录，并清除对应正文、引用和交互缓存。
 
 **性能**
@@ -31,6 +32,7 @@
 - Long HUD messages now truncate at each GUI scale, leaving room for the vanilla hotbar and offhand slot.
 - The panel and HUD render bold, italic, strikethrough, and obfuscated text while preserving server-defined name colors and underlines.
 - Chat text supports resource-pack fonts and custom title glyphs, restores insertion Shift-clicks, and preserves vanilla message indicators and tooltips.
+- Fixed all chat text turning into boxes when used with Modern UI.
 - Vanilla message deletion replaces matching panel and local-history records and clears their original bodies, quotes, and interaction caches.
 
 **Performance**

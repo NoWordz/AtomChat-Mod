@@ -22,7 +22,7 @@ import static org.junit.jupiter.api.Assertions.*;
 class NativeFontProviderTest {
     // JUnit has no Mixin transformer. These two test subclasses implement only the generated accessors;
     // the native FontStorage setFonts/filter/cache code and all AC routing/layout/paint remain real.
-    private static final class Storage extends net.minecraft.client.font.FontStorage implements com.atom.chat.mixin.NativeFontStorageAccess {
+    private static class Storage extends net.minecraft.client.font.FontStorage implements com.atom.chat.mixin.NativeFontStorageAccess {
         Storage(net.minecraft.client.texture.TextureManager textures){super(textures,net.minecraft.util.Identifier.of("minecraft:default"));}
         @SuppressWarnings("unchecked") private <T>T field(String name){try{var f=net.minecraft.client.font.FontStorage.class.getDeclaredField(name);f.setAccessible(true);return (T)f.get(this);}catch(Exception e){throw new AssertionError(e);}}
         public net.minecraft.util.Identifier atomchat$fontId(){return getId();}
@@ -211,6 +211,84 @@ class NativeFontProviderTest {
     private static net.minecraft.client.font.Font load(String json,ResourceManager resources) throws Exception {
         var definition=FontLoader.CODEC.codec().parse(JsonOps.INSTANCE,JsonParser.parseString(json)).result().orElseThrow();
         return definition.build().left().orElseThrow().load(resources);
+    }
+    @Test void delegatedFontStorageWithEmptyVanillaProvidersKeepsChatTextLegible() throws Exception {
+        GlTestEnvironment.requireWindowContext();assertTrue(GLFW.glfwInit());
+        GLFW.glfwDefaultWindowHints();GLFW.glfwWindowHint(GLFW.GLFW_VISIBLE,GLFW.GLFW_FALSE);
+        long window=GLFW.glfwCreateWindow(32,64,"AC delegated font storage regression",0,0);assertNotEquals(0,window);
+        var singleton=Arrays.stream(net.minecraft.client.MinecraftClient.class.getDeclaredFields())
+                .filter(f->java.lang.reflect.Modifier.isStatic(f.getModifiers()) && f.getType()==net.minecraft.client.MinecraftClient.class).findFirst().orElseThrow();
+        singleton.setAccessible(true);Object previous=singleton.get(null);
+        try {
+            GLFW.glfwMakeContextCurrent(window);GL.createCapabilities();
+            if(!RenderSystem.isOnRenderThread())RenderSystem.initRenderThread();
+            var unsafeField=sun.misc.Unsafe.class.getDeclaredField("theUnsafe");unsafeField.setAccessible(true);var unsafe=(sun.misc.Unsafe)unsafeField.get(null);
+            var client=(net.minecraft.client.MinecraftClient)unsafe.allocateInstance(net.minecraft.client.MinecraftClient.class);
+            boolean[] delegated={true};
+            try(var textures=new net.minecraft.client.texture.TextureManager(resources(Map.of()));var storage=new Storage(textures) {
+                // Modern UI's StandardFontSet also keeps the superclass provider lists empty.
+                // Its public glyph lookup is backed by a separate font collection, without a vanilla raster recipe.
+                @Override public net.minecraft.client.font.Glyph getGlyph(int cp,boolean validate) {
+                    if(!delegated[0])return super.getGlyph(cp,validate);
+                    return new net.minecraft.client.font.Glyph() {
+                        public float getAdvance(){return cp=='-'?0:cp=='+'?-4:6.75F;}
+                        public net.minecraft.client.font.GlyphRenderer bake(java.util.function.Function<net.minecraft.client.font.RenderableGlyph,net.minecraft.client.font.GlyphRenderer> baker) {
+                            throw new AssertionError("A delegated glyph has no vanilla upload recipe");
+                        }
+                    };
+                }
+            }) {
+                storage.setFonts(List.of(),Set.of());
+                assertTrue(storage.atomchat$providers().isEmpty());
+                var stock="{\"providers\":[{\"type\":\"space\",\"advances\":{\" \":4}}]}".getBytes(java.nio.charset.StandardCharsets.UTF_8);
+                NativeFontProvenance.fontStorage(storage,"minecraft:default",List.of(),Map.of(),
+                        id->id.equals("minecraft:font/default.json")?new ByteArrayInputStream(stock):null,value->value);
+                var renderer=new Renderer(storage);var field=net.minecraft.client.MinecraftClient.class.getDeclaredField("textRenderer");field.setAccessible(true);field.set(client,renderer);singleton.set(null,client);
+                var font=FontManager.font(20);String text="聊天测试 E33EPUS 0123456789 +-";
+                for(var style:List.of(net.minecraft.text.Style.EMPTY,net.minecraft.text.Style.EMPTY.withFont(net.minecraft.util.Identifier.of("test:delegated")))) {
+                    NativeFontRenderer.invalidate();NativeFontRenderer.beginFrame();
+                    for(int cp:text.codePoints().toArray())assertFalse(NativeFontRenderer.hasNative(style,cp),"empty private provider lists must not fabricate missing glyphs: "+cp);
+                    var rich=com.atom.chat.text.RichText.of(net.minecraft.text.Text.literal(text).setStyle(style));
+                    NativeFontRenderer.request(rich);NativeFontRenderer.prepare();
+                    assertEquals(PlainText.width(font,text),NativeFontRenderer.width(font,text,style),.001F);
+                    try(var actual=Surface.makeRasterN32Premul(640,80);var expected=Surface.makeRasterN32Premul(640,80);var pixels=new Bitmap();var oracle=new Bitmap()) {
+                        NativeFontRenderer.draw(actual.getCanvas(),font,text,8,50,-1,style,0);
+                        PlainText.draw(expected.getCanvas(),font,text,8,50,-1);
+                        pixels.allocN32Pixels(640,80);oracle.allocN32Pixels(640,80);
+                        assertTrue(actual.readPixels(pixels,0,0));assertTrue(expected.readPixels(oracle,0,0));
+                        assertArrayEquals(oracle.readPixels(),pixels.readPixels(),"delegated storage must preserve the original AC text pixels");
+                        try(var snapshot=actual.makeImageSnapshot();var png=snapshot.encodeToData(EncodedImageFormat.PNG)) {
+                            var evidence=java.nio.file.Path.of("../../build/v096-font-tofu/delegated-text-after.png");java.nio.file.Files.createDirectories(evidence.getParent());java.nio.file.Files.write(evidence,png.getBytes());
+                        }
+                    }
+                    NativeFontRenderer.endFrame();
+                }
+                // The same empty superclass storage must still retain true resource-removal semantics.
+                delegated[0]=false;NativeFontRenderer.invalidate();
+                assertTrue(NativeFontRenderer.hasNative(net.minecraft.text.Style.EMPTY,'A'));
+                assertEquals(net.minecraft.client.font.BuiltinEmptyGlyph.MISSING.getAdvance(false)*font.getSize()/9F,
+                        NativeFontRenderer.width(font,"A",net.minecraft.text.Style.EMPTY),.001F);
+                delegated[0]=true;NativeFontRenderer.invalidate();
+                assertFalse(NativeFontRenderer.hasNative(net.minecraft.text.Style.EMPTY,'A'));
+                assertEquals(PlainText.width(font,"A"),NativeFontRenderer.width(font,"A",net.minecraft.text.Style.EMPTY),.001F);
+                try(var space=load("{\"type\":\"space\",\"advances\":{\"A\":6.75}}",resources(Map.of()))) {
+                    storage.setFonts(List.of(new net.minecraft.client.font.Font.FontFilterPair(space,net.minecraft.client.font.FontFilterType.FilterMap.NO_FILTER)),Set.of());
+                    var definition=JsonParser.parseString("{\"type\":\"space\",\"advances\":{\"A\":6.75}}").getAsJsonObject();Object key=new Object();
+                    NativeFontProvenance.definition(key,"minecraft:default",definition);
+                    NativeFontProvenance.loaded(NativeFontProvenance.take(key),space,resources(Map.of()),id->null,id->null,value->value);
+                    storage.atomchat$byWidth().put(7,new it.unimi.dsi.fastutil.ints.IntArrayList(new int[]{'B'}));
+                    NativeFontRenderer.invalidate();NativeFontRenderer.beginFrame();
+                    var obfuscated=net.minecraft.text.Style.EMPTY.withObfuscated(true);
+                    var rich=com.atom.chat.text.RichText.of(net.minecraft.text.Text.literal("A").setStyle(obfuscated));
+                    assertTrue(NativeFontRenderer.hasNative(obfuscated,'A'));
+                    NativeFontRenderer.request(rich);NativeFontRenderer.prepare();
+                    try(var surface=Surface.makeRasterN32Premul(80,80)) {
+                        NativeFontRenderer.draw(surface.getCanvas(),font,"A",8,50,-1,obfuscated,0);
+                    }
+                    NativeFontRenderer.endFrame();
+                }
+            }
+        } finally {NativeFontRenderer.invalidate();singleton.set(null,previous);GL.setCapabilities(null);GLFW.glfwDestroyWindow(window);GLFW.glfwTerminate();}
     }
     @Test void actualProvidersUploadTheirOwnPixelsOnFirstPrepareAndAfterResourceReplacement() throws Exception {
         GlTestEnvironment.requireWindowContext();assertTrue(GLFW.glfwInit());
