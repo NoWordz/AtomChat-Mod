@@ -1,12 +1,14 @@
 # AtomChat 当前状态
 
-## 2026-11-24 · 0.9.6 已实测确认，准备发布
+## 2026-11-24 · 0.9.6 正式发布
 
+- GitHub Latest 已更新至 `v0.9.6`，标签指向 `f550c4ebb2268b744a00c144bb722341d83da0c5`。双语正文与仓库版本段一致，六个公开JAR均已下载并核对公开摘要；三端共3053个AtomChat类与本地实机验收包逐字节一致，配套AtomLib0.7.1摘要与固定输入一致。 [公开发布](https://github.com/NoWordz/AtomChat-Mod/releases/tag/v0.9.6) · [发布核验](D:/AtomChat-Backups/2026-11-24-v096-release/release-verification.json)
+- 主分支Build 7/7、正式Release 11/11通过，包含Windows严格构建与Linux真实OpenGL测试。商店步骤因未配置Modrinth/CurseForge凭据而跳过，不能把作业成功当作已上架商店。 [主线CI](https://github.com/NoWordz/AtomChat-Mod/actions/runs/45351581802) · [发布CI](https://github.com/NoWordz/AtomChat-Mod/actions/runs/45351581986)
 - 用户确认本轮实测正常，授权提交、推送与正式发布0.9.6。Modern UI 下正文、名字和数字全变方框的回归已修复并获现场确认，未损坏聊天记录。 [字体回归与验证](verification/2026-11-24-v096-font-regression.md)
 - 本版包括 HUD 按 GUI 缩放避让原版快捷栏、单行省略，紧凑单尖气泡四状态普通圆弧，富文本名字和字体、原版消息标记与撤回同步，以及原始消息500条容量和绘制分配优化。CLASSIC/ROUND造型保持原样；移动或加宽快捷栏模组、阿拉伯/希伯来双向排版不在本版范围。 [需求与验收](verification/2026-11-23-v096-progress.md)
-- 沿用11月24日13:32核对的三端严格构建结果：6,980项测试含56项既有跳过，6,924项实际通过、零失败/错误，各196个正式设置场景；19项字体定向回归全部通过。独立审查及旧实现失败、新实现通过的证据已归档。本次只更新验收与发布文档，未改变已验收的行为代码。 [冻结证据](D:/AtomChat-Backups/2026-11-24-v096-font-hotfix/verification.json)
+- 本地验收依据为11月24日13:32核对的三端严格构建结果：6,980项测试含56项既有跳过，6,924项实际通过、零失败/错误，各196个正式设置场景；19项字体定向回归全部通过。独立审查及旧实现失败、新实现通过的证据保留。后续发布只调整测试的语言资源设置和验收文档，未改变已验收的行为代码。 [冻结证据](D:/AtomChat-Backups/2026-11-24-v096-font-hotfix/verification.json)
 - 13:31/13:34三端修复包已部署，CCB `62b6ae65a444`、Forge主实例 `bbd900eb29f7`、NeoForge航空学 `becc1c0287c1`，均配原AtomLib0.7.1。 [部署回执](D:/AtomChat-Backups/2026-11-24-v096-font-hotfix/deployment-readback.json)
-- 图片上传故障仅完成静态归因，未取得故障服现场证据；Modern UI 私有字体集合的特殊图标仍未完整适配。游戏帧时及未单列的资源包/Shift/原版Tag专项不以自动化绿灯冒充实测。此前公开发行仍是0.9.5，本轮将由既有CI生成正式0.9.6配套包。
+- 图片上传故障仅完成静态归因，未取得故障服现场证据；Modern UI 私有字体集合的特殊图标仍未完整适配。游戏帧时及未单列的资源包/Shift/原版Tag专项不以自动化绿灯冒充实测。正式0.9.6已由既有CI生成并公开。
 - 首次发布CI的Linux字体首帧用例失败，已在本地Mesa/Xvfb复现：缺少模组语言表时，原始翻译键宽397.14，右对齐到340后把待检查的彩色字形挤出画布。用例现显式加载真实中英语言资源，保留首帧着色和两帧像素一致断言；修后Linux实际运行通过。NeoForge另一次GLFW初始化失败未在本地同层300轮复现，同提交对应CI作业重跑已通过，未跳过OpenGL测试或修改产品字体实现。
 - 本轮176个临时路径最初被迁入归档；用户明确要求回收站后，已将这批7123文件、约814MiB送入Windows回收站并核对条目。两个子代理工作树已由应用归档移除，固定Maven输入与正式产物保留。 [回收站回执](D:/AtomChat-Backups/2026-11-24-v096-release/cleanup/recycle-receipt.json)
 
