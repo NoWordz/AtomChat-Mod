@@ -1,9 +1,14 @@
 package com.atom.chat.settings;
 
 import com.atom.chat.config.AtomChatConfig;
+import com.atom.chat.config.GraphicsQuality;
 import com.atom.chat.platform.Platform;
+import com.atom.chat.render.CornerGeometry;
+import com.atom.chat.ui.AtomChatAppearance;
 import com.atom.chat.ui.UiLayout;
 import com.atom.lib.design.atomchat.UiTokens;
+import io.github.humbleui.skija.Bitmap;
+import io.github.humbleui.skija.Surface;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -13,6 +18,60 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class AboutCreditCardsTest {
     @Test
+    void qualityArtworkUsesTheSettingsTileContourAtBothEndsOfTheCornerSlider(@TempDir Path root) {
+        Platform.install(new Platform.Provider() {
+            public Path configDir() { return root.resolve("config"); }
+            public Path gameDir() { return root.resolve("game"); }
+            public boolean isModLoaded(String id) { return false; }
+        });
+        var config = AtomChatConfig.get();
+        float previous = config.cornerRadius;
+        float tileX = 10F;
+        float rowY = 10F;
+        var box = AboutCreditCards.logoRect(tileX, rowY);
+        int size = (int) Math.ceil(box.bottom() + AboutCreditCards.ROW_HEIGHT);
+        int selection = 0xFF00CFFF;
+        try (var reference = Surface.makeRasterN32Premul(size, size);
+             var result = Surface.makeRasterN32Premul(size, size);
+             var expected = new Bitmap(); var actual = new Bitmap()) {
+            expected.allocN32Pixels(size, size);
+            actual.allocN32Pixels(size, size);
+            for (float radius : new float[]{0F, AtomChatConfig.MAX_CORNER_RADIUS}) {
+                config.cornerRadius = radius;
+                float contour = UiTokens.settingsTileRadius(AtomChatAppearance.theme());
+                for (int edge : new int[]{0, selection}) {
+                    reference.getCanvas().clear(0);
+                    CornerGeometry.drawRoundedRect(reference.getCanvas(), box.x(), box.y(), box.w(), box.h(),
+                            contour, 0xFFFFFFFF);
+                    if (edge != 0) {
+                        CornerGeometry.drawEdgeHighlight(reference.getCanvas(), box.x(), box.y(), box.w(), box.h(),
+                                contour, UiTokens.s(2F), edge);
+                    }
+                    assertTrue(reference.readPixels(expected, 0, 0));
+                    for (GraphicsQuality quality : GraphicsQuality.values()) {
+                        result.getCanvas().clear(0);
+                        AboutCreditCards.drawQuality(result.getCanvas(), quality, quality.name(), tileX, rowY,
+                                0xFFFFFFFF, null, edge);
+                        assertTrue(result.readPixels(actual, 0, 0));
+                        for (int y = (int) Math.ceil(box.y()); y < box.bottom() - 1F; y++) {
+                            for (int x = (int) Math.ceil(box.x()); x < box.right() - 1F; x++) {
+                                int alpha = expected.getColor(x, y) >>> 24;
+                                if (alpha == 0 || alpha == 255) {
+                                    assertEquals(alpha, actual.getColor(x, y) >>> 24,
+                                            quality + ", slider " + radius + ", selected " + (edge != 0)
+                                                    + ", pixel (" + x + ", " + y + ")");
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        } finally {
+            config.cornerRadius = previous;
+        }
+    }
+
+    @Test
     void ordinaryWheelScrollsLinksAndOnlyLogoBoundsAreClickable(@TempDir Path root) {
         Platform.install(new Platform.Provider() {
             public Path configDir() { return root.resolve("config"); }
@@ -20,8 +79,8 @@ class AboutCreditCardsTest {
             public boolean isModLoaded(String id) { return false; }
         });
         var config = AtomChatConfig.get();
-        boolean previous = config.performanceMode;
-        config.performanceMode = true;
+        boolean previous = config.performanceModeEnabled();
+        config.graphicsQuality = com.atom.chat.config.GraphicsQuality.PERFORMANCE;
         try {
             var page = new SettingsSectionPage();
             var layout = UiLayout.ofDetail(0, 0, 240, 1600);
@@ -49,7 +108,7 @@ class AboutCreditCardsTest {
             assertTrue(page.perform(page.hit(firstX, header.y() + header.h() / 2, layout, about, 0F)));
             assertFalse(page.themesUnderPointer(firstX, y, layout, about, 0F));
         } finally {
-            config.performanceMode = previous;
+            config.graphicsQuality = (previous ? com.atom.chat.config.GraphicsQuality.PERFORMANCE : com.atom.chat.config.GraphicsQuality.ULTRA);
         }
     }
 }

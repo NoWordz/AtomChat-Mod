@@ -95,8 +95,16 @@ public final class ImageCropper {
      * @param frameW circle mode: frame diameter; rect mode: aspect width
      * @param frameH rect mode: aspect height (ignored in circle mode)
      */
+    private enum PointerAction { CONFIRM, CANCEL }
+    private record PointerId(Object opening, PointerAction action) {}
+    private Object opening = new Object();
+    private PointerAction heldAction;
+    private boolean pointerMoved;
+
     public void open(java.nio.file.Path source, boolean circle,
                      float frameW, float frameH, String targetId) {
+        opening = new Object();
+        heldAction = null;
         active = true;
         this.circle = circle;
         this.targetId = targetId != null ? targetId : "";
@@ -243,30 +251,26 @@ public final class ImageCropper {
         return dx * dx + dy * dy <= r * r;
     }
 
-    /** A click: buttons, double-click reset, otherwise starts a pan. Consumes. */
+    public com.atom.chat.ui.input.ClickTarget clickTarget(float x, float y, int button, UiLayout.Rect panel) {
+        if (!isActive()) return null;
+        if (button != 0 || closing) return com.atom.chat.ui.input.ClickTarget.blocked();
+        PointerAction action;
+        if (inButton(x, y, confirmCx(panel), panel)) action = PointerAction.CONFIRM;
+        else if (inButton(x, y, cancelCx(panel), panel)) action = PointerAction.CANCEL;
+        else return null;
+        return new com.atom.chat.ui.input.ClickTarget(new PointerId(opening, action),
+                () -> heldAction = action, () -> heldAction = null,
+                action == PointerAction.CONFIRM ? () -> confirm(panel) : this::cancel);
+    }
+
+    /** A press on the crop canvas arms continuous panning. */
     public void onClick(float vmx, float vmy, UiLayout.Rect panel) {
         if (closing) {
             return;
         }
-        long now = System.currentTimeMillis();
-        boolean doubleClick = now - lastClickMs < DOUBLE_CLICK_MS;
-        lastClickMs = now;
-        if (inButton(vmx, vmy, confirmCx(panel), panel)) {
-            confirm(panel);
-            return;
-        }
-        if (inButton(vmx, vmy, cancelCx(panel), panel)) {
-            cancel();
-            return;
-        }
-        if (decoded == null || !transformReady) {
-            return;
-        }
-        if (doubleClick) {
-            resetToBase(panel);
-            return;
-        }
+        if (decoded == null || !transformReady) return;
         dragging = true;
+        pointerMoved = false;
         dragStartX = vmx;
         dragStartY = vmy;
         offStartX = offX;
@@ -278,6 +282,7 @@ public final class ImageCropper {
         if (closing || !dragging || decoded == null || !transformReady) {
             return;
         }
+        pointerMoved = true;
         float[] p = CropMath.clampCover(decodeW, decodeH, scale,
                 frameCx(panel), frameCy(panel), frameRx(panel), frameRy(panel),
                 offStartX + (vmx - dragStartX), offStartY + (vmy - dragStartY));
@@ -287,6 +292,24 @@ public final class ImageCropper {
 
     public void endDrag() {
         dragging = false;
+        pointerMoved = false;
+        lastClickMs = 0;
+    }
+
+    public void releasePointer(UiLayout.Rect panel) {
+        if (!dragging) return;
+        dragging = false;
+        if (pointerMoved || closing || decoded == null || !transformReady) {
+            lastClickMs = 0;
+            return;
+        }
+        long now = System.currentTimeMillis();
+        if (lastClickMs != 0 && now - lastClickMs < DOUBLE_CLICK_MS) {
+            lastClickMs = 0;
+            resetToBase(panel);
+        } else {
+            lastClickMs = now;
+        }
     }
 
     /** Wheel zoom anchored at the frame centre; consumes the event. */
@@ -424,9 +447,9 @@ public final class ImageCropper {
             float cxConfirm = confirmCx(panel);
             float cyButtons = btnCy(panel);
             // The scaled shapes are the s(24)-radius round keys themselves.
-            cancelScale.update(inButton(vmx, vmy, cxCancel, panel), false, dt, Animations.enabled(),
+            cancelScale.update(inButton(vmx, vmy, cxCancel, panel), heldAction == PointerAction.CANCEL, dt, Animations.enabled(),
                     s(24) * 2.0F);
-            confirmScale.update(inButton(vmx, vmy, cxConfirm, panel), false, dt, Animations.enabled(),
+            confirmScale.update(inButton(vmx, vmy, cxConfirm, panel), heldAction == PointerAction.CONFIRM, dt, Animations.enabled(),
                     s(24) * 2.0F);
             cancelScale.begin(canvas, cxCancel, cyButtons);
             try {

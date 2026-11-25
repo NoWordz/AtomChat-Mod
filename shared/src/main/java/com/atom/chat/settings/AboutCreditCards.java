@@ -1,6 +1,9 @@
 package com.atom.chat.settings;
 
+import com.atom.chat.config.GraphicsQuality;
 import com.atom.chat.font.FontManager;
+import com.atom.chat.render.CornerGeometry;
+import com.atom.chat.ui.PressScale;
 import com.atom.chat.render.SkiaFontRenderer;
 import com.atom.chat.render.SkiaImages;
 import com.atom.chat.ui.AtomChatAppearance;
@@ -8,6 +11,8 @@ import com.atom.chat.ui.UiLayout;
 import com.atom.lib.design.atomchat.UiTokens;
 import io.github.humbleui.skija.Canvas;
 import io.github.humbleui.skija.Image;
+import io.github.humbleui.skija.SamplingMode;
+import io.github.humbleui.types.RRect;
 
 import java.io.IOException;
 import java.util.HashMap;
@@ -33,21 +38,57 @@ final class AboutCreditCards {
     }
 
     static void draw(Canvas canvas, String key, String title, float tileX, float rowY, int ink) {
+        draw(canvas, key, title, tileX, rowY, ink, null);
+    }
+
+    static void draw(Canvas canvas, String key, String title, float tileX, float rowY, int ink, PressScale motion) {
+        String asset = key.substring(key.lastIndexOf('.') + 1);
+        String filename = asset.equals("thirdparty") ? "skija" : asset;
+        String initials = switch (asset) {
+            case "flatlaf" -> "FL";
+            case "nfde" -> "NFD";
+            default -> title.substring(0, 1);
+        };
+        drawTile(canvas, "/assets/atomchat/creditmarks/" + filename + ".png", title, initials,
+                tileX, rowY, ink, motion, SamplingMode.LINEAR, 0, false);
+    }
+
+    static void drawQuality(Canvas canvas, GraphicsQuality quality, String title,
+                            float tileX, float rowY, int ink, PressScale motion, int selection) {
+        String asset = quality == GraphicsQuality.BALANCED ? "/assets/atomchat/mod_logo.png"
+                : "/assets/atomchat/quality/" + quality.id() + ".png";
+        SamplingMode sampling = quality == GraphicsQuality.PERFORMANCE ? SamplingMode.DEFAULT : SamplingMode.LINEAR;
+        drawTile(canvas, asset, title, title.substring(0, 1), tileX, rowY, ink, motion, sampling, selection, true);
+    }
+
+    private static void drawTile(Canvas canvas, String resource, String title, String initials,
+                                 float tileX, float rowY, int ink, PressScale motion, SamplingMode sampling,
+                                 int selection, boolean settingsContour) {
         var box = logoRect(tileX, rowY);
         float centerX = box.x() + box.w() / 2F;
-        String asset = key.substring(key.lastIndexOf('.') + 1);
-        var logo = LOGOS.computeIfAbsent(asset, AboutCreditCards::loadLogo).orElse(null);
-        if (logo != null) {
-            SkiaImages.drawRoundedImage(canvas, logo, box.x(), box.y(), box.w(), box.h(),
-                    UiTokens.radius(LOGO_RADIUS, AtomChatAppearance.theme()));
-        } else {
-            String initials = switch (asset) {
-                case "flatlaf" -> "FL";
-                case "nfde" -> "NFD";
-                default -> title.substring(0, 1);
-            };
-            var font = FontManager.boldFont(UiTokens.FONT_TITLE);
-            SkiaFontRenderer.drawTextCentered(canvas, font, initials, centerX, box.y() + box.h() / 2F, ink);
+        float centerY = box.y() + box.h() / 2F;
+        var theme = AtomChatAppearance.theme();
+        float radius = settingsContour ? UiTokens.settingsTileRadius(theme) : UiTokens.radius(LOGO_RADIUS, theme);
+        var logo = LOGOS.computeIfAbsent(resource, AboutCreditCards::loadLogo).orElse(null);
+        if (motion != null) motion.begin(canvas, centerX, centerY);
+        try {
+            if (logo != null) {
+                if (settingsContour) {
+                    SkiaImages.drawContourImage(canvas, logo,
+                            RRect.makeXYWH(box.x(), box.y(), box.w(), box.h(), radius), sampling);
+                } else {
+                    SkiaImages.drawRoundedImage(canvas, logo, box.x(), box.y(), box.w(), box.h(), radius, sampling);
+                }
+            } else {
+                var font = FontManager.boldFont(UiTokens.FONT_TITLE);
+                SkiaFontRenderer.drawTextCentered(canvas, font, initials, centerX, centerY, ink);
+            }
+            if (selection != 0) {
+                CornerGeometry.drawEdgeHighlight(canvas, box.x(), box.y(), box.w(), box.h(), radius,
+                        UiTokens.SCALE * 2F, selection);
+            }
+        } finally {
+            if (motion != null) canvas.restore();
         }
         var font = FontManager.font(UiTokens.SETTINGS_TILE_SUB);
         var lines = SkiaFontRenderer.wrapWords(font, title, WIDTH);
@@ -63,8 +104,7 @@ final class AboutCreditCards {
         }
     }
 
-    private static Optional<Image> loadLogo(String key) {
-        String resource = "/assets/atomchat/creditmarks/" + (key.equals("thirdparty") ? "skija" : key) + ".png";
+    private static Optional<Image> loadLogo(String resource) {
         try (var stream = AboutCreditCards.class.getResourceAsStream(resource)) {
             if (stream != null) return Optional.ofNullable(Image.makeFromEncoded(stream.readAllBytes()));
         } catch (IOException | IllegalArgumentException ignored) {

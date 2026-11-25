@@ -72,7 +72,7 @@ public final class SettingsSlider {
 
     public boolean available() {
         return switch (id) {
-            case "blur_strength", "card_blur_strength" -> !AtomChatConfig.get().performanceMode;
+            case "blur_strength", "card_blur_strength" -> !AtomChatConfig.get().performanceModeEnabled();
             default -> true;
         };
     }

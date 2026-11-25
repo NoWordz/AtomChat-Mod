@@ -194,7 +194,7 @@ class ModeDCadenceTest {
         for (String t : TARGETS) {
             String blur = renderer(t);
             // 二级降级：无有效旧档 / 纹理重建 → 强制完整 render，绝不采样空档
-            assertTrue(blur.contains("if (lastBlurTex == -1 || recreated)"), t + " 复用前降级检查");
+            assertTrue(blur.contains("if (lastBlurTex == -1 || recreated || lastQuality !="), t + " 复用前降级检查");
             assertTrue(blur.contains("return render(pose, x, y, width, height, radius, alpha, strength);"),
                     t + " 降级走完整 render");
             // 复用帧只做圆角合成，不重跑 blit + 5 pass

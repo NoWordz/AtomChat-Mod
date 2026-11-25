@@ -77,34 +77,47 @@ class UiFeatureRenderTest {
             tools.toggle(); tools.render(surface.getCanvas(), 0, 0, 16);
             assertEquals(1, host.presses); tools.onRelease(0, 0, 0); assertEquals(1, host.releases);
             var menu = ToolLayout.menu(host.layout);
-            tools.onClick(menu.x() + menu.w() / 2, menu.y() + ToolLayout.MENU_ROW_H * 1.5, 0);
+            tapTool(tools, menu.x() + menu.w() / 2, menu.y() + ToolLayout.MENU_ROW_H * 1.5, 0);
             assertTrue(tools.active());
             tools.render(surface.getCanvas(), 0, 0, 16);
-            tools.onClick(menu.x() + menu.w() / 2, menu.y() + ToolLayout.MENU_ROW_H * 1.5, 0);
+            var players = ToolLayout.menu(host.layout, host.onlinePlayers().size() + 1);
+            tapTool(tools, players.x() + players.w() / 2, players.y() + ToolLayout.MENU_ROW_H * 1.5, 0);
             assertEquals("Alice", host.mentioned.realName()); assertFalse(tools.active());
             tools.toggle();
-            tools.onClick(menu.x() + menu.w() / 2, menu.y() + ToolLayout.MENU_ROW_H * 2.5, 0);
+            tapTool(tools, menu.x() + menu.w() / 2, menu.y() + ToolLayout.MENU_ROW_H * 2.5, 0);
             assertEquals(1, host.picks); assertFalse(tools.active());
         }
     }
     @Test void modalConsumesInputAndItsPaintedButtonsExecuteOnce() {
         var dialog = new ConfirmationDialog(); var calls = new AtomicInteger();
         var input = new ConfirmationInput(() -> dialog, x -> (float) x, y -> (float) y);
+        var gate = new com.atom.chat.ui.input.InputGate(() -> false).add(input);
         try (var surface = Surface.makeRasterN32Premul(460, 820)) {
             dialog.open("清空聊天记录", tr("atomchat.confirm.history_clear"), "取消", "确认清除", calls::incrementAndGet);
             dialog.render(surface.getCanvas(), new UiLayout.Rect(15, 15, 420, 780), 0, 0, 200);
             assertEquals(0, calls.get());
             assertTrue(input.onScroll(50, 50, 0, -1)); assertTrue(input.onChar('a', 0));
             var confirm = dialog.geometry().confirm();
-            assertTrue(input.onClick(confirm.x() + confirm.w() / 2, confirm.y() + confirm.h() / 2, 0));
+            double x = confirm.x() + confirm.w() / 2, y = confirm.y() + confirm.h() / 2;
+            assertTrue(gate.click(x, y, 0));
+            assertEquals(1, calls.get());
+            assertTrue(gate.release(x, y, 0));
             assertEquals(1, calls.get()); assertFalse(dialog.hasPendingAction());
             dialog.render(surface.getCanvas(), hostPanel(), 0, 0, 200); assertFalse(dialog.isActive());
             dialog.click(confirm.x(), confirm.y(), 0); assertEquals(1, calls.get());
             dialog.open("清空聊天记录", "测试", "取消", "确认清除", calls::incrementAndGet);
             dialog.render(surface.getCanvas(), new UiLayout.Rect(15, 15, 420, 780), 0, 0, 200);
-            assertTrue(input.onClick(-100, -100, 0)); assertFalse(dialog.hasPendingAction()); assertEquals(1, calls.get());
+            assertTrue(gate.click(-100, -100, 0));
+            assertTrue(gate.release(-100, -100, 0));
+            assertFalse(dialog.hasPendingAction()); assertEquals(1, calls.get());
             dialog.render(surface.getCanvas(), hostPanel(), 0, 0, 200); assertFalse(dialog.isActive());
         }
+    }
+    static boolean tapTool(ComposerTools tools, double x, double y, int button) {
+        var gate = new com.atom.chat.ui.input.InputGate(() -> false).add(tools);
+        boolean consumed = Boolean.TRUE.equals(gate.click(x, y, button));
+        gate.release(x, y, button);
+        return consumed;
     }
     private static UiLayout.Rect hostPanel() { return new UiLayout.Rect(15, 15, 420, 780); }
     @Test void repeatedFramesKeepCanvasBalancedAndExportActualComponents() throws Exception {
@@ -115,7 +128,7 @@ class UiFeatureRenderTest {
             var menu = ToolLayout.menu(host.layout);
             for (int i = 0; i < 12; i++) { backdrop(canvas, host.layout); tools.render(canvas, menu.x()+menu.w()/2, menu.y()+ToolLayout.MENU_ROW_H/2, 16); assertEquals(saved, canvas.getSaveCount()); }
             save(surface, "tool-menu.png");
-            tools.onClick(menu.x() + menu.w() / 2, menu.y() + ToolLayout.MENU_ROW_H / 2, 0);
+            tapTool(tools, menu.x() + menu.w() / 2, menu.y() + ToolLayout.MENU_ROW_H / 2, 0);
             assertFalse(tools.onChar('建', 0), "typing reaches the native composer");
             host.text = "建造"; host.layout = UiLayout.of(15, 15, 420, 780, 0, 0, false, true);
             tools.update();

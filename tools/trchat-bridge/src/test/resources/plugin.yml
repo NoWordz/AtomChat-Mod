@@ -1,0 +1,8 @@
+name: AtomChatBridgeFailureProbe
+version: '1'
+main: com.atom.chat.trchat.test.FailureFixture
+api-version: '1.21'
+depend: [TrChat]
+commands:
+  bridge-regression:
+    description: Runs an isolated channel delivery regression

@@ -182,6 +182,10 @@ public final class ReactionChips {
     }
 
     public void draw(Canvas canvas,ChatMessage row,float x,float bubbleBottom,float width,float scroll) {
+        draw(canvas, row, x, bubbleBottom, width, scroll, 0);
+    }
+
+    public void draw(Canvas canvas,ChatMessage row,float x,float bubbleBottom,float width,float scroll,float offsetX) {
         Font emojiFont = FontManager.font(UiTokens.FONT_EMOJI);
         Font font = FontManager.font(UiTokens.FONT_QUOTE);
         List<Cell> cells = layout(row, width);
@@ -230,7 +234,7 @@ public final class ReactionChips {
                         SkiaFontRenderer.centerBaselineY(font, cyMid), fade(ink, alpha));
             } finally { canvas.restore(); }
 
-            hits.add(new Hit(row, cell.entry(), cx, cy - scroll, cell.w()));
+            hits.add(new Hit(row, cell.entry(), cx + offsetX, cy - scroll, cell.w()));
         }
     }
 
@@ -250,11 +254,16 @@ public final class ReactionChips {
         return null;
     }
 
-    public boolean click(float x,float y) {
+    private record ReactionClick(long messageId, String emoji) {}
+
+    public com.atom.chat.ui.input.ClickTarget clickTarget(float x, float y, Runnable feedback) {
         Hit hit = at(x, y);
-        if (hit == null || hit.entry() == null) return false;
-        ReactionClient.toggle(hit.row(), hit.entry().emoji());
-        return true;
+        if (hit == null || hit.entry() == null || !ReactionClient.available(hit.row())) return null;
+        String emoji = hit.entry().emoji();
+        return com.atom.chat.ui.input.ClickTarget.action(new ReactionClick(hit.row().getId(), emoji), () -> {
+            ReactionClient.toggle(hit.row(), emoji);
+            feedback.run();
+        });
     }
 
     /** Any pointer-owning overlay suppresses the reaction tooltip. */

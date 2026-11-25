@@ -130,14 +130,14 @@ class BubbleV096PreviewTest {
     @Test void renderTheProductionPanelAndHud() throws Exception {
         var cfg = AtomChatConfig.get();
         var old = AppearancePresetStore.Snapshot.capture(cfg);
-        boolean oldCompact = cfg.compactMessagesEnabled, oldPerformance = cfg.performanceMode;
+        boolean oldCompact = cfg.compactMessagesEnabled, oldPerformance = cfg.performanceModeEnabled();
         int oldInterval = cfg.timestampIntervalMinutes;
         var hud = new ChatHudRenderer();
         try (Surface surface = Surface.makeRasterN32Premul(1440, 950)) {
             cfg.bubbleStyle = AtomChatConfig.BubbleStyle.CORNER;
             cfg.compactMessagesEnabled = true;
             cfg.timestampIntervalMinutes = 0;
-            cfg.performanceMode = false;
+            cfg.graphicsQuality = com.atom.chat.config.GraphicsQuality.ULTRA;
             cfg.ownBubbleColor = 0xFF1989FA;
             cfg.otherBubbleColor = 0xFF303D52;
             cfg.bubbleTextColor = cfg.otherBubbleTextColor = 0xFFFFFFFF;
@@ -179,7 +179,7 @@ class BubbleV096PreviewTest {
             hud.clear();
             old.applyTo(cfg);
             cfg.compactMessagesEnabled = oldCompact;
-            cfg.performanceMode = oldPerformance;
+            cfg.graphicsQuality = (oldPerformance ? com.atom.chat.config.GraphicsQuality.PERFORMANCE : com.atom.chat.config.GraphicsQuality.ULTRA);
             cfg.timestampIntervalMinutes = oldInterval;
         }
     }

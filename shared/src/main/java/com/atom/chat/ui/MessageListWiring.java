@@ -79,6 +79,10 @@ public final class MessageListWiring<S> {
 
         /** Whether that span carries a click event. */
         boolean hasClickEvent(S span);
+
+        default boolean sameClick(S pressed, S released) {
+            return pressed.equals(released);
+        }
     }
 
     private final Host<S> host;
@@ -181,7 +185,7 @@ public final class MessageListWiring<S> {
         S released = host.clickableSpanAt(vmx, vmy);
         return pending != null && !pendingClickMoved
                 && host.hasClickEvent(pending)
-                && pending.equals(released);
+                && host.sameClick(pending, released);
     }
 
     /** The drag flag is cleared on every release, fired or not. */

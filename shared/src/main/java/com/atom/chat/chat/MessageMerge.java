@@ -58,7 +58,7 @@ public final class MessageMerge {
         if (last.isDeleted() || next.isDeleted()) return false;
         if(last.nativeMeta().captured()!=next.nativeMeta().captured()
                 || !Objects.equals(last.nativeMeta().tag(),next.nativeMeta().tag()))return false;
-        if (unsettled(last) || unsettled(next)) return false;
+        if (last.hasCard() || next.hasCard() || unsettled(last) || unsettled(next)) return false;
         if (last.isSystem() || next.isSystem()) {
             return false;
         }

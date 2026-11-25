@@ -1,5 +1,7 @@
 package com.atom.chat.notification;
 
+import com.atom.chat.audio.FeedbackCue;
+import com.atom.chat.audio.FeedbackSoundController;
 import com.atom.chat.chat.ChatMessage;
 import com.atom.chat.chat.PlayerRef;
 import com.atom.chat.nav.AppPage;
@@ -184,6 +186,23 @@ public final class NotificationJumpService {
      * @param readOnly whether the current private page is read-only (D24); only
      *                 the send-button route reads it, for the composer focus
      */
+    private record PointerId(long messageId, long notificationBirth, boolean reply) {}
+
+    public com.atom.chat.ui.input.ClickTarget bannerClickTarget(int button, float x, float y, boolean readOnly,
+                                                               UiLayout layout, MessageListView view) {
+        if (button != 0) return null;
+        NotificationBanner.Active target = NotificationBanner.INSTANCE.buttonHit(x, y);
+        boolean reply = target != null;
+        if (target == null) target = NotificationBanner.INSTANCE.hitTest(x, y);
+        if (target == null) return null;
+        if (target.message() == null) {
+            NotificationBanner.Active notice = target;
+            return com.atom.chat.ui.input.ClickTarget.action(notice, () -> NotificationBanner.INSTANCE.dismiss(notice));
+        }
+        return com.atom.chat.ui.input.ClickTarget.action(new PointerId(target.message().getId(), target.born(), reply),
+                () -> onBannerClick(button, x, y, readOnly, layout, view));
+    }
+
     public boolean onBannerClick(int button, float vmx, float vmy, boolean readOnly,
                                  UiLayout layout, MessageListView view) {
         if (button != 0 || !NotificationBanner.INSTANCE.hasActive()) {
@@ -205,7 +224,7 @@ public final class NotificationJumpService {
         if (hit == null) {
             return false;
         }
-        if (jumpToNotification(hit, layout, view)) {
+        if (hit.message() == null || jumpToNotification(hit, layout, view)) {
             NotificationBanner.INSTANCE.dismiss(hit);
         }
         return true;
@@ -338,13 +357,17 @@ public final class NotificationJumpService {
 
     /** Raises a transient action acknowledgement in the panel's floating layer. */
     public void feedback(String key, boolean success) {
-        actionFeedback.show(key, success ? ActionFeedback.Outcome.SUCCESS : ActionFeedback.Outcome.ERROR,
-                System.currentTimeMillis());
+        feedback(key, null, success);
     }
 
     /** Raises an acknowledgement whose text carries an argument (a player name). */
     public void feedback(String key, String label, boolean success) {
         actionFeedback.show(key, label, success ? ActionFeedback.Outcome.SUCCESS : ActionFeedback.Outcome.ERROR,
                 System.currentTimeMillis());
+        // Pokes already play their cue when sent or received, including debug pokes.
+        switch (key) {
+            case "atomchat.feedback.poked", "atomchat.feedback.pokedLocal", "atomchat.feedback.pokeReceived" -> { }
+            default -> FeedbackSoundController.play(FeedbackCue.TOAST);
+        }
     }
 }

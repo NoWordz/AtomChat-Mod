@@ -102,7 +102,7 @@ public final class FixedHeaderClockAgent {
                                     super.visitInsn(Opcodes.POP);
                                     return;
                                 }
-                                if (credits && name.equals("draw") && opcode == Opcodes.INVOKESTATIC
+                                if (credits && name.equals("drawTile") && opcode == Opcodes.INVOKESTATIC
                                         && owner.equals("com/atom/chat/render/SkiaFontRenderer")
                                         && method.equals("drawTextCentered")
                                         && descriptor.equals("(Lio/github/humbleui/skija/Canvas;Lio/github/humbleui/skija/Font;Ljava/lang/String;FFI)V")) {

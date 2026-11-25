@@ -144,7 +144,7 @@ public final class MenuPopup {
 
     /**
      * Advances a row's bounce toward the hover state. {@code pressed} is
-     * fixed false — menus select on release, they have no press half — and
+     * fixed false for menus that use hover only, and
      * the animation gate is {@link Animations#enabled()} like every other
      * decorative motion. One {@link PressScale} per row, never shared.
      */

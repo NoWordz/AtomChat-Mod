@@ -96,7 +96,7 @@ public final class AppearancePresetStore {
             config.cornerRadius = cornerRadius;
             config.panelOutline = panelOutline;
             config.setPanelOutlineWidth(panelOutlineWidth);
-            if (!config.performanceMode) {
+            if (!config.performanceModeEnabled()) {
                 config.cardBlurStrength = cardBlurStrength;
                 config.blurEnabled = blurEnabled;
                 config.animationEnabled = animationEnabled;

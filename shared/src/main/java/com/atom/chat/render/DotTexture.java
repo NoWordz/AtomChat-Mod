@@ -87,8 +87,8 @@ public final class DotTexture {
                 }
             };
 
-    private record HaloKey(float width, float height, int tint, float density, boolean trail, int resolution) {}
-    private record PanelEdgeKey(UiLayout.Rect bar, float radius, boolean above, int tint, Matrix33 matrix) {}
+    private record HaloKey(float width, float height, int tint, float density, boolean trail, int resolution, int step) {}
+    private record PanelEdgeKey(UiLayout.Rect bar, float radius, boolean above, int tint, Matrix33 matrix, int step) {}
     private record TitleProjection(Canvas recording, Matrix33 playback) {}
 
     private record DotGrid(float scale, float xPhase, float yPhase) {
@@ -120,7 +120,7 @@ public final class DotTexture {
      * a Picture. 9 alphas are baked into the recorded commands, not the key.
      */
     private record Key(int kind, float x, float y, float w, float h, float radius,
-                       int themeTint, boolean above, float density, DotGrid grid) { }
+                       int themeTint, boolean above, float density, DotGrid grid, int step) { }
 
     static boolean dotsCached() { return cached; }
     static void setDotsCached(boolean value) { cached = value; }
@@ -187,16 +187,18 @@ public final class DotTexture {
     private static void drawEdge(Canvas canvas, UiLayout.Rect bar, float radius, boolean above, int tint,
                                  boolean useCache, boolean settled, boolean circular) {
         if (!SoftShadow.enabled() || !visible(bar, tint)) return;
+        int step = columnStep();
+        int paintTint = scaledTint(tint, step);
         long segmentId = com.atom.chat.diagnostics.FrameSegments.current(), started = com.atom.chat.diagnostics.FrameSegments.start(segmentId);
         try {
             float r = Math.max(0F, Math.min(radius, Math.min(bar.w(), bar.h()) / 2F));
             RRect outline = circular ? CornerGeometry.circularRect(bar.x(), bar.y(), bar.w(), bar.h(), r)
                     : RRect.makeXYWH(bar.x(), bar.y(), bar.w(), bar.h(), r);
-            if (cached && settled && drawPanelMask(canvas, bar, r, outline, above, tint)) return;
+            if (cached && settled && drawPanelMask(canvas, bar, r, outline, above, paintTint, step)) return;
             if (cached && useCache) {
                 int kind = circular ? KIND_EDGE : KIND_POPUP_EDGE;
-                Key key = new Key(kind, bar.x(), bar.y(), bar.w(), bar.h(), radius, tint, above, UiTokens.SCALE, null);
-                Picture picture = picture(key, c -> edgeBody(c, bar, r, outline, above, tint));
+                Key key = new Key(kind, bar.x(), bar.y(), bar.w(), bar.h(), radius, paintTint, above, UiTokens.SCALE, null, step);
+                Picture picture = picture(key, c -> edgeBody(c, bar, r, outline, above, paintTint, step));
                 canvas.save();
                 try {
                     edgeClips(canvas, bar, r, outline, above);
@@ -209,7 +211,7 @@ public final class DotTexture {
             canvas.save();
             try {
                 edgeClips(canvas, bar, r, outline, above);
-                edgeBody(canvas, bar, r, outline, above, tint);
+                edgeBody(canvas, bar, r, outline, above, paintTint, step);
             } finally {
                 canvas.restore();
             }
@@ -230,7 +232,7 @@ public final class DotTexture {
     }
 
     private static boolean drawPanelMask(Canvas canvas, UiLayout.Rect bar, float r, RRect outline,
-                                         boolean above, int tint) {
+                                         boolean above, int tint, int step) {
         Matrix33 matrix = canvas.getLocalToDeviceAsMatrix33();
         DotGrid grid = DotGrid.of(matrix);
         if (grid == null) return false;
@@ -242,7 +244,7 @@ public final class DotTexture {
         int width = (int) Math.ceil(bar.right() * scale + m[2]) - x;
         int height = (int) Math.ceil((top + UiTokens.MESSAGE_DOT_DEPTH + r) * scale + m[5]) - y;
         if (width <= 0 || height <= 0 || (long) width * height > MAX_PANEL_EDGE_PIXELS) return false;
-        var key = new PanelEdgeKey(bar, r, above, tint, matrix);
+        var key = new PanelEdgeKey(bar, r, above, tint, matrix, step);
         Image image = PANEL_EDGES.get(key);
         int side = above ? 1 : 0;
         PanelEdgeKey previous = PREVIOUS_PANEL_EDGE[side];
@@ -256,7 +258,7 @@ public final class DotTexture {
                 bake.concat(matrix);
                 edgeClips(bake, bar, r, outline, above);
                 edgeGlow(bake, outline, tint);
-                edgePoints(bake, bar, r, above, tint, grid);
+                edgePoints(bake, bar, r, above, tint, grid, step);
                 image = surface.makeImageSnapshot();
                 PANEL_EDGES.put(key, image);
                 buildCount++;
@@ -280,15 +282,15 @@ public final class DotTexture {
                 .setStrokeWidth(UiTokens.DOT_GLOW_STROKE).setColor(tinted(tint, UiTokens.DOT_GLOW_ALPHA)));
     }
 
-    private static void edgeBody(Canvas canvas, UiLayout.Rect bar, float r, RRect outline, boolean above, int tint) {
+    private static void edgeBody(Canvas canvas, UiLayout.Rect bar, float r, RRect outline, boolean above, int tint, int step) {
         float depth = UiTokens.MESSAGE_DOT_DEPTH;
         edgeGlow(canvas, outline, tint);
         if (cached) {
-            edgePoints(canvas, bar, r, above, tint, null);
+            edgePoints(canvas, bar, r, above, tint, null, step);
             return;
         }
         int columns = Math.min(512, (int) Math.ceil(bar.w() / UiTokens.MESSAGE_DOT_GAP));
-        for (int i = 0; i < columns; i++) {
+        for (int i = 0; i < columns; i += step) {
             float cx = UiTokens.MESSAGE_DOT_INSET + i * UiTokens.MESSAGE_DOT_GAP;
             float dx = Math.max(0F, Math.max(r - cx, cx - (bar.w() - r)));
             float corner = r - (float) Math.sqrt(Math.max(0F, r * r - dx * dx));
@@ -304,14 +306,14 @@ public final class DotTexture {
     }
 
     /** Round points use the same circle primitive; one submission per full-opacity row. */
-    private static void edgePoints(Canvas canvas, UiLayout.Rect bar, float r, boolean above, int tint, DotGrid grid) {
+    private static void edgePoints(Canvas canvas, UiLayout.Rect bar, float r, boolean above, int tint, DotGrid grid, int step) {
         int columns=Math.min(512,(int)Math.ceil(bar.w()/UiTokens.MESSAGE_DOT_GAP));
         float[] points = EDGE_POINTS;
         for(int row=0;row<ALPHAS.length;row++) {
             int count=0;
             float radius=UiTokens.MESSAGE_DOT_RADII[row];
             float distance=UiTokens.MESSAGE_DOT_DEPTH-row*UiTokens.MESSAGE_DOT_GAP;
-            for(int col=0;col<columns;col++) {
+            for(int col=0;col<columns;col+=step) {
                 float cx=UiTokens.MESSAGE_DOT_INSET+col*UiTokens.MESSAGE_DOT_GAP;
                 float dx=Math.max(0F,Math.max(r-cx,cx-(bar.w()-r)));
                 float corner=r-(float)Math.sqrt(Math.max(0F,r*r-dx*dx));
@@ -381,12 +383,14 @@ public final class DotTexture {
 
     private static void drawField(Canvas canvas, UiLayout.Rect box, int tint, boolean trail, DotGrid grid) {
         if (!SoftShadow.enabled() || !visible(box, tint)) return;
+        int step = columnStep();
+        int paintTint = scaledTint(tint, step);
         long segmentId = com.atom.chat.diagnostics.FrameSegments.current(), started = com.atom.chat.diagnostics.FrameSegments.start(segmentId);
         try {
             if (cached) {
                 boolean largeField = grid == null && box.w() * box.h() >= FIELD_IMAGE_MIN_AREA;
                 if (largeField) {
-                    Image image = fieldImage(box, tint, trail, HALO_SUPERSAMPLE);
+                    Image image = fieldImage(box, paintTint, trail, HALO_SUPERSAMPLE, step);
                     if (image != null) {
                         canvas.save();
                         try {
@@ -402,8 +406,8 @@ public final class DotTexture {
                     }
                 }
                 int kind = trail ? KIND_TRAIL : KIND_HALO;
-                Key key = new Key(kind, box.x(), box.y(), box.w(), box.h(), 0F, tint, false, UiTokens.SCALE, grid);
-                Picture picture = picture(key, c -> fieldBody(c, box, tint, trail, grid));
+                Key key = new Key(kind, box.x(), box.y(), box.w(), box.h(), 0F, paintTint, false, UiTokens.SCALE, grid, step);
+                Picture picture = picture(key, c -> fieldBody(c, box, paintTint, trail, grid, step));
                 canvas.save();
                 try {
                     canvas.clipRect(Rect.makeXYWH(box.x(), box.y(), box.w(), box.h()));
@@ -416,7 +420,7 @@ public final class DotTexture {
             canvas.save();
             try {
                 canvas.clipRect(Rect.makeXYWH(box.x(), box.y(), box.w(), box.h()));
-                fieldBody(canvas, box, tint, trail, grid);
+                fieldBody(canvas, box, paintTint, trail, grid, step);
             } finally {
                 canvas.restore();
             }
@@ -425,8 +429,8 @@ public final class DotTexture {
         }
     }
 
-    private static Image fieldImage(UiLayout.Rect box, int tint, boolean trail, int resolution) {
-        HaloKey key = new HaloKey(box.w(), box.h(), tint, UiTokens.SCALE, trail, resolution);
+    private static Image fieldImage(UiLayout.Rect box, int tint, boolean trail, int resolution, int step) {
+        HaloKey key = new HaloKey(box.w(), box.h(), tint, UiTokens.SCALE, trail, resolution, step);
         Image existing = HALO_IMAGES.get(key);
         if (existing != null) {
             hitCount++;
@@ -446,7 +450,7 @@ public final class DotTexture {
             Canvas raster = surface.getCanvas();
             raster.clear(0);
             raster.scale(resolution, resolution);
-            fieldBody(raster, new UiLayout.Rect(0, 0, box.w(), box.h()), tint, trail, null);
+            fieldBody(raster, new UiLayout.Rect(0, 0, box.w(), box.h()), tint, trail, null, step);
             Image created = surface.makeImageSnapshot();
             java.util.Iterator<Map.Entry<HaloKey, Image>> eldest = HALO_IMAGES.entrySet().iterator();
             while (eldest.hasNext() && haloBytes() + bytes > MAX_HALO_BYTES) {
@@ -471,14 +475,14 @@ public final class DotTexture {
         return bytes;
     }
 
-    private static void fieldBody(Canvas canvas, UiLayout.Rect box, int tint, boolean trail, DotGrid grid) {
+    private static void fieldBody(Canvas canvas, UiLayout.Rect box, int tint, boolean trail, DotGrid grid, int step) {
         GLOW.setMode(PaintMode.FILL).setColor(tinted(tint, UiTokens.DOT_FIELD_GLOW_ALPHA));
         float glowW = box.w() * (trail ? 0.65F : 0.7F);
         canvas.drawOval(Rect.makeXYWH(box.x() + (trail ? 0F : (box.w() - glowW) / 2F),
                 box.y() + box.h() * 0.3F, glowW, box.h() * 0.4F), GLOW);
         int columns = Math.min(512, (int) Math.ceil(box.w() / UiTokens.MESSAGE_DOT_GAP));
         int rows = Math.min(128, (int) Math.ceil(box.h() / UiTokens.MESSAGE_DOT_GAP));
-        for (int i = 0; i < columns; i++) {
+        for (int i = 0; i < columns; i += step) {
             float cx = UiTokens.MESSAGE_DOT_INSET + i * UiTokens.MESSAGE_DOT_GAP;
             float u = cx / box.w();
             for (int j = 0; j < rows; j++) {
@@ -500,6 +504,14 @@ public final class DotTexture {
         return rect != null && Float.isFinite(rect.x()) && Float.isFinite(rect.y())
                 && Float.isFinite(rect.w()) && Float.isFinite(rect.h())
                 && rect.w() > 0F && rect.h() > 0F && (tint >>> 24) > 0;
+    }
+
+    private static int columnStep() {
+        return com.atom.chat.config.AtomChatConfig.activeGraphicsQuality() == com.atom.chat.config.GraphicsQuality.BALANCED ? 2 : 1;
+    }
+
+    private static int scaledTint(int tint, int step) {
+        return step == 1 ? tint : (tint & 0xFFFFFF) | (Math.round((tint >>> 24) * .7F) << 24);
     }
 
     private static int tinted(int tint, float alpha) {

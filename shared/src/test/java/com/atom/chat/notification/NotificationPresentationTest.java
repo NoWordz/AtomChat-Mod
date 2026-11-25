@@ -16,12 +16,12 @@ class NotificationPresentationTest {
     @Test void frontBannerBodyOccludesAButtonOnAnOlderReflowingBanner() throws Exception {
         withConfig(config -> {
             var clock = new AtomicLong(1000); var banner = new NotificationBanner(clock::get);
-            banner.enqueue(NotificationBanner.Type.MENTION, "Alice", "first", null);
+            banner.enqueue(NotificationBanner.Type.MENTION, "Alice", "first", chat("first"));
             var old = banner.newest();
             try (var surface = Surface.makeRasterN32Premul(1000, 800)) {
                 clock.addAndGet(600);
                 banner.renderInPanel(surface.getCanvas(), 10, 10, 650, 700, -1, -1);
-                banner.enqueue(NotificationBanner.Type.MENTION, "Bob", "second", null);
+                banner.enqueue(NotificationBanner.Type.MENTION, "Bob", "second", chat("second"));
                 clock.addAndGet(16);
                 banner.renderInPanel(surface.getCanvas(), 10, 10, 650, 700, -1, -1);
                 Rect oldButton = bounds(banner, old, "buttonRects");
@@ -33,6 +33,10 @@ class NotificationPresentationTest {
                 assertNull(banner.buttonHit(x, y), "front card body must occlude the old card's reply button");
             }
         });
+    }
+
+    private static com.atom.chat.chat.ChatMessage chat(String text) {
+        return new com.atom.chat.chat.ChatMessage(com.atom.chat.text.RichText.literal(text).toText(), false, false);
     }
 
     @Test void dismissAndImmediateHudHandoffDoesNotHideRemainingCardDuringReflow() throws Exception {

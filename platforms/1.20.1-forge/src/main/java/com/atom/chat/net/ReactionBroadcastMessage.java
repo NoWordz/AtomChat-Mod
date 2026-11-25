@@ -7,10 +7,21 @@ import net.minecraft.network.chat.Component;
 public final class ReactionBroadcastMessage implements OutgoingChatMessage {
     private final OutgoingChatMessage delegate;
     private final UUID id=UUID.randomUUID();
-    public ReactionBroadcastMessage(OutgoingChatMessage delegate) { this.delegate=delegate; }
+    private final CardCompanionServer.PlayerShareDelivery cardDelivery;
+    public ReactionBroadcastMessage(OutgoingChatMessage delegate, CardCompanionServer.PlayerShareDelivery cardDelivery) {
+        this.delegate=delegate;
+        this.cardDelivery=cardDelivery;
+    }
     @Override public Component content() { return delegate.content(); }
     @Override public void sendToPlayer(ServerPlayer receiver,boolean filtered,net.minecraft.network.chat.ChatType.Bound bound) {
-        Object source=delegate instanceof OutgoingChatMessage.Disguised ? delegate.content() : null;
-        try(var scope=ReactionCompanionServer.broadcastDelivery(receiver,source,id)) { delegate.sendToPlayer(receiver,filtered,bound); }
+        Object source = delegate instanceof OutgoingChatMessage.Disguised ? delegate.content() : null;
+        try (var scope = ReactionCompanionServer.broadcastDelivery(receiver,source,id)) {
+            if (cardDelivery == null) {
+                delegate.sendToPlayer(receiver,filtered,bound);
+            } else {
+                CardCompanionServer.sendPlayerShare(receiver, filtered, bound.decorate(delegate.content()),
+                        cardDelivery, () -> delegate.sendToPlayer(receiver,filtered,bound));
+            }
+        }
     }
 }

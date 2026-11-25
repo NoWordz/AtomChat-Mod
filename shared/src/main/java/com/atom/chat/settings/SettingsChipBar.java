@@ -50,6 +50,11 @@ public final class SettingsChipBar {
         }
     }
     public void draw(Canvas canvas,UiLayout layout,List<String> labels,int selected,int secondary){
+        draw(canvas, layout, labels, selected, secondary, false);
+    }
+
+    public void draw(Canvas canvas, UiLayout layout, List<String> labels, int selected, int secondary,
+                     boolean fitLabels){
         int count=labels.size();if(count==0||layout.chipBar.w()<=0)return;
         var first=cell(layout,0,count);
         float inset=insetX(layout,count);
@@ -77,7 +82,17 @@ public final class SettingsChipBar {
             if (scaleLabel) scale.begin(canvas, cell.x() + cell.w()/2, cell.y() + cell.h()/2);
             try{
                 if(!on&&hover.getOrDefault(i,0f)>.01f)SettingsCapsuleCoverage.draw(canvas,cell.x(),cell.y(),cell.w(),cell.h(),radius,UiTokens.cardHover(hover.get(i), theme));
-                String label = SkiaFontRenderer.truncate(font, labels.get(i), Math.max(0, cell.w() - textInset));
+                String label = labels.get(i);
+                float available = Math.max(0F, cell.w() - textInset);
+                if (fitLabels && available > 0F) {
+                    float measured = SkiaFontRenderer.getStringWidth(font, label);
+                    if (measured > available) {
+                        float fittedSize = Math.max(1F, (float) Math.floor(fontSize * available / measured));
+                        font = on ? FontManager.boldFont(fittedSize) : FontManager.font(fittedSize);
+                    }
+                } else {
+                    label = SkiaFontRenderer.truncate(font, label, available);
+                }
                 int ink = on ? UiTokens.onAccent(accent) : secondary;
                 float labelX = cell.x() + cell.w() / 2F - SkiaFontRenderer.getStringWidth(font, label) / 2F;
                 float baseline = SkiaFontRenderer.centerBaselineY(font, cell.y() + cell.h() / 2F);

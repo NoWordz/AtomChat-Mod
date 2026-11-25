@@ -424,6 +424,11 @@ public final class SkiaFontRenderer {
     private static final io.github.humbleui.skija.ImageFilter SHADOW_ON_DARK =
             io.github.humbleui.skija.ImageFilter.makeDropShadowOnly(0.0F, 1.0F, 1.5F, 1.5F, 0x59000000);
 
+    private static final io.github.humbleui.skija.ImageFilter BALANCED_SHADOW_ON_LIGHT =
+            io.github.humbleui.skija.ImageFilter.makeDropShadowOnly(0.0F, 1.0F, 1.0F, 1.0F, 0x33000000);
+    private static final io.github.humbleui.skija.ImageFilter BALANCED_SHADOW_ON_DARK =
+            io.github.humbleui.skija.ImageFilter.makeDropShadowOnly(0.0F, 1.0F, 1.0F, 1.0F, 0x59000000);
+
     /**
      * The soft-shadow filter behind drawText/drawBackingText, public for
      * rich-text pre-passes that manage their own run loop: one filtered layer
@@ -445,6 +450,9 @@ public final class SkiaFontRenderer {
     }
 
     private static io.github.humbleui.skija.ImageFilter backingShadowFor(boolean surfaceIsLight) {
+        if (com.atom.chat.config.AtomChatConfig.activeGraphicsQuality() == com.atom.chat.config.GraphicsQuality.BALANCED) {
+            return surfaceIsLight ? BALANCED_SHADOW_ON_LIGHT : BALANCED_SHADOW_ON_DARK;
+        }
         return surfaceIsLight ? SHADOW_ON_LIGHT : SHADOW_ON_DARK;
     }
 

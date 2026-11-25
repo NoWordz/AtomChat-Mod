@@ -6,12 +6,17 @@ import com.atom.chat.render.CornerGeometry;
 import com.atom.lib.design.atomchat.UiTokens;
 import com.atom.chat.font.FontManager;
 import com.atom.chat.render.SkiaFontRenderer;
+import com.atom.chat.ui.input.ClickTarget;
 import io.github.humbleui.skija.Canvas;
 import java.util.List;
 
 /** Panel-centred picker-family modal. Input is routed by ConfirmationInput, business stays with the caller. */
 public final class ConfirmationDialog {
+    private enum Action { CANCEL, CONFIRM, DISMISS }
+    private record PointerId(Object prompt, Action action) {}
+
     private final ConfirmationState state = new ConfirmationState();
+    private Object prompt = new Object();
     private String title = "", message = "", cancelLabel = "", confirmLabel = "";
     private ConfirmationLayout geometry;
     private boolean visible;
@@ -28,7 +33,7 @@ public final class ConfirmationDialog {
     public void open(String title, String message, String cancelLabel, String confirmLabel, Runnable action) {
         tutorial = false; dangerous = true; dismissAction = null;
         this.title = title; this.message = message; this.cancelLabel = cancelLabel; this.confirmLabel = confirmLabel;
-        geometry = null; visible = true; state.open(action);
+        geometry = null; visible = true; prompt = new Object(); state.open(action);
         pressed = -1; pulse = 0; bodyScroll = 0; maxBodyScroll = 0;
     }
     public void openDangerous(String title,String message,String cancel,String confirm,Runnable action) {
@@ -60,11 +65,27 @@ public final class ConfirmationDialog {
         } else state.key(key);
     }
     private void press(int button) { pressed = button; pulse = UiMotion.POPUP_MS; buttons[button].press(); }
+    public ClickTarget clickTarget(float x, float y, int button) {
+        if (!visible) return null;
+        if (button != 0 || geometry == null || !state.active() || progress < 1) return ClickTarget.blocked();
+        if (geometry.cancel().contains(x, y)) return buttonTarget(Action.CANCEL, 0, this::cancel);
+        if (geometry.confirm().contains(x, y)) return buttonTarget(Action.CONFIRM, 1, state::confirm);
+        if (!geometry.surface().contains(x, y) && !tutorial) {
+            return ClickTarget.action(new PointerId(prompt, Action.DISMISS), this::cancel);
+        }
+        return ClickTarget.blocked();
+    }
+
+    private ClickTarget buttonTarget(Action action, int index, Runnable activate) {
+        return new ClickTarget(new PointerId(prompt, action),
+                () -> buttons[index].hold(true),
+                () -> buttons[index].hold(false),
+                () -> { press(index); activate.run(); });
+    }
+
     public void click(float x, float y, int button) {
-        if (button != 0 || geometry == null || !state.active() || progress < 1) return;
-        if (geometry.cancel().contains(x, y)) { press(0); cancel(); }
-        else if (!geometry.surface().contains(x, y)) { if (!tutorial) cancel(); }
-        else if (geometry.confirm().contains(x, y)) { press(1); state.confirm(); }
+        ClickTarget target = clickTarget(x, y, button);
+        if (target != null) target.activate().run();
     }
     public void render(Canvas canvas, UiLayout.Rect panel, float mx, float my) {
         render(canvas, panel, mx, my, 16);

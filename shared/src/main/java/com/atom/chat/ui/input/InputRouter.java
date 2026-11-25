@@ -1,7 +1,9 @@
 package com.atom.chat.ui.input;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Ordered input-event router. Handlers answer events in registration order;
@@ -13,7 +15,10 @@ import java.util.List;
  * by unit tests.</p>
  */
 public final class InputRouter {
+    private static final ClickTarget CANCELLED = ClickTarget.blocked();
+
     private final List<InputHandler> handlers = new ArrayList<>();
+    private final Map<Integer, ClickTarget> claims = new HashMap<>();
 
     /** Appends a handler; earlier registrations have higher priority. */
     public InputRouter add(InputHandler handler) {
@@ -22,7 +27,15 @@ public final class InputRouter {
     }
 
     public boolean click(double mouseX, double mouseY, int button) {
+        clear(claims.remove(button));
         for (InputHandler handler : handlers) {
+            ClickTarget target = handler.clickTarget(mouseX, mouseY, button);
+            if (target != null) {
+                claims.put(button, target);
+                target.press().run();
+                target.activate().run();
+                return true;
+            }
             if (handler.onClick(mouseX, mouseY, button)) {
                 return true;
             }
@@ -31,6 +44,7 @@ public final class InputRouter {
     }
 
     public boolean drag(double mouseX, double mouseY, int button, double dragX, double dragY) {
+        if (cancel(button)) return true;
         for (InputHandler handler : handlers) {
             if (handler.onDrag(mouseX, mouseY, button, dragX, dragY)) {
                 return true;
@@ -40,12 +54,34 @@ public final class InputRouter {
     }
 
     public boolean release(double mouseX, double mouseY, int button) {
+        ClickTarget claim = claims.remove(button);
+        if (claim != null) {
+            clear(claim);
+            return true;
+        }
         for (InputHandler handler : handlers) {
             if (handler.onRelease(mouseX, mouseY, button)) {
                 return true;
             }
         }
         return false;
+    }
+
+    /** Drop feedback immediately, keeping ownership until the physical button releases. */
+    public boolean cancel(int button) {
+        ClickTarget claim = claims.get(button);
+        if (claim == null) return false;
+        claims.put(button, CANCELLED);
+        clear(claim);
+        return true;
+    }
+
+    public void discardRelease(int button) {
+        clear(claims.remove(button));
+    }
+
+    private static void clear(ClickTarget claim) {
+        if (claim != null) claim.clear().run();
     }
 
     public boolean scroll(double mouseX, double mouseY, double horizontalAmount, double verticalAmount) {

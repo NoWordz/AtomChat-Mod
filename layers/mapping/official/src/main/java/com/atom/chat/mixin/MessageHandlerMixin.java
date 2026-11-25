@@ -76,6 +76,13 @@ public class MessageHandlerMixin {
 
     @Shadow private void handleMessage(MessageSignature signature, BooleanSupplier callback) { throw new AssertionError(); }
 
+    @Redirect(method = "handlePlayerChatMessage", require = 0, at = @At(value = "INVOKE", target = "Lnet/minecraft/client/multiplayer/chat/ChatListener;handleMessage(Lnet/minecraft/network/chat/MessageSignature;Ljava/util/function/BooleanSupplier;)V"))
+    private void atomchat$deferShareCard(ChatListener listener, MessageSignature signature, BooleanSupplier callback,
+                                         PlayerChatMessage message, GameProfile profile, ChatType.Bound bound) {
+        handleMessage(signature, com.atom.chat.net.CardCompanionClient.deferNativeShare(
+                message.sender(), message.signedContent(), callback));
+    }
+
     @Redirect(method = "handleDisguisedChatMessage", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/multiplayer/chat/ChatListener;handleMessage(Lnet/minecraft/network/chat/MessageSignature;Ljava/util/function/BooleanSupplier;)V"))
     private void atomchat$deferDisguised(ChatListener listener, MessageSignature signature, BooleanSupplier callback,
                                         Component message, ChatType.Bound bound) {

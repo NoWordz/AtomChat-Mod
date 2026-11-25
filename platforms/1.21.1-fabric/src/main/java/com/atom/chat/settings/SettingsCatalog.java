@@ -221,12 +221,7 @@ public final class SettingsCatalog {
                             "atomchat.settings.about.debug",
                             "atomchat.settings.about.debug.desc",
                             () -> AtomChatConfig.get().debug,
-                            v -> AtomChatConfig.get().debug = v),
-                    new SettingsItem("performance_mode",
-                            "atomchat.settings.about.performance_mode",
-                            "atomchat.settings.about.performance_mode.desc",
-                            () -> AtomChatConfig.get().performanceMode,
-                            v -> AtomChatConfig.get().performanceMode = v));
+                            v -> AtomChatConfig.get().debug = v));
         };
     }
 

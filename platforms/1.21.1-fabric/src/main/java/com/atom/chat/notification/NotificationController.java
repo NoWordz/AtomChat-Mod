@@ -1,6 +1,7 @@
 package com.atom.chat.notification;
 
 import com.atom.chat.AtomChat;
+import com.atom.chat.audio.FeedbackSoundController;
 import com.atom.chat.chat.ChatMessage;
 import com.atom.chat.config.AtomChatConfig;
 import com.atom.chat.text.RichText;
@@ -60,9 +61,8 @@ public final class NotificationController {
     }
 
     /**
-     * The poke cue: the same bundled pop pitched up, so a poke reads as its own
-     * "hey" without a second asset. Its own clock keeps a poke from muting a
-     * mention cue and vice versa.
+     * Pokes use the classic notification pop pitched up. Their own clock keeps
+     * a poke from muting a message notification and vice versa.
      */
     public static void playPokeSound() {
         MinecraftClient client = MinecraftClient.getInstance();
@@ -74,11 +74,21 @@ public final class NotificationController {
         }
         float volume = com.atom.chat.audio.FeedbackSoundPolicy.volume(AtomChatConfig.get().notificationSoundEnabled, true, AtomChatConfig.get().notifyVolume);
         if (volume <= 0) return;
-        client.getSoundManager().play(PositionedSoundInstance.master(NOTIFICATION_SOUND, 1.25F, volume));
+        client.getSoundManager().play(PositionedSoundInstance.master(FeedbackSoundController.toastSound(), 1.25F, volume));
     }
 
     public static void onMention(ChatMessage message) {
         fire(NotificationBanner.Type.MENTION, message);
+    }
+
+    public static void onMentionAll(java.util.UUID senderUuid, String sender) {
+        if (!AtomChatConfig.get().enabled) return;
+        var type = NotificationBanner.Type.MENTION;
+        if (NotificationBanner.soundEnabled(type)) playSound(type);
+        if (NotificationBanner.enabled(type)) {
+            NotificationBanner.INSTANCE.enqueueMentionAll(senderUuid, sender,
+                    Text.translatable("atomchat.notify.mention_all").getString());
+        }
     }
 
     public static void onQuote(ChatMessage message) {

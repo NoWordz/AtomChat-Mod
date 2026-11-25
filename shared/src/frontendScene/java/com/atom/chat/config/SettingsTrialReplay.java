@@ -139,9 +139,19 @@ public final class SettingsTrialReplay {
                 }
                 case 69 -> {
                     var anchor = history.actionAnchor(SettingsSection.CHAT, "history_clear", layout, 0);
-                    var hit = history.hit(anchor.x() + 4, anchor.y() + anchor.h() / 2, layout, SettingsSection.CHAT, 0);
-                    require(hit != null && history.perform(hit) && history.confirmation().hasPendingAction(),
-                            "original cleanup hit opens confirmation");
+                    var gate = new com.atom.chat.ui.input.InputGate(() -> false)
+                            .add(new com.atom.chat.ui.ConfirmationInput(history::confirmation, x -> (float) x, y -> (float) y))
+                            .add(new com.atom.chat.ui.input.InputHandler() {
+                                @Override public com.atom.chat.ui.input.ClickTarget clickTarget(double x, double y, int button) {
+                                    return button == 0 ? com.atom.chat.settings.SettingsDetailPage.rowClickTarget(
+                                            history, SettingsSection.CHAT, layout, 0, (float) x, (float) y, () -> {}) : null;
+                                }
+                            });
+                    double x = anchor.x() + 4, y = anchor.y() + anchor.h() / 2;
+                    require(Boolean.TRUE.equals(gate.click(x, y, 0)), "history cleanup owns the press");
+                    require(history.confirmation().hasPendingAction(), "press opens cleanup confirmation");
+                    require(Boolean.TRUE.equals(gate.release(x, y, 0)) && history.confirmation().hasPendingAction(),
+                            "release of the cleanup row stays consumed by its press");
                     require(cleared == 0, "history kept until confirmation");
                 }
                 case 83 -> {

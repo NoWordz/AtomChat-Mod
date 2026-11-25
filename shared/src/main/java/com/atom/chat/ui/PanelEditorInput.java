@@ -28,6 +28,12 @@ public final class PanelEditorInput implements InputHandler {
 
     private PanelEditor active() { return blocked.getAsBoolean() ? null : editor.get(); }
 
+    @Override public com.atom.chat.ui.input.ClickTarget clickTarget(double mx, double my, int button) {
+        var current = active();
+        return current == null ? null : current.toolbarClickTarget(
+                x.apply(mx), y.apply(my), button, width.get(), height.get(), finish);
+    }
+
     @Override public boolean onClick(double mouseX, double mouseY, int button) {
         var current = active();
         if (current == null) return false;

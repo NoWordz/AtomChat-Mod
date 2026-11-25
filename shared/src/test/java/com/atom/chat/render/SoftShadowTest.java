@@ -271,10 +271,11 @@ class SoftShadowTest {
             SoftShadow.drawPanel(surface.getCanvas(),100,100,400,600,28);
             var field=SoftShadow.class.getDeclaredField("PANEL_PATCHES");field.setAccessible(true);
             var patches=(java.util.Map<?,?>)field.get(null);
-            Object first=patches.get(28F);
+            var key=new SoftShadow.PanelPatchKey(28F,3);
+            Object first=patches.get(key);
             assertNotNull(first);
             for(int i=0;i<100;i++) SoftShadow.drawPanel(surface.getCanvas(),100,100,400+i,600-i,28);
-            assertSame(first,patches.get(28F),"width/height must not be part of the panel patch cache key");
+            assertSame(first,patches.get(key),"width/height must not be part of the panel patch cache key");
         } finally { SoftShadow.release(); }
     }
 
@@ -300,9 +301,9 @@ class SoftShadowTest {
         try(var surface=Surface.makeRasterN32Premul(100,100)) {
             var draw=SkiaPipelineWarmup.class.getDeclaredMethod("draw",io.github.humbleui.skija.Canvas.class,java.util.List.class);
             draw.setAccessible(true);draw.invoke(null,surface.getCanvas(),pictures);
-            assertTrue(patches.containsKey(UiTokens.panelRadius(com.atom.chat.ui.AtomChatAppearance.theme())),
+            assertTrue(patches.containsKey(new SoftShadow.PanelPatchKey(UiTokens.panelRadius(com.atom.chat.ui.AtomChatAppearance.theme()),3)),
                     "first phone frame must reuse a prepared Gaussian patch");
-            assertTrue(patches.containsKey(0F),"first docked frame must reuse its square-edge Gaussian patch");
+            assertTrue(patches.containsKey(new SoftShadow.PanelPatchKey(0F,3)),"first docked frame must reuse its square-edge Gaussian patch");
         } finally { pictures.forEach(io.github.humbleui.skija.Picture::close);SoftShadow.release(); }
     }
 

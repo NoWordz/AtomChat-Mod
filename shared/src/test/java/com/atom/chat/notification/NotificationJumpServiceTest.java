@@ -1,5 +1,7 @@
 package com.atom.chat.notification;
 
+import com.atom.chat.audio.FeedbackCue;
+import com.atom.chat.audio.FeedbackSoundController;
 import com.atom.chat.config.AtomChatConfig;
 
 import com.atom.chat.chat.ChatMessage;
@@ -75,7 +77,7 @@ class NotificationJumpServiceTest {
     static Path platformRoot;
 
     @BeforeAll
-    static void installTemporaryPlatform() {
+    static void installTemporaryPlatform() throws Exception {
         Platform.install(new Platform.Provider() {
             @Override
             public Path configDir() {
@@ -92,6 +94,18 @@ class NotificationJumpServiceTest {
                 return false;
             }
         });
+        // Forge requires the registry to be bootstrapped before a SoundEvent is created.
+        var constants = Class.forName("net.minecraft.SharedConstants");
+        try {
+            constants.getMethod("tryDetectVersion").invoke(null);
+        } catch (NoSuchMethodException yarnMappings) {
+            constants.getMethod("createGameVersion").invoke(null);
+        }
+        try {
+            Class.forName("net.minecraft.server.Bootstrap").getMethod("bootStrap").invoke(null);
+        } catch (ClassNotFoundException yarnMappings) {
+            Class.forName("net.minecraft.Bootstrap").getMethod("initialize").invoke(null);
+        }
     }
 
     /**
@@ -108,6 +122,44 @@ class NotificationJumpServiceTest {
                 return;
             }
             NotificationBanner.INSTANCE.dismiss(banner);
+        }
+    }
+
+    @Test
+    void actionToastUsesOneFeedbackCueButPokeAcknowledgementsDoNotRepeatTheirCue() {
+        var config = AtomChatConfig.get();
+        boolean previousEnabled = config.feedbackSoundEnabled;
+        float previousVolume = config.feedbackVolume;
+        config.feedbackSoundEnabled = true;
+        config.feedbackVolume = 1.0F;
+        var cues = new ArrayList<String>();
+        FeedbackSoundController.observeCuesForTest(cue -> cues.add(cue.name()));
+        try {
+            var service = new Harness().service;
+            FeedbackSoundController.beginAction();
+            try {
+                FeedbackSoundController.play(FeedbackCue.BUTTON);
+                service.feedback("atomchat.feedback.copied", true);
+            } finally {
+                FeedbackSoundController.endAction();
+            }
+            assertEquals(List.of("TOAST"), cues);
+
+            service.feedback("atomchat.feedback.poked", "Alice", true);
+            service.feedback("atomchat.feedback.pokedLocal", "Alice", true);
+            service.feedback("atomchat.feedback.pokeReceived", "Alice", true);
+            assertEquals(List.of("TOAST"), cues);
+
+            service.feedback("atomchat.card.notice", "Card action failed", false);
+            assertEquals(List.of("TOAST", "TOAST"), cues);
+
+            config.feedbackSoundEnabled = false;
+            service.feedback("atomchat.feedback.copied", true);
+            assertEquals(List.of("TOAST", "TOAST"), cues);
+        } finally {
+            FeedbackSoundController.observeCuesForTest(null);
+            config.feedbackSoundEnabled = previousEnabled;
+            config.feedbackVolume = previousVolume;
         }
     }
 
@@ -555,6 +607,26 @@ class NotificationJumpServiceTest {
         assertFalse(NotificationBanner.INSTANCE.hasActive(), "the body route dismisses on a landed jump");
         assertEquals(0, h.screen.focusWrites, "only the send button focuses the composer");
         assertEquals(1, h.screen.openedPrivate.size(), "and it jumped");
+    }
+
+    @Test
+    void aServerNoticeDismissesOnPressWithoutOpeningAConversation() {
+        Harness h = new Harness();
+        NotificationBanner.INSTANCE.enqueue(NotificationBanner.Type.MENTION, "Alice", "@everyone", null);
+        settleAndRender(h);
+
+        float[] body = bannerBodyPoint(h.layout);
+        var gate = new com.atom.chat.ui.input.InputGate(() -> false)
+                .add(new com.atom.chat.ui.input.InputHandler() {
+                    @Override public com.atom.chat.ui.input.ClickTarget clickTarget(double x, double y, int button) {
+                        return h.service.bannerClickTarget(button, (float) x, (float) y, false, h.layout, h.view);
+                    }
+                });
+        assertEquals(Boolean.TRUE, gate.click(body[0], body[1], 0));
+        assertFalse(NotificationBanner.INSTANCE.hasActive());
+        assertEquals(AppPage.SETTINGS, h.screen.page);
+        assertEquals(0, h.screen.focusWrites);
+        assertEquals(Boolean.TRUE, gate.release(body[0], body[1], 0));
     }
 
     @Test

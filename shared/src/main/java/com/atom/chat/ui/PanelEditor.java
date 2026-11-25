@@ -199,6 +199,20 @@ public final class PanelEditor {
         buttons[index].draw(canvas, rect, text(key), primary, false, false, rect.contains(mx, my), dt, 1);
     }
 
+    public com.atom.chat.ui.input.ClickTarget toolbarClickTarget(float x, float y, int button, float vw, float vh,
+                                                                java.util.function.Consumer<Boolean> finish) {
+        if (button != 0 || closing) return null;
+        float scale = zoom();
+        var controls = layout(vw * scale, vh * scale);
+        int index = controls.save().contains(x * scale, y * scale) ? 1
+                : controls.reset().contains(x * scale, y * scale) ? 0 : -1;
+        if (index < 0) return null;
+        return new com.atom.chat.ui.input.ClickTarget(java.util.List.of(this, index),
+                () -> buttons[index].hold(true), () -> buttons[index].hold(false), () -> {
+                    if (click(x, y, button, vw, vh) == Result.SAVE) finish.accept(true);
+                });
+    }
+
     public Result click(float x, float y, int button, float vw, float vh) {
         if (closing) return Result.CONSUMED;
         float zoom = zoom();

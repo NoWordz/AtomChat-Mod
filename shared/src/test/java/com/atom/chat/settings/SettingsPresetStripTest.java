@@ -141,6 +141,31 @@ class SettingsPresetStripTest {
     }
 
     @Test
+    void releasingAcrossTheWallpaperCardEdgeDoesNotSelectThePressedPreset() throws Exception {
+        UiLayout tall = UiLayout.ofDetail(10, 10, 520, 1800);
+        var rows = page.rows(SettingsSection.APPEARANCE);
+        int index = java.util.stream.IntStream.range(0, rows.size())
+                .filter(i -> rows.get(i).kind() == SettingsSectionPage.RowKind.WALLPAPERS)
+                .findFirst().orElseThrow();
+        var rect = page.rowRect(SettingsSection.APPEARANCE, rows, index, 0, tall);
+        float x = rect.x() + UiTokens.SETTINGS_ROW_PAD + UiTokens.THEME_CARD_W;
+        float y = rect.y() + UiTokens.s(28) + UiTokens.THEME_CARD_H / 2;
+        try (Surface surface = Surface.makeRasterN32Premul(560, 1820)) {
+            page.renderBody(surface.getCanvas(), tall, SettingsSection.APPEARANCE, -1, -1, 0,
+                    AtomChatConfig.get().accentColor);
+            actions.clear();
+            assertTrue(page.themesPress(x - 1, y, tall, SettingsSection.APPEARANCE, 0));
+            assertTrue(actions.isEmpty());
+            page.endThemeStrip(x + 1, y, tall);
+            assertTrue(actions.isEmpty());
+
+            assertTrue(page.themesPress(x - 1, y, tall, SettingsSection.APPEARANCE, 0));
+            page.endThemeStrip(x - 1, y, tall);
+            assertTrue(actions.stream().anyMatch(action -> action.startsWith("wallpaper_preset:")));
+        }
+    }
+
+    @Test
     void wallpapersUseTheSameHorizontalStripGestureAndIndependentAction() throws Exception {
         assertTrue(page.rows(SettingsSection.APPEARANCE).stream().anyMatch(r -> r.kind().name().equals("WALLPAPERS")));
         UiLayout tall = UiLayout.ofDetail(0,0,480,1800);

@@ -11,6 +11,16 @@ public final class TutorialGuide {
     public record Entry(TutorialSession.Step step,SettingsSection section,int chip,int row,int lastRow,String title,String body) {
         public static Entry page(TutorialSession.Step step){return new Entry(step,null,-1,-1,-1,null,null);}
     }
+    /** Independently mountable step for the Presets chip. The row owns its painted anchor. */
+    public static Optional<Entry> graphicsQualityEntry(SettingsSectionPage page, Function<String, String> translator) {
+        int chip = page.activeChipIndex(SettingsSection.APPEARANCE);
+        int row = page.graphicsQualityTutorialRow();
+        if (row < 0) return Optional.empty();
+        return Optional.of(new Entry(TutorialSession.Step.APPEARANCE, SettingsSection.APPEARANCE, chip, row, row,
+                translator.apply("atomchat.settings.appearance.quality"),
+                translator.apply("atomchat.tutorial.settings.appearance.quality")));
+    }
+
     public static List<Entry> build(SettingsSectionPage page,Function<String,String> translator) {
         var result=new ArrayList<Entry>();
         for(var step:List.of(TutorialSession.Step.NAVIGATION,TutorialSession.Step.CONVERSATIONS,
@@ -28,6 +38,9 @@ public final class TutorialGuide {
                 String title = page.chips(section).isEmpty()
                         ? translator.apply("atomchat.tutorial." + step.key() + ".title")
                         : translator.apply(page.chips(section).get(chip).labelKey());
+                if (section == SettingsSection.APPEARANCE && id.equals("theme")) {
+                    graphicsQualityEntry(page, translator).ifPresent(result::add);
+                }
                 result.add(new Entry(step, section, chip, 0, rows.size() - 1,
                         title, translator.apply(key)));
 

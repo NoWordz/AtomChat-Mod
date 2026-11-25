@@ -11,6 +11,8 @@ import com.atom.chat.chat.ChatMessage;
 import com.atom.chat.chat.ChatStore;
 import com.atom.chat.chat.PlayerRef;
 import com.atom.chat.chat.PrivateChatStore;
+import com.atom.chat.channel.ChannelFeed;
+import com.atom.chat.channel.ChannelInbox;
 import com.atom.chat.font.FontManager;
 import com.atom.chat.image.PlayerAvatar;
 import com.atom.chat.render.SkiaImages;
@@ -186,11 +188,16 @@ public final class ConversationListPage {
         return rowHeight(rows.get(index)) + gap;
     }
 
-    public enum RowKind { PUBLIC, PLAYER, DIVIDER }
+    public enum RowKind { PUBLIC, PLAYER, DIVIDER, CHANNEL }
 
     public record Row(RowKind kind, PlayerRef player, ChatMessage latest,
-                      int unread, boolean online, boolean blocked) {
+                      int unread, boolean online, boolean blocked, ChannelInbox.Row channel) {
+        public Row(RowKind kind, PlayerRef player, ChatMessage latest, int unread, boolean online, boolean blocked) {
+            this(kind, player, latest, unread, online, blocked, null);
+        }
+
         public String title() {
+            if (channel != null) return channel.entry().label();
             if (kind == RowKind.PUBLIC) {
                 return tr("atomchat.conversation.world");
             }
@@ -233,12 +240,18 @@ public final class ConversationListPage {
     private List<Row> cachedRows = List.of();
     private long rowsBuiltAt = Long.MIN_VALUE / 2L;
     private boolean rowsDirty = true;
+    private long channelRevision = -1;
+    private final ChannelFeed channelFeed = new ChannelFeed();
+
+    public ChannelFeed channelFeed() { return channelFeed; }
 
     /** Row list in display order (cached; see {@link #ROWS_REBUILD_MS}). */
     public List<Row> rows() {
         long now = UiStagger.frameTimeMillis();
-        if (rowsDirty || now - rowsBuiltAt >= ROWS_REBUILD_MS) {
+        long revision = ChannelInbox.INSTANCE.revision(System.nanoTime());
+        if (rowsDirty || channelRevision != revision || now - rowsBuiltAt >= ROWS_REBUILD_MS) {
             cachedRows = buildRows();
+            channelRevision = revision;
             rowsBuiltAt = now;
             rowsDirty = false;
         }
@@ -276,6 +289,9 @@ public final class ConversationListPage {
         sortedPlayers.sort(PLAYER_ORDER);
         List<Row> result = new ArrayList<>();
         result.add(new Row(RowKind.PUBLIC, null, latestPublic(), ChatStore.publicUnread(), true, false));
+        for (var channel : ChannelInbox.INSTANCE.rows(System.nanoTime())) {
+            result.add(new Row(RowKind.CHANNEL, null, null, channel.unread(), true, false, channel));
+        }
         if (!sortedPlayers.isEmpty()) {
             result.add(divider());
         }
@@ -330,6 +346,7 @@ public final class ConversationListPage {
     }
 
     public float measureContent(UiLayout layout) {
+        if (channelFeed.active() != null) return channelFeed.measure(layout);
         // Measurement takes the frame's expansion snapshot. Draw and hit only
         // read it, so all three consumers walk exactly the same row geometry.
         long now = UiStagger.frameTimeMillis();
@@ -346,7 +363,18 @@ public final class ConversationListPage {
         return total;
     }
 
+    static boolean showEmptyPlayerNotice(List<Row> rows) {
+        return rows.stream().noneMatch(row -> row.kind() == RowKind.PLAYER || row.kind() == RowKind.CHANNEL);
+    }
+
     public void render(Canvas canvas, UiLayout layout, float vmx, float vmy, float scrollY) {
+        var channel = channelFeed.active();
+        if (channel != null) {
+            staggerHits.clear();
+            channelFeed.render(canvas, layout, channel, scrollY, vmx, vmy,
+                    textPrimary(), textSecondary(255), ConversationListPage::tr);
+            return;
+        }
         long now = UiStagger.frameTimeMillis();
         staggerHits.clear();
         float dt = Math.min(50.0F, Math.max(1.0F, now - lastFrameMs));
@@ -354,7 +382,6 @@ public final class ConversationListPage {
         List<Row> rows = rows();
         int hovered = -1;
         float emptyTop = 0.0F;
-        boolean hasPlayers = rows.stream().anyMatch(r -> r.kind() == RowKind.PLAYER);
         // The nav style as an axis, resolved once per frame: SLIDE moves rows
         // horizontally only, ZOOM lifts and scales them. One mapping per
         // surface, so the two styles cannot leak into each other.
@@ -528,7 +555,7 @@ public final class ConversationListPage {
         } else if (rowHover <= 0.0F) {
             hoverRowIndex = -1;
         }
-        if (!hasPlayers) {
+        if (showEmptyPlayerNotice(rows)) {
             float available = layout.list.bottom() - emptyTop;
             if (available > 0.0F) {
                 UiLayout.Rect area = new UiLayout.Rect(layout.list.x(), emptyTop,
@@ -720,7 +747,7 @@ public final class ConversationListPage {
         float iconX = x + iconInset;
         float iconY = y + (ROW_H - iconSize) / 2.0F;
 
-        if (row.kind == RowKind.PUBLIC) {
+        if (row.kind == RowKind.PUBLIC || row.kind == RowKind.CHANNEL) {
             CornerGeometry.drawRoundedRect(canvas, iconX, iconY, iconSize, iconSize, iconRadius,
                     Color.makeARGB(60, 255, 255, 255));
             drawIconCentered(canvas, AppIcons.ICON_GLOBE_PATH,
@@ -781,7 +808,8 @@ public final class ConversationListPage {
         }
 
         float maxPreviewW = Math.max(0.0F, x + w - textX - s(8) - (badgeW > 0 ? badgeW + s(8) : 0.0F));
-        String preview = previewText(row);
+        String preview = row.channel() == null ? previewText(row)
+                : row.channel().entry().key().backend() + " · " + tr("atomchat.channels.read_only");
         if (preview == null || preview.isBlank()) {
             preview = tr("atomchat.conversation.start");
         }

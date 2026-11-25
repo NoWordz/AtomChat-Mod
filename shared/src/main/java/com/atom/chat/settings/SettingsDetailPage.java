@@ -133,6 +133,32 @@ public final class SettingsDetailPage {
         host.colorPicker().render(canvas, layout.rect(), vmx, vmy, host.accent());
     }
 
+    private record RowPointerId(SettingsSection section, int chip, SettingsSectionPage.RowKind kind, Object action) {}
+
+    /** Resolves against the settings row and action rectangle painted by the current page. */
+    public static com.atom.chat.ui.input.ClickTarget rowClickTarget(SettingsSectionPage page, SettingsSection section,
+                                                                   UiLayout layout, float scroll, float x, float y,
+                                                                   Runnable feedback) {
+        if (!layout.list.contains(x, y)) return null;
+        var hit = page.hit(x, y, layout, section, scroll);
+        if (hit == null || !hit.onAction(x, y)) return null;
+        var row = hit.row();
+        Object action = switch (row.kind()) {
+            case SWITCH -> row.item().available() ? row.item().id() : null;
+            case ACTION -> row.item().available() ? row.actionId() : null;
+            case INFO -> row.info().isLink() ? row.info() : null;
+            case LABEL -> row.labelKey();
+            case BLOCKED -> row.player();
+            default -> null;
+        };
+        if (action == null) return null;
+        var id = new RowPointerId(section, page.activeChipIndex(section), row.kind(), action);
+        return new com.atom.chat.ui.input.ClickTarget(id,
+                () -> page.setPressedRow(hit.index()), () -> page.setPressedRow(-1), () -> {
+                    if (page.perform(hit) && !page.historyOwnsFeedback(hit)) feedback.run();
+                });
+    }
+
     /** The inline numeric editor's handler, for the shell's input router. */
     public InputHandler numberEditInput() {
         return new NumberEditInput();

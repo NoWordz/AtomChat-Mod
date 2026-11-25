@@ -69,7 +69,7 @@ public final class HeaderChrome {
         int textPrimary();
     }
 
-    private record Title(String text, Boolean online) {}
+    private record Title(String text, Boolean online, boolean wrap) {}
 
     private static final DateTimeFormatter CLOCK = DateTimeFormatter.ofPattern("HH:mm");
     private final Host host;
@@ -142,14 +142,15 @@ public final class HeaderChrome {
         if (showBack) stepBackButtonHover(mx, my);
         long duration = Animations.ms(UiMotion.PAGE_NAV_MS);
         String title = shellTitleFor(nav);
-        var titleLayer = titleFade.draw(title == null ? "" : title, new Title(title, online), nowMs, duration);
+        var titleLayer = titleFade.draw(title == null ? "" : title,
+                new Title(title, online, nav.page() == AppPage.SETTINGS_SECTION), nowMs, duration);
         var backLayer = backFade.draw(showBack ? Boolean.TRUE : null, showBack ? backButton() : null, nowMs, duration);
         var actionLayer = actionFade.draw(action == null ? null : nav, action, nowMs, duration);
         Title visible = titleLayer.value();
         ShellHeader.renderNavigation(canvas, header, visible.text(), backLayer.value(), backButtonHover,
                 host.textPrimary(), visible.online(), actionLayer.value(), clockAt(nowMs),
                 titleLayer.opacity(), backLayer.opacity(), actionLayer.opacity(),
-                backFade.accepts(Boolean.TRUE) && showBack, actionFade.accepts(nav));
+                backFade.accepts(Boolean.TRUE) && showBack, actionFade.accepts(nav), visible.wrap());
     }
 
     public boolean isVisibleBackButtonHit(float mx, float my) {

@@ -333,6 +333,18 @@ class AvatarClickWiringTest {
     }
 
     @Test
+    void aCancelledClickCannotPokeTheSameIndexAfterNavigation() {
+        setUp();
+        Row alice = from(ALICE, "Alice");
+        wiring.handleAvatarClick(1_000L, alice, 7);
+        wiring.settlePendingAvatarClick(0, true);
+        wiring.handleAvatarClick(1_100L, alice, 7);
+        assertEquals(0, host.count("pokeSend:" + ALICE));
+        wiring.settlePendingAvatarClick(1_400L, false);
+        assertEquals(1, host.count("pushProfileDetail"));
+    }
+
+    @Test
     void aSecondClickOnAnotherRowIsNotADoubleClick() {
         setUp();
         wiring.handleAvatarClick(1_000L, from(ALICE, "Alice"), 7);

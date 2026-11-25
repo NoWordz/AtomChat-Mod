@@ -1,5 +1,6 @@
 package com.atom.chat.chat;
 
+import com.atom.chat.api.card.ShareCard;
 import com.atom.chat.text.RichText;
 import net.minecraft.text.Text;
 
@@ -35,6 +36,7 @@ public class ChatMessage {
      * carry this id over.
      */
     private final long id;
+    private final ShareCard card;
     private NativeMessageMeta nativeMeta = NativeMessageMeta.UNKNOWN;
     public NativeMessageMeta nativeMeta() { return nativeMeta; }
     public boolean isDeleted() { return nativeMeta.deleted(); }
@@ -50,7 +52,7 @@ public class ChatMessage {
             safe=RichText.concat(safe,RichText.of(net.minecraft.text.Text.literal(run.text()).setStyle(style)));
         }
         ChatMessage copy=new ChatMessage(marker.toText(),own,system,null,null,senderUuid,senderName,profileName,
-                marker.getString(),safe,marker,timestamp,1,id);
+                marker.getString(),safe,marker,timestamp,1,id,null);
         copy.nativeMeta=nativeMeta.asDeleted();copy.delivery=delivery;copy.capturedPresentation=true;
         return copy;
     }
@@ -73,13 +75,33 @@ public class ChatMessage {
     public ChatMessage withServerEcho(ChatMessage server) {
         ChatMessage corrected = new ChatMessage(server.component, own, server.system, server.quoteName, server.quoteText,
                 server.senderUuid, server.senderName, server.profileName, server.contentText, server.senderRich,
-                server.contentRich, timestamp, duplicateCount, id);
+                server.contentRich, timestamp, duplicateCount, id, server.card);
         corrected.delivery = OutgoingMessages.State.CONFIRMED;
         corrected.capturedPresentation = server.capturedPresentation;
         corrected.nativeMeta = server.nativeMeta;
         return corrected;
     }
 
+
+    public ChatMessage withCard(ShareCard card) {
+        if (isDeleted() || this.card == card) return this;
+        boolean privateCredential = card != null && card.hasPrivateRedPacketPassword();
+        if (privateCredential) card = card.hidePrivateRedPacketPassword();
+        String content = privateCredential ? card.fallbackPlainText() : contentText;
+        ChatMessage copy = new ChatMessage(privateCredential ? Text.literal(content) : component,
+                own, system, privateCredential ? null : quoteName, privateCredential ? null : quoteText,
+                senderUuid, senderName, profileName, content, senderRich,
+                privateCredential ? RichText.literal(content) : contentRich,
+                timestamp, duplicateCount, id, card);
+        copy.nativeMeta = nativeMeta;
+        copy.delivery = delivery;
+        copy.capturedPresentation = capturedPresentation;
+        return copy;
+    }
+
+    public ShareCard getCard() { return card; }
+
+    public boolean hasCard() { return card != null; }
 
     private static final java.util.concurrent.atomic.AtomicLong ID_SEQUENCE =
             new java.util.concurrent.atomic.AtomicLong();
@@ -136,13 +158,13 @@ public class ChatMessage {
                        UUID senderUuid, String senderName, String profileName, String contentText,
                        RichText senderRich, RichText contentRich, long timestamp, int duplicateCount) {
         this(component, own, system, quoteName, quoteText, senderUuid, senderName, profileName, contentText,
-                senderRich, contentRich, timestamp, duplicateCount, ID_SEQUENCE.incrementAndGet());
+                senderRich, contentRich, timestamp, duplicateCount, ID_SEQUENCE.incrementAndGet(), null);
     }
 
     /** Private tail: {@code id} lets merge copies keep the original identity. */
     private ChatMessage(Text component, boolean own, boolean system, String quoteName, String quoteText,
                         UUID senderUuid, String senderName, String profileName, String contentText,
-                        RichText senderRich, RichText contentRich, long timestamp, int duplicateCount, long id) {
+                        RichText senderRich, RichText contentRich, long timestamp, int duplicateCount, long id, ShareCard card) {
         this.component = component;
         this.rawText = component.getString();
         this.timestamp = timestamp > 0 ? timestamp : System.currentTimeMillis();
@@ -172,6 +194,7 @@ public class ChatMessage {
         this.quoteTextRich = quoteParts != null ? quoteParts.text() : null;
         this.duplicateCount = Math.max(1, duplicateCount);
         this.id = id;
+        this.card = card;
     }
 
     private static String clean(String s) {
@@ -369,7 +392,7 @@ public class ChatMessage {
     public ChatMessage withDuplicateCount(int count, long newTimestamp) {
         ChatMessage copy = new ChatMessage(component, own, system, quoteName, quoteText,
                 senderUuid, senderName, profileName, contentText,
-                senderRich, contentRich, newTimestamp, count, id).retainPresentation(capturedPresentation);
+                senderRich, contentRich, newTimestamp, count, id, card).retainPresentation(capturedPresentation);
         copy.delivery = delivery;
         copy.nativeMeta = nativeMeta;
         return copy;

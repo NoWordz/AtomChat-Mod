@@ -16,6 +16,8 @@ its own copyright and license. This file collects the required notices.
 | Tabler Icons | MIT | Selected [v3.34.1 Outline paths](https://github.com/tabler/tabler-icons/tree/v3.34.1) in `TablerIcons` and retained [settings icons](https://github.com/tabler/tabler-icons/tree/85e870dbe8680c2d6deefd062122d30ef1544a41) in `SettingsIcons`. License included in `META-INF/licenses/Tabler-Icons.txt` |
 | [Lucide](https://lucide.dev/) and [Feather](https://feathericons.com/) | ISC and MIT | Retained SVG adaptations include the Feather-derived Lucide mention icon and the Lucide lightning glyph in server settings. Notices included in `META-INF/licenses/Lucide.txt` and `META-INF/licenses/Feather.txt` |
 | LWJGL Yoga (3.3.1 Forge, 3.3.3 1.21.1) | BSD 3-Clause for LWJGL, MIT for Yoga | Layout backend distributed by AtomLib |
+| [Android Material notification sound Rhea](https://android.googlesource.com/platform/frameworks/base/+/25e0813/data/sounds/notifications/material/ogg/Rhea_48k.ogg) | Apache License 2.0 | The Android Open Source Project's `Rhea_48k.ogg`, level-adjusted and mixed with a short vibration for notifications. Notice and license included in `META-INF/licenses/AOSP-Rhea.txt` |
+| [vibrating phone on table.wav by GallerShades](https://freesound.org/people/GallerShades/sounds/83704/) | [CC0 1.0 Universal](https://creativecommons.org/publicdomain/zero/1.0/) | A 0.42-second excerpt, filtered, faded and level-adjusted for the notification mix. Source listed in `META-INF/licenses/AOSP-Rhea.txt` |
 
 The Windows x64 picker DLL is built from the unmodified NFDe v1.4.1 tag using
 MinGW-w64. From the upstream clone, build the resource with
@@ -26,7 +28,7 @@ then run `strip --strip-unneeded atomchat-nfde.dll`. The JAR stores the DLL in
 ## Apache License 2.0 components
 
 The following components are licensed under the Apache License, Version 2.0:
-Skija, HumbleUI types, and FlatLaf.
+Skija, HumbleUI types, FlatLaf, and the Android Material notification sound Rhea.
 
 Copyright (c) their respective authors and contributors.
 

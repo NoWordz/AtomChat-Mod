@@ -18,6 +18,7 @@ import com.atom.chat.AtomChat;
 import com.atom.chat.chat.BlockList;
 import com.atom.chat.chat.PlayerRef;
 import com.atom.chat.config.AtomChatConfig;
+import com.atom.chat.config.GraphicsQuality;
 import com.atom.chat.font.FontManager;
 import com.atom.chat.image.ImageLoader;
 import com.atom.chat.image.PlayerAvatar;
@@ -53,6 +54,7 @@ import io.github.humbleui.skija.PaintStrokeCap;
 import io.github.humbleui.skija.PaintStrokeJoin;
 import io.github.humbleui.skija.PictureRecorder;
 import io.github.humbleui.skija.SamplingMode;
+import net.minecraft.util.Language;
 import net.minecraft.text.Text;
 
 import java.util.ArrayList;
@@ -104,7 +106,7 @@ public final class SettingsSectionPage {
     public void markSettled() {
         entrance.markSettled();
     }
-    public enum RowKind { HERO, AUTHORS, SWITCH, SLIDER, COLOR, INFO, BLOCKED, BLOCKED_EMPTY, LABEL, ACTION, THEMES, BUBBLES, WALLPAPERS, CREDITS }
+    public enum RowKind { HERO, AUTHORS, SWITCH, SLIDER, COLOR, INFO, BLOCKED, BLOCKED_EMPTY, LABEL, ACTION, THEMES, BUBBLES, WALLPAPERS, CREDITS, QUALITY }
 
     public record Row(RowKind kind, SettingsItem item, SettingsSlider slider,
                       SettingsColor color, SettingsCatalog.InfoRow info, PlayerRef player,
@@ -414,6 +416,7 @@ public final class SettingsSectionPage {
             return;
         }
         if (section == SettingsSection.CHAT && historyMount != null) historyMount.embedded().clear();
+        cancelPreviewPress();
         activeChip.put(section.id(), index);
         rowGeometry = null;
         // The new row set draws in one frame, then rises in on the same
@@ -509,10 +512,11 @@ public final class SettingsSectionPage {
     // drag follows the pointer 1:1, and a press that never travels selects.
     private static final class CardStrip {
         final RowKind kind;
-        float scroll, target, animFrom, dragStartX, dragStartY, pressX, pressY, dragStartScroll;
+        float scroll, target, animFrom, dragStartX, dragStartY, dragStartScroll;
         long animStart;
         boolean animActive, pressed, dragged;
         int pressedCard = -1;
+        int pressedDeleteCard = -1;
         int hoveredCard = -1;
         UiLayout.Rect rect;
         final Map<Integer, PressScale> scales = new HashMap<>();
@@ -529,8 +533,11 @@ public final class SettingsSectionPage {
     private final CardStrip themeStrip = new CardStrip(RowKind.THEMES);
     private final CardStrip bubbleStrip = new CardStrip(RowKind.BUBBLES);
     private final CardStrip wallpaperStrip = new CardStrip(RowKind.WALLPAPERS);
+    private static final String QUALITY_TITLE = "atomchat.settings.appearance.quality";
+    private static final GraphicsQuality[] GRAPHICS_QUALITIES = GraphicsQuality.values();
+    private final CardStrip qualityStrip = new CardStrip(RowKind.QUALITY);
     private final CardStrip creditsStrip = new CardStrip(RowKind.CREDITS);
-    private final CardStrip[] previewStrips = {themeStrip, bubbleStrip, wallpaperStrip, creditsStrip};
+    private final CardStrip[] previewStrips = {qualityStrip, themeStrip, bubbleStrip, wallpaperStrip, creditsStrip};
     private CardStrip pointerStrip = themeStrip;
     private final Map<Integer, Float> themeDeleteHover = new HashMap<>();
     private boolean revealLatestPresetPending;
@@ -588,6 +595,7 @@ public final class SettingsSectionPage {
     private long lastFrameMs = System.currentTimeMillis();
     private long lastChipFrameMs = System.currentTimeMillis();
     private static final Map<String, String> NO_ARG_TEXT = new HashMap<>();
+    private static Language translationLanguage;
     private static long translationRevision;
 
     /** Title/value/verb/icon colour — follows the interface text colour setting. */
@@ -602,6 +610,7 @@ public final class SettingsSectionPage {
     }
 
     private static String tr(String key) {
+        currentTranslationRevision();
         String cached = NO_ARG_TEXT.get(key);
         if (cached != null) return cached;
         String value = Text.translatable(key).getString();
@@ -613,8 +622,15 @@ public final class SettingsSectionPage {
         return args.length == 0 ? tr(key) : Text.translatable(key, args).getString();
     }
 
-    /** Resource reloads cover language changes and pack changes; keep no stale copy across them. */
+    /** Language-only reloads can replace the table without calling our resource reload listener. */
+    private static long currentTranslationRevision() {
+        if (translationLanguage != Language.getInstance()) clearTranslationCache();
+        return translationRevision;
+    }
+
+    /** Also invalidate explicitly on a full resource reload. */
     public static void clearTranslationCache() {
+        translationLanguage = Language.getInstance();
         NO_ARG_TEXT.clear();
         translationRevision++;
     }
@@ -637,7 +653,7 @@ public final class SettingsSectionPage {
             case BLOCKED_EMPTY -> s(160);
             case THEMES, WALLPAPERS -> UiTokens.SETTINGS_THEME_ROW_H;
             case BUBBLES -> UiTokens.SETTINGS_THEME_ROW_H;
-            case CREDITS -> AboutCreditCards.ROW_HEIGHT;
+            case CREDITS, QUALITY -> AboutCreditCards.ROW_HEIGHT;
             case HERO -> UiTokens.SETTINGS_HERO_H;
             case AUTHORS -> UiTokens.SETTINGS_AUTHOR_ROW_H;
             default -> UiTokens.SETTINGS_ROW_H;
@@ -657,11 +673,12 @@ public final class SettingsSectionPage {
     private record RowGeometry(List<Row> rows, SettingsSection section,
                                float listX, float listY, float listW,
                                float cardWidth, float[] tops, float[] heights,
-                               float contentHeight,
+                               float contentHeight, long languageRevision,
                                IdentityHashMap<Row, CompactText> compactTexts) {}
 
     private CompactText compactText(Row row, float width) {
-        if (rowGeometry != null && Float.compare(rowGeometry.cardWidth(), width) == 0
+        if (rowGeometry != null && rowGeometry.languageRevision() == currentTranslationRevision()
+                && Float.compare(rowGeometry.cardWidth(), width) == 0
                 && rowGeometry.compactTexts().containsKey(row)) {
             return rowGeometry.compactTexts().get(row);
         }
@@ -681,7 +698,7 @@ public final class SettingsSectionPage {
             case SWITCH -> {
                 title = tr(row.item().titleKey());
                 desc = descriptionText(row);
-                reserved = UiTokens.SWITCH_W + UiTokens.SETTINGS_COMPACT_GAP;
+                reserved = inner - descriptionMaxWidth(row, width);
                 controlH = UiTokens.SWITCH_H;
             }
             case ACTION -> {
@@ -698,16 +715,14 @@ public final class SettingsSectionPage {
             case INFO -> {
                 title = tr(row.info().titleKey()); desc = row.info().value();
                 if (row.info().isLink()) {
-                    reserved = SkiaFontRenderer.getStringWidth(titleFont, tr("atomchat.settings.about.open"))
-                            + UiTokens.SETTINGS_COMPACT_GAP;
+                    reserved = SkiaFontRenderer.getStringWidth(titleFont, tr("atomchat.settings.about.open")) + s(12);
                     controlH = SkiaFontRenderer.getHeight(titleFont);
                 }
             }
             case SLIDER -> {
                 title = tr(row.slider().titleKey());
                 String value = "card_blur_strength".equals(row.slider().id()) ? "300% → 300%" : row.slider().displayValue();
-                reserved = SkiaFontRenderer.getStringWidth(subFont, value)
-                        + UiTokens.SETTINGS_COMPACT_GAP;
+                reserved = SkiaFontRenderer.getStringWidth(subFont, value) + s(12);
                 controlH = UiTokens.SETTINGS_VALUE_BAND;
                 if (isInlineNumberSlider(row.slider().id())) {
                     desc = inlineNumberDescription(row.slider());
@@ -718,7 +733,8 @@ public final class SettingsSectionPage {
             default -> { return null; }
         }
         boolean number=row.kind()==RowKind.SLIDER&&isInlineNumberSlider(row.slider().id());
-        var flow=SettingsRowText.measure(title,desc,width,reserved,controlH,number);
+        boolean wordTitles = number || (row.kind() != RowKind.SLIDER && SettingsRowText.hasWordBoundaries(title));
+        var flow = SettingsRowText.measure(title, desc, width, reserved, controlH, wordTitles);
         if(!flow.stacked())return null;
         float h=UiTokens.SETTINGS_ROW_PAD*2+flow.titles().size()*flow.titleH()
                 +flow.descriptions().size()*flow.descriptionH()+controlH+UiTokens.SETTINGS_COMPACT_GAP*2;
@@ -742,6 +758,11 @@ public final class SettingsSectionPage {
     private float rowHeight(Row row, UiLayout layout, CompactText compact) {
         RowKind kind = row.kind();
         float base = rowHeight(kind);
+        if (kind == RowKind.LABEL) {
+            String title = tr(row.labelKey());
+            return title.equals(row.labelKey()) ? base
+                    : SettingsGroupPaint.height(title, rowCardWidth(layout), foldableGroup(row.labelKey()) != null);
+        }
         if (compact != null) base = compact.height();
         if (kind == RowKind.COLOR) {
             Font font = FontManager.font(UiTokens.SETTINGS_TILE_TITLE);
@@ -759,7 +780,7 @@ public final class SettingsSectionPage {
                 || SkiaFontRenderer.getStringWidth(subFont, text) <= maxWidth) {
             return base;
         }
-        List<String> lines = SkiaFontRenderer.wrap(subFont, text, maxWidth);
+        List<String> lines = SettingsRowText.wrapCopy(subFont, text, maxWidth);
         return base + Math.max(0, lines.size() - 1) * descriptionLineHeight(subFont);
     }
 
@@ -1040,6 +1061,8 @@ public final class SettingsSectionPage {
                 addColorGroup(rows, "atomchat.settings.group.appearance.ui_colors", "ui");
             }
             default -> {
+                addGroup(rows, QUALITY_TITLE, () -> rows.add(new Row(
+                        RowKind.QUALITY, null, null, null, null, null, null, null, null, null)));
                 addGroup(rows, "atomchat.settings.group.appearance.presets", () -> rows.add(Row.ofThemes()));
                 addGroup(rows, "atomchat.settings.group.appearance.bubbles", () -> rows.add(Row.ofBubbles()));
                 addGroup(rows, "atomchat.settings.group.appearance.wallpaper", () -> {
@@ -1095,7 +1118,7 @@ public final class SettingsSectionPage {
                 rows.add(new Row(RowKind.CREDITS, null, null, null, null, null, null, null, null, null)));
         addGroup(rows, LABEL_MAINTENANCE, () -> {
             rows.add(Row.ofAction(ACTION_CACHE_CLEAR, cacheClearItem()));
-            addSwitches(rows, SettingsSection.ABOUT, "debug", "performance_mode");
+            addSwitches(rows, SettingsSection.ABOUT, "debug");
         });
         return rows;
     }
@@ -1268,13 +1291,14 @@ public final class SettingsSectionPage {
         float width = rowCardWidth(layout);
         Font title = FontManager.font(UiTokens.SETTINGS_TILE_TITLE);
         Font subtitle = FontManager.font(UiTokens.SETTINGS_TILE_SUB);
+        long languageRevision = currentTranslationRevision();
         AppearanceMeasurement measurement = appearanceMeasurement;
         if (measurement == null || measurement.width != width || measurement.titleFont != title
-                || measurement.subtitleFont != subtitle || measurement.languageRevision != translationRevision
+                || measurement.subtitleFont != subtitle || measurement.languageRevision != languageRevision
                 || measurement.hasWallpaper != hasWallpaper
                 || !measurement.collapsed.equals(collapsedColorGroups)) {
             measurement = new AppearanceMeasurement(rows(SettingsSection.APPEARANCE), width,
-                    collapsedColorGroups, title, subtitle, translationRevision, hasWallpaper);
+                    collapsedColorGroups, title, subtitle, languageRevision, hasWallpaper);
             appearanceMeasurement = measurement;
         }
         return measurement;
@@ -1302,10 +1326,11 @@ public final class SettingsSectionPage {
     private RowGeometry buildRowGeometry(SettingsSection section, List<Row> rows,
                                          UiLayout layout) {
         float width = rowCardWidth(layout);
+        long languageRevision = currentTranslationRevision();
         String[] groups = rowGroups(rows);
         IdentityHashMap<Row, CompactText> compactTexts = new IdentityHashMap<>();
         AppearanceMeasurement prepared = appearanceMeasurement;
-        boolean preparedRows = prepared != null && prepared.rows == rows;
+        boolean preparedRows = prepared != null && prepared.rows == rows && prepared.languageRevision == languageRevision;
         float[] full = new float[rows.size()];
         for (int i = 0; i < rows.size(); i++) {
             Row row = rows.get(i);
@@ -1325,14 +1350,15 @@ public final class SettingsSectionPage {
                 :SettingsGroupFrontend.layout(full,groups,this::expansionOf);
         float contentHeight = slots.contentHeight();
         RowGeometry geometry = new RowGeometry(rows, section, layout.list.x(), layout.list.y(),
-                layout.list.w(), width, slots.tops(), slots.heights(), contentHeight, compactTexts);
+                layout.list.w(), width, slots.tops(), slots.heights(), contentHeight, languageRevision, compactTexts);
         rowGeometry = geometry;
         return geometry;
     }
 
     private RowGeometry rowGeometry(SettingsSection section, List<Row> rows, UiLayout layout) {
         RowGeometry cached = rowGeometry;
-        if (cached != null && cached.rows() == rows && cached.section() == section
+        if (cached != null && cached.languageRevision() == currentTranslationRevision()
+                && cached.rows() == rows && cached.section() == section
                 && Float.compare(cached.listX(), layout.list.x()) == 0
                 && Float.compare(cached.listY(), layout.list.y()) == 0
                 && Float.compare(cached.listW(), layout.list.w()) == 0) {
@@ -1398,14 +1424,23 @@ public final class SettingsSectionPage {
             String title=row.item()!=null?tr(row.item().titleKey()):row.slider()!=null?tr(row.slider().titleKey())
                     :row.color()!=null?tr(row.color().titleKey()):row.info()!=null?tr(row.info().titleKey())
                     :row.labelKey()!=null?tr(row.labelKey()):row.kind()==RowKind.THEMES?tr("atomchat.settings.appearance.theme")
+                    :row.kind()==RowKind.QUALITY?tr(QUALITY_TITLE)
                     :row.kind()==RowKind.WALLPAPERS?tr("atomchat.settings.appearance.wallpaper")
                     :row.kind()==RowKind.BUBBLES?tr("atomchat.tutorial.appearance.title"):tr("atomchat.tutorial."+section.id()+".title");
             String body=descriptionText(row);
             if(body==null||body.isBlank())body=title;
-            result.add(new TutorialRow(title,body,row.kind()==RowKind.LABEL,row.kind()==RowKind.THEMES||row.kind()==RowKind.WALLPAPERS||row.kind()==RowKind.BUBBLES));
+            result.add(new TutorialRow(title,body,row.kind()==RowKind.LABEL,row.kind()==RowKind.THEMES||row.kind()==RowKind.WALLPAPERS||row.kind()==RowKind.BUBBLES||row.kind()==RowKind.QUALITY));
         }
         return java.util.List.copyOf(result);
     }
+    public int graphicsQualityTutorialRow() {
+        var rows = rows(SettingsSection.APPEARANCE);
+        for (int i = 0; i < rows.size(); i++) {
+            if (rows.get(i).kind() == RowKind.QUALITY) return i;
+        }
+        return -1;
+    }
+
     /** The same row geometry used by paint and hit testing, scrolled into view before annotating. */
     public UiLayout.Rect tutorialAnchor(SettingsSection section,int index,UiLayout layout,com.atom.chat.ui.ScrollController scroll) {
         expandTutorialGroup(section,index);
@@ -1730,7 +1765,7 @@ public final class SettingsSectionPage {
     }
 
     private void drawChipBar(Canvas canvas,UiLayout layout,SettingsSection section,int accent,float dtMs){
-        sharedChipBar.draw(canvas,layout,chips(section).stream().map(chip->tr(chip.labelKey())).toList(),activeChipIndex(section),sec(200));
+        sharedChipBar.draw(canvas,layout,chips(section).stream().map(chip->tr(chip.labelKey())).toList(),activeChipIndex(section),sec(200),true);
     }
 
     /** Advances the chip hover washes, press springs and the selection slide.
@@ -1791,7 +1826,8 @@ public final class SettingsSectionPage {
             case THEMES -> drawThemes(canvas, rect, dtMs);
             case WALLPAPERS -> drawWallpapers(canvas, rect, dtMs);
             case BUBBLES -> drawBubblePreviews(canvas, rect, dtMs);
-            case CREDITS -> drawCredits(canvas, rect);
+            case CREDITS -> drawCredits(canvas, rect, dtMs);
+            case QUALITY -> drawGraphicsQuality(canvas, rect, dtMs, accent);
             case INFO -> drawInfo(canvas, row, rect);
             case BLOCKED -> drawBlocked(canvas, row, rect, hover, buttonFont);
             case BLOCKED_EMPTY -> drawEmptyState(canvas, rect, "atomchat.settings.privacy.empty");
@@ -1854,8 +1890,11 @@ public final class SettingsSectionPage {
                 ? aboutCardPress.computeIfAbsent(start, k -> PressScale.bounce())
                 : aboutCardPress.get(start);
         if (press != null && interactive) {
-            boolean stripPressed = rows.get(start).kind() == RowKind.CREDITS
-                    && creditsStrip.pressed && !creditsStrip.dragged;
+            boolean stripPressed = switch (rows.get(start).kind()) {
+                case CREDITS -> creditsStrip.pressed && !creditsStrip.dragged;
+                case QUALITY -> qualityStrip.pressed && !qualityStrip.dragged;
+                default -> false;
+            };
             press.update(cardOver, stripPressed || pressedRow >= start && pressedRow < end,
                     dt, Animations.enabled(), Math.max(card.w(), card.h()));
         }
@@ -1939,14 +1978,19 @@ public final class SettingsSectionPage {
     private int stripCardCount(CardStrip strip) {
         return switch (strip.kind) {
             case CREDITS -> SettingsCatalog.thirdPartyRows().size();
+            case QUALITY -> GRAPHICS_QUALITIES.length;
             case BUBBLES -> AtomChatConfig.BubbleStyle.values().length;
             case WALLPAPERS -> com.atom.chat.wallpaper.WallpaperPresets.presets().length;
             default -> themeCardCount();
         };
     }
 
+    private static boolean usesLogoCards(CardStrip strip) {
+        return strip.kind == RowKind.CREDITS || strip.kind == RowKind.QUALITY;
+    }
+
     private static float stripCardWidth(CardStrip strip) {
-        return strip.kind == RowKind.CREDITS ? AboutCreditCards.WIDTH : UiTokens.THEME_CARD_W;
+        return usesLogoCards(strip) ? AboutCreditCards.WIDTH : UiTokens.THEME_CARD_W;
     }
 
     private int builtInThemeCount() {
@@ -1991,15 +2035,15 @@ public final class SettingsSectionPage {
         stripHitTests++;
         if (!rect.contains(vmx, vmy)) return -1;
         float scroll = strip.scroll;
-        boolean credits = strip.kind == RowKind.CREDITS;
-        float top = credits ? rect.y() + AboutCreditCards.TOP : themeCardY(rect);
-        float height = credits ? AboutCreditCards.LOGO : UiTokens.THEME_CARD_H + s(18);
+        boolean logoCards = usesLogoCards(strip);
+        float top = logoCards ? rect.y() + AboutCreditCards.TOP : themeCardY(rect);
+        float height = logoCards ? AboutCreditCards.LOGO : UiTokens.THEME_CARD_H + s(18);
         if (vmy < top || vmy > top + height) return -1;
         float width = stripCardWidth(strip);
         int count = stripCardCount(strip);
         for (int i = 0; i < count; i++) {
             float x = stripCardX(rect, i, scroll, width);
-            if (credits ? AboutCreditCards.logoRect(x, rect.y()).contains(vmx, vmy)
+            if (logoCards ? AboutCreditCards.logoRect(x, rect.y()).contains(vmx, vmy)
                     : vmx >= x && vmx <= x + width) {
                 return i;
             }
@@ -2059,10 +2103,11 @@ public final class SettingsSectionPage {
         CardStrip strip = pointerStrip;
         strip.pressed = true;
         strip.dragged = false;
-        strip.pressX = strip.dragStartX = vmx;
-        strip.pressY = strip.dragStartY = vmy;
+        strip.dragStartX = vmx;
+        strip.dragStartY = vmy;
         strip.dragStartScroll = strip.scroll;
         strip.pressedCard = stripCardAt(strip, strip.rect, vmx, vmy);
+        strip.pressedDeleteCard = strip.kind == RowKind.THEMES ? themeDeleteAt(strip.rect, vmx, vmy, strip.scroll) : -1;
         return true;
     }
 
@@ -2107,8 +2152,11 @@ public final class SettingsSectionPage {
 
     /** Release: a press that never turned into a drag selects the card. */
     public void endThemeStrip(float mx, float my, UiLayout layout) {
-        if (pointerStrip.kind == RowKind.CREDITS && (pointerStrip.rect == null || !layout.list.contains(mx, my)
-                || stripCardAt(pointerStrip, pointerStrip.rect, mx, my) != pointerStrip.pressedCard)) {
+        UiLayout.Rect rect = pointerStrip.rect;
+        if (rect == null || !layout.list.contains(mx, my)
+                || stripCardAt(pointerStrip, rect, mx, my) != pointerStrip.pressedCard
+                || pointerStrip.kind == RowKind.THEMES
+                && themeDeleteAt(rect, mx, my, pointerStrip.scroll) != pointerStrip.pressedDeleteCard) {
             pointerStrip.pressedCard = -1;
         }
         endThemeStrip();
@@ -2118,10 +2166,14 @@ public final class SettingsSectionPage {
         int card = pointerStrip.pressedCard;
         boolean select = pointerStrip.pressed && !pointerStrip.dragged && card >= 0;
         UiLayout.Rect rect = pointerStrip.rect;
-        int deleteCard = pointerStrip.kind == RowKind.THEMES && select && rect != null
-                ? themeDeleteAt(rect, pointerStrip.pressX, pointerStrip.pressY, pointerStrip.scroll) : -1;
+        int deleteCard = select ? pointerStrip.pressedDeleteCard : -1;
         pointerStrip.pressed = false;
         pointerStrip.pressedCard = -1;
+        pointerStrip.pressedDeleteCard = -1;
+        if (pointerStrip.kind == RowKind.QUALITY) {
+            if (select) selectGraphicsQuality(GRAPHICS_QUALITIES[card]);
+            return;
+        }
         if (pointerStrip.kind == RowKind.CREDITS) {
             if (select) {
                 openUri(SettingsCatalog.thirdPartyRows().get(card).uri());
@@ -2250,6 +2302,7 @@ public final class SettingsSectionPage {
                 case BUBBLES -> bubbleStrip;
                 case WALLPAPERS -> wallpaperStrip;
                 case CREDITS -> creditsStrip;
+                case QUALITY -> qualityStrip;
                 default -> null;
             };
             if (strip != null) updatePreviewStrip(strip, rowRect(section, rows, i, scrollY, layout));
@@ -2349,8 +2402,16 @@ public final class SettingsSectionPage {
         }
     }
 
-    private void drawCredits(Canvas canvas, UiLayout.Rect rect) {
+    private PressScale logoMotion(CardStrip strip, int index, float dtMs) {
+        var motion = strip.scales.computeIfAbsent(index, unused -> PressScale.bounce());
+        motion.update(strip.hoveredCard == index, strip.pressed && strip.pressedCard == index, dtMs,
+                AtomChatConfig.get().animationEnabled, AboutCreditCards.LOGO);
+        return motion;
+    }
+
+    private void drawCredits(Canvas canvas, UiLayout.Rect rect, float dtMs) {
         updatePreviewStrip(creditsStrip, rect);
+        creditsStrip.hoveredCard = stripCardAt(creditsStrip, rect, pointerX, pointerY);
         var credits = SettingsCatalog.thirdPartyRows();
         int secondary = sec(220);
         int save = canvas.save();
@@ -2360,11 +2421,40 @@ public final class SettingsSectionPage {
                 float x = stripCardX(rect, i, creditsStrip.scroll, AboutCreditCards.WIDTH);
                 if (x >= rect.right() || x + AboutCreditCards.WIDTH <= rect.x()) continue;
                 var credit = credits.get(i);
-                AboutCreditCards.draw(canvas, credit.titleKey(), credit.value(), x, rect.y(), secondary);
+                AboutCreditCards.draw(canvas, credit.titleKey(), credit.value(), x, rect.y(), secondary,
+                        logoMotion(creditsStrip, i, dtMs));
             }
         } finally {
             canvas.restoreToCount(save);
         }
+    }
+
+    private void drawGraphicsQuality(Canvas canvas, UiLayout.Rect rect, float dtMs, int accent) {
+        updatePreviewStrip(qualityStrip, rect);
+        qualityStrip.hoveredCard = stripCardAt(qualityStrip, rect, pointerX, pointerY);
+        GraphicsQuality active = AtomChatConfig.get().graphicsQuality;
+        int save = canvas.save();
+        try {
+            canvas.clipRect(Rect.makeXYWH(rect.x(), rect.y(), rect.w(), rect.h()));
+            for (int i = 0; i < GRAPHICS_QUALITIES.length; i++) {
+                float x = stripCardX(rect, i, qualityStrip.scroll, AboutCreditCards.WIDTH);
+                if (x >= rect.right() || x + AboutCreditCards.WIDTH <= rect.x()) continue;
+                GraphicsQuality quality = GRAPHICS_QUALITIES[i];
+                AboutCreditCards.drawQuality(canvas, quality, tr(QUALITY_TITLE + "." + quality.id()), x, rect.y(),
+                        active == quality ? accent : sec(220), logoMotion(qualityStrip, i, dtMs),
+                        active == quality ? accent : 0);
+            }
+        } finally {
+            canvas.restoreToCount(save);
+        }
+    }
+
+    private static void selectGraphicsQuality(GraphicsQuality quality) {
+        var config = AtomChatConfig.get();
+        GraphicsQuality previous = config.graphicsQuality;
+        if (previous == quality) return;
+        config.graphicsQuality = quality;
+        if (!AtomChatConfig.saveChecked(config)) config.graphicsQuality = previous;
     }
 
     private void drawThemePreviews(Canvas canvas, CardStrip strip, UiLayout.Rect rect, float dtMs) {
@@ -3153,7 +3243,7 @@ public final class SettingsSectionPage {
                         SkiaFontRenderer.getStringWidth(valueFont, valueText), s(1.5F), s(0.75F), LINK_COLOR);
             }
         } else {
-            List<String> lines = SkiaFontRenderer.wrap(valueFont, valueText, valueMaxW);
+            List<String> lines = SettingsRowText.wrapCopy(valueFont, valueText, valueMaxW);
             float lineH = descriptionLineHeight(valueFont);
             float blockH = lines.size() * lineH;
             float centerY = rect.y() + Math.max(s(37), rect.h() - s(8) - blockH / 2.0F);
@@ -3452,7 +3542,7 @@ public final class SettingsSectionPage {
         if (dragging) {
             return slider.normalize(dragValue);
         }
-        if (!AtomChatConfig.get().performanceMode && slider.id().equals(settleId)) {
+        if (!AtomChatConfig.get().performanceModeEnabled() && slider.id().equals(settleId)) {
             return settleFrom + (settleTo - settleFrom)
                     * Easing.easeOutCubic(Math.min(1.0F, (System.currentTimeMillis() - settleStart) / 120.0F));
         }
@@ -3707,6 +3797,7 @@ public final class SettingsSectionPage {
         themeStrip.reset();
         bubbleStrip.reset();
         creditsStrip.reset();
+        qualityStrip.reset();
         pointerStrip = themeStrip;
         themeDeleteHover.clear();
         draggingSliderId = null;

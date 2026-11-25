@@ -34,6 +34,17 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 class PageTransitionCompositeWiringSourceTest {
 
+    @Test void delayedAvatarNavigationSettlesBeforeThePageIsStamped() throws IOException {
+        for (String screen : SCREENS) {
+            String src = source(screen);
+            String render = body(src, "public void render(");
+            assertTrue(render.contains("avatarWiring.settlePendingAvatarClick("), screen);
+            assertTrue(render.indexOf("avatarWiring.settlePendingAvatarClick(")
+                    < render.indexOf("composite.beginFrame("), screen);
+            assertFalse(body(src, "private void drawPanel(").contains("settlePendingAvatarClick("), screen);
+        }
+    }
+
     private static final String COMPOSITE =
             "shared/src/main/java/com/atom/chat/nav/PageTransitionComposite.java";
 

@@ -53,6 +53,18 @@ public final class ServerTemplateRecognition {
         }
 
         var preview = ChatTemplates.matchConfigured(text, server, publicFormats, privateFormats, knownNames);
+        if ("split_conflict".equals(preview.error()) && visible == message) {
+            var segments = new java.util.HashSet<TemplateParser.Span>();
+            int[] offset = {0};
+            message.visit((style, part) -> {
+                if (!part.isEmpty()) segments.add(new TemplateParser.Span(offset[0], offset[0] + part.length()));
+                offset[0] += part.length();
+                return java.util.Optional.empty();
+            }, net.minecraft.network.chat.Style.EMPTY);
+            if (offset[0] == text.length()) {
+                preview = ChatTemplates.matchConfigured(text, server, publicFormats, privateFormats, knownNames, segments);
+            }
+        }
         if (preview.state() == TemplateParser.State.AMBIGUOUS) {
             if (rules.debug) {
                 String reason = preview.error();

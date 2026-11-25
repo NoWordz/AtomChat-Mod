@@ -233,8 +233,6 @@ public final class AvatarClickWiring {
 
     private final Poke poke;
 
-    private long lastAvatarClickTime;
-    private int lastAvatarClickIndex = -1;
     private long pendingAvatarClickTime;
     private int pendingAvatarClickIndex = -1;
     private MessageFacts pendingAvatarClickMessage;
@@ -357,25 +355,24 @@ public final class AvatarClickWiring {
         boolean pokeEnabled = host.pokeConfigEnabled() && host.animationsEnabled()
                 && msg != null && !msg.own() && uuid != null;
         boolean doubleClick = pokeEnabled
-                && lastAvatarClickIndex == index
-                && nowMs - lastAvatarClickTime < AVATAR_CLICK_WINDOW_MS;
+                && pendingAvatarClickMessage != null
+                && pendingAvatarClickIndex == index
+                && uuid.equals(pendingAvatarClickMessage.senderUuid())
+                && nowMs - pendingAvatarClickTime < AVATAR_CLICK_WINDOW_MS;
         if (doubleClick) {
             // Double click → poke; cancels the pending single click.
-            lastAvatarClickTime = 0;
-            pendingAvatarClickMessage = null;
+            clearPendingAvatarClick();
             sendPoke(msg);
         } else if (pokeEnabled) {
             // QQ-style competition window: the single click waits for
             // the double-click threshold before opening the profile.
-            lastAvatarClickTime = nowMs;
-            lastAvatarClickIndex = index;
             pendingAvatarClickTime = nowMs;
             pendingAvatarClickIndex = index;
             pendingAvatarClickMessage = msg;
         } else {
             // With poke (or decorative motion) off a double click does
             // nothing, so there is nothing to compete with: jump at once.
-            lastAvatarClickTime = 0;
+            clearPendingAvatarClick();
             openProfileFor(msg);
         }
     }
@@ -391,13 +388,17 @@ public final class AvatarClickWiring {
             return;
         }
         if (closing) {
-            pendingAvatarClickMessage = null;
+            clearPendingAvatarClick();
         } else if (nowMs - pendingAvatarClickTime >= AVATAR_CLICK_WINDOW_MS) {
             MessageFacts pending = pendingAvatarClickMessage;
-            pendingAvatarClickMessage = null;
-            pendingAvatarClickIndex = -1;
+            clearPendingAvatarClick();
             openProfileFor(pending);
         }
+    }
+
+    private void clearPendingAvatarClick() {
+        pendingAvatarClickMessage = null;
+        pendingAvatarClickIndex = -1;
     }
 
     /** True while a single click is waiting out the competition window. */

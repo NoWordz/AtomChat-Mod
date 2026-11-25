@@ -235,9 +235,9 @@ class PageTransitionCompositeTest {
     }
     @Test void performanceModePaintsTheTargetOnceAndRetiresAnInFlightTransition() {
         var config = AtomChatConfig.get();
-        boolean previousMode = config.performanceMode;
+        boolean previousMode = config.performanceModeEnabled();
         try (var surface = Surface.makeRasterN32Premul(W, H)) {
-            config.performanceMode = false;
+            config.graphicsQuality = com.atom.chat.config.GraphicsQuality.ULTRA;
             frame(surface, 1000);
             top = NavPage.settingsSection(SettingsSection.APPEARANCE);
             frame(surface, 1010);
@@ -245,7 +245,7 @@ class PageTransitionCompositeTest {
             assertNotSame(surface.getCanvas(), actualBodyCanvas);
             draws.clear();
             headers.clear();
-            config.performanceMode = true;
+            config.graphicsQuality = com.atom.chat.config.GraphicsQuality.PERFORMANCE;
             frame(surface, 1030);
             assertEquals(List.of(top), draws);
             assertEquals(List.of(top), headers);
@@ -253,7 +253,7 @@ class PageTransitionCompositeTest {
             assertEquals(1F, composite.paintedBodyScale());
             assertTrue(composite.overlaySettled(1030));
         } finally {
-            config.performanceMode = previousMode;
+            config.graphicsQuality = (previousMode ? com.atom.chat.config.GraphicsQuality.PERFORMANCE : com.atom.chat.config.GraphicsQuality.ULTRA);
         }
     }
     @Test void pureModelsCoverDirectionInverseHitsAndTenThousandRetargets(){InterruptiblePageMotionProbe.main(new String[0]);com.atom.chat.ui.BottomChromeMotionProbe.main(new String[0]);}

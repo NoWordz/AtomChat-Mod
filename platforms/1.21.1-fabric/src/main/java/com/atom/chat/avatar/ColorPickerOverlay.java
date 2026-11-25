@@ -68,7 +68,14 @@ public final class ColorPickerOverlay {
         this.clipboard = clipboard;
     }
 
+    private enum PointerAction { CONFIRM, CANCEL, COPY }
+    private record PointerId(Object opening, PointerAction action) {}
+    private Object opening = new Object();
+    private PointerAction heldAction;
+
     public void open(SettingsColor color) {
+        opening = new Object();
+        heldAction = null;
         this.closing = false;
         this.target = color;
         float[] hsv = ColorUtil.rgbToHsv(color.value());
@@ -297,6 +304,19 @@ public final class ColorPickerOverlay {
     }
 
     // --------------------------------- input ---------------------------------
+
+    public com.atom.chat.ui.input.ClickTarget clickTarget(float x, float y, int button, UiLayout.Rect panel) {
+        if (!isActive()) return null;
+        if (button != 0 || closing) return com.atom.chat.ui.input.ClickTarget.blocked();
+        PointerAction action;
+        if (inButton(x, y, confirmCx(panel), panel)) action = PointerAction.CONFIRM;
+        else if (inButton(x, y, cancelCx(panel), panel)) action = PointerAction.CANCEL;
+        else if (x >= hexHitX && x <= hexHitX + hexHitW && y >= hexHitY && y <= hexHitY + hexHitH)
+            action = PointerAction.COPY;
+        else return null;
+        return new com.atom.chat.ui.input.ClickTarget(new PointerId(opening, action),
+                () -> heldAction = action, () -> heldAction = null, () -> onClick(x, y, panel));
+    }
 
     /** A click while active. Consumes everything inside the panel. */
     public void onClick(float vmx, float vmy, UiLayout.Rect panel) {
@@ -547,9 +567,9 @@ public final class ColorPickerOverlay {
             float cxConfirm = confirmCx(panel);
             float cyButtons = btnCy(panel);
             // The scaled shapes are the s(18)-radius round buttons themselves.
-            cancelScale.update(inButton(vmx, vmy, cxCancel, panel), false, dt, Animations.enabled(),
+            cancelScale.update(inButton(vmx, vmy, cxCancel, panel), heldAction == PointerAction.CANCEL, dt, Animations.enabled(),
                     s(18) * 2.0F);
-            confirmScale.update(inButton(vmx, vmy, cxConfirm, panel), false, dt, Animations.enabled(),
+            confirmScale.update(inButton(vmx, vmy, cxConfirm, panel), heldAction == PointerAction.CONFIRM, dt, Animations.enabled(),
                     s(18) * 2.0F);
             cancelScale.begin(canvas, cxCancel, cyButtons);
             try {

@@ -59,6 +59,8 @@ public final class NavStackController {
      * screen method's name would capture the guard's anchor.
      */
     public interface Host {
+        default void cancelPointerGesture() {}
+        default void closeChannelFeed() {}
         default boolean allowBackNavigation() { return true; }
         /** D18: a live signature edit never survives navigation. */
         boolean signatureEditLive();
@@ -253,6 +255,8 @@ public final class NavStackController {
         if (topNav().equals(page)) {
             return;
         }
+        host.cancelPointerGesture();
+        host.closeChannelFeed();
         // Leaving the profile page must not carry a live signature edit into
         // the next page: abort (never commit on navigation) before anything
         // else touches the borrowed field.
@@ -304,6 +308,7 @@ public final class NavStackController {
             return;
         }
         if (topPage().isRoot()) {
+            host.cancelPointerGesture();
             if (navigation.pop()) com.atom.chat.diagnostics.FrameSegments.navigation("pop", topPage().name());
             return;
         }
@@ -312,6 +317,7 @@ public final class NavStackController {
 
     /** Applies a pop and restores the page underneath it. */
     public void popNow() {
+        host.cancelPointerGesture();
         // The leaving page's live reply is captured while it still owns the
         // field (same capture the old transition's start step ran at click time).
         host.syncReplySlot();
@@ -354,6 +360,8 @@ public final class NavStackController {
         if (!root.isRoot()) {
             return;
         }
+        host.cancelPointerGesture();
+        host.closeChannelFeed();
         // Tab switches are the one navigation path that never runs pushNav or
         // popPage, so the signature edit aborts here too (arriving OR leaving
         // the profile tab).

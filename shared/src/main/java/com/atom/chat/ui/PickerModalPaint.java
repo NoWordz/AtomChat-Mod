@@ -16,8 +16,10 @@ public final class PickerModalPaint {
     public static int secondaryButtonColor() { return 0xFF4B4F58; }
     public static float radius() { return UiTokens.radius(RADIUS, AtomChatAppearance.theme()); }
     public static void backdrop(Canvas canvas, UiLayout.Rect panel, float progress) {
-        CornerGeometry.drawRoundedRect(canvas,panel.x(),panel.y(),panel.w(),panel.h(),UiTokens.modalBackdropRadius(AtomChatAppearance.theme()),
-                Color.makeARGB((int)(200*progress),8,9,14));
+        // Both callers clip to the panel interior, including the inner bezel pixel.
+        try (var shade = new Paint().setColor(Color.makeARGB((int) (200 * progress), 8, 9, 14))) {
+            canvas.drawPaint(shade);
+        }
     }
     public static void surface(Canvas canvas, UiLayout.Rect box, float progress) {
         int alpha=(int)(255*progress);

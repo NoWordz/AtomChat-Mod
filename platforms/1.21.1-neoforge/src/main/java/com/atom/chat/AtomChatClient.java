@@ -113,6 +113,8 @@ public class AtomChatClient {
 
     private static void onClientSetup(net.neoforged.fml.event.lifecycle.FMLClientSetupEvent event) {
         AtomChatConfig.get();
+        com.atom.chat.api.card.CardRuleEngine.loadFrom(
+                com.atom.chat.platform.Platform.configDir().resolve("atomchat").resolve("card_rules.json"));
         CacheDirs.migrateFromOldConfigPaths();
         CacheDirs.initializePersonalDirectories();
         WallpaperStore.init(CacheDirs.wallpaperDir());
@@ -150,11 +152,14 @@ public class AtomChatClient {
             com.atom.chat.render.ImageQuality.release();
             com.atom.chat.render.SoftShadow.release();
             com.atom.chat.settings.SettingsSectionPage.clearTranslationCache();
+            com.atom.chat.api.card.CardRuleEngine.reload();
         });
     }
 
     private static void onPlayerJoin(ClientPlayerNetworkEvent.LoggingIn event) {
         Minecraft client = Minecraft.getInstance();
+        com.atom.chat.channel.ChannelInbox.INSTANCE.connection(client.getConnection());
+        com.atom.chat.channel.ChannelNetwork.advertise(client.getConnection());
         // Adopt the world key first so a saved history can be loaded before
         // join-time system lines start arriving.
         com.atom.chat.history.ChatHistory.onJoin(client);
@@ -168,10 +173,13 @@ public class AtomChatClient {
         com.atom.chat.net.ConfigAdminClient.onJoin();
         com.atom.chat.chat.OwnIdentity.reset();
         com.atom.chat.chat.TeleportCommands.reset();
+        com.atom.chat.api.card.CardStateStore.clear();
+        com.atom.chat.card.BuiltInCardAdapter.resetSession();
         com.atom.chat.render.FirstOpenWarmup.requestGlWarmup();
     }
 
     private static void onPlayerDisconnect(ClientPlayerNetworkEvent.LoggingOut event) {
+        com.atom.chat.channel.ChannelInbox.INSTANCE.connection(null);
         Minecraft client = Minecraft.getInstance();
         // Save before the stores are cleared, then drop the world key.
         com.atom.chat.history.ChatHistory.onDisconnect(client);
@@ -188,6 +196,8 @@ public class AtomChatClient {
         com.atom.chat.net.MediaCompanionClient.onDisconnect();
             com.atom.chat.net.ProfileCompanionClient.onLeave();
             com.atom.chat.reaction.ReactionClient.reset();
+        com.atom.chat.api.card.CardStateStore.clear();
+        com.atom.chat.card.BuiltInCardAdapter.resetSession();
         com.atom.chat.net.PokeCompanionClient.setHandler(null);
         com.atom.chat.net.PackSyncClient.onDisconnect();
         com.atom.chat.net.ConfigScreenClient.onDisconnect();

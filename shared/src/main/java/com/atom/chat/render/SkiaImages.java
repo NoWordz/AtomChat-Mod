@@ -64,6 +64,18 @@ public final class SkiaImages {
     }
 
     static void drawShape(Canvas canvas, Image image, Rect src, RRect shape, SamplingMode mode) {
+        drawShape(canvas, image, src, shape, mode, true);
+    }
+
+    /** Image fill using the same contour as the surrounding AtomChat surface. */
+    public static void drawContourImage(Canvas canvas, Image image, RRect shape, SamplingMode mode) {
+        if (image == null || shape.getWidth() <= 0F || shape.getHeight() <= 0F) return;
+        Image source = ImageQuality.scaledForLogical(image, Math.max(shape.getWidth(), shape.getHeight()));
+        drawShape(canvas, source, Rect.makeWH(source.getWidth(), source.getHeight()), shape, mode, false);
+    }
+
+    private static void drawShape(Canvas canvas, Image image, Rect src, RRect shape, SamplingMode mode,
+                                  boolean circularCoverage) {
         // Give the shape sole ownership of edge coverage. An AA image rectangle
         // under an AA clip multiplies coverage where their edges coincide.
         float sx = shape.getWidth() / src.getWidth(), sy = shape.getHeight() / src.getHeight();
@@ -71,7 +83,7 @@ public final class SkiaImages {
                 0F, sy, shape.getTop() - sy * src.getTop(), 0F, 0F, 1F);
         try (var shader = image.makeShader(FilterTileMode.CLAMP, FilterTileMode.CLAMP, mode, placement)) {
             try {
-                CornerGeometry.drawRRect(canvas, shape, PAINT.setShader(shader), true);
+                CornerGeometry.drawRRect(canvas, shape, PAINT.setShader(shader), circularCoverage);
             } finally {
                 PAINT.setShader(null);
             }

@@ -1,5 +1,6 @@
 package com.atom.chat.render;
 
+import com.atom.chat.config.GraphicsQuality;
 import io.github.humbleui.skija.BlendMode;
 import io.github.humbleui.skija.Data;
 import io.github.humbleui.skija.FilterTileMode;
@@ -37,6 +38,15 @@ final class KawaseBlur {
 
     static float spacing(int pass, float strength) {
         return (2F + pass * 1.5F) * strength;
+    }
+
+    static int sampleDivisor(int ultraDivisor, float strength, GraphicsQuality quality) {
+        // The resampling filter can dominate a weak blur. Keep its original resolution below 100%.
+        return quality == GraphicsQuality.BALANCED && strength >= 1F ? ultraDivisor * 2 : ultraDivisor;
+    }
+
+    static int sampleSize(int deviceSize, int divisor) {
+        return Math.max(1, (deviceSize + divisor - 1) / divisor);
     }
 
     static Image blur(Surface input, Surface temporary, Rect deviceBounds, float strength) {

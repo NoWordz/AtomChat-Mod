@@ -23,7 +23,7 @@ class CompactMenuFamilyTest {
             try (var actual = Surface.makeRasterN32Premul(700, 820);
                  var expected = Surface.makeRasterN32Premul(700, 820)) {
                 menu.render(actual.getCanvas(), layout, -1, -1, 200, key -> "");
-                checkFrames(actual, expected, box, 3, hovered, (mx, my, dt) ->
+                checkFrames(actual, expected, box, 5, hovered, (mx, my, dt) ->
                         menu.render(actual.getCanvas(), layout, mx, my, dt, key -> ""));
             }
         }

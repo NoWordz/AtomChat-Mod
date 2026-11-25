@@ -69,7 +69,7 @@ final class AboutSettingsReplay {
     static void run(Path out, int width, String locale, boolean light, SettingsContractScene capture) throws Exception {
         var scene = new AboutSettingsReplay(width);
         var cfg = AtomChatConfig.get();
-        cfg.performanceMode = false;
+        cfg.graphicsQuality = com.atom.chat.config.GraphicsQuality.ULTRA;
         cfg.feedbackSoundEnabled = false;
         scene.settings.markEntered(clock(0));
         try (var surface = Surface.makeRasterN32Premul(width + 40, 900)) {
@@ -112,7 +112,7 @@ final class AboutSettingsReplay {
     }
 
     private void measure() {
-        vertical.setDecorativeMotion(!AtomChatConfig.get().performanceMode);
+        vertical.setDecorativeMotion(!AtomChatConfig.get().performanceModeEnabled());
         vertical.setContent(settings.measureContent(layout, SECTION), layout.list.h());
     }
 
@@ -151,7 +151,7 @@ final class AboutSettingsReplay {
                 mx = my = -100F;
             }
             case 202, IMMEDIATE -> {
-                if (tick == IMMEDIATE) AtomChatConfig.get().performanceMode = true;
+                if (tick == IMMEDIATE) AtomChatConfig.get().graphicsQuality = com.atom.chat.config.GraphicsQuality.PERFORMANCE;
                 fold();
             }
             case 236 -> {

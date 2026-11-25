@@ -1,5 +1,75 @@
 # Release Notes
 
+## v0.9.7
+
+**新增**
+
+- 聊天支持位置、装备、红包和互动分享卡片，工具菜单可分享当前位置和主手物品。 [分享卡片贡献](https://github.com/NoWordz/AtomChat-Mod/pull/3)
+- 在「外观与交互 → 预设」新增极致、均衡和性能三档画质，并在新手教程加入单独说明。
+- 服务器安装 AtomChat 并启用托管后，管理员可在聊天工具的「玩家」菜单中用「@全体成员」提醒当前服的在线玩家。
+- 配置了桥接的 TrChat 2.5.2 服务器支持只读频道卡片和未读数。 [桥接安装指南](https://github.com/NoWordz/AtomChat-Mod/blob/v0.9.7/docs/TRCHAT_CHANNEL_BRIDGE.md)
+
+**更改**
+
+- AtomChat 自有按钮在按下时执行，连续点击可打断正在播放的页面动画。
+- 旧性能模式迁移到对应画质档，画质独立于主题预设。
+- 背景和卡片模糊默认 200%、最高 300%，均衡档以较低渲染分辨率实现相同设置并减轻点阵和阴影。
+- 为画质档和「关于」第三方组件图标增加独立悬停反馈。
+- 移除普通设置说明末尾的句号。
+- 聊天面板与 AtomChat HUD 均移除消息状态竖条，正文富文本继续支持悬停。
+- 三档画质图标和选中描边采用全局圆角与连续曲率轮廓。
+- 通知改用 Android Material 的 Rhea，并叠加一段短震动声。
+- 戳一戳和操作 Toast 使用原来的通知音。
+
+**修复**
+
+- 修复取色等弹窗的遮罩在面板内缘漏出亮边。
+- 分享卡片沿用聊天可见性和屏蔽设置，关闭图片时显示缩略图占位。
+- 红包领取口令默认保密，传送卡片只接受对应的服务端状态更新。
+- 减少位置卡在附近区块未就绪时重复采样。
+- 按接收者语言显示坐标分享卡片，分享工具菜单按标签长度适应宽度。
+- 修复延迟显示聊天时，主手物品的分享卡片可能退回纯文字的问题。
+- 修复 No Chat Reports 转换聊天时，支持卡片配对的 AtomChat 两端分享位置或物品可能只显示文字的问题。
+- 修复 @全体成员通知中缺少发送者头像的问题。
+- 窄面板中的设置长文案会折行显示。
+- 快速切换游戏语言后，设置详情页也会随之更新。
+- 修复从聊天头像打开他人资料时，页面先闪现再播放入场的问题。
+
+----
+
+**Added**
+
+- Added location, item, red packet, and interactive chat cards, with composer actions for sharing your location and held item. [Share card contribution](https://github.com/NoWordz/AtomChat-Mod/pull/3)
+- Added Ultra, Balanced, and Performance graphics quality settings to Appearance & Interaction → Presets, with a dedicated tutorial step.
+- Server operators can notify online players on the current server from the chat tools' Players menu when AtomChat is installed server-side and hosting is enabled.
+- TrChat 2.5.2 servers with the bridge can show read-only channel cards and unread counts. [Bridge setup guide](https://github.com/NoWordz/AtomChat-Mod/blob/v0.9.7/docs/TRCHAT_CHANNEL_BRIDGE.md)
+
+**Changed**
+
+- AtomChat buttons act on mouse press so consecutive clicks can interrupt running page animations.
+- Existing Performance Mode settings migrate to the corresponding graphics quality, which stays independent of themes.
+- Panel and card blur default to 200% and reach 300%, with Balanced rendering the same settings at reduced resolution and simplifying dots and shadows.
+- Added individual hover feedback to quality and About credit icons.
+- Removed trailing periods from ordinary settings descriptions.
+- Removed message status bars from the AtomChat panel and HUD, with rich chat tooltips still available.
+- Applied the global continuous-corner contour to the three graphics quality icons and their selection outlines.
+- Switched notifications to Android Material's Rhea with a short phone vibration.
+- Pokes and action toasts use the classic notification pop.
+
+**Fixed**
+
+- Fixed a bright seam along the inner panel edge when opening the color picker and related overlays.
+- Share cards respect chat visibility and blocking, and show thumbnail placeholders when images are disabled.
+- Red packet access codes are private by default, and teleport cards only accept correlated server state updates.
+- Reduced repeated location preview sampling while nearby chunks are unavailable.
+- Localized location cards for the recipient and sized the share tools menu to fit its labels.
+- Fixed held-item shares falling back to plain text when chat display is delayed.
+- Fixed location and held-item shares appearing as plain text when No Chat Reports converts chat and both AtomChat endpoints support card pairing.
+- Restored the sender's avatar on @Everyone notifications.
+- Wrapped long settings copy in narrow panels.
+- Settings detail pages now update after a fast language switch.
+- Fixed player profiles briefly appearing before their entrance animation when opened through a chat avatar.
+
 ## v0.9.6
 
 **更改**

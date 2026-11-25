@@ -208,24 +208,28 @@ public final class SettingsHomePage {
             AtomChatAppearance.drawCard(canvas, tile.x(), tile.y(), tile.w(), tile.h(),
                     UiTokens.settingsTileRadius(AtomChatAppearance.theme()), hover);
 
-            // One vertically centred group: glyph above, single label below. Both
-            // are horizontally centred, so nothing in the tile depends on text
-            // length and every tile reads as the same shape.
             Font titleFont = FontManager.boldFont(UiTokens.SETTINGS_TILE_TITLE);
+            float maxW = Math.max(1F, tile.w() - UiTokens.s(16));
+            String label = title(section);
+            var lines = SkiaFontRenderer.getStringWidth(titleFont, label) <= maxW
+                    ? java.util.List.of(label) : SettingsRowText.wrapCopy(titleFont, label, maxW);
             float textH = SkiaFontRenderer.textHeight(titleFont);
-            float groupH = UiTokens.SETTINGS_TILE_ICON + UiTokens.SETTINGS_TILE_TEXT_GAP + textH;
+            float lineH = SkiaFontRenderer.getHeight(titleFont);
+            float labelH = textH + Math.max(0, lines.size() - 1) * lineH;
+            float groupH = UiTokens.SETTINGS_TILE_ICON + UiTokens.SETTINGS_TILE_TEXT_GAP + labelH;
             float groupTop = tile.y() + (tile.h() - groupH) / 2.0F;
             float cx = tile.x() + tile.w() / 2.0F;
+            int ink = com.atom.chat.config.AtomChatConfig.get().textPrimaryColor;
 
             drawIconCentered(canvas, iconFor(section), cx, groupTop + UiTokens.SETTINGS_TILE_ICON / 2.0F,
-                    UiTokens.SETTINGS_TILE_ICON, com.atom.chat.config.AtomChatConfig.get().textPrimaryColor);
+                    UiTokens.SETTINGS_TILE_ICON, ink);
 
             float labelCenterY = groupTop + UiTokens.SETTINGS_TILE_ICON
                     + UiTokens.SETTINGS_TILE_TEXT_GAP + textH / 2.0F;
-            float maxW = tile.w() - UiTokens.s(16);
-            SkiaFontRenderer.drawTextCentered(canvas, titleFont,
-                    SkiaFontRenderer.truncate(titleFont, title(section), maxW), cx, labelCenterY,
-                    com.atom.chat.config.AtomChatConfig.get().textPrimaryColor);
+            for (String line : lines) {
+                SkiaFontRenderer.drawTextCentered(canvas, titleFont, line, cx, labelCenterY, ink);
+                labelCenterY += lineH;
+            }
         } finally {
             if (scale != null) {
                 canvas.restore();

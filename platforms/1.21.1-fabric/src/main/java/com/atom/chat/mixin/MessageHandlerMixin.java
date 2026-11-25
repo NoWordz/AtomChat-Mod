@@ -12,13 +12,16 @@ import net.minecraft.network.message.MessageType;
 import net.minecraft.network.message.SignedMessage;
 import net.minecraft.text.Text;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.Redirect;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 import java.time.Instant;
 import java.util.UUID;
+import java.util.function.BooleanSupplier;
 
 /**
  * Captures identity at actual HUD delivery, preserving private routing and visible filtered bodies.
@@ -26,6 +29,17 @@ import java.util.UUID;
  */
 @Mixin(value = MessageHandler.class, priority = 500)
 public class MessageHandlerMixin {
+    @Shadow private void process(net.minecraft.network.message.MessageSignatureData signature,
+                                 BooleanSupplier callback) { throw new AssertionError(); }
+
+    @Redirect(method = "onChatMessage", require = 0, at = @At(value = "INVOKE", target = "Lnet/minecraft/client/network/message/MessageHandler;process(Lnet/minecraft/network/message/MessageSignatureData;Ljava/util/function/BooleanSupplier;)V"))
+    private void atomchat$deferShareCard(MessageHandler handler, net.minecraft.network.message.MessageSignatureData signature,
+                                         BooleanSupplier callback, SignedMessage message, GameProfile profile,
+                                         MessageType.Parameters bound) {
+        process(signature, com.atom.chat.net.CardCompanionClient.deferNativeShare(
+                message.getSender(), message.getSignedContent(), callback));
+    }
+
     @org.spongepowered.asm.mixin.injection.ModifyVariable(method="process(Lnet/minecraft/network/message/MessageSignatureData;Ljava/util/function/BooleanSupplier;)V",at=@At("HEAD"),argsOnly=true)
     private java.util.function.BooleanSupplier atomchat$reactionDelivery(java.util.function.BooleanSupplier original) {
         return com.atom.chat.reaction.ReactionClient.defer(original);

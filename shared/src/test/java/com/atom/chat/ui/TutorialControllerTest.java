@@ -24,12 +24,13 @@ class TutorialControllerTest {
         var host=new Host();var controller=new TutorialController(host,v->(float)v,v->(float)v);
         controller.initialize(root.resolve("atomchat/client/onboarding.json"));
         controller.start();
-        assertTrue(controller.onClick(-100,-100,0));
+        var gate=new com.atom.chat.ui.input.InputGate(()->false).add(controller);
+        assertTrue(gate.click(-100,-100,0));
         assertTrue(controller.onChar('x',0));
         assertTrue(controller.onKey(86,0,2),"paste must not reach the live upload handler");
         assertTrue(controller.onScroll(0,0,0,1));
-        assertTrue(controller.onDrag(0,0,0,1,1));
-        assertTrue(controller.onRelease(0,0,0));
+        assertTrue(gate.drag(0,0,0,1,1));
+        assertTrue(gate.release(0,0,0));
         assertTrue(controller.onKey(256,0,0));
         assertFalse(controller.active());
         controller.reset();assertEquals(1,host.leaves);
@@ -67,14 +68,18 @@ class TutorialControllerTest {
         var host=new Host();var controller=new TutorialController(host,v->(float)v,v->(float)v);
         controller.start();
         var overlayField=getOverlay(controller);
+        var gate=new com.atom.chat.ui.input.InputGate(()->false).add(controller);
         try(var surface=Surface.makeRasterN32Premul(560,1100)) {
             var layout=UiLayout.ofDetail(10,10,520,1000);
             var root=UiLayout.ofRoot(10,10,520,1000);
             while(controller.step()!=TutorialSession.Step.APPEARANCE) {
                 controller.render(surface.getCanvas(),layout,root,root.tabBar,0,0,16);
                 var skip=overlayField.geometry().buttons().get(2);
-                assertTrue(controller.onClick(skip.x()+skip.w()/2,skip.y()+skip.h()/2,0));
-                assertTrue(controller.onRelease(0,0,0),"release of tutorial control must not reach the new page");
+                double x=skip.x()+skip.w()/2, y=skip.y()+skip.h()/2;
+                var before=controller.step();
+                assertTrue(gate.click(x,y,0));
+                assertNotEquals(before,controller.step(),"pressing Skip advances the guide");
+                assertTrue(gate.release(x,y,0),"release of tutorial control must not reach the new page");
             }
             assertTrue(controller.onChar('x',0));
             assertTrue(controller.onKey(86,0,2));

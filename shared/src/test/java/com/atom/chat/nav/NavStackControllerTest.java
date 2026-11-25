@@ -123,7 +123,9 @@ class NavStackControllerTest {
         boolean signatureEditing;
         boolean partnerOnline = true;
         boolean allowBack = true;
+        int closedChannelFeeds;
         @Override public boolean allowBackNavigation() { return allowBack; }
+        @Override public void closeChannelFeed() { closedChannelFeeds++; }
         String composer = "";
 
         private void note(String step) {
@@ -262,6 +264,18 @@ class NavStackControllerTest {
                 "pushNav's cascade order is the contract");
         assertEquals(AppPage.WORLD_CHAT, controller.topPage(),
                 "the push lands the stack this frame (no transition to wait for)");
+    }
+
+    @Test
+    void leavingTheConversationRootClosesItsReadOnlyChannelFeed() {
+        Recorder host = new Recorder();
+        NavStackController controller = onStack(host, List.of(NavPage.of(AppPage.CHAT_LIST)));
+        controller.pushNav(NavPage.of(AppPage.CHAT_LIST));
+        controller.switchRoot(AppPage.WORLD_CHAT);
+        assertEquals(0, host.closedChannelFeeds);
+        controller.pushNav(NavPage.of(AppPage.WORLD_CHAT));
+        controller.switchRoot(AppPage.SETTINGS);
+        assertEquals(2, host.closedChannelFeeds);
     }
 
     /** The two other reset arms stay page-specific. */

@@ -14,6 +14,18 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 class SettingsSectionRowFrameReuseTest {
     @Test
+    void narrowGroupHeadingKeepsTheWholeEnglishLabel() {
+        String label = "Diagnostics and maintenance";
+        float narrow = 280F;
+        var lines = SettingsGroupPaint.titleLines(label, narrow, true);
+        org.junit.jupiter.api.Assertions.assertTrue(lines.size() > 1);
+        assertEquals(label.replace(" ", ""), String.join("", lines).replace(" ", ""));
+        org.junit.jupiter.api.Assertions.assertTrue(lines.stream().anyMatch(line -> line.contains("maintenance")));
+        org.junit.jupiter.api.Assertions.assertTrue(SettingsGroupPaint.height(label, narrow, true)
+                > SettingsGroupPaint.height(label, 420F, true));
+    }
+
+    @Test
     void measureAndDrawBuildTheRowListOncePerFrame(@TempDir Path root) {
         Platform.install(new Platform.Provider() {
             public Path configDir() { return root.resolve("config"); }

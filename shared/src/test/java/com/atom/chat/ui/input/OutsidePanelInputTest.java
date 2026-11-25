@@ -12,6 +12,7 @@ class OutsidePanelInputTest {
         public float toVirtualX(double x) { return (float) (x * 2); }
         public float toVirtualY(double y) { return (float) (y * 2); }
         public void requestClose() { closes++; }
+        public boolean floatingUiAt(double x, double y) { return floating; }
         public boolean clickFloatingUi(double x, double y, int button) { return floating; }
     }
 
@@ -25,17 +26,21 @@ class OutsidePanelInputTest {
                 });
         assertEquals(Boolean.TRUE, gate.click(400, 100, 0));
         assertEquals(1, host.closes); assertEquals(0, modalClicks[0]);
+        assertTrue(gate.release(400, 100, 0));
+        assertEquals(1, host.closes); assertEquals(0, modalClicks[0]);
         assertEquals(Boolean.TRUE, gate.click(100, 100, 0));
         assertEquals(1, host.closes); assertEquals(1, modalClicks[0]);
     }
 
     @Test void boundsAndCoordinateConversionMatchTheVisiblePanel() {
         Host host = new Host(); var input = new OutsidePanelInput(host);
-        assertFalse(input.onClick(15, 10, 0));
-        assertFalse(input.onClick(315, 460, 0));
-        assertTrue(input.onClick(14, 100, 0));
-        assertTrue(input.onClick(100, 9, 0));
-        assertTrue(input.onClick(100, 461, 0));
+        var gate=new InputGate(()->false).add(input);
+        assertNull(gate.click(15, 10, 0));
+        assertNull(gate.click(315, 460, 0));
+        for (double[] point : new double[][] {{14,100},{100,9},{100,461}}) {
+            assertTrue(gate.click(point[0],point[1],0));
+            assertTrue(gate.release(point[0],point[1],0));
+        }
         assertEquals(3, host.closes);
     }
 
@@ -55,7 +60,14 @@ class OutsidePanelInputTest {
         assertTrue(input.onClick(400, 100, 0));
         assertEquals(0, host.closes);
         host.floating = false;
-        assertTrue(input.onClick(400, 100, 0));
-        assertEquals(1, host.closes);
+        var gate=new InputGate(()->false).add(input);
+        assertTrue(gate.click(400, 100, 0));
+        host.floating = true;
+        assertTrue(gate.release(400, 100, 0));
+        assertEquals(1, host.closes, "the outside press already closed the panel");
+        host.floating = false;
+        assertTrue(gate.click(400, 100, 0));
+        assertTrue(gate.release(400, 100, 0));
+        assertEquals(2, host.closes);
     }
 }

@@ -45,7 +45,8 @@ class PanelBlurGpuCostTest {
                             for(int pass=0;pass<5;pass++) {
                                 GL30C.glBindFramebuffer(GL30C.GL_FRAMEBUFFER,fbos[(pass+1)%2]);
                                 GL11C.glBindTexture(GL11C.GL_TEXTURE_2D,textures[pass%2]);
-                                GL20C.glUniform1f(spacing,(2F+pass*1.5F)*2F);
+                                float offset = KawaseBlur.spacing(pass, 2F);
+                                GL20C.glUniform2f(spacing, offset, offset);
                                 GL11C.glDrawArrays(GL11C.GL_TRIANGLES,0,6);
                             }
                             GL15C.glEndQuery(GL33C.GL_TIME_ELAPSED);

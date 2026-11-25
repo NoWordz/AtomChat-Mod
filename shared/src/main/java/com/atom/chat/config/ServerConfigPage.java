@@ -55,7 +55,8 @@ public final class ServerConfigPage {
         float x(float x){return cx+(x-cx-dx)/scale;}
         float y(float y){return cy+(y-cy-dy)/scale;}
     }
-    private record Hit(UiLayout.Rect box,Runnable action,String field,String group,Motion motion){}
+    private record Hit(UiLayout.Rect box,Object id,Runnable action,String field,String group,Motion motion){}
+    private record PointerId(View view,int chip,Object action){}
     private final Host host;
     private final com.atom.chat.settings.contract.SettingsYogaLayout contractLayout=new com.atom.chat.settings.contract.SettingsYogaLayout();
     private Consumer<Boolean> navigationDirection=backwards->{};
@@ -530,7 +531,7 @@ public final class ServerConfigPage {
                             press.begin(canvas,header.x()+header.w()/2,header.y()+header.h()/2);
                             try{SettingsGroupPaint.draw(canvas,new UiLayout.Rect(header.x(),header.y(),header.w(),UiTokens.SETTINGS_LABEL_H),group.title(),group.icon(),true,expansion);drawHeaderAction(canvas,group,header,m,viewport,m.x(mx),m.y(my),dt);}finally{canvas.restore();}return 0;
                         });
-                        hit(new UiLayout.Rect(header.x(),header.y(),header.w(),UiTokens.SETTINGS_LABEL_H),()->{if(!collapsed.add(group.id()))collapsed.remove(group.id());},null,m,viewport);
+                        hit(new UiLayout.Rect(header.x(),header.y(),header.w(),UiTokens.SETTINGS_LABEL_H),List.of("group",group.id()),()->{if(!collapsed.add(group.id()))collapsed.remove(group.id());},null,m,viewport);
                     }
                 }
                 int start=index;for(var row:group.rows())index++;
@@ -600,11 +601,11 @@ public final class ServerConfigPage {
         return t(status.complete()==0?"sync_none":"synced");
     }
     private String error(String reason){return t("error."+reason);}
-    private void hit(UiLayout.Rect box,Runnable action,String field,Motion motion,UiLayout.Rect clip){
+    private void hit(UiLayout.Rect box,Object id,Runnable action,String field,Motion motion,UiLayout.Rect clip){
         if(frameAlpha<.01f)return;
         var a=motion.map(box);var b=motion.map(clip);
         float x=Math.max(a.x(),b.x()),y=Math.max(a.y(),b.y()),right=Math.min(a.right(),b.right()),bottom=Math.min(a.bottom(),b.bottom());
-        if(right>x&&bottom>y)hits.add(new Hit(new UiLayout.Rect(x,y,right-x,bottom-y),action,field,drawingGroup,motion));
+        if(right>x&&bottom>y)hits.add(new Hit(new UiLayout.Rect(x,y,right-x,bottom-y),id,action,field,drawingGroup,motion));
     }
     private void button(Canvas canvas,String id,String label,UiLayout.Rect box,boolean primary,boolean danger,boolean enabled,
                         Runnable action,Motion motion,UiLayout.Rect clip,float mx,float my,float dt){
@@ -615,7 +616,7 @@ public final class ServerConfigPage {
         var control=listActions.computeIfAbsent(id,k->new SettingsListAction());
         control.draw(canvas,box,label,icon,rotation,primary,danger,enabled,box.contains(mx,my),dt);
         if(enabled){
-            hit(box,()->{control.press();action.run();},null,motion,clip);
+            hit(box,id,()->{control.press();action.run();},null,motion,clip);
             var mapped=motion.map(box);var boundary=motion.map(clip);var viewport=geometry.viewport();
             float x=Math.max(mapped.x(),Math.max(boundary.x(),viewport.x())),y=Math.max(mapped.y(),Math.max(boundary.y(),viewport.y()));
             float right=Math.min(mapped.right(),Math.min(boundary.right(),viewport.right())),bottom=Math.min(mapped.bottom(),Math.min(boundary.bottom(),viewport.bottom()));
@@ -639,12 +640,12 @@ public final class ServerConfigPage {
         hostingMount.paint(canvas, id, rect, mx, my, id.equals(focused), Objects.equals(pressed, drawingGroup));
         if (draft.saving()) return;
         if (row.kind() == Kind.TOGGLE) {
-            hit(rect, () -> hostingMount.embedded().pointer(id,
+            hit(rect, id, () -> hostingMount.embedded().pointer(id,
                     new PointerEvent(PointerEvent.Type.PRESS, (rect.x() + rect.right()) / 2, (rect.y() + rect.bottom()) / 2, 0)),
                     null, motion, clip);
         } else {
             var box = SettingsRowText.number(rect, numberRowText(row, rect.w()).stacked());
-            hit(box, () -> {}, id, motion, clip);
+            hit(box, id, () -> {}, id, motion, clip);
         }
     }
 
@@ -672,7 +673,7 @@ public final class ServerConfigPage {
             var box=new UiLayout.Rect(rect.right()-pad-UiTokens.SWITCH_W,rowText(row,rect.w()).stacked()?rect.bottom()-pad-UiTokens.SWITCH_H:rect.y()+(rect.h()-UiTokens.SWITCH_H)/2,UiTokens.SWITCH_W,UiTokens.SWITCH_H);
             toggle.setInteraction(enabled&&box.contains(mx,my),Objects.equals(pressed,drawingGroup)&&box.contains(mx,my));
             toggle.update(dt,draft.enabled(row.id()));toggle.render(canvas,box.x(),box.y(),c.accentColor,enabled);
-            if(enabled)hit(rect,()->toggleRow(row.id(),toggle),null,motion,clip);
+            if(enabled)hit(rect,row.id(),()->toggleRow(row.id(),toggle),null,motion,clip);
             return;
         }
         if(row.kind()==Kind.NUMBER||row.kind()==Kind.TEXT||row.kind()==Kind.MULTILINE){
@@ -686,27 +687,27 @@ public final class ServerConfigPage {
                 var font=FontManager.font(UiTokens.SETTINGS_TILE_SUB);String count=value(row.id()).length()+" / 200";
                 SkiaFontRenderer.drawText(canvas,font,count,rect.right()-pad-SkiaFontRenderer.getStringWidth(font,count),SkiaFontRenderer.centerBaselineY(font,box.bottom()+UiTokens.SETTINGS_ROW_GAP+TITLE_HALF_LINE),c.textSecondaryColor);
             }
-            if(enabled)hit(box,()->{},row.id(),motion,clip);return;
+            if(enabled)hit(box,row.id(),()->{},row.id(),motion,clip);return;
         }
         if(row.kind()==Kind.ACTION||row.kind()==Kind.MEDIA){
             if(row.kind()==Kind.MEDIA){
                 float w=SettingsListAction.width(t("import_short"));
                 button(canvas,"asset:import",t("import_short"),new UiLayout.Rect(rect.right()-pad-w,rect.y()+pad,w,SettingsListAction.HEIGHT),true,false,enabled&&!importing,()->act("asset:import"),motion,clip,mx,my,dt);
             }else{
-                if(enabled)hit(rect,()->act(row.id()),null,motion,clip);
+                if(enabled)hit(rect,row.id(),()->act(row.id()),null,motion,clip);
                 SettingsGroupPaint.chevron(canvas,rect.right()-pad-UiTokens.COMPOSER_ICON_SIZE/2,rect.y()+UiTokens.SETTINGS_ROW_H/2,UiTokens.SETTINGS_FOLD_CHEVRON_SIZE,0,c.textSecondaryColor);
             }
             return;
         }
         if(row.kind()==Kind.PHRASE){
-            if(enabled)hit(rect,()->phraseAction(row.index(),"edit"),null,motion,clip);
+            if(enabled)hit(rect,List.of(row.id(),draft.phrases().get(row.index())),()->phraseAction(row.index(),"edit"),null,motion,clip);
             float size=SettingsListAction.HEIGHT,x=rect.right()-pad-size*3-UiTokens.SETTINGS_ROW_GAP*2;
             float y=inlineList(row,rect.w())?rect.y()+(rect.h()-size)/2:rect.bottom()-pad-size;
             for(var action:List.of("up","down","delete")){
                 boolean allowed=enabled&&(!action.equals("up")||row.index()>0)&&(!action.equals("down")||row.index()<draft.phrases().size()-1);
                 var box=new UiLayout.Rect(x,y,size,size);
                 // Disabled boundary arrows still consume their own cell, never opening the editor behind them.
-                hit(box,()->{},null,motion,clip);
+                hit(box,null,()->{},null,motion,clip);
                 listButton(canvas,row.id()+action,t(action),action.equals("delete")?SettingsGroupGlyphs.TRASH:null,action.equals("up")?-90:action.equals("down")?90:0,
                         box,false,action.equals("delete"),allowed,()->phraseAction(row.index(),action),motion,clip,mx,my,dt);
                 x+=size+UiTokens.SETTINGS_ROW_GAP;
@@ -715,12 +716,12 @@ public final class ServerConfigPage {
         }
         if(row.kind()==Kind.TEMPLATE){
             var r=draft.templates().get(row.index());
-            if(enabled)hit(rect,()->templateAction(row.index(),"edit"),null,motion,clip);
+            if(enabled)hit(rect,r.id(),()->templateAction(row.index(),"edit"),null,motion,clip);
             float size=SettingsListAction.HEIGHT,y=inlineList(row,rect.w())?rect.y()+(rect.h()-size)/2:rect.bottom()-pad-size;
             var toggle=switches.computeIfAbsent(row.id(),k->{var control=new ToggleSwitch();control.snapTo(r.enabled());return control;});
             var toggleBox=new UiLayout.Rect(rect.right()-pad-size-UiTokens.SETTINGS_ROW_GAP-UiTokens.SWITCH_W,y+(size-UiTokens.SWITCH_H)/2,UiTokens.SWITCH_W,UiTokens.SWITCH_H);
             toggle.setInteraction(enabled&&toggleBox.contains(mx,my),Objects.equals(pressed,drawingGroup)&&toggleBox.contains(mx,my));toggle.update(dt,r.enabled());toggle.render(canvas,toggleBox.x(),toggleBox.y(),c.accentColor,enabled);
-            if(enabled)hit(toggleBox,()->{toggle.pulse();templateAction(row.index(),r.enabled()?"disable":"enable");cue();},null,motion,clip);
+            if(enabled)hit(toggleBox,List.of(r.id(),"enabled"),()->{toggle.pulse();templateAction(row.index(),r.enabled()?"disable":"enable");cue();},null,motion,clip);
             for(var action:List.of("edit","delete")){
                 float w=action.equals("edit")?SettingsListAction.width(t("edit")):size;
                 var box=new UiLayout.Rect(action.equals("edit")?toggleBox.x()-UiTokens.SETTINGS_ROW_GAP-w:rect.right()-pad-size,y,w,size);
@@ -757,7 +758,7 @@ public final class ServerConfigPage {
         }
         var desc=assetDescription(row,available);drawLines(canvas,desc,left,top,c.textSecondaryColor);top+=desc.size()*TITLE_LINE_H+gap;
         View origin=view;
-        if(enabled)hit(thumb,()->previewImage(asset,origin),null,motion,clip);
+        if(enabled)hit(thumb,List.of(row.id(),"thumbnail"),()->previewImage(asset,origin),null,motion,clip);
         float previewW=SettingsListAction.width(t("preview_image")),removeW=SettingsListAction.width(t("remove"));
         boolean stacked=previewW+removeW+gap>available;
         button(canvas,row.id()+"preview",t("preview_image"),new UiLayout.Rect(left,top,Math.min(previewW,available),SettingsListAction.HEIGHT),
@@ -859,19 +860,73 @@ public final class ServerConfigPage {
         },"AtomChat-AdminImport");
         worker.setDaemon(true);worker.start();
     }
+    public com.atom.chat.ui.input.ClickTarget clickTarget(float x,float y,int button) {
+        if(layout==null||geometry==null||button!=0) return com.atom.chat.ui.input.ClickTarget.blocked();
+        if(view==View.ROOT) {
+            int next=chips.hit(layout,x,y);
+            if(next>=0) return pointerTarget(List.of("tab",next),() -> selectChip(next));
+        }
+        if(draft.saving()) return com.atom.chat.ui.input.ClickTarget.blocked();
+        if(geometry.save().contains(x,y)) {
+            if(importing||view==View.ROOT&&!draft.dirty()) return com.atom.chat.ui.input.ClickTarget.blocked();
+            var save=buttons.get("save");
+            return new com.atom.chat.ui.input.ClickTarget(new PointerId(view,chip(),"save"),
+                    () -> save.hold(true),() -> save.hold(false),this::saveFromPointer);
+        }
+        if(view!=View.TEMPLATE_GUIDE&&geometry.status().contains(x,y)&&feedback.equals("saved"))
+            return pointerTarget("retrySync",host::retrySync);
+        if(!geometry.scrollViewport().contains(x,y)) return pointerTarget("blur",this::blur);
+        if(SettingsScrollbar.over(geometry.scrollViewport(),scroll,x,y)) return null;
+        Hit hit=hitAt(x,y);
+        if(hit==null) return pointerTarget("blur",this::blur);
+        if(hit.field()!=null) return null;
+        if(hit.id()==null) return com.atom.chat.ui.input.ClickTarget.blocked();
+        return new com.atom.chat.ui.input.ClickTarget(new PointerId(view,chip(),hit.id()),
+                () -> pressed=hit.group(),() -> pressed=null,() -> { blur(); hit.action().run(); });
+    }
+
+    private com.atom.chat.ui.input.ClickTarget pointerTarget(Object action,Runnable activate) {
+        return com.atom.chat.ui.input.ClickTarget.action(new PointerId(view,chip(),action),activate);
+    }
+
+    private Hit hitAt(float x,float y) {
+        for(int i=hits.size()-1;i>=0;i--) {
+            Hit hit=hits.get(i);
+            if(hit.box().contains(x,y)) return hit;
+        }
+        return null;
+    }
+
+    private void selectChip(int next) {
+        if(next==chip()) return;
+        navigationDirection.accept(next<chip());
+        blur();
+        if(hostingMount!=null) hostingMount.embedded().clear();
+        hits.clear();
+        chips.select(next);
+        entrance.markEntered();
+        cue();
+    }
+
+    private void saveFromPointer() {
+        if(view!=View.ROOT) {
+            navigateBack();
+        } else if(draft.dirty()&&draft.beginSave(System.currentTimeMillis())) {
+            buttons.get("save").press();
+            host.saveDraft(draft.version(),draft.values(),draft.assets(),draft.fingerprint());
+        }
+    }
+
     public boolean click(float x,float y,int button){
         if(layout==null||geometry==null||button!=0)return true;
         if(view==View.ROOT){
             int chip=chips.hit(layout,x,y);
-            if(chip>=0){if(chip!=chip()){navigationDirection.accept(chip<chip());blur();if(hostingMount!=null)hostingMount.embedded().clear();hits.clear();chips.select(chip);entrance.markEntered();cue();}return true;}
+            if(chip>=0){selectChip(chip);return true;}
         }
         if(draft.saving())return true;
         if(geometry.save().contains(x,y)){
             if(importing)return true;
-            if(view!=View.ROOT){navigateBack();return true;}
-            if(draft.dirty()&&draft.beginSave(System.currentTimeMillis())){
-                buttons.get("save").press();host.saveDraft(draft.version(),draft.values(),draft.assets(),draft.fingerprint());
-            }
+            saveFromPointer();
             return true;
         }
         if(view!=View.TEMPLATE_GUIDE&&geometry.status().contains(x,y)&&feedback.equals("saved")){host.retrySync();return true;}

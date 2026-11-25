@@ -24,7 +24,10 @@ public class ReactionSystemBroadcastMixin {
         try(var ignored=ReactionCompanionServer.broadcastDelivery(receiver,content,id,overlay)) { receiver.sendSystemMessage(content,overlay); }
     }
     @Redirect(method="broadcastChatMessage(Lnet/minecraft/network/chat/PlayerChatMessage;Ljava/util/function/Predicate;Lnet/minecraft/server/level/ServerPlayer;Lnet/minecraft/network/chat/ChatType$Bound;)V",at=@At(value="INVOKE",target="Lnet/minecraft/network/chat/OutgoingChatMessage;create(Lnet/minecraft/network/chat/PlayerChatMessage;)Lnet/minecraft/network/chat/OutgoingChatMessage;"))
-    private net.minecraft.network.chat.OutgoingChatMessage atomchat$nativeBroadcast(net.minecraft.network.chat.PlayerChatMessage message) {
-        return new com.atom.chat.net.ReactionBroadcastMessage(net.minecraft.network.chat.OutgoingChatMessage.create(message));
+    private net.minecraft.network.chat.OutgoingChatMessage atomchat$nativeBroadcast(net.minecraft.network.chat.PlayerChatMessage message,
+            net.minecraft.network.chat.PlayerChatMessage original, java.util.function.Predicate<ServerPlayer> filter,
+            ServerPlayer sender, net.minecraft.network.chat.ChatType.Bound bound) {
+        return new com.atom.chat.net.ReactionBroadcastMessage(net.minecraft.network.chat.OutgoingChatMessage.create(message),
+                com.atom.chat.net.CardCompanionServer.claimPlayerShare(sender, original));
     }
 }

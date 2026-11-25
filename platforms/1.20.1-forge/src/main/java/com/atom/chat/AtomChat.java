@@ -43,6 +43,7 @@ public class AtomChat {
             com.atom.chat.net.ProfilePayloads.register();
             // Poke companion: a remote poke, rate limited server-side.
             com.atom.chat.net.PokePayloads.register();
+            com.atom.chat.net.MentionAllPayloads.register();
         com.atom.chat.net.ReactionPayloads.register();
             // Media companion: server-hosted chat images / GIFs, same dual
             // entrypoint pattern and master hosting switch as the avatar side.
@@ -53,6 +54,8 @@ public class AtomChat {
             com.atom.chat.net.ConfigPayloads.register();
             // Simulation harness channel for a single-player session.
             com.atom.chat.net.TestPayloads.register();
+            // Share Card API: server-authoritative rich cards, live state sync and safe client shares.
+            com.atom.chat.net.CardPayloads.register();
         }));
 
         // Retention and lifecycle housekeeping for the two hosted stores
@@ -76,6 +79,7 @@ public class AtomChat {
         MinecraftForge.EVENT_BUS.addListener((PlayerEvent.PlayerLoggedOutEvent event) -> {
             if (event.getEntity() != null) {
                 com.atom.chat.net.CompanionMaintenance.onPlayerLogout(event.getEntity().getUUID());
+                com.atom.chat.net.CardCompanionServer.onPlayerLogout(event.getEntity().getUUID());
             }
         });
 

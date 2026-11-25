@@ -28,6 +28,7 @@ import com.atom.chat.text.RichTextLayout;
 import com.atom.chat.text.RichTextLayout.RichLine;
 import com.atom.chat.theme.ThemeService;
 import com.atom.chat.ui.Animations;
+import com.atom.chat.ui.UiLayout;
 import com.atom.chat.ui.ScrollController;
 import com.atom.chat.ui.UiMotion;
 import com.atom.chat.ui.UiSpring;
@@ -100,6 +101,15 @@ public final class MessageListView {
 
     private final List<MessageHit> hits = new ArrayList<>();
     private final List<ClickableSpan> clickableSpans = new ArrayList<>();
+    private final List<com.atom.chat.card.CardHitRegion> cardHits = new ArrayList<>();
+    private UiLayout.Rect cardViewport;
+    private long pressedCardMessage;
+    private com.atom.chat.api.card.ShareCard.CardAction pressedCardAction;
+
+    public void setPressedCard(long message, com.atom.chat.api.card.ShareCard.CardAction action) {
+        pressedCardMessage = message;
+        pressedCardAction = action;
+    }
 
     /**
      * Wrapped content lines keyed by (message id, wrap width). Measure, draw
@@ -194,6 +204,7 @@ public final class MessageListView {
 
     /** Cached {@link #kindOf}; see {@link #kindCache}. */
     private BubbleKind kindOfCached(ChatMessage msg) {
+        if (msg.hasCard() && AtomChatConfig.get().shareCardsEnabled) return BubbleKind.CARD;
         var key = new KindKey(msg,AtomChatConfig.get().imageMessagesEnabled);
         BubbleKind cached = kindCache.get(key);
         if (cached != null) {
@@ -350,13 +361,13 @@ public final class MessageListView {
     }
 
     private final com.atom.chat.ui.ReactionChips reactionChips = new com.atom.chat.ui.ReactionChips();
-    public boolean clickReaction(float x, float y) { refreshFontEpoch(); return reactionChips.click(x, y); }
+    public com.atom.chat.ui.input.ClickTarget reactionClickTarget(float x, float y, Runnable feedback) {
+        refreshFontEpoch();
+        return reactionChips.clickTarget(x, y, feedback);
+    }
     public void drawReactionHover(Canvas canvas, float x, float y, boolean suppress) {
         refreshFontEpoch();
         reactionChips.hover(canvas,x,y,suppress);
-        if(!suppress)for(var hit:hits)if(y>=hit.bubbleY() && y<=hit.bubbleBottom()
-                && x>=hit.x() && x<=hit.x()+hit.maxWidth()+UiTokens.FONT_BODY)
-            MessagePaint.nativeTagIcon(canvas,hit.message(),hit.bubbleX(),hit.bubbleY(),hit.bubbleWidth(),hit.bubbleBottom()-hit.bubbleY());
     }
 
     private List<ChatMessage> preparedMessages;
@@ -407,6 +418,8 @@ public final class MessageListView {
                      List<ChatMessage> messages, ScrollController scroll) {
         refreshFontEpoch();
         hits.clear();
+        cardHits.clear();
+        cardViewport = new UiLayout.Rect(x, y, width, height);
         reactionChips.begin(x, y, width, height);
         clickableSpans.clear();
         currentMessages = messages;
@@ -470,6 +483,7 @@ public final class MessageListView {
                     if (!layered) {
                         messageEnterSettled.add(msg);
                     }
+                    float dx = 0;
                     canvas.save();
                     if (layered) {
                         // QQ-style entrance: own bubbles come in from the right
@@ -488,7 +502,7 @@ public final class MessageListView {
                         // System capsules are centered and have no sender side;
                         // they fade in place rather than pretending to be someone's
                         // bubble.
-                        float dx = msg.isSystem() ? 0.0F
+                        dx = msg.isSystem() ? 0.0F
                                 : msg.isOwn() ? (1.0F - move) * travel
                                 : -(1.0F - move) * travel;
                         try (Paint layer = new Paint()) {
@@ -501,26 +515,36 @@ public final class MessageListView {
                     }
                     drawJumpHighlight(canvas, msg, x, cursorY, width, h);
                     int spanStart = clickableSpans.size();
+                    int cardStart = cardHits.size();
                     var bubbleGroup = ChatBubble.Group.of(grouped, isCompactGrouped(messages, mi + 1, from));
                     MessageHit hit = drawMessage(canvas, msg, x, cursorY, width, hits.size(), grouped, bubbleGroup);
-                    MessagePaint.nativeTag(canvas,msg,hit.bubbleX(),hit.bubbleY(),hit.bubbleWidth(),hit.bubbleBottom()-hit.bubbleY(),clickableSpans);
                     reactionChips.draw(canvas, msg, msg.isOwn() ? hit.bubbleX()+hit.bubbleWidth() : hit.bubbleX(), hit.bubbleBottom(),
-                            Math.max(UiTokens.REACTION_MIN_WIDTH, bubbleMaxWidth(msg, width)), scroll.getScrollY());
+                            Math.max(UiTokens.REACTION_MIN_WIDTH, bubbleMaxWidth(msg, width)), scroll.getScrollY(), dx);
                     // Clickable spans are recorded in content space (like hits
                     // before conversion); convert them to screen space so later
                     // hit-testing can compare them directly against the mouse.
                     for (int i = spanStart; i < clickableSpans.size(); i++) {
                         ClickableSpan s = clickableSpans.get(i);
-                        clickableSpans.set(i, new ClickableSpan(s.x(), s.y() - scroll.getScrollY(), s.w(), s.h(), s.style()));
+                        clickableSpans.set(i, new ClickableSpan(s.x() + dx, s.y() - scroll.getScrollY(),
+                                s.w(), s.h(), s.style(), msg.getId(), i - spanStart));
+                    }
+                    for (int i = cardStart; i < cardHits.size(); i++) {
+                        var card = cardHits.get(i);
+                        if (pressedCardMessage == msg.getId() && pressedCardAction != null
+                                && pressedCardAction.equals(card.action())) {
+                            CornerGeometry.drawRoundedRect(canvas, card.x(), card.y(), card.w(), card.h(), s(4F), 0x25000000);
+                        }
+                        cardHits.set(i, new com.atom.chat.card.CardHitRegion(card.x() + dx, card.y() - scroll.getScrollY(),
+                                card.w(), card.h(), card.card(), card.state(), card.action(), card.hoverStyle(), msg.getId()));
                     }
                     if (layered) {
                         canvas.restore();
                     }
                     canvas.restore();
                     // Hits are hit-tested in screen space; drawing happens in content space.
-                    hits.add(new MessageHit(hit.message(), hit.index(), hit.x(), hit.y() - scroll.getScrollY(), hit.maxWidth(),
-                            hit.bottom() - scroll.getScrollY(), hit.avatarX(), hit.avatarY() - scroll.getScrollY(), hit.avatarSize(),
-                            hit.bubbleY() - scroll.getScrollY(), hit.bubbleX(), hit.bubbleWidth(), hit.bubbleBottom() - scroll.getScrollY(),
+                    hits.add(new MessageHit(hit.message(), hit.index(), hit.x() + dx, hit.y() - scroll.getScrollY(), hit.maxWidth(),
+                            hit.bottom() - scroll.getScrollY(), hit.avatarX() + dx, hit.avatarY() - scroll.getScrollY(), hit.avatarSize(),
+                            hit.bubbleY() - scroll.getScrollY(), hit.bubbleX() + dx, hit.bubbleWidth(), hit.bubbleBottom() - scroll.getScrollY(),
                             hit.imageUrl()));
                 } else {
                     // Left the viewport: drop the start timestamp only. The
@@ -950,7 +974,6 @@ public final class MessageListView {
     /** One-shot click signal from the button; cleared on read. */
     public void requestLoadEarlier() {
         loadEarlierRequested = true;
-        loadEarlierHeld = true;
     }
 
     public boolean consumeLoadEarlierRequest() {
@@ -962,6 +985,22 @@ public final class MessageListView {
     public Optional<ClickableSpan> clickableSpanAt(float mx, float my) {
         refreshFontEpoch();
         return Optional.ofNullable(findClickableSpan(mx, my));
+    }
+
+    public com.atom.chat.card.CardHitRegion cardHitAt(float x, float y) {
+        if (!AtomChatConfig.get().shareCardsEnabled || cardViewport == null || !cardViewport.contains(x, y)) return null;
+        for (var hit : cardHits) {
+            if (hit.action() != null && hit.contains(x, y)) return hit;
+        }
+        return null;
+    }
+
+    public net.minecraft.network.chat.Style cardHoverStyleAt(float x, float y) {
+        if (!AtomChatConfig.get().shareCardsEnabled || cardViewport == null || !cardViewport.contains(x, y)) return null;
+        for (var hit : cardHits) {
+            if (hit.hoverStyle() != null && hit.hoverStyle().getHoverEvent() != null && hit.contains(x, y)) return hit.hoverStyle();
+        }
+        return null;
     }
 
     /** Drops entrance-animation bookkeeping; called when the screen is removed. */
@@ -1103,7 +1142,7 @@ public final class MessageListView {
     }
 
     /** How a message is painted. Draw, measure and hit-test all read this one answer. */
-    private enum BubbleKind { SYSTEM, IMAGE, IMAGE_PLACEHOLDER, TEXT }
+    private enum BubbleKind { SYSTEM, CARD, IMAGE, IMAGE_PLACEHOLDER, TEXT }
 
     /** Once per launch; see {@link #noteImageMessagesDisabled()}. */
     private static final AtomicBoolean IMAGE_MESSAGES_OFF_NOTED = new AtomicBoolean();
@@ -1147,13 +1186,14 @@ public final class MessageListView {
 
     private MessageHit drawMessage(Canvas canvas, ChatMessage msg, float x, float y, float maxWidth, int index,
                                    boolean grouped, ChatBubble.Group bubbleGroup) {
+        BubbleKind kind = kindOfCached(msg);
+        if (kind == BubbleKind.CARD) return drawCardMessage(canvas, msg, x, y, maxWidth, index, grouped);
         if (msg.isSystem()) {
             return drawSystemMessage(canvas, msg, x, y, maxWidth, index);
         }
         Font font = FontManager.font(UiTokens.FONT_BODY);
         float bubbleMaxWidth = bubbleMaxWidth(msg, maxWidth);
         String raw = msg.getRawText();
-        BubbleKind kind = kindOfCached(msg);
         if (kind == BubbleKind.IMAGE_PLACEHOLDER) {
             return drawImagePlaceholderMessage(canvas, msg, x, y, maxWidth, index, grouped, bubbleGroup);
         }
@@ -1428,6 +1468,41 @@ public final class MessageListView {
                 SkiaFontRenderer.centerBaselineY(font, centerY), accent(), true);
     }
 
+    private boolean cardHasSender(ChatMessage message) {
+        return !message.isSystem();
+    }
+
+    private float cardHeaderHeight(ChatMessage message, boolean grouped) {
+        if (!cardHasSender(message)) return s(2);
+        float band = grouped ? 0 : UiTokens.NAME_BAND;
+        return band + (message.getQuoteName() == null ? 0 : UiTokens.QUOTE_HEIGHT + UiTokens.QUOTE_GAP);
+    }
+
+    private MessageHit drawCardMessage(Canvas canvas, ChatMessage message, float x, float y, float maxWidth,
+                                       int index, boolean grouped) {
+        var card = message.getCard();
+        boolean sender = cardHasSender(message);
+        float[] size = com.atom.chat.card.BuiltInCardRenderer.measure(card, bubbleMaxWidth(message, maxWidth));
+        float margin = UiTokens.AVATAR_SIZE + UiTokens.AVATAR_GAP + avatarEdgeInset();
+        float bubbleX = message.isOwn() && sender ? x + maxWidth - size[0] - margin : x + margin;
+        bubbleX = Math.max(x, Math.min(bubbleX, x + maxWidth - size[0]));
+        float top = y + cardHeaderHeight(message, grouped);
+        float avatarX = 0, avatarY = 0, avatarSize = 0;
+        if (sender && !grouped) {
+            drawMessageName(canvas, message, y, bubbleX, bubbleX + size[0]);
+            avatarX = message.isOwn() ? x + maxWidth - UiTokens.AVATAR_SIZE - avatarEdgeInset() : x + avatarEdgeInset();
+            avatarY = y + s(4);
+            avatarSize = UiTokens.AVATAR_SIZE;
+            drawAvatarWithPoke(canvas, message, index, avatarX, avatarY);
+        }
+        if (sender && message.getQuoteName() != null)
+            drawQuotePill(canvas, message, x, maxWidth, y + (grouped ? 0 : UiTokens.NAME_BAND), message.isOwn());
+        com.atom.chat.card.BuiltInCardRenderer.draw(canvas, card, bubbleX, top, size[0], size[1], message.isOwn(), cardHits);
+        float bottom = top + size[1];
+        return new MessageHit(message, index, x, y, maxWidth, bottom, avatarX, avatarY, avatarSize,
+                top, bubbleX, size[0], bottom, null);
+    }
+
     private MessageHit drawImageMessage(Canvas canvas, ChatMessage msg, String raw, String imageUrl,
                                         float x, float y, float maxWidth, int index, boolean grouped, ChatBubble.Group bubbleGroup) {
         // Bubble offset from the list edge; includes the avatar's edge inset so
@@ -1579,8 +1654,10 @@ public final class MessageListView {
         refreshFontEpoch();
         int config = (AtomChatConfig.get().imageMessagesEnabled ? 1 : 0)
                 | (AtomChatConfig.get().compactMessagesEnabled ? 2 : 0)
-                | (AtomChatConfig.get().effectiveBubbleStyle().ordinal() << 2);
-        long reaction = com.atom.chat.reaction.ReactionClient.revision() + reactionChips.geometryEpoch() * 1_000_003L;
+                | (AtomChatConfig.get().shareCardsEnabled ? 4 : 0)
+                | (AtomChatConfig.get().effectiveBubbleStyle().ordinal() << 3);
+        long reaction = com.atom.chat.reaction.ReactionClient.revision() + reactionChips.geometryEpoch() * 1_000_003L
+                + com.atom.chat.api.card.CardStateStore.revision() * 31L;
         if (heightValue >= 0.0F && heightList == messages && heightSize == messages.size()
                 && heightFrom == from && heightWidth == width
                 && heightConfig == config && heightReaction == reaction) {
@@ -1595,7 +1672,8 @@ public final class MessageListView {
         heightFrom = from;
         heightWidth = width;
         heightConfig = config;
-        heightReaction = com.atom.chat.reaction.ReactionClient.revision() + reactionChips.geometryEpoch() * 1_000_003L;
+        heightReaction = com.atom.chat.reaction.ReactionClient.revision() + reactionChips.geometryEpoch() * 1_000_003L
+                + com.atom.chat.api.card.CardStateStore.revision() * 31L;
         heightValue = measured;
         return measured;
     }
@@ -1645,6 +1723,11 @@ public final class MessageListView {
     }
 
     private float messageBodyHeight(ChatMessage msg, float maxWidth, boolean grouped) {
+        BubbleKind kind = kindOfCached(msg);
+        if (kind == BubbleKind.CARD) {
+            return cardHeaderHeight(msg, grouped) + com.atom.chat.card.BuiltInCardRenderer
+                    .measure(msg.getCard(), bubbleMaxWidth(msg, maxWidth))[1];
+        }
         if (msg.isSystem()) {
             Font font = FontManager.font(UiTokens.FONT_QUOTE);
             float lineHeight = SkiaFontRenderer.getHeight(font);
@@ -1653,7 +1736,6 @@ public final class MessageListView {
         }
         float quoteH = msg.getQuoteName() != null ? UiTokens.QUOTE_HEIGHT + UiTokens.QUOTE_GAP : 0.0F;
         float band = grouped ? 0.0F : UiTokens.NAME_BAND;
-        BubbleKind kind = kindOfCached(msg);
         if (kind == BubbleKind.IMAGE_PLACEHOLDER) {
             Font font = FontManager.font(UiTokens.FONT_QUOTE);
             return band + quoteH
@@ -1676,7 +1758,7 @@ public final class MessageListView {
         List<MessageTextLine> out = new ArrayList<>();
         ChatMessage msg = hit.message();
         BubbleKind kind = kindOfCached(msg);
-        if (kind == BubbleKind.IMAGE || kind == BubbleKind.IMAGE_PLACEHOLDER) {
+        if (kind == BubbleKind.IMAGE || kind == BubbleKind.IMAGE_PLACEHOLDER || kind == BubbleKind.CARD) {
             return out;
         }
         Font font = FontManager.font(msg.isSystem() ? UiTokens.FONT_QUOTE : UiTokens.FONT_BODY);

@@ -24,18 +24,85 @@ class ToolMenuInteractionTest {
             var hoverEarly = pixels(surface);
             canvas.clear(0); tools.render(canvas, row.x() + 40, row.y() + 20, 90);
             assertFalse(java.util.Arrays.equals(hoverEarly, pixels(surface)), "hover must fade and bounce, not jump to a flat wash");
-            tools.onClick(-20, -20, 0);
+            tapTool(tools, -20, -20, 0);
             canvas.clear(0); tools.render(canvas, -1, -1, 1);
             assertTrue(nonzero(pixels(surface)), "closing must keep painting the outgoing menu");
             canvas.clear(0); tools.render(canvas, -1, -1, 200);
             assertFalse(nonzero(pixels(surface)), "outgoing popup must release its surface when closed");
         }
     }
+    @Test void toolsAndRowsActivateOnPressWithoutClickingThrough() {
+        var host = new UiFeatureRenderTest.Host();
+        var tools = new ComposerTools(host);
+        var gate = new com.atom.chat.ui.input.InputGate(() -> false).add(tools);
+        var button = host.layout.imageBtn;
+        double x = button.x() + button.w() / 2;
+        double y = button.y() + button.h() / 2;
+        assertTrue(gate.click(x, y, 0));
+        assertEquals(1, host.presses, "the button responds to the press");
+        assertTrue(tools.active(), "the menu starts opening on press");
+        assertTrue(gate.release(x, y, 0));
+        assertTrue(tools.active());
+
+        try (var surface = Surface.makeRasterN32Premul(460, 820)) {
+            tools.render(surface.getCanvas(), -1, -1, 200);
+            var image = tools.tutorialActionBounds(2);
+            var players = tools.tutorialActionBounds(1);
+            double rowX = image.x() + image.w() / 2;
+            double rowY = image.y() + image.h() / 2;
+            assertTrue(gate.click(rowX, rowY, 0));
+            assertEquals(1, host.picks);
+            assertTrue(gate.release(rowX, players.y() + players.h() / 2, 0));
+            assertEquals(1, host.picks);
+            assertFalse(tools.active());
+            gate.release(rowX, rowY, 0);
+            assertEquals(1, host.picks);
+        }
+    }
+
+    @Test void popupWidensForTheHeldItemLabelWithinThePanel() {
+        var host = new UiFeatureRenderTest.Host() {
+            @Override public String tr(String key) {
+                return key.equals("atomchat.tools.share_item") ? "Share the held equipment with everyone" : super.tr(key);
+            }
+        };
+        var tools = new ComposerTools(host);
+        tools.toggle();
+        var item = tools.tutorialActionBounds(4);
+        assertTrue(item.w() > ToolLayout.menu(host.layout).w());
+        assertTrue(item.right() <= host.layout.rect().right());
+    }
+
+    @Test void theOperatorOnlyRowUnderBackSendsImmediatelyAndDoesNotInsertADraft() {
+        var host = new UiFeatureRenderTest.Host() {
+            @Override public boolean canMentionAll() { return true; }
+            @Override public void mentionAll() { presses++; }
+        };
+        var tools = new ComposerTools(host);
+        tools.toggle();
+        var players = tools.tutorialActionBounds(1);
+        assertTrue(tapTool(tools, players.x() + players.w() / 2, players.y() + players.h() / 2, 0));
+        try (var surface = Surface.makeRasterN32Premul(460, 820)) {
+            tools.render(surface.getCanvas(), -1, -1, 200);
+            var menu = ToolLayout.menu(host.layout, 4);
+            int initialPresses = host.presses;
+            var gate = new com.atom.chat.ui.input.InputGate(() -> false).add(tools);
+            double x = menu.x() + 30;
+            double y = menu.y() + 1.5 * ToolLayout.MENU_ROW_H;
+            assertTrue(gate.click(x, y, 0));
+            assertEquals(initialPresses + 1, host.presses);
+            assertEquals("draft", host.text);
+            assertNull(host.mentioned);
+            assertTrue(gate.release(x, y, 0));
+            assertEquals(initialPresses + 1, host.presses);
+        }
+    }
+
     @Test void playersReplaceTheMenuAndDoNotTakeOverTheConversation() {
         var host = new UiFeatureRenderTest.Host(); var tools = new ComposerTools(host);
         tools.toggle();
         var bounds = ToolLayout.menu(host.layout);
-        tools.onClick(bounds.x() + 30, bounds.y() + ToolLayout.MENU_ROW_H * 1.5, 0);
+        tapTool(tools, bounds.x() + 30, bounds.y() + ToolLayout.MENU_ROW_H * 1.5, 0);
         try (var surface = Surface.makeRasterN32Premul(460, 820)) {
             surface.getCanvas().clear(0); tools.render(surface.getCanvas(), -1, -1, 200);
             var bytes = pixels(surface);
@@ -47,12 +114,12 @@ class ToolMenuInteractionTest {
     @Test void searchBorrowsNativeTypingAndConsumesEverySendAction() {
         var host = new UiFeatureRenderTest.Host(); var tools = new ComposerTools(host);
         tools.toggle(); var bounds = ToolLayout.menu(host.layout);
-        tools.onClick(bounds.x() + 30, bounds.y() + ToolLayout.MENU_ROW_H / 2, 0);
+        tapTool(tools, bounds.x() + 30, bounds.y() + ToolLayout.MENU_ROW_H / 2, 0);
         assertTrue(tools.searching()); assertEquals("", host.text);
         assertFalse(tools.onChar('中', 0));
         host.text = "中文关键词"; tools.update();
         assertTrue(tools.onKey(257, 0, 0)); assertEquals("中文关键词", host.text);
-        assertTrue(tools.onClick(host.layout.sendBtn.x() + 5, host.layout.sendBtn.y() + 5, 0));
+        assertTrue(tapTool(tools, host.layout.sendBtn.x() + 5, host.layout.sendBtn.y() + 5, 0));
         assertEquals(0, host.picks);
         assertTrue(tools.onKey(256, 0, 0)); assertFalse(tools.searching());
         assertEquals("draft", host.text); assertEquals(2, host.caret);
@@ -60,10 +127,13 @@ class ToolMenuInteractionTest {
     @Test void openingAnotherComposerBorrowRestoresTheDraftFirst() {
         var host = new UiFeatureRenderTest.Host(); var tools = new ComposerTools(host);
         tools.toggle(); var bounds = ToolLayout.menu(host.layout);
-        tools.onClick(bounds.x() + 30, bounds.y() + ToolLayout.MENU_ROW_H / 2, 0);
+        tapTool(tools, bounds.x() + 30, bounds.y() + ToolLayout.MENU_ROW_H / 2, 0);
         host.text = "query";
-        assertFalse(tools.onClick(host.layout.phraseBtn.x() + 5, host.layout.phraseBtn.y() + 5, 0));
+        assertFalse(tapTool(tools, host.layout.phraseBtn.x() + 5, host.layout.phraseBtn.y() + 5, 0));
         assertFalse(tools.searching()); assertEquals("draft", host.text);
+    }
+    private static boolean tapTool(ComposerTools tools, double x, double y, int button) {
+        return UiFeatureRenderTest.tapTool(tools, x, y, button);
     }
     private static byte[] pixels(Surface surface) {
         try (var bitmap = new io.github.humbleui.skija.Bitmap()) {

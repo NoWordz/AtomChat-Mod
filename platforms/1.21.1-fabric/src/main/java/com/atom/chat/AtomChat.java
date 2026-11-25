@@ -30,6 +30,7 @@ public class AtomChat implements ModInitializer {
         com.atom.chat.net.AvatarCompanionServer.register();
         // Poke companion: a remote poke, rate limited server-side.
         com.atom.chat.net.PokePayloads.register();
+        com.atom.chat.net.MentionAllPayloads.register();
         com.atom.chat.net.ReactionPayloads.register();
         com.atom.chat.net.ReactionCompanionServer.register();
         com.atom.chat.net.PokeCompanionServer.register();
@@ -52,6 +53,9 @@ public class AtomChat implements ModInitializer {
         // itself is built by the editing player's client, never by the server.
         com.atom.chat.net.ConfigPayloads.register();
         com.atom.chat.net.ConfigScreenServer.register();
+        // Share Card API: server-authoritative rich cards, live state sync and safe client shares.
+        com.atom.chat.net.CardPayloads.register();
+        com.atom.chat.net.CardCompanionServer.register();
         // Retention and lifecycle housekeeping for the two hosted stores
         // (atomchat/media and /avatars). The start and tick hooks only run
         // for a server - a dedicated one, or the integrated one of a
@@ -67,6 +71,7 @@ public class AtomChat implements ModInitializer {
         ServerPlayConnectionEvents.DISCONNECT.register((handler, server) -> {
             if (handler.player != null) {
                 com.atom.chat.net.CompanionMaintenance.onPlayerLogout(handler.player.getUuid());
+                com.atom.chat.net.CardCompanionServer.onPlayerLogout(handler.player.getUuid());
             }
         });
         LOGGER.info(com.atom.chat.diagnostics.AtomChatLog.message("startup", "AtomChat initialized"));

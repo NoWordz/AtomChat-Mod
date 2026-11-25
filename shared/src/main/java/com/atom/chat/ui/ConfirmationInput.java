@@ -1,5 +1,6 @@
 package com.atom.chat.ui;
 
+import com.atom.chat.ui.input.ClickTarget;
 import com.atom.chat.ui.input.InputHandler;
 import java.util.function.DoubleFunction;
 import java.util.function.Supplier;
@@ -11,9 +12,8 @@ public final class ConfirmationInput implements InputHandler {
     public ConfirmationInput(Supplier<ConfirmationDialog> dialog, DoubleFunction<Float> x, DoubleFunction<Float> y) {
         this.dialog = dialog; this.x = x; this.y = y;
     }
-    @Override public boolean onClick(double mx, double my, int button) {
-        if (!dialog.get().isActive()) return false;
-        dialog.get().click(x.apply(mx), y.apply(my), button); return true;
+    @Override public ClickTarget clickTarget(double mx, double my, int button) {
+        return dialog.get().clickTarget(x.apply(mx), y.apply(my), button);
     }
     @Override public boolean onKey(int key, int scan, int modifiers) {
         if (!dialog.get().isActive()) return false;

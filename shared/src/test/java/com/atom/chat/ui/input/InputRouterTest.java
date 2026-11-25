@@ -102,6 +102,71 @@ class InputRouterTest {
     }
 
     @Test
+    void clickActivatesBeforeReleaseEvenWhileTheTargetIsMoving() {
+        InputRouter router = new InputRouter();
+        int[] left = {10}, commits = {0};
+        boolean[] held = {false};
+        router.add(new InputHandler() {
+            @Override public ClickTarget clickTarget(double x, double y, int button) {
+                if (x < left[0] || x >= left[0] + 10) return null;
+                return new ClickTarget("send", () -> held[0] = true, () -> held[0] = false, () -> {
+                    assertTrue(held[0], "activation starts during the press");
+                    commits[0]++;
+                });
+            }
+        });
+
+        assertTrue(router.click(12, 5, 0));
+        assertTrue(held[0]);
+        assertEquals(1, commits[0]);
+        left[0] = 15;
+        assertTrue(router.release(21, 5, 0));
+        assertFalse(held[0]);
+        assertFalse(router.release(21, 5, 0));
+        assertEquals(1, commits[0]);
+    }
+
+    @Test
+    void consumedPressCannotFallThroughToAReplacementLayerOnRelease() {
+        InputRouter router = new InputRouter();
+        boolean[] covered = {false}, enabled = {true}, held = {false};
+        int[] commits = {0}, lowerReleases = {0};
+        router.add(new InputHandler() {
+            @Override public ClickTarget clickTarget(double x, double y, int button) {
+                return covered[0] ? ClickTarget.blocked() : null;
+            }
+        });
+        router.add(new InputHandler() {
+            @Override public ClickTarget clickTarget(double x, double y, int button) {
+                return enabled[0] ? new ClickTarget("row", () -> held[0] = true, () -> held[0] = false,
+                        () -> commits[0]++) : null;
+            }
+        });
+        router.add(new InputHandler() {
+            @Override public boolean onRelease(double x, double y, int button) { lowerReleases[0]++; return true; }
+        });
+
+        assertTrue(router.click(15, 5, 0));
+        covered[0] = true;
+        assertTrue(router.release(15, 5, 0));
+        covered[0] = false;
+        assertFalse(held[0]);
+
+        assertTrue(router.click(15, 5, 0));
+        enabled[0] = false;
+        assertTrue(router.release(15, 5, 0));
+        enabled[0] = true;
+        assertFalse(held[0]);
+
+        assertTrue(router.click(15, 5, 0));
+        assertTrue(router.cancel(0));
+        assertFalse(held[0]);
+        assertTrue(router.release(15, 5, 0));
+        assertEquals(3, commits[0]);
+        assertEquals(0, lowerReleases[0]);
+    }
+
+    @Test
     void everyEventTypeRoutesIndependently() {
         InputRouter router = new InputRouter();
         seen.clear();

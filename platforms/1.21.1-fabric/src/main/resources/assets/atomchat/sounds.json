@@ -9,6 +9,11 @@
       "atomchat:feedback_button"
     ]
   },
+  "feedback_toast": {
+    "sounds": [
+      "atomchat:feedback_toast"
+    ]
+  },
   "feedback_send": {
     "sounds": [
       "atomchat:feedback_send"

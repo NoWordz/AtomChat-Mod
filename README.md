@@ -37,7 +37,9 @@ Install AtomChat on the server to add media hosting, profile sync, shared sticke
 
 ## Compatibility
 
-Pair the published AtomChat 0.9.2 package with AtomLib 0.6.0. Its bundled settings profile belongs to that library release. The AtomChat 0.9.3 development builds target AtomLib 0.7.0 on Windows. [AtomLib desktop support](https://github.com/NoWordz/AtomLib-Mod/releases/tag/v0.7.0)
+Pair AtomChat 0.9.7 with the matching AtomLib 0.7.1 JAR from the same release. The packaged settings profile uses that library version. Older AtomChat 0.9.2 packages use AtomLib 0.6.0. [Release downloads](https://github.com/NoWordz/AtomChat-Mod/releases/latest)
+
+TrChat 2.5.2 servers can enable read-only chat channels with the optional server bridge. Players continue using the server's chat commands and channel switching. [TrChat channel bridge](docs/TRCHAT_CHANNEL_BRIDGE.md)
 
 Image messages use the `[[CICode]]` protocol used by E33Chat and ChatImage. Chat-screen replacements or unusual server chat formats may require extra configuration. [Troubleshooting](docs/wiki/Troubleshooting.md)
 

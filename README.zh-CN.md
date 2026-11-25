@@ -37,7 +37,9 @@
 
 ## 兼容性
 
-公开发布的 AtomChat 0.9.2 请配合 AtomLib 0.6.0 使用，包内的设置资源对应这个库版本。AtomChat 0.9.3 开发包在 Windows 上使用 AtomLib 0.7.0。 [AtomLib 桌面端支持](https://github.com/NoWordz/AtomLib-Mod/releases/tag/v0.7.0)
+AtomChat 0.9.7 请搭配同一发行页中对应加载器的 AtomLib 0.7.1，包内的设置资源使用这个库版本。旧版 AtomChat 0.9.2 配套 AtomLib 0.6.0。 [发行下载](https://github.com/NoWordz/AtomChat-Mod/releases/latest)
+
+TrChat 2.5.2 服务器可通过可选桥接启用只读频道。玩家继续使用服务器原有的聊天命令和切频道方式。 [TrChat 频道桥接](docs/TRCHAT_CHANNEL_BRIDGE.md)
 
 图片消息沿用 E33Chat、ChatImage 使用的 `[[CICode]]` 协议。替换聊天界面的模组或部分服务器消息格式可能需要额外配置。 [常见问题排查](docs/wiki/常见问题排查.md)
 

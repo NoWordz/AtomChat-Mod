@@ -44,7 +44,7 @@ public final class HistoryLabelRow {
             if (description.isEmpty() || available <= 0 || SkiaFontRenderer.getStringWidth(font, description) <= available) {
                 return UiTokens.SETTINGS_ROW_H;
             }
-            int extra = Math.max(0, SkiaFontRenderer.wrap(font, description, available).size() - 1);
+            int extra = Math.max(0, SettingsRowText.wrapCopy(font, description, available).size() - 1);
             return UiTokens.SETTINGS_ROW_H + extra * SkiaFontRenderer.getHeight(font);
         }
 

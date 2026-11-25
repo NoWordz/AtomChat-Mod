@@ -23,11 +23,12 @@ public record BlurMask(UiLayout.Rect rect, float radius, float alpha) {
                 (float) ((right - left) / guiScale), (float) ((bottom - top) / guiScale));
     }
 
-    Rect textureCoords(double guiScale, int captureX, int captureBottom, int textureWidth, int textureHeight) {
+    Rect textureCoords(double guiScale, int captureX, int captureBottom,
+                       double textureWidthInDevicePixels, double textureHeightInDevicePixels) {
         // The rounded shader flips V. Keep samples pinned to the framebuffer while masks move.
-        return Rect.makeLTRB((float) ((rect.x() * guiScale - captureX) / textureWidth),
-                (float) (1 - (captureBottom - rect.y() * guiScale) / textureHeight),
-                (float) ((rect.right() * guiScale - captureX) / textureWidth),
-                (float) (1 - (captureBottom - rect.bottom() * guiScale) / textureHeight));
+        return Rect.makeLTRB((float) ((rect.x() * guiScale - captureX) / textureWidthInDevicePixels),
+                (float) (1 - (captureBottom - rect.y() * guiScale) / textureHeightInDevicePixels),
+                (float) ((rect.right() * guiScale - captureX) / textureWidthInDevicePixels),
+                (float) (1 - (captureBottom - rect.bottom() * guiScale) / textureHeightInDevicePixels));
     }
 }

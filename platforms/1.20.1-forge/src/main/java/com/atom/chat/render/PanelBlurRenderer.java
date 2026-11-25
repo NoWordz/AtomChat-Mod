@@ -38,18 +38,21 @@ public final class PanelBlurRenderer {
     private static ShaderInstance kawaseShader;
 
     // Panel-sized GPU ping-pong buffers.
-    private static int inputFbo = -1, inputTex = -1;   // 1:1 capture from main framebuffer
+    private static int inputFbo = -1, inputTex = -1;   // capture from main framebuffer
     private static int tempFbo = -1, tempTex = -1;     // Kawase ping-pong buffer A
     private static int resultFbo = -1, resultTex = -1; // Kawase ping-pong buffer B
     private static int texW;
     private static int texH;
     private static int capW, capH;          // allocated capacity (power of two) / exact size
+    private static int textureDivisor = 1;
     private static boolean capacityMode;    // true = capacity reuse, false = exact (clipped fallback)
     // Per-frame geometry derived from the capture rect + framebuffer height in render().
     private static int vpW, vpH;            // Kawase viewport
     private static float tmx, tmy;          // Kawase quad texCoord upper bound
     private static float uvX, uvY;          // rounded-quad UV normalisation (actual / capacity)
     private static int lastBlurTex = -1;
+    private static com.atom.chat.config.GraphicsQuality lastQuality;
+    private static float lastStrength;
     private static boolean recreated = true;
     /** Set once by {@link #disable(String)}; see there for why it never resets. */
     private static volatile boolean disabled;
@@ -165,23 +168,29 @@ public final class PanelBlurRenderer {
         try {
             int fbHeight = fb.height;
             int hCrop = Math.max(0, Math.min(ph, fbHeight - py));
+            if (hCrop == 0) return false;
             boolean clipped = hCrop < ph;
+            var quality = com.atom.chat.config.AtomChatConfig.activeGraphicsQuality();
+            int divisor = clipped ? 1 : KawaseBlur.sampleDivisor(1, strength, quality);
+            int sampleW = KawaseBlur.sampleSize(pw, divisor);
+            int sampleH = KawaseBlur.sampleSize(ph, divisor);
+            int sampleCropH = KawaseBlur.sampleSize(hCrop, divisor);
             ppM2 = probeOn ? System.nanoTime() : 0L;    // capture 段起
-            ensureTextures(pw, ph, clipped);
+            ensureTextures(sampleW, sampleH, clipped, divisor);
             ppM3 = probeOn ? System.nanoTime() : 0L;    // capture 段止（ensureTextures + 容量逻辑）
-            uvX = (float) pw / texW;
-            uvY = (float) ph / texH;
+            uvX = (float) sampleW / texW;
+            uvY = (float) sampleH / texH;
             if (clipped) {
                 // Exact path: keep the original viewport / UV / no extension so
                 // an off-screen panel bottom keeps its existing behaviour.
-                vpW = pw; vpH = hCrop; tmx = 1.0F; tmy = 1.0F;
+                vpW = sampleW; vpH = sampleCropH; tmx = 1.0F; tmy = 1.0F;
             } else {
                 // Capacity path: viewport = capacity, quad/UV limited to the
                 // captured sub-region; the 1:1 texel mapping is preserved.
                 vpW = texW; vpH = texH; tmx = uvX; tmy = uvY;
             }
             ppM4 = probeOn ? System.nanoTime() : 0L;    // passes 段起
-            int blurTex = refreshBlur(fb.frameBufferId, fbHeight, px, py, pw, ph, strength,
+            int blurTex = refreshBlur(fb.frameBufferId, fbHeight, px, py, pw, hCrop, strength, quality, sampleW, sampleCropH,
                     restoreFbo, restoreViewport, restoreScissor);
             ppM5 = probeOn ? System.nanoTime() : 0L;    // passes 段止（refreshBlur 合计：blit+5pass+尾部恢复）
             if (blurTex == -1) {
@@ -189,7 +198,8 @@ public final class PanelBlurRenderer {
             }
             ppM6 = probeOn ? System.nanoTime() : 0L;    // composite 段起
             boolean drawn = masks == null ? drawRoundedQuad(pose, x, y, width, height, radius, alpha, blurTex)
-                    : drawMaskedQuads(pose, masks, scale, px, py + hCrop, texW, texH, blurTex);
+                    : drawMaskedQuads(pose, masks, scale, px, py + hCrop,
+                            (double) texW * pw / sampleW, (double) texH * hCrop / sampleCropH, blurTex);
             if (!drawn) {
                 ppM7 = probeOn ? System.nanoTime() : 0L;
                 return false;
@@ -263,7 +273,8 @@ public final class PanelBlurRenderer {
             return false;
         }
         // 首次进入 D / 纹理重建 / 尚无有效旧档 → 强制刷新一次（不采未初始化纹理）。
-        if (lastBlurTex == -1 || recreated) {
+        if (lastBlurTex == -1 || recreated || lastQuality != com.atom.chat.config.AtomChatConfig.activeGraphicsQuality()
+                || strength != lastStrength) {
             return render(pose, x, y, width, height, radius, alpha, strength);
         }
         com.atom.chat.config.AtomChatConfig probeCfg = com.atom.chat.config.AtomChatConfig.get();
@@ -374,7 +385,7 @@ public final class PanelBlurRenderer {
     }
 
     static boolean drawMaskedQuads(Matrix4f pose, java.util.List<BlurMask> masks, double scale,
-                                    int captureX, int captureBottom, int textureWidth, int textureHeight, int texture) {
+                                    int captureX, int captureBottom, double textureWidth, double textureHeight, int texture) {
         return GlStateUtil.withRgbOnlyBlend(() -> {
             for (BlurMask mask : masks) {
                 var rect = mask.rect();
@@ -461,11 +472,12 @@ public final class PanelBlurRenderer {
      * It is rare and its size is stable, so it does not reintroduce the
      * per-frame rebuild this method exists to remove.
      */
-    private static void ensureTextures(int w, int h, boolean clipped) {
+    private static void ensureTextures(int w, int h, boolean clipped, int divisor) {
         w = Math.max(1, w);
         h = Math.max(1, h);
         boolean wantCapacity = !clipped;
-        boolean wasCapacity = capacityMode;
+        boolean sameResolution = textureDivisor == divisor;
+        boolean wasCapacity = capacityMode && sameResolution;
         boolean need;
         int nw, nh;
         if (wantCapacity) {
@@ -473,7 +485,7 @@ public final class PanelBlurRenderer {
             nw = Math.max(nextPow2(w), wasCapacity ? capW : 0);
             nh = Math.max(nextPow2(h), wasCapacity ? capH : 0);
         } else {
-            need = (inputFbo == -1) || wasCapacity || (w != texW) || (h != texH);
+            need = (inputFbo == -1) || capacityMode || !sameResolution || (w != texW) || (h != texH);
             nw = w;
             nh = h;
         }
@@ -481,6 +493,7 @@ public final class PanelBlurRenderer {
             return;
         }
         capacityMode = wantCapacity;
+        textureDivisor = divisor;
         destroyTextures();
         recreated = true;
         com.atom.chat.diagnostics.FrameSegments.count(com.atom.chat.diagnostics.FrameSegments.Counter.BLUR_RESOURCE);
@@ -587,13 +600,8 @@ public final class PanelBlurRenderer {
     }
 
     private static int refreshBlur(int mainFbo, int fbHeight, int x, int y, int w, int h, float strength,
+                                   com.atom.chat.config.GraphicsQuality quality, int sampleW, int sampleH,
                                    int restoreFbo, int[] restoreViewport, boolean restoreScissor) {
-        int y2 = Math.min(y + h, fbHeight);
-        if (y2 <= y) {
-            return lastBlurTex;
-        }
-        h = y2 - y;
-
         // P0-C: render() already captured the external FBO / viewport / scissor
         // at the only true state boundary. From here to the tail every binding
         // is written by ourselves, so re-querying them here was a redundant
@@ -614,21 +622,27 @@ public final class PanelBlurRenderer {
         // every-2-frames refresh. A denied slot simply reuses lastBlurTex.
         boolean full = true;
         if (full) {
-            blit(mainFbo, x, glY0, x + w, glY1, inputFbo, 0, 0, w, h);
+            blit(mainFbo, x, glY0, x + w, glY1, inputFbo, 0, 0, sampleW, sampleH);
             if (capacityMode) {
-                extendEdge(inputFbo, w, h, texW, texH);
+                extendEdge(inputFbo, sampleW, sampleH, texW, texH);
             }
 
+            // Convert device-pixel offsets using the actual ratios, including odd dimensions.
+            float scaleX = (float) sampleW / w;
+            float scaleY = (float) sampleH / h;
             int srcTex = inputTex;
             for (int i = 0; i < KawaseBlur.PASSES; i++) {
                 int dstFbo = (i % 2 == 0) ? tempFbo : resultFbo;
-                kawasePass(dstFbo, srcTex, vpW, vpH, capacityMode, tmx, tmy, KawaseBlur.spacing(i, strength));
+                float spacing = KawaseBlur.spacing(i, strength);
+                kawasePass(dstFbo, srcTex, vpW, vpH, capacityMode, tmx, tmy, spacing * scaleX, spacing * scaleY);
                 if (capacityMode) {
-                    extendEdge(dstFbo, w, h, texW, texH);
+                    extendEdge(dstFbo, sampleW, sampleH, texW, texH);
                 }
                 srcTex = (i % 2 == 0) ? tempTex : resultTex;
             }
-            lastBlurTex = (KawaseBlur.PASSES % 2 == 0) ? resultTex : tempTex;
+            lastBlurTex = srcTex;
+            lastQuality = quality;
+            lastStrength = strength;
             recreated = false;
         }
 
@@ -650,7 +664,7 @@ public final class PanelBlurRenderer {
     }
 
     private static void kawasePass(int dstFbo, int srcTex, int viewportW, int viewportH,
-                                   boolean scaled, float texMaxX, float texMaxY, float spacing) {
+                                   boolean scaled, float texMaxX, float texMaxY, float spacingX, float spacingY) {
         ShaderInstance sh = kawaseShader;
         if (sh == null) {
             return;
@@ -672,7 +686,7 @@ public final class PanelBlurRenderer {
 
         RenderSystem.disableBlend();
         RenderSystem.setShaderTexture(0, srcTex);
-        uSpacing.set(spacing);
+        uSpacing.set(spacingX, spacingY);
         RenderSystem.setShader(() -> sh);
 
         // The vertex shader derives texCoord from Position (texCoord =

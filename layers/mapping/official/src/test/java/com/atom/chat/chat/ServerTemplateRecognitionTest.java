@@ -199,4 +199,32 @@ class ServerTemplateRecognitionTest {
         }
         throw new AssertionError("Missing entity tooltip constructor");
     }
+
+    @Test void trChatSeparateEnvelopeDelimiterPreservesTheColonInTheBody() {
+        String body = "YG-04 test [brackets]: text";
+        String format = "[{channel}] {display}: {message}";
+        var message = net.minecraft.network.chat.Component.empty().append(net.minecraft.network.chat.Component.literal("[world] "))
+                .append(net.minecraft.network.chat.Component.literal("LabGame")).append(net.minecraft.network.chat.Component.literal(": ")).append(net.minecraft.network.chat.Component.literal(body));
+        var parsed = ServerTemplateRecognition.parse(message, null, "Other", java.util.UUID.randomUUID(),
+                java.util.List.of(format), java.util.List.of(), java.util.List.of());
+        assertNotNull(parsed);
+        assertFalse(parsed.system());
+        assertEquals(IdentityEvidence.UNKNOWN_TEMPLATE, parsed.evidence());
+        assertNull(parsed.senderUuid());
+        assertEquals(body, parsed.contentComponent().getString());
+
+        var flat = net.minecraft.network.chat.Component.literal(message.getString());
+        var ambiguous = ServerTemplateRecognition.parse(flat, null, "Other", java.util.UUID.randomUUID(),
+                java.util.List.of(format), java.util.List.of(), java.util.List.of());
+        assertNotNull(ambiguous);
+        assertTrue(ambiguous.system(), "a flat message still has no separator evidence");
+
+        var ambiguousComponents = net.minecraft.network.chat.Component.empty().append(net.minecraft.network.chat.Component.literal("[world] LabGame"))
+                .append(net.minecraft.network.chat.Component.literal(": ")).append(net.minecraft.network.chat.Component.literal("first"))
+                .append(net.minecraft.network.chat.Component.literal(": ")).append(net.minecraft.network.chat.Component.literal("second"));
+        var twoSeparators = ServerTemplateRecognition.parse(ambiguousComponents, null, "Other", java.util.UUID.randomUUID(),
+                java.util.List.of(format), java.util.List.of(), java.util.List.of());
+        assertNotNull(twoSeparators);
+        assertTrue(twoSeparators.system(), "two equally valid isolated delimiters must remain ambiguous");
+    }
 }

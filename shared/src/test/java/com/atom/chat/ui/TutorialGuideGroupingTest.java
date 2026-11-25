@@ -17,8 +17,14 @@ class TutorialGuideGroupingTest {
             assertTrue(e.lastRow()>=e.row());if(e.lastRow()>e.row())grouped++;
         }
         int tabs = Arrays.stream(SettingsSection.values()).mapToInt(section -> Math.max(1, page.chips(section).size())).sum();
-        assertEquals(tabs, guide.stream().filter(e -> e.section() != null).count(),
-                "one entry per settings tab");
+        assertEquals(tabs + 1, guide.stream().filter(e -> e.section() != null).count(),
+                "settings retain their grouped entries plus an independent quality step");
+        var quality = guide.stream().filter(e -> UiFeatureRenderTest.tr("atomchat.settings.appearance.quality").equals(e.title()))
+                .toList();
+        assertEquals(1, quality.size());
+        assertEquals(SettingsSection.APPEARANCE, quality.get(0).section());
+        assertEquals(quality.get(0).row(), quality.get(0).lastRow());
+        assertEquals(UiFeatureRenderTest.tr("atomchat.tutorial.settings.appearance.quality"), quality.get(0).body());
         assertTrue(grouped>=4,"ordinary settings must advance by group, not by item");
         for(var section:SettingsSection.values())for(int chip=0;chip<Math.max(1,page.chips(section).size());chip++) {
             page.selectChip(section,chip);var copy=page.tutorialRows(section);rows+=copy.size();final int index=chip;

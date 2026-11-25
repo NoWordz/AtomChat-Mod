@@ -41,7 +41,7 @@ class MessageListShadowTest {
             public boolean isModLoaded(String id) { return false; }
         });
         AtomChatConfig config = AtomChatConfig.get();
-        boolean oldMode = config.performanceMode;
+        boolean oldMode = config.performanceModeEnabled();
         boolean oldMotion = config.animationEnabled;
         boolean oldImages = config.imageMessagesEnabled;
         boolean oldCompact = config.compactMessagesEnabled;
@@ -87,7 +87,7 @@ class MessageListShadowTest {
                         motion, message("Lumi", "[[CICode,name=unavailable]]", true, false));
                 view.setVisibleStart(1);
                 try {
-                    config.performanceMode = false;
+                    config.graphicsQuality = com.atom.chat.config.GraphicsQuality.ULTRA;
                     Canvas canvas = output.getCanvas();
                     canvas.clear(BACKDROP);
                     draw(view, canvas, rows, fromTop());
@@ -98,7 +98,7 @@ class MessageListShadowTest {
                     float loadCenter = X + (WIDTH - 2F * X) / 2F;
                     assertTrue(view.loadEarlierHitAt(loadCenter, Y + UiTokens.s(12)));
 
-                    config.performanceMode = true;
+                    config.graphicsQuality = com.atom.chat.config.GraphicsQuality.PERFORMANCE;
                     canvas.clear(BACKDROP);
                     draw(view, canvas, rows, fromTop());
                     assertEquals(hit, hitFor(view, picture));
@@ -120,7 +120,7 @@ class MessageListShadowTest {
                             fast.getColor((int) loadCenter, (int) (Y + UiTokens.s(30) + 2)));
 
                     clock.addAndGet(120L);
-                    config.performanceMode = false;
+                    config.graphicsQuality = com.atom.chat.config.GraphicsQuality.ULTRA;
                     canvas.clear(BACKDROP);
                     draw(view, canvas, rows, fromTop());
                     assertTrue(output.readPixels(allocate(nextGif), 0, 0));
@@ -132,7 +132,7 @@ class MessageListShadowTest {
                     assertEquals(BACKDROP, nextGif.getColor(gifOuter, gifY));
 
                     if ("1".equals(System.getenv("ATOMCHAT_MESSAGE_SHADOW_PREVIEW"))) {
-                        config.performanceMode = false;
+                        config.graphicsQuality = com.atom.chat.config.GraphicsQuality.ULTRA;
                         clock.set(1120L);
                         for (int side = 0; side < 2; side++) {
                             canvas.save();
@@ -163,7 +163,7 @@ class MessageListShadowTest {
                 }
             }
         } finally {
-            config.performanceMode = oldMode;
+            config.graphicsQuality = (oldMode ? com.atom.chat.config.GraphicsQuality.PERFORMANCE : com.atom.chat.config.GraphicsQuality.ULTRA);
             config.animationEnabled = oldMotion;
             config.imageMessagesEnabled = oldImages;
             config.compactMessagesEnabled = oldCompact;
@@ -193,7 +193,7 @@ class MessageListShadowTest {
                 (i & 1) != 0, i % 10 == 0)).toList();
         view.setVisibleStart(0);
         for (boolean fast : new boolean[]{false, true}) {
-            config.performanceMode = fast;
+            config.graphicsQuality = (fast ? com.atom.chat.config.GraphicsQuality.PERFORMANCE : com.atom.chat.config.GraphicsQuality.ULTRA);
             ScrollController scroll = fromTop();
             draw(view, canvas, feed, scroll);
             int maxVisible = 0;

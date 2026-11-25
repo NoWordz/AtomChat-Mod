@@ -16,7 +16,7 @@ class ChatShortcutHintRenderTest {
         field.setAccessible(true);
         var previous = field.get(null);
         var config = new AtomChatConfig();
-        config.performanceMode = true;
+        config.graphicsQuality = com.atom.chat.config.GraphicsQuality.PERFORMANCE;
         field.set(null, config);
         try (var surface = Surface.makeRasterN32Premul(180, 180); var pixels = new Bitmap()) {
             var canvas = surface.getCanvas();

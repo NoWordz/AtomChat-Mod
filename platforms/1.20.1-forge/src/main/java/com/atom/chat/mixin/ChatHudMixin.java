@@ -136,7 +136,7 @@ public class ChatHudMixin implements NotificationHudOverlay.PanelChatHud {
         return atomchat$hudRenderer.render(viewport, client.player.getUUID(), OwnIdentity.bareName(),
                 net.minecraft.client.resources.language.I18n.get("atomchat.sender.player"), net.minecraft.client.resources.language.I18n.get("atomchat.hud.image"),
                 client.getMainRenderTarget().frameBufferId,
-                context::flush, graphics -> { com.atom.chat.render.NativeTagIconRenderer.prepare(context,graphics); ItemIconRenderer.prepare(context, graphics); },
+                context::flush, graphics -> ItemIconRenderer.prepare(context, graphics),
                 limit, opacity, visibility, animate, now / 1_000_000L);
     }
 
@@ -206,13 +206,21 @@ public class ChatHudMixin implements NotificationHudOverlay.PanelChatHud {
             return;
         }
 
+        ChatMessage staged = com.atom.chat.card.CardHudBridge.consumeStaged();
+        if (staged != null) {
+            atomchat$hudHistory.stage(message, staged);
+            return;
+        }
+
         // Store the original message first; the vanilla HUD copy is rewritten
         // below only after capture has already decided what belongs in ChatStore.
         ChatMessage presentation = atomchat$captureAndStore(message, NativeMessageBridge.capture(signatureData,indicator));
 
         Minecraft client = Minecraft.getInstance();
         String ownName = client.player != null ? client.player.getName().getString() : null;
-        Component rewritten = ChatTextRewriter.rewritePrivate(message, ownName);
+        boolean protectedRedPacket = presentation != null && presentation.hasCard()
+                && presentation.getCard().hasPrivateRedPacketPassword();
+        Component rewritten = protectedRedPacket ? presentation.getComponent() : ChatTextRewriter.rewritePrivate(message, ownName);
         if (rewritten != null) {
             // Keep compacting image codes / quote prefixes inside the rewritten
             // private line (e.g. "<name>[Whisper] [Quote] body").
@@ -249,11 +257,17 @@ public class ChatHudMixin implements NotificationHudOverlay.PanelChatHud {
 
         boolean configured = false;
         SenderMeta meta = MessageCapture.consume();
+        var convertedShare = com.atom.chat.net.CardCompanionClient.takeConvertedShare(message);
+        if (convertedShare != null) {
+            return atomchat$storeConvertedShare(message, nativeMeta, client, convertedShare);
+        }
         if (meta == null) meta = ChatPipeline.structuredPlayerLine(message);
         if (AtomChatConfig.get().debug) {
             // Whether the channel-level capture landed at all: a missing meta is
             // why an own line falls through to the text heuristics (2026-09-11).
-            AtomChat.LOGGER.info(com.atom.chat.diagnostics.AtomChatLog.message("capture", "[capture] meta={} line={}"), meta != null, raw);
+            AtomChat.LOGGER.info(com.atom.chat.diagnostics.AtomChatLog.message("capture", "[capture] meta={} line={}"), meta != null,
+                    com.atom.chat.card.BuiltInCardAdapter.isLegacyCredentialAnnouncement(message, raw)
+                            ? "[private red packet]" : raw);
         }
         // Machine-to-machine chat protocols must never be claimed as player chat
         // or suppressed as an own echo. e33chat routes them to the system channel
@@ -261,6 +275,10 @@ public class ChatHudMixin implements NotificationHudOverlay.PanelChatHud {
         if (ChatClassifier.isXaeroWaypointData(raw)
                 || (meta != null && meta.contentText() != null
                 && ChatClassifier.isXaeroWaypointData(meta.contentText()))) {
+            if (meta != null && !meta.system()) {
+                if (sourceBlocked(client, meta)) return null;
+                return addSystemMessage(message, nativeMeta, meta.senderName());
+            }
             return addSystemMessage(message,nativeMeta);
         }
         if (meta != null && meta.system()) { return addSystemMessage(message,nativeMeta); }
@@ -329,11 +347,7 @@ public class ChatHudMixin implements NotificationHudOverlay.PanelChatHud {
                 com.atom.chat.chat.LearnedChatFormats.observe(raw, confirmedLabel, meta.contentComponent().getString());
         }
         boolean unknown = meta.evidence() == IdentityEvidence.UNKNOWN_TEMPLATE;
-        String blockName = unknown ? null : meta.profileName() != null ? meta.profileName() : meta.senderName();
-        if (AtomChatConfig.get().hideBlockedMessages
-                && blockName != null && BlockList.isBlocked(blockName)) {
-            return null;
-        }
+        if (sourceBlocked(client, meta)) return null;
 
         String displayName = meta.senderComponent() != null ? meta.senderComponent().getString() : ChatPipeline.decoratedDisplayName(raw, meta);
         if (displayName == null) {
@@ -369,6 +383,10 @@ public class ChatHudMixin implements NotificationHudOverlay.PanelChatHud {
                 quote != null ? quote.quoteText() : null,
                 meta.senderUuid(), displayName, unknown ? "" : meta.profileName(), body,
                 senderRich, contentRich).retainPresentation(configured || unknown).withNativeMeta(nativeMeta);
+        var pairedCard = meta.evidence() == IdentityEvidence.NATIVE
+                ? com.atom.chat.net.CardCompanionClient.takeNativeShare(meta.senderUuid(), meta.originalContent()) : null;
+        presentation = pairedCard == null ? atomchat$attachCard(presentation, message, displayName, meta.system())
+                : presentation.withCard(pairedCard);
         atomchat$addPublic(presentation, body, meta.system() || unknown,
                 meta.evidence().confirmsIdentity(), meta.originalContent());
         return presentation;
@@ -379,6 +397,19 @@ public class ChatHudMixin implements NotificationHudOverlay.PanelChatHud {
      * uses the final body text and fires the observer seam; unread counters
      * live in ChatStore. System capsules never count as mentions.
      */
+    @Unique
+    private static ChatMessage atomchat$storeConvertedShare(Component message, NativeMessageMeta nativeMeta,
+            Minecraft client, com.atom.chat.net.ConvertedSharePairing.Share share) {
+        if (client.isBlocked(share.author()) || client.getPlayerSocialManager().isHidden(share.author())
+                || AtomChatConfig.get().hideBlockedMessages && BlockList.isBlocked(share.name())) return null;
+        boolean own = client.player != null && share.author().equals(client.player.getUUID());
+        var row = new ChatMessage(message, own, false, null, null, share.author(), share.name(), share.name(),
+                share.body(), RichText.literal(share.name()), RichText.literal(share.body()))
+                .withNativeMeta(nativeMeta).withCard(share.card());
+        atomchat$addPublic(row, share.body(), false, true, share.body());
+        return row;
+    }
+
     @Unique
     private static void atomchat$addPublic(ChatMessage message, String body, boolean system, boolean provenSender, String originalBody) {
         if (message.isOwn() && provenSender) OwnIdentity.cache(ChatPipeline.senderPresentation(message.getSenderRich()));
@@ -586,8 +617,29 @@ public class ChatHudMixin implements NotificationHudOverlay.PanelChatHud {
         return privateMessage;
     }
 
+    @Unique
+    private static boolean sourceBlocked(Minecraft client, SenderMeta meta) {
+        if (meta.evidence() == IdentityEvidence.UNKNOWN_TEMPLATE) return false;
+        if (client != null && meta.senderUuid() != null && client.isBlocked(meta.senderUuid())) return true;
+        String profile = meta.profileName() != null ? meta.profileName() : meta.senderName();
+        return AtomChatConfig.get().hideBlockedMessages && profile != null && BlockList.isBlocked(profile);
+    }
+
+    @Unique
+    private static ChatMessage atomchat$attachCard(ChatMessage presentation, Component original, String sender, boolean system) {
+        if (presentation.isDeleted()) return presentation;
+        var card = com.atom.chat.card.BuiltInCardAdapter.adapt(original, sender, system);
+        return card == null ? presentation : presentation.withCard(card);
+    }
+
     private static ChatMessage addSystemMessage(Component message, NativeMessageMeta nativeMeta) {
+        return addSystemMessage(message, nativeMeta, null);
+    }
+
+    @Unique
+    private static ChatMessage addSystemMessage(Component message, NativeMessageMeta nativeMeta, String sender) {
         ChatMessage presentation = atomchat$systemPresentation(message).withNativeMeta(nativeMeta);
+        presentation = atomchat$attachCard(presentation, message, sender, true);
         ChatStore.get().add(presentation);
         return presentation;
     }

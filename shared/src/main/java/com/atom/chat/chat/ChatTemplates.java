@@ -29,13 +29,25 @@ public final class ChatTemplates {
     public static TemplateParser.Preview matchConfigured(String visible, List<MessageTemplate> server,
                                                           List<String> publicFormats, List<String> privateFormats,
                                                           Collection<String> knownNames) {
-        var found = TemplateParser.match(server, visible);
-        found = TemplateParser.combine(found, matchRules(visible, publicFormats, knownNames, MessageTemplate.Kind.PUBLIC));
+        return matchConfigured(visible, server, publicFormats, privateFormats, knownNames, Set.of());
+    }
+
+    static TemplateParser.Preview matchConfigured(String visible, List<MessageTemplate> server,
+                                                   List<String> publicFormats, List<String> privateFormats,
+                                                   Collection<String> knownNames, Set<TemplateParser.Span> standaloneSegments) {
+        var found = TemplateParser.match(server, visible, standaloneSegments);
+        found = TemplateParser.combine(found, matchRules(visible, publicFormats, knownNames, MessageTemplate.Kind.PUBLIC,
+                standaloneSegments));
         return TemplateParser.combine(found, matchRules(visible, privateFormats, knownNames, MessageTemplate.Kind.INCOMING));
     }
 
     static TemplateParser.Preview matchRules(String line, List<String> formats, Collection<String> knownNames,
                                              MessageTemplate.Kind kind) {
+        return matchRules(line, formats, knownNames, kind, Set.of());
+    }
+
+    private static TemplateParser.Preview matchRules(String line, List<String> formats, Collection<String> knownNames,
+                                                      MessageTemplate.Kind kind, Set<TemplateParser.Span> standaloneSegments) {
         var found = TemplateParser.result(TemplateParser.State.NO_MATCH, "");
         if (formats == null) return found;
         if (formats.size() > 64) {
@@ -44,7 +56,7 @@ public final class ChatTemplates {
         }
         var names = knownNames == null ? List.<String>of() : knownNames;
         for (int i = 0; i < formats.size(); i++) {
-            var preview = TemplateParser.previewClient(formats.get(i), kind, line, names);
+            var preview = TemplateParser.previewClient(formats.get(i), kind, line, names, standaloneSegments);
             if (preview.state() == TemplateParser.State.INVALID) {
                 warn(kind + "[" + i + "]: " + preview.error());
                 continue;

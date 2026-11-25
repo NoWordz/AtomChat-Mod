@@ -78,6 +78,7 @@ public final class InputGate {
     /** {@code TRUE} while animating, else the first consumer's answer, else {@code null}. */
     public Boolean drag(double mouseX, double mouseY, int button, double dragX, double dragY) {
         if (host.panelAnimating()) {
+            cancelPointer(button);
             return Boolean.TRUE;
         }
         return route(router.drag(mouseX, mouseY, button, dragX, dragY));
@@ -86,10 +87,16 @@ public final class InputGate {
     /** {@code TRUE} while animating, else the first consumer's answer, else {@code null}. */
     public Boolean release(double mouseX, double mouseY, int button) {
         if (host.panelAnimating()) {
+            router.discardRelease(button);
             host.cancelPointer(button);
             return Boolean.TRUE;
         }
         return route(router.release(mouseX, mouseY, button));
+    }
+
+    public void cancelPointer(int button) {
+        router.cancel(button);
+        host.cancelPointer(button);
     }
 
     /**

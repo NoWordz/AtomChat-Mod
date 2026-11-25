@@ -358,7 +358,7 @@ public final class EnvironmentSummary {
         return "blur=" + onOff(config.effectiveBlurEnabled()) + " (opacity " + config.panelOpacity + ")"
                 + " | wallpaper=" + (WallpaperStore.isSet() ? "set" : "none")
                 + " | imageMessages=" + onOff(config.imageMessagesEnabled)
-                + " | animations=" + onOff(config.effectiveAnimationEnabled()) + " | performanceMode=" + onOff(config.performanceMode)
+                + " | animations=" + onOff(config.effectiveAnimationEnabled()) + " | graphicsQuality=" + config.graphicsQuality
                 + " | panel=" + (int) config.panelWidth + "x" + (int) config.panelHeight
                 + " @" + config.uiScale + "x"
                 + " | debug=" + onOff(config.debug);

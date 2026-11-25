@@ -1,5 +1,7 @@
 package com.atom.chat.render;
 
+import com.atom.chat.config.AtomChatConfig;
+import com.atom.chat.config.GraphicsQuality;
 import io.github.humbleui.skija.BlendMode;
 import io.github.humbleui.skija.Canvas;
 import io.github.humbleui.skija.FilterBlurMode;
@@ -17,7 +19,8 @@ import java.util.LinkedHashMap;
 
 /** Cached shape shadows for HUD messages and panel surfaces. Render-thread confined. */
 public final class HudShadow {
-    private static final int DENSITY = 2;
+    private static final int ULTRA_DENSITY = 2;
+    private static final int BALANCED_DENSITY = 1;
     private static final int MAX_PATCHES = 72;
     public static final float PAD = ShadowTokens.HUD.pad();
     public static final float PANEL_PAD = ShadowTokens.MESSAGE.pad();
@@ -27,7 +30,7 @@ public final class HudShadow {
     private HudShadow() { }
 
     private record Shape(int width, int height, float tl, float tr, float br, float bl,
-                         ShadowTokens.Face profile, boolean hollow, boolean circularCorners) { }
+                         ShadowTokens.Face profile, boolean hollow, boolean circularCorners, int density) { }
     private record Patch(Image image, IRect center) { }
     static void draw(Canvas canvas, RRect outline) {
         draw(canvas, outline, ShadowTokens.HUD, null);
@@ -51,10 +54,12 @@ public final class HudShadow {
         boolean circularCorners = CornerGeometry.usesCircularArcs(outline) || CornerGeometry.isSingleTip(tl, tr, br, bl)
                 || (tl == tr && tl == br && tl == bl && radius >= Math.min(width, height) / 2F - .001F);
         float reach = circularCorners ? radius : CornerGeometry.maxReach(radius);
-        int span = (int) Math.ceil((2F * reach + 6F * profile.wideSigma() + 2F) * DENSITY);
-        int pixelsWide = (int) Math.ceil(width * DENSITY);
-        int pixelsHigh = (int) Math.ceil(height * DENSITY);
-        var key = new Shape(Math.min(span, pixelsWide), Math.min(span, pixelsHigh), tl, tr, br, bl, profile, hollow, circularCorners);
+        int density = AtomChatConfig.activeGraphicsQuality() == GraphicsQuality.BALANCED
+                ? BALANCED_DENSITY : ULTRA_DENSITY;
+        int span = (int) Math.ceil((2F * reach + 6F * profile.wideSigma() + 2F) * density);
+        int pixelsWide = (int) Math.ceil(width * density);
+        int pixelsHigh = (int) Math.ceil(height * density);
+        var key = new Shape(Math.min(span, pixelsWide), Math.min(span, pixelsHigh), tl, tr, br, bl, profile, hollow, circularCorners, density);
         Patch patch = PATCHES.get(key);
         if (patch == null) {
             patch = bake(key);
@@ -75,9 +80,9 @@ public final class HudShadow {
         canvas.save();
         try {
             canvas.translate(outline.getLeft() - pad, outline.getTop() - pad);
-            canvas.scale(1F / DENSITY, 1F / DENSITY);
+            canvas.scale(1F / density, 1F / density);
             canvas.drawImageNine(patch.image(), patch.center(),
-                    Rect.makeWH((width + 2F * pad) * DENSITY, (height + 2F * pad) * DENSITY), FilterMode.LINEAR, opacity);
+                    Rect.makeWH((width + 2F * pad) * density, (height + 2F * pad) * density), FilterMode.LINEAR, opacity);
         } finally {
             canvas.restore();
         }
@@ -116,15 +121,16 @@ public final class HudShadow {
     }
 
     private static Patch bake(Shape key) {
+        int density = key.density();
         float pad = key.profile().pad();
-        int w = key.width() + (int) (2F * pad * DENSITY);
-        int h = key.height() + (int) (2F * pad * DENSITY);
+        int w = key.width() + (int) (2F * pad * density);
+        int h = key.height() + (int) (2F * pad * density);
         try (var surface = Surface.makeRasterN32Premul(w, h);
              var paint = new Paint().setAntiAlias(true)) {
             var canvas = surface.getCanvas();
             canvas.clear(0);
-            canvas.scale(DENSITY, DENSITY);
-            var face = RRect.makeComplexXYWH(pad, pad, (float) key.width() / DENSITY, (float) key.height() / DENSITY,
+            canvas.scale(density, density);
+            var face = RRect.makeComplexXYWH(pad, pad, (float) key.width() / density, (float) key.height() / density,
                     new float[]{key.tl(), key.tl(), key.tr(), key.tr(), key.br(), key.br(), key.bl(), key.bl()});
             if (key.profile().ambient() != null) paintLayer(canvas, face, paint, key.profile().ambient(), key.circularCorners());
             paintLayer(canvas, face, paint, key.profile().contact(), key.circularCorners());
@@ -142,7 +148,8 @@ public final class HudShadow {
 
     static void paintLayer(Canvas canvas, RRect face, Paint paint, ShadowTokens.Layer layer, boolean circular) {
         try (var blur = MaskFilter.makeBlur(FilterBlurMode.NORMAL, layer.sigma())) {
-            drawContour(canvas, face.offset(0F, layer.drop()), paint.setColor(layer.color()).setMaskFilter(blur), circular);
+            drawContour(canvas, face.offset(0F, layer.drop()),
+                    paint.setColor(SoftShadow.shadowColor(layer.color())).setMaskFilter(blur), circular);
             paint.setMaskFilter(null);
         }
     }

@@ -13,7 +13,7 @@
 分组是编译期事实：甲组少一个类型，那个目标当场编不过。判据用简单名的词边界匹配
 （覆盖 import 全限定名与同包简单名两种写法），偏保守 —— 注释里的提及也算，宁可多列。
 
-当前：甲组 **177** 个，乙组 **110** 个。
+当前：甲组 **188** 个，乙组 **126** 个。
 
 ## 甲：共用代码引用了的（接缝）
 
@@ -24,6 +24,15 @@
 | `com.atom.chat.audio.FeedbackSoundController` | 1.20.1-forge, 1.21.1-fabric, 1.21.1-neoforge |
 | `com.atom.chat.avatar.ColorPickerOverlay` | 1.21.1-fabric |
 | `com.atom.chat.avatar.ImageCropper` | 1.21.1-fabric |
+| `com.atom.chat.card.BuiltInCardAdapter` | 1.21.1-fabric |
+| `com.atom.chat.card.BuiltInCardRenderer` | 1.21.1-fabric |
+| `com.atom.chat.card.CardActionExecutor` | 1.21.1-fabric |
+| `com.atom.chat.card.CardHitRegion` | 1.21.1-fabric |
+| `com.atom.chat.card.CardHudBridge` | 1.21.1-fabric |
+| `com.atom.chat.card.ComponentCardAdapter` | 1.21.1-fabric |
+| `com.atom.chat.card.MinimapPreviewSampler` | 1.21.1-fabric |
+| `com.atom.chat.card.MinimapTerrainSampler` | 1.21.1-fabric |
+| `com.atom.chat.card.ShareCardClientPolicyTest` | 1.21.1-fabric |
 | `com.atom.chat.chat.ChatClassifier` | 1.21.1-fabric |
 | `com.atom.chat.chat.ChatClassifierTest` | 1.21.1-fabric |
 | `com.atom.chat.chat.ChatMessage` | 1.21.1-fabric |
@@ -92,6 +101,7 @@
 | `com.atom.chat.net.PokeCompanionServer` | 1.20.1-forge, 1.21.1-fabric, 1.21.1-neoforge |
 | `com.atom.chat.notification.NotificationBanner` | 1.21.1-fabric |
 | `com.atom.chat.notification.NotificationBannerRichTextTest` | 1.21.1-fabric |
+| `com.atom.chat.notification.NotificationController` | 1.20.1-forge, 1.21.1-fabric, 1.21.1-neoforge |
 | `com.atom.chat.notification.NotificationHudEditorScreen` | 1.21.1-fabric |
 | `com.atom.chat.notification.NotificationHudOverlay` | 1.21.1-fabric |
 | `com.atom.chat.notification.NotificationHudVisibility` | 1.20.1-forge, 1.21.1-fabric, 1.21.1-neoforge |
@@ -112,7 +122,6 @@
 | `com.atom.chat.render.NativeFontRenderer` | 1.21.1-fabric |
 | `com.atom.chat.render.NativeGlyphSource` | 1.20.1-forge, 1.21.1-fabric, 1.21.1-neoforge |
 | `com.atom.chat.render.NativeGlyphUpload` | 1.21.1-fabric |
-| `com.atom.chat.render.NativeTagIconRenderer` | 1.21.1-fabric |
 | `com.atom.chat.render.OffscreenRenderTest` | 1.21.1-fabric |
 | `com.atom.chat.render.PanelBlurRenderer` | 1.20.1-forge, 1.21.1-fabric, 1.21.1-neoforge |
 | `com.atom.chat.render.RichTextRenderer` | 1.21.1-fabric |
@@ -147,6 +156,8 @@
 
 | 目标 | 类型 |
 |---|---|
+| 1.20.1-forge | `com.atom.chat.api.card.AtomChatCards` |
+| 1.20.1-forge | `com.atom.chat.channel.ChannelNetwork` |
 | 1.20.1-forge | `com.atom.chat.mixin.AtomChatMixinPlugin` |
 | 1.20.1-forge | `com.atom.chat.mixin.NativeFontManagerMixin` |
 | 1.20.1-forge | `com.atom.chat.mixin.NativeFontPreparationAccess` |
@@ -155,10 +166,15 @@
 | 1.20.1-forge | `com.atom.chat.mixin.ReactionPrivateMessageMixin` |
 | 1.20.1-forge | `com.atom.chat.mixin.ReactionServerSendMixin` |
 | 1.20.1-forge | `com.atom.chat.mixin.ReactionSystemBroadcastMixin` |
+| 1.20.1-forge | `com.atom.chat.mixin.TrChatChannelPacketMixin` |
 | 1.20.1-forge | `com.atom.chat.net.AvatarPayloads` |
+| 1.20.1-forge | `com.atom.chat.net.CardCompanionClient` |
+| 1.20.1-forge | `com.atom.chat.net.CardCompanionServer` |
+| 1.20.1-forge | `com.atom.chat.net.CardPayloads` |
 | 1.20.1-forge | `com.atom.chat.net.ConfigScreenServer` |
 | 1.20.1-forge | `com.atom.chat.net.ForgeWireIo` |
 | 1.20.1-forge | `com.atom.chat.net.MediaPayloads` |
+| 1.20.1-forge | `com.atom.chat.net.MentionAllPayloads` |
 | 1.20.1-forge | `com.atom.chat.net.PackNetClient` |
 | 1.20.1-forge | `com.atom.chat.net.PackNetServer` |
 | 1.20.1-forge | `com.atom.chat.net.PokePayloads` |
@@ -173,7 +189,6 @@
 | 1.20.1-forge | `com.atom.chat.net.TestCompanionClient` |
 | 1.20.1-forge | `com.atom.chat.net.TestCompanionServer` |
 | 1.20.1-forge | `com.atom.chat.net.TestPayloads` |
-| 1.20.1-forge | `com.atom.chat.notification.NotificationController` |
 | 1.20.1-forge | `com.atom.chat.platform.ForgePlatform` |
 | 1.20.1-forge | `com.atom.chat.screen.CompletionVersionPolicy` |
 | 1.20.1-forge | `com.atom.chat.net.AvatarCompanionServerTest` |
@@ -182,6 +197,8 @@
 | 1.20.1-forge | `com.atom.chat.screen.NativeScreenRedactionTest` |
 | 1.20.1-forge | `com.atom.chat.testing.ForgeEventBusAgent` |
 | 1.20.1-forge | `com.atom.chat.testing.ForgeEventBusAgentProbe` |
+| 1.21.1-fabric | `com.atom.chat.api.card.AtomChatCards` |
+| 1.21.1-fabric | `com.atom.chat.channel.ChannelNetwork` |
 | 1.21.1-fabric | `com.atom.chat.compat.FabricAtomLibVersion` |
 | 1.21.1-fabric | `com.atom.chat.mixin.AtomChatMixinPlugin` |
 | 1.21.1-fabric | `com.atom.chat.mixin.NativeFontManagerMixin` |
@@ -192,9 +209,13 @@
 | 1.21.1-fabric | `com.atom.chat.mixin.ReactionServerSendMixin` |
 | 1.21.1-fabric | `com.atom.chat.mixin.ReactionSystemBroadcastMixin` |
 | 1.21.1-fabric | `com.atom.chat.net.AvatarPayloads` |
+| 1.21.1-fabric | `com.atom.chat.net.CardCompanionClient` |
+| 1.21.1-fabric | `com.atom.chat.net.CardCompanionServer` |
+| 1.21.1-fabric | `com.atom.chat.net.CardPayloads` |
 | 1.21.1-fabric | `com.atom.chat.net.ConfigScreenServer` |
 | 1.21.1-fabric | `com.atom.chat.net.FabricWireIo` |
 | 1.21.1-fabric | `com.atom.chat.net.MediaPayloads` |
+| 1.21.1-fabric | `com.atom.chat.net.MentionAllPayloads` |
 | 1.21.1-fabric | `com.atom.chat.net.PackNetClient` |
 | 1.21.1-fabric | `com.atom.chat.net.PackNetServer` |
 | 1.21.1-fabric | `com.atom.chat.net.PokePayloads` |
@@ -209,7 +230,6 @@
 | 1.21.1-fabric | `com.atom.chat.net.TestCompanionClient` |
 | 1.21.1-fabric | `com.atom.chat.net.TestCompanionServer` |
 | 1.21.1-fabric | `com.atom.chat.net.TestPayloads` |
-| 1.21.1-fabric | `com.atom.chat.notification.NotificationController` |
 | 1.21.1-fabric | `com.atom.chat.platform.FabricPlatform` |
 | 1.21.1-fabric | `com.atom.chat.screen.CompletionVersionPolicy` |
 | 1.21.1-fabric | `com.atom.chat.compat.FabricAtomLibVersionTest` |
@@ -224,6 +244,8 @@
 | 1.21.1-fabric | `com.atom.chat.ui.QuickPhrasePanelHitZoneTest` |
 | 1.21.1-fabric | `net.minecraft.client.gui.screen.AtomChatScreenMessageLookupTest` |
 | 1.21.1-fabric | `net.minecraft.client.gui.screen.NativeScreenRedactionTest` |
+| 1.21.1-neoforge | `com.atom.chat.api.card.AtomChatCards` |
+| 1.21.1-neoforge | `com.atom.chat.channel.ChannelNetwork` |
 | 1.21.1-neoforge | `com.atom.chat.mixin.AtomChatMixinPlugin` |
 | 1.21.1-neoforge | `com.atom.chat.mixin.GnetumChatLayerMixin` |
 | 1.21.1-neoforge | `com.atom.chat.mixin.NativeFontManagerMixin` |
@@ -234,8 +256,12 @@
 | 1.21.1-neoforge | `com.atom.chat.mixin.ReactionServerSendMixin` |
 | 1.21.1-neoforge | `com.atom.chat.mixin.ReactionSystemBroadcastMixin` |
 | 1.21.1-neoforge | `com.atom.chat.net.AvatarPayloads` |
+| 1.21.1-neoforge | `com.atom.chat.net.CardCompanionClient` |
+| 1.21.1-neoforge | `com.atom.chat.net.CardCompanionServer` |
+| 1.21.1-neoforge | `com.atom.chat.net.CardPayloads` |
 | 1.21.1-neoforge | `com.atom.chat.net.ConfigScreenServer` |
 | 1.21.1-neoforge | `com.atom.chat.net.MediaPayloads` |
+| 1.21.1-neoforge | `com.atom.chat.net.MentionAllPayloads` |
 | 1.21.1-neoforge | `com.atom.chat.net.NeoForgeWireIo` |
 | 1.21.1-neoforge | `com.atom.chat.net.PackNetClient` |
 | 1.21.1-neoforge | `com.atom.chat.net.PackNetServer` |
@@ -251,7 +277,6 @@
 | 1.21.1-neoforge | `com.atom.chat.net.TestCompanionClient` |
 | 1.21.1-neoforge | `com.atom.chat.net.TestCompanionServer` |
 | 1.21.1-neoforge | `com.atom.chat.net.TestPayloads` |
-| 1.21.1-neoforge | `com.atom.chat.notification.NotificationController` |
 | 1.21.1-neoforge | `com.atom.chat.screen.CompletionVersionPolicy` |
 | 1.21.1-neoforge | `com.atom.chat.net.AvatarCompanionServerTest` |
 | 1.21.1-neoforge | `com.atom.chat.render.NativeFontProviderTest` |

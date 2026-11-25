@@ -164,10 +164,15 @@ public final class NotificationBanner {
      * strings: the capture path hands over the runs sliced out of the original
      * line, so an explicitly coloured sender or a multi-coloured body survives
      * all the way to the draw call. Nothing here can flatten that to a string
-     * again — {@link #drawBanner} reads the runs. {@code message} stays for the
-     * avatar and for the jump target.
+     * again — {@link #drawBanner} reads the runs. Avatar identity is also
+     * available for notices with no message to jump to.
      */
-    public record Active(Type type, RichText sender, RichText content, long born, ChatMessage message) {
+    public record Active(Type type, RichText sender, RichText content, long born, ChatMessage message,
+                         java.util.UUID avatarUuid, String avatarProfile) {
+        public Active(Type type, RichText sender, RichText content, long born, ChatMessage message) {
+            this(type, sender, content, born, message, message == null ? null : message.getSenderUuid(),
+                    message == null ? null : message.getProfileName());
+        }
     }
 
     private record Hit(Active banner, Rect rect) {
@@ -205,8 +210,16 @@ public final class NotificationBanner {
      * path never has to null-check.
      */
     public void enqueue(Type type, RichText senderRich, RichText contentRich, ChatMessage message) {
-        long now = clock.getAsLong();
-        banners.add(0, new Active(type, literalOrEmpty(senderRich), literalOrEmpty(contentRich), now, message));
+        enqueue(new Active(type, literalOrEmpty(senderRich), literalOrEmpty(contentRich), clock.getAsLong(), message));
+    }
+
+    public void enqueueMentionAll(java.util.UUID senderUuid, String profile, String content) {
+        enqueue(new Active(Type.MENTION, RichText.literal(profile), RichText.literal(content),
+                clock.getAsLong(), null, senderUuid, profile));
+    }
+
+    private void enqueue(Active banner) {
+        banners.add(0, banner);
         while (banners.size() > MAX_STACK) {
             Active dropped = banners.remove(banners.size() - 1);
             hoverAlphas.remove(dropped);
@@ -428,6 +441,7 @@ public final class NotificationBanner {
         lastHoverMs = now;
         for (BannerPose pose : frame.poses()) {
             Active b = pose.banner();
+            boolean reply = interactive && b.message() != null;
             var rect = pose.rect();
             float x = rect.x(), drawY = rect.y(), bannerW = rect.w(), bannerH = rect.h();
             float scale = pose.scale();
@@ -450,15 +464,17 @@ public final class NotificationBanner {
                     canvas.translate(cx + pose.slide(), cy);
                     canvas.scale(scale, scale);
                     canvas.translate(-cx, -cy);
-                    drawBanner(canvas, b, x, drawY, bannerW, bannerH, pose.alpha(), hover, buttonHover, sendScale, interactive, interactive);
+                    drawBanner(canvas, b, x, drawY, bannerW, bannerH, pose.alpha(), hover, buttonHover, sendScale, reply, interactive);
                 }
             } finally { canvas.restore(); }
             if (interactive) {
                 var bounds = pose.paintedBounds();
                 hitRects.add(new Hit(b, Rect.makeXYWH(bounds.x(), bounds.y(), bounds.w(), bounds.h())));
-                float btnX = bounds.x() + (bannerW - UiTokens.s(14) - BUTTON_SIZE) * scale;
-                float btnY = bounds.y() + (bannerH - BUTTON_SIZE) * scale / 2;
-                buttonRects.add(new Hit(b, Rect.makeXYWH(btnX, btnY, BUTTON_SIZE * scale, BUTTON_SIZE * scale)));
+                if (reply) {
+                    float btnX = bounds.x() + (bannerW - UiTokens.s(14) - BUTTON_SIZE) * scale;
+                    float btnY = bounds.y() + (bannerH - BUTTON_SIZE) * scale / 2;
+                    buttonRects.add(new Hit(b, Rect.makeXYWH(btnX, btnY, BUTTON_SIZE * scale, BUTTON_SIZE * scale)));
+                }
             }
         }
         pruneHovers(hoverAlphas);
@@ -659,13 +675,11 @@ public final class NotificationBanner {
                 float avatarSize = UiTokens.ACTION_BUTTON_SIZE;
                 float avatarX = x + padX;
                 float avatarY = y + (h - avatarSize) / 2.0F;
-                ChatMessage msg = b.message();
-                boolean skinStyle = PlayerAvatar.drawE33Chat(canvas,
-                        msg != null ? msg.getSenderUuid() : null,
-                        msg != null ? msg.getProfileName() : null,
+                boolean skinStyle = PlayerAvatar.drawE33Chat(canvas, b.avatarUuid(), b.avatarProfile(),
                         avatarX, avatarY, avatarSize);
                 if (!skinStyle) {
-                    Image face = msg != null ? PlayerAvatar.face(msg.getSenderUuid(), msg.getProfileName()) : null;
+                    Image face = b.avatarUuid() != null || b.avatarProfile() != null
+                            ? PlayerAvatar.face(b.avatarUuid(), b.avatarProfile()) : null;
                     if (face != null) {
                         SkiaImages.drawRoundedImage(canvas, face, avatarX, avatarY, avatarSize, avatarSize,
                                 avatarSize / 2.0F, SamplingMode.LINEAR);

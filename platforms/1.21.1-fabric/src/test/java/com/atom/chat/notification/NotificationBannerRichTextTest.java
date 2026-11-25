@@ -88,6 +88,30 @@ class NotificationBannerRichTextTest {
     }
 
     @Test
+    void mentionAllUsesTheNoticesSenderWithoutCreatingAReplyTarget() {
+        var config = AtomChatConfig.get();
+        boolean previousEnabled = config.enabled;
+        boolean previousBanner = config.mentionBannerEnabled;
+        config.enabled = true;
+        config.mentionBannerEnabled = true;
+        var banner = NotificationBanner.INSTANCE;
+        banner.reset();
+        try {
+            UUID sender = UUID.fromString("aabbccdd-1234-4234-9234-123456789012");
+            NotificationController.onMentionAll(sender, "Steve");
+            var notice = banner.newest();
+            assertNotNull(notice);
+            assertEquals(sender, notice.avatarUuid());
+            assertEquals("Steve", notice.avatarProfile());
+            org.junit.jupiter.api.Assertions.assertNull(notice.message());
+        } finally {
+            banner.reset();
+            config.mentionBannerEnabled = previousBanner;
+            config.enabled = previousEnabled;
+        }
+    }
+
+    @Test
     void senderKeepsItsExplicitColourInTheTitleRow() {
         RichText title = NotificationBanner.titleRich(NotificationBanner.Type.MENTION,
                 colouredSender("Steve", ORANGE));

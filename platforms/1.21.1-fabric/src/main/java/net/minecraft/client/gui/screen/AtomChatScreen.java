@@ -88,6 +88,7 @@ import com.atom.chat.ui.QuickPhraseWiring;
 import com.atom.chat.ui.UiMotion;
 import com.atom.chat.ui.UiStagger;
 import com.atom.lib.design.atomchat.UiTokens;
+import com.atom.chat.ui.input.ClickTarget;
 import com.atom.chat.ui.input.InputGate;
 import com.atom.chat.ui.input.InputHandler;
 import com.atom.chat.wallpaper.WallpaperImage;
@@ -431,7 +432,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         public String translate(String key) { return tr(key); }
         public void enter() {
             tutorialReturnStack = navStack.snapshot();
-            cancelTransitionPointer(0);
+            cancelScreenPointer();
             composerTools.close();
             emojiPanel.close();
             closePhrasePanel();
@@ -464,7 +465,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         }
         public void show(com.atom.chat.onboarding.TutorialSession.Step step) { showTutorialStep(step); }
         public void leave() {
-            cancelTransitionPointer(0);composerTools.close();emojiPanel.close();closePhrasePanel();contextMenu.close();
+            cancelScreenPointer();composerTools.close();emojiPanel.close();closePhrasePanel();contextMenu.close();
             if(tutorialPreview!=null){tutorialPreview.close();tutorialPreview=null;}
             if (tutorialReturnStack != null && !tutorialReturnStack.isEmpty()) {
                 var saved = tutorialReturnStack;
@@ -838,12 +839,29 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         return false;
     }
 
+    private boolean pointerFocused = true;
+
+    private void syncPointerFocus() {
+        boolean focused = client.isWindowFocused();
+        if (pointerFocused && !focused) cancelScreenPointer();
+        pointerFocused = focused;
+    }
+
+    private void cancelScreenPointer() {
+        gate.cancelPointer(0);
+        gate.cancelPointer(1);
+        gate.cancelPointer(2);
+    }
+
     private void cancelTransitionPointer(int button) {
         if (button == foreignPointerButton) {
             foreignPointerHeld = false;
             foreignPointerButton = -1;
         }
         if (button != 0) return;
+        imagePreview.endDrag();
+        imageCropper.endDrag();
+        colorPicker.endDrag();
         settingsSectionPage.cancelPointer();
         bottomTabBar.setPressedTab(-1);
         primitives.setButtonHeld(-1);
@@ -907,6 +925,10 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
             public float toVirtualX(double x) { return AtomChatScreen.this.toVirtualX(x); }
             public float toVirtualY(double y) { return AtomChatScreen.this.toVirtualY(y); }
             public void requestClose() { AtomChatScreen.this.requestClose(); }
+            public boolean floatingUiAt(double x, double y) {
+                return isWorldChatPage() && !imagePreview.isActive() && !imageCropper.isActive()
+                        && !colorPicker.isActive() && suggestorWiring.hovered(x, y);
+            }
             public boolean clickFloatingUi(double x, double y, int button) {
                 return isWorldChatPage() && !imagePreview.isActive() && !imageCropper.isActive()
                         && !colorPicker.isActive() && suggestorWiring.mouseClicked((int) x, (int) y, button);
@@ -928,6 +950,13 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
             return client.getNetworkHandler().getPlayerList().stream().map(p -> PlayerRef.of(p.getProfile().getId(), p.getProfile().getName())).toList();
         }
         public void mention(PlayerRef player) { composer.insert("@" + player.realName() + " "); }
+        public boolean canMentionAll() {
+            return client.player != null && client.player.hasPermissionLevel(1)
+                    && !com.atom.chat.onboarding.TutorialSandbox.active();
+        }
+        public void mentionAll() {
+            if (!com.atom.chat.net.MentionAllPayloads.send()) feedback("atomchat.tools.mention_all.unavailable");
+        }
         public String composerText() { return composer.text(); }
         public int composerCaret() { return composer.caretIndex(); }
         public void setComposerText(String text) { composer.setText(text); }
@@ -946,6 +975,31 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         }
         public void releaseTool() { primitives.setButtonHeld(-1); }
         public void pickImage() { if (!isPrivateReadOnly()) pickAndUploadImage(); }
+        public void shareLocation() {
+            if (!mayShareCard()) return;
+            sendShareCard(com.atom.chat.card.BuiltInCardAdapter.fromPlayerLocation(client));
+        }
+        public void shareHeldItem() {
+            if (!mayShareCard() || client.player == null) return;
+            var held = client.player.getMainHandStack();
+            if (held.isEmpty()) {
+                feedback("atomchat.card.no_held_item");
+                return;
+            }
+            sendShareCard(com.atom.chat.card.BuiltInCardAdapter.fromItemStack(held, tr("atomchat.tools.share_item")));
+        }
+        private boolean mayShareCard() {
+            if (isPrivateReadOnly()) return false;
+            if (activePrivateTarget() != null) {
+                feedback("atomchat.card.public_only");
+                return false;
+            }
+            return true;
+        }
+        private void sendShareCard(com.atom.chat.api.card.ShareCard card) {
+            if (card != null && com.atom.chat.api.card.AtomChatCards.shareFromClient(card))
+                AtomChatScreen.this.feedback("atomchat.card.shared", true);
+        }
         public void dismissOtherPopups() { emojiPanel.close(); closePhrasePanel(); contextMenu.close(); dismissSuggestor(); }
     });
 
@@ -1050,7 +1104,12 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
 
         @Override
         public ClickableSpan clickableSpanAt(float vmx, float vmy) {
-            return messageListView.clickableSpanAt(vmx, vmy).orElse(null);
+            return layout().list.contains(vmx, vmy) ? messageListView.clickableSpanAt(vmx, vmy).orElse(null) : null;
+        }
+
+        @Override
+        public boolean sameClick(ClickableSpan pressed, ClickableSpan released) {
+            return pressed.sameClick(released);
         }
 
         @Override
@@ -1737,6 +1796,11 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
      * borrowed one of them would capture the guard's anchor.
      */
     private final NavStackController.Host navHost = new NavStackController.Host() {
+        @Override public void closeChannelFeed() { conversationListPage.channelFeed().close(); }
+        @Override public void cancelPointerGesture() {
+            avatarWiring.settlePendingAvatarClick(0, true);
+            cancelScreenPointer();
+        }
         @Override public boolean allowBackNavigation() {
             if (topPage() != AppPage.SERVER_CONFIG || serverConfigPage == null) return true;
             serverConfigPage.leave(settingsSectionPage.confirmation());
@@ -1868,11 +1932,14 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
     private com.atom.chat.ui.input.InputHandler serverConfigInput() {
         return new com.atom.chat.ui.input.InputHandler() {
             private boolean active() { return topPage() == AppPage.SERVER_CONFIG && serverConfigPage != null; }
+            @Override public ClickTarget clickTarget(double x, double y, int button) {
+                if (!active()) return null;
+                float mx = toVirtualX(x), my = toVirtualY(y);
+                if (button == 0 && headerChrome.isVisibleBackButtonHit(mx, my)) return backTarget();
+                return serverConfigPage.clickTarget(mx, my, button);
+            }
             public boolean onClick(double x, double y, int button) {
-                if (!active()) return false;
-                if (button == 0 && headerChrome.isVisibleBackButtonHit(toVirtualX(x), toVirtualY(y))) popPage();
-                else serverConfigPage.click(toVirtualX(x), toVirtualY(y), button);
-                return true;
+                return active() && serverConfigPage.click(toVirtualX(x), toVirtualY(y), button);
             }
             public boolean onKey(int key, int scan, int modifiers) {
                 if (!active()) return false;
@@ -2300,6 +2367,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
 
     @Override
     public void render(DrawContext context, int mouseX, int mouseY, float delta) {
+        syncPointerFocus();
         syncNativeMessages();
         rememberPointer(mouseX, mouseY);
         // First-open attribution: how long the first render() call takes.
@@ -2315,7 +2383,10 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         }
         com.atom.chat.wallpaper.WallpaperPresets.viewport((int)Math.ceil(panelWidth()*uiDensity()), (int)Math.ceil(panelHeight()*uiDensity()), System.currentTimeMillis());
         composite.deviceDensity(uiDensity());
-        composite.beginFrame(System.currentTimeMillis());
+        long pageFrameMs = System.currentTimeMillis();
+        // Resolve the delayed avatar click before stamping and drawing the arriving page.
+        avatarWiring.settlePendingAvatarClick(pageFrameMs, closing);
+        composite.beginFrame(pageFrameMs);
         if (composite.needsCompaction()) {
             graphics.withContext(contextOwner -> {
                 syncAnimationContext(io.github.humbleui.skija.impl.Native.getPtr(contextOwner));
@@ -2429,7 +2500,6 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
                 long iconBudget = FirstOpenBudget.active() ? System.nanoTime() : 0L;
                 try {
                     preparePanelFonts();
-                    com.atom.chat.render.NativeTagIconRenderer.prepare(context,graphics);
                     com.atom.chat.render.ItemIconRenderer.prepare(context, graphics);
                 }
                 finally {
@@ -2484,6 +2554,10 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         ClickableSpan hoveredSpan = messageWiring.hoverSpan(isWorldChatPage() && !composerTools.active(),
                 toVirtualX(mouseX), toVirtualY(mouseY));
         Style hovered = hoveredSpan != null ? hoveredSpan.style() : null;
+        if (hovered == null && isWorldChatPage() && !composerTools.active()
+                && !contextMenu.hasMessageMenu() && !contextMenu.hasPlayerCardMenu()
+                && !emojiPanel.isOpen() && !quickPhrasePanel.isOpen())
+            hovered = messageListView.cardHoverStyleAt(toVirtualX(mouseX), toVirtualY(mouseY));
         if (hovered != null && hovered.getHoverEvent() != null && !foreignChatUiHovered(mouseX, mouseY)
                 && !imagePreview.isActive() && !imageCropper.isActive() && !colorPicker.isActive()) {
             context.drawHoverEvent(this.textRenderer, hovered, mouseX, mouseY);
@@ -2695,13 +2769,9 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
      */
     private final class BannerInput implements InputHandler {
         @Override
-        public boolean onClick(double mouseX, double mouseY, int button) {
-            // The click rules live in NotificationJumpService; the GUI->panel
-            // conversion, the layout, the list view and the read-only flag are
-            // this shell's facts.
-            if (composerTools.active()) return false;
-            return notificationJump.onBannerClick(button, toVirtualX(mouseX), toVirtualY(mouseY),
-                    isPrivateReadOnly(), layout(), messageListView);
+        public ClickTarget clickTarget(double mouseX, double mouseY, int button) {
+            return composerTools.active() ? null : notificationJump.bannerClickTarget(button,
+                    toVirtualX(mouseX), toVirtualY(mouseY), isPrivateReadOnly(), layout(), messageListView);
         }
     }
 
@@ -2851,6 +2921,8 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
 
     @Override
     public void removed() {
+        conversationListPage.channelFeed().close();
+        cancelScreenPointer();
         com.atom.chat.chat.NativeMessageSync.unlisten(nativeDeletionListener);
         if (panelEditor != null) { panelEditor.cancel(); panelEditor = null; }
         if(!tutorial.suspended())tutorial.reset();
@@ -2903,10 +2975,6 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         long nowMs = System.currentTimeMillis();
         frameDt = PanelOpenMotion.domainFrameDtMs(nowMs, lastFrameMs);
         lastFrameMs = nowMs;
-        // Single-click→profile competition window: fire when no second click
-        // arrived within the threshold. The verdict stays inside this frame —
-        // the domain only decides, the frame order is this method's.
-        avatarWiring.settlePendingAvatarClick(nowMs, closing);
         String reactionFailure = com.atom.chat.reaction.ReactionClient.takeError();
         if (reactionFailure != null) feedback("atomchat.reaction." + reactionFailure, false);
         if (!PanelOpenMotion.animating(panelProgress, closing)
@@ -3438,23 +3506,21 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         bottomTabBar.render(canvas, layout.tabBar, selectedIndex, textPrimary(), accent());
     }
 
-    /** Routes a root-page click on one of the three bottom tab cells. */
-    private boolean handleBottomTabClick(float vmx, float vmy) {
-        int index = BottomTabBar.hitTest(vmx, vmy, rootLayout().tabBar);
-        if (index < 0) {
-            return false;
-        }
-        bottomTabBar.setPressedTab(index);
+    private ClickTarget bottomTabTarget(float mx, float my) {
+        int index = BottomTabBar.hitTest(mx, my, rootLayout().tabBar);
+        if (index < 0) return null;
         AppPage root = switch (index) {
             case 0 -> AppPage.CHAT_LIST;
             case 1 -> AppPage.PROFILE;
             case 2 -> AppPage.SETTINGS;
             default -> throw new IllegalStateException("Unexpected bottom tab index " + index);
         };
-        boolean changed = topPage() != root;
-        switchRoot(root);
-        if (changed) com.atom.chat.audio.FeedbackSoundController.play(com.atom.chat.audio.FeedbackCue.BUTTON);
-        return true;
+        return new ClickTarget(new ScreenClick(topNav(), "bottomTab", root),
+                () -> bottomTabBar.setPressedTab(index), () -> bottomTabBar.setPressedTab(-1), () -> {
+                    boolean changed = topPage() != root;
+                    switchRoot(root);
+                    if (changed) playPointerSound();
+                });
     }
 
     private static float s(float v) {
@@ -3618,6 +3684,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
 
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
+        syncPointerFocus();
         syncNativeMessages();
         rememberPointer(mouseX, mouseY);
 
@@ -3660,14 +3727,18 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
 
     @Override
     public boolean mouseReleased(double mouseX, double mouseY, int button) {
+        syncPointerFocus();
         syncNativeMessages();
         rememberPointer(mouseX, mouseY);
         foreignPointer.release(button);
-        Boolean direct = gate.release(mouseX, mouseY, button);
-        if (direct != null) {
-            return direct;
+        com.atom.chat.audio.FeedbackSoundController.beginAction();
+        try {
+            Boolean direct = gate.release(mouseX, mouseY, button);
+            if (direct != null) return direct;
+            return super.mouseReleased(mouseX, mouseY, button);
+        } finally {
+            com.atom.chat.audio.FeedbackSoundController.endAction();
         }
-        return super.mouseReleased(mouseX, mouseY, button);
     }
 
     @Override
@@ -4014,28 +4085,35 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
      * while active, each owns every event.
      */
     private final class ModalInput implements InputHandler {
+        private boolean modalActive() {
+            return imagePreview.isActive() || imageCropper.isActive() || colorPicker.isActive();
+        }
+
+        @Override
+        public ClickTarget clickTarget(double mouseX, double mouseY, int button) {
+            float x = toVirtualX(mouseX), y = toVirtualY(mouseY);
+            UiLayout.Rect panel = layout().rect();
+            ClickTarget target;
+            if (imagePreview.isActive()) target = imagePreview.clickTarget(x, y, button, panel);
+            else if (imageCropper.isActive()) target = imageCropper.clickTarget(x, y, button, panel);
+            else if (colorPicker.isActive()) target = colorPicker.clickTarget(x, y, button, panel);
+            else return null;
+            if (target == null || target.id() == null) return target;
+            return new ClickTarget(target.id(), target.press(), target.clear(), () -> {
+                target.activate().run();
+                if (!modalActive()) playPointerSound();
+            });
+        }
+
         @Override
         public boolean onClick(double mouseX, double mouseY, int button) {
-            // The picture preview: a click on the picture keeps it open, a click
-            // on the dim backdrop or the close key dismisses it.
-            if (imagePreview.isActive()) {
-                if (button == 0) imagePreview.onClick(toVirtualX(mouseX), toVirtualY(mouseY), layout().rect());
-                if (!imagePreview.isActive()) com.atom.chat.audio.FeedbackSoundController.play(com.atom.chat.audio.FeedbackCue.BUTTON);
-                return true;
-            }
-            // The avatar cropper is modal: while it is open it owns every click.
-            if (imageCropper.isActive()) {
-                imageCropper.onClick(toVirtualX(mouseX), toVirtualY(mouseY), layout().rect());
-                if (!imageCropper.isActive()) com.atom.chat.audio.FeedbackSoundController.play(com.atom.chat.audio.FeedbackCue.BUTTON);
-                return true;
-            }
-            // So is the colour picker.
-            if (colorPicker.isActive()) {
-                colorPicker.onClick(toVirtualX(mouseX), toVirtualY(mouseY), layout().rect());
-                if (!colorPicker.isActive()) com.atom.chat.audio.FeedbackSoundController.play(com.atom.chat.audio.FeedbackCue.BUTTON);
-                return true;
-            }
-            return false;
+            float x = toVirtualX(mouseX), y = toVirtualY(mouseY);
+            UiLayout.Rect panel = layout().rect();
+            if (imagePreview.isActive()) imagePreview.onClick(x, y, panel);
+            else if (imageCropper.isActive()) imageCropper.onClick(x, y, panel);
+            else if (colorPicker.isActive()) colorPicker.onClick(x, y, panel);
+            else return false;
+            return true;
         }
 
         @Override
@@ -4064,7 +4142,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
                 return true;
             }
             if (imageCropper.isActive()) {
-                imageCropper.endDrag();
+                if (button == 0) imageCropper.releasePointer(layout().rect());
                 return true;
             }
             if (colorPicker.isActive()) {
@@ -4202,85 +4280,87 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         }
     }
 
-    private boolean clickSettingsSection(float mx, float my, UiLayout pageLayout,
-                                         ScrollController pageScroll, int button) {
-        if (button == 0 && headerChrome.isActionVisible(topNav()) && headerChrome.adjacentButton().contains(mx, my)) {
-            ShellHeader.armActionPress();
-            settingsSectionPage.requestTabReset(topNav().section(), (key, failed) -> feedback(key, failed), () -> {
-                if (panelEditor != null) {
-                    panelEditor.followPanel(panelX(), panelY(), panelWidth(), panelHeight(),
-                            ScreenMetrics.vw(client.getWindow()), ScreenMetrics.vh(client.getWindow()));
-                    panelEditor.finishAfterSettingsReset();
-                }
-            });
-            com.atom.chat.audio.FeedbackSoundController.play(com.atom.chat.audio.FeedbackCue.BUTTON);
-            return true;
-        }
-        if (button == 0 && headerChrome.isVisibleBackButtonHit(mx, my)) {
-            popPage();
-            return true;
-        }
-        if (button == 0) {
-            int chip = settingsSectionPage.chipAt(topNav().section(), mx, my, pageLayout);
-            if (chip >= 0) {
-                // Same press-bounce arming the bottom tab bar uses.
-                settingsSectionPage.setPressedChip(chip);
-                if (chip != settingsSectionPage.activeChipIndex(topNav().section()))
-                    composite.navigationDirection(chip < settingsSectionPage.activeChipIndex(topNav().section()));
-                settingsSectionPage.selectChip(topNav().section(), chip);
+    private record ScreenClick(NavPage page, Object action, Object detail) {}
+
+    private static void playPointerSound() {
         com.atom.chat.audio.FeedbackSoundController.play(com.atom.chat.audio.FeedbackCue.BUTTON);
-                return true;
-            }
+    }
+
+    private ClickTarget screenClick(Object action, Object detail, Runnable activate) {
+        return ClickTarget.action(new ScreenClick(topNav(), action, detail), activate);
+    }
+
+    private ClickTarget backTarget() {
+        return new ClickTarget(new ScreenClick(topNav(), "back", null),
+                ShellHeader::armBackPress, () -> {}, this::popPage);
+    }
+
+    private ClickTarget settingsClickTarget(float mx, float my, UiLayout pageLayout, ScrollController pageScroll) {
+        SettingsSection section = topNav().section();
+        int activeChip = settingsSectionPage.activeChipIndex(section);
+        if (headerChrome.isActionVisible(topNav()) && headerChrome.adjacentButton().contains(mx, my)) {
+            return new ClickTarget(new ScreenClick(topNav(), "settingsReset", activeChip),
+                    ShellHeader::armActionPress, () -> {}, () -> {
+                        settingsSectionPage.requestTabReset(section, (key, failed) -> feedback(key, failed), () -> {
+                            if (panelEditor != null) {
+                                panelEditor.followPanel(panelX(), panelY(), panelWidth(), panelHeight(),
+                                        ScreenMetrics.vw(client.getWindow()), ScreenMetrics.vh(client.getWindow()));
+                                panelEditor.finishAfterSettingsReset();
+                            }
+                        });
+                        playPointerSound();
+                    });
         }
-        if (button == 0 && settingsSectionPage.themesPress(mx, my, pageLayout,
-                topNav().section(), pageScroll.getScrollY())) {
-            // The theme strip owns clicks on its row: a settled press
-            // selects a card, a moving one scrolls it.
-            return true;
+        if (headerChrome.isVisibleBackButtonHit(mx, my)) return backTarget();
+
+        int chip = settingsSectionPage.chipAt(section, mx, my, pageLayout);
+        if (chip >= 0) {
+            return new ClickTarget(new ScreenClick(topNav(), "settingsTab", chip),
+                    () -> settingsSectionPage.setPressedChip(chip), () -> settingsSectionPage.setPressedChip(-1), () -> {
+                        if (chip != settingsSectionPage.activeChipIndex(section))
+                            composite.navigationDirection(chip < settingsSectionPage.activeChipIndex(section));
+                        settingsSectionPage.selectChip(section, chip);
+                        playPointerSound();
+                    });
         }
-        if (button == 0) {
-            SettingsSection section = topNav().section();
-            // A slider press starts a drag or nudges by one step; it
-            // must never fall through to the row's other actions.
-            SettingsSectionPage.SliderHit slider = settingsSectionPage.sliderHit(
-                    mx, my, pageLayout, section, pageScroll.getScrollY());
-            if (slider != null) {
-                if (SettingsSectionPage.isInlineNumberSlider(slider.row().slider().id())) {
-                    settingsSectionPage.beginNumberEdit(slider.row().slider());
-                    return true;
-                }
-                float normalized = slider.row().slider()
-                        .normalize(slider.row().slider().value());
-                if (slider.onKnob(mx, my, normalized)) {
-                    settingsSectionPage.beginSliderDrag(slider.index(), slider.row().slider(),
-                            slider.rowRect(), mx);
-                } else {
-                    settingsSectionPage.nudgeSlider(slider,
-                            mx < slider.track().x() + slider.track().w() / 2.0F ? -1 : 1);
-                }
-                return true;
-            }
-            SettingsSectionPage.ColorHit colorHit = settingsSectionPage.colorHit(
-                    mx, my, pageLayout, section, pageScroll.getScrollY());
-            if (colorHit != null) {
-                settingsSectionPage.setPressedRow(colorHit.rowIndex());
-                colorPicker.open(colorHit.color());
-                com.atom.chat.audio.FeedbackSoundController.play(com.atom.chat.audio.FeedbackCue.BUTTON);
-                return true;
-            }
-            SettingsSectionPage.RowHit hit = settingsSectionPage.hit(mx, my, pageLayout,
-                    section, pageScroll.getScrollY());
-            if (hit != null) {
-                // Arm the row press bounce wherever the press landed;
-                // hit-tests stay unscaled.
-                settingsSectionPage.setPressedRow(hit.index());
-                if (hit.onAction(mx, my)) {
-                    if (settingsSectionPage.perform(hit) && !settingsSectionPage.historyOwnsFeedback(hit)) {
-                        com.atom.chat.audio.FeedbackSoundController.play(com.atom.chat.audio.FeedbackCue.BUTTON);
-                    }
-                    return true;
-                }
-            }
+        float scroll = pageScroll.getScrollY();
+        if (!pageLayout.list.contains(mx, my)
+                || settingsSectionPage.themesUnderPointer(mx, my, pageLayout, section, scroll)) return null;
+        SettingsSectionPage.SliderHit slider = settingsSectionPage.sliderHit(mx, my, pageLayout, section, scroll);
+        if (slider != null) {
+            var setting = slider.row().slider();
+            if (SettingsSectionPage.isInlineNumberSlider(setting.id()))
+                return screenClick("numericSetting", setting.id(), () -> settingsSectionPage.beginNumberEdit(setting));
+            if (slider.onKnob(mx, my, setting.normalize(setting.value()))) return null;
+            int direction = mx < slider.track().x() + slider.track().w() / 2.0F ? -1 : 1;
+            return screenClick("stepSetting", java.util.List.of(setting.id(), direction),
+                    () -> settingsSectionPage.nudgeSlider(slider, direction));
+        }
+        SettingsSectionPage.ColorHit color = settingsSectionPage.colorHit(mx, my, pageLayout, section, scroll);
+        if (color != null) {
+            return settingsRowTarget(activeChip, color.color().id(), color.rowIndex(), () -> {
+                colorPicker.open(color.color());
+                playPointerSound();
+            });
+        }
+        return SettingsDetailPage.rowClickTarget(settingsSectionPage, section, pageLayout, scroll, mx, my,
+                AtomChatScreen::playPointerSound);
+    }
+
+    private ClickTarget settingsRowTarget(int chip, Object action, int index, Runnable activate) {
+        return new ClickTarget(new ScreenClick(topNav(), "settingsRow", java.util.List.of(chip, action)),
+                () -> settingsSectionPage.setPressedRow(index),
+                () -> settingsSectionPage.setPressedRow(-1), activate);
+    }
+
+    private boolean pressSettingsControl(float mx, float my, UiLayout pageLayout, ScrollController pageScroll, int button) {
+        if (button != 0) return true;
+        SettingsSection section = topNav().section();
+        float scroll = pageScroll.getScrollY();
+        if (settingsSectionPage.themesPress(mx, my, pageLayout, section, scroll)) return true;
+        SettingsSectionPage.SliderHit slider = settingsSectionPage.sliderHit(mx, my, pageLayout, section, scroll);
+        if (slider != null && slider.onKnob(mx, my, slider.row().slider().normalize(slider.row().slider().value()))) {
+            settingsSectionPage.beginSliderDrag(slider.index(), slider.row().slider(), slider.rowRect(), mx);
         }
         return true;
     }
@@ -4288,103 +4368,91 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
     /** Root pages (conversation list / profile / settings): no composer, own scroll and rows. */
     private final class RootPageInput implements InputHandler {
         @Override
-        public boolean onClick(double mouseX, double mouseY, int button) {
-            // Root pages have no world-chat composer/message interactions. Route
-            // them before the hidden chat field/suggestion layer can see the click,
-            // and consume root clicks so ChatScreen's composer never gets focus.
-            if (isWorldChatPage()) {
-                return false;
-            }
-            float mx = toVirtualX(mouseX);
-            float my = toVirtualY(mouseY);
+        public ClickTarget clickTarget(double mouseX, double mouseY, int button) {
+            if (isWorldChatPage()) return null;
+            float mx = toVirtualX(mouseX), my = toVirtualY(mouseY);
             UiLayout pageLayout = listLayout();
             ScrollController pageScroll = listScroll();
-            // Root-page player-card context menu gets priority over row clicks.
-            // The box (row count included) comes from the menu itself — the same
-            // source its drawing measures with: two rows here once left
-            // "取消屏蔽" permanently unclickable.
             if (contextMenu.hasPlayerCardMenu()) {
                 int row = contextMenu.hitPlayerCardRow(mx, my);
                 if (row >= 0 && button == 0) {
-                    contextActions.performPlayerCardAction(row);
-                com.atom.chat.audio.FeedbackSoundController.play(com.atom.chat.audio.FeedbackCue.BUTTON);
-                    contextMenu.close();
-                    return true;
+                    return screenClick("playerMenu", java.util.List.of(row, contextMenu.currentOrLastPlayer()), () -> {
+                        contextActions.performPlayerCardAction(row);
+                        playPointerSound();
+                        contextMenu.close();
+                    });
                 }
-                contextMenu.close();
             }
+            if (button == 0 && overScrollbarTrack(pageLayout, mx, my, pageScroll)) return null;
+            if (topPage() == AppPage.SETTINGS_SECTION)
+                return button == 0 ? settingsClickTarget(mx, my, pageLayout, pageScroll) : null;
+            if (topPage() == AppPage.PROFILE_DETAIL) {
+                if (button == 0 && headerChrome.isVisibleBackButtonHit(mx, my)) return backTarget();
+                return profilePage.clickTarget(mx, my, detailLayout(), scrollSync.detailScroll().getScrollY(), button);
+            }
+            if (button == 0) {
+                ClickTarget tab = bottomTabTarget(mx, my);
+                if (tab != null) return tab;
+                if (topPage() == AppPage.SETTINGS) {
+                    SettingsSection section = settingsHomePage.hit(mx, my, pageLayout, pageScroll.getScrollY());
+                    if (section != null) return screenClick("settingsSection", section, () -> openSettingsSection(section));
+                }
+            }
+            if (topPage() == AppPage.PROFILE)
+                return profilePage.clickTarget(mx, my, pageLayout, pageScroll.getScrollY(), button);
+            if (topPage() != AppPage.CHAT_LIST) return null;
+            var channelFeed = conversationListPage.channelFeed();
+            var activeChannel = channelFeed.active();
+            if (activeChannel != null) {
+                if (button != 0 || !channelFeed.hitBack(pageLayout, mx, my, pageScroll.getScrollY())) return null;
+                return screenClick("channelBack", activeChannel.entry().key(), () -> {
+                    channelFeed.close();
+                    pageScroll.scrollTo(0, false);
+                });
+            }
+            var hit = conversationListPage.hit(mx, my, pageLayout, pageScroll.getScrollY());
+            if (hit == null) return null;
+            Runnable action = switch (hit.row().kind()) {
+                case DIVIDER -> button == 0 ? () -> {
+                    conversationListPage.togglePrivateGroup();
+                    playPointerSound();
+                } : null;
+                case PUBLIC -> button == 0 ? AtomChatScreen.this::openWorldChat : null;
+                case CHANNEL -> button == 0 ? () -> {
+                    if (channelFeed.open(hit.row().channel().entry().key())) pageScroll.scrollTo(0, false);
+                } : null;
+                case PLAYER -> switch (button) {
+                    case 0 -> () -> openPrivateChat(hit.row().player());
+                    case 1 -> () -> {
+                        contextMenu.openPlayerCard(hit.row().player(), mx, my);
+                        playPointerSound();
+                    };
+                    default -> null;
+                };
+                default -> null;
+            };
+            if (action == null) return ClickTarget.blocked();
+            Object row = hit.row().channel() != null ? hit.row().channel().entry().key()
+                    : hit.row().player() == null ? hit.row().kind() : hit.row().player();
+            return new ClickTarget(new ScreenClick(topNav(), "conversation", row),
+                    () -> conversationListPage.pulseRow(hit.index()), () -> {}, () -> {
+                        contextMenu.close();
+                        action.run();
+                    });
+        }
+
+        @Override
+        public boolean onClick(double mouseX, double mouseY, int button) {
+            if (isWorldChatPage()) return false;
+            float mx = toVirtualX(mouseX), my = toVirtualY(mouseY);
+            UiLayout pageLayout = listLayout();
+            ScrollController pageScroll = listScroll();
+            if (contextMenu.hasPlayerCardMenu()) contextMenu.close();
             if (button == 0 && overScrollbarTrack(pageLayout, mx, my, pageScroll)) {
                 pageScroll.beginDrag(my);
                 return true;
             }
-            if (topPage() == AppPage.SETTINGS_SECTION) {
-                return clickSettingsSection(mx, my, pageLayout, pageScroll, button);
-            }
-            // A pushed profile detail: back arrow, then copyable rows/tiles.
-            if (topPage() == AppPage.PROFILE_DETAIL) {
-                if (button == 0 && headerChrome.isVisibleBackButtonHit(mx, my)) {
-                    popPage();
-                    return true;
-                }
-                if (button == 0) {
-                    profilePage.onClick(mx, my, detailLayout(), scrollSync.detailScroll().getScrollY());
-                } else if (button == 1) {
-                    // Right-click on the banner card clears the custom banner.
-                    profilePage.onRightClick(mx, my, detailLayout(), scrollSync.detailScroll().getScrollY());
-                }
-                return true;
-            }
-            if (button == 0 && handleBottomTabClick(mx, my)) {
-                return true;
-            }
-            if (topPage() == AppPage.SETTINGS && button == 0) {
-                SettingsSection section = settingsHomePage.hit(mx, my, pageLayout, pageScroll.getScrollY());
-                if (section != null) {
-                    // Tiles open their section directly; the section page
-                    // groups its rows into in-page chips instead.
-                    openSettingsSection(section);
-                    return true;
-                }
-            }
-            if (topPage() == AppPage.PROFILE && button == 0) {
-                profilePage.onClick(mx, my, pageLayout, pageScroll.getScrollY());
-            }
-            if (topPage() == AppPage.PROFILE && button == 1) {
-                // Right-click on the banner card clears the custom banner.
-                profilePage.onRightClick(mx, my, pageLayout, pageScroll.getScrollY());
-            }
-            if (topPage() == AppPage.CHAT_LIST) {
-                ConversationListPage.RowHit hit = conversationListPage.hit(mx, my, pageLayout, pageScroll.getScrollY());
-                if (hit != null) {
-                    // Arm the pressed dip on the row that was actually hit; the
-                    // page times the pulse itself because opening the chat ends
-                    // the interaction before any release could arrive.
-                    conversationListPage.pulseRow(hit.index());
-                    if (hit.row().kind() == ConversationListPage.RowKind.DIVIDER) {
-                        if (button == 0) {
-                            conversationListPage.togglePrivateGroup();
-                            com.atom.chat.audio.FeedbackSoundController.play(
-                                    com.atom.chat.audio.FeedbackCue.BUTTON);
-                        }
-                        return true;
-                    }
-                    if (hit.row().kind() == ConversationListPage.RowKind.PUBLIC && button == 0) {
-                        openWorldChat();
-                        return true;
-                    }
-                    if (hit.row().kind() == ConversationListPage.RowKind.PLAYER) {
-                        if (button == 0) {
-                            openPrivateChat(hit.row().player());
-                            return true;
-                        }
-                        if (button == 1) {
-                            contextMenu.openPlayerCard(hit.row().player(), mx, my);
-                    com.atom.chat.audio.FeedbackSoundController.play(com.atom.chat.audio.FeedbackCue.BUTTON);
-                            return true;
-                        }
-                    }
-                }
-            }
+            if (topPage() == AppPage.SETTINGS_SECTION) return pressSettingsControl(mx, my, pageLayout, pageScroll, button);
             return true;
         }
 
@@ -4428,8 +4496,12 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
             }
             if (button == 0 && settingsSectionPage.isDraggingThemeStrip()) {
                 settingsSectionPage.endThemeStrip(toVirtualX(mouseX), toVirtualY(mouseY), listLayout());
+                return true;
             }
-            settingsSectionPage.endSliderDrag();
+            if (button == 0 && settingsSectionPage.isDraggingSlider()) {
+                settingsSectionPage.endSliderDrag();
+                return true;
+            }
             settingsSectionPage.setPressedRow(-1);
             settingsSectionPage.setPressedChip(-1);
             bottomTabBar.setPressedTab(-1);
@@ -4505,6 +4577,231 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
     /** World chat and private chats: composer, emoji panel, message list, context menus. */
     private final class WorldChatInput implements InputHandler {
         @Override
+        public ClickTarget clickTarget(double mouseX, double mouseY, int button) {
+            if ((button != 0 && button != 1) || !isWorldChatPage()) return null;
+            float mx = toVirtualX(mouseX), my = toVirtualY(mouseY);
+            UiLayout layout = layout();
+            if (button == 1) {
+                ClickTarget popup = popupTarget(layout, mx, my, button);
+                if (popup != null) return popup;
+                ClickTarget message = messageTarget(layout, mx, my, button);
+                if (message != null) return message;
+                return contextMenu.hasMessageMenu()
+                        ? screenClick("dismissMessageMenu", contextMenu.currentRow().getId(), contextMenu::close)
+                        : null;
+            }
+            if (headerChrome.isVisibleBackButtonHit(mx, my)) return backTarget();
+            if (topPage() == AppPage.WORLD_CHAT && headerChrome.isActionVisible(topNav()) && isFilterButtonHit(mx, my)) {
+                return new ClickTarget(new ScreenClick(topNav(), "worldFilter", null), ShellHeader::armActionPress, () -> {}, () -> {
+                    cycleWorldFilter();
+                    playPointerSound();
+                });
+            }
+            if (isPrivateReadOnly() && !composerTools.searching() && (layout.inputBar.contains(mx, my)
+                    || layout.imageBtn.contains(mx, my) || layout.emojiBtn.contains(mx, my)
+                    || layout.phraseBtn.contains(mx, my) || layout.sendBtn.contains(mx, my))) {
+                return ClickTarget.blocked();
+            }
+            if (layout.emojiBtn.contains(mx, my)) return composerButton(1, "emoji", emojiPanel.isOpen(), () -> {
+                composer.setFocused(true);
+                closePhrasePanel();
+                reactionTarget = null;
+                emojiPanel.toggle();
+                playPointerSound();
+            });
+            if (layout.phraseBtn.contains(mx, my)) return composerButton(3, "quickPhrase", quickPhrasePanel.isOpen(), () -> {
+                composer.setFocused(true);
+                emojiPanel.close();
+                if (quickPhrasePanel.isOpen()) closePhrasePanel();
+                else quickPhrasePanel.open();
+                playPointerSound();
+            });
+            ClickTarget popup = popupTarget(layout, mx, my, button);
+            if (popup != null) return popup;
+            ClickTarget menu = contextMenuTarget(mx, my);
+            if (menu != null) return menu;
+            if (overJumpLatest(layout, mx, my)) {
+                return new ClickTarget(new ScreenClick(topNav(), "latestMessage", null),
+                        scrollSync::pressJumpLatest, scrollSync::releaseJumpLatest, () -> {
+                            dismissMessagePopups();
+                            currentScroll().scrollToBottom(true);
+                            playPointerSound();
+                        });
+            }
+            ClickTarget reaction = messageListView.reactionClickTarget(mx, my, () -> {
+                dismissMessagePopups();
+                playPointerSound();
+            });
+            if (reaction != null) return reaction;
+            if (layout.sendBtn.contains(mx, my)) {
+                return composerButton(2, "send", quickPhrasePanel.isEditing(), () -> {
+                    dismissMessagePopups();
+                    if (quickPhrasePanel.isEditing()) endPhraseEdit(true);
+                    else sendMessage(composer.text());
+                });
+            }
+            if (messageListView.loadEarlierHitAt(mx, my)) {
+                return new ClickTarget(new ScreenClick(topNav(), "earlierMessages", null),
+                        () -> messageListView.setLoadEarlierPressed(true),
+                        () -> messageListView.setLoadEarlierPressed(false), () -> {
+                            dismissMessagePopups();
+                            messageListView.requestLoadEarlier();
+                        });
+            }
+            ClickTarget card = cardActionTarget(mx, my);
+            return card != null ? card : messageTarget(layout, mx, my, button);
+        }
+
+        private ClickTarget cardActionTarget(float x, float y) {
+            var hit = messageListView.cardHitAt(x, y);
+            if (hit == null) return null;
+            var state = com.atom.chat.api.card.CardStateStore.get(hit.card().cardId());
+            if (state != hit.state()) return ClickTarget.blocked();
+            if (!com.atom.chat.card.CardActionExecutor.actionEnabled(hit.action(), state)) return ClickTarget.blocked();
+            var id = new ScreenClick(topNav(), "shareCard", java.util.List.of(hit.messageId(), hit.action()));
+            return new ClickTarget(id, () -> messageListView.setPressedCard(hit.messageId(), hit.action()),
+                    () -> messageListView.setPressedCard(0, null), () -> {
+                dismissMessagePopups();
+                if (com.atom.chat.card.CardActionExecutor.execute(hit.card(), state, hit.action(), shareCardFeedback))
+                    playPointerSound();
+            });
+        }
+
+        private final com.atom.chat.card.CardActionExecutor.FeedbackSink shareCardFeedback =
+                new com.atom.chat.card.CardActionExecutor.FeedbackSink() {
+                    public void toast(String message) {
+                        notificationJump.feedback("atomchat.card.notice", message, true);
+                    }
+                    public void suggestInComposer(String text) {
+                        composer.setText(text);
+                        composer.focus();
+                    }
+                    public void openUrl(String url) {
+                        clickStyle(net.minecraft.text.ClickEvent.Action.OPEN_URL, url);
+                    }
+                    public void runComponentCommand(String command) {
+                        clickStyle(net.minecraft.text.ClickEvent.Action.RUN_COMMAND, command);
+                    }
+                    private void clickStyle(net.minecraft.text.ClickEvent.Action action, String value) {
+                        handleTextClick(Style.EMPTY.withClickEvent(new net.minecraft.text.ClickEvent(action, value)));
+                    }
+                };
+
+        private ClickTarget popupTarget(UiLayout layout, float x, float y, int button) {
+            var emoji = emojiPanel.clickTarget(layout, x, y, button, inserted -> {
+                if (inserted == null || inserted.isEmpty()) return;
+                if (reactionTarget != null) {
+                    com.atom.chat.reaction.ReactionClient.toggle(reactionTarget, inserted);
+                    emojiPanel.close();
+                    reactionTarget = null;
+                } else composer.append(inserted);
+                playPointerSound();
+            });
+            return emoji != null ? emoji : quickPhrasePanel.clickTarget(layout, x, y, button, AtomChatScreen.this::handlePhraseAction);
+        }
+
+        private ClickTarget contextMenuTarget(float mx, float my) {
+            ChatMessage selected = contextMenu.currentRow();
+            if (selected == null) return null;
+            int row = contextMenu.hitRow(mx, my);
+            if (row < 0) return null;
+            boolean avatar = contextMenu.isAvatarMode();
+            return screenClick("messageMenu", java.util.List.of(selected.getId(), avatar, row), () -> {
+                if (avatar) {
+                    contextActions.performAvatarMenuAction(row, menuMessageOf(selected));
+                    playPointerSound();
+                } else if (row == 0) {
+                    boolean copied = copyToClipboard(selected.getContentText());
+                    feedback("atomchat.feedback.copied", copied);
+                    if (copied) playPointerSound();
+                } else if (row == 1) {
+                    replySlots.arm(selected);
+                    playPointerSound();
+                    composer.focus();
+                } else if (row == ContextMenuController.rows(ContextMenuController.ContextMenuMode.BUBBLE,
+                        Cicodes.extractImageUrl(selected.getRawText()) != null)
+                        && com.atom.chat.reaction.ReactionClient.available(selected)) {
+                    reactionTarget = selected;
+                    closePhrasePanel();
+                    emojiPanel.openReaction();
+                    playPointerSound();
+                } else {
+                    saveImage(selected);
+                    playPointerSound();
+                }
+                contextMenu.close();
+            });
+        }
+
+        private ClickTarget messageTarget(UiLayout layout, float mx, float my, int button) {
+            if (!layout.list.contains(mx, my)) return null;
+            if (button == 0) {
+                var picture = messageListView.imageHitAt(mx, my);
+                if (picture != null && ImageLoader.get().get(picture.imageUrl(), false) != null) {
+                    return screenClick("messageImage", java.util.List.of(picture.message().getId(), picture.imageUrl()), () -> {
+                        Image bitmap = ImageLoader.get().get(picture.imageUrl(), false);
+                        if (bitmap == null) return;
+                        dismissMessagePopups();
+                        imagePreviewMessage = picture.message();
+                        imagePreview.open(bitmap);
+                        messageWiring.clearClick();
+                    });
+                }
+            }
+            for (var hit : messageListView.hits()) {
+                if (my < hit.y() || my > hit.bottom()) continue;
+                ChatMessage message = hit.message();
+                if (message == null) continue;
+                boolean avatar = hit.avatarSize() > 0F && mx >= hit.avatarX()
+                        && mx <= hit.avatarX() + hit.avatarSize() && my >= hit.avatarY()
+                        && my <= hit.avatarY() + hit.avatarSize();
+                if (button == 0 && avatar) {
+                    return screenClick("avatarPoke", message.getId(), () -> {
+                        dismissMessagePopups();
+                        avatarWiring.handleAvatarClick(System.currentTimeMillis(), factsOf(message), hit.index());
+                    });
+                }
+                if (button != 1) continue;
+                if (avatar && ContextMenuActions.canOpenAvatarMenu(menuMessageOf(message)) && !message.isIdentityUnknown()) {
+                    return screenClick("avatarMenu", message.getId(), () -> toggleMessageMenu(message, true, mx, my));
+                }
+                if (!message.isSystem() && mx >= hit.bubbleX() && mx <= hit.bubbleX() + hit.bubbleWidth()
+                        && my >= hit.bubbleY() && my <= hit.bubbleBottom()) {
+                    return screenClick("bubbleMenu", message.getId(), () -> toggleMessageMenu(message, false, mx, my));
+                }
+            }
+            return null;
+        }
+
+        private void toggleMessageMenu(ChatMessage message, boolean avatar, float mx, float my) {
+            ChatMessage previous = contextMenu.currentRow();
+            boolean sameMenu = previous != null && previous.getId() == message.getId()
+                    && (!avatar || contextMenu.isAvatarMode());
+            dismissMessagePopups();
+            if (!sameMenu) {
+                if (avatar) contextMenu.openAvatar(menuSubjectOf(message), mx, my);
+                else contextMenu.openBubble(menuSubjectOf(message), mx, my);
+            }
+            playPointerSound();
+        }
+
+        private ClickTarget composerButton(int index, Object action, Object detail, Runnable activate) {
+            return new ClickTarget(new ScreenClick(topNav(), action, detail), () -> {
+                primitives.pressButton(index);
+                primitives.setButtonHeld(index);
+            }, () -> primitives.setButtonHeld(-1), activate);
+        }
+
+        private void dismissMessagePopups() {
+            if (emojiPanel.isOpen()) {
+                emojiPanel.close();
+                reactionTarget = null;
+            }
+            if (quickPhrasePanel.isOpen()) closePhrasePanel();
+            if (contextMenu.hasMessageMenu()) contextMenu.close();
+        }
+
+        @Override
         public boolean onClick(double mouseX, double mouseY, int button) {
             if (!isWorldChatPage()) {
                 return false;
@@ -4520,25 +4817,6 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
                 return true;
             }
 
-            // Back to the conversation list before any composer/emoji/message
-            // hit. popPage() applies the pop immediately (there is no exit
-            // phase); the arriving page's entrance overlay announces it.
-            if (button == 0 && headerChrome.isVisibleBackButtonHit(mx, my)) {
-                ShellHeader.armBackPress();
-                popPage();
-                return true;
-            }
-
-            // Feed filter cycle: only on the public page (the private header
-            // has no filter slot even though the geometry exists).
-            if (button == 0 && topPage() == AppPage.WORLD_CHAT && headerChrome.isActionVisible(topNav())
-                    && isFilterButtonHit(mx, my)) {
-                ShellHeader.armActionPress();
-                cycleWorldFilter();
-                com.atom.chat.audio.FeedbackSoundController.play(com.atom.chat.audio.FeedbackCue.BUTTON);
-                return true;
-            }
-
             // Private read-only pages (offline/blocked) must not let the composer
             // buttons or the text field take focus.
             if (isPrivateReadOnly() && !composerTools.searching()
@@ -4550,140 +4828,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
                 return true;
             }
 
-            // The emoji toggle button is tested before the panel's own "click outside
-            // dismisses" rule, otherwise closing and reopening in the same click nets
-            // back to open and the button can never toggle the panel off.
-            if (button == 0 && layout.emojiBtn.contains((float) mx, (float) my)) {
-                primitives.pressButton(1);
-                com.atom.chat.audio.FeedbackSoundController.play(com.atom.chat.audio.FeedbackCue.BUTTON);
-                primitives.setButtonHeld(1);
-                composer.setFocused(true);
-                closePhrasePanel();
-                reactionTarget = null;
-                emojiPanel.toggle();
-                com.atom.chat.audio.FeedbackSoundController.play(com.atom.chat.audio.FeedbackCue.BUTTON);
-                return true;
-            }
-
-            // Quick-phrase toggle: same pre-dismiss ordering as the emoji button.
-            if (button == 0 && layout.phraseBtn.contains((float) mx, (float) my)) {
-                primitives.pressButton(3);
-                com.atom.chat.audio.FeedbackSoundController.play(com.atom.chat.audio.FeedbackCue.BUTTON);
-                primitives.setButtonHeld(3);
-                composer.setFocused(true);
-                emojiPanel.close();
-                if (quickPhrasePanel.isOpen()) {
-                    closePhrasePanel();
-                } else {
-                    quickPhrasePanel.open();
-                }
-                return true;
-            }
-
-            // Emoji panel click: tabs first, then the currently visible grid.
-            if (emojiPanel.isOpen()) {
-                if (emojiPanel.overPanel(layout, mx, my)) {
-                    String inserted = emojiPanel.click(layout, mx, my);
-                    if (inserted != null && !inserted.isEmpty()) {
-                        if (reactionTarget != null) {
-                            com.atom.chat.reaction.ReactionClient.toggle(reactionTarget, inserted);
-                            emojiPanel.close(); reactionTarget = null;
-                        } else composer.append(inserted);
-                        com.atom.chat.audio.FeedbackSoundController.play(com.atom.chat.audio.FeedbackCue.BUTTON);
-                    }
-                    return true;
-                }
-                emojiPanel.close();
-                reactionTarget = null;
-            }
-
-            // Quick-phrase panel: every action is settled by the screen so an
-            // in-progress composer edit is committed/cancelled in the right
-            // order; an outside click closes (and thus commits) the panel.
-            if (quickPhrasePanel.isOpen()) {
-                if (quickPhrasePanel.overPanel(layout, mx, my)) {
-                    handlePhraseAction(quickPhrasePanel.click(layout, mx, my));
-                    return true;
-                }
-                closePhrasePanel();
-            }
-
-            // Context menu click. Remember the target before dismissing so a
-            // right-click on the same bubble/avatar toggles instead of reopening.
-            ChatMessage menuBefore = contextMenu.currentRow();
-            boolean menuBeforeAvatar = contextMenu.isAvatarMode();
-            if (contextMenu.hasMessageMenu()) {
-                int row = contextMenu.hitRow((float) mx, (float) my);
-                if (row >= 0 && button == 0) {
-                    if (menuBeforeAvatar) {
-                        contextActions.performAvatarMenuAction(row, menuMessageOf(menuBefore));
-                        com.atom.chat.audio.FeedbackSoundController.play(com.atom.chat.audio.FeedbackCue.BUTTON);
-                    } else if (row == 0) {
-                        boolean copied = copyToClipboard(menuBefore.getContentText());
-                        feedback("atomchat.feedback.copied", copied);
-                        if (copied) com.atom.chat.audio.FeedbackSoundController.play(com.atom.chat.audio.FeedbackCue.BUTTON);
-                    } else if (row == 1) {
-                        replySlots.arm(menuBefore);
-                        com.atom.chat.audio.FeedbackSoundController.play(com.atom.chat.audio.FeedbackCue.BUTTON);
-                        composer.setFocused(true);
-                        setFocused(chatField);
-                        chatField.setFocused(true);
-                    } else if (row == ContextMenuController.rows(ContextMenuController.ContextMenuMode.BUBBLE,
-                            Cicodes.extractImageUrl(menuBefore.getRawText()) != null)
-                            && com.atom.chat.reaction.ReactionClient.available(menuBefore)) {
-                        reactionTarget = menuBefore;
-                        closePhrasePanel();
-                        emojiPanel.openReaction();
-                        com.atom.chat.audio.FeedbackSoundController.play(com.atom.chat.audio.FeedbackCue.BUTTON);
-                    } else {
-                        saveImage(menuBefore);
-                        com.atom.chat.audio.FeedbackSoundController.play(com.atom.chat.audio.FeedbackCue.BUTTON);
-                    }
-                    contextMenu.close();
-                    return true;
-                }
-                // Any other click — including a right-click aimed at another bubble —
-                // dismisses first; the handlers below may then open a new menu.
-                contextMenu.close();
-            }
-
-            // Jump-to-latest bubble sits above the message list and takes priority
-            // over ordinary message clicks when it is visible.
-            if (button == 0 && overJumpLatest(layout, mx, my)) {
-                scrollSync.pressJumpLatest();
-                currentScroll().scrollToBottom(true);
-                com.atom.chat.audio.FeedbackSoundController.play(com.atom.chat.audio.FeedbackCue.BUTTON);
-                return true;
-            }
-
-            if (button == 0 && messageListView.clickReaction(mx, my)) {
-                com.atom.chat.audio.FeedbackSoundController.play(com.atom.chat.audio.FeedbackCue.BUTTON);
-                return true;
-            }
-
-            // Button row: image / emoji / send share one row and one size,
-            // geometry comes from UiLayout so hits can never drift from the drawing.
-            if (button == 0 && layout.imageBtn.contains((float) mx, (float) my)) {
-                primitives.pressButton(0);
-                com.atom.chat.audio.FeedbackSoundController.play(com.atom.chat.audio.FeedbackCue.BUTTON);
-                primitives.setButtonHeld(0);
-                composer.setFocused(true);
-                composerTools.toggle();
-                return true;
-            }
-            // Inserting an emoji must NOT close the panel: users often want to pick several
-            // in a row. The panel still closes on any outside click or the toggle button.
-            if (button == 0 && layout.sendBtn.contains((float) mx, (float) my)) {
-                primitives.pressButton(2);
-                primitives.setButtonHeld(2);
-                if (quickPhrasePanel.isEditing()) {
-                    // In phrase-edit mode the send button commits the phrase.
-                    endPhraseEdit(true);
-                    return true;
-                }
-                sendMessage(composer.text());
-                return true;
-            }
+            dismissMessagePopups();
 
             // Input box focus
             composer.setFocused(false);
@@ -4719,64 +4864,11 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
             // text; the text-line branch below may overwrite it with the same result.
             if (button == 0) {
                 messageWiring.armClickAt(mx, my);
-                // The folded-history button floats over the top of the list, so it
-                // claims the press before any message row beneath it can.
-                if (messageListView.loadEarlierHitAt(mx, my)) {
-                    messageListView.requestLoadEarlier();
-                    return true;
-                }
-                // A press on a picture whose bitmap is already loaded opens the
-                // preview. imageHitAt answers only for a bubble the last frame
-                // resolved an image for, so the loading plate and the [图片]
-                // capsule fall through to the ordinary row handling below.
-                MessageListView.MessageHit imageHit = messageListView.imageHitAt(mx, my);
-                if (imageHit != null) {
-                    // The bitmap comes from the cache the bubble drew from, so
-                    // opening the preview downloads nothing a second time.
-                    Image bitmap = ImageLoader.get().get(imageHit.imageUrl(), true);
-                    if (bitmap != null) {
-                        imagePreviewMessage=imageHit.message();
-                        imagePreview.open(bitmap);
-                        // This press belongs to the modal now: nothing was armed
-                        // for a clickable span or a selection on the way here.
-                        messageWiring.clearClick();
-                        return true;
-                    }
-                }
             }
 
-            // Message interactions. Left avatar click only arms the double-click
-            // poke; single-click @ is deliberately gone (use the right-click menu).
-            // Right-click opens the bubble menu only when the pointer is actually on
-            // the bubble; right-click on a real player's avatar opens the avatar menu.
             for (MessageListView.MessageHit hit : messageListView.hits()) {
                 if (my < hit.y() || my > hit.bottom()) {
                     continue;
-                }
-                if (button == 1 && hit.avatarSize() > 0F
-                        && mx >= hit.avatarX() && mx <= hit.avatarX() + hit.avatarSize()
-                        && my >= hit.avatarY() && my <= hit.avatarY() + hit.avatarSize()
-                        && ContextMenuActions.canOpenAvatarMenu(menuMessageOf(hit.message()))) {
-                    // Right-clicking the avatar the avatar menu is already on closes it.
-                    if (menuBefore == hit.message() && menuBeforeAvatar) {
-                        com.atom.chat.audio.FeedbackSoundController.play(com.atom.chat.audio.FeedbackCue.BUTTON);
-                        return true;
-                    }
-                    if (hit.message() != null && !hit.message().isIdentityUnknown()) contextMenu.openAvatar(menuSubjectOf(hit.message()), mx, my);
-                    com.atom.chat.audio.FeedbackSoundController.play(com.atom.chat.audio.FeedbackCue.BUTTON);
-                    return true;
-                }
-                if (button == 1 && !hit.message().isSystem()
-                        && mx >= hit.bubbleX() && mx <= hit.bubbleX() + hit.bubbleWidth()
-                        && my >= hit.bubbleY() && my <= hit.bubbleBottom()) {
-                    // Right-clicking the bubble the menu is already on closes it.
-                    if (menuBefore == hit.message()) {
-                        com.atom.chat.audio.FeedbackSoundController.play(com.atom.chat.audio.FeedbackCue.BUTTON);
-                        return true;
-                    }
-                    contextMenu.openBubble(menuSubjectOf(hit.message()), mx, my);
-                    com.atom.chat.audio.FeedbackSoundController.play(com.atom.chat.audio.FeedbackCue.BUTTON);
-                    return true;
                 }
                 if (button == 0) {
                     List<MessageListView.MessageTextLine> textLines = messageListView.textLinesForHit(hit);
@@ -4794,15 +4886,6 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
                             return true;
                         }
                     }
-                }
-                if (button == 0 && hit.avatarSize() > 0F
-                        && mx >= hit.avatarX() && mx <= hit.avatarX() + hit.avatarSize()
-                        && my >= hit.avatarY() && my <= hit.avatarY() + hit.avatarSize()) {
-                    // The competition window's three branches and their order
-                    // are the domain's (D18b); the frame's clock is this click's.
-                    avatarWiring.handleAvatarClick(System.currentTimeMillis(),
-                            factsOf(hit.message()), hit.index());
-                    return true;
                 }
             }
             return false;

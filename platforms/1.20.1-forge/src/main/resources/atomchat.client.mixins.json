@@ -9,6 +9,7 @@
     "MinecraftClientMixin",
     "ChatHudMixin",
     "MessageHandlerMixin",
+    "TrChatChannelPacketMixin",
     "MouseHandlerAccessor",
     "SuggestionWindowAccessor",
     "ComposerSuggestionAccessor",

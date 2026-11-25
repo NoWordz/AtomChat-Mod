@@ -11,7 +11,7 @@ import java.util.function.BooleanSupplier;
 public final class SettingsTabDefaults {
     private SettingsTabDefaults() { }
     private static final Map<String, List<String>> NAMES = Map.ofEntries(
-            Map.entry("APPEARANCE/theme", List.of("bubbleStyle")),
+            Map.entry("APPEARANCE/theme", List.of("bubbleStyle", "graphicsQuality")),
             Map.entry("APPEARANCE/colors", List.of(
                 "accentColor", "ownBubbleColor", "bubbleTextColor",
                 "otherBubbleColor", "otherBubbleTextColor", "panelBgColor",
@@ -45,7 +45,7 @@ public final class SettingsTabDefaults {
             Map.entry("PRIVACY/privacy", List.of(
                 "hideBlockedMessages", "serverPacksEnabled")),
             Map.entry("ABOUT/about", List.of(
-                "debug", "performanceMode")));
+                "debug")));
     private static final Map<String, List<Field>> FIELDS = resolveFields();
 
     private static Map<String, List<Field>> resolveFields() {
@@ -77,7 +77,7 @@ public final class SettingsTabDefaults {
     public static boolean reset(AtomChatConfig config, SettingsSection section, String chip, BooleanSupplier save) {
         var fields = FIELDS.get(key(section, chip));
         if (fields == null || config == AtomChatConfig.DEFAULT) return false;
-        if (config.performanceMode) fields = fields.stream().filter(field -> !coveredByPerformanceMode(field)).toList();
+        if (config.performanceModeEnabled()) fields = fields.stream().filter(field -> !coveredByPerformanceMode(field)).toList();
         var before = new java.util.ArrayList<Object>(fields.size());
         boolean committed = false;
         try {

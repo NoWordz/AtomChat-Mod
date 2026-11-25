@@ -223,10 +223,10 @@ class HistoryFoldStoreTest {
     @Test
     void revealingARealFoldedGroupKeepsItsOldBubbleAtTheSameScreenPosition() {
         var config = com.atom.chat.config.AtomChatConfig.get();
-        boolean oldCompact = config.compactMessagesEnabled, oldPerformance = config.performanceMode;
+        boolean oldCompact = config.compactMessagesEnabled, oldPerformance = config.performanceModeEnabled();
         int oldInterval = config.timestampIntervalMinutes;
         config.compactMessagesEnabled = true;
-        config.performanceMode = true;
+        config.graphicsQuality = com.atom.chat.config.GraphicsQuality.PERFORMANCE;
         config.timestampIntervalMinutes = 0;
         try {
             for (int total : new int[]{101, 201}) {
@@ -258,7 +258,7 @@ class HistoryFoldStoreTest {
             }
         } finally {
             config.compactMessagesEnabled = oldCompact;
-            config.performanceMode = oldPerformance;
+            config.graphicsQuality = (oldPerformance ? com.atom.chat.config.GraphicsQuality.PERFORMANCE : com.atom.chat.config.GraphicsQuality.ULTRA);
             config.timestampIntervalMinutes = oldInterval;
         }
     }

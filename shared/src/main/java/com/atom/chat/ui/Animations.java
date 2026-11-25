@@ -44,6 +44,6 @@ public final class Animations {
     /** Whether double-clicking another player's avatar pokes them. */
     public static boolean avatarPoke() {
         var config = AtomChatConfig.get();
-        return !config.performanceMode && config.avatarPokeEnabled;
+        return !config.performanceModeEnabled() && config.avatarPokeEnabled;
     }
 }

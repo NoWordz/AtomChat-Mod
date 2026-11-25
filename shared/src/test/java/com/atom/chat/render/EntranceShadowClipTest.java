@@ -75,8 +75,8 @@ class EntranceShadowClipTest {
         oldPanelBg = config.panelBgColor;
         oldCardColor = config.cardColor;
         oldCardTint = config.cardTint;
-        oldPerformanceMode = config.performanceMode;
-        config.performanceMode = false;
+        oldPerformanceMode = config.performanceModeEnabled();
+        config.graphicsQuality = com.atom.chat.config.GraphicsQuality.ULTRA;
         config.animationEnabled = true;
         // ZOOM is the axis whose cards actually rise; under SLIDE there is no
         // vertical travel, so a vertical shadow lead could not regress there.
@@ -98,7 +98,7 @@ class EntranceShadowClipTest {
         config.panelBgColor = oldPanelBg;
         config.cardColor = oldCardColor;
         config.cardTint = oldCardTint;
-        config.performanceMode = oldPerformanceMode;
+        config.graphicsQuality = (oldPerformanceMode ? com.atom.chat.config.GraphicsQuality.PERFORMANCE : com.atom.chat.config.GraphicsQuality.ULTRA);
     }
 
     @Test

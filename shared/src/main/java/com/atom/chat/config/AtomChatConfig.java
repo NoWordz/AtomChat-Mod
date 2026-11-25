@@ -24,7 +24,7 @@ public class AtomChatConfig {
     public float blurStrength = 2.0F;
 
     public float effectiveBlurStrength() {
-        return performanceMode ? 0F : storedBlurStrength();
+        return performanceModeEnabled() ? 0F : storedBlurStrength();
     }
 
     private float storedBlurStrength() {
@@ -32,11 +32,11 @@ public class AtomChatConfig {
     }
 
     public boolean effectiveBlurEnabled() {
-        return !performanceMode && blurEnabled;
+        return !performanceModeEnabled() && blurEnabled;
     }
 
     public boolean effectiveAnimationEnabled() {
-        return !performanceMode && animationEnabled;
+        return !performanceModeEnabled() && animationEnabled;
     }
 
     public float panelWidth = 480.0F;
@@ -165,7 +165,7 @@ public class AtomChatConfig {
     public boolean debug = false;
 
     /** Runtime override. The underlying appearance and motion values remain on disk. */
-    public boolean performanceMode = false;
+    public GraphicsQuality graphicsQuality = GraphicsQuality.ULTRA;
     /**
      * 「四档归零对照」诊断实验兜底档位："A"=完整（产品默认，每帧新鲜毛玻璃）、
      * "B"=只跳背景模糊 pre-pass、"C"=整个 drawPanel 旁路、
@@ -365,7 +365,7 @@ public class AtomChatConfig {
     public float cardBlurStrength = 2F;
 
     public float effectiveCardBlurStrength() {
-        return performanceMode ? 0F : storedCardBlurStrength();
+        return performanceModeEnabled() ? 0F : storedCardBlurStrength();
     }
 
     public float storedCardBlurStrength() {
@@ -436,6 +436,18 @@ public class AtomChatConfig {
      * downloaded or cached (saving one by hand still fetches on demand).
      */
     public boolean imageMessagesEnabled = true;
+    /** Whether rich share cards (location, red packet, item, TPA, custom API) are rendered as cards. */
+    public boolean shareCardsEnabled = true;
+    /** Whether coordinate/waypoint shares (Xaero/JourneyMap/VoxelMap/FTB/generic) auto-upgrade to minimap cards. */
+    public boolean autoConvertLocationCards = true;
+    /** Whether compact single-item SHOW_ITEM chat shares auto-upgrade to equipment share cards. */
+    public boolean autoConvertItemLinksToCards = true;
+    /** Whether universal pair-button requests (TPA, Party, Guild, Trade, Duel, Friend) auto-upgrade to interactive cards. */
+    public boolean autoConvertRequestCards = true;
+    /** Whether single-button system action notifications (Mail, Auction, Quest, Reward) auto-upgrade to action cards. */
+    public boolean autoConvertActionCards = true;
+    /** Whether user/server-defined JSON rules in config/atomchat/card_rules.json are evaluated. */
+    public boolean customCardRulesEnabled = true;
     /**
      * Time divider between messages, in minutes; 0 disables the divider. A
      * pill with the clock time is drawn above a message when this many minutes
@@ -575,8 +587,17 @@ public class AtomChatConfig {
 
     /** Render paths may run without a loader in offscreen tests and tools. */
     public static boolean performanceModeActive() {
+        return activeGraphicsQuality() == GraphicsQuality.PERFORMANCE;
+    }
+
+    public boolean performanceModeEnabled() {
+        return graphicsQuality == GraphicsQuality.PERFORMANCE;
+    }
+
+    /** Offscreen consumers can query the policy before the platform has initialized. */
+    public static GraphicsQuality activeGraphicsQuality() {
         AtomChatConfig current = instance;
-        return current != null && current.performanceMode;
+        return current == null ? GraphicsQuality.ULTRA : current.graphicsQuality;
     }
 
     /**
@@ -727,6 +748,25 @@ public class AtomChatConfig {
         AtomChat.LOGGER.warn(com.atom.chat.diagnostics.AtomChatLog.message("config", "Ignoring invalid template type at {}"), path);
     }
 
+    private static String migrateGraphicsQuality(String json) {
+        var settings = GSON.fromJson(json, com.google.gson.JsonObject.class);
+        if (settings == null) return json;
+        var tier = settings.get("graphicsQuality");
+        var legacy = settings.remove("performanceMode");
+        GraphicsQuality migrated = legacy != null && legacy.isJsonPrimitive() && legacy.getAsBoolean()
+                ? GraphicsQuality.PERFORMANCE : GraphicsQuality.ULTRA;
+        if (tier != null && tier.isJsonPrimitive() && tier.getAsJsonPrimitive().isString()) {
+            for (GraphicsQuality quality : GraphicsQuality.values()) {
+                if (quality.name().equals(tier.getAsString())) {
+                    migrated = quality;
+                    break;
+                }
+            }
+        }
+        settings.addProperty("graphicsQuality", migrated.name());
+        return settings.toString();
+    }
+
     private static AtomChatConfig load() {
         com.atom.chat.util.CacheDirs.migrateFromOldConfigPaths();
         Path path = com.atom.chat.platform.Platform.configDir().resolve("atomchat/atomchat-client.json");
@@ -735,7 +775,7 @@ public class AtomChatConfig {
                 String json = Files.readString(path, StandardCharsets.UTF_8);
                 boolean halfWidthKeyPresent = hasKey(json, "halfScreenWidthCustomized");
                 AtomChatConfig config = GSON.fromJson(sanitizePageNavStyle(sanitizeAvatarStyle(
-                        sanitizeBubbleStyle(sanitizeWorldFeedFilterAndTemplates(json)))), AtomChatConfig.class);
+                        sanitizeBubbleStyle(sanitizeWorldFeedFilterAndTemplates(migrateGraphicsQuality(json))))), AtomChatConfig.class);
                 if (config != null) {
                     boolean personalLoaded = PersonalDataStore.load(config);
                     if (config.blockedPlayers == null) {

@@ -30,6 +30,7 @@ public final class SettingsGroupIcons {
         Map.entry("atomchat.settings.group.chat.hud",SettingsIcons.DEVICE_DESKTOP),
         Map.entry("atomchat.settings.group.chat.interaction",TablerIcons.HAND_CLICK),
         Map.entry("atomchat.settings.group.chat.content",DrawPrimitives.ICON_IMAGE_PATH),
+        Map.entry("atomchat.settings.appearance.quality",SettingsGroupGlyphs.SPARKLES),
         Map.entry("atomchat.settings.group.appearance.effects",SettingsGroupGlyphs.SPARKLES),
         Map.entry("atomchat.settings.group.appearance.motion",TablerIcons.PLAYER_PLAY),
         Map.entry("atomchat.settings.group.appearance.wallpaper",SettingsIcons.PHOTO),

@@ -1,6 +1,7 @@
 package com.atom.chat.render;
 
 import com.atom.chat.config.AtomChatConfig;
+import com.atom.chat.config.GraphicsQuality;
 import com.atom.chat.ui.UiLayout;
 import io.github.humbleui.skija.*;
 import io.github.humbleui.types.Rect;
@@ -46,6 +47,55 @@ class CardBackdropTest {
         assertTrue(config.needsSeparateCardBlur(true));
         config.cardBlurStrength = 0F;
         assertFalse(config.needsSeparateCardBlur(false));
+    }
+
+    @Test void balancedCardBackdropPreservesTheDevicePixelTransition() {
+        int width = 219, height = 141;
+        var panel = new UiLayout.Rect(0, 0, width, height);
+        var config = new AtomChatConfig();
+        config.panelOutline = false;
+        config.panelOpacity = 0F;
+        try (var source = Surface.makeRasterN32Premul(width, height);
+             var target = Surface.makeRasterN32Premul(width, height);
+             var white = new Paint().setColor(0xFFFFFFFF)) {
+            source.getCanvas().clear(0xFF000000);
+            source.getCanvas().drawRect(Rect.makeLTRB(width / 2, 0, width, height), white);
+            try (var world = source.makeImageSnapshot()) {
+                float previous = 0;
+                for (float strength : new float[]{2F, 3F}) {
+                    config.cardBlurStrength = strength;
+                    float ultra = cardEdgeWidth(target, panel, world, config, GraphicsQuality.ULTRA);
+                    float balanced = cardEdgeWidth(target, panel, world, config, GraphicsQuality.BALANCED);
+                    System.out.printf(java.util.Locale.ROOT, "CARD_BLUR strength=%.0f%% ultra=%.2fpx balanced=%.2fpx%n",
+                            strength * 100F, ultra, balanced);
+                    assertTrue(ultra > previous);
+                    assertEquals(ultra, balanced, 4F, "10–90% span within one Balanced sample");
+                    previous = ultra;
+                }
+            }
+        }
+    }
+
+    private static float cardEdgeWidth(Surface target, UiLayout.Rect panel, Image world, AtomChatConfig config,
+                                       GraphicsQuality quality) {
+        config.graphicsQuality = quality;
+        var canvas = target.getCanvas();
+        canvas.clear(0);
+        try (var frame = CardBackdrop.begin(target, canvas, panel, world, null, config)) {
+            assertTrue(CardBackdrop.active());
+            CardBackdrop.draw(canvas, 0, 0, panel.w(), panel.h(), 0);
+        }
+        byte[] rgba = pixels(target);
+        int width = target.getWidth();
+        int start = (target.getHeight() / 2) * width * 4;
+        float first = 0;
+        for (int x = 1; x < width; x++) {
+            int left = rgba[start + (x - 1) * 4] & 255;
+            int right = rgba[start + x * 4] & 255;
+            if (left < 26 && right >= 26) first = x - 1F + (26F - left) / (right - left);
+            if (left < 230 && right >= 230) return x - 1F + (230F - left) / (right - left) - first;
+        }
+        throw new AssertionError("Card image has no complete edge");
     }
 
     @Test void zeroSkipsAndThreeHundredBlursOnlyInsideRoundedCards() {

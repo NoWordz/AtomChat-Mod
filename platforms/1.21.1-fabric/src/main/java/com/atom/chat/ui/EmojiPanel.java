@@ -92,7 +92,11 @@ public final class EmojiPanel {
     };
 
     private boolean reactionMode;
+    private long pointerOpening;
+    private record EmojiClick(long opening, int tab, Object action) {}
+    private record StickerHit(EmoteGridLayout.Kind kind, int index, File file, boolean remove) {}
     public void openReaction() {
+        pointerOpening++;
         reactionMode = true; open = true; tab = 0; scroll = 0; paintedScroll = 0; tabAnimFrom = -1; paintedTabOffset = 0;
         tabIndicatorAnim.animateTo(0, 0.0F); tabContentAnim.animateTo(0, 1.0F);
         cellHover.clear(); cellScale.clear(); pressedCellKey = -1;
@@ -211,6 +215,7 @@ public final class EmojiPanel {
         reactionMode = false;
         open = !open;
         if (open) {
+            pointerOpening++;
             if (tab == 2) refreshEmotes();
             cellHover.clear();
             cellScale.clear();
@@ -256,29 +261,72 @@ public final class EmojiPanel {
      * Handles a click inside the panel. Returns the text to insert ("" = the
      * click was consumed without inserting; tabs, emote actions and gutters).
      */
+    public com.atom.chat.ui.input.ClickTarget clickTarget(UiLayout layout, float mx, float my, int button,
+                                                          java.util.function.Consumer<String> activate) {
+        if (!open || !overPanel(layout, mx, my)) return null;
+        if (button != 0) return com.atom.chat.ui.input.ClickTarget.blocked();
+        var point = localPointer(layout, mx, my);
+        float x = point.x(), y = point.y();
+        Object action;
+        Runnable press;
+        if (y < panelY(layout) + UiTokens.EMOJI_TAB_H) {
+            int target = tabAt(layout, x);
+            if (target < 0) return com.atom.chat.ui.input.ClickTarget.blocked();
+            action = target;
+            press = () -> pulseTab(target);
+        } else {
+            if (!insideGridWidth(x, layout) || !insideGridWidth(x - paintedTabOffset, layout))
+                return com.atom.chat.ui.input.ClickTarget.blocked();
+            x -= paintedTabOffset;
+            if (tab == 2) {
+                if (sandboxMode || com.atom.chat.onboarding.TutorialSandbox.active()) {
+                    action = "preview";
+                    press = () -> {};
+                } else {
+                    StickerHit sticker = stickerHit(layout, x, y);
+                    if (sticker == null) return com.atom.chat.ui.input.ClickTarget.blocked();
+                    action = sticker;
+                    int index = sticker.kind() == EmoteGridLayout.Kind.SERVER
+                            ? SERVER_HOVER_BASE + sticker.index() : sticker.index();
+                    press = () -> pulseCell(gridHoverKey(2, index));
+                }
+            } else {
+                int index = textGridHoveredIndex(tab, x, y, layout);
+                if (index < 0) return com.atom.chat.ui.input.ClickTarget.blocked();
+                action = (tab == 1 ? KAOMOJI : EMOJIS)[index];
+                int key = gridHoverKey(tab, index);
+                press = () -> pulseCell(key);
+            }
+        }
+        return new com.atom.chat.ui.input.ClickTarget(new EmojiClick(pointerOpening, tab, action), press,
+                () -> { pressedTabKey = -1; pressedCellKey = -1; },
+                () -> activate.accept(click(layout, mx, my)));
+    }
+
+    private int tabAt(UiLayout layout, float x) {
+        int count = tabLabels().length;
+        float stripStart = panelX(layout) + UiTokens.EMOJI_PANEL_PAD;
+        float width = (panelW() - UiTokens.EMOJI_PANEL_PAD * 2.0F) / count;
+        int index = (int) ((x - stripStart) / width);
+        return index >= 0 && index < count ? index : -1;
+    }
+
     public String click(UiLayout layout, float mx, float my) {
         var point = localPointer(layout,mx,my); mx=point.x(); my=point.y();
-        float px = panelX(layout);
         float py = panelY(layout);
-        float pw = panelW();
         if (!overPanelLocal(layout, mx, my)) {
             return "";
         }
         // Tab bar. The strip is inset by EMOJI_PANEL_PAD so it aligns with the
         // content grid below; the active pill then keeps a uniform s(4) inside it.
         if (my < py + UiTokens.EMOJI_TAB_H) {
-            String[] labels = tabLabels();
-            float tabInset = UiTokens.EMOJI_PANEL_PAD;
-            float tabStripX = px + tabInset;
-            float tabStripW = pw - tabInset * 2.0F;
-            float tabW = tabStripW / labels.length;
-            int t = (int) ((mx - tabStripX) / tabW);
-            if (t >= 0 && t < labels.length) {
+            int t = tabAt(layout, mx);
+            if (t >= 0) {
                 // Press feedback on every tab tap, switch or re-tap alike —
                 // the cell pattern: hold pressed for a beat, then rebound.
                 pulseTab(t);
             }
-            if (t >= 0 && t < labels.length && t != tab) {
+            if (t >= 0 && t != tab) {
                 int from = tab;
                 outgoingScroll = scroll;
                 tab = t;
@@ -758,8 +806,7 @@ public final class EmojiPanel {
      * server's emotes sends it too - it is read-only, so there is no remove
      * button to hit first. Always returns "" because nothing is inserted here.
      */
-    private String emotePanelClick(UiLayout layout, float mx, float my) {
-        if (sandboxMode || com.atom.chat.onboarding.TutorialSandbox.active()) return "☺";
+    private StickerHit stickerHit(UiLayout layout, float mx, float my) {
         float px = panelX(layout);
         float py = panelY(layout);
         float pw = panelW();
@@ -769,7 +816,7 @@ public final class EmojiPanel {
         float contentH = contentH();
         if (mx < contentX || mx > contentX + contentW
                 || my < contentY || my > contentY + contentH) {
-            return "";
+            return null;
         }
         float colW = contentW / UiTokens.EMOTE_COLS;
         int col = Math.max(0, Math.min(UiTokens.EMOTE_COLS - 1, (int) ((mx - contentX) / colW)));
@@ -777,40 +824,37 @@ public final class EmojiPanel {
         EmoteGridLayout.Cell cell = emoteLayout().cellAt(row, col);
         float ex = contentX + col * colW;
         float ey = contentY - paintedScroll + row * UiTokens.EMOTE_CELL;
-        switch (cell.kind()) {
+        return switch (cell.kind()) {
             case LOCAL -> {
-                File emote = emoteStore.list().get(cell.index());
-                float rs = UiTokens.EMOTE_REMOVE_SIZE;
-                // Remove button (top-right corner of the cell), hit before send.
-                if (mx >= ex + colW - rs - s(2) && mx <= ex + colW - s(2)
-                        && my >= ey + s(2) && my <= ey + s(2) + rs) {
-                    emoteStore.remove(emote);
-                    emoteImageCache.invalidate(emote);
-                    cellHover.clear();
-                    cellScale.clear();
-                    pressedCellKey = -1;
-                    return "";
-                }
-                open = false;
-                host.sendSticker(emote.toPath());
-                return "";
+                float size = UiTokens.EMOTE_REMOVE_SIZE;
+                boolean remove = mx >= ex + colW - size - s(2) && mx <= ex + colW - s(2)
+                        && my >= ey + s(2) && my <= ey + s(2) + size;
+                yield new StickerHit(cell.kind(), cell.index(), emoteStore.list().get(cell.index()), remove);
             }
-            case ADD -> {
-                if (!emoteStore.isFull()) {
-                    pulseCell(gridHoverKey(2, emoteStore.count()));
-                    host.pickEmoteFile();
-                }
-                return "";
-            }
-            case SERVER -> {
-                open = false;
-                host.sendSticker(emoteStore.serverList().get(cell.index()).toPath());
-                return "";
-            }
-            default -> {
-                return "";
-            }
+            case ADD -> emoteStore.isFull() ? null : new StickerHit(cell.kind(), emoteStore.count(), null, false);
+            case SERVER -> new StickerHit(cell.kind(), cell.index(), emoteStore.serverList().get(cell.index()), false);
+            default -> null;
+        };
+    }
+
+    private String emotePanelClick(UiLayout layout, float mx, float my) {
+        if (sandboxMode || com.atom.chat.onboarding.TutorialSandbox.active()) return "☺";
+        StickerHit hit = stickerHit(layout, mx, my);
+        if (hit == null) return "";
+        if (hit.remove()) {
+            emoteStore.remove(hit.file());
+            emoteImageCache.invalidate(hit.file());
+            cellHover.clear();
+            cellScale.clear();
+            pressedCellKey = -1;
+        } else if (hit.kind() == EmoteGridLayout.Kind.ADD) {
+            pulseCell(gridHoverKey(2, hit.index()));
+            host.pickEmoteFile();
+        } else {
+            close();
+            host.sendSticker(hit.file().toPath());
         }
+        return "";
     }
 
     /**

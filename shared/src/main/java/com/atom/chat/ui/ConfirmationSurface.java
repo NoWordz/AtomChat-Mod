@@ -16,7 +16,9 @@ public final class ConfirmationSurface {
     }
     public static final class Button {
         private float hover,pulse;
+        private boolean held;
         private final PressScale scale=PressScale.bounce();
+        public void hold(boolean held) { this.held = held; }
         public void press(){
             pulse=UiMotion.POPUP_MS;
             com.atom.chat.audio.FeedbackSoundController.play(com.atom.chat.audio.FeedbackCue.BUTTON);
@@ -24,7 +26,7 @@ public final class ConfirmationSurface {
         public void draw(Canvas canvas,UiLayout.Rect rect,String label,boolean primary,boolean dangerous,
                          boolean focused,boolean hovered,float dt,float opacity) {
             hover=UiMotion.approach(hover,hovered||focused?1:0,dt,UiMotion.HOVER_MS);
-            scale.update(hovered,pulse>0,dt,Animations.enabled(),rect.w());pulse=Math.max(0,pulse-Math.max(0,dt));
+            scale.update(hovered,held||pulse>0,dt,Animations.enabled(),rect.w());pulse=Math.max(0,pulse-Math.max(0,dt));
             int color=actionColor(primary,dangerous);
             scale.begin(canvas,rect.x()+rect.w()/2,rect.y()+rect.h()/2);
             try {

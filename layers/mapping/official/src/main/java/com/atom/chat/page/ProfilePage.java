@@ -927,6 +927,53 @@ public final class ProfilePage {
      * former badge, banner, signature line or copy button); false lets the
      * shell keep it.
      */
+    private enum PointerAction {
+        DISMISS_AVATAR_MENU, PICK_AVATAR, ARM_CLEAR_AVATAR, CLEAR_AVATAR, MANAGE_AVATAR,
+        PICK_BANNER, CLEAR_BANNER, EDIT_SIGNATURE, FINISH_SIGNATURE, COPY_UUID
+    }
+
+    private record PointerId(java.util.UUID subject, PointerAction action, boolean editingSignature) {}
+
+    public com.atom.chat.ui.input.ClickTarget clickTarget(float x, float y, UiLayout layout, float scrollY, int button) {
+        if (button != 0 && button != 1) return null;
+        syncAvatarInteraction();
+        PointerAction action = pointerAction(x, y, layout, scrollY, button);
+        if (action == null) return com.atom.chat.ui.input.ClickTarget.blocked();
+        return com.atom.chat.ui.input.ClickTarget.action(new PointerId(subjectUuid(), action, signatureEditing), () -> {
+            if (button == 0) onClick(x, y, layout, scrollY);
+            else onRightClick(x, y, layout, scrollY);
+        });
+    }
+
+    private PointerAction pointerAction(float x, float y, UiLayout layout, float scrollY, int button) {
+        if (button == 0 && signatureEditing && signatureRect(layout, scrollY).contains(x, y))
+            return PointerAction.FINISH_SIGNATURE;
+        if (avatarMenuOpen) {
+            if (button == 1) return PointerAction.DISMISS_AVATAR_MENU;
+            if (layout.list.contains(x, y) && menuItemRect(layout, scrollY, 0).contains(x, y))
+                return PointerAction.PICK_AVATAR;
+            if (layout.list.contains(x, y) && menuItemRect(layout, scrollY, 1).contains(x, y)) {
+                if (!customAvatarActive()) return null;
+                boolean armed = clearArmIndex == 1 && UiStagger.frameTimeMillis() - clearArmedAt <= CLEAR_ARM_MS;
+                return armed ? PointerAction.CLEAR_AVATAR : PointerAction.ARM_CLEAR_AVATAR;
+            }
+            return PointerAction.DISMISS_AVATAR_MENU;
+        }
+        if (button == 0 && avatarEditable() && layout.list.contains(x, y)) {
+            if (badgeRect(layout, scrollY).contains(x, y)) return PointerAction.PICK_AVATAR;
+            if (avatarRect(layout, scrollY).contains(x, y)) return PointerAction.MANAGE_AVATAR;
+        }
+        if (onAvatarArea(layout, scrollY, x, y)) return null;
+        if (subjectIsSelf() && bannerRect(layout, scrollY).contains(x, y)) {
+            if (button == 0) return PointerAction.PICK_BANNER;
+            if (customBannerActive()) return PointerAction.CLEAR_BANNER;
+        }
+        if (button == 1) return null;
+        if (subjectIsSelf() && signatureRect(layout, scrollY).contains(x, y)) return PointerAction.EDIT_SIGNATURE;
+        if (layout.list.contains(x, y) && copyButtonRect(layout, scrollY).contains(x, y)) return PointerAction.COPY_UUID;
+        return signatureEditing ? PointerAction.FINISH_SIGNATURE : null;
+    }
+
     public boolean onClick(float vmx, float vmy, UiLayout layout, float scrollY) {
         syncAvatarInteraction();
         if (signatureEditing) {

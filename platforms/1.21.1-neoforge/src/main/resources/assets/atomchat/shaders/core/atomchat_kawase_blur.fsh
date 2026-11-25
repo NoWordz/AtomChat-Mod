@@ -1,7 +1,7 @@
 #version 150
 
 uniform sampler2D Sampler0;
-uniform float u_Spacing;
+uniform vec2 u_Spacing;
 
 in vec2 texCoord;
 

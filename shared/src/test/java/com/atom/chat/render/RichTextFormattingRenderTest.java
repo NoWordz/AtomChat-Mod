@@ -78,7 +78,7 @@ class RichTextFormattingRenderTest {
         var message = new ChatMessage(body.toText(), false, false, null, null, null,
                 "1234567890", "Player", body.getString(), sender, body);
         var config = new AtomChatConfig();
-        config.performanceMode = false;
+        config.graphicsQuality = com.atom.chat.config.GraphicsQuality.ULTRA;
         var hud = new ChatHudRenderer();
         try (var surface = Surface.makeRasterN32Premul(340, 160); var pixels = new Bitmap()) {
             pixels.allocN32Pixels(340, 160);
@@ -110,7 +110,7 @@ class RichTextFormattingRenderTest {
         var message = new ChatMessage(body.toText(), false, false, null, null, null,
                 "MMMM World", "Player", "body", sender, body);
         var config = new AtomChatConfig();
-        config.performanceMode = true;
+        config.graphicsQuality = com.atom.chat.config.GraphicsQuality.PERFORMANCE;
         var hud = new ChatHudRenderer();
         try (var surface = Surface.makeRasterN32Premul(340, 160); var pixels = new Bitmap()) {
             hud.paint(surface.getCanvas(), List.of(message), new ChatHudRenderer.Viewport(4, 150, 330, 145, 1, 1),

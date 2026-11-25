@@ -10,6 +10,6 @@
     { "name": "Sampler0" }
   ],
   "uniforms": [
-    { "name": "u_Spacing", "type": "float", "count": 1, "values": [ 2.0 ] }
+    { "name": "u_Spacing", "type": "float", "count": 2, "values": [ 2.0, 2.0 ] }
   ]
 }

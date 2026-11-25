@@ -27,8 +27,8 @@ class TutorialLiveRoutingTest {
         try(var surface=Surface.makeRasterN32Premul(1000,800)) {
             var layout=UiLayout.ofRoot(20,20,400,700);
             controller.render(surface.getCanvas(),layout,layout,layout.tabBar,0,0,1000);
-            assertTrue(controller.onClick(60,190,0),"left click must not escape to profile during the right-click task");
-            assertFalse(controller.onClick(60,190,1),"the requested right click must reach the avatar");
+            assertTrue(Boolean.TRUE.equals(newGate(controller).click(60,190,0)),"left click must not escape to profile during the right-click task");
+            assertFalse(Boolean.TRUE.equals(newGate(controller).click(60,190,1)),"the requested right click must reach the avatar");
         } finally {controller.reset();}
     }
     @Test void clickingConversationDoesNotAdvanceUntilNextIsPressed() throws Exception {
@@ -38,11 +38,21 @@ class TutorialLiveRoutingTest {
         var layout=UiLayout.ofRoot(20,20,520,900);
         try(var surface=Surface.makeRasterN32Premul(800,1000)) {
             controller.render(surface.getCanvas(),layout,layout,layout.tabBar,0,0,1000);
-            var skip=overlay.geometry().buttons().get(2);controller.onClick(skip.x()+2,skip.y()+2,0);
+            var skip=overlay.geometry().buttons().get(2);tap(controller,skip.x()+2,skip.y()+2);
             assertEquals(TutorialSession.Step.CONVERSATIONS,controller.step());
             controller.render(surface.getCanvas(),layout,layout,layout.tabBar,0,0,1000);
-            var target=overlay.geometry().target();controller.onClick(target.x()+2,target.y()+2,0);
+            var target=overlay.geometry().target();tap(controller,target.x()+2,target.y()+2);
             assertEquals(TutorialSession.Step.CONVERSATIONS,controller.step(),"an action must never auto-navigate the tutorial");
         } finally {controller.reset();}
+    }
+
+    private static com.atom.chat.ui.input.InputGate newGate(TutorialController controller) {
+        return new com.atom.chat.ui.input.InputGate(()->false).add(controller);
+    }
+
+    private static void tap(TutorialController controller,double x,double y) {
+        var gate=newGate(controller);
+        gate.click(x,y,0);
+        gate.release(x,y,0);
     }
 }

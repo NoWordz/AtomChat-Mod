@@ -103,6 +103,8 @@ class NavStackWiringSourceTest {
     private static final Map<String, String> PORT_WORK = new LinkedHashMap<>();
 
     static {
+        PORT_WORK.put("cancelPointerGesture", "cancelScreenPointer()");
+        PORT_WORK.put("closeChannelFeed", "conversationListPage.channelFeed().close()");
         PORT_WORK.put("allowBackNavigation", "serverConfigPage.leave(settingsSectionPage.confirmation())");
         PORT_WORK.put("signatureEditLive", "profilePage.isSignatureEditing()");
         PORT_WORK.put("abortSignatureEdit", "profilePage.endSignatureEdit(false)");

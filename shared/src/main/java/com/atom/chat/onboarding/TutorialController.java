@@ -2,6 +2,7 @@ package com.atom.chat.onboarding;
 
 import com.atom.chat.ui.AtomChatAppearance;
 import com.atom.chat.ui.*;
+import com.atom.chat.ui.input.ClickTarget;
 import com.atom.chat.ui.input.InputHandler;
 import io.github.humbleui.skija.Canvas;
 import java.nio.file.Path;
@@ -41,7 +42,9 @@ public final class TutorialController implements InputHandler {
     private final TutorialOverlay overlay=new TutorialOverlay();
     private final ConfirmationDialog prompt=new ConfirmationDialog();
     private OnboardingStore store;
-    private boolean offered, captured, livePointer, suspended;
+    private record PointerId(long tour, int entry, boolean navigation, int action) {}
+    private boolean offered, livePointer, suspended;
+    private long tour;
     public void suspendForChild(){if(session.active())suspended=true;}
     public boolean suspended(){return suspended;}
     public void resumeFromChild(){suspended=false;overlay.reset();}
@@ -55,7 +58,7 @@ public final class TutorialController implements InputHandler {
     public TutorialGuide.Entry entry(){return session.entry();}
     public void start() {
         if(store!=null) { store.retry();store.choose("watch");reportSaveFailure(); }
-        offered=true;prompt.reset();
+        offered=true;prompt.reset();tour++;
         if(!session.active())host.enter();
         session.itinerary(host.itinerary());session.start();overlay.close();host.show(session.step());
     }
@@ -71,7 +74,7 @@ public final class TutorialController implements InputHandler {
     private void previous() {
         session.previous();overlay.reset();host.show(session.step());
     }
-    public void reset() { exit();overlay.close();prompt.reset();captured=false;livePointer=false; }
+    public void reset() { exit();overlay.close();prompt.reset();livePointer=false; }
     public void render(Canvas canvas,UiLayout layout,UiLayout root,UiLayout.Rect chrome,float mx,float my,float dt) {
         if(!offered&&store!=null&&store.needsPrompt()&&host.mayOffer()) {
             offered=true;
@@ -89,36 +92,52 @@ public final class TutorialController implements InputHandler {
         if(store!=null&&store.saveFailed()&&!host.liveModalActive())overlay.notice(canvas,layout.rect(),host.translate("atomchat.tutorial.save_failed"));
     }
     private void reportSaveFailure() { if(store!=null&&store.saveFailed())host.feedback("atomchat.tutorial.save_failed"); }
-    @Override public boolean onClick(double mx,double my,int button) {
-        if(!active())return false;
+    @Override public ClickTarget clickTarget(double mx,double my,int button) {
+        if(!active()) return null;
         float px=x.apply(mx),py=y.apply(my);
-        captured=true;livePointer=false;
-        if(prompt.isActive()) {prompt.click(px,py,button);return true;}
-        if(host.liveModalActive()) { captured=false;livePointer=true;return false; }
-        var g=overlay.geometry();
-        if(g==null)return true;
-        int control=g.buttonAt(px,py);
+        if(prompt.isActive()) return prompt.clickTarget(px,py,button);
+        if(host.liveModalActive()) return null;
+        var geometry=overlay.geometry();
+        if(geometry==null) return ClickTarget.blocked();
+        int control=geometry.buttonAt(px,py);
         if(button==0&&control>=0) {
-            if(control==0&&session.index()==0)return true;
-            if(control==1&&session.entry().section()==null&&session.step().requiresAction()&&!session.demoPerformed())return true;
-            overlay.press(control);
-            switch(control) {case 0->previous();case 1->advance(false);case 2->{if(session.index()==session.count()-1){if(host.keepPreview())advance(true);}else advance(true);}case 3->exit();}
-            return true;
+            if(control==0&&session.index()==0) return ClickTarget.blocked();
+            if(control==1&&session.entry().section()==null&&session.step().requiresAction()&&!session.demoPerformed())
+                return ClickTarget.blocked();
+            return new ClickTarget(new PointerId(tour, session.index(), false, control),
+                    () -> overlay.hold(control,true), () -> overlay.hold(control,false), () -> activateControl(control));
         }
-        if(g.card().contains(px,py))return true;
-        if(session.step()==TutorialSession.Step.NAVIGATION&&g.target().contains(px,py)&&button==0) {
-            int index=Math.max(0,Math.min(2,(int)((px-g.target().x())*3/Math.max(1,g.target().w()))));
-            host.selectRoot(index);session.performDemo();return true;
+        if(geometry.card().contains(px,py)) return ClickTarget.blocked();
+        if(session.step()==TutorialSession.Step.NAVIGATION&&geometry.target().contains(px,py)&&button==0) {
+            int index=Math.max(0,Math.min(2,(int)((px-geometry.target().x())*3/Math.max(1,geometry.target().w()))));
+            return ClickTarget.action(new PointerId(tour, session.index(), true, index), () -> {
+                host.selectRoot(index);
+                session.performDemo();
+            });
         }
-        if(host.allowLiveClick(session.step(),px,py,button)) { captured=false;livePointer=true;return false; }
-
-        return true;
+        return host.allowLiveClick(session.step(),px,py,button) ? null : ClickTarget.blocked();
     }
+
+    private void activateControl(int control) {
+        overlay.press(control);
+        switch(control) {
+            case 0 -> previous();
+            case 1 -> advance(false);
+            case 2 -> { if(session.index()!=session.count()-1||host.keepPreview()) advance(true); }
+            case 3 -> exit();
+            default -> throw new IllegalArgumentException("Unknown tutorial control " + control);
+        }
+    }
+
+    @Override public boolean onClick(double mx,double my,int button) {
+        livePointer=session.active();
+        return false;
+    }
+
     @Override public boolean onRelease(double mx,double my,int button) {
-        if(session.active()&&host.liveModalActive())return false;
-        boolean consume=captured;captured=false;
-        if(livePointer){livePointer=false;return false;}
-        return consume||active();
+        boolean pass=livePointer||host.liveModalActive();
+        livePointer=false;
+        return !pass&&active();
     }
     @Override public boolean onDrag(double mx,double my,int button,double dx,double dy) {
         if(session.active()&&host.liveModalActive())return false;

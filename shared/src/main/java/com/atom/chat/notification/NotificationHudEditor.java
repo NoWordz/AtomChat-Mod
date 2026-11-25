@@ -94,6 +94,18 @@ public final class NotificationHudEditor {
     private void button(Canvas canvas,int index,UiLayout.Rect r,String label,boolean primary,float mx,float my) {
         buttons[index].draw(canvas,r,label,primary,false,false,r.contains(mx,my),frameDt,progress);
     }
+    public com.atom.chat.ui.input.ClickTarget actionTarget(float x,float y,float width,float height,int button,
+                                                            java.util.function.Consumer<Action> activate) {
+        if(button!=0||closing) return null;
+        ensureModel(width);
+        var layout=NotificationHudEditorLayout.of(width,height,model.bounds(width,height).rect());
+        int index=layout.save().contains(x,y)?2:layout.cancel().contains(x,y)?1:layout.reset().contains(x,y)?0:-1;
+        if(index<0) return null;
+        return new com.atom.chat.ui.input.ClickTarget(java.util.List.of(model,index),
+                () -> buttons[index].hold(true), () -> buttons[index].hold(false),
+                () -> activate.accept(click(x,y,width,height,button)));
+    }
+
     public Action click(float x,float y,float width,float height,int button) {
         ensureModel(width);
         if(button!=0||closing) return Action.NONE;

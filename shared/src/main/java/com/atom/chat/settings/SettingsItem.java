@@ -67,7 +67,7 @@ public final class SettingsItem {
     public boolean performanceLocked() {
         return switch (id) {
             case "blur", "motion", "entry", "poke", "page_nav_style", "fun_effects", "experimental_effects" ->
-                    AtomChatConfig.get().performanceMode;
+                    AtomChatConfig.get().performanceModeEnabled();
             default -> false;
         };
     }

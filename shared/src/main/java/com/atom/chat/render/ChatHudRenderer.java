@@ -7,6 +7,7 @@ import com.atom.chat.chat.ImageCode;
 import com.atom.chat.chat.MessageGrouping;
 import com.atom.chat.chat.OwnIdentity;
 import com.atom.chat.config.AtomChatConfig;
+import com.atom.chat.config.GraphicsQuality;
 import com.atom.chat.font.FontManager;
 import com.atom.chat.image.ImageLoader;
 import com.atom.chat.image.MessageImage;
@@ -120,6 +121,8 @@ public final class ChatHudRenderer {
     private static final int DEFAULT_NAME_INK = 0xFFFFFFFF;
     private static final io.github.humbleui.skija.ImageFilter NAME_SHADOW =
             io.github.humbleui.skija.ImageFilter.makeDropShadowOnly(0F, 1F, 1.5F, 1.5F, 0xA0000000);
+    private static final io.github.humbleui.skija.ImageFilter BALANCED_NAME_SHADOW =
+            io.github.humbleui.skija.ImageFilter.makeDropShadowOnly(0F, 1F, 1.0F, 1.0F, 0xA0000000);
 
     private record Ink(AtomChatConfig.BubbleStyle shape, int own, int other, int ownText, int otherText,
                        int capsule, int capsuleText, int accent, float capsuleRadius, boolean shadow,
@@ -128,8 +131,12 @@ public final class ChatHudRenderer {
             this(config.effectiveBubbleStyle(), config.ownBubbleColor, config.otherBubbleColor,
                     config.bubbleTextColor, config.otherBubbleTextColor,
                     config.effectiveSecondaryCapsuleBg(), config.secondaryCapsuleText, config.accentColor,
-                    UiTokens.radius(10, AtomChatAppearance.theme()), !config.performanceMode,
-                    config.performanceMode ? null : NAME_SHADOW);
+                    UiTokens.radius(10, AtomChatAppearance.theme()), !config.performanceModeEnabled(),
+                    switch (config.graphicsQuality) {
+                        case ULTRA -> NAME_SHADOW;
+                        case BALANCED -> BALANCED_NAME_SHADOW;
+                        case PERFORMANCE -> null;
+                    });
         }
     }
 
@@ -161,7 +168,9 @@ public final class ChatHudRenderer {
     private float inlineItemGap;
     private String layoutOwnName, layoutUnknownName, layoutImageLabel;
     private int lastLimit;
-    private boolean lastAnimationEnabled, lastImagesEnabled, lastPerformanceMode;
+    private boolean lastAnimationEnabled, lastImagesEnabled;
+    private GraphicsQuality lastQuality;
+    private boolean lastShareCardsEnabled;
     private boolean lastCompact;
     private int lastTimestampInterval;
     private boolean departingRows;
@@ -263,7 +272,7 @@ public final class ChatHudRenderer {
             flush.run();
             graphics.draw(() -> {
                 NativeFontRenderer.prepare();
-                if (prepare || NativeTagIconRenderer.hasRequests()) prepareIcons.accept(graphics);
+                if (prepare) prepareIcons.accept(graphics);
             }, fittedViewport.density(), (canvas, ignored) -> {
                 paintingStarted = true;
                 prepareInk(config, fittedViewport, graphics.inkGeneration());
@@ -315,8 +324,9 @@ public final class ChatHudRenderer {
 
     private void prepareRows(List<ChatMessage> messages, Viewport viewport, String ownName, String unknownName,
                              String imageLabel, AtomChatConfig config, int limit, boolean animationEnabled, long now) {
-        boolean performanceChanged = config.performanceMode != lastPerformanceMode;
-        if (performanceChanged && config.performanceMode) {
+        boolean qualityChanged = config.graphicsQuality != lastQuality;
+        if (qualityChanged) clearRasterInk();
+        if (qualityChanged && config.performanceModeEnabled()) {
             motion.clear();
             departingRows = false;
         } else if (departingRows) {
@@ -354,7 +364,8 @@ public final class ChatHudRenderer {
             layoutUnknownName = unknownName;
             layoutImageLabel = imageLabel;
         }
-        boolean sameGeometry = viewport.equals(lastViewport) && limit == lastLimit && !invalidateLayout && !performanceChanged
+        boolean sameGeometry = viewport.equals(lastViewport) && limit == lastLimit && !invalidateLayout && !qualityChanged
+                && lastShareCardsEnabled == config.shareCardsEnabled
                 && lastImagesEnabled == config.imageMessagesEnabled
                 && lastCompact == config.compactMessagesEnabled && lastTimestampInterval == config.timestampIntervalMinutes;
         // Keep an in-progress row animation behind the panel's group slide.
@@ -431,10 +442,11 @@ public final class ChatHudRenderer {
         lastViewport = viewport;
         lastLimit = limit;
         lastImagesEnabled = config.imageMessagesEnabled;
+        lastShareCardsEnabled = config.shareCardsEnabled;
         lastCompact = config.compactMessagesEnabled;
         lastTimestampInterval = config.timestampIntervalMinutes;
         lastAnimationEnabled = animationEnabled;
-        lastPerformanceMode = config.performanceMode;
+        lastQuality = config.graphicsQuality;
         hasFrame = true;
     }
 
@@ -475,7 +487,11 @@ public final class ChatHudRenderer {
         String content = message.getContentRich().getString();
         ImageCode.Meta image = null;
         boolean imagePlaceholder = !message.isSystem() && ImageCode.contains(content);
-        if (message.isSystem()) {
+        if (message.hasCard() && AtomChatConfig.get().shareCardsEnabled) {
+            var card = message.getCard();
+            body = RichText.literal((card.hudTag() + " " + card.hudSummary()).trim());
+            imagePlaceholder = false;
+        } else if (message.isSystem()) {
             var ranges = ImageCode.ranges(content);
             for (int i = ranges.size() - 1; i >= 0; i--) {
                 int[] range = ranges.get(i);
@@ -536,8 +552,6 @@ public final class ChatHudRenderer {
         NativeFontRenderer.requestLines(row.body());
         NativeFontRenderer.requestLines(row.name());
         NativeFontRenderer.requestLines(row.quote());
-        var meta=row.message().nativeMeta();
-        if(meta.captured() && meta.tag()!=null)NativeTagIconRenderer.request(meta.tag().icon());
     }
 
     private void prepareInk(AtomChatConfig config, Viewport viewport, long generation) {
@@ -593,7 +607,9 @@ public final class ChatHudRenderer {
             }
             if (departingRows) {
                 for (var row : motion.rows()) {
-                    if (row.departing()) drawRow(canvas, row, viewport, ownUuid, ownName, unknownName, now, null, inkSurface);
+                    if (row.departing()) {
+                        drawRow(canvas, row, viewport, ownUuid, ownName, unknownName, now, null, inkSurface);
+                    }
                 }
             }
             // Keep the new row in front if its entrance briefly intersects the moving stack.
@@ -681,7 +697,6 @@ public final class ChatHudRenderer {
             } else if (!cacheable || !drawStaticInk(canvas, placed, bubbleX, y, grid, inkSurface, false)) {
                 drawInk(canvas, placed, bubbleX, y, viewport.density());
             }
-            MessagePaint.nativeTag(canvas,message,bubbleX,y+placed.nameBand()+measured.quoteHeight(),measured.width(),measured.bubbleHeight(),null);
             if (measured.repeatLabel() != null) {
                 SkiaFontRenderer.drawText(canvas, layoutNameFont, measured.repeatLabel(),
                         repeatX + UiTokens.INLINE_ITEM_GAP, SkiaFontRenderer.centerBaselineY(layoutNameFont, repeatY),

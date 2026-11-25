@@ -83,7 +83,7 @@ public final class TemplateParser {
         Rule rule = compile(template.format(), template.kind(), false);
         if (!rule.error().isEmpty()) return result(State.INVALID, rule.error());
         if (template.validate() != null) return result(State.INVALID, "invalid_format");
-        return preview(rule, template.kind(), text, List.of());
+        return preview(rule, template.kind(), text, List.of(), Set.of());
     }
 
     public static String visibleText(String text) {
@@ -91,24 +91,50 @@ public final class TemplateParser {
     }
 
     static Preview previewClient(String format, MessageTemplate.Kind kind, String text, Collection<String> names) {
-        return preview(compile(format, kind, true), kind, text, names);
+        return previewClient(format, kind, text, names, Set.of());
     }
 
-    private static Preview preview(Rule rule, MessageTemplate.Kind kind, String text, Collection<String> names) {
+    static Preview previewClient(String format, MessageTemplate.Kind kind, String text, Collection<String> names,
+                                 Set<Span> standaloneSegments) {
+        return preview(compile(format, kind, true), kind, text, names, standaloneSegments);
+    }
+
+    private static Preview preview(Rule rule, MessageTemplate.Kind kind, String text, Collection<String> names,
+                                   Set<Span> standaloneSegments) {
         if (!rule.error().isEmpty()) return result(State.INVALID, rule.error());
         if (text == null || text.length() > MAX_TEXT) return result(State.NO_MATCH, "input_limit");
         if (rule.legacy() && names.isEmpty()) return result(State.NO_MATCH, "");
         var matches = new ArrayList<Match>(2);
         int[] budget = {20_000};
-        walk(rule, kind, names, text, 0, 0, new LinkedHashMap<>(), new LinkedHashMap<>(), matches, budget);
+        walk(rule, kind, names, text, 0, 0, new LinkedHashMap<>(), new LinkedHashMap<>(), matches, budget, null, Set.of());
         if (budget[0] <= 0) return result(State.AMBIGUOUS, "input_limit");
-        if (matches.size() > 1) return result(State.AMBIGUOUS, "split_conflict");
+        if (matches.size() > 1) {
+            String delimiter = standaloneSegments.isEmpty() ? null : displayBodyDelimiter(rule, kind);
+            if (delimiter != null) {
+                matches.clear();
+                walk(rule, kind, names, text, 0, 0, new LinkedHashMap<>(), new LinkedHashMap<>(), matches, budget,
+                        delimiter, standaloneSegments);
+                if (budget[0] > 0 && matches.size() == 1) return new Preview(State.MATCH, matches.get(0), "");
+            }
+            return result(State.AMBIGUOUS, "split_conflict");
+        }
         return matches.isEmpty() ? result(State.NO_MATCH, "") : new Preview(State.MATCH, matches.get(0), "");
+    }
+
+    private static String displayBodyDelimiter(Rule rule, MessageTemplate.Kind kind) {
+        if (kind != MessageTemplate.Kind.PUBLIC || rule.legacy() || rule.parts().size() < 3) return null;
+        if (rule.parts().stream().noneMatch(part -> "display".equals(part.field()))
+                || rule.parts().stream().anyMatch(part -> "sender".equals(part.field()) || "target".equals(part.field())))
+            return null;
+        var parts = rule.parts();
+        if (!"message".equals(parts.get(parts.size() - 1).field())) return null;
+        String delimiter = parts.get(parts.size() - 2).literal();
+        return delimiter == null || delimiter.isBlank() ? null : delimiter;
     }
 
     private static void walk(Rule rule, MessageTemplate.Kind kind, Collection<String> names, String text,
                              int partIndex, int at, Map<String, String> fields, Map<String, Span> spans,
-                             List<Match> matches, int[] budget) {
+                             List<Match> matches, int[] budget, String delimiter, Set<Span> standaloneSegments) {
         if (partIndex == rule.parts().size()) {
             if (at != text.length()) return;
             var captured = new LinkedHashMap<>(fields);
@@ -123,12 +149,14 @@ public final class TemplateParser {
         Part part = rule.parts().get(partIndex);
         if (part.literal() != null) {
             if (text.startsWith(part.literal(), at)) {
-                walk(rule, kind, names, text, partIndex + 1, at + part.literal().length(), fields, spans, matches, budget);
+                walk(rule, kind, names, text, partIndex + 1, at + part.literal().length(), fields, spans, matches, budget, delimiter, standaloneSegments);
             }
             return;
         }
 
         String field = part.field();
+        if (delimiter != null && field.equals("message")
+                && !standaloneSegments.contains(new Span(at - delimiter.length(), at))) return;
         String searchLiteral = partIndex + 1 < rule.parts().size() ? rule.parts().get(partIndex + 1).literal() : null;
         int max = switch (field) {
             case "message" -> MAX_TEXT;
@@ -154,7 +182,7 @@ public final class TemplateParser {
             if (!valid(field, value) || rule.legacy() && field.equals("sender") && !names.contains(value)) continue;
             fields.put(field, value);
             spans.put(field, new Span(at, to));
-            walk(rule, kind, names, text, partIndex + 1, to, fields, spans, matches, budget);
+            walk(rule, kind, names, text, partIndex + 1, to, fields, spans, matches, budget, delimiter, standaloneSegments);
             spans.remove(field);
             fields.remove(field);
         }
@@ -196,10 +224,19 @@ public final class TemplateParser {
     }
 
     public static Preview match(List<MessageTemplate> templates, String text) {
+        return match(templates, text, Set.of());
+    }
+
+    static Preview match(List<MessageTemplate> templates, String text, Set<Span> standaloneSegments) {
         Preview found = result(State.NO_MATCH, "");
         for (var template : templates) {
             if (!template.enabled()) continue;
-            found = combine(found, preview(template, text));
+            var parsed = preview(template, text);
+            if ("split_conflict".equals(parsed.error()) && !standaloneSegments.isEmpty()) {
+                parsed = preview(compile(template.format(), template.kind(), false), template.kind(), text,
+                        List.of(), standaloneSegments);
+            }
+            found = combine(found, parsed);
             if (found.state() == State.AMBIGUOUS) break;
         }
         return found;

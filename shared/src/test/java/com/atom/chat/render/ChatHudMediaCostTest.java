@@ -2,6 +2,7 @@ package com.atom.chat.render;
 
 import com.atom.chat.chat.ChatMessage;
 import com.atom.chat.config.AtomChatConfig;
+import com.atom.chat.config.GraphicsQuality;
 import com.atom.chat.image.ChatHudGifFixture;
 import com.atom.chat.image.MessageImage;
 import com.atom.chat.platform.Platform;
@@ -77,7 +78,7 @@ class ChatHudMediaCostTest {
             assertTrue(bitmap.allocN32Pixels(WIDTH, HEIGHT));
             byte[][] frames = new byte[3][];
             for (int pass = 0; pass < frames.length; pass++) {
-                config.performanceMode = pass == 1;
+                config.graphicsQuality = pass == 1 ? GraphicsQuality.PERFORMANCE : GraphicsQuality.ULTRA;
                 surface.getCanvas().clear(0xFFE4D6B5);
                 hud.paint(surface.getCanvas(), rows, VIEW, null, "Local", "Player", config, 1, 255, 1F, false, 0, (w, h) -> SkiaGraphics.createInkSurface(surface, w, h), 1L);
                 assertTrue(surface.readPixels(bitmap, 0, 0));
@@ -125,13 +126,13 @@ class ChatHudMediaCostTest {
                     default -> (url, visible) -> thumbnails[url.charAt(url.length() - 5) - '0'];
                 };
                 for (int repeat = 0; repeat < 3; repeat++) {
-                    config.performanceMode = (repeat & 1) != 0;
+                    config.graphicsQuality = (repeat & 1) != 0 ? GraphicsQuality.PERFORMANCE : GraphicsQuality.ULTRA;
                     measure(backend, scene, "hot-" + repeat, surface, context, sync, clock, config, messages, images, 240, 300, false);
-                    config.performanceMode = !config.performanceMode;
+                    config.graphicsQuality = config.performanceModeEnabled() ? GraphicsQuality.ULTRA : GraphicsQuality.PERFORMANCE;
                     measure(backend, scene, "hot-" + repeat, surface, context, sync, clock, config, messages, images, 240, 300, false);
                 }
                 for (boolean off : new boolean[]{false, true}) {
-                    config.performanceMode = off;
+                    config.graphicsQuality = off ? GraphicsQuality.PERFORMANCE : GraphicsQuality.ULTRA;
                     measure(backend, scene, "cold", surface, context, sync, clock, config, messages, images, 4, 30, true);
                 }
             }
@@ -175,7 +176,7 @@ class ChatHudMediaCostTest {
             hud.clear();
         }
         System.out.printf(Locale.ROOT, "HUD_MEDIA %s %s %s %s paint=%s flushFence=%s combined=%s%n",
-                backend, scene, config.performanceMode ? "off" : "on", phase, quantiles(paint), quantiles(flush), quantiles(combined));
+                backend, scene, config.performanceModeEnabled() ? "off" : "on", phase, quantiles(paint), quantiles(flush), quantiles(combined));
     }
 
     private static String quantiles(long[] samples) {

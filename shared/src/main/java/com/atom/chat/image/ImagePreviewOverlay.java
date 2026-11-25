@@ -77,7 +77,12 @@ public final class ImagePreviewOverlay {
      * close key and nothing behind it — so it is refused instead of displayed;
      * the click path only ever opens a bitmap the frame actually drew.
      */
+    private enum PointerAction { CLOSE, BACKDROP }
+    private record PointerId(Object opening, PointerAction action) {}
+    private Object opening = new Object();
+
     public void open(Image image) {
+        opening = new Object();
         if (image == null) {
             return;
         }
@@ -125,6 +130,22 @@ public final class ImagePreviewOverlay {
      * A left press starts a drag only on the visible picture. The close key
      * wins before image hit testing, including while zoomed.
      */
+    public com.atom.chat.ui.input.ClickTarget clickTarget(float x, float y, int button, UiLayout.Rect panel) {
+        if (!active) return null;
+        if (button != 0 || closing) return com.atom.chat.ui.input.ClickTarget.blocked();
+        if (closeRect(panel).contains(x, y)) {
+            return com.atom.chat.ui.input.ClickTarget.action(new PointerId(opening, PointerAction.CLOSE), this::close);
+        }
+        if (!overImage(x, y, panel)) {
+            return com.atom.chat.ui.input.ClickTarget.action(new PointerId(opening, PointerAction.BACKDROP), this::close);
+        }
+        return null;
+    }
+
+    private boolean overImage(float x, float y, UiLayout.Rect panel) {
+        return image != null && viewport(panel).contains(x, y) && viewRect(panel).contains(x, y);
+    }
+
     public void onClick(float vmx, float vmy, UiLayout.Rect panel) {
         if (!active || closing) {
             return;
@@ -133,7 +154,7 @@ public final class ImagePreviewOverlay {
             close();
             return;
         }
-        if (image != null && viewport(panel).contains(vmx, vmy) && viewRect(panel).contains(vmx, vmy)) {
+        if (overImage(vmx, vmy, panel)) {
             targetZoom = zoom;
             targetPanX = panX;
             targetPanY = panY;

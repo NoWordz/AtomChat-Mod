@@ -6,6 +6,7 @@ import com.atom.chat.font.FontManager;
 import com.atom.chat.render.SkiaFontRenderer;
 import com.atom.chat.ui.UiLayout;
 import com.atom.lib.design.atomchat.UiTokens;
+import com.atom.chat.ui.input.ClickTarget;
 import com.atom.chat.ui.input.InputHandler;
 import io.github.humbleui.skija.Canvas;
 import java.util.List;
@@ -20,12 +21,18 @@ public final class ComposerTools implements InputHandler {
         String tr(String key);
         List<PlayerRef> onlinePlayers();
         void mention(PlayerRef player);
+        default boolean canMentionAll() { return false; }
+        default void mentionAll() {}
         void feedback(String key);
         void pressTool();
         void releaseTool();
         void pickImage();
+        default void shareLocation() {}
+        default void shareHeldItem() {}
         void dismissOtherPopups();
     }
+    private enum MenuAction { TOGGLE, DISMISS, BACK, MENTION, MENTION_ALL, SEARCH, PLAYERS, IMAGE, SHARE_LOCATION, SHARE_ITEM }
+
     private final Host host;
     private final ToolMenu menu = new ToolMenu();
     private final ComposerSearch search;
@@ -42,7 +49,14 @@ public final class ComposerTools implements InputHandler {
     public void close() { menu.close(); search.close(); }
     public void toggle() {
         if (!host.chatVisible()) return;
-        host.pressTool(); host.dismissOtherPopups(); menu.toggle();
+        host.pressTool();
+        toggleMenu();
+    }
+
+    private void toggleMenu() {
+        host.dismissOtherPopups();
+        menu.toggle();
+        if (menu.isOpen()) menu.measure(host::tr);
     }
     public void update() { search.update(); }
     public void render(Canvas canvas, float mx, float my, float dt) {
@@ -62,32 +76,100 @@ public final class ComposerTools implements InputHandler {
         }
         playerRefresh += Math.max(0, dt);
         if (menu.isOpen() && menu.playersOpen() && playerRefresh >= 250) {
-            menu.refreshPlayers(host.onlinePlayers()); playerRefresh = 0;
+            refreshPlayers(); playerRefresh = 0;
         }
         menu.render(canvas, layout, mx, my, dt, host::tr);
     }
+    @Override public ClickTarget clickTarget(double x, double y, int button) {
+        float mx = host.x(x), my = host.y(y);
+        UiLayout layout = host.layout();
+        if (button == 0 && host.chatVisible() && layout.imageBtn.contains(mx, my)) {
+            return new ClickTarget(MenuAction.TOGGLE, host::pressTool, host::releaseTool, this::toggleMenu);
+        }
+        if (menu.isOpen()) {
+            int row = button == 0 ? menu.hit(layout, mx, my) : -1;
+            if (row < 0) return ClickTarget.action(MenuAction.DISMISS, menu::close);
+            if (menu.playersOpen()) {
+                if (row == 0) return rowTarget(row, MenuAction.BACK, this::back);
+                if (menu.isMentionAll(row)) {
+                    return rowTarget(row, MenuAction.MENTION_ALL, this::mentionAll);
+                }
+                PlayerRef player = menu.playerAt(row);
+                if (player == null) return ClickTarget.blocked();
+                return rowTarget(row, MenuAction.MENTION, () -> mention(player));
+            }
+            return switch (row) {
+                case 0 -> rowTarget(row, MenuAction.SEARCH, () -> { menu.close(); search.open(); });
+                case 1 -> rowTarget(row, MenuAction.PLAYERS, () -> {
+                    search.close();
+                    menu.showPlayers(host.onlinePlayers(), host.canMentionAll());
+                    menu.measure(host::tr);
+                });
+                case 2 -> rowTarget(row, MenuAction.IMAGE, this::pickImage);
+                case 3 -> rowTarget(row, MenuAction.SHARE_LOCATION, () -> shareCard(host::shareLocation));
+                case 4 -> rowTarget(row, MenuAction.SHARE_ITEM, () -> shareCard(host::shareHeldItem));
+                default -> ClickTarget.blocked();
+            };
+        }
+        if (searching() && layout.sendBtn.contains(mx, my)) return ClickTarget.blocked();
+        return null;
+    }
+
+    private ClickTarget rowTarget(int row, MenuAction action, Runnable activate) {
+        return new ClickTarget(action, () -> menu.pressRow(row), () -> menu.pressRow(-1), activate);
+    }
+
+    private void mention(PlayerRef player) {
+        if (host.onlinePlayers().contains(player)) {
+            close();
+            host.mention(player);
+        } else {
+            refreshPlayers();
+            host.feedback("atomchat.tools.players.unavailable");
+        }
+    }
+
+    private void refreshPlayers() {
+        menu.refreshPlayers(host.onlinePlayers(), host.canMentionAll());
+        menu.measure(host::tr);
+    }
+
+    private void back() {
+        menu.back();
+        menu.measure(host::tr);
+    }
+
+    private void mentionAll() {
+        if (!host.canMentionAll()) {
+            refreshPlayers();
+            return;
+        }
+        close();
+        if (com.atom.chat.onboarding.TutorialSandbox.active()) {
+            host.feedback("atomchat.tutorial.preview_only");
+        } else {
+            host.mentionAll();
+        }
+    }
+
+    private void shareCard(Runnable action) {
+        close();
+        if (com.atom.chat.onboarding.TutorialSandbox.active()) {
+            host.feedback("atomchat.tutorial.preview_only");
+        } else action.run();
+    }
+
+    private void pickImage() {
+        close();
+        if (com.atom.chat.onboarding.TutorialSandbox.active()) {
+            com.atom.chat.onboarding.TutorialSandbox.imageAction();
+            host.feedback("atomchat.tutorial.preview_only");
+        } else host.pickImage();
+    }
+
     @Override public boolean onClick(double x, double y, int button) {
         float mx = host.x(x), my = host.y(y);
-        if (button == 0 && host.chatVisible() && host.layout().imageBtn.contains(mx, my)) { toggle(); return true; }
-        if (menu.isOpen()) {
-            int row = button == 0 ? menu.hit(host.layout(), mx, my) : -1;
-            if (menu.playersOpen() && row >= 0) {
-                if (row == 0) menu.back();
-                else {
-                    PlayerRef player = menu.playerAt(row);
-                    if (player != null && host.onlinePlayers().contains(player)) { close(); host.mention(player); }
-                    else if (player != null) { menu.refreshPlayers(host.onlinePlayers()); host.feedback("atomchat.tools.players.unavailable"); }
-                }
-            } else {
-                menu.close();
-                if (row == 0) search.open();
-                if (row == 1) { search.close(); menu.toggle(); menu.showPlayers(host.onlinePlayers()); }
-                if (row == 2) { search.close(); if(com.atom.chat.onboarding.TutorialSandbox.active()){com.atom.chat.onboarding.TutorialSandbox.imageAction();host.feedback("atomchat.tutorial.preview_only");}else host.pickImage(); }
-            }
-            return true;
-        }
         if (searching()) {
-            if (host.layout().sendBtn.contains(mx, my)) return true;
             if (host.layout().emojiBtn.contains(mx, my) || host.layout().phraseBtn.contains(mx, my)) search.close();
             if (!host.layout().inputBar.contains(mx, my) && !host.layout().list.contains(mx, my)) search.close();
         }
@@ -95,7 +177,7 @@ public final class ComposerTools implements InputHandler {
     }
     @Override public boolean onKey(int key, int scanCode, int modifiers) {
         if (menu.isOpen()) {
-            if (key == 256 && menu.playersOpen()) menu.back();
+            if (key == 256 && menu.playersOpen()) back();
             else menu.close();
             return key == 256;
         }

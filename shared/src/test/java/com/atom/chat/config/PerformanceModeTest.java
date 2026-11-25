@@ -28,7 +28,7 @@ class PerformanceModeTest {
         AtomChatConfig.reload();
         var config = AtomChatConfig.get();
         config.animationEnabled = true;
-        config.performanceMode = false;
+        config.graphicsQuality = com.atom.chat.config.GraphicsQuality.ULTRA;
         var tabs = new SettingsChipBar();
         var layout = UiLayout.ofDetail(0, 0, 420, 550);
         var indicatorField = SettingsChipBar.class.getDeclaredField("indicator");
@@ -39,7 +39,7 @@ class PerformanceModeTest {
         assertTrue(indicator.getValue() > 0 && indicator.getValue() < 1);
         assertFalse(Animations.caretVisible(500L));
 
-        config.performanceMode = true;
+        config.graphicsQuality = com.atom.chat.config.GraphicsQuality.PERFORMANCE;
         assertTrue(Animations.caretVisible(500L));
         tabs.update(layout, 3, 1, -1, -1, -1, 0);
         assertEquals(1F, indicator.getValue());
@@ -63,16 +63,15 @@ class PerformanceModeTest {
                 """);
         AtomChatConfig.reload();
         var config = AtomChatConfig.get();
-        var mode = SettingsCatalog.items(SettingsSection.ABOUT).stream()
-                .filter(item -> item.id().equals("performance_mode")).findFirst().orElseThrow();
         var debug = SettingsCatalog.items(SettingsSection.ABOUT).stream()
                 .filter(item -> item.id().equals("debug")).findFirst().orElseThrow();
-        assertFalse(mode.value());
-        mode.set(true);
+        assertFalse(config.performanceModeEnabled());
+        config.graphicsQuality = GraphicsQuality.PERFORMANCE;
+        assertTrue(AtomChatConfig.saveChecked(config));
         assertFalse(debug.value());
         AtomChatConfig.reload();
         config = AtomChatConfig.get();
-        assertTrue(mode.value());
+        assertTrue(config.performanceModeEnabled());
         assertFalse(config.effectiveBlurEnabled());
         assertEquals(0F, config.effectiveBlurStrength());
         assertEquals(0F, config.effectiveCardBlurStrength());
@@ -111,7 +110,11 @@ class PerformanceModeTest {
         AppearancePresetStore.Snapshot.capture(new AtomChatConfig()).applyTo(config);
         assertTrue(config.imageMessagesEnabled);
         assertTrue(SettingsTabDefaults.reset(config, SettingsSection.ABOUT, "", () -> true));
-        assertFalse(mode.value());
+        assertTrue(config.performanceModeEnabled());
+        assertFalse(SettingsTabDefaults.reset(config, SettingsSection.APPEARANCE, "theme", () -> false));
+        assertTrue(config.performanceModeEnabled());
+        assertTrue(SettingsTabDefaults.reset(config, SettingsSection.APPEARANCE, "theme", () -> true));
+        assertFalse(config.performanceModeEnabled());
         assertTrue(config.effectiveBlurEnabled());
         assertEquals(1.25F, config.effectiveBlurStrength());
         assertEquals(2.75F, config.effectiveCardBlurStrength());
@@ -131,6 +134,6 @@ class PerformanceModeTest {
     }
 
     @org.junit.jupiter.api.AfterEach void resetMode() {
-        AtomChatConfig.get().performanceMode = false;
+        AtomChatConfig.get().graphicsQuality = com.atom.chat.config.GraphicsQuality.ULTRA;
     }
 }

@@ -27,20 +27,46 @@ class ConfirmationMotionTest {
     }
     @Test void exitKeepsOwningInputAndNeverExecutesAnActionTwice() {
         var dialog = new ConfirmationDialog(); var count = new java.util.concurrent.atomic.AtomicInteger();
-        var input = new ConfirmationInput(() -> dialog, x -> (float)x, y -> (float)y);
+        var gate = new com.atom.chat.ui.input.InputGate(() -> false)
+                .add(new ConfirmationInput(() -> dialog, x -> (float) x, y -> (float) y));
         dialog.open("清空", "删除？", "取消", "确认", count::incrementAndGet);
         try (var surface = Surface.makeRasterN32Premul(460, 820)) {
             var canvas = surface.getCanvas(); var panel = new UiLayout.Rect(10, 10, 430, 800);
             for (int i = 0; i < 12; i++) dialog.render(canvas, panel, -1, -1);
             var button = dialog.geometry().confirm();
-            input.onClick(button.x() + 10, button.y() + 10, 0);
+            gate.click(button.x() + 10, button.y() + 10, 0);
+            gate.release(button.x() + 10, button.y() + 10, 0);
             assertEquals(1, count.get());
-            assertTrue(input.onChar('x', 0), "exit animation still owns input");
-            input.onClick(button.x() + 10, button.y() + 10, 0); assertEquals(1, count.get());
+            assertTrue(gate.charTyped('x', 0), "exit animation still owns input");
+            gate.click(button.x() + 10, button.y() + 10, 0);
+            gate.release(button.x() + 10, button.y() + 10, 0); assertEquals(1, count.get());
             for (int i = 0; i < 12; i++) dialog.render(canvas, panel, -1, -1);
-            assertFalse(dialog.isActive()); assertFalse(input.onChar('x', 0));
+            assertFalse(dialog.isActive()); assertNull(gate.charTyped('x', 0));
         }
     }
+    @Test void confirmationExecutesOnceEvenWhenReleaseLandsOnTheOtherButton() {
+        var dialog = new ConfirmationDialog();
+        var confirmations = new java.util.concurrent.atomic.AtomicInteger();
+        var gate = new com.atom.chat.ui.input.InputGate(() -> false)
+                .add(new ConfirmationInput(() -> dialog, x -> (float) x, y -> (float) y));
+        dialog.open("Clear history", "Remove messages?", "Cancel", "Confirm", confirmations::incrementAndGet);
+        try (var surface = Surface.makeRasterN32Premul(460, 820)) {
+            var panel = new UiLayout.Rect(10, 10, 430, 800);
+            for (int frame = 0; frame < 12; frame++) dialog.render(surface.getCanvas(), panel, -1, -1);
+            var confirm = dialog.geometry().confirm();
+            var cancel = dialog.geometry().cancel();
+            double x = confirm.x() + confirm.w() / 2;
+            double y = confirm.y() + confirm.h() / 2;
+
+            assertTrue(gate.click(x, y, 0));
+            assertEquals(1, confirmations.get());
+            assertFalse(dialog.hasPendingAction());
+            assertTrue(gate.release(cancel.x() + cancel.w() / 2, y, 0));
+            assertTrue(gate.release(x, y, 0));
+            assertEquals(1, confirmations.get());
+        }
+    }
+
     @Test void openingCannotHitTheUnscaledDestructiveButton() {
         var dialog = new ConfirmationDialog(); var count = new java.util.concurrent.atomic.AtomicInteger();
         dialog.open("清空", "删除？", "取消", "确认", count::incrementAndGet);

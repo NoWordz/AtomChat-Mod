@@ -16,12 +16,15 @@ public final class SettingsRowText {
     public static Text measure(String title,String description,float width,float reserved,float controlH){
         return measure(title,description,width,reserved,controlH,false);
     }
-    /** Ordinary settings retain their original character-title/compact-description flow. */
+    /** Measure the shared settings flow using the left column and its available space. */
     public static Text measure(String title,String description,float width,float reserved,float controlH,boolean words){
         var main=FontManager.font(UiTokens.SETTINGS_TILE_TITLE);var sub=FontManager.font(UiTokens.SETTINGS_TILE_SUB);
         float inner=Math.max(1,width-UiTokens.SETTINGS_ROW_PAD*2);boolean stacked=SkiaFontRenderer.getStringWidth(main,title)>inner-reserved;
-        var titles=stacked?(words?SkiaFontRenderer.wrapWords(main,title,inner):SkiaFontRenderer.wrap(main,title,inner)):List.of(title);
-        var descriptions=description.isEmpty()?List.<String>of():stacked||words?SkiaFontRenderer.wrapWords(sub,description,stacked?inner:Math.max(1,inner-reserved)):SkiaFontRenderer.wrap(sub,description,Math.max(1,inner-reserved));
+        var titles = stacked ? (words ? SkiaFontRenderer.wrapWords(main, title, inner) : SkiaFontRenderer.wrap(main, title, inner))
+                : List.of(title);
+        float descriptionWidth = stacked ? inner : Math.max(1, inner - reserved);
+        var descriptions = words ? SkiaFontRenderer.wrapWords(sub, description, descriptionWidth)
+                : wrapCopy(sub, description, descriptionWidth);
         float th=SkiaFontRenderer.getHeight(main),dh=SkiaFontRenderer.getHeight(sub);
         float height=stacked?UiTokens.SETTINGS_ROW_PAD*2+titles.size()*th+descriptions.size()*dh+controlH+UiTokens.SETTINGS_COMPACT_GAP*2:
                 UiTokens.SETTINGS_ROW_H+Math.max(0,descriptions.size()-1)*dh;
@@ -48,9 +51,19 @@ public final class SettingsRowText {
         if(text==null||text.isEmpty()||maxWidth<=0||SkiaFontRenderer.getStringWidth(font,text)<=maxWidth){
             SkiaFontRenderer.drawText(canvas,font,text==null?"":text,x,SkiaFontRenderer.centerBaselineY(font,rect.y()+UiTokens.s(37)),color);return; // bare-value: extracted settings description center
         }
-        var lines=SkiaFontRenderer.wrap(font,text,maxWidth);float lineH=SkiaFontRenderer.getHeight(font),blockH=lines.size()*lineH;
+        var lines=wrapCopy(font,text,maxWidth);float lineH=SkiaFontRenderer.getHeight(font),blockH=lines.size()*lineH;
         float centerY=rect.y()+Math.max(UiTokens.s(37),rect.h()-UiTokens.s(8)-blockH/2); // bare-value: extracted settings description placement
         SkiaFontRenderer.drawLines(canvas,font,lines,x,centerY,lineH,color);
+    }
+    public static List<String> wrapCopy(Font font, String text, float width) {
+        return hasWordBoundaries(text) ? SkiaFontRenderer.wrapWords(font, text, width) : SkiaFontRenderer.wrap(font, text, width);
+    }
+    public static boolean hasWordBoundaries(String text) {
+        return text.indexOf(' ') >= 0 && text.codePoints().noneMatch(codePoint ->
+                switch (Character.UnicodeScript.of(codePoint)) {
+                    case HAN, HIRAGANA, KATAKANA, HANGUL -> true;
+                    default -> false;
+                });
     }
     public static UiLayout.Rect number(UiLayout.Rect row,boolean stacked){
         float h=SettingsFormField.BASE_H;

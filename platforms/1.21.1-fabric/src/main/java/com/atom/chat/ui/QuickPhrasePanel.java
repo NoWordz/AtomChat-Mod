@@ -318,6 +318,7 @@ public final class QuickPhrasePanel {
     }
 
     public void open() {
+        if (!open) pointerOpening++;
         open = true;
     }
 
@@ -505,45 +506,53 @@ public final class QuickPhrasePanel {
 
     // ---- interaction ----
 
-    /** Hit-tests a left click inside the panel. */
-    public Action click(UiLayout layout, double mx, double my) {
-        var point=localPointer(layout,(float)mx,(float)my); mx=point.x(); my=point.y();
-        Rect addRow = addRowRect(layout);
-        if (contains(addRow, (float) mx, (float) my)) {
-            pulseCell(ADD_CELL_KEY);
-            return new Action(Action.ADD, 0);
-        }
+    private record PhraseHit(Action action, int cell, String text) {}
+    private record PhraseClick(long opening, Action action, String text) {}
+    private long pointerOpening;
+
+    public com.atom.chat.ui.input.ClickTarget clickTarget(UiLayout layout, float x, float y, int button,
+                                                          java.util.function.Consumer<Action> activate) {
+        if (!open || !overPanel(layout, x, y)) return null;
+        if (button != 0) return com.atom.chat.ui.input.ClickTarget.blocked();
+        PhraseHit hit = phraseHit(layout, x, y);
+        if (hit == null) return com.atom.chat.ui.input.ClickTarget.blocked();
+        return new com.atom.chat.ui.input.ClickTarget(new PhraseClick(pointerOpening, hit.action(), hit.text()),
+                () -> pulseCell(hit.cell()), () -> pressedCellKey = -1, () -> activate.accept(hit.action()));
+    }
+
+    public Action click(UiLayout layout, double x, double y) {
+        PhraseHit hit = phraseHit(layout, (float) x, (float) y);
+        if (hit == null) return new Action(Action.NONE, 0);
+        pulseCell(hit.cell());
+        return hit.action();
+    }
+
+    private PhraseHit phraseHit(UiLayout layout, float x, float y) {
+        var point = localPointer(layout, x, y);
+        x = point.x();
+        y = point.y();
+        if (contains(addRowRect(layout), x, y)) return new PhraseHit(new Action(Action.ADD, 0), ADD_CELL_KEY, "");
         int local = phrases().size();
         for (int i = 0; i < VISIBLE_ROWS; i++) {
             int position = scroll + i;
-            if (position >= rowCount()) {
-                break;
-            }
+            if (position >= rowCount()) break;
             Rect r = rowRect(layout, i);
-            if (my < r.getTop() || my > r.getBottom() || mx < r.getLeft() || mx > r.getRight()) {
-                continue;
-            }
+            if (!contains(r, x, y)) continue;
             switch (rowKind(position)) {
                 case ROW_LOCAL -> {
-                    int btn = iconUnder(r, (float) mx, (float) my);
-                    if (btn >= 0) {
-                        pulseCell(iconCellKey(position * 2 + btn));
-                        return new Action(btn == 0 ? Action.EDIT : Action.DELETE, position);
-                    }
-                    pulseCell(position);
-                    return new Action(Action.INSERT, position);
+                    int button = iconUnder(r, x, y);
+                    if (button >= 0) return new PhraseHit(new Action(button == 0 ? Action.EDIT : Action.DELETE, position),
+                            iconCellKey(position * 2 + button), phrases().get(position));
+                    return new PhraseHit(new Action(Action.INSERT, position), position, phrases().get(position));
                 }
-                // The server's rows carry no buttons: they can be sent, not edited.
                 case ROW_SERVER -> {
-                    pulseCell(position);
-                    return new Action(Action.INSERT_SERVER, position - local - 1);
+                    int index = position - local - 1;
+                    return new PhraseHit(new Action(Action.INSERT_SERVER, index), position, serverPhrases().get(index));
                 }
-                default -> {
-                    return new Action(Action.NONE, 0);
-                }
+                default -> { return null; }
             }
         }
-        return new Action(Action.NONE, 0);
+        return null;
     }
 
     /**

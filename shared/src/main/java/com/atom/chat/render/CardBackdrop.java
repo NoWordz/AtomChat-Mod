@@ -96,9 +96,11 @@ public final class CardBackdrop implements AutoCloseable {
             if (right <= left || bottom <= top) return NONE;
             Rect bounds = Rect.makeLTRB(left, top, right, bottom);
 
-            // Blur at half resolution. Its radius is still expressed in physical pixels.
-            int w = Math.max(1, (right - left + 1) / 2);
-            int h = Math.max(1, (bottom - top + 1) / 2);
+            // Preserve the existing half-resolution Ultra path. Balanced can sample a smaller surface
+            // because KawaseBlur converts the same device-space radius to the actual per-axis ratio.
+            int divisor = KawaseBlur.sampleDivisor(2, strength, config.graphicsQuality);
+            int w = KawaseBlur.sampleSize(right - left, divisor);
+            int h = KawaseBlur.sampleSize(bottom - top, divisor);
             try (Surface source = target.makeSurface(w, h);
                  Surface result = target.makeSurface(w, h)) {
                 if (source == null || result == null) return NONE;

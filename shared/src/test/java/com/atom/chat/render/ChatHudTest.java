@@ -165,6 +165,37 @@ class ChatHudTest {
         }
     }
 
+    @Test void standaloneAndPanelHudKeepTheMessageWithoutItsStatusBar() {
+        int statusColor = 0xFFFF00FF;
+        var tag = new com.atom.chat.chat.NativeMessageMeta.Tag(statusColor & 0xFFFFFF,
+                null, null, "Status", "Status");
+        var metadata = new com.atom.chat.chat.NativeMessageMeta(null, true, tag, false, 0, 0);
+        var row = new ChatMessage(RichText.literal("HUD message").toText(), false, false).withNativeMeta(metadata);
+        var hud = new ChatHudRenderer();
+        var history = new ChatHudHistory<String, String, ChatMessage>();
+        Object world = new Object();
+        var view = new ChatHudRenderer.Viewport(8, 120, 240, 100, 1F, 1F);
+        var config = new AtomChatConfig();
+        config.otherBubbleTextColor = 0xFFFFFFFF;
+        try (var surface = Surface.makeRasterN32Premul(285, 155); var pixels = new Bitmap()) {
+            pixels.allocN32Pixels(285, 155);
+            for (int phase = 0; phase < 3; phase++) {
+                boolean panel = phase == 1;
+                float visibility = phase == 2 ? .85F : 1F;
+                hud.select(world, history, List.of("hud-row"), 1, key -> row, panel);
+                surface.getCanvas().clear(0);
+                hud.paint(surface.getCanvas(), List.of(row), view, null, "Local", "Player",
+                        config, 1, 255, visibility, false, 0);
+                assertTrue(surface.readPixels(pixels, 0, 0));
+                assertTrue(peakAlpha(pixels, pixel -> (pixel & 0xFFFFFF) == 0xFFFFFF) > 0);
+                assertEquals(0, peakAlpha(pixels,
+                        pixel -> (pixel & 0xFFFFFF) == (statusColor & 0xFFFFFF)));
+            }
+        } finally {
+            hud.clear();
+        }
+    }
+
     @Test void hudWidthUsesTheSpaceBeforeTheVanillaHotbarAtEveryGuiScale() {
         float previousWidth = Float.POSITIVE_INFINITY;
         for (int guiScale = 1; guiScale <= 4; guiScale++) {
@@ -663,7 +694,7 @@ class ChatHudTest {
 
     @Test void zoomedHudGlyphsMatchNativeRenderingAtTheSamePhysicalDensity() throws Exception {
         var config = new AtomChatConfig();
-        config.performanceMode = true;
+        config.graphicsQuality = com.atom.chat.config.GraphicsQuality.PERFORMANCE;
         var message = player(false, "Sharp edges");
         var zoom = new com.atom.chat.ui.HudTransform(.25F, .375F, 1.25F, 1.25F);
         var viewport = new ChatHudRenderer.Viewport(8.25F, 95.25F, 144, 88, 2, 1F, zoom);

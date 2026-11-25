@@ -3,6 +3,7 @@ package com.atom.chat.ui;
 
 import com.atom.chat.render.CornerGeometry;
 import com.atom.chat.render.SoftShadow;
+import com.atom.chat.render.UiPixelSnap;
 import com.atom.lib.design.atomchat.UiTokens;
 import io.github.humbleui.skija.Canvas;
 import io.github.humbleui.skija.Paint;
@@ -92,10 +93,19 @@ public final class PanelBackground {
         }
     }
 
-    /** Clip panel-local overlays to the panel aperture used by the world blur.
-     * The caller owns the enclosing canvas save/restore. */
+    /** Clip panel-local overlays to the rendered shell. The caller owns canvas save/restore. */
     public static void clipInterior(io.github.humbleui.skija.Canvas canvas, UiLayout.Rect panel) {
-        canvas.clipRRect(contour(panel, renderOutlineInset()), CornerGeometry.ANTIALIAS);
+        // Settings details pass unsnapped coordinates, while the shell snaps each outer edge.
+        float left = UiPixelSnap.snapToDevice(panel.x());
+        float top = UiPixelSnap.snapToDevice(panel.y());
+        float right = UiPixelSnap.snapToDevice(panel.right());
+        float bottom = UiPixelSnap.snapToDevice(panel.bottom());
+        var shell = new UiLayout.Rect(left, top, right - left, bottom - top);
+        // Dim the backdrop beneath the fractionally covered inner bezel pixel. The bezel
+        // keeps its original geometry and blends over the already dimmed content.
+        float density = UiPixelSnap.density();
+        float inset = (float) Math.floor(renderOutlineInset() * density) / density;
+        canvas.clipRRect(contour(shell, inset), CornerGeometry.ANTIALIAS);
     }
 
     /** Drops the colour's own alpha; the panel applies its configured opacity instead. */

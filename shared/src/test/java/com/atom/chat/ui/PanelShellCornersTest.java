@@ -19,7 +19,7 @@ class PanelShellCornersTest {
         field.setAccessible(true);
         var previous = field.get(null);
         var config = new AtomChatConfig();
-        config.performanceMode = true;
+        config.graphicsQuality = com.atom.chat.config.GraphicsQuality.PERFORMANCE;
         config.cornerRadius = 25F;
         config.cardTint = 1F;
         field.set(null, config);
@@ -91,7 +91,7 @@ class PanelShellCornersTest {
         field.setAccessible(true);
         var previous = field.get(null);
         var config = new AtomChatConfig();
-        config.performanceMode = true;
+        config.graphicsQuality = com.atom.chat.config.GraphicsQuality.PERFORMANCE;
         config.accentColor = 0xFFDD3377;
         field.set(null, config);
         try (var surface = Surface.makeRasterN32Premul(560, 390); var pixels = new Bitmap()) {
@@ -138,7 +138,7 @@ class PanelShellCornersTest {
         field.setAccessible(true);
         var previous = field.get(null);
         var config = new AtomChatConfig();
-        config.performanceMode = true;
+        config.graphicsQuality = com.atom.chat.config.GraphicsQuality.PERFORMANCE;
         config.cornerRadius = 25F;
         field.set(null, config);
         try (var surface = Surface.makeRasterN32Premul(500, 500); var pixels = new Bitmap()) {
@@ -183,7 +183,7 @@ class PanelShellCornersTest {
         field.setAccessible(true);
         var previous = field.get(null);
         var config = new AtomChatConfig();
-        config.performanceMode = true;
+        config.graphicsQuality = com.atom.chat.config.GraphicsQuality.PERFORMANCE;
         config.cardTint = 1F;
         field.set(null, config);
         try (var surface = Surface.makeRasterN32Premul(340, 320);

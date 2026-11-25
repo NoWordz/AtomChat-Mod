@@ -10,7 +10,15 @@ package com.atom.chat.ui.input;
  * swallowed unrelated pages' clicks three times before this router existed).
  */
 public interface InputHandler {
-    /** GUI-coordinate mouse press. */
+    /**
+     * Hit test for an AtomChat click. It runs on press, in input order.
+     * Return a blocked target when this surface owns the event without an action.
+     */
+    default ClickTarget clickTarget(double mouseX, double mouseY, int button) {
+        return null;
+    }
+
+    /** GUI-coordinate mouse press for continuous interaction and native forwarding. */
     default boolean onClick(double mouseX, double mouseY, int button) {
         return false;
     }

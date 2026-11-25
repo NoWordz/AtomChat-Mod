@@ -116,7 +116,11 @@ class NativeMessageBehaviorTest {
     @Test void sameIdDeletionInvalidatesRealViewSelectionHitWrappedNameAndNotificationState()throws Exception {
         NotificationBanner.INSTANCE.reset();
         var nativeTag=NativeMessageBridge.tag(MessageIndicator.modified(SECRET));
-        var original=message(SECRET,1,0,false).withNativeMeta(new NativeMessageMeta(signature(1),true,nativeTag,false,0,NativeMessageSync.session()));
+        var body = RichText.of(Text.literal(SECRET).setStyle(Style.EMPTY.withHoverEvent(
+                new HoverEvent(HoverEvent.Action.SHOW_TEXT, Text.literal("body hover")))));
+        var original = new ChatMessage(body.toText(), false, false, null, null,
+                ALICE, "Alice", "Alice", SECRET, RichText.literal("Alice"), body)
+                .withNativeMeta(new NativeMessageMeta(signature(1),true,nativeTag,false,0,NativeMessageSync.session()));
         ChatStore.get().add(original);NotificationBanner.INSTANCE.enqueue(NotificationBanner.Type.MENTION,original.getSenderRich(),original.getContentRich(),original);
         long born=banners().get(0).born();
         var view=view();var scroll=new com.atom.chat.ui.ScrollController();
@@ -127,8 +131,13 @@ class NativeMessageBehaviorTest {
             view.dragSelection(line.x()+com.atom.chat.render.RichTextRenderer.width(com.atom.chat.font.FontManager.font(com.atom.lib.design.atomchat.UiTokens.FONT_BODY),line.richLine()),line.y()+line.height()/2);
             assertTrue(view.copySelection().contains(SECRET));
             float barX=hit.bubbleX()-com.atom.lib.design.atomchat.UiTokens.INLINE_ITEM_GAP-com.atom.lib.design.atomchat.UiTokens.s(1);
-            var tagSpan=view.clickableSpanAt(barX,hit.bubbleY()+1).orElseThrow();
-            assertTrue(tagSpan.style().getHoverEvent().getValue(HoverEvent.Action.SHOW_TEXT).getString().contains(SECRET));
+            var bodySpan = view.clickableSpanAt(line.x() + 1F, line.y() + line.height() / 2F).orElseThrow();
+            assertEquals("body hover", bodySpan.style().getHoverEvent().getValue(HoverEvent.Action.SHOW_TEXT).getString());
+            assertTrue(view.clickableSpanAt(barX, hit.bubbleY() + 1).isEmpty(), "panel has no status hover lane");
+            pixels.allocN32Pixels(440,600);assertTrue(surface.readPixels(pixels,0,0));
+            int midY = Math.round((hit.bubbleY() + hit.bubbleBottom()) / 2F);
+            assertNotEquals(0xFF000000 | nativeTag.color(), pixels.getColor(Math.round(barX), midY),
+                    "panel does not draw the native status marker");
             assertEquals(1,NativeMessageSync.applied(signature(1),NativeMessageBridge.deletedMarker()));
             assertEquals("",view.copySelection());assertTrue(view.hits().isEmpty());assertTrue(view.clickableSpanAt(barX,hit.bubbleY()+1).isEmpty());
             assertEquals(1,banners().size());assertEquals(born,banners().get(0).born());assertFalse(banners().get(0).content().getString().contains(SECRET));
@@ -138,7 +147,7 @@ class NativeMessageBehaviorTest {
             pixels.allocN32Pixels(440,600);assertTrue(surface.readPixels(pixels,0,0));
             int x=Math.round(changed.bubbleX()-com.atom.lib.design.atomchat.UiTokens.INLINE_ITEM_GAP-com.atom.lib.design.atomchat.UiTokens.s(1));
             int yy=Math.round(changed.bubbleY()+changed.bubbleBottom())/2;
-            assertEquals(0xFFD0D0D0,pixels.getColor(x,yy),"deleted marker uses the actual native system indicator color");
+            assertNotEquals(0xFFD0D0D0,pixels.getColor(x,yy),"deleted messages have no panel status marker");
         } finally {view.dispose();NotificationBanner.INSTANCE.reset();}
     }
     @Test void echoReplacementWithStableIdDoesNotReuseOldWrapOrImageClassification(){

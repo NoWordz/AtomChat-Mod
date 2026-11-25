@@ -14,6 +14,7 @@ import io.github.humbleui.skija.Font;
 import io.github.humbleui.skija.Paint;
 
 import java.time.LocalTime;
+import java.util.List;
 
 /**
  * Pure Skia shell chrome for the unified AtomChat header. It owns the
@@ -73,21 +74,21 @@ public final class ShellHeader {
         LocalTime now = LocalTime.now();
         String time = String.format("%02d:%02d", now.getHour(), now.getMinute());
         render(canvas, header, title, showBack ? backButton : null, backHover, textPrimary, statusOnline,
-                action, time, 1, 1, 1, true, true, false);
+                action, time, 1, 1, 1, true, true, false, false);
     }
 
     static void renderNavigation(Canvas canvas, UiLayout.Rect header, String title, UiLayout.Rect backButton,
                                  float backHover, int textPrimary, Boolean statusOnline, HeaderAction action,
                                  String time, float titleOpacity, float backOpacity, float actionOpacity,
-                                 boolean backInteractive, boolean actionInteractive) {
+                                 boolean backInteractive, boolean actionInteractive, boolean wrapTitle) {
         render(canvas, header, title, backButton, backHover, textPrimary, statusOnline, action,
-                time, titleOpacity, backOpacity, actionOpacity, backInteractive, actionInteractive, true);
+                time, titleOpacity, backOpacity, actionOpacity, backInteractive, actionInteractive, true, wrapTitle);
     }
 
     private static void render(Canvas canvas, UiLayout.Rect header, String title, UiLayout.Rect backButton,
                                float backHover, int textPrimary, Boolean statusOnline, HeaderAction action,
                                String time, float titleOpacity, float backOpacity, float actionOpacity,
-                               boolean backInteractive, boolean actionInteractive, boolean keepClock) {
+                               boolean backInteractive, boolean actionInteractive, boolean keepClock, boolean wrapTitle) {
         if (header == null || header.w() <= 0.0F || header.h() <= 0.0F) {
             return;
         }
@@ -127,16 +128,22 @@ public final class ShellHeader {
                 keepClock ? 0 : SkiaFontRenderer.getStringWidth(titleFont, title) + dotSpace,
                 SkiaFontRenderer.getStringWidth(timeFont, time));
         if (titleOpacity > 0) {
-            String shown = SkiaFontRenderer.truncate(titleFont, title,
-                    Math.max(0.0F, bounds.right() - bounds.left() - dotSpace));
-            float titleW = SkiaFontRenderer.getStringWidth(titleFont, shown);
+            float available = Math.max(0.0F, bounds.right() - bounds.left() - dotSpace);
+            var copy = titleCopy(title, titleFont, timeFont, available, header.h(), wrapTitle);
+            float titleW = 0F;
+            for (String line : copy.lines()) titleW = Math.max(titleW, SkiaFontRenderer.getStringWidth(copy.font(), line));
             float center = Math.max(bounds.left() + dotSpace + titleW / 2.0F,
                     Math.min(header.x() + header.w() / 2.0F, bounds.right() - titleW / 2.0F));
             canvas.save();
             canvas.clipRect(io.github.humbleui.types.Rect.makeXYWH(bounds.left(), header.y(),
                     Math.max(0.0F, bounds.right() - bounds.left()), header.h()));
-            SkiaFontRenderer.drawTextCentered(canvas, titleFont, shown,
-                    center, header.y() + header.h() / 2.0F, withOpacity(textPrimary, titleOpacity));
+            float lineHeight = SkiaFontRenderer.getHeight(copy.font());
+            float lineY = header.y() + (header.h() - (copy.lines().size() - 1) * lineHeight) / 2F;
+            for (String line : copy.lines()) {
+                SkiaFontRenderer.drawTextCentered(canvas, copy.font(), line, center, lineY,
+                        withOpacity(textPrimary, titleOpacity));
+                lineY += lineHeight;
+            }
 
             if (statusOnline != null) {
                 float dotR = UiTokens.s(5);
@@ -153,6 +160,22 @@ public final class ShellHeader {
     }
 
     record TextBounds(float left, float right, boolean showTime) {}
+
+    record TitleCopy(Font font, List<String> lines) {}
+
+    static TitleCopy titleCopy(String title, Font normal, Font compact, float width, float height, boolean wrap) {
+        float measured = SkiaFontRenderer.getStringWidth(normal, title);
+        if (!wrap || width <= 0F || measured <= width) {
+            return new TitleCopy(normal, List.of(SkiaFontRenderer.truncate(normal, title, width)));
+        }
+        var lines = SkiaFontRenderer.wrapWords(compact, title, width);
+        if (lines.size() <= 2 && lines.size() * SkiaFontRenderer.getHeight(compact) <= height
+                && lines.stream().allMatch(line -> SkiaFontRenderer.getStringWidth(compact, line) <= width)) {
+            return new TitleCopy(compact, lines);
+        }
+        float fittedSize = Math.max(1F, (float) Math.floor(normal.getSize() * width / measured));
+        return new TitleCopy(FontManager.font(fittedSize), List.of(title));
+    }
 
     /** Page content must be drawn after this pass, even when the header itself is an overlay. */
     public static void drawBackdrop(Canvas canvas, UiLayout.Rect header) {

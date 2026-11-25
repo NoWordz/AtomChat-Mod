@@ -19,6 +19,10 @@ public final class FeedbackSoundController {
         SOUNDS.put(cue,SoundEvent.of(Identifier.of("atomchat", id)));
     } }
     private FeedbackSoundController() {}
+    /** Also used by the pitched poke cue, which has its own volume and cooldown. */
+    public static SoundEvent toastSound() {
+        return SOUNDS.get(FeedbackCue.TOAST);
+    }
     public static void registerSound() {
         for(var sound:SOUNDS.values()) Registry.register(Registries.SOUND_EVENT,sound.getId(),sound);
     }
@@ -36,6 +40,7 @@ public final class FeedbackSoundController {
             case BUTTON -> cfg.feedbackButtonEnabled;
             case SEND -> cfg.feedbackSendEnabled;
             case PANEL_OPEN -> cfg.feedbackPanelEnabled;
+            case TOAST -> true;
         };
         float volume=FeedbackSoundPolicy.volume(cfg.feedbackSoundEnabled,enabled,cfg.feedbackVolume);
         if(volume<=0) return;

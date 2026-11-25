@@ -12,5 +12,16 @@ import net.minecraft.network.chat.Style;
  * @param h height of the line box containing the run
  * @param style style carrying the {@code ClickEvent} / {@code HoverEvent}
  */
-public record ClickableSpan(float x, float y, float w, float h, Style style) {
+public record ClickableSpan(float x, float y, float w, float h, Style style, long messageId, int run) {
+    public ClickableSpan(float x, float y, float w, float h, Style style) {
+        this(x, y, w, h, style, 0, 0);
+    }
+
+    public boolean sameClick(ClickableSpan other) {
+        if (other == null) return false;
+        if (messageId == 0 || other.messageId == 0) return equals(other);
+        return messageId == other.messageId && run == other.run
+                && java.util.Objects.equals(style.getClickEvent(), other.style.getClickEvent())
+                && java.util.Objects.equals(style.getInsertion(), other.style.getInsertion());
+    }
 }

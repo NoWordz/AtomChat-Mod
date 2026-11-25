@@ -79,6 +79,7 @@ class HeaderChromeTest {
         UiLayout.Rect header = HEADER;
         UiLayout.Rect pushedHeader = PUSHED_HEADER;
         float dt = 16.0F;
+        int ink = 0xFF112233;
 
         @Override
         public String label(String key) {
@@ -109,7 +110,7 @@ class HeaderChromeTest {
 
         @Override
         public int textPrimary() {
-            return 0xFF112233;
+            return ink;
         }
     }
 
@@ -122,6 +123,39 @@ class HeaderChromeTest {
     }
 
     // ------------------------------------------------------------- 1. the titles
+    @Test
+    void narrowSettingsHeaderWrapsTheFullTitleAndKeepsItsClock() throws Exception {
+        setUp();
+        var titleFont = com.atom.chat.font.FontManager.font(UiTokens.FONT_TITLE);
+        var compact = com.atom.chat.font.FontManager.font(UiTokens.FONT_TIME);
+        String title = "Appearance & interaction";
+        float available = com.atom.chat.render.SkiaFontRenderer.getStringWidth(compact, "Appearance &") + 2F;
+        var copy = ShellHeader.titleCopy(title, titleFont, compact, available, HEADER.h(), true);
+        assertEquals(2, copy.lines().size());
+        assertEquals(title, String.join(" ", copy.lines()));
+
+        float clockWidth = com.atom.chat.render.SkiaFontRenderer.getStringWidth(compact, "00:00");
+        var currentAction = chrome.adjacentButton();
+        float right = currentAction.right() + UiTokens.HEADER_TEXT_GAP * 2 + available
+                + clockWidth + UiTokens.HEADER_PAD_X;
+        host.header = new UiLayout.Rect(HEADER.x(), HEADER.y(), right - HEADER.x(), HEADER.h());
+        host.labelText = key -> title;
+        host.ink = 0xFFFFFFFF;
+        var bounds = ShellHeader.textBounds(host.header, chrome.backButton(), currentAction, 0F, clockWidth);
+        assertTrue(bounds.showTime());
+        var action = new ShellHeader.HeaderAction(currentAction, 0F, EditorActionIcons.RESTORE, host.ink);
+        try (var surface = Surface.makeRasterN32Premul(SURFACE_W, 140)) {
+            chrome.drawNavigationHeader(surface.getCanvas(), host.header,
+                    NavPage.settingsSection(SettingsSection.APPEARANCE), -1F, -1F, null, action, 0L);
+            String capture = System.getenv("ATOMCHAT_SETTINGS_HEADER_CAPTURE");
+            if (capture != null) {
+                try (var snapshot = surface.makeImageSnapshot(); var encoded = snapshot.encodeToData()) {
+                    java.nio.file.Files.write(Path.of(capture), encoded.getBytes());
+                }
+            }
+        }
+    }
+
 
     @Test
     void aPrivatePageIsTitledWithThePartnersRealName() {
