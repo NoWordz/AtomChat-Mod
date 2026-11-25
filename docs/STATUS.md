@@ -1,5 +1,13 @@
 # AtomChat 当前状态
 
+## 2026-11-26 · 0.9.7 正式发布
+
+- GitHub Latest 已更新至 `v0.9.7`，标签指向 `406f4cb7f6a628e3e3a339616b0a7a5bad67053e`。附带 Fabric 1.21.1、NeoForge 1.21.1 和 Forge 1.20.1 的 AtomChat 与 AtomLib 0.7.1 配套包。六个附件的公开摘要、中英发布正文和构建戳均已核对，三端共 3,436 个 AtomChat 类与测试实例验收包逐字节一致。 [正式发行](https://github.com/NoWordz/AtomChat-Mod/releases/tag/v0.9.7)
+- 主线 CI 7 项通过，首次 NeoForge Linux 的 GLFW 初始化失败在同提交重跑后通过。三端标签构建及 Linux 测试通过。自动创建 Release 时，附件上传报错，随后从同一标签流水线的归档补齐六个附件并公开。Modrinth 与 CurseForge 未配置凭据，上传任务已跳过。 [主线构建](https://github.com/NoWordz/AtomChat-Mod/actions/runs/45647010958) · [标签构建](https://github.com/NoWordz/AtomChat-Mod/actions/runs/45647524570)
+- 本版加入位置和物品分享、三档画质及教程，调整按下触发、遮罩、面板和 HUD 消息标记，修复设置语言切换。消息通知使用 Rhea 和手机震动，戳一戳和操作 Toast 使用 0.9.6 通知音，发送使用 0.9.6 发送音。三端各 196 个设置场景已回放验证，定稿音效的三端 228 项定向测试通过。 [发布说明](../RELEASE_NOTES.md#v097) · [兼容验证](verification/2026-11-24-v097-compatibility.md)
+- 可选 TrChat 2.5.2 桥接提供只读频道。跨服权限、撤权及密钥不一致时的拒投通过两个隔离后端验证。新桥接的 Youer 实机以及 Forge、NeoForge 频道界面的实机操作仍待覆盖。真实 No Chat Reports 转换在 Fabric 实机验证。 [桥接指南](TRCHAT_CHANNEL_BRIDGE.md)
+- 42 个临时项目已送入 Windows 回收站，含 7,120 个文件和可从 `34299d29` 重建的 0.3.2 对照工作树。保留发布产物、构建依赖、回滚备份和在用 Git 仓库。
+
 ## 2026-11-24 · 0.9.6 正式发布
 
 - GitHub Latest 已更新至 `v0.9.6`，标签指向 `f550c4ebb2268b744a00c144bb722341d83da0c5`。双语正文与仓库版本段一致，六个公开JAR均已下载并核对公开摘要；三端共3053个AtomChat类与本地实机验收包逐字节一致，配套AtomLib0.7.1摘要与固定输入一致。 [公开发布](https://github.com/NoWordz/AtomChat-Mod/releases/tag/v0.9.6) · [发布核验](D:/AtomChat-Backups/2026-11-24-v096-release/release-verification.json)
