@@ -1,7 +1,6 @@
 package com.atom.chat.render;
 
 import java.nio.file.*;
-import java.util.*;
 import org.junit.jupiter.api.Test;
 import org.lwjgl.glfw.GLFW;
 import org.lwjgl.opengl.*;
@@ -33,39 +32,61 @@ class PanelBlurGpuCostTest {
             int position=GL20C.glGetAttribLocation(program,"Position");GL20C.glEnableVertexAttribArray(position);
             GL20C.glVertexAttribPointer(position,3,GL11C.GL_FLOAT,false,12,0L);
             try {
-                for(int[] size:new int[][]{{480,860},{900,1500},{1440,2160}}) {
-                    int[] textures={texture(size[0],size[1]),texture(size[0],size[1])};
-                    int[] fbos={framebuffer(textures[0]),framebuffer(textures[1])};
-                    GL11C.glViewport(0,0,size[0],size[1]);GL11C.glDisable(GL11C.GL_BLEND);GL11C.glDisable(GL11C.GL_SCISSOR_TEST);
-                    GL11C.glClearColor(.2F,.35F,.5F,1);GL11C.glClear(GL11C.GL_COLOR_BUFFER_BIT);
-                    long[] values=new long[100];int query=GL15C.glGenQueries();
-                    try {
-                        for(int frame=0;frame<125;frame++) {
-                            GL15C.glBeginQuery(GL33C.GL_TIME_ELAPSED,query);
-                            for(int pass=0;pass<5;pass++) {
-                                GL30C.glBindFramebuffer(GL30C.GL_FRAMEBUFFER,fbos[(pass+1)%2]);
-                                GL11C.glBindTexture(GL11C.GL_TEXTURE_2D,textures[pass%2]);
-                                float offset = KawaseBlur.spacing(pass, 2F);
-                                GL20C.glUniform2f(spacing, offset, offset);
-                                GL11C.glDrawArrays(GL11C.GL_TRIANGLES,0,6);
-                            }
-                            GL15C.glEndQuery(GL33C.GL_TIME_ELAPSED);
-                            // Blocking query read is confined to this benchmark; production uses its existing async ring.
-                            long elapsed=GL33C.glGetQueryObjecti64(query,GL15C.GL_QUERY_RESULT);
-                            if(frame>=25)values[frame-25]=elapsed;
-                        }
-                        Arrays.sort(values);
-                        System.out.printf(Locale.ROOT,"BLUR_GPU_5PASS width=%d height=%d p50=%.4fms p95=%.4fms p99=%.4fms%n",
-                                size[0],size[1],values[50]/1e6,values[95]/1e6,values[99]/1e6);
-                    } finally {
-                        GL15C.glDeleteQueries(query);
-                        for(int f:fbos)GL30C.glDeleteFramebuffers(f);
-                        for(int t:textures)GL11C.glDeleteTextures(t);
+                String target = Path.of("").toAbsolutePath().getFileName().toString();
+                var output = Path.of(System.getProperty("atomchat.repoRoot"),
+                        "build/v098-perf/blur-gpu-" + target + ".csv");
+                Files.createDirectories(output.getParent());
+                var samples = new StringBuilder("device_width,device_height,divisor,block,frame,cpu_ns,gpu_ns\n");
+                for (int[] size : new int[][]{{480, 860}, {900, 1500}, {1440, 2160}}) {
+                    int block = 0;
+                    for (int divisor : new int[]{1, 2, 3, 3, 2}) {
+                        measure(size[0], size[1], divisor, block++, spacing, samples);
                     }
                 }
+                Files.writeString(output, samples);
             } finally {GL15C.glDeleteBuffers(vbo);GL30C.glDeleteVertexArrays(vao);GL20C.glDeleteProgram(program);}
         } finally {GLFW.glfwMakeContextCurrent(0);GLFW.glfwDestroyWindow(window);GLFW.glfwTerminate();}
     }
+    private static void measure(int deviceWidth, int deviceHeight, int divisor, int block,
+                                int spacing, StringBuilder samples) {
+        int width = KawaseBlur.sampleSize(deviceWidth, divisor);
+        int height = KawaseBlur.sampleSize(deviceHeight, divisor);
+        int[] textures = {texture(width, height), texture(width, height)};
+        int[] fbos = {framebuffer(textures[0]), framebuffer(textures[1])};
+        GL11C.glViewport(0, 0, width, height);
+        GL11C.glDisable(GL11C.GL_BLEND);
+        GL11C.glDisable(GL11C.GL_SCISSOR_TEST);
+        GL11C.glClearColor(.2F, .35F, .5F, 1);
+        GL11C.glClear(GL11C.GL_COLOR_BUFFER_BIT);
+        int query = GL15C.glGenQueries();
+        try {
+            for (int frame = -30; frame < 120; frame++) {
+                long started = System.nanoTime();
+                GL15C.glBeginQuery(GL33C.GL_TIME_ELAPSED, query);
+                for (int pass = 0; pass < KawaseBlur.PASSES; pass++) {
+                    GL30C.glBindFramebuffer(GL30C.GL_FRAMEBUFFER, fbos[(pass + 1) % 2]);
+                    GL11C.glBindTexture(GL11C.GL_TEXTURE_2D, textures[pass % 2]);
+                    float offset = KawaseBlur.spacing(pass, 2F);
+                    GL20C.glUniform2f(spacing, offset * width / deviceWidth, offset * height / deviceHeight);
+                    GL11C.glDrawArrays(GL11C.GL_TRIANGLES, 0, 6);
+                }
+                GL15C.glEndQuery(GL33C.GL_TIME_ELAPSED);
+                long cpu = System.nanoTime() - started;
+                // The blocking result read belongs only to the benchmark.
+                long gpu = GL33C.glGetQueryObjecti64(query, GL15C.GL_QUERY_RESULT);
+                if (frame >= 0) {
+                    samples.append(deviceWidth).append(',').append(deviceHeight).append(',').append(divisor)
+                            .append(',').append(block).append(',').append(frame).append(',').append(cpu)
+                            .append(',').append(gpu).append('\n');
+                }
+            }
+        } finally {
+            GL15C.glDeleteQueries(query);
+            for (int fbo : fbos) GL30C.glDeleteFramebuffers(fbo);
+            for (int texture : textures) GL11C.glDeleteTextures(texture);
+        }
+    }
+
     private static int compile(int type,String source) {
         int shader=GL20C.glCreateShader(type);GL20C.glShaderSource(shader,source);GL20C.glCompileShader(shader);
         assertEquals(GL11C.GL_TRUE,GL20C.glGetShaderi(shader,GL20C.GL_COMPILE_STATUS),GL20C.glGetShaderInfoLog(shader));return shader;

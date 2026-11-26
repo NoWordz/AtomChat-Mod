@@ -5,6 +5,7 @@ import com.mojang.blaze3d.systems.VertexSorter;
 import com.atom.chat.config.AtomChatConfig;
 import com.atom.chat.config.GraphicsQuality;
 import com.atom.chat.ui.UiLayout;
+import com.atom.chat.platform.Platform;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gl.ShaderProgram;
 import net.minecraft.client.gl.SimpleFramebuffer;
@@ -15,6 +16,7 @@ import net.minecraft.client.util.Window;
 import net.minecraft.resource.Resource;
 import net.minecraft.resource.ResourceFactory;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import org.joml.Matrix4f;
 import org.lwjgl.BufferUtils;
 import org.lwjgl.glfw.GLFW;
@@ -26,6 +28,7 @@ import org.lwjgl.opengl.GL30C;
 import sun.misc.Unsafe;
 
 import java.lang.reflect.Field;
+import java.nio.file.Path;
 import java.util.List;
 import java.util.Optional;
 
@@ -73,12 +76,17 @@ class PanelBlurReloadTest {
         }
     }
 
-    @Test void hudMasksAndBalancedWorldBlurKeepTheirDeviceGeometryAndFramebufferAlpha() throws Exception {
+    @Test void hudMasksAndBalancedWorldBlurKeepTheirDeviceGeometryAndFramebufferAlpha(@TempDir Path root) throws Exception {
         assumeTrue("1".equals(System.getenv("ATOMCHAT_BLUR_RELOAD_TEST")));
         assertTrue(GLFW.glfwInit());
         GLFW.glfwDefaultWindowHints();
         GLFW.glfwWindowHint(GLFW.GLFW_VISIBLE, GLFW.GLFW_FALSE);
         long window = GLFW.glfwCreateWindow(64, 64, "AtomChat HUD blur masks", 0, 0);
+        Platform.install(new Platform.Provider() {
+            public Path configDir() { return root.resolve("config"); }
+            public Path gameDir() { return root; }
+            public boolean isModLoaded(String id) { return false; }
+        });
         try {
             assertNotEquals(0, window);
             GLFW.glfwMakeContextCurrent(window);
@@ -194,13 +202,14 @@ class PanelBlurReloadTest {
                     assertTrue(ultra.width() > previous);
                     assertEquals(ultra.width(), balanced.width(), 2F, "10–90% span within one Balanced sample");
                     assertEquals(balanced.width(), hud.width(), 1F);
-                    assertEquals(ultra.texels() / 4, balanced.texels());
+                    assertEquals(ultra.texels() / 8, balanced.texels()); // 128×64 vs 256×256 for this fixture.
                     assertEquals(balanced.texels(), hud.texels());
                     System.out.printf(java.util.Locale.ROOT,
                             "WORLD_BLUR strength=%.0f%% ultra=%.2fpx/%,d balanced=%.2fpx/%,d hud=%.2fpx%n",
                             strength * 100, ultra.width(), ultra.texels(), balanced.width(), balanced.texels(), hud.width());
                     previous = ultra.width();
                 }
+                verifyReuseTracksTheCaptureRect(width, height);
                 assertEquals(GL11C.GL_NO_ERROR, GL11C.glGetError());
             } finally {
                 shaderField("roundedShader").set(null, null);
@@ -218,6 +227,25 @@ class PanelBlurReloadTest {
         } finally {
             config.graphicsQuality = original;
         }
+    }
+
+    private static void verifyReuseTracksTheCaptureRect(int width, int height) throws Exception {
+        GL11C.glViewport(0, 0, width, height);
+        GL11C.glClearColor(0F, 0F, 0F, .25F);
+        GL11C.glClear(GL11C.GL_COLOR_BUFFER_BIT);
+        GL11C.glEnable(GL11C.GL_SCISSOR_TEST);
+        GL11C.glScissor(width / 2, 0, width - width / 2, height);
+        GL11C.glClearColor(1F, 1F, 1F, .25F);
+        GL11C.glClear(GL11C.GL_COLOR_BUFFER_BIT);
+        GL11C.glDisable(GL11C.GL_SCISSOR_TEST);
+
+        var pose = new Matrix4f();
+        assertTrue(PanelBlurRenderer.render(pose, 10, 10, 46, 60, 8, 1, 2));
+        assertEquals(0, readPixel(30, 40, height)[0]);
+        assertEquals(255, readPixel(165, 40, height)[0], "the new capture starts on white");
+        // Same texture capacity, different screen position and capture size.
+        assertTrue(PanelBlurRenderer.renderReuse(pose, 140, 10, 63, 60, 8, 1, 2));
+        assertEquals(255, readPixel(165, 40, height)[0], "a moved panel must capture the current background");
     }
 
     private record Edge(float width, int texels) {}
@@ -296,8 +324,12 @@ class PanelBlurReloadTest {
     }
 
     private static int[] readPixel(int x, int y) {
+        return readPixel(x, y, 64);
+    }
+
+    private static int[] readPixel(int x, int y, int height) {
         var pixel = BufferUtils.createByteBuffer(4);
-        GL11C.glReadPixels(x, 63 - y, 1, 1, GL11C.GL_RGBA, GL11C.GL_UNSIGNED_BYTE, pixel);
+        GL11C.glReadPixels(x, height - 1 - y, 1, 1, GL11C.GL_RGBA, GL11C.GL_UNSIGNED_BYTE, pixel);
         return new int[]{pixel.get(0) & 255, pixel.get(1) & 255, pixel.get(2) & 255, pixel.get(3) & 255};
     }
 

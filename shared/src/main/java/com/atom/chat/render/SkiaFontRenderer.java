@@ -229,46 +229,27 @@ public final class SkiaFontRenderer {
         }
     }
 
-    /**
-     * Bounded string→width cache. Text shaping is by far the hottest CPU path
-     * in this UI: every label measures itself every frame (and truncation
-     * measures repeatedly), each measurement walks the string code point by
-     * code point resolving font fallbacks. Labels repeat across frames, so a
-     * small LRU removes most of that work. Two levels — the font's size, then
-     * the text — so a cache hit never builds a key: the old
-     * {@code text + "@" + size} concat allocated a fresh string on every
-     * measurement, hit or miss. Keyed by the font's size (not the instance),
-     * exactly like the old key. That is an inherited trade-off, not a claim
-     * that a size has one face: regular and bold of a size are distinct Fonts
-     * (FontManager caches them in separate maps) with different metrics, so
-     * they share a bucket and whichever measures first leaves a few pixels of
-     * drift to the other. PRIMARY_GLYPH_HITS keys by instance because its
-     * fallback answers are per-face truth.
-     */
+    // Faces at the same size may have different advances. Identity also avoids native equality
+    // on a font the caller has closed, and avoids querying size on every cache hit.
     private static final int WIDTH_CACHE_MAX = 4096;
-    private static final java.util.Map<Float, java.util.Map<String, Float>> WIDTH_CACHE =
-            java.util.Collections.synchronizedMap(new java.util.LinkedHashMap<>());
+    private static final int WIDTH_FONT_LIMIT = 16;
+    private static final Map<Font, Map<String, Float>> WIDTH_CACHE =
+            java.util.Collections.synchronizedMap(new java.util.IdentityHashMap<>());
 
-    /** The per-size bucket for {@code font}, created (and the map swept) on first use. */
-    private static java.util.Map<String, Float> widthCacheFor(Font font) {
-        java.util.Map<String, Float> cache = WIDTH_CACHE.get(font.getSize());
-        if (cache != null) {
+    private static Map<String, Float> widthCacheFor(Font font) {
+        synchronized (WIDTH_CACHE) {
+            Map<String, Float> cache = WIDTH_CACHE.get(font);
+            if (cache != null) return cache;
+            if (WIDTH_CACHE.size() >= WIDTH_FONT_LIMIT) WIDTH_CACHE.clear();
+            cache = java.util.Collections.synchronizedMap(new java.util.LinkedHashMap<>(256, .75F, true) {
+                @Override
+                protected boolean removeEldestEntry(Map.Entry<String, Float> eldest) {
+                    return size() > WIDTH_CACHE_MAX;
+                }
+            });
+            WIDTH_CACHE.put(font, cache);
             return cache;
         }
-        // Wholesale clear past 16 sizes, like BLUR_FILTERS: call sites use a
-        // handful of UiTokens sizes, so this never trips in practice — it only
-        // keeps a pathological caller of arbitrary sizes bounded.
-        if (WIDTH_CACHE.size() >= 16) {
-            WIDTH_CACHE.clear();
-        }
-        cache = java.util.Collections.synchronizedMap(new java.util.LinkedHashMap<>(256, 0.75F, true) {
-            @Override
-            protected boolean removeEldestEntry(java.util.Map.Entry<String, Float> eldest) {
-                return size() > WIDTH_CACHE_MAX;
-            }
-        });
-        WIDTH_CACHE.put(font.getSize(), cache);
-        return cache;
     }
 
     public static float getStringWidth(Font font, String text) {
@@ -882,6 +863,7 @@ public final class SkiaFontRenderer {
     }
 
     static void clearTextShapeCache() {
+        WIDTH_CACHE.clear();
         for (ShapedPlan plan : SHAPE_CACHE.values()) closePlan(plan);
         SHAPE_CACHE.clear();
         PARSE_CACHE.clear();

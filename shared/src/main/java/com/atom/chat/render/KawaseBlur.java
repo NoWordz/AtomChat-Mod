@@ -45,6 +45,23 @@ final class KawaseBlur {
         return quality == GraphicsQuality.BALANCED && strength >= 1F ? ultraDivisor * 2 : ultraDivisor;
     }
 
+    static int panelSampleDivisor(float strength, GraphicsQuality quality) {
+        // At strong blur the fixed five passes dominate the prefilter footprint.
+        // Weak blur and the clipping path keep their existing sampling grids.
+        return quality == GraphicsQuality.BALANCED && strength >= 2F ? 3 : sampleDivisor(1, strength, quality);
+    }
+
+    /** Identity of the world pixels used by the diagnostic no-refresh path. */
+    record Capture(Object target, int framebuffer, int framebufferWidth, int framebufferHeight,
+                   int x, int y, int width, int height) {
+        boolean matches(Object target, int framebuffer, int framebufferWidth, int framebufferHeight,
+                        int x, int y, int width, int height) {
+            return this.target == target && this.framebuffer == framebuffer
+                    && this.framebufferWidth == framebufferWidth && this.framebufferHeight == framebufferHeight
+                    && this.x == x && this.y == y && this.width == width && this.height == height;
+        }
+    }
+
     static int sampleSize(int deviceSize, int divisor) {
         return Math.max(1, (deviceSize + divisor - 1) / divisor);
     }

@@ -52,6 +52,8 @@ public final class PanelBlurRenderer {
     private static float tmx, tmy;          // Kawase quad texCoord upper bound
     private static float uvX, uvY;          // rounded-quad UV normalisation (actual / capacity)
     private static int lastBlurTex = -1;
+    private static KawaseBlur.Capture lastPanelCapture;
+    private static boolean panelCaptureValid;
     private static com.atom.chat.config.GraphicsQuality lastQuality;
     private static float lastStrength;
     private static boolean recreated = true;
@@ -154,7 +156,7 @@ public final class PanelBlurRenderer {
             if (hCrop == 0) return false;
             boolean clipped = hCrop < ph;
             var quality = com.atom.chat.config.AtomChatConfig.activeGraphicsQuality();
-            int divisor = clipped ? 1 : KawaseBlur.sampleDivisor(1, strength, quality);
+            int divisor = clipped ? 1 : KawaseBlur.panelSampleDivisor(strength, quality);
             int sampleW = KawaseBlur.sampleSize(pw, divisor);
             int sampleH = KawaseBlur.sampleSize(ph, divisor);
             int sampleCropH = KawaseBlur.sampleSize(hCrop, divisor);
@@ -173,6 +175,7 @@ public final class PanelBlurRenderer {
                 vpW = texW; vpH = texH; tmx = uvX; tmy = uvY;
             }
             ppM4 = probeOn ? System.nanoTime() : 0L;    // passes 段起
+            panelCaptureValid = false;
             int blurTex = refreshBlur(fb.fbo, fbHeight, px, py, pw, hCrop, strength, quality, sampleW, sampleCropH,
                     restoreFbo, restoreViewport, restoreScissor);
             ppM5 = probeOn ? System.nanoTime() : 0L;    // passes 段止（refreshBlur 合计：blit+5pass+尾部恢复）
@@ -198,6 +201,12 @@ public final class PanelBlurRenderer {
                     disable("GL error 0x" + Integer.toHexString(glError));
                     return false;
                 }
+            }
+            if (masks == null) {
+                if (lastPanelCapture == null || !lastPanelCapture.matches(fb, fb.fbo, fb.textureWidth, fbHeight, px, py, pw, ph)) {
+                    lastPanelCapture = new KawaseBlur.Capture(fb, fb.fbo, fb.textureWidth, fbHeight, px, py, pw, ph);
+                }
+                panelCaptureValid = true;
             }
             return true;
         } finally {
@@ -255,9 +264,15 @@ public final class PanelBlurRenderer {
         if (alpha <= 0.003F || width <= 0.0F || height <= 0.0F) {
             return false;
         }
-        // 首次进入 D / 纹理重建 / 尚无有效旧档 → 强制刷新一次（不采未初始化纹理）。
-        if (lastBlurTex == -1 || recreated || lastQuality != com.atom.chat.config.AtomChatConfig.activeGraphicsQuality()
-                || strength != lastStrength) {
+        var client = MinecraftClient.getInstance();
+        var fb = client.getFramebuffer();
+        double scale = client.getWindow().getScaleFactor();
+        if (disabled || !panelCaptureValid || lastBlurTex == -1 || recreated
+                || lastQuality != com.atom.chat.config.AtomChatConfig.activeGraphicsQuality()
+                || strength != lastStrength
+                || !lastPanelCapture.matches(fb, fb.fbo, fb.textureWidth, fb.textureHeight,
+                        (int) Math.round(x * scale), (int) Math.round(y * scale),
+                        (int) Math.round(width * scale), (int) Math.round(height * scale))) {
             return render(pose, x, y, width, height, radius, alpha, strength);
         }
         com.atom.chat.config.AtomChatConfig probeCfg = com.atom.chat.config.AtomChatConfig.get();
@@ -359,6 +374,8 @@ public final class PanelBlurRenderer {
     }
 
     public static void resetShader() {
+        panelCaptureValid = false;
+        lastPanelCapture = null;
         ShaderProgram rounded = roundedShader;
         ShaderProgram kawase = kawaseShader;
         roundedShader = null;
@@ -610,6 +627,9 @@ public final class PanelBlurRenderer {
     }
 
     private static void destroyTextures() {
+        panelCaptureValid = false;
+        lastPanelCapture = null;
+        lastBlurTex = -1;
         if (inputFbo != -1) {
             GL30.glDeleteFramebuffers(inputFbo);
             GlStateManager._deleteTexture(inputTex);

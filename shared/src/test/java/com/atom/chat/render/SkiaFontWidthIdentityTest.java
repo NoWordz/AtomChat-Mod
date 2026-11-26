@@ -36,6 +36,9 @@ class SkiaFontWidthIdentityTest {
              Font wider = new Font(FontManager.getDefaultTypeface(), 23.75F).setScaleX(1.5F)) {
             Font first = reverse ? wider : ordinary, second = reverse ? ordinary : wider;
             assertNotEquals(first.measureTextWidth(text), second.measureTextWidth(text));
+            assertEquals(first.measureTextWidth(text), SkiaFontRenderer.getStringWidth(first, text), .001F);
+            assertEquals(second.measureTextWidth(text), SkiaFontRenderer.getStringWidth(second, text), .001F,
+                    "plain labels must measure with the font that will paint them");
             assertEquals(first.measureTextWidth(text), RichTextRenderer.measurer(first).measure(text), .001F);
             assertEquals(second.measureTextWidth(text), RichTextRenderer.measurer(second).measure(text), .001F,
                     "a same-size font must not reuse another face's measured width");
