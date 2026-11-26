@@ -1,11 +1,12 @@
 package com.atom.chat.api.card;
 
+import java.util.EnumMap;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.Iterator;
-import java.util.Map;
 import java.util.LinkedHashMap;
 import java.util.Locale;
+import java.util.Map;
 import java.util.regex.Pattern;
 
 /** Tracks client-adapted requests through the existing card state store. */
@@ -25,9 +26,11 @@ public final class TeleportRequestSession {
         final String status;
         Receipt(String status) { this.status = status; }
     }
-    // The plug-ins do not provide a request token in these receipts. Preserve which
-    // replies older generations could produce even after the short action window.
-    private static final Map<ReceiptScope, EnumSet<Receipt>> RETIRED = new HashMap<>();
+    // A named duplicate may keep referring to an older request from the same player.
+    private static final Map<ReceiptScope, EnumSet<Receipt>> NAMED_RETIRED = new HashMap<>();
+    // An unnamed receipt can describe any local response to this plug-in. Retain
+    // recent ambiguity without suppressing that plug-in's future receipts.
+    private static final Map<String, EnumMap<Receipt, Long>> RECENT_UNNAMED = new HashMap<>();
     private static final long RECEIPT_WINDOW_NS = 2_000_000_000L;
     private static final LinkedHashMap<String, Attempt> ATTEMPTS = new LinkedHashMap<>();
 
@@ -95,10 +98,17 @@ public final class TeleportRequestSession {
     }
 
     private static void complete(String source, String player, Receipt receipt) {
-        discardOldAttempts(System.nanoTime());
+        long now = System.nanoTime();
+        discardOldAttempts(now);
         String key = player.toLowerCase(Locale.ROOT);
-        var retired = RETIRED.get(new ReceiptScope(source, key));
-        if (retired != null && retired.contains(receipt)) return;
+        if (key.isEmpty()) {
+            var recent = RECENT_UNNAMED.get(source);
+            Long retiredAt = recent == null ? null : recent.get(receipt);
+            if (retiredAt != null && now - retiredAt < RECEIPT_WINDOW_NS) return;
+        } else {
+            var retired = NAMED_RETIRED.get(new ReceiptScope(source, key));
+            if (retired != null && retired.contains(receipt)) return;
+        }
 
         Pending candidate = null;
         for (var attempt : ATTEMPTS.values()) {
@@ -110,7 +120,7 @@ public final class TeleportRequestSession {
         if (candidate == null) return;
         close(candidate, receipt.status);
         ATTEMPTS.remove(candidate.id());
-        retire(candidate, EnumSet.of(receipt));
+        retire(candidate, EnumSet.of(receipt), now);
     }
 
     private static void discardOldAttempts(long now) {
@@ -118,17 +128,18 @@ public final class TeleportRequestSession {
         while (entries.hasNext()) {
             var attempt = entries.next();
             if (now - attempt.sentAt() >= RECEIPT_WINDOW_NS) {
-                retire(attempt.pending(), EnumSet.allOf(Receipt.class));
+                // Use the actual expiry, even if the next action prunes this much later.
+                retire(attempt.pending(), EnumSet.allOf(Receipt.class), attempt.sentAt() + RECEIPT_WINDOW_NS);
                 entries.remove();
             }
         }
     }
 
-    private static void retire(Pending pending, EnumSet<Receipt> receipts) {
+    private static void retire(Pending pending, EnumSet<Receipt> receipts, long retiredAt) {
         var named = new ReceiptScope(pending.source(), pending.player());
-        var unnamed = new ReceiptScope(pending.source(), "");
-        RETIRED.computeIfAbsent(named, key -> EnumSet.noneOf(Receipt.class)).addAll(receipts);
-        RETIRED.computeIfAbsent(unnamed, key -> EnumSet.noneOf(Receipt.class)).addAll(receipts);
+        NAMED_RETIRED.computeIfAbsent(named, key -> EnumSet.noneOf(Receipt.class)).addAll(receipts);
+        var recent = RECENT_UNNAMED.computeIfAbsent(pending.source(), key -> new EnumMap<>(Receipt.class));
+        for (var receipt : receipts) recent.merge(receipt, retiredAt, Math::max);
     }
 
     private static void close(Pending pending, String status) {
@@ -139,6 +150,7 @@ public final class TeleportRequestSession {
         for (var pending : PENDING.values()) close(pending, "传送请求已结束");
         PENDING.clear();
         ATTEMPTS.clear();
-        RETIRED.clear();
+        NAMED_RETIRED.clear();
+        RECENT_UNNAMED.clear();
     }
 }

@@ -137,6 +137,74 @@ class TeleportRequestTest {
         }
     }
 
+    @Test
+    void timelyUnnamedReceiptsCompleteSuccessiveLocalResponses() throws InterruptedException {
+        TeleportRequestSession.reset();
+        try {
+            var first = essentials("Alice");
+            TeleportRequestSession.receive(first);
+            assertTrue(TeleportRequestSession.beginAction(first));
+            TeleportRequestSession.observe("Teleport request accepted.", "", "");
+            assertEquals("已接受传送请求", CardStateStore.get(first.cardId()).statusText());
+
+            var second = essentials("Alice");
+            TeleportRequestSession.receive(second);
+            Thread.sleep(2_150);
+            TeleportRequestSession.observe("Teleport request accepted.", "", "");
+            assertNull(CardStateStore.get(second.cardId()), "a duplicate cannot settle an unanswered card");
+
+            assertTrue(TeleportRequestSession.beginAction(second));
+            TeleportRequestSession.observe("Teleport request accepted.", "", "");
+            assertEquals("已接受传送请求", CardStateStore.get(second.cardId()).statusText());
+        } finally {
+            TeleportRequestSession.reset();
+        }
+    }
+
+    @Test
+    void recentUnnamedDuplicateDoesNotSettleARespondedReplacement() {
+        TeleportRequestSession.reset();
+        try {
+            var first = essentials("Alice");
+            TeleportRequestSession.receive(first);
+            assertTrue(TeleportRequestSession.beginAction(first));
+            TeleportRequestSession.observe("Teleport request denied.", "", "");
+            assertEquals("已拒绝传送请求", CardStateStore.get(first.cardId()).statusText());
+
+            var second = essentials("Alice");
+            TeleportRequestSession.receive(second);
+            assertTrue(TeleportRequestSession.beginAction(second));
+            TeleportRequestSession.observe("Teleport request denied.", "", "");
+            assertEquals("已发送传送回应", CardStateStore.get(second.cardId()).statusText());
+        } finally {
+            TeleportRequestSession.reset();
+        }
+    }
+
+    @Test
+    void ambiguousUnnamedReceiptLeavesRespondedCardsUnconfirmed() {
+        TeleportRequestSession.reset();
+        try {
+            var first = essentials("Alice");
+            var second = essentials("Bob");
+            TeleportRequestSession.receive(first);
+            TeleportRequestSession.receive(second);
+            assertTrue(TeleportRequestSession.beginAction(first));
+            assertTrue(TeleportRequestSession.beginAction(second));
+            TeleportRequestSession.observe("Teleport request accepted.", "", "");
+            assertEquals("已发送传送回应", CardStateStore.get(first.cardId()).statusText());
+            assertEquals("已发送传送回应", CardStateStore.get(second.cardId()).statusText());
+        } finally {
+            TeleportRequestSession.reset();
+        }
+    }
+
+    private static ShareCard essentials(String name) {
+        return UniversalCardMatcher.matchTeleportRequest(
+                signals(name + " has requested to teleport to you.", true), "", false,
+                root -> root.startsWith("essentials:"));
+    }
+
     private static ShareCard husk(String name) {
         var signals = signals("Options: [Accept] [Decline]", true,
                 new UniversalCardMatcher.ClickActionSpec("[Accept]", RUN_COMMAND, "/huskhomes:tpaccept " + name),
