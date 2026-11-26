@@ -74,7 +74,7 @@ GPU 隔离探针复用生产着色器，将 1/2 与 1/3 按 ABBA 运行，每段
 
 ## 可回查文件和命令
 
-- `tools/run_v098_perf_replay.py` 启动历史 CCB 隔离夹具，`tools/summarize_v098_perf_replay.py` 从 JFR 和 CSV 复算统计。传入归档 `D:/AtomChat-Backups/2026-11-22-v094-closeout/replay/worktree.zip` 与核对过的 Fabric AtomLib，使用 JDK21。两侧同样的 `--matrix` 收集 36 张质量／亮暗／缩放／静止与滚动组合原图。命令行和证据见本工作树的 `build/v098-perf`。
+- `tools/run_v098_perf_replay.py` 启动历史 CCB 隔离夹具，`tools/summarize_v098_perf_replay.py` 从 JFR 和 CSV 复算统计。传入归档 `D:/AtomChat-Backups/2026-11-22-v094-closeout/replay/worktree.zip` 与核对过的 Fabric AtomLib，使用 JDK21。两侧同样的 `--matrix` 收集 36 张质量／亮暗／缩放／静止与滚动组合原图。原始资料已归档于 `D:/AtomChat-Backups/2026-11-26-v098/performance/v098-perf-evidence.zip`。
 - `python tools/fetch_atomlib_input.py --output build/v098-perf/verify-input/path.txt` 验证发布输入归档的固定摘要及三端 JAR 摘要。定向构建复用 `D:/AtomChat-Backups/2026-11-26-v098/build-input-local/maven`。
 - 首轮原始 `b097-balanced` 为较短回放，扩展版 `a097-bald5-r2` 保存 4,794 个游戏帧间隔、8,487 条 UI/HUD CPU 与 8,482 条 GPU 区间事件。它成功驱动 119 次滚轮、12 次切页和 8 条 HUD 行。最终候选矩阵里有 285 次被接受的滚轮动作及 12 次切页。长帧尖峰集中在冷开和部分媒体回放，分段显示有时 bridge enter 的时间超过实际列表绘制。首轮正好遇到并行编译，扩展版某些媒体窗口也有异常长帧，结论以匹配的串行矩阵及独立探针为准。
 
