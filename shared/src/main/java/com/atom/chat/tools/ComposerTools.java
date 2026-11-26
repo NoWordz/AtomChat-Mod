@@ -199,28 +199,30 @@ public final class ComposerTools implements InputHandler {
         private final Thread thread = Thread.currentThread();
         private final Object conversation = host.searchScope();
         private boolean active = true;
+        private boolean submitted;
 
         private boolean current() {
             return Thread.currentThread() == thread && active && host.chatVisible()
                     && Objects.equals(conversation, host.searchScope());
         }
 
-        public String draft() { return current() ? search.draft() : ""; }
+        public String draft() { return !submitted && current() ? search.draft() : ""; }
 
         public void replaceDraft(String text) {
-            if (!current() || !host.canUseExtensionButtons()) return;
+            if (submitted || !current() || !host.canUseExtensionButtons()) return;
             search.close();
             host.setComposerText(text);
         }
 
         public void insertText(String text) {
-            if (!current() || !host.canUseExtensionButtons()) return;
+            if (submitted || !current() || !host.canUseExtensionButtons()) return;
             search.close();
             host.insertExtensionText(text);
         }
 
         public void submitDraft() {
-            if (!current() || !host.canUseExtensionButtons()) return;
+            if (submitted || !current() || !host.canUseExtensionButtons()) return;
+            submitted = true;
             search.close();
             host.submitExtensionDraft();
         }

@@ -121,6 +121,7 @@ public final class NavStackController {
         /** Selects a bottom tab now — the bar tweens its own capsule. */
         void selectTabNow(AppPage root);
         default void selectTabNow(NavPage root) { selectTabNow(root.page()); }
+        default void initializeSelectedTab(NavPage root) { selectTabNow(root); }
     }
 
     private final Host host;
@@ -150,7 +151,7 @@ public final class NavStackController {
         NavPage root = navigation.snapshot().get(0);
         if (topPage().isRoot() || root.page() != AppPage.CHAT_LIST
                 || com.atom.chat.api.ui.NavigationUi.tabs().hasEdits()) {
-            host.selectTabNow(root);
+            host.initializeSelectedTab(root);
         }
         if (topPage() == AppPage.PRIVATE_CHAT) {
             PrivateChatStore.setActive(activePrivateTarget());

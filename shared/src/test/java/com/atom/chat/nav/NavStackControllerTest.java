@@ -124,6 +124,7 @@ class NavStackControllerTest {
         boolean partnerOnline = true;
         boolean allowBack = true;
         int closedChannelFeeds;
+        final List<NavPage> initialTabs = new ArrayList<>();
         @Override public boolean allowBackNavigation() { return allowBack; }
         @Override public void closeChannelFeed() { closedChannelFeeds++; }
         String composer = "";
@@ -227,6 +228,12 @@ class NavStackControllerTest {
         public void selectTabNow(AppPage root) {
             note("selectTabNow[" + root + "]");
         }
+
+        @Override
+        public void initializeSelectedTab(NavPage root) {
+            initialTabs.add(root);
+            selectTabNow(root);
+        }
     }
 
     /** A controller whose stack is exactly the given one, with the port attached. */
@@ -245,6 +252,7 @@ class NavStackControllerTest {
                 NavPage.settingsSection(SettingsSection.CHAT)));
         NavStackController controller = new NavStackController(host, true);
         assertEquals(AppPage.SETTINGS_SECTION, controller.topPage());
+        assertEquals(List.of(NavPage.of(AppPage.PROFILE)), host.initialTabs);
         assertTrue(host.calls.contains("selectTabNow[PROFILE]@?"));
     }
 

@@ -41,10 +41,15 @@ class ToolMenuInteractionTest {
     @Test void composerActionCannotSubmitAfterTheConversationOrInvocationEnds() {
         var entries = new com.atom.chat.api.ui.UiContributions<com.atom.chat.api.ui.ComposerUi.MenuItem>();
         var submitted = new java.util.concurrent.atomic.AtomicInteger();
+        var draftAfterSubmit = new java.util.concurrent.atomic.AtomicReference<String>();
         var leaked = new java.util.concurrent.atomic.AtomicReference<com.atom.chat.api.ui.ComposerUi.Context>();
         entries.add("example:scope", new com.atom.chat.api.ui.ComposerUi.MenuItem(
                 "example.scope", TablerIcons.PHOTO, context -> {
                     leaked.set(context);
+                    context.submitDraft();
+                    draftAfterSubmit.set(context.draft());
+                    context.replaceDraft("must not replace a restored draft");
+                    context.insertText("must not insert");
                     context.submitDraft();
                     context.openPage("example:page");
                     context.submitDraft();
@@ -70,6 +75,7 @@ class ToolMenuInteractionTest {
             assertTrue(tapTool(tools, row.x() + row.w()/2, row.y() + row.h()/2, 0));
         }
         assertEquals(1, submitted.get());
+        assertEquals("", draftAfterSubmit.get());
         assertEquals("draft", host.text);
         leaked.get().submitDraft();
         assertEquals(1, submitted.get());

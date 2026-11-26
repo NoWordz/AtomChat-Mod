@@ -114,7 +114,7 @@ public final class SettingsSectionPage {
     public record Row(RowKind kind, SettingsItem item, SettingsSlider slider,
                       SettingsColor color, SettingsCatalog.InfoRow info, PlayerRef player,
                       String labelKey, String actionId, String titleText, String subtitleText,
-                      String groupIdentity) {
+                      String presentationId) {
         public Row(RowKind kind, SettingsItem item, SettingsSlider slider, SettingsColor color,
                    SettingsCatalog.InfoRow info, PlayerRef player, String labelKey, String actionId,
                    String titleText, String subtitleText) {
@@ -123,6 +123,14 @@ public final class SettingsSectionPage {
 
         static Row ofGroup(String key, String id) {
             return new Row(RowKind.LABEL, null, null, null, null, null, key, null, null, null, id);
+        }
+
+        public String switchAnimationKey() {
+            return presentationId != null ? presentationId : item.id();
+        }
+
+        Row withPresentationId(String id) {
+            return new Row(kind, item, slider, color, info, player, labelKey, actionId, titleText, subtitleText, id);
         }
 
         static Row ofSwitch(SettingsItem item) {
@@ -531,7 +539,7 @@ public final class SettingsSectionPage {
      * child rows when collapsed.
      */
     private static String foldableGroup(Row row) {
-        return row.groupIdentity() != null ? row.groupIdentity() : foldableGroup(row.labelKey());
+        return row.presentationId() != null ? row.presentationId() : foldableGroup(row.labelKey());
     }
 
     private static String foldableGroup(String labelKey) {
@@ -973,7 +981,9 @@ public final class SettingsSectionPage {
         Map<String, OriginalGroup> originals = new HashMap<>();
         int start = 0;
         while (start < base.size() && base.get(start).kind() != RowKind.LABEL) start++;
-        List<Row> result = new ArrayList<>(mergeRows(base.subList(0, start), rowEdits.get(SettingsUi.TOP_ROWS)));
+        List<Row> result = new ArrayList<>();
+        appendScopedRows(result, mergeRows(base.subList(0, start), rowEdits.get(SettingsUi.TOP_ROWS)),
+                scope + "/" + SettingsUi.TOP_ROWS);
         while (start < base.size()) {
             String key = base.get(start).labelKey();
             int end = start + 1;
@@ -1000,10 +1010,18 @@ public final class SettingsSectionPage {
             result.add(header);
             String fold = foldableGroup(header);
             if (fold == null || !collapsedColorGroups.contains(fold) || expansionOf(fold) > 0F) {
-                result.addAll(mergeRows(children, rowEdits.get(group.id())));
+                appendScopedRows(result, mergeRows(children, rowEdits.get(group.id())),
+                        scope + "/" + group.id());
             }
         }
         return result;
+    }
+
+    private static void appendScopedRows(List<Row> target, List<Row> rows, String scope) {
+        for (int i = 0; i < rows.size(); i++) {
+            Row row = rows.get(i);
+            target.add(row.kind() == RowKind.SWITCH ? row.withPresentationId(scope + "/" + controlId(row) + "/" + i) : row);
+        }
     }
 
     private List<Row> mergeRows(List<Row> rows, UiContributions<SettingsUi.Control> edits) {
@@ -3195,7 +3213,7 @@ public final class SettingsSectionPage {
 
     private void drawSwitch(Canvas canvas, Row row, UiLayout.Rect rect, int accent, float dtMs) {
         SettingsItem item = row.item();
-        ToggleSwitch control = switches.computeIfAbsent(item.id(), k -> new ToggleSwitch());
+        ToggleSwitch control = switches.computeIfAbsent(row.switchAnimationKey(), k -> new ToggleSwitch());
 
         float switchX = rect.right() - UiTokens.SETTINGS_ROW_PAD - UiTokens.SWITCH_W;
         // Pointer-over-switch drives the control's own hover bounce; a row
@@ -3719,7 +3737,7 @@ public final class SettingsSectionPage {
                 // follows the state change, not the physical press window (the
                 // same frame writes the config, so a press-bound bounce can be
                 // swallowed entirely).
-                ToggleSwitch control = switches.get(item.id());
+                ToggleSwitch control = switches.get(hit.row().switchAnimationKey());
                 if (control != null) {
                     control.pulse();
                 }

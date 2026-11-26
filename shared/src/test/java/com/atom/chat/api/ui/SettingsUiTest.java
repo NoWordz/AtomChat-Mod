@@ -77,6 +77,7 @@ class SettingsUiTest {
             var rows = page.rows(SettingsSection.CHAT);
             int index = 0;
             while (!label.equals(rows.get(index).labelKey())) index++;
+            assertNotEquals(rows.get(index + 1).switchAnimationKey(), rows.get(index + 3).switchAnimationKey());
             assertTrue(page.perform(new SettingsSectionPage.RowHit(rows.get(index), index, 0, 0, 10, 10, 0)));
             assertEquals(rows.size() - 1, page.rows(SettingsSection.CHAT).size());
         } finally {

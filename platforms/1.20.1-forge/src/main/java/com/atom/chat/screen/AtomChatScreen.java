@@ -961,7 +961,9 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         public void openExtensionPage(String pageId) {
             if (NavigationUi.page(pageId) != null) pushNav(NavPage.addonDetail(pageId));
         }
-        public boolean canUseExtensionButtons() { return chatVisible() && !isPrivateReadOnly(); }
+        public boolean canUseExtensionButtons() {
+            return client.screen == AtomChatScreen.this && chatVisible() && !isPrivateReadOnly();
+        }
         public int composerCaret() { return composer.caretIndex(); }
         public void setComposerText(String text) { composer.setText(text); }
         public void moveComposerCaret(int caret) { composer.moveCaretTo(caret); }
@@ -1942,6 +1944,11 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         public void selectTabNow(NavPage root) {
             if (root.page().isAddon()) bottomTabBar.setSelectedIndex(BottomTabBar.rootIndex(root));
             else selectTabNow(root.page());
+        }
+
+        @Override
+        public void initializeSelectedTab(NavPage root) {
+            bottomTabBar.setSelectedImmediate(BottomTabBar.rootIndex(root));
         }
     };
     /**
