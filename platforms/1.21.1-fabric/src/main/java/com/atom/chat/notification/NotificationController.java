@@ -77,6 +77,18 @@ public final class NotificationController {
         client.getSoundManager().play(PositionedSoundInstance.master(FeedbackSoundController.toastSound(), 1.25F, volume));
     }
 
+    public static void onIncomingTeleportRequest(ChatMessage message) {
+        MinecraftClient client = MinecraftClient.getInstance();
+        if (client == null || client.player == null || message.isOwn()
+                || !com.atom.chat.api.card.TeleportRequestSession.claimIncomingCue(
+                        message.getCard(), client.player.getGameProfile().getName())) return;
+        var config = AtomChatConfig.get();
+        float volume = com.atom.chat.audio.FeedbackSoundPolicy.volume(config.notificationSoundEnabled, true, config.notifyVolume);
+        if (volume <= 0) return;
+        client.getSoundManager().play(PositionedSoundInstance.master(FeedbackSoundController.toastSound(), 1.0F, volume));
+        debug("tpa_toast_played volume=" + volume);
+    }
+
     public static void onMention(ChatMessage message) {
         fire(NotificationBanner.Type.MENTION, message);
     }

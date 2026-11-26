@@ -9,6 +9,68 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class TeleportRequestTest {
     @Test
+    void cueClaimsOnlyRecognizedRequestsAndDeduplicatesPerRequester() {
+        TeleportRequestSession.reset();
+        try {
+            var alice = BuiltInCardParsers.buildTpaRequestCard("Alice", false, "/tpyes", "/tpno", "StellarRTP");
+            var aliceRepeat = BuiltInCardParsers.buildTpaRequestCard("Alice", false, "/tpyes", "/tpno", "StellarRTP");
+            var bob = BuiltInCardParsers.buildTpaRequestCard("Bob", false, "/tpyes", "/tpno", "StellarRTP");
+            var own = BuiltInCardParsers.buildTpaRequestCard("Local", false, "/tpyes", "/tpno", "StellarRTP");
+            assertFalse(TeleportRequestSession.claimIncomingCue(alice, "Local", 0));
+            TeleportRequestSession.receive(alice);
+            assertTrue(TeleportRequestSession.claimIncomingCue(alice, "Local", 0));
+            assertFalse(TeleportRequestSession.claimIncomingCue(alice, "Local", Long.MAX_VALUE));
+            TeleportRequestSession.receive(aliceRepeat);
+            assertFalse(TeleportRequestSession.claimIncomingCue(aliceRepeat, "Local", 1));
+            TeleportRequestSession.receive(bob);
+            assertTrue(TeleportRequestSession.claimIncomingCue(bob, "Local", 1));
+            TeleportRequestSession.receive(own);
+            assertFalse(TeleportRequestSession.claimIncomingCue(own, "Local", 1));
+            TeleportRequestSession.receive(alice);
+            assertTrue(TeleportRequestSession.claimIncomingCue(alice, "Local", 3_000_000_000L));
+        } finally {
+            TeleportRequestSession.reset();
+        }
+    }
+
+    @Test
+    void trustedReadOnlyRequestCanChimeButOrdinaryPlayerTextCannotMatch() {
+        String line = "[StellarRTP] Alice wants to teleport to you.";
+        var player = new UniversalCardMatcher.MessageSignals(line, "Alice", false,
+                List.of(), List.of(), false, "");
+        assertNull(UniversalCardMatcher.matchTeleportRequest(player, "", false, command -> false));
+        var system = new UniversalCardMatcher.MessageSignals(line, null, true,
+                List.of(), List.of(), false, "");
+        var readOnly = UniversalCardMatcher.matchTeleportRequest(system, "", false, command -> false);
+        assertNotNull(readOnly);
+        assertTrue(readOnly.actions().isEmpty());
+        TeleportRequestSession.reset();
+        try {
+            TeleportRequestSession.receive(readOnly);
+            assertTrue(TeleportRequestSession.claimIncomingCue(readOnly, "Local", 0));
+        } finally {
+            TeleportRequestSession.reset();
+        }
+    }
+
+    @Test
+    void anExplicitTerminalReceiptLetsTheSamePlayerChimeAgainImmediately() {
+        TeleportRequestSession.reset();
+        try {
+            var first = BuiltInCardParsers.buildTpaRequestCard("Alice", false, "/tpyes", "/tpno", "StellarRTP");
+            TeleportRequestSession.receive(first);
+            assertTrue(TeleportRequestSession.claimIncomingCue(first, "Local", 0));
+            assertTrue(TeleportRequestSession.beginAction(first));
+            TeleportRequestSession.observe("", "stellarrtp.tpa.request_denied", "Alice");
+            var second = BuiltInCardParsers.buildTpaRequestCard("Alice", false, "/tpyes", "/tpno", "StellarRTP");
+            TeleportRequestSession.receive(second);
+            assertTrue(TeleportRequestSession.claimIncomingCue(second, "Local", 1));
+        } finally {
+            TeleportRequestSession.reset();
+        }
+    }
+
+    @Test
     void preservesHuskHomesButtonCommandsAndTheirClickKinds() {
         var signals = signals("Options: [Accept] [Decline]", true,
                 new UniversalCardMatcher.ClickActionSpec("[Accept]", RUN_COMMAND, "/huskhomes:tpaccept Alice"),

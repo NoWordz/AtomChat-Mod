@@ -28,7 +28,7 @@ import io.github.humbleui.types.Rect;
 import net.minecraft.network.chat.Component;
 
 import java.nio.file.Files;
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Consumer;
 
 /**
  * QQ-style image crop overlay: a modal inside the panel. A fixed frame sits in
@@ -51,12 +51,13 @@ public final class ImageCropper {
     }
 
     private final Callback callback;
-    private java.util.function.Consumer<byte[]> publicAvatarCallback;
+    private Consumer<byte[]> publicAvatarCallback;
 
-    private final AtomicInteger GENERATION = new AtomicInteger();
+    private int decodeGeneration;
     private volatile Image decoded;
-    private volatile int decodeW;
-    private volatile int decodeH;
+    private volatile boolean decodeFailed;
+    private int decodeW;
+    private int decodeH;
 
     private boolean active;
     private boolean circle;
@@ -102,9 +103,8 @@ public final class ImageCropper {
     private PointerAction heldAction;
     private boolean pointerMoved;
 
-    public void openPublicChatAvatar(java.nio.file.Path source, java.util.function.Consumer<byte[]> receive) {
-        open(source, false, 1, 1, "");
-        publicAvatarCallback = receive;
+    public void openPublicChatAvatar(java.nio.file.Path source, Consumer<byte[]> receive) {
+        open(source, false, 1, 1, "", receive);
     }
 
     private float rectangularRadius(float width) {
@@ -112,9 +112,14 @@ public final class ImageCropper {
         return com.atom.chat.render.PublicChatAvatarPaint.radius(width);
     }
 
-    public void open(java.nio.file.Path source, boolean circle,
-                     float frameW, float frameH, String targetId) {
-        publicAvatarCallback = null;
+    public void open(java.nio.file.Path source, boolean circle, float frameW, float frameH, String targetId) {
+        open(source, circle, frameW, frameH, targetId, null);
+    }
+
+    private void open(java.nio.file.Path source, boolean circle, float frameW, float frameH,
+                      String targetId, Consumer<byte[]> receive) {
+        release();
+        publicAvatarCallback = receive;
         opening = new Object();
         heldAction = null;
         active = true;
@@ -124,32 +129,38 @@ public final class ImageCropper {
         this.frameH = circle ? frameW : frameH;
         dragging = false;
         anim = 0.0F;
-        closing = false;
-        decoded = null;
         transformReady = false;
         if (source == null || !Files.isRegularFile(source)) {
+            decodeFailed = true;
             return;
         }
-        final java.nio.file.Path path = source;
-        final int generation = GENERATION.incrementAndGet();
+
+        final int generation = decodeGeneration;
         Thread worker = new Thread(() -> {
             Image result = null;
             try {
-                result = downscale(Image.makeFromEncoded(Files.readAllBytes(path)));
-            } catch (Throwable ignored) {
-                result = null;
+                result = downscale(Image.makeFromEncoded(Files.readAllBytes(source)));
+            } catch (java.io.IOException | RuntimeException | LinkageError ignored) {
+                // Report failure on the render thread, where the modal and its owner live.
             }
-            if (generation == GENERATION.get()) {
-                decoded = result;
-                decodeW = result != null ? result.getWidth() : 0;
-                decodeH = result != null ? result.getHeight() : 0;
-                transformReady = false;
-            } else if (result != null) {
-                result.close();
-            }
+            publishDecode(generation, result);
         }, "AtomChat-CropDecode");
         worker.setDaemon(true);
         worker.start();
+    }
+
+    private synchronized void publishDecode(int generation, Image result) {
+        if (generation != decodeGeneration) {
+            if (result != null) result.close();
+            return;
+        }
+        if (result == null) {
+            decodeFailed = true;
+            return;
+        }
+        decodeW = result.getWidth();
+        decodeH = result.getHeight();
+        decoded = result;
     }
 
     public boolean isActive() {
@@ -160,12 +171,10 @@ public final class ImageCropper {
         if (closing) {
             return;
         }
-        String id = targetId;
-        if (publicAvatarCallback != null) publicAvatarCallback.accept(null);
-        else callback.onCancel(id);
-        // The decoded bitmap stays alive through the fade-out; the resources
-        // are released in finishClose() once the animation has played.
+        // Retain the bitmap through the fade and mark the request complete before notifying its owner.
         beginClose();
+        if (publicAvatarCallback != null) publicAvatarCallback.accept(null);
+        else callback.onCancel(targetId);
     }
 
     private void beginClose() {
@@ -179,26 +188,26 @@ public final class ImageCropper {
      * of pixels to the finalizer).
      */
     public void release() {
-        publicAvatarCallback = null;
-        active = false;
-        closing = false;
-        GENERATION.incrementAndGet();
-        Image image = decoded;
-        decoded = null;
-        if (image != null) {
-            image.close();
-        }
+        Consumer<byte[]> pending = active && !closing ? publicAvatarCallback : null;
+        finishClose();
+        if (pending != null) pending.accept(null);
     }
 
     private void finishClose() {
         publicAvatarCallback = null;
         active = false;
         closing = false;
-        GENERATION.incrementAndGet();
+        dragging = false;
+        discardDecode();
+    }
+
+    private synchronized void discardDecode() {
+        decodeGeneration++;
         if (decoded != null) {
             decoded.close();
             decoded = null;
         }
+        decodeFailed = false;
     }
 
     private void resetToBase(UiLayout.Rect panel) {
@@ -376,17 +385,20 @@ public final class ImageCropper {
                  io.github.humbleui.skija.Data data = snapshot.encodeToData(EncodedImageFormat.PNG)) {
                 bytes = data.getBytes();
             }
+        } catch (RuntimeException | LinkageError ignored) {
+            cancel();
+            return;
         }
-        String id = targetId;
-        if (publicAvatarCallback != null) publicAvatarCallback.accept(bytes);
-        else callback.onConfirm(id, bytes);
         beginClose();
+        if (publicAvatarCallback != null) publicAvatarCallback.accept(bytes);
+        else callback.onConfirm(targetId, bytes);
     }
 
     public void render(Canvas canvas, UiLayout.Rect panel, float vmx, float vmy) {
         if (!active) {
             return;
         }
+        if (decodeFailed && !closing) cancel();
         long now = System.currentTimeMillis();
         float dt = Math.min(50.0F, Math.max(1.0F, now - lastFrameMs));
         lastFrameMs = now;
@@ -551,7 +563,7 @@ public final class ImageCropper {
         }
         int tw = Math.max(1, Math.round(w * sc));
         int th = Math.max(1, Math.round(h * sc));
-        try (Surface surface = Surface.makeRasterN32Premul(tw, th)) {
+        try (source; Surface surface = Surface.makeRasterN32Premul(tw, th)) {
             Canvas canvas = surface.getCanvas();
             try (Paint paint = new Paint().setAntiAlias(true)) {
                 canvas.drawImageRect(source,
@@ -559,7 +571,6 @@ public final class ImageCropper {
                         Rect.makeXYWH(0, 0, tw, th),
                         SamplingMode.LINEAR, paint, false);
             }
-            source.close();
             return surface.makeImageSnapshot();
         }
     }

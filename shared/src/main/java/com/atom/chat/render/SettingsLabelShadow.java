@@ -62,6 +62,10 @@ public final class SettingsLabelShadow {
         draw(c, font, text, x, y, null, x, y, 0F);
     }
 
+    static void drawIcon(Canvas canvas, Path icon, float x, float y, float size) {
+        draw(canvas, null, "", x, y, icon, x, y, size);
+    }
+
     public static void draw(Canvas c, Font font, String text, float x, float y,
                             Path icon, float iconX, float iconY, float iconSize) {
         if (text.isEmpty() && icon == null) return;
@@ -71,11 +75,16 @@ public final class SettingsLabelShadow {
         }
 
         ImageFilter filter = SkiaFontRenderer.backingShadow();
-        var metrics = font.getMetrics();
         float left = x;
-        float right = x + SkiaFontRenderer.getStringWidth(font, text);
-        float top = y + metrics.getAscent();
-        float bottom = y + metrics.getDescent();
+        float right = x;
+        float top = y;
+        float bottom = y;
+        if (font != null) {
+            var metrics = font.getMetrics();
+            right += SkiaFontRenderer.getStringWidth(font, text);
+            top += metrics.getAscent();
+            bottom += metrics.getDescent();
+        }
         if (icon != null) {
             left = Math.min(left, iconX - iconSize / 2F);
             top = Math.min(top, iconY - iconSize / 2F);

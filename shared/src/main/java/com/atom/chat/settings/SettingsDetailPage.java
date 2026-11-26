@@ -1,7 +1,5 @@
 package com.atom.chat.settings;
 
-import com.atom.chat.avatar.ImageCropper;
-import com.atom.chat.avatar.ColorPickerOverlay;
 import com.atom.chat.ui.ScrollSyncService;
 import com.atom.chat.ui.UiLayout;
 import com.atom.chat.ui.input.InputHandler;
@@ -11,52 +9,12 @@ import io.github.humbleui.skija.Canvas;
  * A pushed settings sub-page (D15b): its scroll state, the per-chip memory it
  * keeps, its frame, and the inline numeric editor of its integer sliders.
  *
- * <p><b>The modal contract is the reason this class exists in one piece.</b>
- * {@link ImageCropper} and {@link ColorPickerOverlay} are global modals: while
- * one is active <em>the event layer hands it every click</em>. A modal that is
- * active but never rendered is therefore not a cosmetic problem — it swallows
- * input that nothing on screen can explain, and the screen simply freezes
- * (the 0.2.x freeze). The wallpaper pick is opened <em>from this page</em>, so
- * {@link #drawSettingsSection} must keep rendering both modals on top of the
- * panel, exactly as it does now. The two calls and their comment are part of
- * the contract, not decoration.</p>
- *
- * <p>Two more things are contracts here: the per-chip scroll memory (a chip's
- * offset is saved on the way out and restored on the way in, so coming back to a
- * chip lands where it was left), and the numeric editor's key handling — digits
- * are appended from {@code onKey} and {@code onChar} deliberately swallows the
- * same press, because Minecraft delivers both and appending in both places
- * doubles every digit (1 became 11).</p>
- *
- * <p>Ports on {@link Host}: D16's section page (its state and its rendering),
- * D9's two modals and the accent token, D11's scroll service (the detail
- * controller and the scrollbar), D10's detail layout and the shell's two
- * coordinate conversions. Nothing here is D15 state except the chip memory.</p>
- *
- * <p>One copy, in the shared layer: this class names no Minecraft API at all —
- * everything it drives ({@link SettingsSectionPage}, {@link ImageCropper},
- * {@link ColorPickerOverlay}, {@link ScrollSyncService}, {@link UiLayout},
- * Skija's {@link Canvas}) is either shared or a mapping-layer type that
- * <em>every</em> target provides at this same name (the official layer for
- * forge/neo, the yarn twin beside it for fabric), which is what the seam
- * manifest calls a 甲-group type. That is why it is a single file here rather
- * than a twin pair.</p>
+ * <p>Each chip retains its scroll offset. The number editor adds digits from
+ * onKey and consumes the corresponding character event to avoid duplicate input.
  */
 public final class SettingsDetailPage {
-    /**
-     * What the screen hands over: three objects it owns (the section page or the
-     * two modals), D11's scroll service, D10's detail layout and its own two
-     * coordinate conversions and accent lookup. Nothing here is D15 state.
-     */
     public interface Host {
-        /** D16: the sub-page's own state and rendering. */
         SettingsSectionPage sectionPage();
-
-        /** D9/D19: the HSV modal — rendered on this path, opened from the colour rows. */
-        ColorPickerOverlay colorPicker();
-
-        /** D9: the crop modal — opened from here by the wallpaper pick, so it renders here. */
-        ImageCropper imageCropper();
 
         /** D11: the detail controller (shared across chips) and the scrollbar. */
         ScrollSyncService scrollSync();
@@ -126,11 +84,6 @@ public final class SettingsDetailPage {
         host.sectionPage().renderBody(canvas, layout, section, vmx, vmy, host.scrollSync().detailScroll().getScrollY(),
                 host.accent());
         host.scrollSync().drawScrollbar(canvas, layout, vmx, vmy, host.scrollSync().detailScroll());
-        // Modal overlays on top of the whole panel: the cropper must render on
-        // this path too — it is opened from here (wallpaper pick), and an
-        // active-but-unrendered modal eats every click and freezes the screen.
-        host.imageCropper().render(canvas, layout.rect(), vmx, vmy);
-        host.colorPicker().render(canvas, layout.rect(), vmx, vmy, host.accent());
     }
 
     private record RowPointerId(SettingsSection section, int chip, SettingsSectionPage.RowKind kind, Object action) {}

@@ -129,16 +129,6 @@ class SettingsDetailPageTest {
             }
 
             @Override
-            public ColorPickerOverlay colorPicker() {
-                return colorPicker;
-            }
-
-            @Override
-            public ImageCropper imageCropper() {
-                return cropper;
-            }
-
-            @Override
             public ScrollSyncService scrollSync() {
                 return scrollSync;
             }
@@ -287,7 +277,7 @@ class SettingsDetailPageTest {
     }
 
     @Test
-    void anActiveModalIsStillDrawnOnTheSettingsPath() throws Exception {
+    void settingsBodyLeavesActiveModalsForTheScreenToPaint() throws Exception {
         Harness harness = new Harness();
         Surface surface = Surface.makeRasterN32Premul(SURFACE_W, SURFACE_H);
         try {
@@ -295,8 +285,7 @@ class SettingsDetailPageTest {
             Path source = platformRoot.resolve("picked.png");
             Files.createDirectories(source.getParent());
             ImageIO.write(new BufferedImage(16, 16, BufferedImage.TYPE_INT_RGB), "png", source.toFile());
-            // Both modals active: the contract says this frame renders them, and
-            // an active-but-unrendered modal is a frozen screen (0.2.x).
+            // Put both overlays in the same active state as a real screen's overlays.
             harness.cropper.open(source, false, 1.0F, 1.0F, "banner");
             harness.colorPicker.open(new SettingsColor("bubble_text", "atomchat.settings.bubbleText", "bubbles",
                     () -> 0xFF112233, value -> {
@@ -305,9 +294,11 @@ class SettingsDetailPageTest {
             harness.page.drawSettingsSection(canvas, 100, 100, SettingsSection.APPEARANCE);
 
             int[] bounds = drawnBounds(surface);
-            assertNotNull(bounds, "the settings page with both modals active painted nothing");
+            assertNotNull(bounds, "the settings body is still painted");
+            assertTrue(bounds[1] > harness.layout.rect().y(), "modal scrim must stay out of the page recording");
             assertTrue(bounds[2] - bounds[0] + 1 >= 100, "the painted area is suspiciously narrow: " + bounds[2]);
         } finally {
+            harness.cropper.release();
             surface.close();
         }
     }

@@ -13,6 +13,8 @@ import io.github.humbleui.types.RRect;
 
 /** Measured HUD presentation, painted in the same physical-pixel pass as other HUD messages. */
 final class CompactCardPaint {
+    private static final float ITEM_ICON_SCALE = 1.30F;
+
     record Content(ShareCard card, CardState state, CardRenderRegistry.CompactCardRenderer renderer) {
         Content generic() { return new Content(card, state, null); }
     }
@@ -32,13 +34,27 @@ final class CompactCardPaint {
     }
 
     static boolean showsNativeItem(Content content, float width) {
-        return content != null && content.card().template() == ShareCard.Template.ITEM
-                && content.card().item() != null && textInset(width) > UiTokens.BUBBLE_PAD;
+        return hasNativeItem(content) && iconExtent(content, width) > 0F;
     }
 
-    static float textInset(float width) {
-        return width >= UiTokens.COMPOSER_ICON_SIZE + UiTokens.BUBBLE_PAD * 3
-                ? UiTokens.COMPOSER_ICON_SIZE + UiTokens.BUBBLE_PAD * 2 : UiTokens.BUBBLE_PAD;
+    private static boolean hasNativeItem(Content content) {
+        return content != null && content.card().template() == ShareCard.Template.ITEM && content.card().item() != null;
+    }
+
+    private static float iconExtent(Content content, float width) {
+        if (content == null || width < UiTokens.COMPOSER_ICON_SIZE + UiTokens.BUBBLE_PAD * 3) return 0F;
+        if (!hasNativeItem(content)) return UiTokens.COMPOSER_ICON_SIZE;
+        return Math.min(UiTokens.COMPOSER_ICON_SIZE * ITEM_ICON_SCALE, width - UiTokens.BUBBLE_PAD * 3);
+    }
+
+    static float textInset(Content content, float width) {
+        float extent = iconExtent(content, width);
+        return extent > 0F ? extent + UiTokens.BUBBLE_PAD * 2 : UiTokens.BUBBLE_PAD;
+    }
+
+    static float fallbackHeight(Content content, float width, float lineBubbleHeight) {
+        float extent = Math.max(UiTokens.COMPOSER_ICON_SIZE, iconExtent(content, width));
+        return Math.max(lineBubbleHeight, extent + UiTokens.BUBBLE_PAD * 2);
     }
 
     static Size measure(Content content, float maxWidth, float fallbackWidth, float fallbackHeight) {
@@ -85,19 +101,27 @@ final class CompactCardPaint {
                                float radius, int background, int iconInk, boolean shadow, boolean nativeItems) {
         if (shadow) HudShadow.draw(canvas, RRect.makeXYWH(x, y, width, height, radius));
         CornerGeometry.drawRoundedRect(canvas, x, y, width, height, radius, background);
-        if (textInset(width) == UiTokens.BUBBLE_PAD) return;
-        float iconSize = UiTokens.COMPOSER_ICON_SIZE;
+        float extent = iconExtent(content, width);
+        float iconSize = Math.min(extent, Math.max(0F, height - UiTokens.BUBBLE_PAD * 2));
+        if (iconSize == 0F) return;
+        float iconCenterX = x + UiTokens.BUBBLE_PAD + extent / 2F;
         if (nativeItems && showsNativeItem(content, width)
-                && ItemIconRenderer.drawCardItem(canvas, content.card(), x + UiTokens.BUBBLE_PAD,
+                && ItemIconRenderer.drawCardItem(canvas, content.card(), iconCenterX - iconSize / 2F,
                         y + (height - iconSize) / 2, iconSize)) return;
-        var icon = switch (SpecialCardPresentation.kind(content.card())) {
+        var kind = SpecialCardPresentation.kind(content.card());
+        var icon = switch (kind) {
             case LOCATION -> AppIcons.ICON_GLOBE_PATH;
             case TELEPORT_REQUEST -> DrawPrimitives.ICON_TP_PATH;
             case ITEM, RED_PACKET, GENERAL, CUSTOM -> DrawPrimitives.ICON_PHRASE_PATH;
         };
         int accent = content.card().accentColor();
         int ink = content.state() != null && content.state().dimmed() || accent >>> 24 == 0 ? iconInk : accent;
-        DrawPrimitives.drawIconCentered(canvas, icon, x + UiTokens.BUBBLE_PAD + UiTokens.COMPOSER_ICON_SIZE / 2,
-                y + height / 2, UiTokens.COMPOSER_ICON_SIZE, ink);
+        if (kind == SpecialCardPresentation.Kind.LOCATION || kind == SpecialCardPresentation.Kind.TELEPORT_REQUEST) {
+            ink = iconInk;
+            if (shadow && (ink >>> 24) != 0) {
+                SettingsLabelShadow.drawIcon(canvas, icon, iconCenterX, y + height / 2F, iconSize);
+            }
+        }
+        DrawPrimitives.drawIconCentered(canvas, icon, iconCenterX, y + height / 2F, iconSize, ink);
     }
 }

@@ -38,6 +38,37 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class InputWiringSourceTest {
 
     @Test
+    void screenRendersTheCropperOutsidePageRecordingsAndRoutesModalInputFirst() throws IOException {
+        for (String screen : SCREENS) {
+            String src = source(screen);
+            String gate = gateStatement(src);
+            assertTrue(gate.indexOf(".add(new ModalInput())") < gate.indexOf(".add(serverConfigInput())"), screen);
+            assertEquals(1, occurrences(src, "imageCropper.render("), screen);
+            int body = src.indexOf("composite.drawArrivingFrame(");
+            int cropper = src.indexOf("imageCropper.render(");
+            int preview = src.indexOf("imagePreview.render(", cropper);
+            assertTrue(body >= 0 && body < cropper && cropper < preview, screen);
+        }
+        String details = source("shared/src/main/java/com/atom/chat/settings/SettingsDetailPage.java");
+        assertFalse(details.contains("imageCropper().render("));
+    }
+
+    @Test
+    void fixedSettingsChromeAndThePanelBoundaryKeepTheirOwnCoordinates() throws IOException {
+        for (String screen : SCREENS) {
+            String src = source(screen);
+            int outside = src.indexOf("private InputHandler outsidePanelInput()");
+            int trace = src.indexOf("private final com.atom.chat.ui.ClickRipples", outside);
+            String host = src.substring(outside, trace);
+            assertTrue(host.contains("ScreenMetrics.toVirtualX(") && host.contains("ScreenMetrics.toVirtualY("), screen);
+            int track = src.indexOf("private boolean overPageScrollbarTrack(");
+            assertTrue(track >= 0 && src.substring(track, src.indexOf("\n    }", track))
+                    .contains("y <= stationaryChromeBottom()"), screen);
+            assertEquals(3, occurrences(src, "overPageScrollbarTrack("), screen);
+        }
+    }
+
+    @Test
     void rawPressAndReleaseAreObservedBeforeTheAnimationGate() throws IOException {
         for (String screen : SCREENS) {
             String src = source(screen);
@@ -71,12 +102,13 @@ class InputWiringSourceTest {
             ".add(newClosingStateInput())"
                     + ".add(tutorial)"
                     + ".add(newcom.atom.chat.ui.ConfirmationInput(settingsSectionPage::confirmation,this::toVirtualX,this::toVirtualY))"
+                    + ".add(newModalInput())"
                     + ".add(serverConfigInput())"
                     + ".add(panelEditorInput())"
                     + ".add(completionInput)"
                     + ".add(foreignChatUiInput())"
                     + ".add(outsidePanelInput())"
-                    + ".add(newModalInput())"
+                    + ".add(borrowedTextInput())"
                     + ".add(composerTools)"
                     + ".add(settingsDetailPage.numberEditInput())"
                     + ".add(newBannerInput())"
@@ -86,8 +118,8 @@ class InputWiringSourceTest {
 
     /** The prose contract that carries the priority list, quoted from the source. */
     private static final String FROZEN_PRIORITY_PROSE =
-            "Priority (first registered wins): closing guard, tutorial, confirmation, server config, panel editing handles, completion, foreign chat UI, outside-panel close, modals (cropper/colour "
-                    + "picker), composer tools, pushed-subpage Esc, screen Esc, root pages, world chat.";
+            "Priority (first registered wins): closing guard, tutorial, confirmation, modals, server config, panel editing handles, completion, foreign chat UI, outside-panel close, borrowed text "
+                    + "editor keys, composer tools, pushed-subpage Esc, screen Esc, root pages, world chat.";
 
     private static final String FROZEN_NO_BRANCHES_PROSE =
             "New interactive features register a handler instead of inserting branches "
@@ -178,7 +210,7 @@ class InputWiringSourceTest {
      * event and the overrides fall through to vanilla. Hence both halves: no
      * {@code InputRouter} anywhere in the screen (the gate owns it, so the
      * screen needs neither the type nor the import), and the gate statement
-     * itself carrying all fifteen registrations.
+     * itself carrying the complete handler sequence.
      */
     @Test
     void theScreenHasExactlyOneHandlerChainAndItIsTheGatesOwn() throws IOException {
@@ -189,8 +221,8 @@ class InputWiringSourceTest {
                             + " the gate owns the chain. A second chain leaves the gate's router"
                             + " empty, and every event falls through to super.");
             String gate = gateStatement(src);
-            assertEquals(15, occurrences(gate, ".add("),
-                    screen + ": the gate declaration must register exactly the fifteen handlers.\n"
+            assertEquals(16, occurrences(gate, ".add("),
+                    screen + ": the gate declaration must register all handlers.\n"
                             + gate);
             assertTrue(flatten(gate).endsWith(".add(newWorldChatInput());"),
                     screen + ": the gate chain must end on WorldChatInput, the lowest-priority"
@@ -199,7 +231,7 @@ class InputWiringSourceTest {
     }
 
     /**
-     * The fifteen registrations keep their frozen relative order. Registration
+     * The registrations keep their relative order. Registration
      * order <em>is</em> the priority contract: a swap silently changes which
      * handler sees an event first, which is how the modal/root/world handlers
      * stay out of each other's way.
@@ -209,9 +241,7 @@ class InputWiringSourceTest {
         for (String screen : SCREENS) {
             String gate = gateStatement(source(screen));
             assertTrue(flatten(gate).contains(FROZEN_CHAIN_FLAT),
-                    screen + ": the registration order changed. Frozen order is ClosingState -> OutsidePanel ->"
-                            + " Modal -> NumberEdit -> Banner -> ScreenEsc -> RootPage ->"
-                            + " WorldChat.\n" + gate);
+                    screen + ": the registration order changed.\n" + gate);
         }
     }
 

@@ -8,6 +8,7 @@ import com.atom.chat.platform.Platform;
 import com.atom.chat.settings.SettingsColor;
 import io.github.humbleui.skija.Bitmap;
 import io.github.humbleui.skija.Canvas;
+import io.github.humbleui.skija.EncodedImageFormat;
 import io.github.humbleui.skija.Surface;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.AfterEach;
@@ -15,6 +16,7 @@ import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import java.nio.file.Path;
+import java.nio.file.Files;
 import static org.junit.jupiter.api.Assertions.*;
 
 class ModalPanelClipTest {
@@ -52,6 +54,10 @@ class ModalPanelClipTest {
              Surface source = Surface.makeRasterN32Premul(40, 30);
              var image = source.makeImageSnapshot(); Bitmap pixels = new Bitmap()) {
             pixels.allocN32Pixels(420, 800);
+            Path cropSource = tmp.resolve("clip-crop.png");
+            try (var encoded = image.encodeToData(EncodedImageFormat.PNG)) {
+                Files.write(cropSource, encoded.getBytes());
+            }
             ImagePreviewOverlay preview = new ImagePreviewOverlay();
             ColorPickerOverlay picker = new ColorPickerOverlay(s -> {});
             ImageCropper crop = new ImageCropper(new ImageCropper.Callback() {
@@ -64,7 +70,7 @@ class ModalPanelClipTest {
                 cfg.cornerRadius = radius;
                 preview.open(image);
                 picker.open(new SettingsColor("test", "test", "ui", () -> 0xFF778899, v -> {}));
-                crop.open(null, true, 160, 160, "test");
+                crop.open(cropSource, true, 160, 160, "test");
                 java.util.List<java.util.function.Consumer<Canvas>> draws = java.util.List.of(
                     c -> preview.render(c, panel, -100, -100),
                     c -> picker.render(c, panel, -100, -100, 0xFF778899),
@@ -98,6 +104,7 @@ class ModalPanelClipTest {
                     }
             }
             }
+            crop.release();
         }
     }
 

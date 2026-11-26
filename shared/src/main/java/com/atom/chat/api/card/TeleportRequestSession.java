@@ -11,7 +11,7 @@ import java.util.regex.Pattern;
 
 /** Tracks client-adapted requests through the existing card state store. */
 public final class TeleportRequestSession {
-    private record Pending(String player, String source, ShareCard card) {
+    private record Pending(String player, String source, ShareCard card, boolean cueAvailable) {
         String id() { return card.cardId(); }
     }
     private static final int MAX_PENDING = 100;
@@ -33,6 +33,8 @@ public final class TeleportRequestSession {
     private static final Map<String, EnumMap<Receipt, Long>> RECENT_UNNAMED = new HashMap<>();
     private static final long RECEIPT_WINDOW_NS = 2_000_000_000L;
     private static final LinkedHashMap<String, Attempt> ATTEMPTS = new LinkedHashMap<>();
+    private record CueKey(String player, String source, String title) {}
+    private static final LinkedHashMap<CueKey, Long> RECENT_CUES = new LinkedHashMap<>();
 
     private TeleportRequestSession() {}
 
@@ -43,7 +45,7 @@ public final class TeleportRequestSession {
             // A separate text announcement can arrive after the actionable packet.
             return;
         }
-        var pending = new Pending(player, card.sourceLabel(), card);
+        var pending = new Pending(player, card.sourceLabel(), card, true);
         var previous = PENDING.put(player, pending);
         if (previous != null) close(previous, "请求已更新");
         if (PENDING.size() > MAX_PENDING) {
@@ -51,6 +53,27 @@ public final class TeleportRequestSession {
             close(oldest.next(), "请求已归档");
             oldest.remove();
         }
+    }
+
+    /** Called only after live storage. The pending identity comes from the native request adapter. */
+    public static boolean claimIncomingCue(ShareCard card, String ownName) {
+        return claimIncomingCue(card, ownName, System.nanoTime());
+    }
+
+    static boolean claimIncomingCue(ShareCard card, String ownName, long now) {
+        if (card == null || card.general() == null) return false;
+        String player = card.general().avatarPlayerName().toLowerCase(Locale.ROOT);
+        if (player.equalsIgnoreCase(ownName)) return false;
+        var pending = PENDING.get(player);
+        if (pending == null || pending.card() != card || !pending.cueAvailable()) return false;
+        PENDING.put(player, new Pending(player, pending.source(), card, false));
+        CueKey key = new CueKey(player, pending.source(), card.title().toLowerCase(Locale.ROOT));
+        var previous = RECENT_CUES.get(key);
+        if (previous != null && now - previous < RECEIPT_WINDOW_NS) return false;
+        RECENT_CUES.remove(key);
+        RECENT_CUES.put(key, now);
+        if (RECENT_CUES.size() > MAX_PENDING) RECENT_CUES.remove(RECENT_CUES.keySet().iterator().next());
+        return true;
     }
 
     /** An expired, superseded or foreign card must never direct a current request. */
@@ -119,6 +142,8 @@ public final class TeleportRequestSession {
         }
         if (candidate == null) return;
         close(candidate, receipt.status);
+        String completedPlayer = candidate.player();
+        RECENT_CUES.keySet().removeIf(cue -> cue.player().equals(completedPlayer) && cue.source().equals(source));
         ATTEMPTS.remove(candidate.id());
         retire(candidate, EnumSet.of(receipt), now);
     }
@@ -152,5 +177,6 @@ public final class TeleportRequestSession {
         ATTEMPTS.clear();
         NAMED_RETIRED.clear();
         RECENT_UNNAMED.clear();
+        RECENT_CUES.clear();
     }
 }

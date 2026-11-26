@@ -638,7 +638,8 @@ public class ChatHudMixin implements NotificationHudOverlay.PanelChatHud {
     private static ChatMessage addSystemMessage(Text message, NativeMessageMeta nativeMeta, String sender) {
         ChatMessage presentation = atomchat$systemPresentation(message).withNativeMeta(nativeMeta);
         presentation = atomchat$attachCard(presentation, message, sender, true);
-        ChatStore.get().add(presentation);
+        boolean folded = ChatStore.get().add(presentation);
+        if (!folded && presentation.hasCard()) NotificationController.onIncomingTeleportRequest(presentation);
         return presentation;
     }
 

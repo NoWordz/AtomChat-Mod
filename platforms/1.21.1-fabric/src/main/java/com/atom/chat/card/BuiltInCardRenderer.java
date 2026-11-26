@@ -10,6 +10,7 @@ import com.atom.chat.api.card.SpecialCardPresentation;
 import com.atom.chat.api.card.ShareCard;
 import com.atom.chat.font.FontManager;
 import com.atom.chat.image.ImageLoader;
+import com.atom.chat.render.ChromeMaterial;
 import com.atom.chat.render.CornerGeometry;
 import com.atom.chat.render.HudShadow;
 import com.atom.chat.render.ItemIconRenderer;
@@ -81,11 +82,15 @@ public final class BuiltInCardRenderer {
             case LOCATION -> drawLocation(canvas, card, state, x, y, w, h, hitsOut);
             case RED_PACKET -> drawRedPacket(canvas, card, state, x, y, w, h, hitsOut);
             case ITEM -> drawItem(canvas, card, state, x, y, w, h, hitsOut);
-            case GENERAL, CUSTOM -> drawGeneral(canvas, card, state, x, y, w, h, hitsOut);
+            case TELEPORT_REQUEST, GENERAL, CUSTOM -> drawGeneral(canvas, card, state, x, y, w, h, hitsOut);
         }
     }
 
     private static float cardRadius() { return UiTokens.settingsRowRadius(com.atom.chat.ui.AtomChatAppearance.theme()); }
+    private static RRect mediaFrame(float x, float y, float width, float height) {
+        return RRect.makeXYWH(x, y, width, height, ChromeMaterial.insetCornerRadius(width, height, cardRadius(), 0F));
+    }
+
     private static float padX() { return s(BODY_PAD); }
     private static float footerHeight(float cardH) { return clamp(cardH * 0.255F, s(FOOTER_MIN_HEIGHT), s(FOOTER_MAX_HEIGHT)); }
     private static Font titleFont() { return FontManager.boldFont(UiTokens.FONT_BODY * 0.84F); }
@@ -205,7 +210,7 @@ public final class BuiltInCardRenderer {
     private static void drawMinimapViewport(Canvas canvas, Image minimapImg,
                                             float x, float y, float w, float h,
                                             String dim, int accent) {
-        RRect frame = RRect.makeXYWH(x, y, w, h, s(MAP_RADIUS));
+        RRect frame = mediaFrame(x, y, w, h);
         CornerGeometry.drawClipped(canvas, frame, () -> {
             if (minimapImg != null) {
                 Rect src = Rect.makeWH(minimapImg.getWidth(), minimapImg.getHeight());
@@ -239,7 +244,7 @@ public final class BuiltInCardRenderer {
         });
         try (Paint border = new Paint().setColor(0x520F172A).setMode(PaintMode.STROKE)
                 .setStrokeWidth(s(MAP_FRAME_STROKE)).setAntiAlias(true)) {
-            canvas.drawRRect(frame, border);
+            CornerGeometry.drawRRect(canvas, frame, border);
         }
     }
 
@@ -426,7 +431,7 @@ public final class BuiltInCardRenderer {
             float slotSize = clamp(bodyH * 0.64F, s(ICON_MIN_SIZE), s(ICON_MAX_SIZE));
             float slotX = x + pad + s(INNER_INSET);
             float slotY = y + (bodyH - slotSize) / 2F;
-            RRect slotRect = RRect.makeXYWH(slotX, slotY, slotSize, slotSize, s(ITEM_SLOT_RADIUS));
+            RRect slotRect = mediaFrame(slotX, slotY, slotSize, slotSize);
             try (Shader slotGrad = Shader.makeLinearGradient(slotX, slotY, slotX + slotSize, slotY + slotSize,
                     new int[]{darken(accent, 0.28F), darken(accent, 0.46F)});
                  Paint slotFill = new Paint().setShader(slotGrad).setAntiAlias(true)) {
@@ -589,13 +594,13 @@ public final class BuiltInCardRenderer {
             if (hasImageThumb) {
                 float tx = x + w - pad - thumbSize;
                 float ty = y + (bodyH - thumbSize) / 2F;
-                RRect thumbR = RRect.makeXYWH(tx, ty, thumbSize, thumbSize, s(THUMBNAIL_RADIUS));
+                RRect thumbR = mediaFrame(tx, ty, thumbSize, thumbSize);
                 io.github.humbleui.skija.Image img = allowThumbnail ? ImageLoader.get().get(gen.thumbnailUrl(), true) : null;
                 if (img != null) {
                     CornerGeometry.drawClipped(canvas, thumbR, () ->
                             canvas.drawImageRect(img, Rect.makeXYWH(tx, ty, thumbSize, thumbSize)));
                 } else {
-                    CornerGeometry.drawRoundedRect(canvas, tx, ty, thumbSize, thumbSize, s(THUMBNAIL_RADIUS), withAlpha(accent, 0x22));
+                    CornerGeometry.fill(canvas, thumbR, withAlpha(accent, 0x22));
                 }
             }
 

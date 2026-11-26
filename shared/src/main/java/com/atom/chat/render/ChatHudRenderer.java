@@ -527,7 +527,7 @@ public final class ChatHudRenderer {
         float repeatLane = repeatLabel == null ? 0F
                 : UiTokens.INLINE_ITEM_GAP + SkiaFontRenderer.getStringWidth(nameFont, repeatLabel);
         maxBubbleWidth = Math.max(1F, maxBubbleWidth - repeatLane);
-        float textInset = card == null ? UiTokens.BUBBLE_PAD : CompactCardPaint.textInset(maxBubbleWidth);
+        float textInset = CompactCardPaint.textInset(card, maxBubbleWidth);
         float textWidth = Math.max(1F, maxBubbleWidth - textInset - UiTokens.BUBBLE_PAD);
         List<RichLine> lines = MessagePaint.hudLine(body, font, textWidth);
         List<RichLine> caption = MessagePaint.hudLine(name, nameFont, textWidth);
@@ -537,8 +537,11 @@ public final class ChatHudRenderer {
         float lineHeight = SkiaFontRenderer.getHeight(font);
         float bubbleHeight = lineHeight + padY;
         if (card != null) {
+            if (CompactCardPaint.showsNativeItem(card, maxBubbleWidth)) {
+                bubbleWidth = Math.min(maxBubbleWidth, Math.max(bubbleWidth, textInset + UiTokens.BUBBLE_PAD * 2));
+            }
             var size = CompactCardPaint.measure(card, maxBubbleWidth, bubbleWidth,
-                    Math.max(bubbleHeight, UiTokens.COMPOSER_ICON_SIZE + UiTokens.BUBBLE_PAD * 2));
+                    CompactCardPaint.fallbackHeight(card, bubbleWidth, bubbleHeight));
             bubbleWidth = size.width();
             bubbleHeight = size.height();
             if (!size.custom() && card.renderer() != null) card = card.generic();
@@ -792,7 +795,7 @@ public final class ChatHudRenderer {
                 try {
                     canvas.clipRect(Rect.makeXYWH(x, cardY, width, height));
                     RichTextRenderer.drawLines(canvas, measured.bodyFont(), measured.body(),
-                            x + CompactCardPaint.textInset(width), cardY + height / 2F, measured.lineHeight(),
+                            x + CompactCardPaint.textInset(measured.card(), width), cardY + height / 2F, measured.lineHeight(),
                             lastInk.capsuleText(), null, false, TextSurface.CAPSULE.shadowed(), capsuleTextShadow());
                 } finally {
                     canvas.restore();

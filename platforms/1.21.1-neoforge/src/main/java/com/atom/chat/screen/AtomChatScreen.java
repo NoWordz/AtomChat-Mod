@@ -707,26 +707,12 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
     /**
      * The pushed settings sub-page (D15b): its scroll state, the per-chip memory
      * it keeps, its frame and the inline numeric editor of its integer sliders.
-     * The domain keeps the modal contract — the cropper and the colour picker
-     * must be rendered on this page's draw path, or an active-but-unrendered
-     * modal eats every click and freezes the screen. This screen hands it D16's
-     * section page, D9's two modals and accent, D11's scroll service, D10's
-     * detail layout and its own two coordinate conversions.
+     * The shell draws and routes modals above the animated page bodies.
      */
     private final SettingsDetailPage settingsDetailPage = new SettingsDetailPage(new SettingsDetailPage.Host() {
         @Override
         public SettingsSectionPage sectionPage() {
             return settingsSectionPage;
-        }
-
-        @Override
-        public ColorPickerOverlay colorPicker() {
-            return colorPicker;
-        }
-
-        @Override
-        public ImageCropper imageCropper() {
-            return imageCropper;
         }
 
         @Override
@@ -916,8 +902,8 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
     private InputHandler outsidePanelInput() {
         return new com.atom.chat.ui.input.OutsidePanelInput(new com.atom.chat.ui.input.OutsidePanelInput.Host() {
             public UiLayout.Rect panelRect() { return layout().rect(); }
-            public float toVirtualX(double x) { return AtomChatScreen.this.toVirtualX(x); }
-            public float toVirtualY(double y) { return AtomChatScreen.this.toVirtualY(y); }
+            public float toPanelSpaceX(double x) { return ScreenMetrics.toVirtualX(client.getWindow(), x); }
+            public float toPanelSpaceY(double y) { return ScreenMetrics.toVirtualY(client.getWindow(), y); }
             public void requestClose() { AtomChatScreen.this.requestClose(); }
             public boolean floatingUiAt(double x, double y) {
                 return isWorldChatPage() && !imagePreview.isActive() && !imageCropper.isActive()
@@ -1011,7 +997,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
 
     /**
      * Ordered input routing (D23a). Priority (first registered wins): closing
-     * guard, tutorial, confirmation, server config, panel editing handles, completion, foreign chat UI, outside-panel close, modals (cropper/colour picker), composer tools, pushed-subpage Esc, screen Esc,
+     * guard, tutorial, confirmation, modals, server config, panel editing handles, completion, foreign chat UI, outside-panel close, borrowed text editor keys, composer tools, pushed-subpage Esc, screen Esc,
      * root pages, world chat. New interactive features register a handler
      * instead of inserting branches into the former if-else chains.
      *
@@ -1044,12 +1030,13 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
             .add(tutorial)
             .add(new com.atom.chat.ui.ConfirmationInput(settingsSectionPage::confirmation,
                     this::toVirtualX, this::toVirtualY))
+            .add(new ModalInput())
             .add(serverConfigInput())
             .add(panelEditorInput())
             .add(completionInput)
             .add(foreignChatUiInput())
             .add(outsidePanelInput())
-            .add(new ModalInput())
+            .add(borrowedTextInput())
             .add(composerTools)
             .add(settingsDetailPage.numberEditInput())
             .add(new BannerInput())
@@ -1988,12 +1975,14 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
     }
     public void closeServerConfig() {
         if (topPage() != AppPage.SERVER_CONFIG) return;
+        cancelPublicAvatarPick();
         serverConfigPage = null;
         composite.navigationDirection(true);
         navStack.popPage();
     }
     public void openServerConfig(com.atom.chat.config.ServerConfigPage page) {
         closing = false;
+        if (serverConfigPage != page) cancelPublicAvatarPick();
         serverConfigPage = page;
         page.bindConfirmation(settingsSectionPage.confirmation());
         page.bindNavigationDirection(composite::navigationDirection);
@@ -2839,8 +2828,8 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         if (PanelOpenMotion.layerSkippable(PanelOpenMotion.fade(progress), scale)) {
             int probeBefore = canvas.getSaveCount();
             clickRipples.begin(settingsSectionPage.confirmation().isActive() ? settingsSectionPage.confirmation()
-                    : imageCropper.isActive() ? imageCropper : colorPicker.isActive() ? colorPicker
-                    : imagePreview.isActive() ? imagePreview : this);
+                    : imagePreview.isActive() ? imagePreview : imageCropper.isActive() ? imageCropper
+                    : colorPicker.isActive() ? colorPicker : this);
             drawPanel(canvas, target, x, y, worldSnapshot, mouseX, mouseY, delta, exitBackground, true);
             drawNotificationBanners(canvas, mouseX, mouseY);
             suggestorWiring.renderSkia(canvas, mouseX, mouseY, canUseCompletions(), frameDt);
@@ -2878,8 +2867,8 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
             // fades in with the panel and rides the same motion — no special handling.
             int probeBefore = canvas.getSaveCount();
             clickRipples.begin(settingsSectionPage.confirmation().isActive() ? settingsSectionPage.confirmation()
-                    : imageCropper.isActive() ? imageCropper : colorPicker.isActive() ? colorPicker
-                    : imagePreview.isActive() ? imagePreview : this);
+                    : imagePreview.isActive() ? imagePreview : imageCropper.isActive() ? imageCropper
+                    : colorPicker.isActive() ? colorPicker : this);
             drawPanel(canvas, glass ? target : null, x, y, worldSnapshot, mouseX, mouseY, delta, exitBackground, false);
             drawNotificationBanners(canvas, mouseX, mouseY);
             suggestorWiring.renderSkia(canvas, mouseX, mouseY, canUseCompletions(), frameDt);
@@ -2996,6 +2985,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         // Natives the screen owns: the emote grid's decoded cells and pack
         // icon, and the cropper's decoded bitmap if it was closed mid-crop.
         emojiPanel.dispose();
+        cancelPublicAvatarPick();
         imageCropper.release();
         super.removed();
     }
@@ -3116,11 +3106,6 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
                     bottomTabBar.renderContents(content, root.tabBar, BottomTabBar.rootIndex(topNav()), textPrimary(), accent());
                 }
             });
-            if (topPage().isRoot()) {
-                imageCropper.render(canvas, layout.rect(), vmx, vmy);
-                colorPicker.render(canvas, layout.rect(), vmx, vmy, accent());
-            }
-
             // The overlays live above the envelope, untransformed: they belong to
             // the screen, not to the entering page.
             if (isWorldChatPage()) {
@@ -3133,7 +3118,10 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
                 quickPhrasePanel.render(canvas, layout, vmx, vmy, frameDt);
             }
             contextMenu.draw(canvas, vmx, vmy);
-            // Last inside the panel: a modal over the page it was opened from.
+            // Screen-owned overlays stay outside the page recordings and advance once per frame.
+            if (publicAvatarPickOwner != null && !ownsPublicAvatarPick(publicAvatarPickOwner)) cancelPublicAvatarPick();
+            colorPicker.render(canvas, layout.rect(), vmx, vmy, accent());
+            imageCropper.render(canvas, layout.rect(), vmx, vmy);
             imagePreview.render(canvas, layout.rect(), vmx, vmy);
 
             com.atom.chat.fun.ChatEffectRenderer.draw(canvas, layout, chatEffects.session(),
@@ -3534,9 +3522,6 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         drawRootPage(canvas, root, rootPage);
         drawScrollbar(canvas, root, vmx, vmy, scrollSync.rootScroll());
         drawBottomTabBar(canvas, root, rootPage);
-        // Modal avatar cropper on top of everything inside the panel.
-        imageCropper.render(canvas, root.rect(), vmx, vmy);
-        colorPicker.render(canvas, root.rect(), vmx, vmy, accent());
     }
 
     /**
@@ -3855,14 +3840,42 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
 
 
 
+    private com.atom.chat.config.ServerConfigPage publicAvatarPickOwner;
+    private java.util.function.Consumer<byte[]> pendingPublicAvatarPick;
+
+    private boolean ownsPublicAvatarPick(com.atom.chat.config.ServerConfigPage owner) {
+        return client != null && client.screen == this && !closing && serverConfigPage == owner
+                && topPage() == AppPage.SERVER_CONFIG;
+    }
+
+    private void cancelPublicAvatarPick() {
+        if (publicAvatarPickOwner == null) return;
+        publicAvatarPickOwner = null;
+        var pending = pendingPublicAvatarPick;
+        pendingPublicAvatarPick = null;
+        if (pending != null) pending.accept(null);
+        else imageCropper.release();
+    }
+
     public void pickPublicChatAvatar(com.atom.chat.config.ServerConfigPage owner,
                                      java.util.function.Consumer<byte[]> receive) {
+        if (!ownsPublicAvatarPick(owner) || publicAvatarPickOwner != null || imageCropper.isActive()) {
+            receive.accept(null);
+            return;
+        }
+        publicAvatarPickOwner = owner;
+        pendingPublicAvatarPick = receive;
         pickServerConfigImage(file -> com.atom.chat.net.Host.execute(() -> {
-            if (serverConfigPage != owner || topPage() != AppPage.SERVER_CONFIG || closing || file == null) {
-                receive.accept(null);
+            if (pendingPublicAvatarPick != receive) return;
+            if (!ownsPublicAvatarPick(owner) || file == null) {
+                cancelPublicAvatarPick();
                 return;
             }
-            imageCropper.openPublicChatAvatar(file, receive);
+            pendingPublicAvatarPick = null;
+            imageCropper.openPublicChatAvatar(file, png -> {
+                publicAvatarPickOwner = null;
+                receive.accept(ownsPublicAvatarPick(owner) ? png : null);
+            });
         }));
     }
 
@@ -4285,41 +4298,6 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
                 }
                 return true;
             }
-            // The profile signature editor borrows the composer field exactly
-            // like the quick-phrase editor: Esc cancels, Enter commits,
-            // everything else falls through to the normal chain (typing, IME
-            // and backspace keep working on the borrowed field).
-            if (profilePage.isSignatureEditing()) {
-                if (keyCode == 256) {
-                    profilePage.endSignatureEdit(false);
-                } else if (keyCode == 257 || keyCode == 335) {
-                    profilePage.endSignatureEdit(true);
-                } else {
-                    return false;
-                }
-                return true;
-            }
-            // The quick-phrase panel borrows the composer field for text input,
-            // so its key handling is narrow: while editing, Esc cancels and
-            // Enter commits; everything else falls through to the normal
-            // composer chain (typing, IME, backspace and history keep working).
-            // Open but not editing, only Esc (close) is intercepted.
-            if (quickPhrasePanel.isOpen()) {
-                if (quickPhrasePanel.isEditing()) {
-                    if (keyCode == 256) {
-                        endPhraseEdit(false);
-                    } else if (keyCode == 257 || keyCode == 335) {
-                        endPhraseEdit(true);
-                    } else {
-                        return false;
-                    }
-                    return true;
-                }
-                if (keyCode == 256) {
-                    closePhrasePanel();
-                }
-                return keyCode == 256;
-            }
             return false;
         }
 
@@ -4329,16 +4307,57 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
             if (imagePreview.isActive()) {
                 return true;
             }
-            // The colour picker's hex input swallows typed characters while active.
+            if (imageCropper.isActive()) return true;
             if (colorPicker.isActive()) {
                 colorPicker.onChar(chr);
                 return true;
             }
-            if (imageCropper.isActive()) {
-                return true;
-            }
             return false;
         }
+    }
+
+    private InputHandler borrowedTextInput() {
+        return new InputHandler() {
+            @Override
+            public boolean onKey(int keyCode, int scanCode, int modifiers) {
+                // The profile signature editor borrows the composer field exactly
+                // like the quick-phrase editor: Esc cancels, Enter commits,
+                // everything else falls through to the normal chain (typing, IME
+                // and backspace keep working on the borrowed field).
+                if (profilePage.isSignatureEditing()) {
+                    if (keyCode == 256) {
+                        profilePage.endSignatureEdit(false);
+                    } else if (keyCode == 257 || keyCode == 335) {
+                        profilePage.endSignatureEdit(true);
+                    } else {
+                        return false;
+                    }
+                    return true;
+                }
+                // The quick-phrase panel borrows the composer field for text input,
+                // so its key handling is narrow: while editing, Esc cancels and
+                // Enter commits; everything else falls through to the normal
+                // composer chain (typing, IME, backspace and history keep working).
+                // Open but not editing, only Esc (close) is intercepted.
+                if (quickPhrasePanel.isOpen()) {
+                    if (quickPhrasePanel.isEditing()) {
+                        if (keyCode == 256) {
+                            endPhraseEdit(false);
+                        } else if (keyCode == 257 || keyCode == 335) {
+                            endPhraseEdit(true);
+                        } else {
+                            return false;
+                        }
+                        return true;
+                    }
+                    if (keyCode == 256) {
+                        closePhrasePanel();
+                    }
+                    return keyCode == 256;
+                }
+                return false;
+            }
+        };
     }
 
     /**
@@ -4445,6 +4464,12 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
     }
 
     /** Root pages (conversation list / profile / settings): no composer, own scroll and rows. */
+    private boolean overPageScrollbarTrack(UiLayout layout, float x, float y, ScrollController scroll) {
+        // Fixed chips are painted above the scroll track in a settings section.
+        if (topPage() == AppPage.SETTINGS_SECTION && y <= stationaryChromeBottom()) return false;
+        return overScrollbarTrack(layout, x, y, scroll);
+    }
+
     private final class RootPageInput implements InputHandler {
         @Override
         public ClickTarget clickTarget(double mouseX, double mouseY, int button) {
@@ -4462,7 +4487,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
                     });
                 }
             }
-            if (button == 0 && overScrollbarTrack(pageLayout, mx, my, pageScroll)) return null;
+            if (button == 0 && overPageScrollbarTrack(pageLayout, mx, my, pageScroll)) return null;
             if (topPage() == AppPage.SETTINGS_SECTION)
                 return button == 0 ? settingsClickTarget(mx, my, pageLayout, pageScroll) : null;
             if (topPage() == AppPage.ADDON_DETAIL && button == 0
@@ -4532,7 +4557,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
             UiLayout pageLayout = listLayout();
             ScrollController pageScroll = listScroll();
             if (contextMenu.hasPlayerCardMenu()) contextMenu.close();
-            if (button == 0 && overScrollbarTrack(pageLayout, mx, my, pageScroll)) {
+            if (button == 0 && overPageScrollbarTrack(pageLayout, mx, my, pageScroll)) {
                 pageScroll.beginDrag(my);
                 return true;
             }

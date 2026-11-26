@@ -6,8 +6,8 @@ import com.atom.chat.ui.UiLayout;
 public final class OutsidePanelInput implements InputHandler {
     public interface Host {
         UiLayout.Rect panelRect();
-        float toVirtualX(double guiX);
-        float toVirtualY(double guiY);
+        float toPanelSpaceX(double guiX);
+        float toPanelSpaceY(double guiY);
         void requestClose();
         /** Vanilla completion popups may extend past the panel boundary. */
         default boolean floatingUiAt(double guiX, double guiY) { return false; }
@@ -29,6 +29,6 @@ public final class OutsidePanelInput implements InputHandler {
 
     private boolean outside(double x, double y, int button) {
         return button == 0 && Double.isFinite(x) && Double.isFinite(y)
-                && !host.panelRect().contains(host.toVirtualX(x), host.toVirtualY(y));
+                && !host.panelRect().contains(host.toPanelSpaceX(x), host.toPanelSpaceY(y));
     }
 }

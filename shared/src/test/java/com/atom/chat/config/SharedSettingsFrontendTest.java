@@ -76,9 +76,8 @@ class SharedSettingsFrontendTest {
             try(var in=getClass().getResourceAsStream("/com/atom/chat/config/sample-emote.jpg")){server.draft().assets(List.of(AdminAsset.imported("mambo.jpg",Objects.requireNonNull(in).readAllBytes())));}
             var primitives=new DrawPrimitives(new DrawPrimitives.Host(){public float frameDt(){return dt;}public boolean emojiPanelOpen(){return false;}public boolean phrasePanelOpen(){return false;}});
             scrolling=new ScrollSyncService(new ScrollSyncService.Host(){public long frameDt(){return dt;}public AppPage topPage(){return nav().page();}public PlayerRef activePrivateTarget(){return null;}public DrawPrimitives primitives(){return primitives;}});
-            var picker=new ColorPickerOverlay(s->{});var cropper=new ImageCropper(null);
             detail=new SettingsDetailPage(new SettingsDetailPage.Host(){
-                public SettingsSectionPage sectionPage(){return settings;}public ColorPickerOverlay colorPicker(){return picker;}public ImageCropper imageCropper(){return cropper;}public ScrollSyncService scrollSync(){return scrolling;}public UiLayout detailLayout(){return layout;}public int accent(){return AtomChatConfig.get().accentColor;}public float toVirtualX(double x){return (float)x;}public float toVirtualY(double y){return (float)y;}
+                public SettingsSectionPage sectionPage(){return settings;}public ScrollSyncService scrollSync(){return scrolling;}public UiLayout detailLayout(){return layout;}public int accent(){return AtomChatConfig.get().accentColor;}public float toVirtualX(double x){return (float)x;}public float toVirtualY(double y){return (float)y;}
             });
             chrome=new HeaderChrome(new HeaderChrome.Host(){
                 public String label(String key){return admin&&key.equals("atomchat.config.title")?server.title():tr(key);}public String activePrivateName(){return null;}public UiLayout.Rect headerRect(){return layout.header;}public UiLayout.Rect pushedHeaderRect(){return layout.header;}public float frameDt(){return dt;}public int textPrimary(){return AtomChatConfig.get().textPrimaryColor;}

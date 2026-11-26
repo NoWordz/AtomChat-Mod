@@ -9,27 +9,32 @@ class OutsidePanelInputTest {
         int closes;
         boolean floating;
         public UiLayout.Rect panelRect() { return new UiLayout.Rect(30, 20, 600, 900); }
-        public float toVirtualX(double x) { return (float) (x * 2); }
-        public float toVirtualY(double y) { return (float) (y * 2); }
+        public float toPanelSpaceX(double x) { return (float) (x * 2); }
+        public float toPanelSpaceY(double y) { return (float) (y * 2); }
         public void requestClose() { closes++; }
         public boolean floatingUiAt(double x, double y) { return floating; }
         public boolean clickFloatingUi(double x, double y, int button) { return floating; }
     }
 
-    @Test void leftClickInWorldClosesAndConsumesBeforeAnOpenModal() {
+    @Test void anOpenModalOwnsPressesEvenOutsideThePanel() {
         Host host = new Host();
         int[] modalClicks = {0};
+        boolean[] active = {true};
         InputGate gate = new InputGate(() -> false)
-                .add(new OutsidePanelInput(host))
                 .add(new InputHandler() {
-                    public boolean onClick(double x, double y, int button) { modalClicks[0]++; return true; }
-                });
-        assertEquals(Boolean.TRUE, gate.click(400, 100, 0));
-        assertEquals(1, host.closes); assertEquals(0, modalClicks[0]);
+                    public ClickTarget clickTarget(double x, double y, int button) {
+                        return active[0] ? ClickTarget.action(this, () -> modalClicks[0]++) : null;
+                    }
+                })
+                .add(new OutsidePanelInput(host));
+        assertTrue(gate.click(400, 100, 0));
+        assertEquals(0, host.closes);
+        assertEquals(1, modalClicks[0]);
+        active[0] = false;
         assertTrue(gate.release(400, 100, 0));
-        assertEquals(1, host.closes); assertEquals(0, modalClicks[0]);
-        assertEquals(Boolean.TRUE, gate.click(100, 100, 0));
-        assertEquals(1, host.closes); assertEquals(1, modalClicks[0]);
+        assertEquals(0, host.closes);
+        assertTrue(gate.click(400, 100, 0));
+        assertEquals(1, host.closes);
     }
 
     @Test void boundsAndCoordinateConversionMatchTheVisiblePanel() {
