@@ -35,6 +35,53 @@ class ChatHudTest {
         });
     }
 
+    @Test void compactCardsPaintAtHudScaleAndPanelOnlyCardsDoNotConsumeRows() {
+        String type = "test:compact_card";
+        var card = com.atom.chat.api.card.ShareCard.custom(type, "Test card").cardId("hud-card").build();
+        int customInk = 0xFFEF6000;
+        var sawState = new java.util.concurrent.atomic.AtomicBoolean();
+        var renderer = new com.atom.chat.api.card.CardRenderRegistry.CompactCardRenderer() {
+            public float[] measure(com.atom.chat.api.card.ShareCard content, com.atom.chat.api.card.CardState state, float width) {
+                return new float[]{44F, 22F};
+            }
+            public void draw(io.github.humbleui.skija.Canvas canvas, com.atom.chat.api.card.ShareCard content,
+                             com.atom.chat.api.card.CardState state, float x, float y, float width, float height) {
+                sawState.set(state != null && state.dimmed());
+                CornerGeometry.drawRoundedRect(canvas, x, y, width, height, 0, customInk);
+            }
+        };
+        com.atom.chat.api.card.CardRenderRegistry.registerCompactRenderer(type, renderer);
+        var hud = new ChatHudRenderer();
+        var config = new AtomChatConfig();
+        var row = player(false, "A special card").withCard(card);
+        var viewport = new ChatHudRenderer.Viewport(8, 150, 280, 125, 1.25F, 1F);
+        try (var surface = Surface.makeRasterN32Premul(400, 250); var pixels = new Bitmap()) {
+            pixels.allocN32Pixels(400, 250);
+            surface.getCanvas().scale(1.25F, 1.25F);
+            hud.paint(surface.getCanvas(), List.of(row), viewport, null, "", "", config, 1, 255, 1, false, 0);
+            assertTrue(surface.readPixels(pixels, 0, 0));
+            assertTrue(leftmostPixel(pixels, customInk) >= 0);
+            assertFalse(sawState.get());
+
+            com.atom.chat.api.card.CardStateStore.update(
+                    com.atom.chat.api.card.CardState.dimmed(card.cardId(), "Closed").build());
+            hud.paint(surface.getCanvas(), List.of(row), viewport, null, "", "", config, 1, 255, 1, false, 1);
+            assertTrue(sawState.get());
+
+            com.atom.chat.api.card.CardRenderRegistry.registerPanelOnly(type);
+            var history = new ChatHudHistory<String, String, ChatMessage>();
+            var rows = new ArrayList<ChatMessage>();
+            var older = player(false, "Ordinary message");
+            history.copyRecent(List.of("card", "older"), 1, key -> key.equals("card") ? row : older,
+                    null, 0, rows, message -> !com.atom.chat.api.card.CardRenderRegistry.panelOnly(message.getCard()));
+            assertEquals(List.of(older), rows);
+            surface.getCanvas().clear(0);
+            hud.paint(surface.getCanvas(), List.of(row), viewport, null, "", "", config, 1, 255, 1, false, 2);
+            assertTrue(surface.readPixels(pixels, 0, 0));
+            assertEquals(-1, leftmostPixel(pixels, customInk));
+        }
+    }
+
     @Test void identicalVanillaRowsKeepTheirOwnCapturedPresentation() {
         var history = new ChatHudHistory<String, Object, Object>();
         String first = new String("a vanilla row");

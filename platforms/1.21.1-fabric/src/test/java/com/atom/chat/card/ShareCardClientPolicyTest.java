@@ -51,6 +51,27 @@ class ShareCardClientPolicyTest {
         assertFalse(BuiltInCardAdapter.isLegacyCredentialAnnouncement(unrelated, unrelated.getString()));
     }
 
+    @Test void realAdaptersPreserveTargetedNativeButtonsAndRejectPlayerChat() {
+        var nativeRequest = Text.translatable("stellarrtp.tpa.request_received_to_player", "[Rank] Alice")
+                .append(Text.literal(" [Accept]").styled(style -> style.withClickEvent(new net.minecraft.text.ClickEvent(
+                        net.minecraft.text.ClickEvent.Action.RUN_COMMAND, "/tpyes Alice"))))
+                .append(Text.literal(" [Deny]").styled(style -> style.withClickEvent(new net.minecraft.text.ClickEvent(
+                        net.minecraft.text.ClickEvent.Action.RUN_COMMAND, "/tpno Alice"))));
+        com.atom.chat.api.card.TeleportRequestSession.reset();
+        try {
+            var card = BuiltInCardAdapter.adapt(nativeRequest, null, true);
+            assertNotNull(card);
+            assertEquals("StellarRTP", card.sourceLabel());
+            assertEquals("Alice", card.general().avatarPlayerName());
+            assertEquals(java.util.List.of("/tpyes Alice", "/tpno Alice"),
+                    card.actions().stream().map(com.atom.chat.api.card.ShareCard.CardAction::value).toList());
+            assertTrue(card.isNativeClickCommand("/tpyes Alice"));
+            assertNull(BuiltInCardAdapter.adapt(nativeRequest, "Alice", false));
+        } finally {
+            com.atom.chat.api.card.TeleportRequestSession.reset();
+        }
+    }
+
     @Test void legacyTeleportRepliesNeverGuessWhichRequestChanged() {
         var first = com.atom.chat.api.card.BuiltInCardParsers
                 .buildTpaRequestCard("LabPlayer", false, "/tpaccept", "/tpdeny", "StellarRTP");

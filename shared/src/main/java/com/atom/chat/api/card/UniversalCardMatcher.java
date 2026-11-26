@@ -138,6 +138,15 @@ public final class UniversalCardMatcher {
         return DANGEROUS_COMMAND_ROOTS.contains(root);
     }
 
+    public static ShareCard matchTeleportRequest(MessageSignals signals, String translatedRequester,
+                                                 boolean toHere, java.util.function.Predicate<String> offersCommand) {
+        return TeleportRequestMatcher.match(signals, translatedRequester, toHere, offersCommand);
+    }
+
+    public static boolean isTargetedTeleportResponse(String command) {
+        return TeleportRequestMatcher.isTargetedCommand(command);
+    }
+
     /**
      * Pattern A: Universal pair-button request / invitation card (TPA, Party, Guild, Trade, Duel, Friend, Claim).
      * Strictly requires {@code signals.system()} to prevent player-to-player command phishing via chat tags.
@@ -145,7 +154,7 @@ public final class UniversalCardMatcher {
     public static ShareCard matchPairRequest(MessageSignals signals) {
         if (signals == null || !signals.system() || !passesBaseGuardrails(signals, 200)) return null;
         List<ClickActionSpec> execs = executableClicks(signals.clicks());
-        if (execs.size() != 2) return null;
+        if (execs.size() != 2 || execs.stream().anyMatch(TeleportRequestMatcher::isTeleportClick)) return null;
 
         ClickActionSpec a = execs.get(0);
         ClickActionSpec b = execs.get(1);
@@ -201,7 +210,7 @@ public final class UniversalCardMatcher {
     public static ShareCard matchSingleAction(MessageSignals signals) {
         if (signals == null || !signals.system() || !passesBaseGuardrails(signals, 150)) return null;
         List<ClickActionSpec> execs = executableClicks(signals.clicks());
-        if (execs.size() != 1) return null;
+        if (execs.size() != 1 || TeleportRequestMatcher.isTeleportClick(execs.get(0))) return null;
 
         ClickActionSpec act = execs.get(0);
         if (isPaginationOrMenu(act) || isPassiveReceiptAction(act, signals) || isDangerousCommand(act.value())) {

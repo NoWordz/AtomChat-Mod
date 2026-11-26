@@ -6,7 +6,7 @@ import com.atom.chat.api.card.BuiltInCardParsers;
 import com.atom.chat.api.card.ComposerLocationCard;
 import com.atom.chat.api.card.CardRenderRegistry;
 import com.atom.chat.api.card.CardState;
-import com.atom.chat.api.card.CardStateStore;
+import com.atom.chat.api.card.SpecialCardPresentation;
 import com.atom.chat.api.card.ShareCard;
 import com.atom.chat.font.FontManager;
 import com.atom.chat.image.ImageLoader;
@@ -54,7 +54,7 @@ public final class BuiltInCardRenderer {
     public static float[] measure(ShareCard card, float maxWidth) {
         float w = Math.max(Math.min(maxWidth, s(MIN_CARD_W)), Math.min(maxWidth, s(MAX_CARD_W)));
         if (card == null) return new float[]{w, Math.max(s(EMPTY_CARD_MIN_HEIGHT), w * STANDARD_RATIO)};
-        CardState state = CardStateStore.get(card.cardId());
+        CardState state = SpecialCardPresentation.state(card);
         if (card.template() == ShareCard.Template.CUSTOM && com.atom.chat.config.AtomChatConfig.get().imageMessagesEnabled) {
             CardRenderRegistry.CustomCardRenderer custom = CardRenderRegistry.rendererOf(card.customTypeId());
             if (custom != null) {
@@ -72,7 +72,7 @@ public final class BuiltInCardRenderer {
     public static void draw(Canvas canvas, ShareCard card, float x, float y, float w, float h,
                             boolean own, List<CardHitRegion> hitsOut) {
         if (canvas == null || card == null) return;
-        CardState state = CardStateStore.get(card.cardId());
+        CardState state = SpecialCardPresentation.state(card);
         if (card.template() == ShareCard.Template.CUSTOM && com.atom.chat.config.AtomChatConfig.get().imageMessagesEnabled) {
             CardRenderRegistry.CustomCardRenderer custom = CardRenderRegistry.rendererOf(card.customTypeId());
             if (custom != null) {
@@ -84,7 +84,7 @@ public final class BuiltInCardRenderer {
                 return;
             }
         }
-        switch (card.template()) {
+        switch (SpecialCardPresentation.kind(card)) {
             case LOCATION -> drawLocation(canvas, card, state, x, y, w, h, hitsOut);
             case RED_PACKET -> drawRedPacket(canvas, card, state, x, y, w, h, hitsOut);
             case ITEM -> drawItem(canvas, card, state, x, y, w, h, hitsOut);

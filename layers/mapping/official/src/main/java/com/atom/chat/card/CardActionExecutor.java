@@ -6,6 +6,7 @@ import com.atom.chat.api.card.CardRegistry;
 import com.atom.chat.api.card.CardState;
 import com.atom.chat.api.card.ShareCard;
 import com.atom.chat.api.card.UniversalCardMatcher;
+import com.atom.chat.api.card.TeleportRequestSession;
 import net.minecraft.client.Minecraft;
 
 import java.util.Locale;
@@ -82,10 +83,14 @@ public final class CardActionExecutor {
         if (raw.isEmpty() || containsControlOrFormatting(raw)) return false;
         String cmd = raw.startsWith("/") ? raw.substring(1) : raw;
         boolean nativeSafe = card.isNativeClickCommand(raw) && !UniversalCardMatcher.isDangerousCommand(cmd);
-        if (!card.serverAuthoritative() && !nativeSafe && !isSafeClientCommand(cmd)) {
+        boolean teleportResponse = card.cardId() != null && card.cardId().startsWith("tpa:")
+                && action.id().startsWith("respond_tpa_");
+        boolean inferredResponse = teleportResponse && UniversalCardMatcher.isTargetedTeleportResponse(cmd);
+        if (!card.serverAuthoritative() && !nativeSafe && !inferredResponse && !isSafeClientCommand(cmd)) {
             if (sink != null) sink.toast("已拦截非授权卡片指令");
             return false;
         }
+        if (teleportResponse && !card.serverAuthoritative() && !TeleportRequestSession.beginAction(card)) return false;
         client.player.connection.sendCommand(cmd);
         return true;
     }
@@ -206,7 +211,7 @@ public final class CardActionExecutor {
         }
     }
 
-    private static boolean hasServerCommand(Minecraft client, String rootName) {
+    static boolean hasServerCommand(Minecraft client, String rootName) {
         try {
             var root = client.player.connection.getCommands().getRoot();
             return root.getChild(rootName) != null;

@@ -8,6 +8,7 @@ import com.atom.chat.api.card.CardState;
 import com.atom.chat.api.card.CardStateStore;
 import com.atom.chat.api.card.ShareCard;
 import com.atom.chat.api.card.UniversalCardMatcher;
+import com.atom.chat.api.card.TeleportRequestSession;
 import com.atom.chat.config.AtomChatConfig;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.MinecraftClient;
@@ -94,6 +95,7 @@ public final class BuiltInCardAdapter {
     }
 
     public static void resetSession() {
+        TeleportRequestSession.reset();
         com.atom.chat.net.CardCompanionClient.resetNativeShares();
         HOVER_CACHE.clear();
         MinimapPreviewSampler.clearCache();
@@ -173,7 +175,7 @@ public final class BuiltInCardAdapter {
         }
 
         if (cfg.autoConvertRequestCards) {
-            ShareCard tpa = adaptTpaRequest(component, raw, nativeCmds);
+            ShareCard tpa = adaptTpaRequest(component, signals);
             if (tpa != null) {
                 return tpa;
             }
@@ -323,44 +325,20 @@ public final class BuiltInCardAdapter {
         return resolved;
     }
 
-    private static ShareCard adaptTpaRequest(Text component, String raw, Set<String> nativeCmds) {
-        List<ClickEvent> clicks = collectClickEvents(component);
-        String acceptCmd = null;
-        String denyCmd = null;
-        for (ClickEvent click : clicks) {
-            if (click.getAction() != ClickEvent.Action.RUN_COMMAND) continue;
-            String val = click.getValue() == null ? "" : click.getValue().trim();
-            String lower = val.toLowerCase(Locale.ROOT);
-            if (lower.startsWith("/tpyes") || lower.startsWith("tpyes")
-                    || lower.startsWith("/tpaccept") || lower.startsWith("tpaccept")) {
-                acceptCmd = val.startsWith("/") ? val : "/" + val;
-            } else if (lower.startsWith("/tpno") || lower.startsWith("tpno")
-                    || lower.startsWith("/tpdeny") || lower.startsWith("tpdeny")) {
-                denyCmd = val.startsWith("/") ? val : "/" + val;
-            }
-        }
-
-        TranslatableTextContent tc = findTranslatable(component,
-                "stellarrtp.tpa.request_received_to_player",
+    private static ShareCard adaptTpaRequest(Text component, UniversalCardMatcher.MessageSignals signals) {
+        if (!signals.system()) return null;
+        var receipt = findTranslatable(component, "stellarrtp.tpa.request_accepted",
+                "stellarrtp.tpa.request_denied", "stellarrtp.failure.request_expired", "stellarrtp.tpa.no_pending");
+        TeleportRequestSession.observe(signals.rawText(), receipt == null ? "" : receipt.getKey(),
+                receipt == null || receipt.getArgs().length == 0 ? "" : argString(receipt.getArgs()[0]));
+        var request = findTranslatable(component, "stellarrtp.tpa.request_received_to_player",
                 "stellarrtp.tpa.request_received_here");
-        if (tc != null) {
-            boolean toHere = "stellarrtp.tpa.request_received_here".equals(tc.getKey());
-            String requester = tc.getArgs().length > 0 ? argString(tc.getArgs()[0]) : "玩家";
-            ShareCard card = BuiltInCardParsers.buildTpaRequestCard(
-                    requester, toHere, acceptCmd, denyCmd, "繁星传送");
-            return attachVerifiedNativeCommands(card, nativeCmds);
-        }
-
-        if (acceptCmd != null && denyCmd != null) {
-            boolean toHere = raw.contains("过去") || raw.contains("他那里")
-                    || raw.toLowerCase(Locale.ROOT).contains("teleport you to")
-                    || raw.toLowerCase(Locale.ROOT).contains("tpahere");
-            String requester = extractLeadingWord(raw);
-            ShareCard card = BuiltInCardParsers.buildTpaRequestCard(
-                    requester, toHere, acceptCmd, denyCmd, "传送");
-            return attachVerifiedNativeCommands(card, nativeCmds);
-        }
-        return null;
+        String requester = request == null || request.getArgs().length == 0 ? "" : argString(request.getArgs()[0]);
+        var card = UniversalCardMatcher.matchTeleportRequest(signals, requester,
+                request != null && "stellarrtp.tpa.request_received_here".equals(request.getKey()),
+                root -> CardActionExecutor.hasServerCommand(MinecraftClient.getInstance(), root));
+        if (card != null) TeleportRequestSession.receive(card);
+        return card;
     }
 
     private static void observeRedPacketFollowUp(Text component, String raw, List<ClickEvent> rawClicks) {
@@ -842,15 +820,6 @@ public final class BuiltInCardAdapter {
         return arg == null ? "" : String.valueOf(arg);
     }
 
-    private static String extractLeadingWord(String raw) {
-        String s = raw.replaceAll("§.", "").trim();
-        if (s.startsWith("[")) {
-            int end = s.indexOf(']');
-            if (end >= 0 && end + 1 < s.length()) s = s.substring(end + 1).trim();
-        }
-        int sp = s.indexOf(' ');
-        return sp > 0 ? s.substring(0, sp) : s;
-    }
 
     private static String detectBracketMapSource() {
         if (isModLoaded("journeymap")) return "JourneyMap";

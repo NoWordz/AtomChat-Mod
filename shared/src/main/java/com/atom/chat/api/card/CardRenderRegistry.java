@@ -28,6 +28,47 @@ public final class CardRenderRegistry {
                   float x, float y, float w, float h, HitRegistrar hits);
     }
 
+    /** Read-only presentation on the gameplay HUD, in the host's scaled coordinates. */
+    public interface CompactCardRenderer {
+        float[] measure(ShareCard card, CardState state, float maxWidth);
+        void draw(Canvas canvas, ShareCard card, CardState state, float x, float y, float width, float height);
+    }
+
+    private record HudPresentation(CompactCardRenderer renderer, boolean panelOnly) {}
+    private static final Map<String, HudPresentation> HUD = new ConcurrentHashMap<>();
+    private static final java.util.concurrent.atomic.AtomicLong HUD_REVISION = new java.util.concurrent.atomic.AtomicLong();
+
+    public static void registerCompactRenderer(String customTypeId, CompactCardRenderer renderer) {
+        if (customTypeId == null || customTypeId.isBlank() || renderer == null) return;
+        HUD.put(customTypeId, new HudPresentation(renderer, false));
+        HUD_REVISION.incrementAndGet();
+    }
+
+    public static void registerPanelOnly(String customTypeId) {
+        if (customTypeId == null || customTypeId.isBlank()) return;
+        HUD.put(customTypeId, new HudPresentation(null, true));
+        HUD_REVISION.incrementAndGet();
+    }
+
+    public static boolean panelOnly(ShareCard card) {
+        var entry = hud(card);
+        return entry != null && entry.panelOnly();
+    }
+
+    public static CompactCardRenderer compactRendererOf(ShareCard card) {
+        var entry = hud(card);
+        return entry == null ? null : entry.renderer();
+    }
+
+    public static long hudRevision() {
+        return HUD_REVISION.get();
+    }
+
+    private static HudPresentation hud(ShareCard card) {
+        return card != null && card.template() == ShareCard.Template.CUSTOM && card.customTypeId() != null
+                ? HUD.get(card.customTypeId()) : null;
+    }
+
     private static final Map<String, CustomCardRenderer> RENDERERS = new ConcurrentHashMap<>();
 
     private CardRenderRegistry() {

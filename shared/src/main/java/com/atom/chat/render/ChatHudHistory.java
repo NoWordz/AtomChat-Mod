@@ -7,6 +7,7 @@ import java.util.Map;
 import java.util.function.BiPredicate;
 import java.util.function.BinaryOperator;
 import java.util.function.Function;
+import java.util.function.Predicate;
 import java.util.function.ToIntFunction;
 
 /** Associates capture with the actual vanilla entry, including a rewritten re-post. */
@@ -49,26 +50,37 @@ public final class ChatHudHistory<K, C, V> {
 
     public void copyRecent(List<K> liveEntries, int limit, Function<K, V> vanillaFallback,
                            ToIntFunction<K> receivedTick, int currentTick, List<V> output) {
+        copyRecent(liveEntries, limit, vanillaFallback, receivedTick, currentTick, output, value -> true);
+    }
+
+    void copyRecent(List<K> liveEntries, int limit, Function<K, V> vanillaFallback,
+                    ToIntFunction<K> receivedTick, int currentTick, List<V> output, Predicate<V> visible) {
         output.clear();
         for (int i = 0; i < liveEntries.size() && output.size() < limit; i++) {
             K entry = liveEntries.get(i);
             // Even a vanilla deletion marker keeps the original tick and its place in the list.
             if (receivedTick != null && currentTick - receivedTick.applyAsInt(entry) >= DISPLAY_TICKS) break;
             V presentation = presentation(entry, vanillaFallback);
-            if (presentation != null) output.add(presentation);
+            if (presentation != null && visible.test(presentation)) output.add(presentation);
         }
     }
 
     /** Fold consecutive live presentations without mutating vanilla entries or their expiry. */
     public void copyRecentMerged(List<K> liveEntries, int limit, Function<K, V> vanillaFallback,
                                  ToIntFunction<K> receivedTick, int currentTick, List<V> output, Merger<V> merger) {
+        copyRecentMerged(liveEntries, limit, vanillaFallback, receivedTick, currentTick, output, merger, value -> true);
+    }
+
+    void copyRecentMerged(List<K> liveEntries, int limit, Function<K, V> vanillaFallback,
+                          ToIntFunction<K> receivedTick, int currentTick, List<V> output, Merger<V> merger,
+                          Predicate<V> visible) {
         output.clear();
         if (limit <= 0) return;
         V previous = null;
         for (K entry : liveEntries) {
             if (receivedTick != null && currentTick - receivedTick.applyAsInt(entry) >= DISPLAY_TICKS) break;
             V current = presentation(entry, vanillaFallback);
-            if (current == null) continue;
+            if (current == null || !visible.test(current)) continue;
             if (previous != null && merger.matches().test(current, previous)) {
                 int last = output.size() - 1;
                 output.set(last, merge(current, output.get(last), merger.combine()));

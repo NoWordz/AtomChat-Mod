@@ -1,6 +1,8 @@
 package com.atom.chat.render;
 
 import com.atom.chat.AtomChat;
+import com.atom.chat.api.card.CardRenderRegistry;
+import com.atom.chat.api.card.CardStateStore;
 import com.atom.chat.chat.ChatMessage;
 import com.atom.chat.chat.MessageMerge;
 import com.atom.chat.chat.ImageCode;
@@ -99,7 +101,7 @@ public final class ChatHudRenderer {
     private record Measured(ChatMessage message, List<RichLine> name, List<RichLine> body, Font bodyFont,
                             float lineHeight, float width, float bubbleHeight, float nameWidth,
                             boolean hasItems, boolean animatedText, boolean animatedName, ImageCode.Meta image, boolean imagePlaceholder, List<RichLine> quote, float quoteWidth,
-                            float quoteHeight, String repeatLabel, float repeatLane, Object[] inkKeys) {
+                            float quoteHeight, String repeatLabel, float repeatLane, CompactCardPaint.Content card, Object[] inkKeys) {
         Object inkKey(ChatBubble.Group group) {
             int index = group.ordinal();
             if (inkKeys[index] == null) inkKeys[index] = new Object();
@@ -163,6 +165,7 @@ public final class ChatHudRenderer {
     private Font layoutBodyFont, layoutNameFont, layoutCapsuleFont;
     private long messageRevision = -1L;
     private long fontEpoch = -1L;
+    private long cardStateRevision = -1L, compactRendererRevision = -1L;
     private float layoutWidth;
     private float layoutAvatarInset;
     private float inlineItemGap;
@@ -233,14 +236,18 @@ public final class ChatHudRenderer {
         // takes a fresh selection, including messages received while the panel owned input.
         if (!panel || !hasSelection) {
             if (MessageMerge.antiSpamEnabled()) {
-                history.copyRecentMerged(entries, limit, fallback, receivedTick, tick, recent, REPEATS);
+                history.copyRecentMerged(entries, limit, fallback, receivedTick, tick, recent, REPEATS, ChatHudRenderer::visibleCardOnHud);
             } else {
-                history.copyRecent(entries, limit, fallback, receivedTick, tick, recent);
+                history.copyRecent(entries, limit, fallback, receivedTick, tick, recent, ChatHudRenderer::visibleCardOnHud);
             }
             hasSelection = true;
         }
         panelFrame = panel;
         if (panel) hasFrame = false;
+    }
+
+    private static boolean visibleCardOnHud(ChatMessage message) {
+        return !AtomChatConfig.get().shareCardsEnabled || !CardRenderRegistry.panelOnly(message.getCard());
     }
 
     /** The bridge targets Minecraft's main framebuffer. Leave cached or clipped passes to vanilla. */
@@ -346,13 +353,18 @@ public final class ChatHudRenderer {
         Font capsuleFont = FontManager.font(UiTokens.FONT_QUOTE);
         float avatarInset = MessageGeometry.avatarInset();
         long currentFontEpoch = NativeFontRenderer.epoch();
-        boolean invalidateLayout = fontEpoch != currentFontEpoch || layoutWidth != viewport.width() || layoutBodyFont != bodyFont
+        long currentCardState = CardStateStore.revision();
+        long currentCompactRenderer = CardRenderRegistry.hudRevision();
+        boolean invalidateLayout = currentCardState != cardStateRevision || currentCompactRenderer != compactRendererRevision
+                || lastShareCardsEnabled != config.shareCardsEnabled || fontEpoch != currentFontEpoch || layoutWidth != viewport.width() || layoutBodyFont != bodyFont
                 || layoutNameFont != nameFont || layoutCapsuleFont != capsuleFont || inlineItemGap != UiTokens.INLINE_ITEM_GAP
                 || layoutAvatarInset != avatarInset || !Objects.equals(layoutOwnName, ownName)
                 || !Objects.equals(layoutUnknownName, unknownName) || !Objects.equals(layoutImageLabel, imageLabel);
         if (invalidateLayout) {
             layouts.clear();
             fontEpoch = currentFontEpoch;
+            cardStateRevision = currentCardState;
+            compactRendererRevision = currentCompactRenderer;
             clearRasterInk();
             layoutBodyFont = bodyFont;
             layoutNameFont = nameFont;
@@ -386,23 +398,25 @@ public final class ChatHudRenderer {
         float minimumPile = 0F;
         for (int i = 0; i < messages.size() && i < limit; i++) {
             ChatMessage message = messages.get(i);
+            if (config.shareCardsEnabled && CardRenderRegistry.panelOnly(message.getCard())) continue;
             boolean system = message.isSystem();
             float maxBubbleWidth = viewport.width() - (system ? 0F : avatarLane);
             if (maxBubbleWidth <= 0F) break;
             Measured candidate = layout(message, system ? capsuleFont : bodyFont, nameFont,
-                    ownName, unknownName, imageLabel, system ? UiTokens.SYSTEM_BUBBLE_PAD_Y : UiTokens.BUBBLE_PAD_Y, maxBubbleWidth);
+                    ownName, unknownName, imageLabel, system ? UiTokens.SYSTEM_BUBBLE_PAD_Y : UiTokens.BUBBLE_PAD_Y, maxBubbleWidth, config.shareCardsEnabled);
             float next = minimumPile + minimumHeight(candidate, false, minPlayerHeight);
             boolean grouped = false;
-            if (i > 0) {
-                Measured newer = measuredRows.get(i - 1);
+            if (!measuredRows.isEmpty()) {
+                Measured newer = measuredRows.get(measuredRows.size() - 1);
                 grouped = config.compactMessagesEnabled
                         && MessageGrouping.continues(message, newer.message(), config.timestampIntervalMinutes);
                 next += rowGap(grouped) + minimumHeight(newer, grouped, minPlayerHeight)
                         - minimumHeight(newer, false, minPlayerHeight);
             }
             if (next > bottom - top) break;
-            if (i > 0) continuations[i - 1] = grouped;
-            continuations[i] = false; // The oldest visible row owns the sender band.
+            int rowIndex = measuredRows.size();
+            if (rowIndex > 0) continuations[rowIndex - 1] = grouped;
+            continuations[rowIndex] = false; // The oldest visible row owns the sender band.
             measuredRows.add(candidate);
             minimumPile = next;
         }
@@ -480,16 +494,17 @@ public final class ChatHudRenderer {
     }
 
     private Measured layout(ChatMessage message, Font font, Font nameFont, String ownName, String unknownName,
-                            String imageLabel, float padY, float maxBubbleWidth) {
+                            String imageLabel, float padY, float maxBubbleWidth, boolean shareCardsEnabled) {
         Measured cached = layouts.get(message);
         if (cached != null) return cached;
         RichText body = MessagePaint.body(message);
         String content = message.getContentRich().getString();
         ImageCode.Meta image = null;
         boolean imagePlaceholder = !message.isSystem() && ImageCode.contains(content);
-        if (message.hasCard() && AtomChatConfig.get().shareCardsEnabled) {
-            var card = message.getCard();
-            body = RichText.literal((card.hudTag() + " " + card.hudSummary()).trim());
+        CompactCardPaint.Content card = null;
+        if (message.hasCard() && shareCardsEnabled) {
+            card = CompactCardPaint.of(message.getCard());
+            body = RichText.literal(CompactCardPaint.label(card));
             imagePlaceholder = false;
         } else if (message.isSystem()) {
             var ranges = ImageCode.ranges(content);
@@ -511,14 +526,22 @@ public final class ChatHudRenderer {
         float repeatLane = repeatLabel == null ? 0F
                 : UiTokens.INLINE_ITEM_GAP + SkiaFontRenderer.getStringWidth(nameFont, repeatLabel);
         maxBubbleWidth = Math.max(1F, maxBubbleWidth - repeatLane);
-        float textWidth = Math.max(1F, maxBubbleWidth - 2F * UiTokens.BUBBLE_PAD);
+        float textInset = card == null ? UiTokens.BUBBLE_PAD : CompactCardPaint.textInset(maxBubbleWidth);
+        float textWidth = Math.max(1F, maxBubbleWidth - textInset - UiTokens.BUBBLE_PAD);
         List<RichLine> lines = MessagePaint.hudLine(body, font, textWidth);
         List<RichLine> caption = MessagePaint.hudLine(name, nameFont, textWidth);
         float bodyWidth = lines.isEmpty() ? 0F : RichTextRenderer.width(font, lines.get(0));
         float nameWidth = caption.isEmpty() ? 0F : RichTextRenderer.width(nameFont, caption.get(0));
-        float bubbleWidth = Math.min(maxBubbleWidth, Math.max(UiTokens.BUBBLE_MIN_W, bodyWidth + 2F * UiTokens.BUBBLE_PAD));
+        float bubbleWidth = Math.min(maxBubbleWidth, Math.max(UiTokens.BUBBLE_MIN_W, bodyWidth + textInset + UiTokens.BUBBLE_PAD));
         float lineHeight = SkiaFontRenderer.getHeight(font);
         float bubbleHeight = lineHeight + padY;
+        if (card != null) {
+            var size = CompactCardPaint.measure(card, maxBubbleWidth, bubbleWidth,
+                    Math.max(bubbleHeight, UiTokens.COMPOSER_ICON_SIZE + UiTokens.BUBBLE_PAD * 2));
+            bubbleWidth = size.width();
+            bubbleHeight = size.height();
+            if (!size.custom() && card.renderer() != null) card = card.generic();
+        }
         float quoteHeight = quoteHeight(message);
         boolean hasItems = !lines.isEmpty() && lines.get(0).parts().stream().anyMatch(part -> part.isItem());
         hasItems |= !caption.isEmpty() && caption.get(0).parts().stream().anyMatch(part -> part.isItem());
@@ -542,7 +565,7 @@ public final class ChatHudRenderer {
                 RichTextRenderer.hasObfuscated(lines) || RichTextRenderer.hasObfuscated(caption) || RichTextRenderer.hasObfuscated(quote)
                         || NativeFontRenderer.hasNative(lines) || NativeFontRenderer.hasNative(caption) || NativeFontRenderer.hasNative(quote),
                 RichTextRenderer.hasObfuscated(caption) || NativeFontRenderer.hasNative(caption), image, imagePlaceholder,
-                quote, quoteWidth, quoteHeight, repeatLabel, repeatLane, new Object[ChatBubble.Group.values().length]);
+                quote, quoteWidth, quoteHeight, repeatLabel, repeatLane, card, new Object[ChatBubble.Group.values().length]);
         if (layouts.size() >= MAX_LAYOUTS) layouts.clear();
         layouts.put(message, result);
         return result;
@@ -678,7 +701,7 @@ public final class ChatHudRenderer {
             MessageImage attachment = placed.thumbnailHeight() > 0F
                     ? visibleImage.apply(measured.image().url(), !row.departing()) : null;
             Image image = attachment == null ? null : attachment.image();
-            boolean cacheable = grid != null && row.settled(now) && !measured.hasItems() && !measured.animatedText();
+            boolean cacheable = grid != null && (measured.card() == null || measured.card().renderer() == null) && row.settled(now) && !measured.hasItems() && !measured.animatedText();
             float repeatX = bubbleX + measured.width();
             float repeatY = y + placed.nameBand() + measured.quoteHeight() + measured.bubbleHeight() / 2F;
             if (image != null) {
@@ -756,7 +779,24 @@ public final class ChatHudRenderer {
     private void drawInk(Canvas canvas, Placed placed, float x, float y, float liveDensity) {
         Measured measured = placed.measured();
         float height = measured.bubbleHeight();
-        if (measured.message().isSystem()) {
+        if (measured.card() != null) {
+            drawCaptionAndQuote(canvas, placed, x, y, liveDensity);
+            float cardY = y + placed.nameBand() + measured.quoteHeight();
+            float width = measured.width();
+            if (!CompactCardPaint.drawCustom(canvas, measured.card(), x, cardY, width, height)) {
+                CompactCardPaint.drawBackground(canvas, measured.card(), x, cardY, width, height,
+                        lastInk.capsuleRadius(), lastInk.capsule(), lastInk.capsuleText(), lastInk.shadow());
+                canvas.save();
+                try {
+                    canvas.clipRect(Rect.makeXYWH(x, cardY, width, height));
+                    RichTextRenderer.drawLines(canvas, measured.bodyFont(), measured.body(),
+                            x + CompactCardPaint.textInset(width), cardY + height / 2F, measured.lineHeight(),
+                            lastInk.capsuleText(), null, false, TextSurface.CAPSULE.shadowed(), capsuleTextShadow());
+                } finally {
+                    canvas.restore();
+                }
+            }
+        } else if (measured.message().isSystem()) {
             if (lastInk.shadow()) HudShadow.draw(canvas, RRect.makeXYWH(x, y, measured.width(), height, lastInk.capsuleRadius()));
             CornerGeometry.drawRoundedRect(canvas, x, y, measured.width(), height, lastInk.capsuleRadius(), lastInk.capsule());
             RichTextRenderer.drawLines(canvas, measured.bodyFont(), measured.body(), x + UiTokens.BUBBLE_PAD,
