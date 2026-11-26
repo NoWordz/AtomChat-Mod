@@ -12,13 +12,13 @@
 
 | 要改的地方 | 入口 |
 | --- | --- |
-| 输入栏按钮 | `ComposerUi.buttons()`，内置位置 ID 为 `TOOLS_BUTTON`、`EMOJI_BUTTON`、`QUICK_PHRASES_BUTTON`、`SEND_BUTTON`。自定义按钮选择方形或胶囊外观并提供图标。回调通过 `ComposerUi.Context` 读取或编辑草稿、请求宿主发送和打开已注册页面。 |
+| 输入栏按钮 | `ComposerUi.buttons()`，内置位置 ID 为 `TOOLS_BUTTON`、`EMOJI_BUTTON`、`QUICK_PHRASES_BUTTON`、`SEND_BUTTON`。自定义按钮选择方形或胶囊外观并提供图标。回调通过 `ComposerUi.Context` 读取或编辑草稿、请求宿主发送和打开已注册页面。草稿权限随调用结束或离开原会话失效。 |
 | 工具菜单 | `ComposerUi.menu()`。内置菜单项 ID 在 `ComposerUi` 中公开。用翻译键提供菜单文案。选择玩家后打开的子列表由宿主随在线玩家刷新。 |
 | 底部导航和自定义页面 | 先 `NavigationUi.registerPage(id, page)`，再向 `NavigationUi.tabs()` 添加页签，或由已有入口打开该页面。页面拿到裁剪后的列表区、滚动位置和虚拟坐标。页面实例在所属 AtomChat 屏幕释放时调用 `close()`。内置根页的 ID 为 `NavigationUi.CHAT`、`PROFILE`、`SETTINGS`。 |
 | 设置首页 | `SettingsUi.home()`。用 `SettingsUi.sectionRoute(section)` 定位内置入口，自定义入口使用已注册的页面 ID。 |
-| 设置详情的页签和折叠组 | `SettingsUi.tabs(section)` 与 `SettingsUi.groups(section, tabId)`。添加的折叠组可绑定附属自己的开关和保存逻辑。无页签的页面通过空的 `tabId` 指定。内置页签和组 ID 用 `builtInTabId`、`builtInGroupId` 取得。 |
+| 设置详情的页签和折叠组 | `SettingsUi.tabs(section)` 与 `SettingsUi.groups(section, tabId)`。添加的折叠组可绑定附属自己的开关和保存逻辑。`SettingsUi.rows(section, tabId, groupId)` 可移动、删除或替换组内的单行，也可加入附属开关或说明。无页签的页面通过空的 `tabId` 指定。内置页签和组 ID 用 `builtInTabId`、`builtInGroupId` 取得。 |
 | 全局布局和图形 | `ComposerUi.styles()` 替换 `ComposerUi.SPACING` 可改工具键间距和左右留白。 `SettingsUi.homeStyles()` 替换 `SettingsUi.HOME_SPACING` 可改首页格距和边距。按钮、菜单、底部导航和设置入口接受附属提供的 Skija 图标。附属持有图标并在注册有效期间保持原生资源可用。 |
-| 本地物品卡操作 | `ItemCardActions.register` 将客户端动作加入物品卡菜单，配合 `ItemCardItems.copyStack` 取得原生物品及其标签或组件。点击前会重新检查动作的可用状态。 |
+| 本地物品卡操作 | `ItemCardActions.register` 将客户端动作加入物品卡菜单，配合 `ItemCardItems.copyStack` 取得原生物品及其标签或组件。点击前会重新检查动作的可用状态。常规卡片网络动作沿用原协议，本地回调仅由客户端构造。 |
 
 样例附属走真实的 AtomChat 输入、设置和导航入口，并使用已安装的 JEI 查看配方。 [三端示例与构建命令](../examples/jei/README.md)
 

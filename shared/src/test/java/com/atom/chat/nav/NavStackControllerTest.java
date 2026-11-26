@@ -238,6 +238,16 @@ class NavStackControllerTest {
         return controller;
     }
 
+    @Test
+    void restoringADetailInitializesTheIndicatorFromTheUnderlyingRoot() {
+        Recorder host = new Recorder();
+        AtomChatState.save(List.of(NavPage.of(AppPage.PROFILE),
+                NavPage.settingsSection(SettingsSection.CHAT)));
+        NavStackController controller = new NavStackController(host, true);
+        assertEquals(AppPage.SETTINGS_SECTION, controller.topPage());
+        assertTrue(host.calls.contains("selectTabNow[PROFILE]@?"));
+    }
+
     // ------------------------------------------------------------- cascade
 
     /**

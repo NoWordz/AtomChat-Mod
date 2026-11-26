@@ -953,7 +953,11 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         }
         public String composerText() { return composer.text(); }
         public void insertExtensionText(String text) { composer.insert(text); }
-        public void submitExtensionDraft() { sendMessage(composer.text()); }
+        public void submitExtensionDraft() {
+            if (!canUseExtensionButtons()) return;
+            if (quickPhrasePanel.isEditing()) endPhraseEdit(true);
+            else sendMessage(composer.text());
+        }
         public void openExtensionPage(String pageId) {
             if (NavigationUi.page(pageId) != null) pushNav(NavPage.addonDetail(pageId));
         }

@@ -29,12 +29,21 @@ public final class CardWireCodec {
     }
 
     public static ShareCard decodeCard(byte[] bytes) {
+        return decodeCard(bytes, true);
+    }
+
+    /** Decodes a server payload, ignoring actions that name locally registered callbacks. */
+    public static ShareCard decodeRemoteCard(byte[] bytes) {
+        return decodeCard(bytes, false);
+    }
+
+    private static ShareCard decodeCard(byte[] bytes, boolean allowLocalCallback) {
         if (bytes == null || bytes.length == 0 || bytes.length > MAX_CARD_BYTES) {
             return null;
         }
         try {
             CardDto dto = GSON.fromJson(new String(bytes, StandardCharsets.UTF_8), CardDto.class);
-            return dto == null ? null : dto.toCard().hidePrivateRedPacketPassword();
+            return dto == null ? null : dto.toCard(allowLocalCallback).hidePrivateRedPacketPassword();
         } catch (RuntimeException ignored) {
             return null;
         }
@@ -46,12 +55,21 @@ public final class CardWireCodec {
     }
 
     public static CardState decodeState(byte[] bytes) {
+        return decodeState(bytes, true);
+    }
+
+    /** Decodes a server payload, ignoring actions that name locally registered callbacks. */
+    public static CardState decodeRemoteState(byte[] bytes) {
+        return decodeState(bytes, false);
+    }
+
+    private static CardState decodeState(byte[] bytes, boolean allowLocalCallback) {
         if (bytes == null || bytes.length == 0 || bytes.length > MAX_STATE_BYTES) {
             return null;
         }
         try {
             StateDto dto = GSON.fromJson(new String(bytes, StandardCharsets.UTF_8), StateDto.class);
-            return dto == null ? null : dto.toState();
+            return dto == null ? null : dto.toState(allowLocalCallback);
         } catch (RuntimeException ignored) {
             return null;
         }
@@ -75,13 +93,14 @@ public final class CardWireCodec {
             return d;
         }
 
-        ShareCard.CardAction toAction() {
+        ShareCard.CardAction toAction(boolean allowLocalCallback) {
             ShareCard.ActionKind k;
             try {
                 k = kind == null ? ShareCard.ActionKind.COPY_TEXT : ShareCard.ActionKind.valueOf(kind);
             } catch (IllegalArgumentException e) {
                 k = ShareCard.ActionKind.COPY_TEXT;
             }
+            if (!allowLocalCallback && k == ShareCard.ActionKind.CLIENT_CALLBACK) return null;
             return new ShareCard.CardAction(id, label, k, value, primary);
         }
     }
@@ -218,7 +237,7 @@ public final class CardWireCodec {
             return d;
         }
 
-        ShareCard toCard() {
+        ShareCard toCard(boolean allowLocalCallback) {
             ShareCard.Template tpl;
             try {
                 tpl = template == null ? ShareCard.Template.GENERAL : ShareCard.Template.valueOf(template);
@@ -264,11 +283,11 @@ public final class CardWireCodec {
                 customData.forEach(b::putData);
             }
             if (bodyAction != null) {
-                b.bodyAction(bodyAction.toAction());
+                b.bodyAction(bodyAction.toAction(allowLocalCallback));
             }
             if (actions != null) {
                 for (ActionDto a : actions) {
-                    if (a != null) b.addAction(a.toAction());
+                    if (a != null) b.addAction(a.toAction(allowLocalCallback));
                 }
             }
             return b.build();
@@ -294,14 +313,14 @@ public final class CardWireCodec {
             return d;
         }
 
-        CardState toState() {
+        CardState toState(boolean allowLocalCallback) {
             if (cardId == null || cardId.isBlank()) return null;
             CardState.Builder b = new CardState.Builder(cardId, dimmed)
                     .statusText(statusText)
                     .badgeText(badgeText)
                     .disableActions(disableActions);
             if (overrideBodyAction != null) {
-                b.overrideBodyAction(overrideBodyAction.toAction());
+                b.overrideBodyAction(overrideBodyAction.toAction(allowLocalCallback));
             }
             return b.build();
         }

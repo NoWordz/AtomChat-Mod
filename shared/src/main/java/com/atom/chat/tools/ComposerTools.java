@@ -16,6 +16,8 @@ import com.atom.chat.ui.input.ClickTarget;
 import com.atom.chat.ui.input.InputHandler;
 import io.github.humbleui.skija.Canvas;
 import java.util.List;
+import java.util.Objects;
+import java.util.function.Consumer;
 
 /** Routes composer modes and the anchored tools popup; never replaces a conversation page. */
 public final class ComposerTools implements InputHandler {
@@ -153,8 +155,7 @@ public final class ComposerTools implements InputHandler {
 
     private void activateExtensionButton(ComposerButtonLayout.Slot slot) {
         try {
-            host.dismissOtherPopups();
-            slot.button().action().accept(extensionContext);
+            invokeExtension(slot.button().action());
         } catch (RuntimeException exception) {
             LOGGER.log(System.Logger.Level.WARNING, "Composer button failed: " + slot.id(), exception);
         }
@@ -185,34 +186,56 @@ public final class ComposerTools implements InputHandler {
         }
     }
 
-    private final ComposerUi.Context extensionContext = new ComposerUi.Context() {
-        public String draft() { return search.draft(); }
+    private void invokeExtension(Consumer<ComposerUi.Context> action) {
+        var context = new ActionContext();
+        try {
+            action.accept(context);
+        } finally {
+            context.active = false;
+        }
+    }
+
+    private final class ActionContext implements ComposerUi.Context {
+        private final Thread thread = Thread.currentThread();
+        private final Object conversation = host.searchScope();
+        private boolean active = true;
+
+        private boolean current() {
+            return Thread.currentThread() == thread && active && host.chatVisible()
+                    && Objects.equals(conversation, host.searchScope());
+        }
+
+        public String draft() { return current() ? search.draft() : ""; }
 
         public void replaceDraft(String text) {
+            if (!current() || !host.canUseExtensionButtons()) return;
             search.close();
             host.setComposerText(text);
         }
 
         public void insertText(String text) {
+            if (!current() || !host.canUseExtensionButtons()) return;
             search.close();
             host.insertExtensionText(text);
         }
 
         public void submitDraft() {
+            if (!current() || !host.canUseExtensionButtons()) return;
             search.close();
             host.submitExtensionDraft();
         }
 
         public void openPage(String pageId) {
+            if (!current()) return;
             close();
             host.openExtensionPage(pageId);
         }
-    };
+    }
 
     private void activateMenuEntry(UiContributions.Entry<ComposerUi.MenuItem> entry) {
         try {
             if (!entry.value().keepOpen()) menu.close();
-            entry.value().action().accept(extensionContext);
+            invokeExtension(entry.value().action());
         } catch (RuntimeException exception) {
             LOGGER.log(System.Logger.Level.WARNING, "Composer menu entry failed: " + entry.id(), exception);
         }

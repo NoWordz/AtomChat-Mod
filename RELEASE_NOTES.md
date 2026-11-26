@@ -18,7 +18,7 @@
 
 **性能**
 
-- 均衡档降低高强度背景模糊的内部采样。
+- 均衡档降低高强度背景模糊和大面板阴影的内部采样。
 
 ----
 
@@ -38,7 +38,7 @@
 
 **Performance**
 
-- Reduced internal sampling for strong background blur in Balanced quality.
+- Reduced internal sampling for strong background blur and large panel shadows in Balanced quality.
 
 ## v0.9.7
 

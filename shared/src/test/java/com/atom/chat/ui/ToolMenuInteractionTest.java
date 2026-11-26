@@ -38,6 +38,43 @@ class ToolMenuInteractionTest {
         }
     }
 
+    @Test void composerActionCannotSubmitAfterTheConversationOrInvocationEnds() {
+        var entries = new com.atom.chat.api.ui.UiContributions<com.atom.chat.api.ui.ComposerUi.MenuItem>();
+        var submitted = new java.util.concurrent.atomic.AtomicInteger();
+        var leaked = new java.util.concurrent.atomic.AtomicReference<com.atom.chat.api.ui.ComposerUi.Context>();
+        entries.add("example:scope", new com.atom.chat.api.ui.ComposerUi.MenuItem(
+                "example.scope", TablerIcons.PHOTO, context -> {
+                    leaked.set(context);
+                    context.submitDraft();
+                    context.openPage("example:page");
+                    context.submitDraft();
+                    context.replaceDraft("must not change the departed route");
+                }), com.atom.chat.api.ui.UiContributions.Position.first());
+        var host = new UiFeatureRenderTest.Host() {
+            private String route = "private:alice";
+            @Override public Object searchScope() { return route; }
+            @Override public void openExtensionPage(String id) { route = id; }
+            @Override public void submitExtensionDraft() { submitted.incrementAndGet(); }
+            @Override public String tr(String key) {
+                return key.equals("example.scope") ? "Open example" : super.tr(key);
+            }
+            @Override public com.atom.chat.api.ui.UiContributions<com.atom.chat.api.ui.ComposerUi.MenuItem> menuExtensions() {
+                return entries;
+            }
+        };
+        var tools = new ComposerTools(host);
+        tools.toggle();
+        try (var surface = Surface.makeRasterN32Premul(460, 820)) {
+            tools.render(surface.getCanvas(), -1, -1, 200);
+            var row = tools.menuActionBounds("example:scope");
+            assertTrue(tapTool(tools, row.x() + row.w()/2, row.y() + row.h()/2, 0));
+        }
+        assertEquals(1, submitted.get());
+        assertEquals("draft", host.text);
+        leaked.get().submitDraft();
+        assertEquals(1, submitted.get());
+    }
+
     @Test void openingClosingAndHoverRemainOnThePopupTimeline() {
         var host = new UiFeatureRenderTest.Host(); var tools = new ComposerTools(host);
         try (var surface = Surface.makeRasterN32Premul(460, 820)) {

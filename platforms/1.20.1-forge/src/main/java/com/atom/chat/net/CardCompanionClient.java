@@ -99,7 +99,7 @@ public final class CardCompanionClient {
                     && com.atom.chat.chat.BlockList.isBlocked(senderName)) return;
         }
 
-        ShareCard card = CardWireCodec.decodeCard(payload.cardBytes());
+        ShareCard card = CardWireCodec.decodeRemoteCard(payload.cardBytes());
         if (card == null) return;
 
         if (card.template() == ShareCard.Template.ITEM && card.nativeHoverObject() == null) {
@@ -162,7 +162,7 @@ public final class CardCompanionClient {
     }
 
     public static void onCardStateUpdate(CardPayloads.CardStateUpdatePayload payload) {
-        CardState state = CardWireCodec.decodeState(payload.stateBytes());
+        CardState state = CardWireCodec.decodeRemoteState(payload.stateBytes());
         if (state != null) {
             CardStateStore.updateFromServer(state);
         }

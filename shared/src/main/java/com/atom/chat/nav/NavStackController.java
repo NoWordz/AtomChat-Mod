@@ -147,8 +147,10 @@ public final class NavStackController {
                 navigation.push(saved.get(i));
             }
         }
-        if (topPage().isRoot()) {
-            host.selectTabNow(topNav());
+        NavPage root = navigation.snapshot().get(0);
+        if (topPage().isRoot() || root.page() != AppPage.CHAT_LIST
+                || com.atom.chat.api.ui.NavigationUi.tabs().hasEdits()) {
+            host.selectTabNow(root);
         }
         if (topPage() == AppPage.PRIVATE_CHAT) {
             PrivateChatStore.setActive(activePrivateTarget());

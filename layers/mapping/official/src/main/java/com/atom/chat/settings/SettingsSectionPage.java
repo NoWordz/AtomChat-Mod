@@ -116,7 +116,18 @@ public final class SettingsSectionPage {
 
     public record Row(RowKind kind, SettingsItem item, SettingsSlider slider,
                       SettingsColor color, SettingsCatalog.InfoRow info, PlayerRef player,
-                      String labelKey, String actionId, String titleText, String subtitleText) {
+                      String labelKey, String actionId, String titleText, String subtitleText,
+                      String groupIdentity) {
+        public Row(RowKind kind, SettingsItem item, SettingsSlider slider, SettingsColor color,
+                   SettingsCatalog.InfoRow info, PlayerRef player, String labelKey, String actionId,
+                   String titleText, String subtitleText) {
+            this(kind, item, slider, color, info, player, labelKey, actionId, titleText, subtitleText, null);
+        }
+
+        static Row ofGroup(String key, String id) {
+            return new Row(RowKind.LABEL, null, null, null, null, null, key, null, null, null, id);
+        }
+
         static Row ofSwitch(SettingsItem item) {
             return new Row(RowKind.SWITCH, item, null, null, null, null, null, null, null, null);
         }
@@ -522,6 +533,10 @@ public final class SettingsSectionPage {
      * label. Any label returning a non-null id gets a chevron and hides its
      * child rows when collapsed.
      */
+    private static String foldableGroup(Row row) {
+        return row.groupIdentity() != null ? row.groupIdentity() : foldableGroup(row.labelKey());
+    }
+
     private static String foldableGroup(String labelKey) {
         if (labelKey == null) {
             return null;
@@ -786,7 +801,7 @@ public final class SettingsSectionPage {
         if (kind == RowKind.LABEL) {
             String title = tr(row.labelKey());
             return title.equals(row.labelKey()) ? base
-                    : SettingsGroupPaint.height(title, rowCardWidth(layout), foldableGroup(row.labelKey()) != null);
+                    : SettingsGroupPaint.height(title, rowCardWidth(layout), foldableGroup(row) != null);
         }
         if (compact != null) base = compact.height();
         if (kind == RowKind.COLOR) {
@@ -943,38 +958,88 @@ public final class SettingsSectionPage {
             case PRIVACY -> privacyRows();
             case ABOUT -> aboutRows();
         };
-        var edits = SettingsUi.registeredGroups(section, addonTab ? chip : SettingsUi.builtInTabId(chip));
-        return edits == null || !edits.hasEdits() ? base : mergeGroups(base, edits);
+        String tabId = addonTab ? chip : SettingsUi.builtInTabId(chip);
+        var edits = SettingsUi.registeredGroups(section, tabId);
+        var rowEdits = SettingsUi.registeredRows(section, tabId);
+        return (edits == null || !edits.hasEdits()) && rowEdits.isEmpty() ? base
+                : mergeGroups(base, edits, rowEdits, section.id() + "/" + tabId);
     }
 
-    private List<Row> mergeGroups(List<Row> base, UiContributions<SettingsUi.Group> edits) {
-        List<Row> result = new ArrayList<>();
+    private record OriginalGroup(SettingsUi.Group value, List<Row> rows) {}
+
+    private List<Row> mergeGroups(List<Row> base, UiContributions<SettingsUi.Group> edits,
+                                  Map<String, UiContributions<SettingsUi.Control>> rowEdits, String scope) {
         List<UiContributions.Entry<SettingsUi.Group>> groups = new ArrayList<>();
-        Map<String, List<Row>> originals = new HashMap<>();
+        Map<String, OriginalGroup> originals = new HashMap<>();
         int start = 0;
-        while (start < base.size() && base.get(start).kind() != RowKind.LABEL) {
-            result.add(base.get(start++));
-        }
+        while (start < base.size() && base.get(start).kind() != RowKind.LABEL) start++;
+        List<Row> result = new ArrayList<>(mergeRows(base.subList(0, start), rowEdits.get(SettingsUi.TOP_ROWS)));
         while (start < base.size()) {
             String key = base.get(start).labelKey();
             int end = start + 1;
             while (end < base.size() && base.get(end).kind() != RowKind.LABEL) end++;
             String id = SettingsUi.builtInGroupId(key);
-            groups.add(new UiContributions.Entry<>(id, new SettingsUi.Group(key, List.of())));
-            originals.put(id, base.subList(start, end));
+            var value = new SettingsUi.Group(key, List.of());
+            groups.add(new UiContributions.Entry<>(id, value));
+            originals.put(id, new OriginalGroup(value, base.subList(start, end)));
             start = end;
         }
-        for (var group : edits.resolve(groups)) {
-            if (groups.stream().anyMatch(original ->
-                    original.id().equals(group.id()) && original.value() == group.value())) {
-                result.addAll(originals.get(group.id()));
+        for (var group : edits == null ? groups : edits.resolve(groups)) {
+            var original = originals.get(group.id());
+            Row header;
+            List<Row> children;
+            if (original != null && original.value() == group.value()) {
+                var rows = original.rows();
+                header = rows.get(0);
+                children = rows.subList(1, rows.size());
             } else {
-                addGroup(result, group.value().labelKey(), () -> {
-                    for (var toggle : group.value().toggles()) result.add(Row.ofSwitch(SettingsItem.addon(toggle)));
-                });
+                header = Row.ofGroup(group.value().labelKey(), scope + "/" + group.id());
+                children = group.value().toggles().stream()
+                        .map(toggle -> Row.ofSwitch(SettingsItem.addon(toggle))).toList();
+            }
+            result.add(header);
+            String fold = foldableGroup(header);
+            if (fold == null || !collapsedColorGroups.contains(fold) || expansionOf(fold) > 0F) {
+                result.addAll(mergeRows(children, rowEdits.get(group.id())));
             }
         }
         return result;
+    }
+
+    private List<Row> mergeRows(List<Row> rows, UiContributions<SettingsUi.Control> edits) {
+        if (edits == null || !edits.hasEdits()) return rows;
+        Map<String, Row> original = new HashMap<>();
+        List<UiContributions.Entry<SettingsUi.Control>> defaults = new ArrayList<>();
+        for (int i = 0; i < rows.size(); i++) {
+            Row row = rows.get(i);
+            String id = controlId(row);
+            if (original.containsKey(id)) id += "/" + i;
+            original.put(id, row);
+            defaults.add(new UiContributions.Entry<>(id, SettingsUi.OriginalControl.KEEP));
+        }
+        List<Row> resolved = new ArrayList<>();
+        for (var entry : edits.resolve(defaults)) {
+            if (entry.value() instanceof SettingsUi.Toggle toggle) {
+                resolved.add(Row.ofSwitch(SettingsItem.addon(toggle)));
+            } else if (entry.value() instanceof SettingsUi.Info info) {
+                resolved.add(Row.ofInfo(new SettingsCatalog.InfoRow(info.titleKey(), tr(info.bodyKey()), null)));
+            } else if (original.containsKey(entry.id())) {
+                resolved.add(original.get(entry.id()));
+            }
+        }
+        return resolved;
+    }
+
+    private static String controlId(Row row) {
+        if (row.item() != null) {
+            String id = row.item().id();
+            return id.contains(":") ? id : SettingsUi.builtInRowId(id);
+        }
+        if (row.slider() != null) return SettingsUi.builtInRowId(row.slider().id());
+        if (row.color() != null) return SettingsUi.builtInRowId(row.color().id());
+        if (row.info() != null) return SettingsUi.builtInRowId(row.info().titleKey());
+        if (row.player() != null) return SettingsUi.builtInRowId(row.player().realName());
+        return SettingsUi.builtInRowId(row.kind().name());
     }
 
     long rowBuildsForTest() { return rowBuilds; }
@@ -1226,7 +1291,7 @@ public final class SettingsSectionPage {
         for (int i = 0; i < rows.size(); i++) {
             Row row = rows.get(i);
             if (row.kind() == RowKind.LABEL) {
-                String own = foldableGroup(row.labelKey());
+                String own = foldableGroup(row);
                 resolved[i] = own == null ? active : null;
                 active = own;
             } else {
@@ -1263,7 +1328,7 @@ public final class SettingsSectionPage {
      */
     private void stepGroupExpansions(List<Row> rows, float dtMs) {
         for (Row row : rows) if (row.kind() == RowKind.LABEL) {
-            String id=foldableGroup(row.labelKey());
+            String id=foldableGroup(row);
             if(id!=null)groupExpansion.putIfAbsent(id,collapsedColorGroups.contains(id)?0f:1f);
         }
         if(SettingsGroupFrontend.stepFolds(groupExpansion,collapsedColorGroups,dtMs))rowGeometry=null;
@@ -1473,7 +1538,7 @@ public final class SettingsSectionPage {
     public void expandTutorialGroup(SettingsSection section,int index) {
         var visible=rows(section);if(index<0||index>=visible.size())return;
         String group=null;
-        for(int i=0;i<=index;i++)if(visible.get(i).kind()==RowKind.LABEL)group=foldableGroup(visible.get(i).labelKey());
+        for(int i=0;i<=index;i++)if(visible.get(i).kind()==RowKind.LABEL)group=foldableGroup(visible.get(i));
         if(group!=null){collapsedColorGroups.remove(group);groupExpansion.put(group,1f);}
     }
     public record TutorialRow(String title,String body,boolean startsGroup,boolean standalone) { }
@@ -1715,7 +1780,7 @@ public final class SettingsSectionPage {
                 boolean over = interactive
                         && row.kind() != RowKind.AUTHORS
                         && row.kind() != RowKind.BLOCKED_EMPTY
-                        && (row.kind() != RowKind.LABEL || foldableGroup(row.labelKey()) != null)
+                        && (row.kind() != RowKind.LABEL || foldableGroup(row) != null)
                         && vmx >= rect.x() && vmx <= rect.right()
                         && vmy >= rect.y() && vmy <= rect.bottom();
                 if (over) {
@@ -1735,7 +1800,7 @@ public final class SettingsSectionPage {
                 // colour groups on click and used to sit dead under the
                 // pointer. Plain headings still get none.
                 PressScale press = row.kind() == RowKind.AUTHORS
-                        || (row.kind() == RowKind.LABEL && foldableGroup(row.labelKey()) == null) ? null
+                        || (row.kind() == RowKind.LABEL && foldableGroup(row) == null) ? null
                         : interactive ? rowPress.computeIfAbsent(i, k -> PressScale.bounce())
                         : rowPress.get(i);
                 if (press != null && interactive) {
@@ -3089,7 +3154,7 @@ public final class SettingsSectionPage {
      * caption. A foldable group's chevron sits at the right edge.
      */
     private void drawLabel(Canvas canvas, Row row, UiLayout.Rect rect) {
-        String group=foldableGroup(row.labelKey());
+        String group=foldableGroup(row);
         SettingsGroupPaint.draw(canvas,rect,tr(row.labelKey()),SettingsGroupIcons.forLabel(row.labelKey()),group!=null,group==null?1:expansionOf(group));
     }
 
@@ -3665,7 +3730,7 @@ public final class SettingsSectionPage {
                 } else { return false; }
             }
             case LABEL -> {
-                String group = foldableGroup(hit.row().labelKey());
+                String group = foldableGroup(hit.row());
                 if (group == null) {
                     return false;
                 }

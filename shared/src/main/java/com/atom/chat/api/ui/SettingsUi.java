@@ -19,6 +19,8 @@ public final class SettingsUi {
     private static final UiContributions<HomeEntry> HOME = new UiContributions<>();
     private static final Map<SettingsSection, UiContributions<Chip>> CHIPS = new ConcurrentHashMap<>();
     private static final Map<Scope, UiContributions<Group>> GROUPS = new ConcurrentHashMap<>();
+    private static final Map<Scope, Map<String, UiContributions<Control>>> ROWS = new ConcurrentHashMap<>();
+    public static final String TOP_ROWS = "atomchat:ungrouped";
     private static final List<UiContributions.Entry<HomeEntry>> DEFAULT_HOME = List.of(
             builtIn(SettingsSection.APPEARANCE, "atomchat.settings.appearance", SettingsIcons.PALETTE),
             builtIn(SettingsSection.CHAT, "atomchat.settings.chat", SettingsIcons.MESSAGES),
@@ -48,9 +50,21 @@ public final class SettingsUi {
         public Chip { Objects.requireNonNull(titleKey); }
     }
 
+    public sealed interface Control permits Toggle, Info, OriginalControl {}
+
+    /** Marker used when merging an existing native row. */
+    public enum OriginalControl implements Control { KEEP }
+
+    public record Info(String titleKey, String bodyKey) implements Control {
+        public Info {
+            Objects.requireNonNull(titleKey);
+            Objects.requireNonNull(bodyKey);
+        }
+    }
+
     /** The add-on writes and persists its own value from the setter. */
     public record Toggle(String id, String titleKey, String descriptionKey,
-                         BooleanSupplier value, Consumer<Boolean> setValue) {
+                         BooleanSupplier value, Consumer<Boolean> setValue) implements Control {
         public Toggle {
             new UiContributions.Entry<>(id, titleKey);
             Objects.requireNonNull(descriptionKey);
@@ -90,6 +104,22 @@ public final class SettingsUi {
     public static UiContributions<Group> registeredGroups(SettingsSection section, String tabId) {
         return GROUPS.isEmpty() || com.atom.chat.onboarding.TutorialSandbox.active()
                 ? null : GROUPS.get(new Scope(section, tabId));
+    }
+
+    /** Edit individual rows of an existing or contributed group. */
+    public static UiContributions<Control> rows(SettingsSection section, String tabId, String groupId) {
+        return ROWS.computeIfAbsent(new Scope(section, tabId), unused -> new ConcurrentHashMap<>())
+                .computeIfAbsent(groupId, unused -> new UiContributions<>());
+    }
+
+    public static Map<String, UiContributions<Control>> registeredRows(SettingsSection section, String tabId) {
+        if (ROWS.isEmpty() || com.atom.chat.onboarding.TutorialSandbox.active()) return Map.of();
+        var edits = ROWS.get(new Scope(section, tabId));
+        return edits == null || edits.values().stream().noneMatch(UiContributions::hasEdits) ? Map.of() : edits;
+    }
+
+    public static String builtInRowId(String nativeId) {
+        return "atomchat:" + nativeId.toLowerCase(java.util.Locale.ROOT).replaceAll("[^a-z0-9_./-]", "_");
     }
 
     public static String builtInTabId(String id) {

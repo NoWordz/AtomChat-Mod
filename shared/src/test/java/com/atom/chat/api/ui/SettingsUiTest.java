@@ -39,4 +39,49 @@ class SettingsUiTest {
             tabs.unregister(id);
         }
     }
+    @Test
+    void groupRowsCanReorderAndReplaceNativeControls() {
+        String label = "atomchat.settings.group.chat.input";
+        var edits = SettingsUi.rows(SettingsSection.CHAT, SettingsUi.builtInTabId("messages"),
+                SettingsUi.builtInGroupId(label));
+        edits.move("example:retain_first", SettingsUi.builtInRowId("retain_draft_on_close"),
+                UiContributions.Position.first());
+        edits.replace("example:replace_close", SettingsUi.builtInRowId("close_after_send"),
+                new SettingsUi.Info("example.notice", "example.notice.desc"));
+        try {
+            var page = new SettingsSectionPage();
+            var rows = page.rows(SettingsSection.CHAT);
+            int index = 0;
+            while (!label.equals(rows.get(index).labelKey())) index++;
+            assertEquals("retain_draft_on_close", rows.get(index + 1).item().id());
+            assertEquals("example.notice", rows.get(index + 2).info().titleKey());
+            assertTrue(page.rows(SettingsSection.CHAT).stream().anyMatch(row ->
+                            row.item() != null && row.item().id().equals("chat_hud")),
+                    "Editing one group preserves neighbouring native controls on repeated resolves");
+        } finally {
+            edits.unregister("example:retain_first");
+            edits.unregister("example:replace_close");
+        }
+    }
+
+    @Test
+    void twoAddonGroupsWithTheSameLabelFoldIndependently() {
+        var groups = SettingsUi.groups(SettingsSection.CHAT, SettingsUi.builtInTabId("messages"));
+        String label = "example.same_label";
+        var toggle = new SettingsUi.Toggle("example:option", "example.opt", "example.opt.desc",
+                () -> true, value -> {});
+        groups.add("example:first", new SettingsUi.Group(label, List.of(toggle)), UiContributions.Position.last());
+        groups.add("example:second", new SettingsUi.Group(label, List.of(toggle)), UiContributions.Position.last());
+        try {
+            var page = new SettingsSectionPage();
+            var rows = page.rows(SettingsSection.CHAT);
+            int index = 0;
+            while (!label.equals(rows.get(index).labelKey())) index++;
+            assertTrue(page.perform(new SettingsSectionPage.RowHit(rows.get(index), index, 0, 0, 10, 10, 0)));
+            assertEquals(rows.size() - 1, page.rows(SettingsSection.CHAT).size());
+        } finally {
+            groups.unregister("example:first");
+            groups.unregister("example:second");
+        }
+    }
 }
