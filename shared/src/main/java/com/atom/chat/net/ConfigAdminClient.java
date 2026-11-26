@@ -14,6 +14,8 @@ public final class ConfigAdminClient {
     private static final Map<String,FileRequest> files=new HashMap<>();
     private static String detail="",pendingOpen,pendingSave,pendingStatus;
     private static ServerConfigPage saveOwner;
+    private record AvatarRequest(String id, ServerConfigPage owner, long deadline) {}
+    private static AvatarRequest avatarRequest;
     private static ConfigAdminServer.SyncStatus sync;
     private static long pollUntil,lastPoll;
     public static ConfigAdminServer.SyncStatus sync(){return sync;}
@@ -23,11 +25,16 @@ public final class ConfigAdminClient {
         if(AtomChatConfig.get().serverPacksEnabled&&ConfigAdminClientTransport.available())request("hello");
     }
     public static void onDisconnect(){
-        outgoing.clear();files.clear();receiver=new AdminProtocol.Receiver();ServerTemplateStore.clear();
+        avatarRequest=null;outgoing.clear();files.clear();receiver=new AdminProtocol.Receiver();ServerTemplateStore.clear();
         detail="";sync=null;pollUntil=lastPoll=0;pendingOpen=pendingSave=pendingStatus=null;saveOwner=null;
     }
     public static void tick(){
         long now=System.currentTimeMillis();receiver.expire(now);
+        if (avatarRequest != null && now > avatarRequest.deadline()) {
+            var request = avatarRequest;
+            avatarRequest = null;
+            if (ConfigScreenClient.page() == request.owner()) request.owner().publicAvatarResult(null, "failed");
+        }
         if(now<pollUntil&&now-lastPoll>1000){lastPoll=now;request("status");}
         for(int i=0;i<8&&!outgoing.isEmpty();i++){
             if(!ConfigAdminClientTransport.available()){outgoing.clear();break;}
@@ -48,6 +55,26 @@ public final class ConfigAdminClient {
         var request=new AdminProtocol.Request("save",version,fingerprint,values,assets,null);
         pendingSave=request.requestId();saveOwner=ConfigScreenClient.page();send(request);
     }
+    public static void savePublicAvatar(ServerConfigPage owner, String revision, byte[] png) {
+        if (ConfigScreenClient.page() != owner || !ConfigAdminClientTransport.available()) {
+            owner.publicAvatarResult(null, "failed");
+            return;
+        }
+        String action = png == null ? "public_avatar_reset" : "public_avatar_set";
+        String data = png == null ? null : Base64.getEncoder().encodeToString(png);
+        var request = new AdminProtocol.Request(action, 0, revision, null, null, data);
+        avatarRequest = new AvatarRequest(request.requestId(), owner, System.currentTimeMillis() + 45_000);
+        send(request);
+    }
+
+    private static void publicAvatarReply(AdminProtocol.Reply reply) {
+        if (avatarRequest == null || !Objects.equals(reply.requestId(), avatarRequest.id())) return;
+        var request = avatarRequest;
+        avatarRequest = null;
+        if (ConfigScreenClient.page() != request.owner()) return;
+        request.owner().publicAvatarResult(reply.ok() ? reply.error() : null, reply.ok() ? "" : reply.error());
+    }
+
     public static void packAck(String hash,boolean ok){if(ConfigAdminClientTransport.available()&&AtomChatConfig.get().serverPacksEnabled)send(new AdminProtocol.Request(ok?"pack_ack":"pack_failed",0,hash,null,null,null));}
     public static void file(AdminAsset asset,Consumer<byte[]> callback){
         if(asset.data()!=null){callback.accept(asset.bytes());return;}
@@ -68,12 +95,15 @@ public final class ConfigAdminClient {
                     var page=ConfigScreenClient.page();
                     if(Objects.equals(reply.requestId(),pendingSave)&&page!=null&&page==saveOwner&&page.draft().saving()){
                         page.result(true,"");
-                        if(page.acceptSnapshot(reply.snapshot().version(),reply.snapshot().values()))
+                        if(page.acceptSnapshot(reply.snapshot().version(),reply.snapshot().values())) {
                             page.resources(reply.snapshot().fingerprint(),reply.snapshot().assets());
+                            page.publicAvatarSnapshot(reply.snapshot().publicAvatarRevision());
+                        }
                         pendingSave=null;saveOwner=null;
                         detail="syncing";sync=null;pollUntil=System.currentTimeMillis()+120_000;lastPoll=0;
                     }
                 }
+                case "public_avatar_saved" -> publicAvatarReply(reply);
                 case "file"->{
                     var waiting=files.remove(reply.requestId());var asset=reply.asset();
                     if(waiting!=null&&asset!=null&&waiting.expected().hash().equals(asset.hash())&&waiting.expected().size()==asset.size()){
@@ -101,7 +131,9 @@ public final class ConfigAdminClient {
     }
     private static void failure(AdminProtocol.Reply reply){
         detail=reply.error()==null?"failed":reply.error();
-        if(reply.action().equals("save_error")&&Objects.equals(reply.requestId(),pendingSave)){
+        if (reply.action().equals("public_avatar_set_error") || reply.action().equals("public_avatar_reset_error")) {
+            publicAvatarReply(reply);
+        } else if(reply.action().equals("save_error")&&Objects.equals(reply.requestId(),pendingSave)){
             var page=ConfigScreenClient.page();
             if(page!=null&&page==saveOwner&&page.draft().saving())page.result(false,detail);
             pendingSave=null;saveOwner=null;

@@ -747,7 +747,10 @@ public final class ConversationListPage {
         float iconX = x + iconInset;
         float iconY = y + (ROW_H - iconSize) / 2.0F;
 
-        if (row.kind == RowKind.PUBLIC || row.kind == RowKind.CHANNEL) {
+        if (row.kind == RowKind.PUBLIC) {
+            com.atom.chat.render.PublicChatAvatarPaint.draw(canvas, iconX, iconY, iconSize,
+                    Color.makeARGB(60, 255, 255, 255), textPrimary());
+        } else if (row.kind == RowKind.CHANNEL) {
             CornerGeometry.drawRoundedRect(canvas, iconX, iconY, iconSize, iconSize, iconRadius,
                     Color.makeARGB(60, 255, 255, 255));
             drawIconCentered(canvas, AppIcons.ICON_GLOBE_PATH,

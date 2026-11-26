@@ -91,6 +91,10 @@ public final class CacheDirs {
         return cacheRoot().resolve("debug");
     }
 
+    public static Path publicChatAvatar() {
+        return serverRoot().resolve("public-chat-avatar.png");
+    }
+
     /** Companion server's uploaded custom-avatar PNGs. */
     public static Path avatarDataDir() {
         return serverRoot().resolve("avatars");

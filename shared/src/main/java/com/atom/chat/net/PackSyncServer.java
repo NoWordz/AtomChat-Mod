@@ -262,9 +262,18 @@ public final class PackSyncServer {
     }
 
     private static byte[] readIcon() {
+        try {
+            byte[] avatar = com.atom.chat.pack.PublicChatAvatar.read(CacheDirs.publicChatAvatar());
+            if (avatar != null) return avatar;
+        } catch (IOException e) {
+            AtomChat.LOGGER.warn(com.atom.chat.diagnostics.AtomChatLog.message("pack", "Failed to read public chat avatar"), e);
+        }
         Path icon = CacheDirs.gameDir().resolve("server-icon.png");
         try {
-            return Files.isRegularFile(icon) ? Files.readAllBytes(icon) : null;
+            if (!Files.isRegularFile(icon)) return null;
+            try (var input = Files.newInputStream(icon)) {
+                return input.readNBytes(ServerPack.MAX_ICON_BYTES + 1);
+            }
         } catch (IOException e) {
             AtomChat.LOGGER.warn(com.atom.chat.diagnostics.AtomChatLog.message("pack", "Failed to read server-icon.png"), e);
             return null;

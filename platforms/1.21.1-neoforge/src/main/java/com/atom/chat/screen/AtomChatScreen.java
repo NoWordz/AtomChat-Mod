@@ -3844,6 +3844,17 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
 
 
 
+    public void pickPublicChatAvatar(com.atom.chat.config.ServerConfigPage owner,
+                                     java.util.function.Consumer<byte[]> receive) {
+        pickServerConfigImage(file -> com.atom.chat.net.Host.execute(() -> {
+            if (serverConfigPage != owner || topPage() != AppPage.SERVER_CONFIG || closing || file == null) {
+                receive.accept(null);
+                return;
+            }
+            imageCropper.openPublicChatAvatar(file, receive);
+        }));
+    }
+
     public void pickServerConfigImage(java.util.function.Consumer<java.nio.file.Path> receive) {
         // The native AWT dialog grabs OS input; release MC's held keys/button so
         // the UI does not think the image button is still pressed when it returns.

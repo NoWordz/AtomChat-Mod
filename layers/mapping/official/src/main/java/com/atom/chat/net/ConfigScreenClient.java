@@ -15,7 +15,10 @@ public final class ConfigScreenClient {
     public static void onAdministration(com.atom.chat.config.AdminProtocol.Snapshot snapshot){
         if(open!=null&&active()&&(open.draft().dirty()||open.draft().saving()))return;
         openSnapshot(new ConfigPayloads.Snapshot(snapshot.version(),snapshot.values(),new ConfigPayloads.PackStatus(0,0,"")));
-        if(open!=null)open.resources(snapshot.fingerprint(),snapshot.assets());
+        if (open != null) {
+            open.resources(snapshot.fingerprint(), snapshot.assets());
+            open.publicAvatarSnapshot(snapshot.publicAvatarRevision());
+        }
     }
     public static void onSnapshot(ConfigPayloads.Snapshot payload) {
         if(ConfigAdminClientTransport.available()){ConfigAdminClient.request("open");return;}
@@ -36,6 +39,12 @@ public final class ConfigScreenClient {
             public boolean administration(){return ConfigAdminClientTransport.available();}
             public void requestAsset(com.atom.chat.config.AdminAsset asset,java.util.function.Consumer<byte[]> receive){ConfigAdminClient.file(asset,receive);}
             public void retrySync(){ConfigAdminClient.request("retry");com.atom.chat.net.PackSyncClient.resync();}
+            public void choosePublicAvatar(java.util.function.Consumer<byte[]> receive) {
+                panel.pickPublicChatAvatar(open, receive);
+            }
+            public void savePublicAvatar(ServerConfigPage owner, String revision, byte[] png) {
+                ConfigAdminClient.savePublicAvatar(owner, revision, png);
+            }
             public void chooseImage(java.util.function.Consumer<java.nio.file.Path> receive){panel.pickServerConfigImage(receive);}
             public void refresh() { if (client.player != null) client.player.connection.sendCommand("atomchat gui"); }
             public void rescan() { ConfigScreenClient.rescan(); }

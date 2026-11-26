@@ -23,28 +23,49 @@ public final class ServerPackStore {
     /** Emotes taken from one server pack; mirrors the server's default cap. */
     public static final int MAX_SERVER_EMOTES = 32;
 
-    private static final ServerPackStore EMPTY = new ServerPackStore(null, null);
+    private static final ServerPackStore EMPTY = new ServerPackStore(null, null, null);
 
     private static volatile ServerPackStore current = EMPTY;
 
     private final ServerPack pack;
     private final Path dir;
     private final List<Path> emotes;
+    private final byte[] publicAvatar;
 
-    private ServerPackStore(ServerPack pack, Path dir) {
+    private ServerPackStore(ServerPack pack, Path dir, byte[] verifiedAvatar) {
+        this.publicAvatar = pack != null && PublicChatAvatar.isPublished(verifiedAvatar) ? verifiedAvatar.clone() : null;
         this.pack = pack;
         this.dir = dir;
         this.emotes = pack == null || dir == null ? List.of() : listEmotes(dir);
     }
 
+    private ServerPackStore(ServerPackStore previous) {
+        this.pack = previous.pack;
+        this.dir = previous.dir;
+        this.emotes = previous.emotes;
+        this.publicAvatar = null;
+    }
+
+    public static void hidePublicAvatar() {
+        var previous = current;
+        if (previous.publicAvatar != null) current = new ServerPackStore(previous);
+    }
+
     /** Re-reads the pack installed for {@code key}; a missing/broken one reads as absent. */
     public static void refresh(Path packsRoot, String key) {
+        refresh(packsRoot, key, null);
+    }
+
+    public static void refresh(Path packsRoot, String key, ServerPack verifiedManifest) {
         if (packsRoot == null || !PackKeys.isKey(key)) {
             current = EMPTY;
             return;
         }
         Path dir = packsRoot.resolve(key);
-        current = new ServerPackStore(PackManifestFile.read(dir), dir);
+        var installed = PackManifestFile.read(dir);
+        byte[] verifiedAvatar = installed != null && verifiedManifest != null
+                && installed.packHash().equals(verifiedManifest.packHash()) ? verifiedManifest.icon() : null;
+        current = new ServerPackStore(installed, dir, verifiedAvatar);
     }
 
     /** Forgets the current pack (disconnect, or a server that turned packs off). */
@@ -72,6 +93,10 @@ public final class ServerPackStore {
 
     public byte[] icon() {
         return pack == null ? null : pack.icon();
+    }
+
+    public byte[] publicAvatar() {
+        return publicAvatar == null ? null : publicAvatar.clone();
     }
 
     public String packHash() {

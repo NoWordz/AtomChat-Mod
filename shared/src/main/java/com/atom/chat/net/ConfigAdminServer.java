@@ -1,5 +1,7 @@
 package com.atom.chat.net;
 
+import com.atom.chat.pack.PublicChatAvatar;
+
 import com.atom.chat.config.*;
 import com.atom.chat.util.CacheDirs;
 import java.util.*;
@@ -50,6 +52,16 @@ public final class ConfigAdminServer {
                     respond(player,request,new AdminProtocol.Reply("saved",true,"",snapshot(),null,null));
                     broadcast(Host.serverOf(player));PackSyncServer.pushUpdate(Host.serverOf(player));
                 }
+                case "public_avatar_set", "public_avatar_reset" -> {
+                    byte[] png = request.action().equals("public_avatar_set")
+                            ? PublicChatAvatar.decodeUpload(request.name()) : null;
+                    var avatar = CacheDirs.publicChatAvatar();
+                    String revision = PublicChatAvatar.save(avatar, request.fingerprint(), png);
+                    PackSyncServer.invalidate();
+                    respond(player, request, new AdminProtocol.Reply("public_avatar_saved", true,
+                            revision, null, null, null));
+                    PackSyncServer.pushUpdate(Host.serverOf(player));
+                }
                 case "retry" -> {broadcast(Host.serverOf(player));PackSyncServer.pushUpdate(Host.serverOf(player));}
                 case "status" -> respond(player,request,new AdminProtocol.Reply("sync",true,AdminProtocol.JSON.toJson(syncStatus(Host.serverOf(player))),null,null,null));
                 default -> throw new IllegalArgumentException("failed");
@@ -63,7 +75,8 @@ public final class ConfigAdminServer {
     }
     private static AdminProtocol.Snapshot snapshot() throws java.io.IOException {
         var assets=ServerResources.list(CacheDirs.serverEmotesDir());
-        return new AdminProtocol.Snapshot(ConfigRevision.get(),ServerConfigValues.of(AtomChatServerConfig.get()),ServerResources.fingerprint(assets),assets);
+        return new AdminProtocol.Snapshot(ConfigRevision.get(),ServerConfigValues.of(AtomChatServerConfig.get()),ServerResources.fingerprint(assets),assets,
+                PublicChatAvatar.revision(CacheDirs.publicChatAvatar()));
     }
     private static void respond(Object player,AdminProtocol.Request request,AdminProtocol.Reply response){reply(player,response.correlate(request.requestId()));}
     private static void reply(Object player,AdminProtocol.Reply reply){

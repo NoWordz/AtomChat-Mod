@@ -69,7 +69,7 @@ public final class PackSyncClient {
     private static final Map<String, PackAssembler.FileBuffer> buffers = new LinkedHashMap<>();
     private static final Map<String, byte[]> ready = new LinkedHashMap<>();
     private static long deadline;
-    private static boolean active;
+    private static boolean active, receivePacks;
     private static volatile long epoch;
     /** Last thing that happened, for the panel. */
     private static volatile String detail = "";
@@ -80,7 +80,8 @@ public final class PackSyncClient {
     /** Join hook: ask this server what it offers, unless the player opted out. */
     public static void onJoin() {
         reset();
-        if (!AtomChatConfig.get().serverPacksEnabled) {
+        receivePacks = AtomChatConfig.get().serverPacksEnabled;
+        if (!receivePacks) {
             detail = "disabled";
             return;
         }
@@ -110,7 +111,12 @@ public final class PackSyncClient {
      * once a fresh manifest has been fetched.
      */
     public static void resync() {
-        if(!AtomChatConfig.get().serverPacksEnabled){ServerPackStore.clear();detail="disabled";return;}
+        receivePacks = AtomChatConfig.get().serverPacksEnabled;
+        if (!receivePacks) {
+            reset();
+            detail = "disabled";
+            return;
+        }
         if(!Net.canSendToServer(new PackMessage.Hello()))return;
         String current=worldKey();if(current==null)return;
         epoch++;key=current;expected=null;wanted=Set.of();buffers.clear();ready.clear();
@@ -126,6 +132,7 @@ public final class PackSyncClient {
     private static void reset() {
         epoch++;
         ServerPackStore.clear();
+        com.atom.chat.render.PublicChatAvatarPaint.clear();
         key = null;
         expected = null;
         wanted = Set.of();
@@ -137,6 +144,7 @@ public final class PackSyncClient {
 
     /** Called every client tick: the only way a stalled sync ever ends. */
     public static void tick() {
+        if (receivePacks != AtomChatConfig.get().serverPacksEnabled) resync();
         if (active && deadline > 0L && System.currentTimeMillis() > deadline) {
             abort("timeout");
         }
@@ -152,6 +160,7 @@ public final class PackSyncClient {
             detail = "server_disabled";
             active = false;
             ServerPackStore.clear();
+            com.atom.chat.render.PublicChatAvatarPaint.clear();
             send(new PackMessage.Ack(true,"disabled"));
             ConfigAdminClient.packAck("",true);
             return;
@@ -165,6 +174,13 @@ public final class PackSyncClient {
         }
         if (expectedPack.files().size() > MAX_FILES || expectedPack.totalBytes() > MAX_BYTES) {
             abort("too_large");
+            return;
+        }
+        byte[] icon = expectedPack.icon();
+        if (com.atom.chat.pack.PublicChatAvatar.isPublished(icon)
+                && !expectedPack.packHash().equals(ServerPack.hashOf(ServerPack.canonical(
+                        expectedPack.files(), expectedPack.phrases(), expectedPack.serverName(), icon)))) {
+            abort("bad_manifest");
             return;
         }
         expected = expectedPack;
@@ -181,7 +197,7 @@ public final class PackSyncClient {
                         && plan.isUpToDate()) {
                     detail = "up_to_date";
                     active = false;
-                    ServerPackStore.refresh(CacheDirs.packsRoot(), key);
+                    ServerPackStore.refresh(CacheDirs.packsRoot(), key, expectedPack);
                     send(new PackMessage.Ack(true, "up_to_date"));
                     ConfigAdminClient.packAck(expectedPack.packHash(),true);
                 } else {
@@ -236,7 +252,7 @@ public final class PackSyncClient {
                 if(token!=epoch)return;
                 detail = "up_to_date";
                 active = false;
-                ServerPackStore.refresh(CacheDirs.packsRoot(), installKey);
+                ServerPackStore.refresh(CacheDirs.packsRoot(), installKey, installPack);
                 send(new PackMessage.Ack(true, "metadata"));
                 ConfigAdminClient.packAck(installPack.packHash(),true);
             });
@@ -245,6 +261,7 @@ public final class PackSyncClient {
 
     /** S2C: one slice of one file. */
     public static void onChunk(PackMessage.Chunk chunk) {
+        if (!AtomChatConfig.get().serverPacksEnabled) return;
         if (!active || expected == null) {
             return;
         }
@@ -284,6 +301,7 @@ public final class PackSyncClient {
      * our own tally of verified files, never the peer's word for it.
      */
     public static void onDone(int fileCount) {
+        if (!AtomChatConfig.get().serverPacksEnabled) return;
         if (!active || expected == null) {
             return;
         }
@@ -316,7 +334,7 @@ public final class PackSyncClient {
                 if(token!=epoch)return;
                 detail = "synced";
                 active = false;
-                ServerPackStore.refresh(CacheDirs.packsRoot(), installKey);
+                ServerPackStore.refresh(CacheDirs.packsRoot(), installKey, pack);
                 send(new PackMessage.Ack(true, count + " file(s) " + hash));
                 ConfigAdminClient.packAck(pack.packHash(),true);
                 AtomChat.LOGGER.info(com.atom.chat.diagnostics.AtomChatLog.message("pack", "Server pack {} synced ({} file(s), {} KB)"), hash, count,
@@ -329,6 +347,8 @@ public final class PackSyncClient {
         AtomChat.LOGGER.warn(com.atom.chat.diagnostics.AtomChatLog.message("pack", "Server pack sync failed: {}"), reason);
         detail = reason;
         active = false;
+        ServerPackStore.hidePublicAvatar();
+        com.atom.chat.render.PublicChatAvatarPaint.clear();
         send(new PackMessage.Ack(false, reason));
         if(expected!=null)ConfigAdminClient.packAck(expected.packHash(),false);
     }

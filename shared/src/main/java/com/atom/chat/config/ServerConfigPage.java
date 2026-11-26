@@ -41,6 +41,8 @@ public final class ServerConfigPage {
         default void requestAsset(AdminAsset asset,Consumer<byte[]> receive){}
         default void chooseImage(Consumer<Path> receive){}
         default void retrySync(){}
+        default void choosePublicAvatar(Consumer<byte[]> receive){}
+        default void savePublicAvatar(ServerConfigPage owner, String revision, byte[] png){}
     }
     private static final String TEMPLATE_GUIDE = "guide:templates";
     private static final MessageTemplate GUIDE_EXAMPLE = new MessageTemplate(
@@ -92,6 +94,9 @@ public final class ServerConfigPage {
     private boolean closed,requestedSnapshot;
     private volatile boolean importing;
     private long acknowledgedAt;
+    private String publicAvatarRevision;
+    private boolean publicAvatarBusy;
+    private String publicAvatarFeedback = "";
     private float frameAlpha=1;
 
     private ContractRegistry settingsContract = SettingsContractResources.approved();
@@ -176,6 +181,46 @@ public final class ServerConfigPage {
     public float chromeBottom(UiLayout layout){return layout.chipBar.bottom();}
     public boolean stationaryPointer(UiLayout layout,float y){return y<=chromeBottom(layout)||y>=ServerConfigLayout.of(layout).status().y();}
     public void resources(String fingerprint,List<AdminAsset> files){draft.resourceBaseline(fingerprint,files);}
+    public void publicAvatarSnapshot(String revision) {
+        publicAvatarRevision = revision;
+    }
+
+    public void publicAvatarResult(String revision, String error) {
+        if (closed) return;
+        publicAvatarBusy = false;
+        if (revision != null) {
+            publicAvatarRevision = revision;
+            publicAvatarFeedback = t("avatar_saved");
+        } else {
+            publicAvatarFeedback = error(error == null || error.isBlank() ? "failed" : error);
+        }
+    }
+
+    private void editPublicAvatar() {
+        if (publicAvatarBusy || publicAvatarRevision == null) return;
+        publicAvatarFeedback = "";
+        publicAvatarBusy = true;
+        String revision = publicAvatarRevision;
+        host.choosePublicAvatar(png -> {
+            if (closed || png == null) {
+                publicAvatarBusy = false;
+                return;
+            }
+            host.savePublicAvatar(this, revision, png);
+        });
+    }
+
+    private void resetPublicAvatar() {
+        if (publicAvatarBusy || publicAvatarRevision == null || publicAvatarRevision.isEmpty()) return;
+        String revision = publicAvatarRevision;
+        confirmation.openDangerous(t("avatar_reset"), t("avatar_reset_hint"),
+                host.label("atomchat.config.cancel"), t("avatar_reset"), () -> {
+                    publicAvatarBusy = true;
+                    publicAvatarFeedback = "";
+                    host.savePublicAvatar(this, revision, null);
+                });
+    }
+
     public void bindConfirmation(ConfirmationDialog dialog){confirmation=dialog;}
     public void bindNavigationDirection(Consumer<Boolean> direction){navigationDirection=Objects.requireNonNull(direction);}
     public String title(){return switch(view){
@@ -266,12 +311,21 @@ public final class ServerConfigPage {
         if(view==View.IMAGE)return List.of(group("image",shownImage.name(),DrawPrimitives.ICON_IMAGE_PATH,
                 new Row("image",shownImage.name(),"",Kind.IMAGE,"",-1)));
         if(chip()==0)return hostingGroups();
-        if(chip()==1)return List.of(
-                group("pack",t("group.pack"),SettingsGroupGlyphs.LAYOUT,row("packEnabled",Kind.TOGGLE,""),row("packName",Kind.TEXT,""),
-                        row("packMaxFiles",Kind.NUMBER,t("files")),row("packMaxMb",Kind.NUMBER,"MiB")),
-                new Group("contents",t("group.contents"),DrawPrimitives.ICON_EMOJI_PATH,assetRows(true)),
-                group("phrases-entry","",DrawPrimitives.ICON_PHRASE_PATH,
-                        action("phrases:list",t("phrases"),draft.phrases().size()+" "+t("phrases_count")+" · "+t("click_edit"))));
+        if (chip() == 1) {
+            var groups = new ArrayList<Group>();
+            groups.add(group("pack",t("group.pack"),SettingsGroupGlyphs.LAYOUT,row("packEnabled",Kind.TOGGLE,""),
+                    row("packName",Kind.TEXT,""),row("packMaxFiles",Kind.NUMBER,t("files")),row("packMaxMb",Kind.NUMBER,"MiB")));
+            if (publicAvatarRevision != null) {
+                var rows = new ArrayList<Row>();
+                rows.add(action("avatar:choose", t("avatar_choose"), t("avatar_hint")));
+                if (!publicAvatarRevision.isEmpty()) rows.add(action("avatar:reset", t("avatar_reset"), ""));
+                groups.add(new Group("public-avatar", t("group.public_avatar"), AppIcons.ICON_GLOBE_PATH, rows));
+            }
+            groups.add(new Group("contents",t("group.contents"),DrawPrimitives.ICON_EMOJI_PATH,assetRows(true)));
+            groups.add(group("phrases-entry","",DrawPrimitives.ICON_PHRASE_PATH,
+                    action("phrases:list",t("phrases"),draft.phrases().size()+" "+t("phrases_count")+" · "+t("click_edit"))));
+            return groups;
+        }
         var rows=new ArrayList<Row>();
         for(int i=0;i<draft.templates().size();i++){
             var r=draft.templates().get(i);
@@ -588,6 +642,8 @@ public final class ServerConfigPage {
         String status=importing?t("importing"):draft.saving()?host.label("atomchat.config.saving"):!draft.error().isEmpty()?error(draft.error()):draft.dirty()&&draft.validation()!=null?error(draft.validation()):
                 !feedback.isEmpty()?(feedback.equals("saved")?t("saved_sync"):error(feedback)):t(view==View.TEMPLATE||view==View.PHRASE?"editor_commit_hint":draft.dirty()?(root?"dirty":"editor_draft"):"unchanged");
         if(host.administration()&&root&&feedback.equals("saved"))status+=" · "+syncText();
+        if (root && chip() == 1 && publicAvatarBusy) status = host.label("atomchat.config.saving");
+        else if (root && chip() == 1 && !publicAvatarFeedback.isEmpty()) status = publicAvatarFeedback;
         var font=FontManager.font(UiTokens.SETTINGS_TILE_SUB);
         SkiaFontRenderer.drawTextCentered(canvas,font,SkiaFontRenderer.truncate(font,status,geometry.status().w()),
                 geometry.status().x()+geometry.status().w()/2,geometry.status().y()+geometry.status().h()/2,
@@ -694,7 +750,8 @@ public final class ServerConfigPage {
                 float w=SettingsListAction.width(t("import_short"));
                 button(canvas,"asset:import",t("import_short"),new UiLayout.Rect(rect.right()-pad-w,rect.y()+pad,w,SettingsListAction.HEIGHT),true,false,enabled&&!importing,()->act("asset:import"),motion,clip,mx,my,dt);
             }else{
-                if(enabled)hit(rect,row.id(),()->act(row.id()),null,motion,clip);
+                if(enabled && (!row.id().startsWith("avatar:") || !publicAvatarBusy))
+                    hit(rect,row.id(),()->act(row.id()),null,motion,clip);
                 SettingsGroupPaint.chevron(canvas,rect.right()-pad-UiTokens.COMPOSER_ICON_SIZE/2,rect.y()+UiTokens.SETTINGS_ROW_H/2,UiTokens.SETTINGS_FOLD_CHEVRON_SIZE,0,c.textSecondaryColor);
             }
             return;
@@ -774,6 +831,8 @@ public final class ServerConfigPage {
     private void act(String id){
         switch(id){
             case TEMPLATE_GUIDE -> show(View.TEMPLATE_GUIDE);
+            case "avatar:choose" -> editPublicAvatar();
+            case "avatar:reset" -> resetPublicAvatar();
             case "phrases:list"->show(View.PHRASES);
             case "assets:list"->show(View.EMOTES);
             case "asset:import"->{if(!importing){importing=true;host.chooseImage(this::importImage);}}

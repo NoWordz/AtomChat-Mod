@@ -11,7 +11,12 @@ public final class AdminProtocol {
     public record Request(String action,int version,String fingerprint,ServerConfigValues values,List<AdminAsset> assets,String name,String requestId) {
         public Request(String action,int version,String fingerprint,ServerConfigValues values,List<AdminAsset> assets,String name){this(action,version,fingerprint,values,assets,name,UUID.randomUUID().toString());}
     }
-    public record Snapshot(int version,ServerConfigValues values,String fingerprint,List<AdminAsset> assets) {}
+    public record Snapshot(int version,ServerConfigValues values,String fingerprint,List<AdminAsset> assets,
+                           String publicAvatarRevision) {
+        public Snapshot(int version, ServerConfigValues values, String fingerprint, List<AdminAsset> assets) {
+            this(version, values, fingerprint, assets, null);
+        }
+    }
     public record Reply(String action,boolean ok,String error,Snapshot snapshot,AdminAsset asset,List<MessageTemplate> templates,String requestId) {
         public Reply(String action,boolean ok,String error,Snapshot snapshot,AdminAsset asset,List<MessageTemplate> templates){this(action,ok,error,snapshot,asset,templates,null);}
         public Reply correlate(String id){return new Reply(action,ok,error,snapshot,asset,templates,id);}

@@ -51,6 +51,7 @@ public final class ImageCropper {
     }
 
     private final Callback callback;
+    private java.util.function.Consumer<byte[]> publicAvatarCallback;
 
     private final AtomicInteger GENERATION = new AtomicInteger();
     private volatile Image decoded;
@@ -101,8 +102,19 @@ public final class ImageCropper {
     private PointerAction heldAction;
     private boolean pointerMoved;
 
+    public void openPublicChatAvatar(java.nio.file.Path source, java.util.function.Consumer<byte[]> receive) {
+        open(source, false, 1, 1, "");
+        publicAvatarCallback = receive;
+    }
+
+    private float rectangularRadius(float width) {
+        if (publicAvatarCallback == null) return s(12);
+        return com.atom.chat.render.PublicChatAvatarPaint.radius(width);
+    }
+
     public void open(java.nio.file.Path source, boolean circle,
                      float frameW, float frameH, String targetId) {
+        publicAvatarCallback = null;
         opening = new Object();
         heldAction = null;
         active = true;
@@ -149,7 +161,8 @@ public final class ImageCropper {
             return;
         }
         String id = targetId;
-        callback.onCancel(id);
+        if (publicAvatarCallback != null) publicAvatarCallback.accept(null);
+        else callback.onCancel(id);
         // The decoded bitmap stays alive through the fade-out; the resources
         // are released in finishClose() once the animation has played.
         beginClose();
@@ -166,6 +179,7 @@ public final class ImageCropper {
      * of pixels to the finalizer).
      */
     public void release() {
+        publicAvatarCallback = null;
         active = false;
         closing = false;
         GENERATION.incrementAndGet();
@@ -177,6 +191,7 @@ public final class ImageCropper {
     }
 
     private void finishClose() {
+        publicAvatarCallback = null;
         active = false;
         closing = false;
         GENERATION.incrementAndGet();
@@ -337,7 +352,10 @@ public final class ImageCropper {
                 frameCx(panel), frameCy(panel), rx, ry, offX, offY);
         int outW;
         int outH;
-        if (circle) {
+        if (publicAvatarCallback != null) {
+            outW = com.atom.chat.pack.PublicChatAvatar.SIZE;
+            outH = outW;
+        } else if (circle) {
             outW = AVATAR_OUT;
             outH = AVATAR_OUT;
         } else {
@@ -354,13 +372,14 @@ public final class ImageCropper {
                         Rect.makeXYWH(0, 0, outW, outH),
                         SamplingMode.LINEAR, paint, false);
             }
-            try (io.github.humbleui.skija.Data data =
-                         surface.makeImageSnapshot().encodeToData(EncodedImageFormat.PNG)) {
+            try (Image snapshot = surface.makeImageSnapshot();
+                 io.github.humbleui.skija.Data data = snapshot.encodeToData(EncodedImageFormat.PNG)) {
                 bytes = data.getBytes();
             }
         }
         String id = targetId;
-        callback.onConfirm(id, bytes);
+        if (publicAvatarCallback != null) publicAvatarCallback.accept(bytes);
+        else callback.onConfirm(id, bytes);
         beginClose();
     }
 
@@ -423,7 +442,7 @@ public final class ImageCropper {
                 try (Paint dim = new Paint().setColor(Color.makeARGB((int) (150F * anim), 0, 0, 0))) {
                     RRect opening = circle ? RRect.makeOvalXYWH(cropBounds.getLeft(), cropBounds.getTop(),
                             cropBounds.getWidth(), cropBounds.getHeight())
-                            : RRect.makeXYWH(cropBounds.getLeft(), cropBounds.getTop(), cropBounds.getWidth(), cropBounds.getHeight(), s(12));
+                            : RRect.makeXYWH(cropBounds.getLeft(), cropBounds.getTop(), cropBounds.getWidth(), cropBounds.getHeight(), rectangularRadius(cropBounds.getWidth()));
                     CornerGeometry.clipRRect(canvas, opening, io.github.humbleui.skija.ClipMode.DIFFERENCE, true);
                     canvas.drawRect(Rect.makeXYWH(panel.x(), panel.y(), panelW, panelH), dim);
                 } finally {
@@ -436,7 +455,7 @@ public final class ImageCropper {
                 if (circle) {
                     canvas.drawOval(Rect.makeXYWH(cx - rx, cy - ry, 2.0F * rx, 2.0F * ry), ring);
                 } else {
-                    CornerGeometry.drawRRect(canvas, RRect.makeXYWH(cx - rx, cy - ry, 2.0F * rx, 2.0F * ry, s(12)), ring);
+                    CornerGeometry.drawRRect(canvas, RRect.makeXYWH(cx - rx, cy - ry, 2.0F * rx, 2.0F * ry, rectangularRadius(2.0F * rx)), ring);
                 }
             }
 
