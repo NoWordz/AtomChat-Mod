@@ -544,7 +544,8 @@ public final class ChatHudRenderer {
             if (!size.custom() && card.renderer() != null) card = card.generic();
         }
         float quoteHeight = quoteHeight(message);
-        boolean hasItems = !lines.isEmpty() && lines.get(0).parts().stream().anyMatch(part -> part.isItem());
+        boolean hasItems = CompactCardPaint.showsNativeItem(card, bubbleWidth)
+                || !lines.isEmpty() && lines.get(0).parts().stream().anyMatch(part -> part.isItem());
         hasItems |= !caption.isEmpty() && caption.get(0).parts().stream().anyMatch(part -> part.isItem());
         List<RichLine> quote = List.of();
         float quoteWidth = 0F;
@@ -786,7 +787,7 @@ public final class ChatHudRenderer {
             float width = measured.width();
             if (!CompactCardPaint.drawCustom(canvas, measured.card(), x, cardY, width, height)) {
                 CompactCardPaint.drawBackground(canvas, measured.card(), x, cardY, width, height,
-                        lastInk.capsuleRadius(), lastInk.capsule(), lastInk.capsuleText(), lastInk.shadow());
+                        lastInk.capsuleRadius(), lastInk.capsule(), lastInk.capsuleText(), lastInk.shadow(), paintingStarted);
                 canvas.save();
                 try {
                     canvas.clipRect(Rect.makeXYWH(x, cardY, width, height));

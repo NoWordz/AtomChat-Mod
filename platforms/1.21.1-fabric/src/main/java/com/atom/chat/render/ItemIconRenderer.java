@@ -140,14 +140,31 @@ public final class ItemIconRenderer {
 
     /** Direct item-stack info entry point for rich share cards (reuses the same offscreen cache). */
     public static void draw(Canvas canvas, HoverEvent.ItemStackContent info, float x, float y, float size) {
+        paintCached(canvas, info, x, y, size);
+    }
+
+    /** HUD cards reserve the same cache slot as the item shown in their full card. */
+    static boolean drawCardItem(Canvas canvas, com.atom.chat.api.card.ShareCard card, float x, float y, float size) {
+        var client = MinecraftClient.getInstance();
+        if (client == null || client.world == null || failed) return false;
+        var hover = com.atom.chat.card.BuiltInCardAdapter.resolveItemHover(card);
+        return hover != null && paintCached(canvas, hover.getValue(HoverEvent.Action.SHOW_ITEM), x, y, size);
+    }
+
+    private static boolean paintCached(Canvas canvas, HoverEvent.ItemStackContent info, float x, float y, float size) {
         if (failed || canvas == null || info == null
-                || !Float.isFinite(x) || !Float.isFinite(y) || !Float.isFinite(size) || size <= 0) return;
+                || !Float.isFinite(x) || !Float.isFinite(y) || !Float.isFinite(size) || size <= 0) return false;
         try {
             Image image = CACHE.request(info);
-            if (image == null) com.atom.chat.diagnostics.FrameSegments.count(com.atom.chat.diagnostics.FrameSegments.Counter.ICON_COLD);
-            if (image != null) canvas.drawImageRect(image, Rect.makeXYWH(x, y, size, size));
+            if (image == null) {
+                com.atom.chat.diagnostics.FrameSegments.count(com.atom.chat.diagnostics.FrameSegments.Counter.ICON_COLD);
+                return false;
+            }
+            canvas.drawImageRect(image, Rect.makeXYWH(x, y, size, size));
+            return true;
         } catch (RuntimeException | LinkageError error) {
             disable(error);
+            return false;
         }
     }
 

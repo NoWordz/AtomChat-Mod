@@ -31,6 +31,11 @@ final class CompactCardPaint {
         return card.hudSummary().isBlank() ? card.title() : card.hudSummary();
     }
 
+    static boolean showsNativeItem(Content content, float width) {
+        return content != null && content.card().template() == ShareCard.Template.ITEM
+                && content.card().item() != null && textInset(width) > UiTokens.BUBBLE_PAD;
+    }
+
     static float textInset(float width) {
         return width >= UiTokens.COMPOSER_ICON_SIZE + UiTokens.BUBBLE_PAD * 3
                 ? UiTokens.COMPOSER_ICON_SIZE + UiTokens.BUBBLE_PAD * 2 : UiTokens.BUBBLE_PAD;
@@ -77,10 +82,14 @@ final class CompactCardPaint {
     }
 
     static void drawBackground(Canvas canvas, Content content, float x, float y, float width, float height,
-                               float radius, int background, int iconInk, boolean shadow) {
+                               float radius, int background, int iconInk, boolean shadow, boolean nativeItems) {
         if (shadow) HudShadow.draw(canvas, RRect.makeXYWH(x, y, width, height, radius));
         CornerGeometry.drawRoundedRect(canvas, x, y, width, height, radius, background);
         if (textInset(width) == UiTokens.BUBBLE_PAD) return;
+        float iconSize = UiTokens.COMPOSER_ICON_SIZE;
+        if (nativeItems && showsNativeItem(content, width)
+                && ItemIconRenderer.drawCardItem(canvas, content.card(), x + UiTokens.BUBBLE_PAD,
+                        y + (height - iconSize) / 2, iconSize)) return;
         var icon = switch (SpecialCardPresentation.kind(content.card())) {
             case LOCATION -> AppIcons.ICON_GLOBE_PATH;
             case TELEPORT_REQUEST -> DrawPrimitives.ICON_TP_PATH;
