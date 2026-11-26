@@ -75,12 +75,26 @@ final class ReplayMatrix {
             throw new IllegalStateException("GUI scale drift before " + key);
         }
         captured = true;
+        if (key.endsWith("-balanced")) {
+            logPanelPatches();
+        }
         try (var screenshot = class_318.method_1663(client.method_1522())) {
             var directory = Path.of("probe-screenshots");
             Files.createDirectories(directory);
             screenshot.method_4314(directory.resolve(key + ".png"));
         } catch (IOException failure) {
             throw new UncheckedIOException(failure);
+        }
+    }
+
+    private static void logPanelPatches() {
+        try {
+            var field = com.atom.chat.render.SoftShadow.class.getDeclaredField("PANEL_PATCHES");
+            field.setAccessible(true);
+            var patches = (java.util.Map<?, ?>) field.get(null);
+            System.out.printf("V098_SHADOW_PATCH %s %s%n", key, patches.keySet());
+        } catch (ReflectiveOperationException failure) {
+            throw new IllegalStateException("Cannot observe panel shadow patches", failure);
         }
     }
 

@@ -20,18 +20,20 @@ import java.util.Map;
 
 /** Panel/dialog Gaussian shadows and popup material for the jump button. Render-thread confined. */
 public final class SoftShadow {
-    private static final int ULTRA_DENSITY = 3;
-    private static final int BALANCED_DENSITY = 2;
+    private static final float ULTRA_DENSITY = 3F;
+    private static final float BALANCED_DENSITY = 2F;
+    private static final float LARGE_BALANCED_DENSITY = 1.5F;
     private static final int MAX_PATCHES = 12;
     private static final int MAX_SETTLED_SHADOW_PIXELS = 1024 * 1024;
+    private static final int LARGE_SHADOW_DEVICE_PIXELS = MAX_SETTLED_SHADOW_PIXELS / 4;
     private static final float MAX_SETTLED_SHADOW_DENSITY = 2F;
     private static final Map<PanelPatchKey, PanelPatch> PANEL_PATCHES = new LinkedHashMap<>(16, .75F, true);
     private static DeviceShadowKey previousShadowKey;
     private static DeviceShadow settledShadow;
 
-    record PanelPatchKey(float radius, int density) { }
-    private record PanelPatch(Image image, IRect center, int density) { }
-    private record DeviceShadowKey(RRect face, float width, float height, Matrix33 matrix, int density) { }
+    record PanelPatchKey(float radius, float density) { }
+    private record PanelPatch(Image image, IRect center, float density) { }
+    private record DeviceShadowKey(RRect face, float width, float height, Matrix33 matrix, float density) { }
     private record DeviceShadow(DeviceShadowKey key, Image image) { }
 
     private SoftShadow() { }
@@ -89,8 +91,9 @@ public final class SoftShadow {
         float width = face.getWidth(), height = face.getHeight();
         if (!enabled() || width <= 0 || height <= 0) return;
         float r = face._radii[0];
-        int density = AtomChatConfig.activeGraphicsQuality() == GraphicsQuality.BALANCED
-                ? BALANCED_DENSITY : ULTRA_DENSITY;
+        boolean balanced = AtomChatConfig.activeGraphicsQuality() == GraphicsQuality.BALANCED;
+        Matrix33 matrix = balanced || (settled && r > 0F) ? canvas.getLocalToDeviceAsMatrix33() : null;
+        float density = balanced ? balancedDensity(matrix, width, height) : ULTRA_DENSITY;
         var key = new PanelPatchKey(r, density);
         PanelPatch patch = PANEL_PATCHES.get(key);
         if (patch == null) {
@@ -102,8 +105,25 @@ public final class SoftShadow {
             }
             PANEL_PATCHES.put(key, patch);
         }
-        if (settled && drawSettledShadow(canvas, face, width, height, patch, r)) return;
+        if (settled && r > 0F && drawSettledShadow(canvas, face, width, height, patch, matrix)) return;
         drawPanelPatch(canvas, face, width, height, patch);
+    }
+
+    private static float balancedDensity(Matrix33 matrix, float width, float height) {
+        float[] m = matrix._mat;
+        float scale = m[0];
+        // The nine-slice stores only the soft tail. Keep the full patch for small
+        // shadows and transforms outside the tested, axis-aligned 1–2× range.
+        if (scale >= 1F && scale <= MAX_SETTLED_SHADOW_DENSITY && axisAlignedUniform(m)
+                && (double) width * height * scale * scale >= LARGE_SHADOW_DEVICE_PIXELS) {
+            return LARGE_BALANCED_DENSITY;
+        }
+        return BALANCED_DENSITY;
+    }
+
+    private static boolean axisAlignedUniform(float[] matrix) {
+        return matrix[4] == matrix[0] && matrix[1] == 0F && matrix[3] == 0F
+                && matrix[6] == 0F && matrix[7] == 0F && matrix[8] == 1F;
     }
 
     private static void drawPanelPatch(Canvas canvas, RRect face, float width, float height, PanelPatch patch) {
@@ -113,7 +133,7 @@ public final class SoftShadow {
             canvas.clipRRect(face, ClipMode.DIFFERENCE, true);
             float pad = panelPad();
             canvas.translate(face.getLeft() - pad, face.getTop() - pad);
-            int density = patch.density();
+            float density = patch.density();
             canvas.scale(1F / density, 1F / density);
             canvas.drawImageNine(patch.image(), patch.center(),
                     Rect.makeWH((width + pad * 2F) * density, (height + pad * 2F) * density),
@@ -124,14 +144,11 @@ public final class SoftShadow {
     }
 
     private static boolean drawSettledShadow(Canvas canvas, RRect face, float faceWidth, float faceHeight,
-                                             PanelPatch patch, float radius) {
-        if (radius == 0F) return false;
-        Matrix33 matrix = canvas.getLocalToDeviceAsMatrix33();
+                                             PanelPatch patch, Matrix33 matrix) {
         float[] m = matrix._mat;
         float scale = m[0];
         // Transforms and high-density coverage stay on the live clip.
-        if (!(scale > 0F && scale <= MAX_SETTLED_SHADOW_DENSITY) || m[4] != scale
-                || m[1] != 0F || m[3] != 0F || m[6] != 0F || m[7] != 0F || m[8] != 1F) return false;
+        if (!(scale > 0F && scale <= MAX_SETTLED_SHADOW_DENSITY) || !axisAlignedUniform(m)) return false;
         float left = face.getLeft() * scale + m[2], top = face.getTop() * scale + m[5];
         float right = face.getRight() * scale + m[2], bottom = face.getBottom() * scale + m[5];
         if (!onPixelGrid(left) || !onPixelGrid(top) || !onPixelGrid(right) || !onPixelGrid(bottom)) return false;
@@ -190,7 +207,7 @@ public final class SoftShadow {
         return (float) Math.ceil(profile.wideSigma() * 4F + profile.ambient().drop() + 2F);
     }
 
-    private static PanelPatch makePanelPatch(float radius, int density) {
+    private static PanelPatch makePanelPatch(float radius, float density) {
         var profile = ShadowTokens.PANEL;
         float pad = panelPad();
         // Three sigma between a corner and the stretch seam makes each edge effectively straight.

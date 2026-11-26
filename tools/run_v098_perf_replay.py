@@ -51,6 +51,17 @@ def build_probe(retest, java, out, prior):
     return probe
 
 
+def with_addons(launch, mods):
+    def staged(args, home):
+        for jar in mods:
+            destination = home / "mods" / jar.name
+            if destination.exists():
+                raise FileExistsError(f"duplicate fixture mod filename: {jar.name}")
+            shutil.copyfile(jar, destination)
+        return launch(args, home)
+    return staged
+
+
 def main():
     cli = argparse.ArgumentParser(description=__doc__)
     cli.add_argument("label")
@@ -61,10 +72,18 @@ def main():
     cli.add_argument("--compile-against", type=Path, help="released 0.9.7 jar if testing newer builds")
     cli.add_argument("--quality", choices=["ULTRA", "BALANCED", "PERFORMANCE"], default="BALANCED")
     cli.add_argument("--scale", choices=["2", "3", "5"], default="5")
+    cli.add_argument("--driver", type=Path, help="replace the performance route with a remapped Fabric probe")
+    cli.add_argument("--extra-mod", action="append", type=Path, default=[], help="copy this JAR only into the isolated mods directory")
+    cli.add_argument("--expect-marker", default="STEADY_PROBE_COMPLETE", help="required completion line in the private client log")
     cli.add_argument("--matrix", action="store_true", help="save the 36 steady/scroll quality comparisons")
     cli.add_argument("--theme", choices=["dark", "light"], default="dark")
     cli.add_argument("--out", type=Path, default=ROOT / "build/v098-perf")
     args = cli.parse_args()
+    if args.matrix and args.driver:
+        cli.error("--matrix uses the built-in performance route")
+    if not args.expect_marker.strip():
+        cli.error("--expect-marker must contain the driver's success text")
+    addons = [path.resolve(strict=True) for path in args.extra_mod]
     java = Path(os.environ["JAVA_HOME"]) / "bin"
     release = args.jar.resolve(strict=True)
     library = args.library.resolve(strict=True)
@@ -78,7 +97,11 @@ def main():
     out.mkdir(parents=True)
     source = out / "retest.py"
     with zipfile.ZipFile(args.archive) as archive:
-        source.write_bytes(archive.read("build/v094-retest/retest.py"))
+        historical = archive.read("build/v094-retest/retest.py").decode("utf-8")
+    completion = "'STEADY_PROBE_COMPLETE' in log"
+    if historical.count(completion) != 1:
+        raise ValueError("the archived CCB launcher completion check was not found")
+    source.write_text(historical.replace(completion, f"{args.expect_marker!r} in log"), encoding="utf-8")
     spec = importlib.util.spec_from_file_location("retest", source)
     retest = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(retest)
@@ -86,6 +109,7 @@ def main():
     prior = args.fixture.resolve(strict=True) / "continuous-final-a"
     retest.scratch = Path(os.environ["TEMP"]) / "atomchat-v098-perf-replay"
     retest.java = java / "java.exe"
+    retest.launch_private = with_addons(retest.launch_private, addons)
     retest.archive = out / "reference"
     retest.archive.mkdir()
     config = json.loads((retest.fixture / "atomchat-client.json").read_text(encoding="utf-8-sig"))
@@ -97,7 +121,8 @@ def main():
     )
     if args.theme == "light":
         reference["config_overrides"].update(panelBgColor=-1052177, cardColor=-1842205)
-    reference.update(theme=args.theme, reverse=True, quality_matrix=args.matrix)
+    reference.update(theme=args.theme, reverse=True, quality_matrix=args.matrix,
+                     extra_mods={jar.name: retest.sha(jar) for jar in addons})
     config.update(reference["config_overrides"])
     config_bytes = json.dumps(config, ensure_ascii=False, indent=2).replace("\n", "\r\n").encode()
     reference["effective_config_sha256"] = hashlib.sha256(config_bytes).hexdigest()
@@ -106,7 +131,7 @@ def main():
     shutil.copytree(prior / ".fabric/remappedJars", retest.archive / ".fabric/remappedJars")
     shutil.copyfile(args.compile_against or release, out / "atomchat-reference.jar")
     shutil.copyfile(retest.fixture / "manifest.json", out / "fixture-manifest.json")
-    probe = build_probe(retest, java, out, prior)
+    probe = args.driver.resolve(strict=True) if args.driver else build_probe(retest, java, out, prior)
     home = retest.scratch / args.label
     jfc = out / "atomchat.jfc"
     jfc.write_text(JFC, encoding="utf-8")
