@@ -124,6 +124,7 @@ class NavStackWiringSourceTest {
         PORT_WORK.put("dropProfileSubject", "profilePage.resetSubject()");
         PORT_WORK.put("copy", "tr(key)");
         PORT_WORK.put("selectTabNow", "bottomTabBar.setSelectedIndex(BottomTabBar.rootIndex(root))");
+        PORT_WORK.put("initializeSelectedTab", "bottomTabBar.setSelectedImmediate(BottomTabBar.rootIndex(root))");
     }
 
     // ---------------------------------------------------------------- helpers

@@ -166,8 +166,14 @@ class PageNavStyleSourceTest {
         assertTrue(setSelected.contains("animateTo("), "and tweens itself otherwise");
         for (String screen : SCREENS) {
             String src = source(screen);
-            assertFalse(src.contains("setSelectedImmediate"),
-                    screen + ": the screen must select through the tweening entry point");
+            String restoring = body(src, "public void initializeSelectedTab(NavPage root)");
+            assertTrue(restoring.contains("setSelectedImmediate("),
+                    screen + ": the recovered root snaps its selection before the first visible frame");
+            assertEquals(1, occurrences(src, "setSelectedImmediate("),
+                    screen + ": only the restore initializer can snap the capsule");
+            String switching = body(src, "public void selectTabNow(AppPage root)");
+            assertTrue(switching.contains("setSelectedIndex("),
+                    screen + ": ordinary page selection still goes through the tweening entry point");
             assertFalse(src.contains("indicatorAnimator()"),
                     screen + ": the capsule's animator is not shared out any more");
         }
