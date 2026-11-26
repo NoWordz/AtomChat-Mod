@@ -251,6 +251,37 @@ class AppearancePresetStoreTest {
     }
 
     @Test
+    void savedPresetRestoresBothBlurStrengthsAfterReload() {
+        var source = appearance();
+        source.blurStrength = 1.25F;
+        var target = new AtomChatConfig();
+        target.blurStrength = 2.75F;
+        var saved = store.saveCurrent(source, null);
+        assertTrue(saved.ok(), saved.error());
+
+        var reloaded = new AppearancePresetStore(tmp.resolve("appearance-presets"));
+        assertTrue(reloaded.apply(saved.preset().id(), target).ok());
+        assertEquals(1.25F, target.blurStrength);
+        assertEquals(2.35F, target.cardBlurStrength);
+    }
+
+    @Test
+    void legacyPresetWithoutPanelBlurStrengthKeepsCurrentStrength() throws IOException {
+        var saved = store.saveCurrent(appearance(), null);
+        assertTrue(saved.ok(), saved.error());
+        Path manifest = tmp.resolve("appearance-presets").resolve(saved.preset().id()).resolve("preset.json");
+        var json = com.google.gson.JsonParser.parseString(Files.readString(manifest)).getAsJsonObject();
+        json.getAsJsonObject("appearance").remove("blurStrength");
+        Files.writeString(manifest, json.toString());
+
+        var target = new AtomChatConfig();
+        target.blurStrength = 1.75F;
+        assertTrue(store.apply(saved.preset().id(), target).ok());
+        assertEquals(1.75F, target.blurStrength);
+        assertEquals(2.35F, target.cardBlurStrength);
+    }
+
+    @Test
     void nonFiniteOrOutOfRangeValuesAndPathTraversalAreRejected() {
         AtomChatConfig bad = new AtomChatConfig();
         bad.cornerRadius = Float.NaN;
@@ -270,9 +301,13 @@ class AppearancePresetStoreTest {
         Files.writeString(tmp.resolve("config"), "not a directory");
         AtomChatConfig target = appearance();
         target.accentColor = 789;
+        target.blurStrength = 1.2F;
+        target.selectedAppearancePresetId = "";
         assertFalse(store.apply(id, target).ok());
         assertEquals(789, target.accentColor);
         assertFalse(target.blurEnabled);
+        assertEquals(1.2F, target.blurStrength);
+        assertEquals("", target.selectedAppearancePresetId);
         assertTrue(WallpaperStore.isSet());
     }
 

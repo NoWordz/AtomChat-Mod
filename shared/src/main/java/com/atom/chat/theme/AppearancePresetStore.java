@@ -108,7 +108,7 @@ public final class AppearancePresetStore {
     }
 
     public record Preset(String id, int order, int number, boolean hasWallpaper,
-                         String wallpaperExtension, Snapshot snapshot) {
+                         String wallpaperExtension, Snapshot snapshot, Float panelBlurStrength) {
     }
 
     public record Result(boolean ok, String error, Preset preset) {
@@ -149,6 +149,26 @@ public final class AppearancePresetStore {
         return cache;
     }
 
+    /** Use the selection the player made. Older configs inferred it from the appearance values. */
+    public static Preset selected(List<Preset> presets, AtomChatConfig config) {
+        String selectedId = config.selectedAppearancePresetId;
+        if (presets.isEmpty() || "".equals(selectedId)) return null;
+        if (selectedId != null) {
+            for (Preset preset : presets) {
+                if (selectedId.equals(preset.id())) return preset;
+            }
+            return null;
+        }
+        var appearance = Snapshot.capture(config);
+        for (Preset preset : presets) {
+            if (preset.snapshot().equals(appearance)
+                    && (preset.panelBlurStrength() == null || preset.panelBlurStrength() == config.storedBlurStrength())) {
+                return preset;
+            }
+        }
+        return null;
+    }
+
     /** Captures the live appearance under the smallest free positive number. */
     public synchronized Result saveCurrent(AtomChatConfig config, Path wallpaperSource) {
         if (!com.atom.chat.util.DataMigration.allowPersonalPath(dir)) {
@@ -177,7 +197,7 @@ public final class AppearancePresetStore {
         }
         int order = current.stream().mapToInt(Preset::order).max().orElse(0) + 1;
         String id = UUID.randomUUID().toString();
-        return write(id, order, number, snapshot, null, null);
+        return write(id, order, number, snapshot, config.storedBlurStrength(), null, null);
     }
 
     public synchronized Result apply(String id, AtomChatConfig config) {
@@ -189,15 +209,23 @@ public final class AppearancePresetStore {
             return Result.failure("invalid_preset");
         }
         Snapshot previous = Snapshot.capture(config);
+        float previousBlur = config.blurStrength;
+        String previousSelection = config.selectedAppearancePresetId;
         try {
             preset.snapshot().applyTo(config);
+            if (preset.panelBlurStrength() != null) config.blurStrength = preset.panelBlurStrength();
+            config.selectedAppearancePresetId = preset.id();
             if (!AtomChatConfig.saveChecked(config)) {
                 previous.applyTo(config);
+                config.blurStrength = previousBlur;
+                config.selectedAppearancePresetId = previousSelection;
                 return Result.failure("config_io");
             }
             return Result.success(preset);
         } catch (RuntimeException e) {
             previous.applyTo(config);
+            config.blurStrength = previousBlur;
+            config.selectedAppearancePresetId = previousSelection;
             return Result.failure("apply_io");
         }
     }
@@ -220,7 +248,7 @@ public final class AppearancePresetStore {
         }
     }
 
-    private Result write(String id, int order, int number, Snapshot snapshot,
+    private Result write(String id, int order, int number, Snapshot snapshot, float panelBlurStrength,
                          Path wallpaperSource, String extension) {
         Path stage = dir.resolve(".stage-" + id + "-" + UUID.randomUUID());
         Path target = dir.resolve(id);
@@ -230,7 +258,7 @@ public final class AppearancePresetStore {
             com.atom.chat.util.DataMigration.noLinks(target);
             Files.createDirectories(stage);
             Files.writeString(stage.resolve(MANIFEST),
-                    toJson(id, order, number, snapshot, extension), StandardCharsets.UTF_8);
+                    toJson(id, order, number, snapshot, panelBlurStrength, extension), StandardCharsets.UTF_8);
             if (wallpaperSource != null) {
                 Files.copy(wallpaperSource, stage.resolve(WALLPAPER + extension),
                         StandardCopyOption.REPLACE_EXISTING);
@@ -248,7 +276,7 @@ public final class AppearancePresetStore {
             }
             deleteTree(backup);
             refresh();
-            Preset preset = new Preset(id, order, number, extension != null, extension, snapshot);
+            Preset preset = new Preset(id, order, number, extension != null, extension, snapshot, panelBlurStrength);
             return Result.success(preset);
         } catch (IOException e) {
             deleteTreeQuietly(stage);
@@ -304,6 +332,8 @@ public final class AppearancePresetStore {
                 return null;
             }
             JsonObject a = object(root, "appearance");
+            Float panelBlurStrength = a.has("blurStrength") ? number(a, "blurStrength") : null;
+            if (panelBlurStrength != null && !finite(panelBlurStrength, 0.25F, 3F)) return null;
             Snapshot snapshot = new Snapshot(
                     color(a, "accentColor"), color(a, "ownBubbleColor"),
                     color(a, "bubbleTextColor"), color(a, "otherBubbleColor"),
@@ -332,7 +362,7 @@ public final class AppearancePresetStore {
                     return null;
                 }
             }
-            return new Preset(id, order, number, extension != null, extension, snapshot);
+            return new Preset(id, order, number, extension != null, extension, snapshot, panelBlurStrength);
         } catch (IOException | RuntimeException e) {
             return null;
         }
@@ -441,7 +471,7 @@ public final class AppearancePresetStore {
         return value.getAsJsonObject();
     }
 
-    private static String toJson(String id, int order, int number, Snapshot s, String extension) {
+    private static String toJson(String id, int order, int number, Snapshot s, float panelBlurStrength, String extension) {
         JsonObject root = new JsonObject();
         root.addProperty("schema", SCHEMA);
         root.addProperty("id", id);
@@ -470,6 +500,7 @@ public final class AppearancePresetStore {
         a.addProperty("contentScale", s.contentScale());
         a.addProperty("cardTint", s.cardTint());
         a.addProperty("cardBlurStrength", s.cardBlurStrength());
+        a.addProperty("blurStrength", panelBlurStrength);
         a.addProperty("cornerRadius", s.cornerRadius());
         a.addProperty("blurEnabled", s.blurEnabled());
         a.addProperty("panelOutline", s.panelOutline());

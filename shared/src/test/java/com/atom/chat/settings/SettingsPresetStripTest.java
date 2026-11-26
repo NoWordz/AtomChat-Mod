@@ -4,6 +4,7 @@ import com.atom.chat.config.AtomChatConfig;
 import com.atom.chat.platform.Platform;
 import com.atom.chat.render.SkiaFontRenderer;
 import com.atom.chat.theme.AppearancePresetStore;
+import com.atom.chat.theme.ThemeService;
 import com.atom.chat.ui.UiLayout;
 import com.atom.chat.ui.UiStagger;
 import com.atom.lib.design.atomchat.UiTokens;
@@ -206,6 +207,7 @@ class SettingsPresetStripTest {
             page.render(canvas, layout, SettingsSection.APPEARANCE, -1, -1, 0, cfg.accentColor);
             byte[] savedSelected = readPixels(surface, bitmap);
             cfg.themeName = "custom"; // No matching built-in or saved snapshot: borderless reference.
+            cfg.selectedAppearancePresetId = "";
             canvas.clear(0);
             page.render(canvas, layout, SettingsSection.APPEARANCE, -1, -1, 0, cfg.accentColor);
             byte[] borderless = readPixels(surface, bitmap);
@@ -223,6 +225,36 @@ class SettingsPresetStripTest {
     private static byte[] readPixels(Surface surface, Bitmap bitmap) {
         assertTrue(surface.readPixels(bitmap, 0, 0));
         return bitmap.readPixels();
+    }
+
+    @Test
+    void explicitlyPickingDefaultWinsOverAnIdenticalSavedAppearance() throws Exception {
+        AtomChatConfig cfg = AtomChatConfig.get();
+        cfg.animationEnabled = false;
+        ThemeService.apply(cfg, ThemeService.FROSTED);
+        try (Surface surface = Surface.makeRasterN32Premul(560, 940);
+             Bitmap bitmap = new Bitmap()) {
+            bitmap.allocN32Pixels(560, 940);
+            Canvas canvas = surface.getCanvas();
+            page.render(canvas, layout, SettingsSection.APPEARANCE, -1, -1, 0, cfg.accentColor);
+            var row = page.themesRowRect(layout, SettingsSection.APPEARANCE, 0);
+            assertNotNull(row);
+            byte[] originalDefault = readPixels(surface, bitmap);
+            var saved = AppearancePresetStore.get().saveCurrent(cfg, null);
+            assertTrue(saved.ok(), saved.error());
+            assertTrue(AppearancePresetStore.get().apply(saved.preset().id(), cfg).ok());
+            AtomChatConfig.reload();
+            cfg = AtomChatConfig.get();
+            assertEquals(saved.preset().id(), cfg.selectedAppearancePresetId);
+            ThemeService.apply(cfg, ThemeService.FROSTED);
+            canvas.clear(0);
+            page.render(canvas, layout, SettingsSection.APPEARANCE, -1, -1, 0, cfg.accentColor);
+
+            assertEquals(0, differences(originalDefault, readPixels(surface, bitmap),
+                    Math.round(row.x() + UiTokens.SETTINGS_ROW_PAD), Math.round(row.y() + UiTokens.s(28)),
+                    Math.round(UiTokens.THEME_CARD_W), Math.round(UiTokens.THEME_CARD_H)),
+                    "the explicit built-in selection restores the default card edge, even if a custom preset has identical values");
+        }
     }
 
     private static int differences(byte[] a, byte[] b, int x, int y, int w, int h) {

@@ -2615,16 +2615,7 @@ public final class SettingsSectionPage {
                 textPrimary());
         String currentName;
         List<AppearancePresetStore.Preset> custom = AppearancePresetStore.get().list();
-        AppearancePresetStore.Preset matchingCustom = null;
-        if (!custom.isEmpty()) {
-            AppearancePresetStore.Snapshot live = AppearancePresetStore.Snapshot.capture(config);
-            for (AppearancePresetStore.Preset preset : custom) {
-                if (preset.snapshot().equals(live)) {
-                    matchingCustom = preset;
-                    break;
-                }
-            }
-        }
+        AppearancePresetStore.Preset matchingCustom = AppearancePresetStore.selected(custom, config);
         if (currentId.isEmpty() || ThemeService.FROSTED.equals(currentId)) {
             currentName = tr("atomchat.settings.theme.frosted");
         } else if (ThemeService.byId(currentId) != null) {

@@ -27,7 +27,7 @@ public class AtomChatConfig {
         return performanceModeEnabled() ? 0F : storedBlurStrength();
     }
 
-    private float storedBlurStrength() {
+    public float storedBlurStrength() {
         return Float.isFinite(blurStrength) ? Math.max(0.25F, Math.min(3.0F, blurStrength)) : 2.0F;
     }
 
@@ -425,6 +425,8 @@ public class AtomChatConfig {
      * after a preset lands, so this never gates any behaviour.
      */
     public String themeName = "";
+    /** Null for legacy files. An empty string records an explicit built-in selection. */
+    public String selectedAppearancePresetId;
     /**
      * When true only an explicit {@code @Name} counts as a mention; when
      * false the bare name as a standalone token counts too (e33chat default).

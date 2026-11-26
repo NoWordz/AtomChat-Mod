@@ -334,6 +334,7 @@ public final class ThemeService {
             }
         }
         config.themeName = themeId;
+        config.selectedAppearancePresetId = "";
     }
 
     /**
