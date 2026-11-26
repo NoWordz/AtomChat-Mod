@@ -176,6 +176,24 @@ class ContextMenuControllerTest {
     }
 
     @Test
+    void addonActionsUseTheSameRowsForDrawingAndClicks() {
+        setUp();
+        var lookup = new com.atom.chat.api.card.ItemCardActions.Button("example:recipe", "Lookup recipe");
+        var later = new com.atom.chat.api.card.ItemCardActions.Button("example:later", "Remember item");
+        var details = new com.atom.chat.api.card.ItemCardActions.Button("example:details", "More details");
+        menu.openBubble(ContextMenuController.Subject.of(ALICE, false, "diamond",
+                List.of(lookup, later, details)), 100.0F, 100.0F);
+        try (Surface surface = raster()) {
+            settle(surface);
+            assertEquals(5, host.icons.size());
+            assertNull(menu.itemActionAt(menu.hitRow(host.boxLeft() + 5.0F, host.rowCentreY(1))));
+            assertEquals(lookup, menu.itemActionAt(menu.hitRow(host.boxLeft() + 5.0F, host.rowCentreY(2))));
+            assertEquals(details, menu.itemActionAt(menu.hitRow(host.boxLeft() + 5.0F, host.rowCentreY(4))));
+            assertNull(menu.itemActionAt(5));
+        }
+    }
+
+    @Test
     void theCancelBlockRowIsHittable() {
         setUp();
         Surface surface = raster();

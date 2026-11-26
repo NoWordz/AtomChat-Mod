@@ -1,0 +1,14 @@
+plugins {
+    id 'net.neoforged.moddev' version '2.0.141'
+}
+
+apply from: '../../../gradle/atomchat-jei-example.gradle'
+
+java.toolchain.languageVersion = JavaLanguageVersion.of(21)
+
+neoForge { version = '21.1.235' }
+
+dependencies {
+    compileOnly('mezz.jei:jei-1.21.1-neoforge:19.27.0.340') { transitive = false }
+    compileOnly files(atomchatJar)
+}

@@ -33,6 +33,7 @@ public final class ComposerSearch {
             public void moveCursorToStart() { parkedCaret = 0; }
         };
     }
+    public String draft() { return active ? parked : host.composerText(); }
     public int count() { return matches.size(); }
     public int position() { return index + 1; }
     /** An upload started before the borrow completes against the parked draft, never the query. */

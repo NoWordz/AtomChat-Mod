@@ -1,5 +1,8 @@
 package com.atom.chat.settings;
 
+import com.atom.chat.api.ui.SettingsUi;
+import com.atom.chat.api.ui.UiContributions;
+import com.atom.chat.nav.NavPage;
 import com.atom.chat.render.CornerGeometry;
 import com.atom.chat.ui.AtomChatAppearance;
 import com.atom.chat.font.FontManager;
@@ -32,12 +35,12 @@ import net.minecraft.text.Text;
  * rendering cannot drift apart.</p>
  */
 public final class SettingsHomePage {
-    private final SettingsSection[] sections = SettingsSection.values();
-    private final float[] tileHover = new float[sections.length];
+    private java.util.List<UiContributions.Entry<SettingsUi.HomeEntry>> sections = SettingsUi.resolvedHome();
+    private float[] tileHover = new float[sections.size()];
     // Per-tile bounce scale, indexed like tileHover. One instance per tile, so no
     // two tiles can ever drive the same spring; the array fills lazily because
     // PressScale only comes out of its factory methods.
-    private final PressScale[] tileScale = new PressScale[sections.length];
+    private PressScale[] tileScale = new PressScale[sections.size()];
     /** Page-entrance stagger: tiles rise in one after another on a tab arrival. */
     private final UiStagger.Entrance entrance = new UiStagger.Entrance();
     private long lastFrameMs = System.currentTimeMillis();
@@ -55,25 +58,31 @@ public final class SettingsHomePage {
     public com.atom.chat.ui.StaggerHitMap staggerHits() { return staggerHits; }
 
 
+    private void refreshEntries() {
+        var resolved = SettingsUi.resolvedHome();
+        if (sections.equals(resolved)) return;
+        sections = resolved;
+        tileHover = new float[sections.size()];
+        tileScale = new PressScale[sections.size()];
+    }
+
     public float measureContent(UiLayout layout) {
-        int rows = (sections.length + UiTokens.SETTINGS_TILE_COLS - 1) / UiTokens.SETTINGS_TILE_COLS;
+        refreshEntries();
+        if (sections.isEmpty()) return 0F;
+        int rows = (sections.size() + UiTokens.SETTINGS_TILE_COLS - 1) / UiTokens.SETTINGS_TILE_COLS;
         float side = tileSide(layout);
         return UiTokens.ROOT_CONTENT_GAP
                 + rows * side
-                + (rows - 1) * UiTokens.SETTINGS_TILE_GAP
+                + (rows - 1) * SettingsUi.homeSpacing().tileGap()
                 + UiTokens.ROW_CLIP_INSET;
     }
 
     /** Tile width from the column grid; the tile is square, so this is also its height. */
     public static float tileSide(UiLayout layout) {
-        // The grid sits ROW_CLIP_INSET inside the list clip on both sides, like
-        // settings rows: drawn flush with the clip the outer tiles' rounded
-        // corners would shear flat against it the moment the hover scale
-        // (4px budget + spring overshoot per side) and the card-shadow tail
-        // spill past the edge.
-        float gridW = layout.list.w() - UiTokens.ROW_CLIP_INSET * 2.0F;
-        return Math.min(com.atom.chat.ui.LayoutTokens.SETTINGS_TILE_MAX, (gridW - (UiTokens.SETTINGS_TILE_COLS - 1) * UiTokens.SETTINGS_TILE_GAP)
-                / (float) UiTokens.SETTINGS_TILE_COLS);
+        var spacing = SettingsUi.homeSpacing();
+        float gridW = layout.list.w() - spacing.sideInset() * 2F;
+        float cell = (gridW - (UiTokens.SETTINGS_TILE_COLS - 1) * spacing.tileGap()) / UiTokens.SETTINGS_TILE_COLS;
+        return Math.max(0F, Math.min(com.atom.chat.ui.LayoutTokens.SETTINGS_TILE_MAX, cell));
     }
 
     public static UiLayout.Rect tileRect(UiLayout layout, int index, float scrollY) {
@@ -82,14 +91,15 @@ public final class SettingsHomePage {
         int row = index / UiTokens.SETTINGS_TILE_COLS;
         return new UiLayout.Rect(
                 layout.list.x() + (layout.list.w() - side * UiTokens.SETTINGS_TILE_COLS
-                        - (UiTokens.SETTINGS_TILE_COLS - 1) * UiTokens.SETTINGS_TILE_GAP) / 2F
-                        + col * (side + UiTokens.SETTINGS_TILE_GAP),
+                        - (UiTokens.SETTINGS_TILE_COLS - 1) * SettingsUi.homeSpacing().tileGap()) / 2F
+                        + col * (side + SettingsUi.homeSpacing().tileGap()),
                 layout.list.y() + UiTokens.ROOT_CONTENT_GAP
-                        + row * (side + UiTokens.SETTINGS_TILE_GAP) - scrollY,
+                        + row * (side + SettingsUi.homeSpacing().tileGap()) - scrollY,
                 side, side);
     }
 
     public void render(Canvas canvas, UiLayout layout, float vmx, float vmy, float scrollY) {
+        refreshEntries();
         staggerHits.clear();
         long now = UiStagger.frameTimeMillis();
         float dt = Math.min(50.0F, Math.max(1.0F, now - lastFrameMs));
@@ -99,7 +109,7 @@ public final class SettingsHomePage {
         // this frame produced — updating after the draw left the scale and
         // the wash one frame behind the pointer.
         int hovered = -1;
-        for (int i = 0; i < sections.length; i++) {
+        for (int i = 0; i < sections.size(); i++) {
             UiLayout.Rect tile = tileRect(layout, i, scrollY);
             if (tile.bottom() < layout.list.y() || tile.y() > layout.list.bottom()) {
                 continue;
@@ -135,7 +145,7 @@ public final class SettingsHomePage {
                     ? UiStagger.ITEM_STYLE_SLIDE_PX : 0.0F;
             CornerGeometry.clip(canvas, layout.list.x() - CardShadowReach.PAD, layout.list.y(),
                     layout.list.w() + driftClipPad + CardShadowReach.PAD * 2, layout.list.h(), 0.0F);
-            for (int i = 0; i < sections.length; i++) {
+            for (int i = 0; i < sections.size(); i++) {
                 UiLayout.Rect tile = tileRect(layout, i, scrollY);
                 if (tile.bottom() < layout.list.y() || tile.y() > layout.list.bottom()) {
                     continue;
@@ -150,7 +160,7 @@ public final class SettingsHomePage {
                         tileAlpha >= .995F ? 0 : tileRise,
                         tileAlpha >= .995F ? 1 : UiStagger.itemStyleZoomScale(entrance, i, now, axis));
                 if (tileAlpha >= 0.995F) {
-                    drawTile(canvas, tile, sections[i], tileHover[i], tileScale[i]);
+                    drawTile(canvas, tile, sections.get(i).value(), tileHover[i], tileScale[i]);
                 } else {
                     float tileDx = UiStagger.itemStyleSlidePx(entrance, i, now, axis);
                     canvas.save();
@@ -170,7 +180,7 @@ public final class SettingsHomePage {
                         } else if (tileDx != 0.0F) {
                             canvas.translate(tileDx, 0.0F);
                         }
-                        drawTile(canvas, tile, sections[i], tileHover[i], tileScale[i]);
+                        drawTile(canvas, tile, sections.get(i).value(), tileHover[i], tileScale[i]);
                         canvas.restore();
                     } finally {
                         com.atom.chat.render.CardBackdrop.restoreMaskOpacity(maskOpacity);
@@ -186,16 +196,23 @@ public final class SettingsHomePage {
 
     /** Returns the section under the pointer, or null. Uses the render geometry. */
     public SettingsSection hit(float vmx, float vmy, UiLayout layout, float scrollY) {
-        for (int i = 0; i < sections.length; i++) {
+        NavPage page = hitEntry(vmx, vmy, layout, scrollY);
+        return page == null ? null : page.section();
+    }
+
+    public NavPage hitEntry(float vmx, float vmy, UiLayout layout, float scrollY) {
+        refreshEntries();
+        if (!layout.list.contains(vmx, vmy)) return null;
+        for (int i = 0; i < sections.size(); i++) {
             UiLayout.Rect tile = tileRect(layout, i, scrollY);
-            if (vmx >= tile.x() && vmx <= tile.right() && vmy >= tile.y() && vmy <= tile.bottom()) {
-                return sections[i];
+            if (tile.w() > 0 && tile.contains(vmx, vmy)) {
+                return SettingsUi.destination(sections.get(i).value());
             }
         }
         return null;
     }
 
-    private void drawTile(Canvas canvas, UiLayout.Rect tile, SettingsSection section, float hover,
+    private void drawTile(Canvas canvas, UiLayout.Rect tile, SettingsUi.HomeEntry entry, float hover,
                          PressScale scale) {
         // The bounce wraps the whole tile - background, glyph and label - around
         // the tile's own centre. begin() saves even at rest, so the matching
@@ -210,7 +227,7 @@ public final class SettingsHomePage {
 
             Font titleFont = FontManager.boldFont(UiTokens.SETTINGS_TILE_TITLE);
             float maxW = Math.max(1F, tile.w() - UiTokens.s(16));
-            String label = title(section);
+            String label = tr(entry.titleKey());
             var lines = SkiaFontRenderer.getStringWidth(titleFont, label) <= maxW
                     ? java.util.List.of(label) : SettingsRowText.wrapCopy(titleFont, label, maxW);
             float textH = SkiaFontRenderer.textHeight(titleFont);
@@ -221,7 +238,7 @@ public final class SettingsHomePage {
             float cx = tile.x() + tile.w() / 2.0F;
             int ink = com.atom.chat.config.AtomChatConfig.get().textPrimaryColor;
 
-            drawIconCentered(canvas, iconFor(section), cx, groupTop + UiTokens.SETTINGS_TILE_ICON / 2.0F,
+            drawIconCentered(canvas, entry.icon(), cx, groupTop + UiTokens.SETTINGS_TILE_ICON / 2.0F,
                     UiTokens.SETTINGS_TILE_ICON, ink);
 
             float labelCenterY = groupTop + UiTokens.SETTINGS_TILE_ICON

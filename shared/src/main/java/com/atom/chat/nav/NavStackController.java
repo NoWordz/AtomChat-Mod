@@ -120,6 +120,7 @@ public final class NavStackController {
 
         /** Selects a bottom tab now — the bar tweens its own capsule. */
         void selectTabNow(AppPage root);
+        default void selectTabNow(NavPage root) { selectTabNow(root.page()); }
     }
 
     private final Host host;
@@ -147,7 +148,7 @@ public final class NavStackController {
             }
         }
         if (topPage().isRoot()) {
-            host.selectTabNow(topPage());
+            host.selectTabNow(topNav());
         }
         if (topPage() == AppPage.PRIVATE_CHAT) {
             PrivateChatStore.setActive(activePrivateTarget());
@@ -252,7 +253,7 @@ public final class NavStackController {
         // race the push animation can no longer stack pages mid-flight (the push
         // is synchronous now), and pushing the page already on top was never a
         // meaningful action — the guard just makes that permanent.
-        if (topNav().equals(page)) {
+        if (topNav().equals(page) || !page.available()) {
             return;
         }
         host.cancelPointerGesture();
@@ -272,7 +273,7 @@ public final class NavStackController {
         if (page.page() == AppPage.SETTINGS_SECTION) {
             host.clearSettingsPageState();
         }
-        if (page.page() == AppPage.PROFILE_DETAIL) {
+        if (page.page() == AppPage.PROFILE_DETAIL || page.page() == AppPage.ADDON_DETAIL) {
             host.clearDetailScroll();
         }
         navigation.push(page);
@@ -357,7 +358,12 @@ public final class NavStackController {
      * content clock left to arm.
      */
     public void switchRoot(AppPage root) {
-        if (!root.isRoot()) {
+        if (root.isAddon()) return;
+        switchRoot(NavPage.of(root));
+    }
+
+    public void switchRoot(NavPage root) {
+        if (!root.isRoot() || !root.available()) {
             return;
         }
         host.cancelPointerGesture();
@@ -371,13 +377,13 @@ public final class NavStackController {
         AppPage from = topPage();
         // Leaving the profile root falls back to the local player's page; the
         // injected subject (open-profile-for-other-player) is transient.
-        if (from == AppPage.PROFILE && root != AppPage.PROFILE) {
+        if (from == AppPage.PROFILE && root.page() != AppPage.PROFILE) {
             host.dropProfileSubject();
         }
         host.persistCurrentDraft();
         host.clearRootScroll();
-        navigation.replaceWithRoot(NavPage.of(root));
-        com.atom.chat.diagnostics.FrameSegments.navigation("root", root.name());
+        navigation.replaceWithRoot(root);
+        com.atom.chat.diagnostics.FrameSegments.navigation("root", root.page().name());
         ChatStore.setPublicActive(false);
         host.selectTabNow(root);
     }

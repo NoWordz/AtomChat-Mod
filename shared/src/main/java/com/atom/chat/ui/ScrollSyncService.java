@@ -131,6 +131,7 @@ public final class ScrollSyncService {
     /** Scroll controller of whatever list the top page is showing. */
     public ScrollController listScroll() {
         return host.topPage() == AppPage.SETTINGS_SECTION || host.topPage() == AppPage.PROFILE_DETAIL
+                || host.topPage() == AppPage.ADDON_DETAIL
                 ? detailScroll : rootScroll;
     }
 

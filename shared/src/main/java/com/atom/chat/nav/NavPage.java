@@ -23,7 +23,10 @@ public record NavPage(AppPage page, PlayerRef target, String param) {
         if (page == AppPage.SETTINGS_SECTION && (param == null || param.isBlank())) {
             throw new IllegalArgumentException("SETTINGS_SECTION requires a param");
         }
-        if (page != AppPage.SETTINGS_SECTION) {
+        if (page.isAddon() && (param == null || param.isBlank())) {
+            throw new IllegalArgumentException("Add-on pages require a registered route ID");
+        }
+        if (page != AppPage.SETTINGS_SECTION && !page.isAddon()) {
             param = null;
         }
     }
@@ -40,9 +43,21 @@ public record NavPage(AppPage page, PlayerRef target, String param) {
         return new NavPage(AppPage.SETTINGS_SECTION, null, section.id());
     }
 
+    public static NavPage addonRoot(String id) {
+        return new NavPage(AppPage.ADDON_ROOT, null, id);
+    }
+
+    public static NavPage addonDetail(String id) {
+        return new NavPage(AppPage.ADDON_DETAIL, null, id);
+    }
+
+    public boolean available() {
+        return !page.isAddon() || com.atom.chat.api.ui.NavigationUi.page(param) != null;
+    }
+
     /** The settings sub-page this entry points at, or null for any other page. */
     public SettingsSection section() {
-        return param == null ? null : SettingsSection.fromId(param);
+        return page == AppPage.SETTINGS_SECTION ? SettingsSection.fromId(param) : null;
     }
 
     public boolean isRoot() {

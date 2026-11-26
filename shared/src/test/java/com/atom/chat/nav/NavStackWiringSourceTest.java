@@ -362,7 +362,7 @@ class NavStackWiringSourceTest {
         assertTrue(popNow.indexOf("host.clearTransientWorldUi()") < pop,
                 "the transient reset must run while the page is still on the stack");
 
-        String switchRoot = body(src, "public void switchRoot(AppPage root)");
+        String switchRoot = body(src, "public void switchRoot(NavPage root)");
         assertTrue(switchRoot.indexOf("navigation.replaceWithRoot(") < switchRoot.indexOf("host.selectTabNow("),
                 "the tab switch lands on the stack before the bar selects its cell — the capsule "
                         + "tweens itself from there, there is no span or motion arm any more");

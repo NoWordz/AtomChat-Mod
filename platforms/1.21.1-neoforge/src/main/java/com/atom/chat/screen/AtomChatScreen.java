@@ -69,6 +69,9 @@ import com.atom.chat.ui.BottomTabBar;
 import com.atom.chat.ui.CanvasLeakWatch;
 import com.atom.chat.ui.ComposerInput;
 import com.atom.chat.ui.ComposerPointer;
+import com.atom.chat.api.ui.ComposerUi;
+import com.atom.chat.api.ui.NavigationUi;
+import com.atom.chat.ui.ExtensionPages;
 import com.atom.chat.ui.ContextMenuActions;
 import com.atom.chat.ui.ContextMenuController;
 import com.atom.chat.ui.ScrollController;
@@ -949,6 +952,12 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
             if (!com.atom.chat.net.MentionAllPayloads.send()) feedback("atomchat.tools.mention_all.unavailable");
         }
         public String composerText() { return composer.text(); }
+        public void insertExtensionText(String text) { composer.insert(text); }
+        public void submitExtensionDraft() { sendMessage(composer.text()); }
+        public void openExtensionPage(String pageId) {
+            if (NavigationUi.page(pageId) != null) pushNav(NavPage.addonDetail(pageId));
+        }
+        public boolean canUseExtensionButtons() { return chatVisible() && !isPrivateReadOnly(); }
         public int composerCaret() { return composer.caretIndex(); }
         public void setComposerText(String text) { composer.setText(text); }
         public void moveComposerCaret(int caret) { composer.moveCaretTo(caret); }
@@ -1658,11 +1667,13 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
     });
 
     /** The menu's neutral view of a message row: sender, image row, identity. */
-    private static ContextMenuController.Subject<ChatMessage> menuSubjectOf(ChatMessage msg) {
+    private static ContextMenuController.Subject<ChatMessage> menuSubjectOf(ChatMessage msg, boolean avatar) {
         return msg == null ? null
                 : ContextMenuController.Subject.of(
                         msg.isIdentityUnknown() ? null : PlayerRef.of(msg.getSenderUuid(), msg.getProfileName()),
-                        Cicodes.extractImageUrl(msg.getRawText()) != null, msg);
+                        Cicodes.extractImageUrl(msg.getRawText()) != null, msg,
+                        !avatar && AtomChatConfig.get().shareCardsEnabled
+                                ? com.atom.chat.api.card.ItemCardActions.visible(msg.getCard()) : java.util.List.of());
     }
 
     /**
@@ -1736,6 +1747,19 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
     // two-page choreography is gone — the capsule and the arriving page's
     // entrance overlay are independent animations now).
     private final BottomTabBar bottomTabBar = new BottomTabBar();
+    private final ExtensionPages extensionPages = new ExtensionPages(new AddonPageContext());
+
+    private final class AddonPageContext implements NavigationUi.Context {
+        public String translate(String key) { return tr(key); }
+        public int foregroundColor() { return textPrimary(); }
+        public void drawLabel(Canvas canvas, String text, float x, float baselineY) {
+            SkiaFontRenderer.drawText(canvas, FontManager.font(UiTokens.FONT_BODY), text, x, baselineY, textPrimary());
+        }
+        public void open(String pageId) {
+            if (NavigationUi.page(pageId) != null) pushNav(NavPage.addonDetail(pageId));
+        }
+        public void back() { popPage(); }
+    }
     private final com.atom.chat.ui.BottomChromeTransition bottomChrome = new com.atom.chat.ui.BottomChromeTransition();
     private Boolean navigationComposerFocus;
     private float pointerGuiX, pointerGuiY;
@@ -1908,6 +1932,12 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
             // The bar tweens its own capsule; motion off snaps inside
             // setSelectedIndex.
             bottomTabBar.setSelectedIndex(BottomTabBar.rootIndex(root));
+        }
+
+        @Override
+        public void selectTabNow(NavPage root) {
+            if (root.page().isAddon()) bottomTabBar.setSelectedIndex(BottomTabBar.rootIndex(root));
+            else selectTabNow(root.page());
         }
     };
     /**
@@ -2093,6 +2123,8 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         public void drawArrivingBody(Canvas canvas, UiLayout layout, int mouseX, int mouseY) {
             switch (topPage()) {
                 case CHAT_LIST, PROFILE, SETTINGS -> drawRootBody(canvas, mouseX, mouseY, topPage());
+                case ADDON_ROOT -> drawRootBody(canvas, mouseX, mouseY, topPage());
+                case ADDON_DETAIL -> drawExtensionDetail(canvas, mouseX, mouseY);
                 case SERVER_CONFIG -> drawServerConfigBody(canvas, mouseX, mouseY);
                 case SETTINGS_SECTION -> drawSettingsSection(canvas, mouseX, mouseY, topNav().section());
                 case PROFILE_DETAIL -> drawProfileDetail(canvas, mouseX, mouseY);
@@ -2151,7 +2183,8 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
     private ShellHeader.HeaderAction headerActionFor(NavPage page) {
         // The filter's state, icons and tint live in WorldFeedFilter; the button's
         // rect and hover wash are header chrome and stay here (D20).
-        if (page.page() == AppPage.SETTINGS_SECTION && page.section() != null) {
+        if (page.page() == AppPage.SETTINGS_SECTION && page.section() != null
+                && settingsSectionPage.canResetActiveTab(page.section())) {
             return new ShellHeader.HeaderAction(headerChrome.adjacentButton(), settingsResetHover,
                     com.atom.chat.ui.EditorActionIcons.RESTORE, textPrimary());
         }
@@ -2232,9 +2265,18 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
 
     @Override
     public void switchRoot(AppPage root) {
-        composite.navigationDirection(root.isRoot() && topPage().isRoot() && BottomTabBar.rootIndex(root) < BottomTabBar.rootIndex(topPage()));
+        composite.navigationDirection(root.isRoot() && topPage().isRoot() && BottomTabBar.rootIndex(root) < BottomTabBar.rootIndex(topNav()));
         navStack.switchRoot(root);
                 com.atom.chat.audio.FeedbackSoundController.play(com.atom.chat.audio.FeedbackCue.BUTTON);
+    }
+
+    private void switchRoot(NavPage root) {
+        if (!root.page().isAddon()) {
+            switchRoot(root.page());
+            return;
+        }
+        composite.navigationDirection(topNav().isRoot() && BottomTabBar.rootIndex(root) < BottomTabBar.rootIndex(topNav()));
+        navStack.switchRoot(root);
     }
 
     private ScrollController currentScroll() {
@@ -2915,6 +2957,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         if (panelEditor != null) { panelEditor.cancel(); panelEditor = null; }
         if(!tutorial.suspended())tutorial.reset();
         composite.close();
+        extensionPages.close();
         bottomChrome.close();
         composerTools.close();
         clickRipples.clear();
@@ -3059,7 +3102,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
                 else if (topPage().isRoot()) {
                     UiLayout root = rootLayout();
                     bottomTabBar.update(frameDt, toVirtualX(mouseX), toVirtualY(mouseY), root.tabBar);
-                    bottomTabBar.renderContents(content, root.tabBar, BottomTabBar.rootIndex(topPage()), textPrimary(), accent());
+                    bottomTabBar.renderContents(content, root.tabBar, BottomTabBar.rootIndex(topNav()), textPrimary(), accent());
                 }
             });
             if (topPage().isRoot()) {
@@ -3207,16 +3250,20 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
             // instead of being overlapped by the next button in the row.
             int[] order = {0, 3, 1, 2};
             int last = -1;
-            if (inputButtonHovered(layout.imageBtn.x(), layout.imageBtn.y(),
+            if (layout.builtInComposerButton(ComposerUi.TOOLS_BUTTON)
+                    && inputButtonHovered(layout.imageBtn.x(), layout.imageBtn.y(),
                     UiTokens.ACTION_BUTTON_SIZE, UiTokens.ACTION_BUTTON_SIZE, mouseX, mouseY)) {
                 last = 0;
-            } else if (inputButtonHovered(layout.phraseBtn.x(), layout.phraseBtn.y(),
+            } else if (layout.builtInComposerButton(ComposerUi.QUICK_PHRASES_BUTTON)
+                    && inputButtonHovered(layout.phraseBtn.x(), layout.phraseBtn.y(),
                     UiTokens.ACTION_BUTTON_SIZE, UiTokens.ACTION_BUTTON_SIZE, mouseX, mouseY)) {
                 last = 3;
-            } else if (inputButtonHovered(layout.emojiBtn.x(), layout.emojiBtn.y(),
+            } else if (layout.builtInComposerButton(ComposerUi.EMOJI_BUTTON)
+                    && inputButtonHovered(layout.emojiBtn.x(), layout.emojiBtn.y(),
                     UiTokens.ACTION_BUTTON_SIZE, UiTokens.ACTION_BUTTON_SIZE, mouseX, mouseY)) {
                 last = 1;
-            } else if (inputButtonHovered(layout.sendBtn.x(), layout.sendBtn.y(),
+            } else if (layout.builtInComposerButton(ComposerUi.SEND_BUTTON)
+                    && inputButtonHovered(layout.sendBtn.x(), layout.sendBtn.y(),
                     UiTokens.BUTTON_W, UiTokens.BUTTON_H, mouseX, mouseY)) {
                 last = 2;
             }
@@ -3236,12 +3283,25 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
             }
             for (int id : order) {
                 switch (id) {
-                    case 0 -> drawIconButton(canvas, layout.imageBtn.x(), layout.imageBtn.y(), 0, mouseX, mouseY);
-                    case 3 -> drawIconButton(canvas, layout.phraseBtn.x(), layout.phraseBtn.y(), 3, mouseX, mouseY);
-                    case 1 -> drawIconButton(canvas, layout.emojiBtn.x(), layout.emojiBtn.y(), 1, mouseX, mouseY);
-                    default -> drawSendButton(canvas, layout.sendBtn, mouseX, mouseY);
+                    case 0 -> {
+                        if (layout.builtInComposerButton(ComposerUi.TOOLS_BUTTON))
+                            drawIconButton(canvas, layout.imageBtn.x(), layout.imageBtn.y(), 0, mouseX, mouseY);
+                    }
+                    case 3 -> {
+                        if (layout.builtInComposerButton(ComposerUi.QUICK_PHRASES_BUTTON))
+                            drawIconButton(canvas, layout.phraseBtn.x(), layout.phraseBtn.y(), 3, mouseX, mouseY);
+                    }
+                    case 1 -> {
+                        if (layout.builtInComposerButton(ComposerUi.EMOJI_BUTTON))
+                            drawIconButton(canvas, layout.emojiBtn.x(), layout.emojiBtn.y(), 1, mouseX, mouseY);
+                    }
+                    default -> {
+                        if (layout.builtInComposerButton(ComposerUi.SEND_BUTTON))
+                            drawSendButton(canvas, layout.sendBtn, mouseX, mouseY);
+                    }
                 }
             }
+            composerTools.renderExtensionButtons(canvas, layout, toVirtualX(mouseX), toVirtualY(mouseY));
         }
 
         // Input text: rendered by Skia at fixed density; the hidden EditBox is the
@@ -3380,6 +3440,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
             case CHAT_LIST -> conversationListPage.measureContent(root);
             case PROFILE -> profilePage.measureContent(root);
             case SETTINGS -> settingsHomePage.measureContent(root);
+            case ADDON_ROOT -> extensionPages.measure(topNav(), root.list);
             default -> 0.0F;
         };
     }
@@ -3423,6 +3484,17 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         profileWiring.drawProfileDetail(canvas, mouseX, mouseY);
     }
 
+    private void drawExtensionDetail(Canvas canvas, int mouseX, int mouseY) {
+        UiLayout layout = detailLayout();
+        ScrollController scroll = listScroll();
+        float mx = toVirtualX(mouseX);
+        float my = toVirtualY(mouseY);
+        scroll.setContent(extensionPages.measure(topNav(), layout.list), layout.list.h());
+        scroll.updateAnimation(System.currentTimeMillis());
+        extensionPages.draw(canvas, topNav(), layout.list, mx, my, scroll.getScrollY());
+        drawScrollbar(canvas, layout, mx, my, scroll);
+    }
+
     private void drawRootBody(Canvas canvas, int mouseX, int mouseY, AppPage rootPage) {
         UiLayout root = rootLayout();
         rootMouseX = toVirtualX(mouseX);
@@ -3439,7 +3511,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         float vmx = toVirtualX(mouseX);
         float vmy = toVirtualY(mouseY);
         bottomTabBar.update(frameDt, vmx, vmy, root.tabBar);
-        ShellHeader.render(canvas, layout().header, headerChrome.shellTitleFor(rootPage), false, null, 0.0F,
+        ShellHeader.render(canvas, layout().header, headerChrome.shellTitleFor(topNav()), false, null, 0.0F,
                 textPrimary());
         rootMouseX = vmx;
         rootMouseY = vmy;
@@ -3481,6 +3553,8 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
                 }
                 case SETTINGS -> settingsHomePage.render(canvas, layout, rootMouseX, rootMouseY,
                         scrollSync.rootScroll().getScrollY());
+                case ADDON_ROOT -> extensionPages.draw(canvas, topNav(), layout.list, rootMouseX, rootMouseY,
+                        scrollSync.rootScroll().getScrollY());
                 case WORLD_CHAT, PRIVATE_CHAT ->
                         throw new IllegalStateException("Root page body cannot render chat/detail pages");
             }
@@ -3490,22 +3564,18 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
     }
 
             private void drawBottomTabBar(Canvas canvas, UiLayout layout, AppPage rootPage) {
-        int selectedIndex = BottomTabBar.rootIndex(rootPage);
+        int selectedIndex = BottomTabBar.rootIndex(topNav());
         bottomTabBar.render(canvas, layout.tabBar, selectedIndex, textPrimary(), accent());
     }
 
     private ClickTarget bottomTabTarget(float mx, float my) {
         int index = BottomTabBar.hitTest(mx, my, rootLayout().tabBar);
         if (index < 0) return null;
-        AppPage root = switch (index) {
-            case 0 -> AppPage.CHAT_LIST;
-            case 1 -> AppPage.PROFILE;
-            case 2 -> AppPage.SETTINGS;
-            default -> throw new IllegalStateException("Unexpected bottom tab index " + index);
-        };
+        NavPage root = BottomTabBar.rootNavForIndex(index);
+        if (root == null) return null;
         return new ClickTarget(new ScreenClick(topNav(), "bottomTab", root),
                 () -> bottomTabBar.setPressedTab(index), () -> bottomTabBar.setPressedTab(-1), () -> {
-                    boolean changed = topPage() != root;
+                    boolean changed = !topNav().equals(root);
                     switchRoot(root);
                     if (changed) playPointerSound();
                 });
@@ -4373,6 +4443,8 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
             if (button == 0 && overScrollbarTrack(pageLayout, mx, my, pageScroll)) return null;
             if (topPage() == AppPage.SETTINGS_SECTION)
                 return button == 0 ? settingsClickTarget(mx, my, pageLayout, pageScroll) : null;
+            if (topPage() == AppPage.ADDON_DETAIL && button == 0
+                    && headerChrome.isVisibleBackButtonHit(mx, my)) return backTarget();
             if (topPage() == AppPage.PROFILE_DETAIL) {
                 if (button == 0 && headerChrome.isVisibleBackButtonHit(mx, my)) return backTarget();
                 return profilePage.clickTarget(mx, my, detailLayout(), scrollSync.detailScroll().getScrollY(), button);
@@ -4381,8 +4453,11 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
                 ClickTarget tab = bottomTabTarget(mx, my);
                 if (tab != null) return tab;
                 if (topPage() == AppPage.SETTINGS) {
-                    SettingsSection section = settingsHomePage.hit(mx, my, pageLayout, pageScroll.getScrollY());
-                    if (section != null) return screenClick("settingsSection", section, () -> openSettingsSection(section));
+                    NavPage page = settingsHomePage.hitEntry(mx, my, pageLayout, pageScroll.getScrollY());
+                    if (page != null) return screenClick("settingsSection", page, () -> {
+                        if (page.section() != null) openSettingsSection(page.section());
+                        else pushNav(page);
+                    });
                 }
             }
             if (topPage() == AppPage.PROFILE)
@@ -4440,6 +4515,8 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
                 return true;
             }
             if (topPage() == AppPage.SETTINGS_SECTION) return pressSettingsControl(mx, my, pageLayout, pageScroll, button);
+            if (topPage().isAddon())
+                return extensionPages.clicked(topNav(), pageLayout.list, mx, my, pageScroll.getScrollY(), button);
             return true;
         }
 
@@ -4589,14 +4666,16 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
                     || layout.phraseBtn.contains(mx, my) || layout.sendBtn.contains(mx, my))) {
                 return ClickTarget.blocked();
             }
-            if (layout.emojiBtn.contains(mx, my)) return composerButton(1, "emoji", emojiPanel.isOpen(), () -> {
+            if (layout.builtInComposerButton(ComposerUi.EMOJI_BUTTON)
+                    && layout.emojiBtn.contains(mx, my)) return composerButton(1, "emoji", emojiPanel.isOpen(), () -> {
                 composer.setFocused(true);
                 closePhrasePanel();
                 reactionTarget = null;
                 emojiPanel.toggle();
                 playPointerSound();
             });
-            if (layout.phraseBtn.contains(mx, my)) return composerButton(3, "quickPhrase", quickPhrasePanel.isOpen(), () -> {
+            if (layout.builtInComposerButton(ComposerUi.QUICK_PHRASES_BUTTON)
+                    && layout.phraseBtn.contains(mx, my)) return composerButton(3, "quickPhrase", quickPhrasePanel.isOpen(), () -> {
                 composer.setFocused(true);
                 emojiPanel.close();
                 if (quickPhrasePanel.isOpen()) closePhrasePanel();
@@ -4620,7 +4699,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
                 playPointerSound();
             });
             if (reaction != null) return reaction;
-            if (layout.sendBtn.contains(mx, my)) {
+            if (layout.builtInComposerButton(ComposerUi.SEND_BUTTON) && layout.sendBtn.contains(mx, my)) {
                 return composerButton(2, "send", quickPhrasePanel.isEditing(), () -> {
                     dismissMessagePopups();
                     if (quickPhrasePanel.isEditing()) endPhraseEdit(true);
@@ -4693,6 +4772,16 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
             int row = contextMenu.hitRow(mx, my);
             if (row < 0) return null;
             boolean avatar = contextMenu.isAvatarMode();
+            var itemAction = contextMenu.itemActionAt(row);
+            if (itemAction != null) {
+                return screenClick("itemCardAction", java.util.List.of(selected.getId(), itemAction.id()), () -> {
+                    contextMenu.close();
+                    if (AtomChatConfig.get().shareCardsEnabled
+                            && com.atom.chat.api.card.ItemCardActions.activate(selected.getCard(), itemAction.id())) {
+                        playPointerSound();
+                    }
+                });
+            }
             return screenClick("messageMenu", java.util.List.of(selected.getId(), avatar, row), () -> {
                 if (avatar) {
                     contextActions.performAvatarMenuAction(row, menuMessageOf(selected));
@@ -4766,8 +4855,8 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
                     && (!avatar || contextMenu.isAvatarMode());
             dismissMessagePopups();
             if (!sameMenu) {
-                if (avatar) contextMenu.openAvatar(menuSubjectOf(message), mx, my);
-                else contextMenu.openBubble(menuSubjectOf(message), mx, my);
+                if (avatar) contextMenu.openAvatar(menuSubjectOf(message, true), mx, my);
+                else contextMenu.openBubble(menuSubjectOf(message, false), mx, my);
             }
             playPointerSound();
         }

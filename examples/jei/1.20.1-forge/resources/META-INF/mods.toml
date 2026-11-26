@@ -1,0 +1,31 @@
+modLoader="javafml"
+loaderVersion="[47,)"
+license="GPL-3.0-or-later"
+
+[[mods]]
+modId="atomchat_jei_example"
+version="0.9.8"
+displayName="AtomChat JEI Example"
+description="An example AtomChat add-on that opens JEI recipes from item cards."
+displayTest="IGNORE_ALL_VERSION"
+
+[[dependencies.atomchat_jei_example]]
+modId="atomchat"
+mandatory=true
+versionRange="[0.9.8,)"
+ordering="AFTER"
+side="CLIENT"
+
+[[dependencies.atomchat_jei_example]]
+modId="jei"
+mandatory=true
+versionRange="[15.20.0,)"
+ordering="AFTER"
+side="CLIENT"
+
+[[dependencies.atomchat_jei_example]]
+modId="minecraft"
+mandatory=true
+versionRange="[1.20.1,1.20.2)"
+ordering="NONE"
+side="BOTH"

@@ -1,10 +1,16 @@
 package com.atom.chat.tools;
 
+import com.atom.chat.api.ui.ComposerUi;
+import com.atom.chat.api.ui.UiContributions;
 import com.atom.chat.render.CornerGeometry;
 import com.atom.chat.chat.PlayerRef;
 import com.atom.chat.font.FontManager;
 import com.atom.chat.render.SkiaFontRenderer;
+import com.atom.chat.ui.AtomChatAppearance;
+import com.atom.chat.ui.ClickRipples;
+import com.atom.chat.ui.ComposerButtonLayout;
 import com.atom.chat.ui.UiLayout;
+import com.atom.chat.render.DrawPrimitives;
 import com.atom.lib.design.atomchat.UiTokens;
 import com.atom.chat.ui.input.ClickTarget;
 import com.atom.chat.ui.input.InputHandler;
@@ -30,16 +36,41 @@ public final class ComposerTools implements InputHandler {
         default void shareLocation() {}
         default void shareHeldItem() {}
         void dismissOtherPopups();
+        default UiContributions<ComposerUi.MenuItem> menuExtensions() { return ComposerUi.menu(); }
+        default void insertExtensionText(String text) {
+            String draft = composerText();
+            int caret = Math.max(0, Math.min(composerCaret(), draft.length()));
+            setComposerText(draft.substring(0, caret) + text + draft.substring(caret));
+            moveComposerCaret(caret + text.length());
+        }
+        default void submitExtensionDraft() {}
+        default void openExtensionPage(String pageId) {}
+        default boolean canUseExtensionButtons() { return chatVisible(); }
     }
-    private enum MenuAction { TOGGLE, DISMISS, BACK, MENTION, MENTION_ALL, SEARCH, PLAYERS, IMAGE, SHARE_LOCATION, SHARE_ITEM }
+    private enum MenuAction { TOGGLE, DISMISS, BACK, MENTION, MENTION_ALL }
 
+    private static final System.Logger LOGGER = System.getLogger(ComposerTools.class.getName());
     private final Host host;
-    private final ToolMenu menu = new ToolMenu();
+    private final List<UiContributions.Entry<ComposerUi.MenuItem>> defaults;
+    private final ToolMenu menu;
     private final ComposerSearch search;
     private float playerRefresh;
-    public ComposerTools(Host host) { this.host = host; search = new ComposerSearch(host); }
+    private String pressedExtensionButton;
+
+    public ComposerTools(Host host) {
+        this.host = host;
+        search = new ComposerSearch(host);
+        defaults = ToolMenu.defaults(this::activateBuiltIn);
+        menu = new ToolMenu(defaults);
+    }
+
     public UiLayout.Rect tutorialBounds(){return menu.isOpen()?menu.paintedBounds(host.layout()):null;}
-    public UiLayout.Rect tutorialActionBounds(int row) { return menu.paintedRow(host.layout(), row); }
+    public UiLayout.Rect tutorialActionBounds(int originalRow) {
+        return originalRow >= 0 && originalRow < defaults.size() ? menuActionBounds(defaults.get(originalRow).id()) : null;
+    }
+    public UiLayout.Rect menuActionBounds(String actionId) {
+        return menu.paintedRow(host.layout(), menu.indexOfAction(actionId));
+    }
     public boolean active() { return menu.isOpen() || searching(); }
     public boolean searching() { return search.active(); }
     public com.atom.chat.chat.DraftStore.ComposerTextPort draftPort(com.atom.chat.chat.DraftStore.ComposerTextPort live) {
@@ -55,6 +86,10 @@ public final class ComposerTools implements InputHandler {
 
     private void toggleMenu() {
         host.dismissOtherPopups();
+        if (!menu.isOpen()) {
+            menu.setEntries(com.atom.chat.onboarding.TutorialSandbox.active()
+                    ? defaults : host.menuExtensions().resolve(defaults));
+        }
         menu.toggle();
         if (menu.isOpen()) menu.measure(host::tr);
     }
@@ -83,7 +118,8 @@ public final class ComposerTools implements InputHandler {
     @Override public ClickTarget clickTarget(double x, double y, int button) {
         float mx = host.x(x), my = host.y(y);
         UiLayout layout = host.layout();
-        if (button == 0 && host.chatVisible() && layout.imageBtn.contains(mx, my)) {
+        if (button == 0 && host.chatVisible() && layout.builtInComposerButton(ComposerUi.TOOLS_BUTTON)
+                && layout.imageBtn.contains(mx, my)) {
             return new ClickTarget(MenuAction.TOGGLE, host::pressTool, host::releaseTool, this::toggleMenu);
         }
         if (menu.isOpen()) {
@@ -98,24 +134,105 @@ public final class ComposerTools implements InputHandler {
                 if (player == null) return ClickTarget.blocked();
                 return rowTarget(row, MenuAction.MENTION, () -> mention(player));
             }
-            return switch (row) {
-                case 0 -> rowTarget(row, MenuAction.SEARCH, () -> { menu.close(); search.open(); });
-                case 1 -> rowTarget(row, MenuAction.PLAYERS, () -> {
-                    search.close();
-                    menu.showPlayers(host.onlinePlayers(), host.canMentionAll());
-                    menu.measure(host::tr);
-                });
-                case 2 -> rowTarget(row, MenuAction.IMAGE, this::pickImage);
-                case 3 -> rowTarget(row, MenuAction.SHARE_LOCATION, () -> shareCard(host::shareLocation));
-                case 4 -> rowTarget(row, MenuAction.SHARE_ITEM, () -> shareCard(host::shareHeldItem));
-                default -> ClickTarget.blocked();
-            };
+            var entry = menu.actionAt(row);
+            return entry == null ? ClickTarget.blocked()
+                    : rowTarget(row, entry.id(), () -> activateMenuEntry(entry));
         }
-        if (searching() && layout.sendBtn.contains(mx, my)) return ClickTarget.blocked();
+        if (button == 0 && host.canUseExtensionButtons()) {
+            for (var slot : layout.composerButtons) {
+                if (!slot.builtIn() && slot.rect().w() > 0 && slot.rect().contains(mx, my)) {
+                    return new ClickTarget(slot.id(), () -> pressedExtensionButton = slot.id(),
+                            () -> pressedExtensionButton = null, () -> activateExtensionButton(slot));
+                }
+            }
+        }
+        if (searching() && layout.builtInComposerButton(ComposerUi.SEND_BUTTON)
+                && layout.sendBtn.contains(mx, my)) return ClickTarget.blocked();
         return null;
     }
 
-    private ClickTarget rowTarget(int row, MenuAction action, Runnable activate) {
+    private void activateExtensionButton(ComposerButtonLayout.Slot slot) {
+        try {
+            host.dismissOtherPopups();
+            slot.button().action().accept(extensionContext);
+        } catch (RuntimeException exception) {
+            LOGGER.log(System.Logger.Level.WARNING, "Composer button failed: " + slot.id(), exception);
+        }
+    }
+
+    /** Paints add-on buttons at the same positions used by clickTarget. */
+    public void renderExtensionButtons(Canvas canvas, UiLayout layout, float mx, float my) {
+        if (layout.composerButtons.isEmpty()) return;
+        var theme = AtomChatAppearance.theme();
+        for (var slot : layout.composerButtons) {
+            if (slot.builtIn() || slot.rect().w() <= 0) continue;
+            var rect = slot.rect();
+            float radius = UiTokens.radius(8, theme);
+            boolean pressed = slot.id().equals(pressedExtensionButton);
+            boolean hover = rect.contains(mx, my);
+            boolean capsule = slot.button().shape() == ComposerUi.ButtonShape.CAPSULE;
+            int fill = capsule ? UiTokens.accentFill(theme) : UiTokens.cardFill(theme);
+            ClickRipples.region(rect.x(), rect.y(), rect.w(), rect.h(), radius, fill);
+            if (capsule) CornerGeometry.drawRoundedRect(canvas, rect.x(), rect.y(), rect.w(), rect.h(), radius, fill);
+            if (hover || pressed) {
+                CornerGeometry.drawRoundedRect(canvas, rect.x(), rect.y(), rect.w(), rect.h(), radius,
+                        UiTokens.cardHover(pressed ? 1F : .65F, theme));
+            }
+            var config = com.atom.chat.config.AtomChatConfig.get();
+            DrawPrimitives.drawIconCentered(canvas, slot.button().icon(), rect.x() + rect.w() / 2,
+                    rect.y() + rect.h() / 2, Math.min(rect.w(), UiTokens.COMPOSER_ICON_SIZE),
+                    capsule ? UiTokens.onAccent(fill) : config.textPrimaryColor);
+        }
+    }
+
+    private final ComposerUi.Context extensionContext = new ComposerUi.Context() {
+        public String draft() { return search.draft(); }
+
+        public void replaceDraft(String text) {
+            search.close();
+            host.setComposerText(text);
+        }
+
+        public void insertText(String text) {
+            search.close();
+            host.insertExtensionText(text);
+        }
+
+        public void submitDraft() {
+            search.close();
+            host.submitExtensionDraft();
+        }
+
+        public void openPage(String pageId) {
+            close();
+            host.openExtensionPage(pageId);
+        }
+    };
+
+    private void activateMenuEntry(UiContributions.Entry<ComposerUi.MenuItem> entry) {
+        try {
+            if (!entry.value().keepOpen()) menu.close();
+            entry.value().action().accept(extensionContext);
+        } catch (RuntimeException exception) {
+            LOGGER.log(System.Logger.Level.WARNING, "Composer menu entry failed: " + entry.id(), exception);
+        }
+    }
+
+    private void activateBuiltIn(String id) {
+        switch (id) {
+            case ComposerUi.SEARCH -> search.open();
+            case ComposerUi.PLAYERS -> {
+                search.close();
+                menu.showPlayers(host.onlinePlayers(), host.canMentionAll());
+                menu.measure(host::tr);
+            }
+            case ComposerUi.IMAGE -> pickImage();
+            case ComposerUi.SHARE_LOCATION -> shareCard(host::shareLocation);
+            case ComposerUi.SHARE_ITEM -> shareCard(host::shareHeldItem);
+        }
+    }
+
+    private ClickTarget rowTarget(int row, Object action, Runnable activate) {
         return new ClickTarget(action, () -> menu.pressRow(row), () -> menu.pressRow(-1), activate);
     }
 

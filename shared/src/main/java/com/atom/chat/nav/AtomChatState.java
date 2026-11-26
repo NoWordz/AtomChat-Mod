@@ -14,6 +14,10 @@ public final class AtomChatState {
     }
 
     public static synchronized List<NavPage> snapshot() {
+        if (!stack.get(0).available()) return List.of(NavPage.of(AppPage.CHAT_LIST));
+        for (int i = 1; i < stack.size(); i++) {
+            if (!stack.get(i).available()) return List.copyOf(stack.subList(0, i));
+        }
         return List.copyOf(stack);
     }
 

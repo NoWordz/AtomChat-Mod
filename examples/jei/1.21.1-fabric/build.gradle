@@ -1,0 +1,15 @@
+plugins {
+    id 'fabric-loom' version '1.7.4'
+}
+
+apply from: '../../../gradle/atomchat-jei-example.gradle'
+
+java.toolchain.languageVersion = JavaLanguageVersion.of(21)
+
+dependencies {
+    minecraft 'com.mojang:minecraft:1.21.1'
+    mappings 'net.fabricmc:yarn:1.21.1+build.3:v2'
+    modImplementation 'net.fabricmc:fabric-loader:0.16.9'
+    modCompileOnly('mezz.jei:jei-1.21.1-fabric:19.21.2.313') { transitive = false }
+    modCompileOnly files(atomchatJar)
+}

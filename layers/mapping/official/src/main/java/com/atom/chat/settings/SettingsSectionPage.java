@@ -1,5 +1,8 @@
 package com.atom.chat.settings;
 
+import com.atom.chat.api.ui.SettingsUi;
+import com.atom.chat.api.ui.UiContributions;
+
 import com.atom.chat.render.CornerGeometry;
 import com.atom.chat.settings.contract.HistoryFieldsPage;
 import com.atom.chat.settings.contract.SettingsContractMount;
@@ -336,7 +339,7 @@ public final class SettingsSectionPage {
             new SectionChip("notify", "atomchat.settings.group.chat.notify"),
             new SectionChip("effects", "atomchat.settings.tab.effects"));
     /** Active chip index per section id (chip-less sections never read it). */
-    private final Map<String, Integer> activeChip = new HashMap<>();
+    private final Map<String, String> activeChip = new HashMap<>();
 
     // The chip row reuses BottomTabBar's cell geometry and clock: equal cells
     // from the layout rect, a sliding selection capsule, a pure-colour hover
@@ -351,11 +354,25 @@ public final class SettingsSectionPage {
 
     /** The chip row of a section, or an empty list when the section has none. */
     public List<SectionChip> chips(SettingsSection section) {
-        return switch (section) {
+        List<SectionChip> builtIn = switch (section) {
             case APPEARANCE -> APPEARANCE_CHIPS;
             case CHAT -> CHAT_CHIPS;
             default -> List.of();
         };
+        var edits = SettingsUi.tabs(section);
+        if (!edits.hasEdits() || com.atom.chat.onboarding.TutorialSandbox.active()) return builtIn;
+        if (builtIn.isEmpty()) {
+            builtIn = List.of(new SectionChip(section.id(), "atomchat.settings." + section.id()));
+        }
+        var defaults = builtIn.stream().map(chip -> new UiContributions.Entry<>(
+                SettingsUi.builtInTabId(chip.id()), new SettingsUi.Chip(chip.labelKey(), true))).toList();
+        return edits.resolve(defaults).stream().map(entry -> {
+            String id = entry.id();
+            if (entry.value().builtInContent() && defaults.stream().anyMatch(d -> d.id().equals(id))) {
+                return new SectionChip(id.substring("atomchat:".length()), entry.value().titleKey());
+            }
+            return new SectionChip(id, entry.value().titleKey());
+        }).toList();
     }
 
     /** Index of the chip whose rows are showing. */
@@ -364,8 +381,11 @@ public final class SettingsSectionPage {
         if (sectionChips.isEmpty()) {
             return -1;
         }
-        int index = activeChip.getOrDefault(section.id(), 0);
-        return Math.max(0, Math.min(index, sectionChips.size() - 1));
+        String selected = activeChip.get(section.id());
+        for (int i = 0; i < sectionChips.size(); i++) {
+            if (sectionChips.get(i).id().equals(selected)) return i;
+        }
+        return 0;
     }
 
     public void requestTabReset(SettingsSection section, java.util.function.BiConsumer<String, Boolean> feedback) {
@@ -375,6 +395,7 @@ public final class SettingsSectionPage {
     public void requestTabReset(SettingsSection section, java.util.function.BiConsumer<String, Boolean> feedback,
                                Runnable afterGeometryReset) {
         String chip = activeChipId(section);
+        if (!canResetActiveTab(section)) return;
         String label = tr("atomchat.settings." + section.id());
         if (!chips(section).isEmpty()) label += " · " + tr(chips(section).get(activeChipIndex(section)).labelKey());
         new SettingsTabResetPrompt(confirmation, AtomChatConfig::get, AtomChatConfig::saveChecked,
@@ -383,6 +404,10 @@ public final class SettingsSectionPage {
                     com.atom.chat.chat.TeleportCommands.reset();
                     if (section == SettingsSection.APPEARANCE && "adjust".equals(chip)) afterGeometryReset.run();
                 }).request(section, chip, label);
+    }
+
+    public boolean canResetActiveTab(SettingsSection section) {
+        return !activeChipId(section).contains(":");
     }
 
     private String activeChipId(SettingsSection section) {
@@ -420,7 +445,7 @@ public final class SettingsSectionPage {
         }
         if (section == SettingsSection.CHAT && historyMount != null) historyMount.embedded().clear();
         cancelPreviewPress();
-        activeChip.put(section.id(), index);
+        activeChip.put(section.id(), sectionChips.get(index).id());
         rowGeometry = null;
         // The new row set draws in one frame, then rises in on the same
         // per-row stagger a navigation arrival uses (no crossfade, no second
@@ -910,12 +935,46 @@ public final class SettingsSectionPage {
     /** Rows in display order for the given section (active chip applied). */
     public List<Row> rows(SettingsSection section) {
         rowBuilds++;
-        return switch (section) {
-            case CHAT -> chatRows(activeChipId(section));
-            case APPEARANCE -> appearanceRows(activeChipId(section));
+        String chip = activeChipId(section);
+        boolean addonTab = chip.contains(":");
+        List<Row> base = addonTab ? List.of() : switch (section) {
+            case CHAT -> chatRows(chip);
+            case APPEARANCE -> appearanceRows(chip);
             case PRIVACY -> privacyRows();
             case ABOUT -> aboutRows();
         };
+        var edits = SettingsUi.registeredGroups(section, addonTab ? chip : SettingsUi.builtInTabId(chip));
+        return edits == null || !edits.hasEdits() ? base : mergeGroups(base, edits);
+    }
+
+    private List<Row> mergeGroups(List<Row> base, UiContributions<SettingsUi.Group> edits) {
+        List<Row> result = new ArrayList<>();
+        List<UiContributions.Entry<SettingsUi.Group>> groups = new ArrayList<>();
+        Map<String, List<Row>> originals = new HashMap<>();
+        int start = 0;
+        while (start < base.size() && base.get(start).kind() != RowKind.LABEL) {
+            result.add(base.get(start++));
+        }
+        while (start < base.size()) {
+            String key = base.get(start).labelKey();
+            int end = start + 1;
+            while (end < base.size() && base.get(end).kind() != RowKind.LABEL) end++;
+            String id = SettingsUi.builtInGroupId(key);
+            groups.add(new UiContributions.Entry<>(id, new SettingsUi.Group(key, List.of())));
+            originals.put(id, base.subList(start, end));
+            start = end;
+        }
+        for (var group : edits.resolve(groups)) {
+            if (groups.stream().anyMatch(original ->
+                    original.id().equals(group.id()) && original.value() == group.value())) {
+                result.addAll(originals.get(group.id()));
+            } else {
+                addGroup(result, group.value().labelKey(), () -> {
+                    for (var toggle : group.value().toggles()) result.add(Row.ofSwitch(SettingsItem.addon(toggle)));
+                });
+            }
+        }
+        return result;
     }
 
     long rowBuildsForTest() { return rowBuilds; }

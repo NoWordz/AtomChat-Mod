@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "id": "atomchat_jei_example",
+  "version": "0.9.8",
+  "name": "AtomChat JEI Example",
+  "description": "An example AtomChat add-on that opens JEI recipes from item cards.",
+  "environment": "client",
+  "depends": {
+    "fabricloader": ">=0.16.0",
+    "minecraft": "1.21.1",
+    "atomchat": ">=0.9.8",
+    "jei": ">=19.21.2"
+  },
+  "entrypoints": {
+    "jei_mod_plugin": [
+      "com.atom.chat.example.jei.AtomChatJeiPlugin"
+    ]
+  }
+}

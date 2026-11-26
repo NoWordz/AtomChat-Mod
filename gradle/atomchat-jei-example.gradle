@@ -1,0 +1,32 @@
+// Common settings for three standalone builds of the external JEI example.
+version = '0.9.8'
+base.archivesName = "atomchat-jei-example-${projectDir.name}"
+
+def input = providers.gradleProperty('atomchatJar')
+if (!input.isPresent() || !file(input.get()).isFile()) {
+    throw new GradleException('Pass -PatomchatJar=<absolute path to the AtomChat 0.9.8 platform JAR>')
+}
+ext.atomchatJar = file(input.get())
+
+def mapping = projectDir.name.endsWith('-fabric') ? 'fabric' : 'official'
+sourceSets.main {
+    java.srcDirs("../${mapping}", 'java')
+    resources.srcDirs('../resources', 'resources')
+}
+
+repositories {
+    mavenCentral()
+    maven {
+        name = 'JEI'
+        url = 'https://maven.blamejared.com/'
+        content { includeGroup 'mezz.jei' }
+    }
+}
+
+dependencies {
+    compileOnly 'io.github.humbleui:skija-shared:0.143.18'
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+}

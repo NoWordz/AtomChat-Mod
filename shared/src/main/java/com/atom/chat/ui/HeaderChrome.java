@@ -177,6 +177,10 @@ public final class HeaderChrome {
         if (nav.page() == AppPage.SETTINGS_SECTION && nav.section() != null) {
             return settingsTitle(nav.section());
         }
+        if (nav.page().isAddon()) {
+            var page = com.atom.chat.api.ui.NavigationUi.page(nav.param());
+            if (page != null) return host.label(page.titleKey());
+        }
         return shellTitleFor(nav.page());
     }
 
@@ -200,6 +204,7 @@ public final class HeaderChrome {
             case SETTINGS_SECTION -> host.label("atomchat.tab.settings");
             case SERVER_CONFIG -> host.label("atomchat.config.title");
             case PROFILE_DETAIL -> host.label("atomchat.page.profile.title");
+            case ADDON_ROOT, ADDON_DETAIL -> "";
         };
     }
 }

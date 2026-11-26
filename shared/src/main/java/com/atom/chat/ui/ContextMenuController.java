@@ -4,6 +4,7 @@ package com.atom.chat.ui;
 
 import com.atom.lib.design.atomchat.AppIcons;
 import com.atom.lib.design.atomchat.UiTokens;
+import com.atom.chat.api.card.ItemCardActions;
 import com.atom.chat.chat.BlockList;
 import com.atom.chat.chat.PlayerRef;
 import com.atom.chat.font.FontManager;
@@ -15,6 +16,9 @@ import io.github.humbleui.skija.Font;
 import io.github.humbleui.skija.Paint;
 import io.github.humbleui.skija.Path;
 import io.github.humbleui.types.Rect;
+
+import java.util.Arrays;
+import java.util.List;
 
 /**
  * The right-click menu (D19): its three modes, its animation state, its drawing
@@ -70,9 +74,24 @@ public final class ContextMenuController<M> {
         /** The shell's row identity, carried opaquely for the toggle comparison. */
         M row();
 
+        default List<ItemCardActions.Button> itemActions() {
+            return List.of();
+        }
+
         /** The shell's adapter: its own facts become this menu's view of a row. */
         static <M> Subject<M> of(PlayerRef sender, boolean imageMessage, M row) {
+            return of(sender, imageMessage, row, List.of());
+        }
+
+        static <M> Subject<M> of(PlayerRef sender, boolean imageMessage, M row,
+                                 List<ItemCardActions.Button> itemActions) {
+            List<ItemCardActions.Button> snapshot = List.copyOf(itemActions);
             return new Subject<M>() {
+                @Override
+                public List<ItemCardActions.Button> itemActions() {
+                    return snapshot;
+                }
+
                 @Override
                 public PlayerRef sender() {
                     return sender;
@@ -123,9 +142,9 @@ public final class ContextMenuController<M> {
     private ContextMenuMode mode = ContextMenuMode.BUBBLE;
 
     /** Per-cell hover fade for the menu rows. */
-    private final float[] hover = new float[4];
+    private float[] hover = new float[4];
     /** Per-row menu bounce, indexed like {@link #hover}. */
-    private final PressScale[] scale = {PressScale.bounce(), PressScale.bounce(),
+    private PressScale[] scale = {PressScale.bounce(), PressScale.bounce(),
             PressScale.bounce(), PressScale.bounce()};
 
     private float anim;
@@ -256,8 +275,33 @@ public final class ContextMenuController<M> {
      */
     private int menuRows(ContextMenuMode forMode, boolean imageMessage) {
         Subject<M> shown = subject != null ? subject : lastSubject;
+        int count = builtInRows(forMode, imageMessage, shown);
+        return forMode == ContextMenuMode.BUBBLE && shown != null
+                ? count + shown.itemActions().size() : count;
+    }
+
+    private int builtInRows(ContextMenuMode forMode, boolean imageMessage, Subject<M> shown) {
         return rows(forMode, imageMessage) + (forMode == ContextMenuMode.BUBBLE && shown != null
                 && host.canReact(shown.row()) ? 1 : 0);
+    }
+
+    /** Gets the locally registered action corresponding to an open message-menu row. */
+    public ItemCardActions.Button itemActionAt(int row) {
+        return itemActionAt(mode, subject, row);
+    }
+
+    private ItemCardActions.Button itemActionAt(ContextMenuMode forMode, Subject<M> shown, int row) {
+        if (forMode != ContextMenuMode.BUBBLE || shown == null || shown.itemActions().isEmpty()) return null;
+        int index = row - builtInRows(forMode, shown.imageMessage(), shown);
+        return index >= 0 && index < shown.itemActions().size() ? shown.itemActions().get(index) : null;
+    }
+
+    private void ensureMotionRows(int count) {
+        if (count <= scale.length) return;
+        int previous = scale.length;
+        hover = Arrays.copyOf(hover, count);
+        scale = Arrays.copyOf(scale, count);
+        for (int row = previous; row < count; row++) scale[row] = PressScale.bounce();
     }
 
     private Bounds bounds(ContextMenuMode forMode, boolean imageMessage) {
@@ -347,6 +391,7 @@ public final class ContextMenuController<M> {
         float menuH = b.h();
         float rowH = rowHeight();
         int count = menuRows(shownMode, imageMessage);
+        ensureMotionRows(count);
         for (int row = 0; row < count; row++) {
             float rowY = menuY + row * rowH;
             boolean overRow = vmx >= menuX && vmx <= menuX + menuW
@@ -379,7 +424,11 @@ public final class ContextMenuController<M> {
                     MenuPopup.drawRowWash(canvas, menuX, rowY, menuW, rowH, hov);
                     String label;
                     Path icon;
-                    if (shownMode == ContextMenuMode.BUBBLE && row == rows(shownMode, imageMessage)) {
+                    ItemCardActions.Button itemAction = itemActionAt(shownMode, shown, row);
+                    if (itemAction != null) {
+                        label = SkiaFontRenderer.truncate(menuFont, itemAction.label(), menuW - UiTokens.s(46));
+                        icon = AppIcons.ICON_TAB_PROFILE_PATH;
+                    } else if (shownMode == ContextMenuMode.BUBBLE && row == rows(shownMode, imageMessage)) {
                         label = host.label("atomchat.context.react");
                         icon = DrawPrimitives.ICON_EMOJI_PATH;
                     } else if (playerMenu) {

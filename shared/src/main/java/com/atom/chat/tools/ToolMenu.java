@@ -2,6 +2,8 @@ package com.atom.chat.tools;
 
 
 
+import com.atom.chat.api.ui.ComposerUi;
+import com.atom.chat.api.ui.UiContributions;
 import com.atom.chat.render.CornerGeometry;
 import com.atom.chat.ui.AtomChatAppearance;
 import com.atom.lib.design.atomchat.AppIcons;
@@ -17,17 +19,57 @@ import io.github.humbleui.skija.Path;
 import io.github.humbleui.types.RRect;
 import io.github.humbleui.types.Rect;
 import java.util.*;
+import java.util.function.Consumer;
 import java.util.function.Function;
 
 /** Compact action menu with the composer entrance and the complete context-menu surface/row language. */
 public final class ToolMenu {
     private static final Path SEARCH = Path.makeFromSVGString("M8.5 3a5.5 5.5 0 1 0 0 11a5.5 5.5 0 1 0 0-11 M12.5 12.5L18 18");
     static final int ACTION_COUNT = 5;
-    private static final String[] ACTION_KEYS = {"search", "players", "image", "share_location", "share_item"};
     private static final Path PIN_ICON = Path.makeFromSVGString(
             "M10 2a5.5 5.5 0 0 0-5.5 5.5c0 4.2 5.5 10.5 5.5 10.5s5.5-6.3 5.5-10.5A5.5 5.5 0 0 0 10 2z M10 5.5a2 2 0 1 1 0 4a2 2 0 0 1 0-4z");
     private static final Path ITEM_ICON = Path.makeFromSVGString(
             "M10 2L17 6v8l-7 4l-7-4V6l7-4z M10 10L17 6 M10 10L3 6 M10 10v8");
+    private List<UiContributions.Entry<ComposerUi.MenuItem>> entries;
+
+    public ToolMenu() {
+        this(defaults(id -> {}));
+    }
+
+    ToolMenu(List<UiContributions.Entry<ComposerUi.MenuItem>> entries) {
+        this.entries = entries;
+    }
+
+    static List<UiContributions.Entry<ComposerUi.MenuItem>> defaults(Consumer<String> activate) {
+        return List.of(
+                entry(ComposerUi.SEARCH, "search", SEARCH, activate),
+                entry(ComposerUi.PLAYERS, "players", AppIcons.ICON_TAB_PROFILE_PATH, activate),
+                entry(ComposerUi.IMAGE, "image", TablerIcons.PHOTO, activate),
+                entry(ComposerUi.SHARE_LOCATION, "share_location", PIN_ICON, activate),
+                entry(ComposerUi.SHARE_ITEM, "share_item", ITEM_ICON, activate));
+    }
+
+    private static UiContributions.Entry<ComposerUi.MenuItem> entry(
+            String id, String label, Path icon, Consumer<String> activate) {
+        return new UiContributions.Entry<>(id, new ComposerUi.MenuItem(
+                "atomchat.tools." + label, icon, context -> activate.accept(id), id.equals(ComposerUi.PLAYERS)));
+    }
+
+    void setEntries(List<UiContributions.Entry<ComposerUi.MenuItem>> entries) {
+        this.entries = entries;
+    }
+
+    UiContributions.Entry<ComposerUi.MenuItem> actionAt(int row) {
+        return !playersOpen && row >= 0 && row < entries.size() ? entries.get(row) : null;
+    }
+
+    int indexOfAction(String id) {
+        for (int row = 0; row < entries.size(); row++) {
+            if (entries.get(row).id().equals(id)) return row;
+        }
+        return -1;
+    }
+
     private boolean open, playersOpen, mentionAll;
     private int pressedRow = -1;
     private float anim, scroll;
@@ -37,7 +79,13 @@ public final class ToolMenu {
     private final Map<Integer, PressScale> bounce = new HashMap<>();
     public boolean isOpen() { return open; }
     public boolean playersOpen() { return playersOpen; }
-    public void toggle() { if (open) close(); else { open = true; back(); } }
+    public void toggle() {
+        if (open) close();
+        else if (!entries.isEmpty()) {
+            open = true;
+            back();
+        }
+    }
     public void close() {
         open = false;
         pressedRow = -1;
@@ -58,7 +106,7 @@ public final class ToolMenu {
         int index = row - (mentionAll ? 2 : 1);
         return playersOpen && index >= 0 && index < players.size() ? players.get(index) : null;
     }
-    private int rows() { return playersOpen ? 1 + (mentionAll ? 1 : 0) + Math.max(1, players.size()) : ACTION_COUNT; }
+    private int rows() { return playersOpen ? 1 + (mentionAll ? 1 : 0) + Math.max(1, players.size()) : entries.size(); }
 
     void measure(Function<String, String> tr) {
         var font = FontManager.font(UiTokens.FONT_BUTTON);
@@ -133,13 +181,7 @@ public final class ToolMenu {
                 MenuPopup.drawRowWash(canvas, box.x(), y, box.w(), ToolLayout.MENU_ROW_H, h);
                 int color = disabled ? 0xFF999DA6 : 0xFFF4F5F7;
                 Path icon = playersOpen ? i == 0 ? AppIcons.ICON_BACK_PATH : AppIcons.ICON_TAB_PROFILE_PATH
-                        : switch (i) {
-                    case 0 -> SEARCH;
-                    case 1 -> AppIcons.ICON_TAB_PROFILE_PATH;
-                    case 2 -> TablerIcons.PHOTO;
-                    case 3 -> PIN_ICON;
-                    default -> ITEM_ICON;
-                };
+                        : entries.get(i).value().icon();
                 DrawPrimitives.drawIconCentered(canvas, icon, box.x() + ToolLayout.MENU_ROW_H / 2, rowCy,
                         UiTokens.COMPOSER_ICON_SIZE, color);
                 String label = label(i, tr);
@@ -155,7 +197,7 @@ public final class ToolMenu {
     }
 
     private String label(int row, Function<String, String> tr) {
-        if (!playersOpen) return tr.apply("atomchat.tools." + ACTION_KEYS[row]);
+        if (!playersOpen) return tr.apply(entries.get(row).value().labelKey());
         if (row == 0) return tr.apply("atomchat.tools.back");
         if (isMentionAll(row)) return tr.apply("atomchat.tools.mention_all");
         PlayerRef player = playerAt(row);

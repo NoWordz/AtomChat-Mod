@@ -16,7 +16,9 @@ public enum AppPage {
      * full-width push/pop animation, back returns to the page underneath.
      */
     PROFILE_DETAIL("profile_detail", false),
-    SERVER_CONFIG("server_config", false);
+    SERVER_CONFIG("server_config", false),
+    ADDON_ROOT("addon_root", true),
+    ADDON_DETAIL("addon_detail", false);
 
     private final String id;
     private final boolean root;
@@ -32,6 +34,10 @@ public enum AppPage {
 
     public boolean isRoot() {
         return root;
+    }
+
+    public boolean isAddon() {
+        return this == ADDON_ROOT || this == ADDON_DETAIL;
     }
 
     public static AppPage fromId(String id) {

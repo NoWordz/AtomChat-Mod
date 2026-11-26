@@ -10,6 +10,34 @@ class ToolMenuInteractionTest {
     @org.junit.jupiter.api.BeforeAll static void setup(@org.junit.jupiter.api.io.TempDir java.nio.file.Path root) throws Exception {
         UiFeatureRenderTest.setup(root);
     }
+    @Test void registeredMenuEditsDriveTheSamePaintedAndClickableRows() {
+        var entries = new com.atom.chat.api.ui.UiContributions<com.atom.chat.api.ui.ComposerUi.MenuItem>();
+        entries.remove("example:hide_search", com.atom.chat.api.ui.ComposerUi.SEARCH);
+        entries.add("example:custom", new com.atom.chat.api.ui.ComposerUi.MenuItem(
+                "example.insert", TablerIcons.PHOTO, context -> context.replaceDraft("Addon content")),
+                com.atom.chat.api.ui.UiContributions.Position.first());
+        var host = new UiFeatureRenderTest.Host() {
+            @Override public com.atom.chat.api.ui.UiContributions<com.atom.chat.api.ui.ComposerUi.MenuItem> menuExtensions() {
+                return entries;
+            }
+
+            @Override public String tr(String key) {
+                return key.equals("example.insert") ? "Insert example" : super.tr(key);
+            }
+        };
+        var tools = new ComposerTools(host);
+        tools.toggle();
+        try (var surface = Surface.makeRasterN32Premul(460, 820)) {
+            tools.render(surface.getCanvas(), -1, -1, 200);
+            assertNull(tools.tutorialActionBounds(0), "Removed built-in search has no painted slot");
+            var custom = tools.menuActionBounds("example:custom");
+            assertNotNull(custom);
+            assertTrue(tapTool(tools, custom.x() + custom.w() / 2, custom.y() + custom.h() / 2, 0));
+            assertEquals("Addon content", host.text);
+            assertFalse(tools.active());
+        }
+    }
+
     @Test void openingClosingAndHoverRemainOnThePopupTimeline() {
         var host = new UiFeatureRenderTest.Host(); var tools = new ComposerTools(host);
         try (var surface = Surface.makeRasterN32Premul(460, 820)) {

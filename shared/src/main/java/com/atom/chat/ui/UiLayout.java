@@ -1,5 +1,9 @@
 package com.atom.chat.ui;
 
+import com.atom.chat.api.ui.ComposerUi;
+
+import java.util.List;
+
 
 import com.atom.lib.design.atomchat.UiTokens;
 /**
@@ -48,6 +52,9 @@ public final class UiLayout {
     public final Rect sendBtn;
     /** Quick-phrase toggle: fourth button between emoji and send. */
     public final Rect phraseBtn;
+    /** Button values and exact hit rectangles, in the resolved layout order. */
+    public final List<ComposerButtonLayout.Slot> composerButtons;
+    private final boolean customComposerButtons;
     /** Vertical center of the input text's FIRST visible line. */
     public final float inputTextCenterY;
 
@@ -73,6 +80,8 @@ public final class UiLayout {
         // when the draft wraps to a second line the list gives up exactly the
         // height the bar gains. Content is therefore never painted underneath
         // the translucent composer — no images can ghost through it.
+        customComposerButtons = mode == Mode.CHAT && ComposerUi.hasButtonLayoutEdits();
+        var spacing = customComposerButtons ? ComposerUi.spacing() : null;
         float controlW = Math.max(0.0F, panelW - chromePad * 2.0F
                 - UiTokens.EDGE_CONTROL_INSET - UiTokens.INPUT_ROW_PAD);
         int keysPerRow = Math.max(1, Math.min(3, (int) ((controlW + UiTokens.COMPOSER_KEY_GAP)
@@ -81,7 +90,10 @@ public final class UiLayout {
         boolean separateSend = keysPerRow < 3 || keysW + UiTokens.COMPOSER_KEY_GAP
                 + UiTokens.ACTION_BUTTON_SIZE > controlW;
         int extraButtonRows = separateSend ? (3 + keysPerRow - 1) / keysPerRow : 0;
-        float buttonExtraH = extraButtonRows * (UiTokens.INPUT_ROW_H + UiTokens.COMPOSER_KEY_GAP);
+        var buttons = spacing == null ? null : ComposerButtonLayout.resolve(
+                Math.max(0F, panelW - chromePad * 2F - spacing.leadingInset() - spacing.trailingInset()), spacing);
+        float buttonExtraH = buttons != null ? buttons.extraHeight()
+                : extraButtonRows * (UiTokens.INPUT_ROW_H + UiTokens.COMPOSER_KEY_GAP);
         float inputH = UiTokens.INPUT_HEIGHT + this.inputExtraH + buttonExtraH;
         float inputY = panelY + panelH - inputH - bottomPad;
 
@@ -122,41 +134,56 @@ public final class UiLayout {
             this.inputBar = new Rect(panelX + chromePad, inputY,
                     panelW - chromePad * 2.0F, inputH);
 
-            // Two families, two spacing systems, one row. The three square keys
-            // belong to the header action family and take that family's edge
-            // inset: EDGE_CONTROL_INSET off the bar's left edge and off its top,
-            // exactly like the back / filter keys sit in the header card. Send
-            // deliberately keeps its own designed gap instead — INPUT_ROW_PAD
-            // between the capsule and the bar's right edge, kept from the
-            // shipped design rather than unified with the keys.
-            float rowLeft = inputBar.x + UiTokens.EDGE_CONTROL_INSET;
-            float rowRight = inputBar.x + inputBar.w - UiTokens.INPUT_ROW_PAD;
-            // One axis for two heights. The row is as tall as its taller family
-            // (the action square), and the shorter Send capsule centres on that
-            // axis, so the two shapes read as one line instead of each being
-            // pinned to the other's top edge. Anchoring the axis to the taller
-            // family keeps EDGE_CONTROL_INSET as the real gap between the key
-            // band and the bar's top edge whatever either family measures.
-            float rowCenterY = inputBar.y + UiTokens.EDGE_CONTROL_INSET + UiTokens.INPUT_ROW_H / 2.0F;
-            float keyTop = rowCenterY - UiTokens.ACTION_BUTTON_SIZE / 2.0F;
-            float sendTop = rowCenterY - UiTokens.BUTTON_H / 2.0F;
-            this.imageBtn = new Rect(rowLeft, keyTop,
-                    UiTokens.ACTION_BUTTON_SIZE, UiTokens.ACTION_BUTTON_SIZE);
-            this.emojiBtn = new Rect(
-                    rowLeft + (1 % keysPerRow) * (UiTokens.ACTION_BUTTON_SIZE + UiTokens.COMPOSER_KEY_GAP),
-                    keyTop + (1 / keysPerRow) * (UiTokens.INPUT_ROW_H + UiTokens.COMPOSER_KEY_GAP),
-                    UiTokens.ACTION_BUTTON_SIZE, UiTokens.ACTION_BUTTON_SIZE);
-            this.phraseBtn = new Rect(
-                    rowLeft + (2 % keysPerRow) * (UiTokens.ACTION_BUTTON_SIZE + UiTokens.COMPOSER_KEY_GAP),
-                    keyTop + (2 / keysPerRow) * (UiTokens.INPUT_ROW_H + UiTokens.COMPOSER_KEY_GAP),
-                    UiTokens.ACTION_BUTTON_SIZE, UiTokens.ACTION_BUTTON_SIZE);
-            // Send keeps the wider, shorter capsule and is centred on the same
-            // axis; rowRight has already given up INPUT_ROW_PAD, so subtracting
-            // only BUTTON_W leaves exactly that much on the right.
-            float sendW = separateSend ? Math.min(UiTokens.BUTTON_W, controlW)
-                    : Math.min(UiTokens.BUTTON_W, controlW - keysW - UiTokens.COMPOSER_KEY_GAP);
-            this.sendBtn = new Rect(rowRight - sendW, sendTop + buttonExtraH,
-                    Math.max(0.0F, sendW), UiTokens.BUTTON_H);
+            if (buttons == null) {
+                this.composerButtons = List.of();
+                // Two families, two spacing systems, one row. The three square keys
+                // belong to the header action family and take that family's edge
+                // inset: EDGE_CONTROL_INSET off the bar's left edge and off its top,
+                // exactly like the back / filter keys sit in the header card. Send
+                // deliberately keeps its own designed gap instead — INPUT_ROW_PAD
+                // between the capsule and the bar's right edge, kept from the
+                // shipped design rather than unified with the keys.
+                float rowLeft = inputBar.x + UiTokens.EDGE_CONTROL_INSET;
+                float rowRight = inputBar.x + inputBar.w - UiTokens.INPUT_ROW_PAD;
+                // One axis for two heights. The row is as tall as its taller family
+                // (the action square), and the shorter Send capsule centres on that
+                // axis, so the two shapes read as one line instead of each being
+                // pinned to the other's top edge. Anchoring the axis to the taller
+                // family keeps EDGE_CONTROL_INSET as the real gap between the key
+                // band and the bar's top edge whatever either family measures.
+                float rowCenterY = inputBar.y + UiTokens.EDGE_CONTROL_INSET + UiTokens.INPUT_ROW_H / 2.0F;
+                float keyTop = rowCenterY - UiTokens.ACTION_BUTTON_SIZE / 2.0F;
+                float sendTop = rowCenterY - UiTokens.BUTTON_H / 2.0F;
+                this.imageBtn = new Rect(rowLeft, keyTop,
+                        UiTokens.ACTION_BUTTON_SIZE, UiTokens.ACTION_BUTTON_SIZE);
+                this.emojiBtn = new Rect(
+                        rowLeft + (1 % keysPerRow) * (UiTokens.ACTION_BUTTON_SIZE + UiTokens.COMPOSER_KEY_GAP),
+                        keyTop + (1 / keysPerRow) * (UiTokens.INPUT_ROW_H + UiTokens.COMPOSER_KEY_GAP),
+                        UiTokens.ACTION_BUTTON_SIZE, UiTokens.ACTION_BUTTON_SIZE);
+                this.phraseBtn = new Rect(
+                        rowLeft + (2 % keysPerRow) * (UiTokens.ACTION_BUTTON_SIZE + UiTokens.COMPOSER_KEY_GAP),
+                        keyTop + (2 / keysPerRow) * (UiTokens.INPUT_ROW_H + UiTokens.COMPOSER_KEY_GAP),
+                        UiTokens.ACTION_BUTTON_SIZE, UiTokens.ACTION_BUTTON_SIZE);
+                // Send keeps the wider, shorter capsule and is centred on the same
+                // axis; rowRight has already given up INPUT_ROW_PAD, so subtracting
+                // only BUTTON_W leaves exactly that much on the right.
+                float sendW = separateSend ? Math.min(UiTokens.BUTTON_W, controlW)
+                        : Math.min(UiTokens.BUTTON_W, controlW - keysW - UiTokens.COMPOSER_KEY_GAP);
+                this.sendBtn = new Rect(rowRight - sendW, sendTop + buttonExtraH,
+                        Math.max(0.0F, sendW), UiTokens.BUTTON_H);
+            } else {
+                float rowLeft = inputBar.x + spacing.leadingInset();
+                float rowTop = inputBar.y + UiTokens.EDGE_CONTROL_INSET;
+                this.composerButtons = buttons.slots().stream().map(slot -> {
+                    Rect rect = slot.rect();
+                    return new ComposerButtonLayout.Slot(slot.id(), slot.button(),
+                            new Rect(rowLeft + rect.x(), rowTop + rect.y(), rect.w(), rect.h()));
+                }).toList();
+                this.imageBtn = composerRect(ComposerUi.TOOLS_BUTTON);
+                this.emojiBtn = composerRect(ComposerUi.EMOJI_BUTTON);
+                this.phraseBtn = composerRect(ComposerUi.QUICK_PHRASES_BUTTON);
+                this.sendBtn = composerRect(ComposerUi.SEND_BUTTON);
+            }
 
             // The first line's centre sits at the middle of the text band, built
             // from the band's own parts (key inset, row band, half the band) —
@@ -177,8 +204,32 @@ public final class UiLayout {
             this.emojiBtn = new Rect(0, 0, 0, 0);
             this.sendBtn = new Rect(0, 0, 0, 0);
             this.phraseBtn = new Rect(0, 0, 0, 0);
+            this.composerButtons = List.of();
             this.inputTextCenterY = 0.0F;
         }
+    }
+
+    private Rect composerRect(String id) {
+        for (var slot : composerButtons) {
+            if (slot.id().equals(id)) return slot.rect();
+        }
+        return new Rect(0, 0, 0, 0);
+    }
+
+    public boolean builtInComposerButton(String id) {
+        if (!customComposerButtons) {
+            return switch (id) {
+                case ComposerUi.TOOLS_BUTTON -> imageBtn.w() > 0;
+                case ComposerUi.EMOJI_BUTTON -> emojiBtn.w() > 0;
+                case ComposerUi.QUICK_PHRASES_BUTTON -> phraseBtn.w() > 0;
+                case ComposerUi.SEND_BUTTON -> sendBtn.w() > 0;
+                default -> false;
+            };
+        }
+        for (var slot : composerButtons) {
+            if (slot.id().equals(id)) return slot.builtIn() && slot.rect().w() > 0;
+        }
+        return false;
     }
 
     /**

@@ -1,0 +1,9 @@
+{
+  "atomchat_jei_example.show_recipes": "查配方",
+  "atomchat_jei_example.page": "配方",
+  "atomchat_jei_example.empty": "本次会话还没查过物品。",
+  "atomchat_jei_example.recent": "上次查询",
+  "atomchat_jei_example.options": "物品卡片选项",
+  "atomchat_jei_example.lookup_setting": "显示查配方入口",
+  "atomchat_jei_example.lookup_setting.desc": "在本次会话的物品卡片菜单里显示查配方。"
+}

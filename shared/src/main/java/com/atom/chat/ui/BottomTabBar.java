@@ -2,10 +2,11 @@ package com.atom.chat.ui;
 
 
 
+import com.atom.chat.api.ui.NavigationUi;
+import com.atom.chat.nav.NavPage;
 import com.atom.chat.render.OutlineIcons;
 import com.atom.chat.render.CornerGeometry;
 import com.atom.chat.render.ChromeMaterial;
-import com.atom.lib.design.atomchat.AppIcons;
 import com.atom.lib.design.atomchat.UiTokens;
 import com.atom.chat.nav.AppPage;
 import com.atom.chat.nav.PageNavAxis;
@@ -17,6 +18,8 @@ import io.github.humbleui.skija.Paint;
 import io.github.humbleui.skija.Path;
 import io.github.humbleui.types.Rect;
 
+import java.util.Arrays;
+
 /**
  * Shared icon-only bottom tab bar for AtomChat root pages. Rendering and
  * hit-testing are both driven by {@link UiLayout.Rect} plus {@link UiTokens}
@@ -27,18 +30,12 @@ import io.github.humbleui.types.Rect;
  * push so the capsule and the page body always move together.</p>
  */
 public final class BottomTabBar {
-    private static final Path[] ICONS = {
-            AppIcons.ICON_TAB_CHAT_PATH,
-            AppIcons.ICON_TAB_PROFILE_PATH,
-            TablerIcons.SETTINGS
-    };
-
     private final Animator indicatorAnim = new Animator(Easing::easeInOutCubic);
-    private final float[] tabHover = new float[3];
+    private float[] tabHover = new float[3];
     /** Per-tab press/hover bounce; hit-testing stays unscaled, this is draw-only. */
     // One width-derived budget: the capsule stays inside its cell because a
     // tab-width shape only ever travels BUDGET_PX per side, not a fixed ratio.
-    private final PressScale[] tabScale = {PressScale.bounce(), PressScale.bounce(), PressScale.bounce()};
+    private PressScale[] tabScale = {PressScale.bounce(), PressScale.bounce(), PressScale.bounce()};
     /** Tab index under an active press, for the bounce; -1 = none. */
     private int pressedTab = -1;
     /**
@@ -71,7 +68,7 @@ public final class BottomTabBar {
     }
 
     public void setSelectedIndex(int index) {
-        if (index < 0 || index >= 3) {
+        if (index < 0 || index >= NavigationUi.resolvedTabs().size()) {
             return;
         }
         // The capsule is this bar's own animation now (the old two-page
@@ -85,7 +82,7 @@ public final class BottomTabBar {
     }
 
     public void setSelectedImmediate(int index) {
-        if (index < 0 || index >= 3) {
+        if (index < 0 || index >= NavigationUi.resolvedTabs().size()) {
             return;
         }
         indicatorAnim.setValue(index);
@@ -101,10 +98,13 @@ public final class BottomTabBar {
         int hovered = hitTest(vmx, vmy, bar);
         // The scaled shape is the cell's capsule, so the bounce budget derives
         // from the capsule width (render draws the same geometry).
+        int count = NavigationUi.resolvedTabs().size();
+        if (count == 0) return;
+        ensureMotion(count);
         float capsuleW = bar != null && bar.w() > 0.0F
-                ? bar.w() / 3.0F - UiTokens.TAB_EDGE_PAD * 2.0F
+                ? bar.w() / count - UiTokens.TAB_EDGE_PAD * 2.0F
                 : UiTokens.TAB_EDGE_PAD * 2.0F;
-        for (int i = 0; i < 3; i++) {
+        for (int i = 0; i < count; i++) {
             tabHover[i] = UiMotion.approach(tabHover[i], i == hovered ? 1.0F : 0.0F,
                     deltaMs, UiMotion.HOVER_MS);
             tabScale[i].update(i == hovered, i == pressedTab, deltaMs, Animations.enabled(), capsuleW);
@@ -163,11 +163,15 @@ public final class BottomTabBar {
     /** Content only, for the shared composer/tab chrome morph. */
     public void renderContents(Canvas canvas, UiLayout.Rect bar, int selectedIndex,
                                int textPrimary, int accent) {
-        float cellWidth = bar.w() / 3.0F;
+        var entries = NavigationUi.resolvedTabs();
+        int count = entries.size();
+        if (count == 0) return;
+        ensureMotion(count);
+        float cellWidth = bar.w() / count;
         // The selected/hover capsule is inset from the bar by TAB_EDGE_PAD on
         // all four sides; its height is bar height minus the two vertical edge
         // pads. With no label, the icon sits on the pill's vertical centre.
-        float inset = UiTokens.TAB_EDGE_PAD;
+        float inset = Math.min(UiTokens.TAB_EDGE_PAD, cellWidth * .25F);
         float capsuleH = bar.h() - inset * 2.0F;
         float capsuleW = cellWidth - inset * 2.0F;
         float radius = ChromeMaterial.circularInsetCornerRadius(capsuleW, capsuleH,
@@ -177,21 +181,23 @@ public final class BottomTabBar {
         // fractional slide between cells, so the pill is placed from it directly
         // and drawn exactly once. Adding a per-cell offset on top of it would
         // push the pill a whole cell right for every tab but the first.
-        float indicator = indicatorAnim.getValue();
+        float indicator = Math.min(count - 1, indicatorAnim.getValue());
         float capsuleX = bar.x() + indicator * cellWidth + inset;
         float capsuleCenterX = capsuleX + capsuleW / 2.0F;
         float barCenterY = bar.y() + bar.h() / 2.0F;
 
         // One bounce drives the whole selected capsule, glyph included - the
         // capsule has no per-cell identity of its own while it slides.
-        canvas.save();
-        applyBounce(canvas, tabScale[selectedIndex].scale(), capsuleCenterX, barCenterY);
-        CornerGeometry.fill(canvas,
-                CornerGeometry.circularRect(capsuleX, bar.y() + inset, capsuleW, capsuleH, radius),
-                UiTokens.accentFill(AtomChatAppearance.theme()));
-        canvas.restore();
+        if (selectedIndex >= 0 && selectedIndex < count) {
+            canvas.save();
+            applyBounce(canvas, tabScale[selectedIndex].scale(), capsuleCenterX, barCenterY);
+            CornerGeometry.fill(canvas,
+                    CornerGeometry.circularRect(capsuleX, bar.y() + inset, capsuleW, capsuleH, radius),
+                    UiTokens.accentFill(AtomChatAppearance.theme()));
+            canvas.restore();
+        }
 
-        for (int i = 0; i < 3; i++) {
+        for (int i = 0; i < count; i++) {
             ClickRipples.region(bar.x() + cellWidth * i + inset, bar.y() + inset, capsuleW, capsuleH,
                     radius, i == selectedIndex ? UiTokens.accentFill(AtomChatAppearance.theme()) : UiTokens.cardFill(AtomChatAppearance.theme()));
             float cellCenterX = bar.x() + cellWidth * (i + 0.5F);
@@ -215,8 +221,8 @@ public final class BottomTabBar {
             // reads against the accent rather than the panel's text colour.
             int iconColor = i == selectedIndex
                     ? UiTokens.onAccent(UiTokens.accentFill(AtomChatAppearance.theme())) : textPrimary;
-            drawIconCentered(canvas, ICONS[i], cellCenterX, cellCenterY,
-                    UiTokens.TAB_ICON_SIZE, iconColor);
+            drawIconCentered(canvas, entries.get(i).value().icon(), cellCenterX, cellCenterY,
+                    Math.min(UiTokens.TAB_ICON_SIZE, capsuleW), iconColor);
 
             canvas.restore();
         }
@@ -235,41 +241,51 @@ public final class BottomTabBar {
         }
     }
 
-    /** Returns 0..2 for the three equal cells, or -1 when outside the bar. */
+    /** Returns the index of an equal-width tab cell, or -1 when outside the bar. */
     public static int hitTest(float x, float y, UiLayout.Rect bar) {
         if (bar == null || bar.w() <= 0.0F || bar.h() <= 0.0F
                 || x < bar.x() || x > bar.right() || y < bar.y() || y > bar.bottom()) {
             return -1;
         }
-        int index = (int) ((x - bar.x()) / (bar.w() / 3.0F));
-        return Math.max(0, Math.min(2, index));
+        int count = NavigationUi.resolvedTabs().size();
+        if (count == 0) return -1;
+        int index = (int) ((x - bar.x()) / (bar.w() / count));
+        return Math.max(0, Math.min(count - 1, index));
     }
 
     // -------------------------------------------------- root page <-> cell
 
-    /**
-     * The bar owns its own cell table (moved here from the
-     * deleted two-page choreography): the three root pages are the three cells,
-     * in bar order. Pushed pages have no cell.
-     */
     public static int rootIndex(AppPage page) {
-        return switch (page) {
-            case CHAT_LIST -> 0;
-            case PROFILE -> 1;
-            case SETTINGS -> 2;
-            case WORLD_CHAT, PRIVATE_CHAT, SETTINGS_SECTION, PROFILE_DETAIL, SERVER_CONFIG ->
-                    throw new IllegalStateException("Pushed pages have no bottom tab index");
-        };
+        if (!page.isRoot()) throw new IllegalStateException("Pushed pages have no bottom tab index");
+        return page.isAddon() ? -1 : rootIndex(NavPage.of(page));
     }
 
-    /** The root page of a cell, the inverse of {@link #rootIndex}. */
+    public static int rootIndex(NavPage page) {
+        String route = NavigationUi.route(page);
+        var tabs = NavigationUi.resolvedTabs();
+        for (int i = 0; i < tabs.size(); i++) {
+            if (tabs.get(i).value().pageId().equals(route)) return i;
+        }
+        return -1;
+    }
+
+    public static NavPage rootNavForIndex(int index) {
+        var entries = NavigationUi.resolvedTabs();
+        return index >= 0 && index < entries.size() ? NavigationUi.root(entries.get(index).value().pageId()) : null;
+    }
+
     public static AppPage rootPageForIndex(int index) {
-        return switch (index) {
-            case 0 -> AppPage.CHAT_LIST;
-            case 1 -> AppPage.PROFILE;
-            case 2 -> AppPage.SETTINGS;
-            default -> throw new IllegalStateException("Unexpected root tab index " + index);
-        };
+        NavPage page = rootNavForIndex(index);
+        if (page == null) throw new IllegalStateException("Unexpected root tab index " + index);
+        return page.page();
+    }
+
+    private void ensureMotion(int count) {
+        if (count <= tabScale.length) return;
+        int from = tabScale.length;
+        tabScale = Arrays.copyOf(tabScale, count);
+        tabHover = Arrays.copyOf(tabHover, count);
+        for (int i = from; i < count; i++) tabScale[i] = PressScale.bounce();
     }
 
     private static void drawIconCentered(Canvas canvas, Path icon, float cx, float cy,

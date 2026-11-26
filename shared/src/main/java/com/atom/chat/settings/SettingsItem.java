@@ -20,6 +20,7 @@ public final class SettingsItem {
     private final String subtitleKey;
     private final BooleanSupplier getter;
     private final Consumer<Boolean> setter;
+    private final boolean persistAtomChatConfig;
     /**
      * When present and returning false, the row is drawn dimmed and refuses
      * input. Used for options another setting currently overrides — the blur
@@ -35,12 +36,24 @@ public final class SettingsItem {
     public SettingsItem(String id, String titleKey, String subtitleKey,
                         BooleanSupplier getter, Consumer<Boolean> setter,
                         BooleanSupplier available) {
+        this(id, titleKey, subtitleKey, getter, setter, available, true);
+    }
+
+    private SettingsItem(String id, String titleKey, String subtitleKey,
+                         BooleanSupplier getter, Consumer<Boolean> setter,
+                         BooleanSupplier available, boolean persistAtomChatConfig) {
         this.id = id;
         this.titleKey = titleKey;
         this.subtitleKey = subtitleKey;
         this.getter = getter;
         this.setter = setter;
         this.available = available;
+        this.persistAtomChatConfig = persistAtomChatConfig;
+    }
+
+    public static SettingsItem addon(com.atom.chat.api.ui.SettingsUi.Toggle toggle) {
+        return new SettingsItem(toggle.id(), toggle.titleKey(), toggle.descriptionKey(),
+                toggle.value(), toggle.setValue(), null, false);
     }
 
     public String id() {
@@ -76,6 +89,6 @@ public final class SettingsItem {
     public void set(boolean value) {
         if (performanceLocked()) return;
         setter.accept(value);
-        AtomChatConfig.save(AtomChatConfig.get());
+        if (persistAtomChatConfig) AtomChatConfig.save(AtomChatConfig.get());
     }
 }

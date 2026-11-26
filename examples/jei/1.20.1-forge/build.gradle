@@ -1,0 +1,19 @@
+plugins {
+    id 'net.minecraftforge.gradle' version '[6.0,6.2)'
+}
+
+apply from: '../../../gradle/atomchat-jei-example.gradle'
+
+java.toolchain.languageVersion = JavaLanguageVersion.of(17)
+
+minecraft {
+    mappings channel: 'official', version: '1.20.1'
+}
+
+dependencies {
+    minecraft 'net.minecraftforge:forge:1.20.1-47.4.10'
+    compileOnly fg.deobf('mezz.jei:jei-1.20.1-forge:15.20.0.112') { transitive = false }
+    compileOnly files(atomchatJar)
+}
+
+tasks.named('jar') { finalizedBy 'reobfJar' }
