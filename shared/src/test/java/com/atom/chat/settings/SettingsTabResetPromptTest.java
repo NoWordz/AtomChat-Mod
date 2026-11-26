@@ -8,6 +8,12 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 
 class SettingsTabResetPromptTest {
+
+    @org.junit.jupiter.api.BeforeAll
+    static void initializeMinecraft() throws ReflectiveOperationException {
+        com.atom.chat.testing.MinecraftTestBootstrap.ensureInitialized();
+    }
+
     private Object previousProvider;
     @org.junit.jupiter.api.BeforeEach void install(@org.junit.jupiter.api.io.TempDir java.nio.file.Path dir) throws Exception {
         var field=com.atom.chat.platform.Platform.class.getDeclaredField("provider");field.setAccessible(true);

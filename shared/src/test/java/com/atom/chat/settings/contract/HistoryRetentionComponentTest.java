@@ -33,6 +33,12 @@ import static com.atom.lib.frontend.contract.ContractDesign.*;
 import static org.junit.jupiter.api.Assertions.*;
 
 class HistoryRetentionComponentTest {
+
+    @org.junit.jupiter.api.BeforeAll
+    static void initializeMinecraft() throws ReflectiveOperationException {
+        com.atom.chat.testing.MinecraftTestBootstrap.ensureInitialized();
+    }
+
     private static final String PROFILE = "atomchat-settings/1";
     private static final Binding BINDING = new Binding(HistoryRetentionComponent.class.getName(), PROFILE);
 
