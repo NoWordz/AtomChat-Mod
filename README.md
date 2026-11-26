@@ -57,6 +57,10 @@ cd platforms/1.21.1-fabric
 
 This produces a local test build in `build/atomlib-consumer/libs/` under the selected target. On Windows, use `gradlew.bat` and pass the path written to `build/atomlib-input-path`. The distribution build also runs the frontend contract checks. [Project status](docs/STATUS.md) · [Changelog](CHANGELOG.md) · [Issues](https://github.com/NoWordz/AtomChat-Mod/issues)
 
+## Contributors
+
+- [ChatMiaoPT-Meow](https://github.com/ChatMiaoPT-Meow) contributed the Share Card API and the original Fabric, NeoForge, and Forge implementations for location, item, red packet, and interactive cards. [PR #3](https://github.com/NoWordz/AtomChat-Mod/pull/3)
+
 ## License
 
 AtomChat is [MIT-licensed](LICENSE). [Third-party notices](THIRD_PARTY_NOTICES.md)

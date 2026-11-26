@@ -57,6 +57,10 @@ cd platforms/1.21.1-fabric
 
 本地测试包位于所选目标的 `build/atomlib-consumer/libs/`。Windows 可用 `gradlew.bat`，并传入 `build/atomlib-input-path` 中记录的路径。正式分发构建还会执行前端契约检查。 [项目状态](docs/STATUS.md) · [变更日志](CHANGELOG.md) · [问题反馈](https://github.com/NoWordz/AtomChat-Mod/issues)
 
+## 贡献者
+
+- [ChatMiaoPT-Meow](https://github.com/ChatMiaoPT-Meow) 贡献了分享卡片 API，以及位置、物品、红包和互动卡片在 Fabric、NeoForge、Forge 三端的初版实现。 [PR #3](https://github.com/NoWordz/AtomChat-Mod/pull/3)
+
 ## 许可证
 
 AtomChat 采用 [MIT 许可证](LICENSE)。 [第三方声明](THIRD_PARTY_NOTICES.md)
