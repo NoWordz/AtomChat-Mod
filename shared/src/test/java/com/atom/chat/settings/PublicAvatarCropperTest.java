@@ -4,6 +4,7 @@ import com.atom.chat.avatar.ImageCropper;
 import com.atom.chat.config.AtomChatConfig;
 import com.atom.chat.platform.Platform;
 import com.atom.chat.ui.UiLayout;
+import com.atom.chat.ui.input.ClickTarget;
 import io.github.humbleui.skija.Surface;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -92,6 +93,7 @@ class PublicAvatarCropperTest {
                 result.set(bytes);
                 calls.incrementAndGet();
             });
+            assertTrue(cropper.capturesKeyboard(), "editing a public avatar is keyboard-modal");
             var x = ImageCropper.class.getDeclaredMethod("confirmCx", UiLayout.Rect.class);
             var y = ImageCropper.class.getDeclaredMethod("btnCy", UiLayout.Rect.class);
             x.setAccessible(true);
@@ -108,7 +110,10 @@ class PublicAvatarCropperTest {
             var png = ImageIO.read(new java.io.ByteArrayInputStream(result.get()));
             assertEquals(com.atom.chat.pack.PublicChatAvatar.SIZE, png.getWidth());
             assertEquals(png.getWidth(), png.getHeight());
-            assertTrue(cropper.isActive(), "the closing overlay retains input until its fade finishes");
+            assertTrue(cropper.isActive(), "the overlay remains visible through its fade");
+            assertFalse(cropper.capturesKeyboard(), "the server form can receive keys immediately");
+            assertSame(ClickTarget.blocked(), cropper.clickTarget(buttonX, buttonY, 0, PANEL),
+                    "the closing overlay still prevents pointer actions underneath");
             cropper.cancel();
             while (cropper.isActive() && System.nanoTime() < until) {
                 cropper.render(surface.getCanvas(), PANEL, 0, 0);

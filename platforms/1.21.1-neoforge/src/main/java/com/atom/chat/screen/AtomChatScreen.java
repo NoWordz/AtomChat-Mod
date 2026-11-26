@@ -4173,8 +4173,8 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
     }
 
     /**
-     * The picture preview, the avatar cropper and the colour picker are modals:
-     * while active, each owns every event.
+     * The picture preview, the avatar cropper and the colour picker own modal input.
+     * The public avatar cropper releases the keyboard while fading out.
      */
     private final class ModalInput implements InputHandler {
         private boolean modalActive() {
@@ -4272,8 +4272,8 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
                 }
                 return true;
             }
-            // The cropper is modal: Esc cancels it, every other key is swallowed.
-            if (imageCropper.isActive()) {
+            // Esc cancels the crop; the server form can then receive the next key.
+            if (imageCropper.capturesKeyboard()) {
                 if (keyCode == 256) {
                     imageCropper.cancel();
                 }
@@ -4307,7 +4307,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
             if (imagePreview.isActive()) {
                 return true;
             }
-            if (imageCropper.isActive()) return true;
+            if (imageCropper.capturesKeyboard()) return true;
             if (colorPicker.isActive()) {
                 colorPicker.onChar(chr);
                 return true;

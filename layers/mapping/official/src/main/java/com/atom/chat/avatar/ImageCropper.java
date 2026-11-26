@@ -167,6 +167,11 @@ public final class ImageCropper {
         return active;
     }
 
+    /** The server form takes back keyboard input as soon as its avatar crop ends. */
+    public boolean capturesKeyboard() {
+        return active && (!closing || publicAvatarCallback == null);
+    }
+
     public void cancel() {
         if (closing) {
             return;
