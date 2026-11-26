@@ -413,6 +413,7 @@ public final class ContextMenuController<M> {
             // and shadow tokens. Fixed polarity by design.
             MenuPopup.drawSurface(canvas, menuX, menuY, menuW, menuH);
             Font menuFont = FontManager.font(UiTokens.FONT_BUTTON);
+            float labelInset = UiTokens.s(36);
             for (int row = 0; row < count; row++) {
                 float rowY = menuY + row * rowH;
                 float hov = hover[row];
@@ -426,7 +427,7 @@ public final class ContextMenuController<M> {
                     Path icon;
                     ItemCardActions.Button itemAction = itemActionAt(shownMode, shown, row);
                     if (itemAction != null) {
-                        label = SkiaFontRenderer.truncate(menuFont, itemAction.label(), menuW - UiTokens.s(46));
+                        label = SkiaFontRenderer.truncate(menuFont, itemAction.label(), menuW - labelInset - UiTokens.LIST_PAD_X);
                         icon = AppIcons.ICON_TAB_PROFILE_PATH;
                     } else if (shownMode == ContextMenuMode.BUBBLE && row == rows(shownMode, imageMessage)) {
                         label = host.label("atomchat.context.react");
@@ -455,7 +456,7 @@ public final class ContextMenuController<M> {
                     }
                     host.drawIcon(canvas, icon, menuX + UiTokens.s(18), rowY + rowH / 2.0F,
                             UiTokens.CONTEXT_ICON_SIZE, textColor);
-                    SkiaFontRenderer.drawText(canvas, menuFont, label, menuX + UiTokens.s(36),
+                    SkiaFontRenderer.drawText(canvas, menuFont, label, menuX + labelInset,
                             SkiaFontRenderer.centerBaselineY(menuFont, rowY + rowH / 2.0F), textColor);
                 } finally {
                     MenuPopup.endRowBounce(canvas);
