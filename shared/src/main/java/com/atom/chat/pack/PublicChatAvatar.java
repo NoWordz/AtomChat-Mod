@@ -16,8 +16,9 @@ import java.util.Objects;
 import javax.imageio.ImageIO;
 import javax.imageio.stream.MemoryCacheImageInputStream;
 
-/** One static PNG in the server data directory, published through the existing pack icon field. */
+/** One normalized public chat avatar PNG in the server data directory. */
 public final class PublicChatAvatar {
+    public static final String FILE_NAME = "public-chat-avatar.png";
     public static final int SIZE = 96;
     private static final int MAX_ENCODED_CHARS = (ServerPack.MAX_ICON_BYTES + 2) / 3 * 4;
     private static final int HEADER_END = 33;
@@ -46,7 +47,7 @@ public final class PublicChatAvatar {
                 && header.getInt() == SIZE && header.getInt() == SIZE;
     }
 
-    /** The valid PNG tEXt marker distinguishes this asset from the legacy server-list icon. */
+    /** Checks the marker written when the server normalizes this PNG. */
     public static boolean isPublished(byte[] png) {
         return hasHeader(png) && png.length >= HEADER_END + PUBLISHED_MARKER.length
                 && Arrays.equals(png, HEADER_END, HEADER_END + PUBLISHED_MARKER.length,

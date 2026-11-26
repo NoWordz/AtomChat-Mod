@@ -7,6 +7,7 @@ import com.atom.chat.api.card.SpecialCardPresentation;
 import com.atom.lib.design.atomchat.AppIcons;
 import com.atom.lib.design.atomchat.UiTokens;
 import io.github.humbleui.skija.Canvas;
+import io.github.humbleui.skija.PictureRecorder;
 import io.github.humbleui.types.Rect;
 import io.github.humbleui.types.RRect;
 
@@ -18,8 +19,9 @@ final class CompactCardPaint {
     record Size(float width, float height, boolean custom) {}
     private CompactCardPaint() {}
 
-    static Content of(ShareCard card) {
-        return new Content(card, SpecialCardPresentation.state(card), CardRenderRegistry.compactRendererOf(card));
+    static Content of(ShareCard card, boolean imagesEnabled) {
+        return new Content(card, SpecialCardPresentation.state(card),
+                imagesEnabled ? CardRenderRegistry.compactRendererOf(card) : null);
     }
 
     static String label(Content content) {
@@ -51,15 +53,26 @@ final class CompactCardPaint {
 
     static boolean drawCustom(Canvas canvas, Content content, float x, float y, float width, float height) {
         if (content.renderer() == null) return false;
-        int saved = canvas.save();
-        try {
-            canvas.clipRect(Rect.makeXYWH(x, y, width, height));
-            content.renderer().draw(canvas, content.card(), content.state(), x, y, width, height);
+        Rect bounds = Rect.makeXYWH(x, y, width, height);
+        try (var recorder = new PictureRecorder()) {
+            Canvas recording = recorder.beginRecording(bounds);
+            int saved = recording.save();
+            recording.clipRect(bounds);
+            content.renderer().draw(recording, content.card(), content.state(), x, y, width, height);
+            if (recording.getSaveCount() != saved + 1) return false;
+            recording.restoreToCount(saved);
+            try (var picture = recorder.finishRecordingAsPicture()) {
+                int hostSave = canvas.save();
+                try {
+                    canvas.clipRect(bounds);
+                    picture.playback(canvas);
+                } finally {
+                    canvas.restoreToCount(hostSave);
+                }
+            }
             return true;
         } catch (RuntimeException | LinkageError ignored) {
             return false;
-        } finally {
-            canvas.restoreToCount(saved);
         }
     }
 

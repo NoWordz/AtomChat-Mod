@@ -16,6 +16,7 @@ public final class ConfigAdminClient {
     private static ServerConfigPage saveOwner;
     private record AvatarRequest(String id, ServerConfigPage owner, long deadline) {}
     private static AvatarRequest avatarRequest;
+    private static final PublicAvatarSubscription publicAvatar = new PublicAvatarSubscription();
     private static ConfigAdminServer.SyncStatus sync;
     private static long pollUntil,lastPoll;
     public static ConfigAdminServer.SyncStatus sync(){return sync;}
@@ -25,11 +26,15 @@ public final class ConfigAdminClient {
         if(AtomChatConfig.get().serverPacksEnabled&&ConfigAdminClientTransport.available())request("hello");
     }
     public static void onDisconnect(){
+        publicAvatar.reset();
+        com.atom.chat.render.PublicChatAvatarPaint.clear();
         avatarRequest=null;outgoing.clear();files.clear();receiver=new AdminProtocol.Receiver();ServerTemplateStore.clear();
         detail="";sync=null;pollUntil=lastPoll=0;pendingOpen=pendingSave=pendingStatus=null;saveOwner=null;
     }
     public static void tick(){
         long now=System.currentTimeMillis();receiver.expire(now);
+        var subscription = publicAvatar.update(AtomChatConfig.get().serverPacksEnabled, ConfigAdminClientTransport.available());
+        if (subscription != null) send(subscription);
         if (avatarRequest != null && now > avatarRequest.deadline()) {
             var request = avatarRequest;
             avatarRequest = null;
@@ -86,6 +91,7 @@ public final class ConfigAdminClient {
         try{
             String text=receiver.offer(chunk,System.currentTimeMillis());if(text==null)return;
             var reply=AdminProtocol.JSON.fromJson(text,AdminProtocol.Reply.class);if(reply==null)return;
+            if (publicAvatar.receive(reply, AtomChatConfig.get().serverPacksEnabled)) return;
             if(!reply.ok()){failure(reply);return;}
             switch(reply.action()){
                 case "snapshot"->{

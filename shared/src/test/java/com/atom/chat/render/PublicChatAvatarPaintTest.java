@@ -48,13 +48,19 @@ class PublicChatAvatarPaintTest {
         Path published = root.resolve("server/public-chat-avatar.png");
         PublicChatAvatar.save(published, "", upload.toByteArray());
         byte[] png = PublicChatAvatar.read(published);
-        var pack = new ServerPack(ServerPack.hashOf(ServerPack.canonical(List.of(), List.of(), "", png)),
-                List.of(), List.of(), "", png);
+        byte[] legacyIcon = upload.toByteArray();
+        var pack = new ServerPack(ServerPack.hashOf(ServerPack.canonical(List.of(), List.of(), "", legacyIcon)),
+                List.of(), List.of(), "", legacyIcon);
         String key = PackKeys.serverKey("first.example");
         PackManifestFile.install(root, key, pack, Map.of());
+        ServerPackStore.clearPublicAvatar();
         ServerPackStore.refresh(root, key);
-        assertNull(ServerPackStore.current().publicAvatar(), "disk cache alone cannot publish an icon");
-        ServerPackStore.refresh(root, key, pack);
+        assertNull(ServerPackStore.publicAvatar(), "disk cache alone cannot publish an avatar");
+        assertFalse(ServerPackStore.installPublicAvatar("wrong hash", png));
+        assertTrue(ServerPackStore.installPublicAvatar(ServerPack.sha256Hex(png), png));
+        assertArrayEquals(legacyIcon, ServerPackStore.current().icon());
+        ServerPackStore.refresh(root, key);
+        assertArrayEquals(png, ServerPackStore.publicAvatar().png(), "legacy pack refresh leaves the avatar alone");
         try (var surface = Surface.makeRasterN32Premul(128, 128); var pixels = new Bitmap()) {
             var canvas = surface.getCanvas();
             canvas.scale(1.25F, 1.25F);
@@ -88,12 +94,14 @@ class PublicChatAvatarPaintTest {
                     saveEvidence(surface, "globe-" + Integer.toHexString(background) + "-" + i);
                 }
             }
+            ServerPackStore.clearPublicAvatar();
             ServerPackStore.refresh(root, PackKeys.serverKey("second.example"));
-            assertNull(ServerPackStore.current().publicAvatar());
+            assertNull(ServerPackStore.publicAvatar());
         } finally {
             config.cornerRadius = originalRadius;
             config.serverPacksEnabled = originalReceive;
             ServerPackStore.clear();
+            ServerPackStore.clearPublicAvatar();
             PublicChatAvatarPaint.clear();
         }
     }

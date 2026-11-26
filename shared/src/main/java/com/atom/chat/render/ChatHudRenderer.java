@@ -356,7 +356,8 @@ public final class ChatHudRenderer {
         long currentCardState = CardStateStore.revision();
         long currentCompactRenderer = CardRenderRegistry.hudRevision();
         boolean invalidateLayout = currentCardState != cardStateRevision || currentCompactRenderer != compactRendererRevision
-                || lastShareCardsEnabled != config.shareCardsEnabled || fontEpoch != currentFontEpoch || layoutWidth != viewport.width() || layoutBodyFont != bodyFont
+                || lastShareCardsEnabled != config.shareCardsEnabled || lastImagesEnabled != config.imageMessagesEnabled
+                || fontEpoch != currentFontEpoch || layoutWidth != viewport.width() || layoutBodyFont != bodyFont
                 || layoutNameFont != nameFont || layoutCapsuleFont != capsuleFont || inlineItemGap != UiTokens.INLINE_ITEM_GAP
                 || layoutAvatarInset != avatarInset || !Objects.equals(layoutOwnName, ownName)
                 || !Objects.equals(layoutUnknownName, unknownName) || !Objects.equals(layoutImageLabel, imageLabel);
@@ -378,7 +379,6 @@ public final class ChatHudRenderer {
         }
         boolean sameGeometry = viewport.equals(lastViewport) && limit == lastLimit && !invalidateLayout && !qualityChanged
                 && lastShareCardsEnabled == config.shareCardsEnabled
-                && lastImagesEnabled == config.imageMessagesEnabled
                 && lastCompact == config.compactMessagesEnabled && lastTimestampInterval == config.timestampIntervalMinutes;
         // Keep an in-progress row animation behind the panel's group slide.
         if (panelFrame && sameGeometry && (!visibleRows.isEmpty() || departingRows)) return;
@@ -403,7 +403,8 @@ public final class ChatHudRenderer {
             float maxBubbleWidth = viewport.width() - (system ? 0F : avatarLane);
             if (maxBubbleWidth <= 0F) break;
             Measured candidate = layout(message, system ? capsuleFont : bodyFont, nameFont,
-                    ownName, unknownName, imageLabel, system ? UiTokens.SYSTEM_BUBBLE_PAD_Y : UiTokens.BUBBLE_PAD_Y, maxBubbleWidth, config.shareCardsEnabled);
+                    ownName, unknownName, imageLabel, system ? UiTokens.SYSTEM_BUBBLE_PAD_Y : UiTokens.BUBBLE_PAD_Y, maxBubbleWidth,
+                    config.shareCardsEnabled, config.imageMessagesEnabled);
             float next = minimumPile + minimumHeight(candidate, false, minPlayerHeight);
             boolean grouped = false;
             if (!measuredRows.isEmpty()) {
@@ -494,7 +495,7 @@ public final class ChatHudRenderer {
     }
 
     private Measured layout(ChatMessage message, Font font, Font nameFont, String ownName, String unknownName,
-                            String imageLabel, float padY, float maxBubbleWidth, boolean shareCardsEnabled) {
+                            String imageLabel, float padY, float maxBubbleWidth, boolean shareCardsEnabled, boolean imagesEnabled) {
         Measured cached = layouts.get(message);
         if (cached != null) return cached;
         RichText body = MessagePaint.body(message);
@@ -503,7 +504,7 @@ public final class ChatHudRenderer {
         boolean imagePlaceholder = !message.isSystem() && ImageCode.contains(content);
         CompactCardPaint.Content card = null;
         if (message.hasCard() && shareCardsEnabled) {
-            card = CompactCardPaint.of(message.getCard());
+            card = CompactCardPaint.of(message.getCard(), imagesEnabled);
             body = RichText.literal(CompactCardPaint.label(card));
             imagePlaceholder = false;
         } else if (message.isSystem()) {

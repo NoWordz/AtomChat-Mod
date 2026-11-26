@@ -95,6 +95,48 @@ class TeleportRequestTest {
         }
     }
 
+    @Test
+    void lateReceiptDoesNotCloseUnansweredReplacementFromSamePlayer() throws InterruptedException {
+        TeleportRequestSession.reset();
+        try {
+            var old = husk("Alice");
+            TeleportRequestSession.receive(old);
+            assertTrue(TeleportRequestSession.beginAction(old));
+            var replacement = husk("Alice");
+            TeleportRequestSession.receive(replacement);
+            Thread.sleep(2_150);
+            TeleportRequestSession.observe("You declined Alice's teleport request!", "", "");
+            assertNull(CardStateStore.get(replacement.cardId()));
+            assertTrue(TeleportRequestSession.beginAction(replacement));
+            TeleportRequestSession.observe("You declined Alice's teleport request!", "", "");
+            assertEquals("已发送传送回应", CardStateStore.get(replacement.cardId()).statusText());
+        } finally {
+            TeleportRequestSession.reset();
+        }
+    }
+
+    @Test
+    void repeatedNamedReceiptDoesNotResolveTheNextGeneration() {
+        TeleportRequestSession.reset();
+        try {
+            var old = husk("Alice");
+            TeleportRequestSession.receive(old);
+            assertTrue(TeleportRequestSession.beginAction(old));
+            TeleportRequestSession.observe("You declined Alice's teleport request!", "", "");
+            assertEquals("已拒绝传送请求", CardStateStore.get(old.cardId()).statusText());
+
+            var replacement = husk("Alice");
+            TeleportRequestSession.receive(replacement);
+            TeleportRequestSession.observe("You declined Alice's teleport request!", "", "");
+            assertNull(CardStateStore.get(replacement.cardId()));
+            assertTrue(TeleportRequestSession.beginAction(replacement));
+            TeleportRequestSession.observe("You declined Alice's teleport request!", "", "");
+            assertEquals("已发送传送回应", CardStateStore.get(replacement.cardId()).statusText());
+        } finally {
+            TeleportRequestSession.reset();
+        }
+    }
+
     private static ShareCard husk(String name) {
         var signals = signals("Options: [Accept] [Decline]", true,
                 new UniversalCardMatcher.ClickActionSpec("[Accept]", RUN_COMMAND, "/huskhomes:tpaccept " + name),

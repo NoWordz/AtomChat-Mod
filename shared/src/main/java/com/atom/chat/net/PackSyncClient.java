@@ -132,7 +132,6 @@ public final class PackSyncClient {
     private static void reset() {
         epoch++;
         ServerPackStore.clear();
-        com.atom.chat.render.PublicChatAvatarPaint.clear();
         key = null;
         expected = null;
         wanted = Set.of();
@@ -160,7 +159,6 @@ public final class PackSyncClient {
             detail = "server_disabled";
             active = false;
             ServerPackStore.clear();
-            com.atom.chat.render.PublicChatAvatarPaint.clear();
             send(new PackMessage.Ack(true,"disabled"));
             ConfigAdminClient.packAck("",true);
             return;
@@ -174,13 +172,6 @@ public final class PackSyncClient {
         }
         if (expectedPack.files().size() > MAX_FILES || expectedPack.totalBytes() > MAX_BYTES) {
             abort("too_large");
-            return;
-        }
-        byte[] icon = expectedPack.icon();
-        if (com.atom.chat.pack.PublicChatAvatar.isPublished(icon)
-                && !expectedPack.packHash().equals(ServerPack.hashOf(ServerPack.canonical(
-                        expectedPack.files(), expectedPack.phrases(), expectedPack.serverName(), icon)))) {
-            abort("bad_manifest");
             return;
         }
         expected = expectedPack;
@@ -197,7 +188,7 @@ public final class PackSyncClient {
                         && plan.isUpToDate()) {
                     detail = "up_to_date";
                     active = false;
-                    ServerPackStore.refresh(CacheDirs.packsRoot(), key, expectedPack);
+                    ServerPackStore.refresh(CacheDirs.packsRoot(), key);
                     send(new PackMessage.Ack(true, "up_to_date"));
                     ConfigAdminClient.packAck(expectedPack.packHash(),true);
                 } else {
@@ -252,7 +243,7 @@ public final class PackSyncClient {
                 if(token!=epoch)return;
                 detail = "up_to_date";
                 active = false;
-                ServerPackStore.refresh(CacheDirs.packsRoot(), installKey, installPack);
+                ServerPackStore.refresh(CacheDirs.packsRoot(), installKey);
                 send(new PackMessage.Ack(true, "metadata"));
                 ConfigAdminClient.packAck(installPack.packHash(),true);
             });
@@ -334,7 +325,7 @@ public final class PackSyncClient {
                 if(token!=epoch)return;
                 detail = "synced";
                 active = false;
-                ServerPackStore.refresh(CacheDirs.packsRoot(), installKey, pack);
+                ServerPackStore.refresh(CacheDirs.packsRoot(), installKey);
                 send(new PackMessage.Ack(true, count + " file(s) " + hash));
                 ConfigAdminClient.packAck(pack.packHash(),true);
                 AtomChat.LOGGER.info(com.atom.chat.diagnostics.AtomChatLog.message("pack", "Server pack {} synced ({} file(s), {} KB)"), hash, count,
@@ -347,8 +338,6 @@ public final class PackSyncClient {
         AtomChat.LOGGER.warn(com.atom.chat.diagnostics.AtomChatLog.message("pack", "Server pack sync failed: {}"), reason);
         detail = reason;
         active = false;
-        ServerPackStore.hidePublicAvatar();
-        com.atom.chat.render.PublicChatAvatarPaint.clear();
         send(new PackMessage.Ack(false, reason));
         if(expected!=null)ConfigAdminClient.packAck(expected.packHash(),false);
     }

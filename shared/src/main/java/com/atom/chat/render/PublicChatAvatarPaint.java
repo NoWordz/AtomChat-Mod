@@ -12,7 +12,7 @@ import io.github.humbleui.skija.Image;
 public final class PublicChatAvatarPaint {
     private static final float BASE_RADIUS = 12F;
     private static final float ICON_SIZE = 26F;
-    private static ServerPackStore source;
+    private static ServerPackStore.PublicAvatar source;
     private static Image image;
 
     private PublicChatAvatarPaint() {}
@@ -31,14 +31,13 @@ public final class PublicChatAvatarPaint {
 
     public static void draw(Canvas canvas, float x, float y, float size, int background, int ink) {
         if (AtomChatConfig.get().serverPacksEnabled) {
-            ServerPackStore current = ServerPackStore.current();
+            var current = ServerPackStore.publicAvatar();
             if (source != current) {
                 clear();
                 source = current;
-                byte[] png = current.publicAvatar();
-                if (png != null) {
+                if (current != null) {
                     try {
-                        image = Image.makeFromEncoded(png);
+                        image = Image.makeFromEncoded(current.png());
                     } catch (RuntimeException ignored) {
                         // A corrupt image shows the built-in globe.
                     }

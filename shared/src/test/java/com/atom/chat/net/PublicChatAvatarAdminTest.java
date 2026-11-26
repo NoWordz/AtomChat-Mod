@@ -1,6 +1,7 @@
 package com.atom.chat.net;
 
 import com.atom.chat.config.AdminProtocol;
+import com.atom.chat.config.AtomChatServerConfig;
 import com.atom.chat.pack.PublicChatAvatar;
 import com.atom.chat.platform.Platform;
 import com.atom.chat.util.CacheDirs;
@@ -10,7 +11,9 @@ import org.junit.jupiter.api.io.TempDir;
 import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.Base64;
 import java.util.UUID;
 
@@ -41,7 +44,29 @@ class PublicChatAvatarAdminTest {
             public Path gameDir() { return root; }
             public boolean isModLoaded(String id) { return false; }
         });
+        AtomChatServerConfig.reload();
         var file = CacheDirs.publicChatAvatar();
+        var manifests = new ArrayList<PackMessage.Manifest>();
+        Net.installServerSide((player, message) -> {
+            if (player == member && message instanceof PackMessage.Manifest manifest) manifests.add(manifest);
+        });
+        byte[] icon = image(64);
+        Files.write(root.resolve("server-icon.png"), icon);
+        assertTrue(PackSyncServer.syncStates(server).isEmpty(), "receiver joined with server content off");
+        PackSyncServer.invalidate();
+        PackSyncServer.onHello(member);
+        PackSyncServer.pushUpdate(server);
+        var offered = manifests.get(manifests.size() - 1);
+        assertArrayEquals(icon, offered.icon());
+        PackSyncServer.onAck(member, new PackMessage.Ack(true, ""));
+        assertEquals("pending", PackSyncServer.syncStates(server).get(memberId));
+        send(member, false, "pack_ack", "wrong hash", null);
+        assertEquals("pending", PackSyncServer.syncStates(server).get(memberId));
+        send(member, false, "pack_ack", offered.packHash(), null);
+        assertEquals("ok", PackSyncServer.syncStates(server).get(memberId));
+        send(member, false, "pack_failed", offered.packHash(), null);
+        assertEquals("ok", PackSyncServer.syncStates(server).get(memberId), "an old duplicate cannot reopen the verdict");
+
         var png = new ByteArrayOutputStream();
         ImageIO.write(new BufferedImage(96, 96, BufferedImage.TYPE_INT_ARGB), "png", png);
         String encoded = Base64.getEncoder().encodeToString(png.toByteArray());
@@ -50,6 +75,8 @@ class PublicChatAvatarAdminTest {
         assertNull(PublicChatAvatar.read(file));
         send(operator, true, "public_avatar_set", "", encoded);
         assertTrue(PublicChatAvatar.isPublished(PublicChatAvatar.read(file)));
+        assertArrayEquals(icon, PackSyncServer.peek(server).icon(), "legacy icon is independent of the public chat avatar");
+        assertEquals(offered.packHash(), PackSyncServer.peek(server).packHash());
 
         byte[] first = PublicChatAvatar.read(file);
         String revision = PublicChatAvatar.revision(file);
@@ -60,6 +87,12 @@ class PublicChatAvatarAdminTest {
 
         send(operator, true, "public_avatar_reset", revision, null);
         assertNull(PublicChatAvatar.read(file));
+    }
+
+    private static byte[] image(int size) throws Exception {
+        var output = new ByteArrayOutputStream();
+        ImageIO.write(new BufferedImage(size, size, BufferedImage.TYPE_INT_ARGB), "png", output);
+        return output.toByteArray();
     }
 
     private static void send(Object player, boolean mayEdit, String action, String revision, String data) {

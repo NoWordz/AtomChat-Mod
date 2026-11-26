@@ -153,12 +153,12 @@ public final class PackSyncServer {
     /** C2S: the client's verdict, so the outcome lands in the server log. */
     public static void onAck(Object player, PackMessage.Ack ack) {
         UUID id = Host.playerId(player);
-        if (id == null) {
-            return;
-        }
+        if (id == null || RECIPIENTS.get(id) != player || Host.playerById(serverOf(player), id) != player) return;
         OFFERED.remove(id);
-        if(!PUSHED.contains(id)&&!ConfigAdminServer.isTemplatePeer(player)){
-            SYNC_STATES.put(id,ack.ok()?"ok":"failed");SYNC_PENDING.remove(id);
+        if (!PUSHED.contains(id) && !ConfigAdminServer.isTemplatePeer(player)
+                && !ConfigAdminServer.watchesPublicAvatar(player) && SYNC_PENDING.remove(id) != null) {
+            // Older clients only acknowledge initial manifests through this legacy message.
+            SYNC_STATES.put(id, ack.ok() ? "ok" : "failed");
         }
         Cached current = cached;
         String hash = current == null ? "-" : current.pack().packHash().substring(0, 8);
@@ -219,7 +219,15 @@ public final class PackSyncServer {
             PUSHED.add(entry.getKey());
         }
     }
-    public static void verifiedAck(Object player,String hash,boolean ok){UUID id=Host.playerId(player);if(RECIPIENTS.get(id)==player&&java.util.Objects.equals(EXPECTED_HASH.get(id),hash)){SYNC_STATES.put(id,ok?"ok":"failed");SYNC_PENDING.remove(id);}}
+    public static void verifiedAck(Object player, String hash, boolean ok) {
+        UUID id = Host.playerId(player);
+        if (id == null || RECIPIENTS.get(id) != player || Host.playerById(serverOf(player), id) != player) return;
+        Long deadline = SYNC_PENDING.get(id);
+        if (deadline == null || deadline < System.currentTimeMillis()
+                || !java.util.Objects.equals(EXPECTED_HASH.get(id), hash)) return;
+        SYNC_STATES.put(id, ok ? "ok" : "failed");
+        SYNC_PENDING.remove(id);
+    }
     public static Map<UUID,String> syncStates(Object server){
         var result=new HashMap<UUID,String>();long now=System.currentTimeMillis();
         for(var entry:RECIPIENTS.entrySet())if(Host.playerById(server,entry.getKey())==entry.getValue()){
@@ -262,12 +270,6 @@ public final class PackSyncServer {
     }
 
     private static byte[] readIcon() {
-        try {
-            byte[] avatar = com.atom.chat.pack.PublicChatAvatar.read(CacheDirs.publicChatAvatar());
-            if (avatar != null) return avatar;
-        } catch (IOException e) {
-            AtomChat.LOGGER.warn(com.atom.chat.diagnostics.AtomChatLog.message("pack", "Failed to read public chat avatar"), e);
-        }
         Path icon = CacheDirs.gameDir().resolve("server-icon.png");
         try {
             if (!Files.isRegularFile(icon)) return null;

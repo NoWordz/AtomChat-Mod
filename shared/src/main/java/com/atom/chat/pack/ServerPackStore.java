@@ -10,7 +10,7 @@ import java.util.List;
 /**
  * The pack this client currently has for the joined world, as the panel sees it.
  *
- * <p>Nothing is held in memory that is not also on disk: {@link #refresh} re-reads
+ * <p>For the legacy pack, {@link #refresh} re-reads
  * the stored manifest and lists the emote folder, and every accessor is a
  * snapshot taken at that moment. The sync client refreshes on join, refreshes
  * again after installing a download, and clears on disconnect.
@@ -23,49 +23,38 @@ public final class ServerPackStore {
     /** Emotes taken from one server pack; mirrors the server's default cap. */
     public static final int MAX_SERVER_EMOTES = 32;
 
-    private static final ServerPackStore EMPTY = new ServerPackStore(null, null, null);
+    private static final ServerPackStore EMPTY = new ServerPackStore(null, null);
 
     private static volatile ServerPackStore current = EMPTY;
 
     private final ServerPack pack;
     private final Path dir;
     private final List<Path> emotes;
-    private final byte[] publicAvatar;
+    private static volatile PublicAvatar publicAvatar;
 
-    private ServerPackStore(ServerPack pack, Path dir, byte[] verifiedAvatar) {
-        this.publicAvatar = pack != null && PublicChatAvatar.isPublished(verifiedAvatar) ? verifiedAvatar.clone() : null;
+    /** The separately published image for the current connection. */
+    public static final class PublicAvatar {
+        private final byte[] png;
+
+        private PublicAvatar(byte[] png) { this.png = png.clone(); }
+
+        public byte[] png() { return png.clone(); }
+    }
+
+    private ServerPackStore(ServerPack pack, Path dir) {
         this.pack = pack;
         this.dir = dir;
         this.emotes = pack == null || dir == null ? List.of() : listEmotes(dir);
     }
 
-    private ServerPackStore(ServerPackStore previous) {
-        this.pack = previous.pack;
-        this.dir = previous.dir;
-        this.emotes = previous.emotes;
-        this.publicAvatar = null;
-    }
-
-    public static void hidePublicAvatar() {
-        var previous = current;
-        if (previous.publicAvatar != null) current = new ServerPackStore(previous);
-    }
-
     /** Re-reads the pack installed for {@code key}; a missing/broken one reads as absent. */
     public static void refresh(Path packsRoot, String key) {
-        refresh(packsRoot, key, null);
-    }
-
-    public static void refresh(Path packsRoot, String key, ServerPack verifiedManifest) {
         if (packsRoot == null || !PackKeys.isKey(key)) {
             current = EMPTY;
             return;
         }
         Path dir = packsRoot.resolve(key);
-        var installed = PackManifestFile.read(dir);
-        byte[] verifiedAvatar = installed != null && verifiedManifest != null
-                && installed.packHash().equals(verifiedManifest.packHash()) ? verifiedManifest.icon() : null;
-        current = new ServerPackStore(installed, dir, verifiedAvatar);
+        current = new ServerPackStore(PackManifestFile.read(dir), dir);
     }
 
     /** Forgets the current pack (disconnect, or a server that turned packs off). */
@@ -95,8 +84,21 @@ public final class ServerPackStore {
         return pack == null ? null : pack.icon();
     }
 
-    public byte[] publicAvatar() {
-        return publicAvatar == null ? null : publicAvatar.clone();
+    public static PublicAvatar publicAvatar() {
+        return publicAvatar;
+    }
+
+    public static boolean installPublicAvatar(String hash, byte[] png) {
+        if (!PublicChatAvatar.isPublished(png) || !ServerPack.sha256Hex(png).equals(hash)) {
+            clearPublicAvatar();
+            return false;
+        }
+        publicAvatar = new PublicAvatar(png);
+        return true;
+    }
+
+    public static void clearPublicAvatar() {
+        publicAvatar = null;
     }
 
     public String packHash() {

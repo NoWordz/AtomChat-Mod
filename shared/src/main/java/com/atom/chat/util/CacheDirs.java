@@ -92,7 +92,7 @@ public final class CacheDirs {
     }
 
     public static Path publicChatAvatar() {
-        return serverRoot().resolve("public-chat-avatar.png");
+        return serverRoot().resolve(com.atom.chat.pack.PublicChatAvatar.FILE_NAME);
     }
 
     /** Companion server's uploaded custom-avatar PNGs. */

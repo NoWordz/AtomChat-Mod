@@ -82,6 +82,97 @@ class ChatHudTest {
         }
     }
 
+    @Test void compactBitmapRendererStopsWhenImagesAreDisabledOnTheSameHud() {
+        String type = "test:compact_bitmap";
+        var card = com.atom.chat.api.card.ShareCard.custom(type, "Bitmap card").build();
+        int bitmapInk = 0xFFFF3300;
+        try (var output = Surface.makeRasterN32Premul(400, 250);
+             var source = Surface.makeRasterN32Premul(44, 22);
+             var pixels = new Bitmap()) {
+            source.getCanvas().clear(bitmapInk);
+            try (var bitmap = source.makeImageSnapshot()) {
+                var calls = new java.util.concurrent.atomic.AtomicInteger();
+                var registry = new com.atom.chat.api.card.CardRenderRegistry.CompactCardRenderer() {
+                    public float[] measure(com.atom.chat.api.card.ShareCard content,
+                            com.atom.chat.api.card.CardState state, float width) {
+                        calls.incrementAndGet();
+                        return new float[]{44F, 22F};
+                    }
+
+                    public void draw(io.github.humbleui.skija.Canvas canvas,
+                            com.atom.chat.api.card.ShareCard content, com.atom.chat.api.card.CardState state,
+                            float x, float y, float width, float height) {
+                        calls.incrementAndGet();
+                        canvas.drawImage(bitmap, x, y);
+                    }
+                };
+                com.atom.chat.api.card.CardRenderRegistry.registerCompactRenderer(type, registry);
+                try {
+                    var hud = new ChatHudRenderer();
+                    var config = new AtomChatConfig();
+                    config.imageMessagesEnabled = true;
+                    var rows = List.of(player(false, "Bitmap").withCard(card));
+                    var viewport = new ChatHudRenderer.Viewport(8, 150, 280, 125, 1.25F, 1F);
+                    pixels.allocN32Pixels(400, 250);
+                    output.getCanvas().scale(1.25F, 1.25F);
+                    hud.paint(output.getCanvas(), rows, viewport, null, "", "", config, 1, 255, 1, false, 0);
+                    assertTrue(output.readPixels(pixels, 0, 0));
+                    assertTrue(leftmostPixel(pixels, bitmapInk) >= 0);
+                    int before = calls.get();
+
+                    config.imageMessagesEnabled = false;
+                    output.getCanvas().clear(0);
+                    hud.paint(output.getCanvas(), rows, viewport, null, "", "", config, 1, 255, 1, false, 1);
+                    assertTrue(output.readPixels(pixels, 0, 0));
+                    assertEquals(-1, leftmostPixel(pixels, bitmapInk));
+                    assertEquals(before, calls.get(), "images off skips both extension measurement and drawing");
+                    assertTrue(peakAlpha(pixels, color -> color != 0) > 0, "generic card still paints");
+
+                    config.imageMessagesEnabled = true;
+                    hud.paint(output.getCanvas(), rows, viewport, null, "", "", config, 1, 255, 1, false, 2);
+                    assertTrue(calls.get() > before, "enabling images restores the custom layout");
+                } finally {
+                    com.atom.chat.api.card.CardRenderRegistry.registerPanelOnly(type);
+                }
+            }
+        }
+    }
+
+    @Test void failingCompactRendererCannotChangeHudCanvasOrPaintPartially() {
+        var card = com.atom.chat.api.card.ShareCard.custom("test:broken_compact", "Broken card").build();
+        int escapedInk = 0xFFCC3300;
+        var renderer = new com.atom.chat.api.card.CardRenderRegistry.CompactCardRenderer() {
+            public float[] measure(com.atom.chat.api.card.ShareCard content,
+                    com.atom.chat.api.card.CardState state, float width) {
+                return new float[]{40, 30};
+            }
+
+            public void draw(io.github.humbleui.skija.Canvas canvas,
+                    com.atom.chat.api.card.ShareCard content, com.atom.chat.api.card.CardState state,
+                    float x, float y, float width, float height) {
+                canvas.restore();
+                canvas.restore();
+                CornerGeometry.drawRoundedRect(canvas, 1, 1, 93, 81, 0, escapedInk);
+                throw new IllegalStateException("renderer failed");
+            }
+        };
+        try (var surface = Surface.makeRasterN32Premul(120, 100); var pixels = new Bitmap()) {
+            pixels.allocN32Pixels(120, 100);
+            var canvas = surface.getCanvas();
+            canvas.save();
+            canvas.clipRect(io.github.humbleui.types.Rect.makeXYWH(20, 20, 70, 55));
+            int before = canvas.getSaveCount();
+            assertFalse(CompactCardPaint.drawCustom(canvas, new CompactCardPaint.Content(card, null, renderer), 30, 30, 40, 30));
+            assertEquals(before, canvas.getSaveCount());
+            CornerGeometry.drawRoundedRect(canvas, 0, 0, 120, 100, 0, 0xFF007799);
+            assertTrue(surface.readPixels(pixels, 0, 0));
+            assertEquals(0, pixels.getColor(3, 3));
+            assertEquals(-1, leftmostPixel(pixels, escapedInk));
+            assertEquals(0xFF007799, pixels.getColor(40, 40));
+            canvas.restore();
+        }
+    }
+
     @Test void identicalVanillaRowsKeepTheirOwnCapturedPresentation() {
         var history = new ChatHudHistory<String, Object, Object>();
         String first = new String("a vanilla row");
