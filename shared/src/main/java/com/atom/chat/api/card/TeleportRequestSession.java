@@ -53,7 +53,15 @@ public final class TeleportRequestSession {
     public static void observe(String raw, String stellarKey, String requester) {
         String text = raw.replaceAll("§.", "").strip();
         var husk = HUSK_RECEIPT.matcher(text);
-        if (husk.matches()) {
+        if (text.startsWith(TeleportRequestMatcher.STELLAR_PREFIX)) {
+            String body = text.substring(TeleportRequestMatcher.STELLAR_PREFIX.length()).stripLeading();
+            if (body.equals("传送请求已拒绝。") || body.equals("Teleport request denied.")) {
+                complete("StellarRTP", "", "已拒绝传送请求", true);
+            } else if (body.equals("传送请求已过期。") || body.equals("Teleport request expired.")
+                    || body.equals("你当前没有待处理的传送请求。") || body.equals("You have no pending teleport request.")) {
+                complete("StellarRTP", "", "传送请求已过期", true);
+            }
+        } else if (husk.matches()) {
             complete("HuskHomes", husk.group(2), husk.group(1).equals("accepted") ? "已接受传送请求" : "已拒绝传送请求", false);
         } else if ("stellarrtp.tpa.request_accepted".equals(stellarKey)
                 || "stellarrtp.tpa.request_denied".equals(stellarKey)) {

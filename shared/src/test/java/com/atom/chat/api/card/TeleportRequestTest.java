@@ -43,6 +43,29 @@ class TeleportRequestTest {
     }
 
     @Test
+    void stellarDedicatedServerLiteralKeepsSourceButtonsAndReceipt() {
+        var literal = signals("[StellarRTP] Alice 请求传送到你这里。 [接受] [拒绝]", true,
+                new UniversalCardMatcher.ClickActionSpec("[接受]", RUN_COMMAND, "/tpyes Alice"),
+                new UniversalCardMatcher.ClickActionSpec("[拒绝]", RUN_COMMAND, "/tpno Alice"));
+        var card = UniversalCardMatcher.matchTeleportRequest(literal, "", false, root -> false);
+        assertEquals("StellarRTP", card.sourceLabel());
+        assertEquals("Alice 请求传送到你这里。", card.title());
+        assertTrue(card.isNativeClickCommand("/tpyes Alice"));
+        TeleportRequestSession.reset();
+        try {
+            TeleportRequestSession.receive(card);
+            assertTrue(TeleportRequestSession.beginAction(card));
+            TeleportRequestSession.observe("[StellarRTP] 传送请求已拒绝。", "", "");
+            assertEquals("已拒绝传送请求", CardStateStore.get(card.cardId()).statusText());
+        } finally {
+            TeleportRequestSession.reset();
+        }
+        var translated = signals("[StellarRTP] Alice wants you to teleport to them.", true);
+        assertEquals("StellarRTP",
+                UniversalCardMatcher.matchTeleportRequest(translated, "", false, root -> false).sourceLabel());
+    }
+
+    @Test
     void namedOutOfOrderReceiptsAndExpiryUpdateOnlyTheirOwnCards() {
         var alice = husk("Alice");
         var bob = husk("Bob");
