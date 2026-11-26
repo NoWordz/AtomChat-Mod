@@ -1,5 +1,45 @@
 # Release Notes
 
+## v0.9.8
+
+**新增**
+
+- 附属 Mod 可用 Java 预览接口扩展输入栏、菜单、导航和设置，JEI 示例提供物品卡片查配方。
+- 管理员可在服务端设置上传并裁切公屏头像。
+
+**更改**
+
+- HUD 缩小展示特殊卡片，打开 AtomChat 面板即可操作。
+- 传送卡片将接受和拒绝绑定到具体请求者，公屏头像跟随全局圆角。
+
+**修复**
+
+- 修复字体测宽结果串用，以及面板变化后偶尔复用旧模糊底图的问题。
+
+**性能**
+
+- 均衡档降低高强度背景模糊的内部采样。
+
+----
+
+**Added**
+
+- Add-ons can use the Java preview API to extend the composer, menus, navigation, and settings, with a JEI example for item card recipe lookups.
+- Server administrators can upload and crop the public chat avatar.
+
+**Changed**
+
+- The HUD displays compact special cards, with actions available inside the AtomChat panel.
+- Teleport actions target the named requester, and the public chat avatar follows the global corner radius.
+
+**Fixed**
+
+- Fixed mixed font measurements and stale background blur after panel changes.
+
+**Performance**
+
+- Reduced internal sampling for strong background blur in Balanced quality.
+
 ## v0.9.7
 
 **新增**

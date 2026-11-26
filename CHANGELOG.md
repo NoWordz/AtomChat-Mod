@@ -1,5 +1,51 @@
 # Changelog
 
+## v0.9.8
+
+**新增**
+
+- 底栏导航、设置入口、页签、折叠组、输入栏和工具菜单开放 Java 预览接口。
+- 新增独立 JEI 附属示例，可从物品卡片右键菜单查看配方。
+- 管理员可在服务端设置上传并裁切公屏头像，玩家可用「接收服务器内容」控制显示。
+
+**更改**
+
+- 坐标、物品、传送、红包和附属卡片统一为特殊卡片，并在 HUD 缩小展示。
+- 传送卡沿用能绑定具体请求者的接受与拒绝操作，无可靠动作时显示只读卡。
+- 公屏地球图标和自定义头像均跟随全局圆角和连续曲率。
+
+**修复**
+
+- 隔离同字号不同字体的测宽缓存，避免沿用另一种字体的字宽。
+- 面板捕获目标、画质或采样区域变化后刷新模糊缓存。
+
+**性能**
+
+- 均衡档降低高强度背景模糊的内部采样。
+
+----
+
+**Added**
+
+- Added a Java preview API for composer buttons, tool menus, navigation tabs, settings entries, tabs, and collapsible groups.
+- Added a standalone JEI example add-on that opens recipes from the item card context menu.
+- Server administrators can upload and crop a public chat avatar, and players can control whether it is displayed through Receive Server Content.
+
+**Changed**
+
+- Location, item, teleport, red packet, and add-on cards now share a compact HUD presentation.
+- Teleport cards preserve accept and decline actions bound to the named requester and display a read-only card when the action is ambiguous.
+- The default globe and custom public chat avatars follow the global corner radius and continuous curve.
+
+**Fixed**
+
+- Separated text measurement caches for different fonts at the same size.
+- Refreshes cached panel blur when the framebuffer, quality, or sampled region changes.
+
+**Performance**
+
+- Reduced internal sampling for strong background blur in Balanced quality.
+
 ## v0.9.7
 
 **新增**

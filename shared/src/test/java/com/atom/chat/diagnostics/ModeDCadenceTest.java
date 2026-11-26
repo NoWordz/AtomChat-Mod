@@ -194,7 +194,13 @@ class ModeDCadenceTest {
         for (String t : TARGETS) {
             String blur = renderer(t);
             // 二级降级：无有效旧档 / 纹理重建 → 强制完整 render，绝不采样空档
-            assertTrue(blur.contains("if (lastBlurTex == -1 || recreated || lastQuality !="), t + " 复用前降级检查");
+            int reuse = blur.indexOf("public static boolean renderReuse(");
+            int rebuild = blur.indexOf("return render(pose, x, y, width, height, radius, alpha, strength);", reuse);
+            assertTrue(reuse >= 0 && rebuild > reuse, t + " 复用前须有完整刷新路径");
+            String check = blur.substring(reuse, rebuild);
+            assertTrue(check.contains("!panelCaptureValid || lastBlurTex == -1 || recreated")
+                    && check.contains("lastQuality !=") && check.contains("strength != lastStrength")
+                    && check.contains("lastPanelCapture.matches("), t + " 复用校验纹理有效性、画质、强度和捕获矩形");
             assertTrue(blur.contains("return render(pose, x, y, width, height, radius, alpha, strength);"),
                     t + " 降级走完整 render");
             // 复用帧只做圆角合成，不重跑 blit + 5 pass
