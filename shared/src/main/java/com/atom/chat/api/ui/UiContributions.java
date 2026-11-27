@@ -157,7 +157,7 @@ public final class UiContributions<T> {
         return -1;
     }
 
-    private static void requireId(String id) {
+    static void requireId(String id) {
         if (!ID.matcher(Objects.requireNonNull(id)).matches()) {
             throw new IllegalArgumentException("Expected a namespaced UI ID: " + id);
         }
