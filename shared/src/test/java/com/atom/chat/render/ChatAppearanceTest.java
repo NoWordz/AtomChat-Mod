@@ -107,6 +107,21 @@ class ChatAppearanceTest {
         }
     }
 
+    @Test
+    void clearingTheAddonLayerDoesNotEraseTheHostAvatar() {
+        try (var surface = Surface.makeRasterN32Premul(50, 50);
+             var paint = new io.github.humbleui.skija.Paint().setColor(0xFF5EEAD4)) {
+            surface.getCanvas().clear(0xFF17A35E);
+            AvatarRing.draw(surface.getCanvas(), 25, 25, 8, -1, (canvas, context) -> {
+                canvas.clear(0);
+                canvas.drawRect(Rect.makeXYWH(22, 17, 5, 3), paint);
+            });
+            assertEquals(0xFF17A35E, pixel(surface, 25, 25));
+            assertEquals(0xFF5EEAD4, pixel(surface, 24, 18));
+            assertEquals(0xFF17A35E, pixel(surface, 3, 3));
+        }
+    }
+
     private static int pixel(Surface surface, int x, int y) {
         try (var bitmap = new Bitmap()) {
             assertTrue(bitmap.allocN32Pixels(surface.getWidth(), surface.getHeight()));

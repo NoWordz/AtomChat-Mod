@@ -16,6 +16,17 @@ import io.github.humbleui.types.Rect;
 /** Bubble fills and images share one four-corner outline. */
 public final class ChatBubble {
     private static final Paint PAINT = new Paint().setAntiAlias(CornerGeometry.ANTIALIAS);
+    private static final ClassValue<Boolean> DEFAULT_PAINT = new ClassValue<>() {
+        @Override
+        protected Boolean computeValue(Class<?> type) {
+            try {
+                return type.getMethod("draw", Canvas.class, AppearanceUi.BubbleContext.class, Path.class)
+                        .getDeclaringClass() == AppearanceUi.Bubble.class;
+            } catch (NoSuchMethodException ignored) {
+                return false;
+            }
+        }
+    };
 
     public enum Group {
         SINGLE(AppearanceUi.BubbleGroup.SINGLE),
@@ -73,6 +84,11 @@ public final class ChatBubble {
         }
 
         public boolean draw(Canvas canvas) {
+            // Outline-only add-ons use the interface's solid fill without an intermediate layer.
+            if (DEFAULT_PAINT.get(callback.getClass())) {
+                canvas.drawPath(contour, PAINT.setColor(context.fillColor()));
+                return true;
+            }
             var b = context.bounds();
             return AddonPaint.draw(canvas, Rect.makeXYWH(b.x(), b.y(), b.width(), b.height()), contour,
                     output -> callback.draw(output, context, contour), callback, "bubble paint");

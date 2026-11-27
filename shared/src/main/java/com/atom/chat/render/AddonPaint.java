@@ -33,7 +33,13 @@ final class AddonPaint {
             try {
                 if (clip == null) target.clipRect(bounds);
                 else target.clipPath(clip, CornerGeometry.ANTIALIAS);
-                target.drawPicture(recording);
+                // Clear and destination-dependent blend modes only affect the add-on's layer.
+                target.saveLayer(bounds, null);
+                try {
+                    target.drawPicture(recording);
+                } finally {
+                    target.restore();
+                }
             } finally {
                 target.restore();
             }
