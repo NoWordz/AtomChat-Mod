@@ -222,10 +222,7 @@ public final class NotificationBanner {
         banners.add(0, banner);
         while (banners.size() > MAX_STACK) {
             Active dropped = banners.remove(banners.size() - 1);
-            hoverAlphas.remove(dropped);
-            buttonHovers.remove(dropped);
-            buttonScales.remove(dropped);
-            layoutYs.remove(dropped);
+            removeBannerState(dropped);
         }
     }
 
@@ -270,10 +267,7 @@ public final class NotificationBanner {
             Active b = it.next();
             if (now - b.born() >= VISIBLE_MS + (Animations.enabled() ? DISAPPEAR_MS : 0)) {
                 it.remove();
-                hoverAlphas.remove(b);
-                buttonHovers.remove(b);
-                buttonScales.remove(b);
-                layoutYs.remove(b);
+                removeBannerState(b);
             }
         }
     }
@@ -514,6 +508,10 @@ public final class NotificationBanner {
      *  two banners can hold equal data, and equals-based remove would drop the wrong one. */
     public void dismiss(Active banner) {
         banners.removeIf(b -> b == banner);
+        removeBannerState(banner);
+    }
+
+    private void removeBannerState(Active banner) {
         hitRects.removeIf(h -> h.banner == banner);
         buttonRects.removeIf(h -> h.banner == banner);
         hoverAlphas.remove(banner);

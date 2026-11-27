@@ -255,6 +255,30 @@ class NotificationPresentationTest {
         });
     }
 
+    @Test void anExpiredBannerStopsClaimingItsLastPaintedPanelArea() throws Exception {
+        withConfig(config -> {
+            config.animationEnabled = true;
+            var clock = new AtomicLong(1000);
+            var banner = new NotificationBanner(clock::get);
+            banner.enqueue(NotificationBanner.Type.MENTION, "Alice", "hello", null);
+            var notice = banner.newest();
+            try (var surface = Surface.makeRasterN32Premul(1000, 800)) {
+                clock.addAndGet(600);
+                banner.renderInPanel(surface.getCanvas(), 10, 10, 650, 700, -1, -1);
+                Rect painted = bounds(banner, notice);
+                float x = (painted.getLeft() + painted.getRight()) / 2;
+                float y = (painted.getTop() + painted.getBottom()) / 2;
+                assertSame(notice, banner.hitTest(x, y), "a painted banner must still be clickable");
+
+                clock.addAndGet(6200);
+                banner.tick();
+                assertFalse(banner.hasActive());
+                assertNull(banner.hitTest(x, y),
+                        "the panel skips banner painting once the queue empties, so the tick must release the old hit");
+            }
+        });
+    }
+
     @Test void zoomAndSlideUseGlobalPanelGeometryAndHitThePaintedBounds() throws Exception {
         withConfig(config -> {
             for (var style : AtomChatConfig.PageNavStyle.values()) {
