@@ -11,9 +11,9 @@ import io.github.humbleui.skija.Path;
 import io.github.humbleui.skija.PathBuilder;
 import io.github.humbleui.types.RRect;
 
-final class SignalAppearance {
-    static final String MOD_ID = "atomchat_signal";
+import static com.niuqu.atomchat_signal.SignalRegistration.MOD_ID;
 
+final class SignalAppearance {
     private SignalAppearance() {}
 
     static void register() {

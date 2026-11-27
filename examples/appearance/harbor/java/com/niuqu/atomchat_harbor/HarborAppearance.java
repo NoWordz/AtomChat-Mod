@@ -11,9 +11,9 @@ import io.github.humbleui.skija.PaintMode;
 import io.github.humbleui.skija.Path;
 import io.github.humbleui.skija.PathBuilder;
 
-final class HarborAppearance {
-    static final String MOD_ID = "atomchat_harbor";
+import static com.niuqu.atomchat_harbor.HarborRegistration.MOD_ID;
 
+final class HarborAppearance {
     private HarborAppearance() {}
 
     static void register() {

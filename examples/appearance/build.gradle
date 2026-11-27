@@ -39,6 +39,7 @@ configurations {
 dependencies {
     appearanceCompileOnly files(apiInput)
     appearanceCompileOnly 'io.github.humbleui:skija-shared:0.143.18'
+    appearanceCompileOnly 'org.slf4j:slf4j-api:2.0.1'
     // The examples reference only FML or Fabric Loader classes and Skija. No
     // Minecraft symbols are compiled, so no mappings or remapping are needed.
     switch (targetName) {
