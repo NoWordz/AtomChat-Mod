@@ -1,5 +1,6 @@
 package com.atom.chat.render;
 
+import com.atom.chat.api.ui.AppearanceUi;
 import com.atom.chat.chat.ChatMessage;
 import com.atom.chat.chat.MentionHighlighter;
 import com.atom.chat.chat.OwnIdentity;
@@ -109,10 +110,19 @@ public final class MessagePaint {
     }
 
     public static void avatar(Canvas canvas, ChatMessage message, UUID uuid, String name, float x, float y) {
+        avatar(canvas, message, uuid, name, x, y, null);
+    }
+
+    public static void avatar(Canvas canvas, ChatMessage message, UUID uuid, String name, float x, float y,
+                              AppearanceUi.AvatarFrame frame) {
         float size = UiTokens.AVATAR_SIZE;
         float radius = size / 2F;
         boolean unknown = message.isIdentityUnknown();
-        if (!unknown && PlayerAvatar.drawE33Chat(canvas, uuid, name, x, y, size)) return;
+        if (!unknown && PlayerAvatar.drawE33Chat(canvas, uuid, name, x, y, size)) {
+            if (frame != null) AvatarRing.drawAddon(canvas, x + radius, y + radius, radius,
+                    UiTokens.rim(AtomChatAppearance.theme()), frame);
+            return;
+        }
         Image face = unknown ? null : PlayerAvatar.face(uuid, name);
         if (face != null) {
             SkiaImages.drawRoundedImage(canvas, face, x, y, size, size, radius, SamplingMode.LINEAR);
@@ -120,6 +130,7 @@ public final class MessagePaint {
             CornerGeometry.drawRoundedRect(canvas, x, y, size, size, radius, 0xFF788291);
         }
         // The concentric rim covers the edge of either the face or its placeholder.
-        com.atom.chat.render.AvatarRing.draw(canvas, x + radius, y + radius, radius, UiTokens.rim(AtomChatAppearance.theme()));
+        com.atom.chat.render.AvatarRing.draw(canvas, x + radius, y + radius, radius,
+                UiTokens.rim(AtomChatAppearance.theme()), frame);
     }
 }

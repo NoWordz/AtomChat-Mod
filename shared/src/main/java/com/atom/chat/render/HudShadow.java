@@ -4,11 +4,13 @@ import com.atom.chat.config.AtomChatConfig;
 import com.atom.chat.config.GraphicsQuality;
 import io.github.humbleui.skija.BlendMode;
 import io.github.humbleui.skija.Canvas;
+import io.github.humbleui.skija.ClipMode;
 import io.github.humbleui.skija.FilterBlurMode;
 import io.github.humbleui.skija.FilterMode;
 import io.github.humbleui.skija.Image;
 import io.github.humbleui.skija.MaskFilter;
 import io.github.humbleui.skija.Paint;
+import io.github.humbleui.skija.Path;
 import io.github.humbleui.skija.SamplingMode;
 import io.github.humbleui.skija.Surface;
 import io.github.humbleui.types.IRect;
@@ -90,6 +92,33 @@ public final class HudShadow {
 
     public static void drawPanel(Canvas canvas, RRect outline) {
         if (SoftShadow.enabled()) draw(canvas, outline, ShadowTokens.MESSAGE, null);
+    }
+
+    static void drawAddon(Canvas canvas, Path outline, ShadowTokens.Face profile) {
+        if (!SoftShadow.enabled()) return;
+        try (var paint = new Paint().setAntiAlias(true)) {
+            canvas.save();
+            try {
+                canvas.clipPath(outline, ClipMode.DIFFERENCE, true);
+                if (profile.ambient() != null) paintAddonLayer(canvas, outline, paint, profile.ambient());
+                paintAddonLayer(canvas, outline, paint, profile.contact());
+            } finally {
+                canvas.restore();
+            }
+        }
+    }
+
+    private static void paintAddonLayer(Canvas canvas, Path outline, Paint paint, ShadowTokens.Layer layer) {
+        try (var blur = MaskFilter.makeBlur(FilterBlurMode.NORMAL, layer.sigma())) {
+            canvas.save();
+            try {
+                canvas.translate(0F, layer.drop());
+                canvas.drawPath(outline, paint.setColor(SoftShadow.shadowColor(layer.color())).setMaskFilter(blur));
+            } finally {
+                canvas.restore();
+                paint.setMaskFilter(null);
+            }
+        }
     }
 
     public static void drawPanel(Canvas canvas, float x, float y, float width, float height, float radius) {

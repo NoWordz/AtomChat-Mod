@@ -1,8 +1,10 @@
 package com.atom.chat.render;
 
+import com.atom.chat.api.ui.AppearanceUi;
 import com.atom.lib.design.atomchat.SkiaDraw;
 import com.atom.lib.design.atomchat.UiTokens;
 import io.github.humbleui.skija.Canvas;
+import io.github.humbleui.types.Rect;
 
 /** A circular rim with a small inward overlap at the avatar's antialiased edge. */
 public final class AvatarRing {
@@ -23,5 +25,24 @@ public final class AvatarRing {
     public static void draw(Canvas canvas, float centerX, float centerY, float avatarRadius, int color) {
         float stroke = rimWidth(avatarRadius);
         SkiaDraw.drawRing(canvas, centerX, centerY, separatorRadius(avatarRadius) - stroke / 2F, stroke, color);
+    }
+
+    public static void draw(Canvas canvas, float centerX, float centerY, float avatarRadius, int color,
+                            AppearanceUi.AvatarFrame frame) {
+        if (!drawAddon(canvas, centerX, centerY, avatarRadius, color, frame)) {
+            draw(canvas, centerX, centerY, avatarRadius, color);
+        }
+    }
+
+    static boolean drawAddon(Canvas canvas, float centerX, float centerY, float avatarRadius, int color,
+                             AppearanceUi.AvatarFrame frame) {
+        if (frame == null || !(avatarRadius > 0)) return false;
+        float rim = separatorRadius(avatarRadius);
+        var avatar = new AppearanceUi.Bounds(centerX - avatarRadius, centerY - avatarRadius,
+                avatarRadius * 2F, avatarRadius * 2F);
+        var bounds = new AppearanceUi.Bounds(centerX - rim, centerY - rim, rim * 2F, rim * 2F);
+        var context = new AppearanceUi.AvatarContext(avatar, bounds, UiTokens.s(1F), color);
+        return AddonPaint.draw(canvas, Rect.makeXYWH(bounds.x(), bounds.y(), bounds.width(), bounds.height()), null,
+                output -> frame.draw(output, context), frame, "avatar frame");
     }
 }
