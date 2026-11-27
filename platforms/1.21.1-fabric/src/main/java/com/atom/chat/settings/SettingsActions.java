@@ -210,12 +210,12 @@ public final class SettingsActions {
             chooseAppearancePart(AppearanceSettings.part(actionId), actionId.endsWith(":prev") ? -1 : 1);
         } else if (actionId != null && actionId.startsWith("wallpaper_preset:")) {
             String id = actionId.substring("wallpaper_preset:".length());
-            AtomChatConfig config = AtomChatConfig.get();
-            if (config.dynamicWallpaperAppearanceId == null) {
+            String selectedDynamic = AtomChatConfig.get().dynamicWallpaperAppearanceId;
+            if (selectedDynamic == null) {
                 com.atom.chat.wallpaper.WallpaperPresets.apply(id);
             } else {
                 com.atom.chat.wallpaper.WallpaperPresets.apply(id, host.client()::execute,
-                        () -> AppearanceSettings.save(Part.DYNAMIC_WALLPAPER, config, null));
+                        () -> AppearanceSettings.commitStaticWallpaperFor(selectedDynamic));
             }
         } else if ("wallpaper_pick".equals(actionId)) {
             pickWallpaperFile();

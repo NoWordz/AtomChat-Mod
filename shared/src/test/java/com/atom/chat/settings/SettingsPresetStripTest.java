@@ -203,6 +203,11 @@ class SettingsPresetStripTest {
             var saved = AppearancePresetStore.get().saveCurrent(cfg, null);
             assertTrue(saved.ok(), saved.error());
             assertTrue(AppearancePresetStore.get().apply(saved.preset().id(), cfg).ok());
+            AtomChatConfig.reload();
+            cfg = AtomChatConfig.get();
+            assertEquals(saved.preset().id(), cfg.selectedAppearancePresetId);
+            assertEquals(saved.preset().id(),
+                    AppearancePresetStore.selected(AppearancePresetStore.get().list(), cfg).id());
             canvas.clear(0);
             page.render(canvas, layout, SettingsSection.APPEARANCE, -1, -1, 0, cfg.accentColor);
             byte[] savedSelected = readPixels(surface, bitmap);

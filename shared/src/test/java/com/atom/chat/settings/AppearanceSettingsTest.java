@@ -17,6 +17,41 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class AppearanceSettingsTest {
     @Test
+    void generatedWallpaperCommitsAgainstReloadedConfigAndChecksItsOriginalSelection(@TempDir Path dir) throws Exception {
+        Platform.install(new Platform.Provider() {
+            public Path configDir() { return dir.resolve("config"); }
+            public Path gameDir() { return dir; }
+            public boolean isModLoaded(String id) { return false; }
+        });
+        var instance = AtomChatConfig.class.getDeclaredField("instance");
+        instance.setAccessible(true);
+        var previous = instance.get(null);
+        String requested = "appearance_test:old_wallpaper";
+        try {
+            var original = new AtomChatConfig();
+            original.dynamicWallpaperAppearanceId = requested;
+            original.panelOpacity = .51F;
+            instance.set(null, original);
+            assertTrue(AtomChatConfig.saveChecked(original));
+            AtomChatConfig.reload();
+            var current = AtomChatConfig.get();
+            assertNotSame(original, current);
+            current.panelOpacity = .83F;
+
+            assertFalse(AppearanceSettings.commitStaticWallpaperFor("appearance_test:another_wallpaper"));
+            assertEquals(requested, current.dynamicWallpaperAppearanceId);
+            assertTrue(AppearanceSettings.commitStaticWallpaperFor(requested));
+            assertNull(current.dynamicWallpaperAppearanceId);
+            assertEquals(requested, original.dynamicWallpaperAppearanceId);
+            AtomChatConfig.reload();
+            assertNull(AtomChatConfig.get().dynamicWallpaperAppearanceId);
+            assertEquals(.83F, AtomChatConfig.get().panelOpacity);
+        } finally {
+            instance.set(null, previous);
+        }
+    }
+
+    @Test
     void nativeRowsPersistMixedAddonsAndAnAbsentChoiceCanBeReset(@TempDir Path dir) throws Exception {
         Platform.install(new Platform.Provider() {
             public Path configDir() { return dir.resolve("config"); }

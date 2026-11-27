@@ -67,9 +67,20 @@ final class AppearanceSettings {
     static boolean save(Part part, AtomChatConfig config, String id) {
         String previous = selectedId(part, config);
         select(part, config, id);
-        if (AtomChatConfig.saveChecked(config)) return true;
-        select(part, config, previous);
-        return false;
+        boolean saved = false;
+        try {
+            saved = AtomChatConfig.saveChecked(config);
+            return saved;
+        } finally {
+            if (!saved) select(part, config, previous);
+        }
+    }
+
+    /** Publication runs on the client thread, which may have reloaded the config since the click. */
+    static boolean commitStaticWallpaperFor(String expectedDynamic) {
+        AtomChatConfig config = AtomChatConfig.get();
+        return Objects.equals(expectedDynamic, config.dynamicWallpaperAppearanceId)
+                && save(Part.DYNAMIC_WALLPAPER, config, null);
     }
 
     static String label(Part part, String selected) {
