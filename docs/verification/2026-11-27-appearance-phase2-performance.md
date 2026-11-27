@@ -55,4 +55,8 @@
 
 这次跨版本回放覆盖 Windows Fabric 的真实输入、导航与渲染。两个输入包各自归档的 Fabric、NeoForge、Forge 构建回执均为零失败、各 196 个原生场景通过。阶段一回执中的常规测试跳过数分别为 21、19、19。本次复核了回执和输入摘要，原生场景是已有结果。第二阶段新增的气泡、头像框和 HUD 绘制像素由并行的外观回放验证。
 
-原始 JFR、游戏循环 CSV、动作分段、截图和运行配置在本工作树 `build/phase2-perf` 的 `phase2perf-pair-*` 子目录。单轮的 `launcher.log`、`run.json`、`frames.jfr`、`frames.csv` 和 `switch-summary.json` 可复核动作和统计。同进程补测在 `phase2perf-selector-serial`，另含 `selector-summary.json`。驱动、汇总脚本和六轮原始证据归档在 `build/phase2-perf/phase2-perf-evidence.zip`。
+驱动、汇总脚本、原始 JFR、游戏循环 CSV、截图和运行配置已归档到本机 `D:/AtomChat-Backups/2026-11-27-appearance-api/phase-2/phase2-perf-evidence.zip`。
+
+## 部署包复测
+
+同一隔离夹具使用 `dd142886` 的 Fabric 分发包串行走默认、混搭、混搭、默认。外观页签热切的组内 p95 中位数依次为 7.55、5.59、5.27、6.06 ms。切入公屏后 320 ms 内的 p95 依次为 11.40、8.65、8.15、8.23 ms。这一轮没有复现持续卡顿，冷开面板的第一个游戏循环间隔仍为 267.45 ms。原始数据在同一证据目录的 `measurement-final/phase2perf-delivery`。
