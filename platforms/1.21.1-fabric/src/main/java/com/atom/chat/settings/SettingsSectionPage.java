@@ -1218,17 +1218,14 @@ public final class SettingsSectionPage {
                 addGroup(rows, "atomchat.settings.group.appearance.bubbles", () -> rows.add(Row.ofBubbles()));
                 AtomChatConfig config = AtomChatConfig.get();
                 if (AppearanceSettings.visible(Part.BUBBLE, config)
-                        || AppearanceSettings.visible(Part.PANEL_OUTLINE, config)
                         || AppearanceSettings.visible(Part.AVATAR_FRAME, config)) {
                     addGroup(rows, AppearanceSettings.TITLE_PREFIX + "group", () -> {
                         addAppearanceSelector(rows, Part.BUBBLE, config);
-                        addAppearanceSelector(rows, Part.PANEL_OUTLINE, config);
                         addAppearanceSelector(rows, Part.AVATAR_FRAME, config);
                     });
                 }
                 addGroup(rows, "atomchat.settings.group.appearance.wallpaper", () -> {
                     rows.add(new Row(RowKind.WALLPAPERS, null, null, null, null, null, null, null, null, null));
-                    addAppearanceSelector(rows, Part.DYNAMIC_WALLPAPER, config);
                     rows.add(Row.ofAction(ACTION_WALLPAPER_PICK, wallpaperPickItem()));
                     if (WallpaperStore.isSet()) {
                         rows.add(Row.ofAction(ACTION_WALLPAPER_CLEAR, wallpaperClearItem()));
@@ -2509,20 +2506,10 @@ public final class SettingsSectionPage {
         String status = com.atom.chat.wallpaper.WallpaperPresets.error();
         if (com.atom.chat.wallpaper.WallpaperPresets.loading()) status = "atomchat.settings.wallpaper.generating";
         var cfg = AtomChatConfig.get();
-        if (status.isEmpty() && cfg.dynamicWallpaperAppearanceId != null
-                && !com.atom.chat.onboarding.TutorialSandbox.active()) {
-            status = AppearanceSettings.label(Part.DYNAMIC_WALLPAPER, cfg.dynamicWallpaperAppearanceId);
-        }
         if (status.isEmpty()) status = selected.isEmpty()
                 ? WallpaperStore.isSet() ? "atomchat.settings.wallpaper.custom" : "atomchat.settings.wallpaper.none"
                 : "atomchat.settings.wallpaper." + selected;
         String statusText = tr(status);
-        if (cfg.dynamicWallpaperAppearanceId != null) {
-            float statusWidth = row.w() - UiTokens.SETTINGS_ROW_PAD * 2
-                    - SkiaFontRenderer.getStringWidth(title, tr("atomchat.settings.wallpaper.current"))
-                    - UiTokens.SETTINGS_COMPACT_GAP;
-            statusText = SkiaFontRenderer.truncate(value, statusText, Math.max(0, statusWidth));
-        }
         SkiaFontRenderer.drawTextRight(canvas, value, statusText,
                 row.right() - UiTokens.SETTINGS_ROW_PAD, row.y() + WallpaperTokens.CAPTION_Y, sec(255));
         canvas.save();

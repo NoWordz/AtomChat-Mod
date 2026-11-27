@@ -290,10 +290,9 @@ public final class SettingsActions {
         String selected = AppearanceSettings.selectedId(part, config);
         String next = AppearanceSettings.next(part, selected, direction);
         if (java.util.Objects.equals(selected, next)) return;
-        boolean ok = part == Part.DYNAMIC_WALLPAPER
-                ? WallpaperStore.replaceWithConfig(null, () -> AppearanceSettings.save(part, config, next))
-                : AppearanceSettings.save(part, config, next);
-        if (!ok) host.feedback(AppearanceSettings.SAVE_FAILED, false);
+        if (!AppearanceSettings.save(part, config, next)) {
+            host.feedback(AppearanceSettings.SAVE_FAILED, false);
+        }
     }
 
     private void saveThemePreset() {

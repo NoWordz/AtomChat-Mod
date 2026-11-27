@@ -54,7 +54,7 @@ class AppearanceSettingsTest {
     }
 
     @Test
-    void nativeRowsPersistMixedAddonsAndAnAbsentChoiceCanBeReset(@TempDir Path dir) throws Exception {
+    void nativeRowsExposeWorkingPartsAndKeepHiddenChoicesInOldConfigs(@TempDir Path dir) throws Exception {
         Platform.install(new Platform.Provider() {
             public Path configDir() { return dir.resolve("config"); }
             public Path gameDir() { return dir; }
@@ -85,9 +85,16 @@ class AppearanceSettingsTest {
                         case "avatarStore" -> avatars;
                         default -> throw new AssertionError("Unexpected host call " + method.getName());
                     });
-            new SettingsActions(host);
+            var actions = new SettingsActions(host);
 
-            for (Part part : Part.values()) clickArrow(page, part, 1);
+            assertFalse(hasAppearanceRow(page, Part.PANEL_OUTLINE), "Registered outline has no selector");
+            assertFalse(hasAppearanceRow(page, Part.DYNAMIC_WALLPAPER), "Registered dynamic wallpaper has no selector");
+            config.panelOutlineAppearanceId = outline;
+            config.dynamicWallpaperAppearanceId = wallpaper;
+            clickArrow(page, Part.BUBBLE, 1);
+            clickArrow(page, Part.AVATAR_FRAME, 1);
+            actions.handleSettingsAction(AppearanceSettings.action(Part.PANEL_OUTLINE) + ":prev");
+            actions.handleSettingsAction(AppearanceSettings.action(Part.DYNAMIC_WALLPAPER) + ":prev");
             assertEquals(new AppearanceSettings.Selection(bubble, outline, avatar, wallpaper),
                     AppearanceSettings.Selection.capture(config));
 
@@ -95,12 +102,19 @@ class AppearanceSettingsTest {
             config = AtomChatConfig.get();
             assertEquals(new AppearanceSettings.Selection(bubble, outline, avatar, wallpaper),
                     AppearanceSettings.Selection.capture(config));
-            assertTrue(AppearanceUi.unregister(Part.PANEL_OUTLINE, outline));
-            assertEquals(AppearanceSettings.MISSING, AppearanceSettings.label(Part.PANEL_OUTLINE, outline));
-            assertEquals(outline, config.panelOutlineAppearanceId);
-            clickArrow(page, Part.PANEL_OUTLINE, -1);
-            assertNull(config.panelOutlineAppearanceId);
+            assertFalse(hasAppearanceRow(page, Part.PANEL_OUTLINE), "Old outline selection remains hidden");
+            assertFalse(hasAppearanceRow(page, Part.DYNAMIC_WALLPAPER), "Old dynamic selection remains hidden");
+            assertTrue(page.rows(SettingsSection.APPEARANCE).stream()
+                    .anyMatch(row -> row.kind() == SettingsSectionPage.RowKind.WALLPAPERS));
+            assertTrue(page.rows(SettingsSection.APPEARANCE).stream()
+                    .anyMatch(row -> "wallpaper_pick".equals(row.actionId())));
+
+            assertTrue(AppearanceUi.unregister(Part.AVATAR_FRAME, avatar));
+            assertEquals(AppearanceSettings.MISSING, AppearanceSettings.label(Part.AVATAR_FRAME, avatar));
+            clickArrow(page, Part.AVATAR_FRAME, -1);
+            assertNull(config.avatarFrameAppearanceId);
             assertEquals(bubble, config.bubbleAppearanceId);
+            assertEquals(outline, config.panelOutlineAppearanceId);
             assertEquals(wallpaper, config.dynamicWallpaperAppearanceId);
 
             assertTrue(SettingsTabDefaults.reset(config, SettingsSection.APPEARANCE, "theme",
@@ -114,6 +128,11 @@ class AppearanceSettingsTest {
             WallpaperStore.init(null);
             instance.set(null, previous);
         }
+    }
+
+    private static boolean hasAppearanceRow(SettingsSectionPage page, Part part) {
+        return page.rows(SettingsSection.APPEARANCE).stream()
+                .anyMatch(row -> AppearanceSettings.action(part).equals(row.actionId()));
     }
 
     private static void clickArrow(SettingsSectionPage page, Part part, int direction) throws Exception {

@@ -9,7 +9,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
 
-/** Shared settings model for the four optional appearance selectors. */
+/** Shared settings model for add-on appearance choices. */
 final class AppearanceSettings {
     static final String TITLE_PREFIX = "atomchat.settings.appearance.parts.";
     static final String DEFAULT = TITLE_PREFIX + "default";
@@ -35,9 +35,7 @@ final class AppearanceSettings {
         if (action == null || !action.startsWith(ACTION_PREFIX)) return null;
         return switch (action.substring(ACTION_PREFIX.length())) {
             case "bubble", "bubble:prev" -> Part.BUBBLE;
-            case "panel_outline", "panel_outline:prev" -> Part.PANEL_OUTLINE;
             case "avatar_frame", "avatar_frame:prev" -> Part.AVATAR_FRAME;
-            case "dynamic_wallpaper", "dynamic_wallpaper:prev" -> Part.DYNAMIC_WALLPAPER;
             default -> null;
         };
     }
