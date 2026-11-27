@@ -1,5 +1,20 @@
 # AtomChat 当前状态
 
+## 2026-11-27 · 0.9.8 本地收尾
+
+- 交付代码 `15645ecb`，分支 `codex/atomchat-v0.9.8`。三端测试实例已于 14:41 备份替换并核对 SHA-256，分别为 Fabric 1.21.1 CCB、NeoForge 1.21.1 航空学、Forge 1.20.1 主实例，均沿用各自的 AtomLib 0.7.1。本版本尚未合入或推送 main，上一份核实的公开发行是 0.9.7。 [部署回执](D:/AtomChat-Backups/2026-11-27-appearance-api/closeout/15645ecb/deployment/20261127-144135-734038/deployment.json)
+- 已修复通知横幅过期后残留命中区域拦截点击。隔离客户端的真实输入和日志覆盖了横幅显示在服务端配置页、过期、退出后再点公屏卡片与设置页签的组合。 [输入诊断](D:/AtomChat-Backups/2026-11-26-v098-input-diagnostics/server-banner-red-green-comparison.txt)
+- 附属气泡和头像框已接入聊天面板与 HUD，共用设置；附属未提供 HUD 气泡画法时回退内置。隐藏尚未接入绘制的附属面板轮廓和动态壁纸，兼容读取旧配置和预设，现有静态壁纸入口可用。隔离真实客户端每端 17 项外观检查通过，产物与部署包摘要相同。 [三端实机记录](D:/AtomChat-Backups/2026-11-27-appearance-api/closeout/15645ecb/real-entry.json)
+- 审定提交三端各跑 `clean build frontendContractCheck --offline`，共 7,392 项通过、59 项跳过、零失败。每端 196 个原有设置场景通过。归档回执记录审定提交，JAR 内构建戳的 `git_commit` 仍为 `unknown`。 [构建与场景回执](D:/AtomChat-Backups/2026-11-27-appearance-api/closeout/15645ecb/verification.json)
+- Fabric 历史性能回放未复现外观切页持续变慢，冷开仍捕获过 267.45 ms 的首个游戏循环间隔。该样本来自收尾前的 `dd142886`。以最终 `15645ecb` 包重新采集前后端性能基线属于下一轮工作。 [外观性能记录](verification/2026-11-27-appearance-phase2-performance.md)
+- 已将 131 个临时路径移入 Windows 回收站，涉及 14,139 个文件、约 5.35 GiB。清理后回读验收图、测试结果、三端安装包及回滚原包，保留性能原始数据、固定 Maven 输入和复跑母本。已减去运行副本的隔离案例仍可核对原证据，重跑时重新准备客户端。 [清理回执](D:/AtomChat-Backups/2026-11-27-appearance-api/closeout/15645ecb/cleanup.json)
+
+## 下一轮 · 1.0.0-Preview
+
+- 拟从本地 0.9.8 收尾基线起步。先留存同环境的 0.9.8 基准，把预览版升号单独记录，再全量盘点前端与后端的真实入口。当前源码版本仍是 0.9.8。
+- 前端覆盖冷开、切页、长列表滚动、HUD、输入和动画打断、资源加载。优先追踪冷开和首次进入聊天历史的长帧，分开测整帧、CPU/GPU 阶段与输入反馈。后端覆盖收发、身份与频道、重连、历史持久化、卡片与媒体、协议兼容。优先测高并发下的主线程开销、队列与尾延迟，同时核对权限和失败恢复。
+- 全量审计先列覆盖范围和缺口，优化按复现证据与影响排序。每项性能改动保留同场景前后对照，兼顾画面、交互、消息与数据语义。三端与 Official/Yarn 同步验证。预览卡片和其他附属接口延至 1.0.0 正式版后按实际需求排期。 [正式版后扩展安排](superpowers/plans/2026-11-27-post-1.0-appearance-extensions.md)
+
 ## 2026-11-26 · 0.9.7 正式发布
 
 - GitHub Latest 已更新至 `v0.9.7`，标签指向 `406f4cb7f6a628e3e3a339616b0a7a5bad67053e`。附带 Fabric 1.21.1、NeoForge 1.21.1 和 Forge 1.20.1 的 AtomChat 与 AtomLib 0.7.1 配套包。六个附件的公开摘要、中英发布正文和构建戳均已核对，三端共 3,436 个 AtomChat 类与测试实例验收包逐字节一致。 [正式发行](https://github.com/NoWordz/AtomChat-Mod/releases/tag/v0.9.7)
