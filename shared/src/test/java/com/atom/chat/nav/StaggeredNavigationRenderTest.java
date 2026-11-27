@@ -101,6 +101,25 @@ class StaggeredNavigationRenderTest {
         assertEquals(SettingsSection.APPEARANCE, page.hit(point.x(), point.y(), layout, 0));
     }
 
+    @Test void aHoveredTileCannotClaimTheClippedPartAboveTheViewport() {
+        var page = new SettingsHomePage();
+        var firstTile = SettingsHomePage.tileRect(layout, 0, 0);
+        float scrollY = firstTile.y() - layout.list.y() + 2;
+        var tile = SettingsHomePage.tileRect(layout, 0, scrollY);
+        float x = tile.x() + tile.w() / 2;
+        float y = tile.y() + tile.h() / 2;
+        try (var surface = Surface.makeRasterN32Premul(560, 960)) {
+            for (long now = 1000; now <= 1300; now += 20) {
+                UiStagger.atFrame(now, () -> page.render(surface.getCanvas(), layout, x, y, scrollY));
+            }
+        }
+
+        var visible = page.staggerHits().inverse(x, layout.list.y() + 1);
+        assertEquals(SettingsSection.APPEARANCE, page.hit(visible.x(), visible.y(), layout, scrollY));
+        var clipped = page.staggerHits().inverse(x, layout.list.y() - 1);
+        assertNull(page.hit(clipped.x(), clipped.y(), layout, scrollY));
+    }
+
     @Test void hoveredPublicCardCanBeClickedAtItsExpandedEdge() {
         var page = new ConversationListPage(null);
         var root = UiLayout.ofRoot(10, 10, 520, 900);

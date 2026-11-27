@@ -398,6 +398,7 @@ public final class ConversationListPage {
                     ? UiStagger.ITEM_STYLE_SLIDE_PX : 0.0F;
             CornerGeometry.clip(canvas, layout.list.x() - CardShadowReach.PAD, layout.list.y(),
                     layout.list.w() + driftClipPad + CardShadowReach.PAD * 2, layout.list.h(), 0.0F);
+            staggerHits.clipVertically(layout.list.y(), layout.list.bottom());
             float y = contentTop(layout, scrollY);
             // Stagger position = the row's slot inside the VISIBLE viewport, so
             // scrolling never re-plays an entrance for rows already on screen

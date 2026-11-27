@@ -156,6 +156,7 @@ public final class SettingsHomePage {
                     ? UiStagger.ITEM_STYLE_SLIDE_PX : 0.0F;
             CornerGeometry.clip(canvas, layout.list.x() - CardShadowReach.PAD, layout.list.y(),
                     layout.list.w() + driftClipPad + CardShadowReach.PAD * 2, layout.list.h(), 0.0F);
+            staggerHits.clipVertically(layout.list.y(), layout.list.bottom());
             for (int i = 0; i < sections.size(); i++) {
                 UiLayout.Rect tile = tileRect(layout, i, scrollY);
                 if (tile.bottom() < layout.list.y() || tile.y() > layout.list.bottom()) {

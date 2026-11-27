@@ -12,7 +12,20 @@ public final class StaggerHitMap {
         }
     }
     private final List<Item> items = new ArrayList<>();
-    public void clear() { items.clear(); }
+    private float clipTop = Float.NEGATIVE_INFINITY;
+    private float clipBottom = Float.POSITIVE_INFINITY;
+
+    public void clear() {
+        items.clear();
+        clipTop = Float.NEGATIVE_INFINITY;
+        clipBottom = Float.POSITIVE_INFINITY;
+    }
+
+    /** Checks the stationary viewport before undoing the item's motion. */
+    public void clipVertically(float top, float bottom) {
+        clipTop = top;
+        clipBottom = bottom;
+    }
     public void add(UiLayout.Rect rect, float dx, float dy, float scale, float cx, float cy) {
         items.add(new Item(rect, dx, dy, scale, cx, cy));
     }
@@ -28,6 +41,7 @@ public final class StaggerHitMap {
         return rect;
     }
     public Point inverse(float x, float y) {
+        if (y < clipTop || y > clipBottom) return new Point(x, y);
         for (int i = items.size() - 1; i >= 0; i--) {
             Item item = items.get(i);
             Point point = item.inverse(x, y);
