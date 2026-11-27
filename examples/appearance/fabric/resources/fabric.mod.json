@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "id": "${id}",
+  "version": "${version}",
+  "name": "${name}",
+  "description": "${description}",
+  "authors": ["扭曲（E33EPUS）"],
+  "license": "MIT",
+  "environment": "client",
+  "entrypoints": {
+    "client": ["${entrypoint}"]
+  },
+  "depends": {
+    "fabricloader": ">=0.16.9",
+    "minecraft": "1.21.1",
+    "java": ">=21",
+    "atomchat": ">=0.9.8"
+  }
+}

@@ -31,6 +31,8 @@ import com.atom.chat.render.Easing;
 import com.atom.chat.render.SkiaImages;
 import com.atom.chat.render.SkiaFontRenderer;
 import com.atom.chat.theme.ThemeService;
+import com.atom.chat.api.ui.AppearanceUi;
+import com.atom.chat.api.ui.AppearanceUi.Part;
 import com.atom.chat.theme.AppearancePresetStore;
 import com.atom.chat.ui.Animations;
 import com.atom.chat.ui.PanelOpenMotion;
@@ -862,6 +864,13 @@ public final class SettingsSectionPage {
         } else if (redConfirm) {
             subtitle = tr(item.subtitleKey());
             verb = tr("atomchat.settings.appearance.wallpaper.clear.confirm");
+        } else if (AppearanceSettings.part(row.actionId()) != null) {
+            Part part = AppearanceSettings.part(row.actionId());
+            String selected = AppearanceSettings.selectedId(part, AtomChatConfig.get());
+            String label = AppearanceSettings.label(part, selected);
+            subtitle = AppearanceSettings.MISSING.equals(label)
+                    ? tr(AppearanceSettings.TITLE_PREFIX + "missing.desc", selected) : "";
+            verb = tr(label);
         } else if ("onboarding_replay".equals(row.actionId())) {
             subtitle = tr(item.subtitleKey());
             verb = tr("atomchat.tutorial.replay");
@@ -1207,8 +1216,19 @@ public final class SettingsSectionPage {
                         RowKind.QUALITY, null, null, null, null, null, null, null, null, null)));
                 addGroup(rows, "atomchat.settings.group.appearance.presets", () -> rows.add(Row.ofThemes()));
                 addGroup(rows, "atomchat.settings.group.appearance.bubbles", () -> rows.add(Row.ofBubbles()));
+                AtomChatConfig config = AtomChatConfig.get();
+                if (AppearanceSettings.visible(Part.BUBBLE, config)
+                        || AppearanceSettings.visible(Part.PANEL_OUTLINE, config)
+                        || AppearanceSettings.visible(Part.AVATAR_FRAME, config)) {
+                    addGroup(rows, AppearanceSettings.TITLE_PREFIX + "group", () -> {
+                        addAppearanceSelector(rows, Part.BUBBLE, config);
+                        addAppearanceSelector(rows, Part.PANEL_OUTLINE, config);
+                        addAppearanceSelector(rows, Part.AVATAR_FRAME, config);
+                    });
+                }
                 addGroup(rows, "atomchat.settings.group.appearance.wallpaper", () -> {
                     rows.add(new Row(RowKind.WALLPAPERS, null, null, null, null, null, null, null, null, null));
+                    addAppearanceSelector(rows, Part.DYNAMIC_WALLPAPER, config);
                     rows.add(Row.ofAction(ACTION_WALLPAPER_PICK, wallpaperPickItem()));
                     if (WallpaperStore.isSet()) {
                         rows.add(Row.ofAction(ACTION_WALLPAPER_CLEAR, wallpaperClearItem()));
@@ -1217,6 +1237,13 @@ public final class SettingsSectionPage {
             }
         }
         return rows;
+    }
+
+    private void addAppearanceSelector(List<Row> rows, Part part, AtomChatConfig config) {
+        if (!AppearanceSettings.visible(part, config)) return;
+        String action = AppearanceSettings.action(part);
+        rows.add(Row.ofAction(action, new SettingsItem(action, AppearanceSettings.title(part),
+                "", () -> false, unused -> {})));
     }
 
     private void addColorGroup(List<Row> rows, String heading, String group) {
@@ -1407,12 +1434,16 @@ public final class SettingsSectionPage {
         private final Font subtitleFont;
         private final long languageRevision;
         private final boolean hasWallpaper;
+        private final long appearanceRevision;
+        private final AppearanceSettings.Selection appearanceSelection;
+        private final boolean tutorial;
         private final IdentityHashMap<Row, CompactText> text = new IdentityHashMap<>();
         private int nextRow;
         private boolean themePreviewsPending;
 
         private AppearanceMeasurement(List<Row> rows, float width, java.util.Set<String> collapsed,
-                                      Font titleFont, Font subtitleFont, long languageRevision, boolean hasWallpaper) {
+                                      Font titleFont, Font subtitleFont, long languageRevision, boolean hasWallpaper,
+                                      long appearanceRevision, AppearanceSettings.Selection appearanceSelection, boolean tutorial) {
             this.rows = rows;
             this.width = width;
             this.collapsed = java.util.Set.copyOf(collapsed);
@@ -1420,6 +1451,9 @@ public final class SettingsSectionPage {
             this.subtitleFont = subtitleFont;
             this.languageRevision = languageRevision;
             this.hasWallpaper = hasWallpaper;
+            this.appearanceRevision = appearanceRevision;
+            this.appearanceSelection = appearanceSelection;
+            this.tutorial = tutorial;
             this.themePreviewsPending = rows.stream().anyMatch(row -> row.kind() == RowKind.THEMES);
         }
     }
@@ -1430,6 +1464,9 @@ public final class SettingsSectionPage {
             if (fold.getValue() != (collapsedColorGroups.contains(fold.getKey()) ? 0F : 1F)) return null;
         }
         boolean hasWallpaper = WallpaperStore.isSet();
+        AtomChatConfig config = AtomChatConfig.get();
+        long appearanceRevision = AppearanceUi.revision();
+        boolean tutorial = com.atom.chat.onboarding.TutorialSandbox.active();
         float width = rowCardWidth(layout);
         Font title = FontManager.font(UiTokens.SETTINGS_TILE_TITLE);
         Font subtitle = FontManager.font(UiTokens.SETTINGS_TILE_SUB);
@@ -1437,10 +1474,12 @@ public final class SettingsSectionPage {
         AppearanceMeasurement measurement = appearanceMeasurement;
         if (measurement == null || measurement.width != width || measurement.titleFont != title
                 || measurement.subtitleFont != subtitle || measurement.languageRevision != languageRevision
-                || measurement.hasWallpaper != hasWallpaper
+                || measurement.hasWallpaper != hasWallpaper || measurement.appearanceRevision != appearanceRevision
+                || !measurement.appearanceSelection.matches(config) || measurement.tutorial != tutorial
                 || !measurement.collapsed.equals(collapsedColorGroups)) {
             measurement = new AppearanceMeasurement(rows(SettingsSection.APPEARANCE), width,
-                    collapsedColorGroups, title, subtitle, languageRevision, hasWallpaper);
+                    collapsedColorGroups, title, subtitle, languageRevision, hasWallpaper,
+                    appearanceRevision, AppearanceSettings.Selection.capture(config), tutorial);
             appearanceMeasurement = measurement;
         }
         return measurement;
@@ -2469,10 +2508,22 @@ public final class SettingsSectionPage {
         String selected = com.atom.chat.wallpaper.WallpaperPresets.selectedId();
         String status = com.atom.chat.wallpaper.WallpaperPresets.error();
         if (com.atom.chat.wallpaper.WallpaperPresets.loading()) status = "atomchat.settings.wallpaper.generating";
+        var cfg = AtomChatConfig.get();
+        if (status.isEmpty() && cfg.dynamicWallpaperAppearanceId != null
+                && !com.atom.chat.onboarding.TutorialSandbox.active()) {
+            status = AppearanceSettings.label(Part.DYNAMIC_WALLPAPER, cfg.dynamicWallpaperAppearanceId);
+        }
         if (status.isEmpty()) status = selected.isEmpty()
                 ? WallpaperStore.isSet() ? "atomchat.settings.wallpaper.custom" : "atomchat.settings.wallpaper.none"
                 : "atomchat.settings.wallpaper." + selected;
-        SkiaFontRenderer.drawTextRight(canvas, value, tr(status),
+        String statusText = tr(status);
+        if (cfg.dynamicWallpaperAppearanceId != null) {
+            float statusWidth = row.w() - UiTokens.SETTINGS_ROW_PAD * 2
+                    - SkiaFontRenderer.getStringWidth(title, tr("atomchat.settings.wallpaper.current"))
+                    - UiTokens.SETTINGS_COMPACT_GAP;
+            statusText = SkiaFontRenderer.truncate(value, statusText, Math.max(0, statusWidth));
+        }
+        SkiaFontRenderer.drawTextRight(canvas, value, statusText,
                 row.right() - UiTokens.SETTINGS_ROW_PAD, row.y() + WallpaperTokens.CAPTION_Y, sec(255));
         canvas.save();
         try {
@@ -2481,7 +2532,6 @@ public final class SettingsSectionPage {
             var presets = com.atom.chat.wallpaper.WallpaperPresets.presets();
             for (int i = 0; i < presets.length; i++) {
                 var preset = presets[i];
-                var cfg = AtomChatConfig.get();
                 var preview = new ThemeService.Preview(cfg.accentColor, preset.previewColor(),
                         cfg.cardColor, cfg.ownBubbleColor, cfg.otherBubbleColor, UiTokens.radiusFactor(cfg.cornerRadius));
                 drawPreviewCard(canvas, wallpaperStrip, row, i, preview,
@@ -2502,7 +2552,10 @@ public final class SettingsSectionPage {
         SkiaFontRenderer.drawText(canvas, title, tr("atomchat.settings.appearance.bubble_style"),
                 row.x() + UiTokens.SETTINGS_ROW_PAD,
                 SkiaFontRenderer.centerBaselineY(title, row.y() + s(18)), textPrimary());
-        String current = bubbleStyleName(cfg.effectiveBubbleStyle());
+        String addonLabel = AppearanceSettings.label(Part.BUBBLE, cfg.bubbleAppearanceId);
+        boolean addonSelected = !com.atom.chat.onboarding.TutorialSandbox.active() && cfg.bubbleAppearanceId != null
+                && !AppearanceSettings.MISSING.equals(addonLabel);
+        String current = addonSelected ? tr(addonLabel) : bubbleStyleName(cfg.effectiveBubbleStyle());
         float captionWidth = SkiaFontRenderer.getStringWidth(title, tr("atomchat.settings.appearance.bubble_style"))
                 + SkiaFontRenderer.getStringWidth(value, current) + UiTokens.SETTINGS_COMPACT_GAP;
         if (captionWidth <= row.w() - UiTokens.SETTINGS_ROW_PAD * 2F) {
@@ -2516,7 +2569,7 @@ public final class SettingsSectionPage {
             var styles = AtomChatConfig.BubbleStyle.values();
             for (int i = 0; i < styles.length; i++) {
                 drawPreviewCard(canvas, bubbleStrip, row, i, preview, bubbleStyleName(styles[i]),
-                        styles[i] == cfg.effectiveBubbleStyle(), false, styles[i], dtMs);
+                        !addonSelected && styles[i] == cfg.effectiveBubbleStyle(), false, styles[i], dtMs);
             }
         } finally { canvas.restore(); }
     }

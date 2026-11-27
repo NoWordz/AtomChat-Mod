@@ -18,6 +18,33 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 class AtomChatConfigTest {
 
     @Test
+    void appearanceSelectionsRoundTripAndMalformedIdsLeaveOtherSettingsIntact() {
+        var gson = new com.google.gson.Gson();
+        var config = new AtomChatConfig();
+        config.bubbleAppearanceId = "first:soft";
+        config.panelOutlineAppearanceId = "second:cut/outline";
+        config.avatarFrameAppearanceId = "first:ring";
+        config.dynamicWallpaperAppearanceId = "second:waves";
+
+        var loaded = gson.fromJson(AtomChatConfig.sanitizeAppearanceSelections(gson.toJson(config)),
+                AtomChatConfig.class);
+        assertEquals(config.bubbleAppearanceId, loaded.bubbleAppearanceId);
+        assertEquals(config.panelOutlineAppearanceId, loaded.panelOutlineAppearanceId);
+        assertEquals(config.avatarFrameAppearanceId, loaded.avatarFrameAppearanceId);
+        assertEquals(config.dynamicWallpaperAppearanceId, loaded.dynamicWallpaperAppearanceId);
+
+        var legacy = gson.fromJson(AtomChatConfig.sanitizeAppearanceSelections("""
+                {"bubbleAppearanceId": {}, "panelOutlineAppearanceId": 42,
+                 "avatarFrameAppearanceId": "unnamespaced", "notifyVolume": 0.37}
+                """), AtomChatConfig.class);
+        assertNull(legacy.bubbleAppearanceId);
+        assertNull(legacy.panelOutlineAppearanceId);
+        assertNull(legacy.avatarFrameAppearanceId);
+        assertNull(legacy.dynamicWallpaperAppearanceId);
+        assertEquals(0.37F, legacy.notifyVolume);
+    }
+
+    @Test
     void malformedTemplateEntriesDoNotResetOtherClientSettings() {
         var json = """
                 {"notifyVolume": 0.37, "chatTemplates": ["{sender}: {message}", {}, null, 42],

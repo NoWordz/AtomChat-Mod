@@ -12,7 +12,8 @@ final class WallpaperGeneration {
     private final Function<String, byte[]> render;
     private final BiPredicate<String, byte[]> publish;
     private final Consumer<RuntimeException> failure;
-    private String pending;
+    private record Request(String id, Executor publication) {}
+    private Request pending;
     private boolean draining;
     private long generation;
 
@@ -21,22 +22,31 @@ final class WallpaperGeneration {
         this.lock=lock;this.executor=executor;this.render=render;this.publish=publish;this.failure=failure;
     }
     void request(String id) {
+        request(id, Runnable::run);
+    }
+    void request(String id, Executor publication) {
         synchronized(lock) {
-            pending=id;generation++;
+            pending = new Request(id, publication);generation++;
             if(!draining){draining=true;executor.execute(this::drain);}
         }
     }
     void cancel() { synchronized(lock){generation++;pending=null;} }
     private void drain() {
         while(true) {
-            String id;long token;
+            Request request;long token;
             synchronized(lock){
-                id=pending;pending=null;token=generation;
-                if(id==null){draining=false;return;}
+                request=pending;pending=null;token=generation;
+                if(request==null){draining=false;return;}
             }
             try {
-                byte[] png=render.apply(id);
-                synchronized(lock){if(token==generation)publish.test(id,png);}
+                byte[] png=render.apply(request.id());
+                request.publication().execute(() -> {
+                    synchronized (lock) {
+                        if (token != generation) return;
+                        try { publish.test(request.id(), png); }
+                        catch (RuntimeException error) { failure.accept(error); }
+                    }
+                });
             } catch(RuntimeException error) {
                 synchronized(lock){if(token==generation)failure.accept(error);}
             }

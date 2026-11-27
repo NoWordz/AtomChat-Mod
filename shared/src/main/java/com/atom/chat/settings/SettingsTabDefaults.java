@@ -11,7 +11,8 @@ import java.util.function.BooleanSupplier;
 public final class SettingsTabDefaults {
     private SettingsTabDefaults() { }
     private static final Map<String, List<String>> NAMES = Map.ofEntries(
-            Map.entry("APPEARANCE/theme", List.of("bubbleStyle", "graphicsQuality")),
+            Map.entry("APPEARANCE/theme", List.of("bubbleStyle", "graphicsQuality",
+                "bubbleAppearanceId", "panelOutlineAppearanceId", "avatarFrameAppearanceId", "dynamicWallpaperAppearanceId")),
             Map.entry("APPEARANCE/colors", List.of(
                 "accentColor", "ownBubbleColor", "bubbleTextColor",
                 "otherBubbleColor", "otherBubbleTextColor", "panelBgColor",

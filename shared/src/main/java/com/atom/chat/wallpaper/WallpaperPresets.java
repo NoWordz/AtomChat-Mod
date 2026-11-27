@@ -11,6 +11,8 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.Executor;
+import java.util.function.BooleanSupplier;
 
 /** Raster-only static preset generation; no GPU object crosses frames or threads. */
 public final class WallpaperPresets {
@@ -31,15 +33,21 @@ public final class WallpaperPresets {
     private static volatile WallpaperViewport.Size renderSize = new WallpaperViewport.Size(576,1024,false);
     private static final java.util.concurrent.atomic.AtomicBoolean SIZE_REFRESH_QUEUED = new java.util.concurrent.atomic.AtomicBoolean();
     private static String requestedId="";
+    private static Executor publication = Runnable::run;
+    private static BooleanSupplier commitConfig = () -> true;
     private static volatile boolean loading;
     private static volatile String error = "";
     private static final WallpaperGeneration QUEUE = new WallpaperGeneration(WallpaperStore.class, WORKER,
             WallpaperPresets::renderCurrentSize, (id,png) -> {
-                boolean ok=WallpaperStore.setPresetPng(id,png,GENERATION.get());
+                boolean ok=WallpaperStore.setPresetPng(id,png,GENERATION.get(),commitConfig);
                 if(!ok)error="atomchat.feedback.wallpaperPresetFailed";
+                publication = Runnable::run;
+                commitConfig = () -> true;
                 loading=false;return ok;
             }, failure -> {
                 error="atomchat.feedback.wallpaperPresetFailed";loading=false;
+                publication = Runnable::run;
+                commitConfig = () -> true;
                 AtomChat.LOGGER.warn("[AtomChat/wallpaper] Static preset generation failed",failure);
             });
     private WallpaperPresets() { }
@@ -50,6 +58,8 @@ public final class WallpaperPresets {
     public static void cancelPending() {
         synchronized (WallpaperStore.class) {
             GENERATION.incrementAndGet(); QUEUE.cancel(); requestedId=""; loading=false; error="";
+            publication = Runnable::run;
+            commitConfig = () -> true;
         }
     }
     static boolean isCurrentRequest(int generation) { return GENERATION.get()==generation; }
@@ -80,10 +90,21 @@ public final class WallpaperPresets {
 
     /** Coalesce rapid selections without queueing stale full-size renders. */
     public static void apply(String id) {
+        apply(id, Runnable::run, () -> true);
+    }
+
+    /** Publish a static choice and its config change together on the client thread. */
+    public static void apply(String id, Executor publishOn, BooleanSupplier saveConfig) {
         find(id);
         synchronized (WallpaperStore.class) {
-            GENERATION.incrementAndGet(); requestedId=id; loading=true; error=""; QUEUE.request(id);
+            publication = publishOn;
+            commitConfig = saveConfig;
+            request(id);
         }
+    }
+
+    private static void request(String id) {
+        GENERATION.incrementAndGet(); requestedId=id; loading=true; error=""; QUEUE.request(id, publication);
     }
 
     private static byte[] renderCurrentSize(String id) {
@@ -100,7 +121,7 @@ public final class WallpaperPresets {
             SIZE_REFRESH_QUEUED.set(false);
             synchronized(WallpaperStore.class) {
                 String id=loading?requestedId:WallpaperStore.presetId();
-                if(!id.isEmpty())apply(id);
+                if(!id.isEmpty())request(id);
             }
         });
     }

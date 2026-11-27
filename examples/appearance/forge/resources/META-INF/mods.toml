@@ -1,0 +1,26 @@
+modLoader="javafml"
+loaderVersion="[47,)"
+license="MIT"
+
+[[mods]]
+modId="${id}"
+version="${version}"
+displayName="${name}"
+description="${description}"
+authors="扭曲（E33EPUS）"
+credits="Skija by HumbleUI (Apache-2.0)"
+displayTest="IGNORE_ALL_VERSION"
+
+[[dependencies.${id}]]
+modId="minecraft"
+mandatory=true
+versionRange="[1.20.1,1.20.2)"
+ordering="NONE"
+side="BOTH"
+
+[[dependencies.${id}]]
+modId="atomchat"
+mandatory=true
+versionRange="[0.9.8,)"
+ordering="AFTER"
+side="CLIENT"

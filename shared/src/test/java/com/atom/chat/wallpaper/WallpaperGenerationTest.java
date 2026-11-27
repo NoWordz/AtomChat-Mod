@@ -7,6 +7,25 @@ import java.util.function.*;
 import static org.junit.jupiter.api.Assertions.*;
 
 class WallpaperGenerationTest {
+    @Test void supersededClientThreadPublicationCannotCommit() {
+        List<Runnable> work = new ArrayList<>();
+        List<Runnable> client = new ArrayList<>();
+        List<String> published = new ArrayList<>();
+        var queue = new WallpaperGeneration(new Object(), work::add, id -> new byte[]{1}, (id, png) -> {
+            published.add(id);
+            return true;
+        }, error -> fail(error));
+        queue.request("obsolete", client::add);
+        work.remove(0).run();
+        queue.request("latest", client::add);
+        work.remove(0).run();
+        assertTrue(published.isEmpty());
+        client.remove(0).run();
+        assertTrue(published.isEmpty());
+        client.remove(0).run();
+        assertEquals(List.of("latest"), published);
+    }
+
     private Object queue(Object lock,Executor executor,Function<String,byte[]> render,
                          BiPredicate<String,byte[]> publish) throws Exception {
         var c=Class.forName("com.atom.chat.wallpaper.WallpaperGeneration")

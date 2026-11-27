@@ -1,6 +1,7 @@
 package com.atom.chat.config;
 
 import com.atom.chat.AtomChat;
+import com.atom.chat.api.ui.AppearanceUi;
 import com.atom.chat.chat.MessageFilter;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
@@ -128,6 +129,12 @@ public class AtomChatConfig {
 
     public enum BubbleStyle { CLASSIC, ROUND, CORNER }
     public BubbleStyle bubbleStyle = BubbleStyle.CORNER;
+
+    /** null selects the built-in part; valid IDs survive an absent add-on. */
+    public String bubbleAppearanceId;
+    public String panelOutlineAppearanceId;
+    public String avatarFrameAppearanceId;
+    public String dynamicWallpaperAppearanceId;
 
     public BubbleStyle effectiveBubbleStyle() {
         return bubbleStyle == null ? BubbleStyle.CORNER : bubbleStyle;
@@ -769,6 +776,20 @@ public class AtomChatConfig {
         return settings.toString();
     }
 
+    static String sanitizeAppearanceSelections(String json) {
+        var settings = GSON.fromJson(json, com.google.gson.JsonObject.class);
+        if (settings == null) return json;
+        for (String key : java.util.List.of("bubbleAppearanceId", "panelOutlineAppearanceId",
+                "avatarFrameAppearanceId", "dynamicWallpaperAppearanceId")) {
+            var value = settings.get(key);
+            if (value != null && (!value.isJsonPrimitive() || !value.getAsJsonPrimitive().isString()
+                    || !AppearanceUi.validId(value.getAsString()))) {
+                settings.remove(key);
+            }
+        }
+        return settings.toString();
+    }
+
     private static AtomChatConfig load() {
         com.atom.chat.util.CacheDirs.migrateFromOldConfigPaths();
         Path path = com.atom.chat.platform.Platform.configDir().resolve("atomchat/atomchat-client.json");
@@ -776,8 +797,9 @@ public class AtomChatConfig {
             try {
                 String json = Files.readString(path, StandardCharsets.UTF_8);
                 boolean halfWidthKeyPresent = hasKey(json, "halfScreenWidthCustomized");
-                AtomChatConfig config = GSON.fromJson(sanitizePageNavStyle(sanitizeAvatarStyle(
-                        sanitizeBubbleStyle(sanitizeWorldFeedFilterAndTemplates(migrateGraphicsQuality(json))))), AtomChatConfig.class);
+                String sanitized = sanitizeAppearanceSelections(sanitizePageNavStyle(sanitizeAvatarStyle(
+                        sanitizeBubbleStyle(sanitizeWorldFeedFilterAndTemplates(migrateGraphicsQuality(json))))));
+                AtomChatConfig config = GSON.fromJson(sanitized, AtomChatConfig.class);
                 if (config != null) {
                     boolean personalLoaded = PersonalDataStore.load(config);
                     if (config.blockedPlayers == null) {

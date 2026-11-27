@@ -42,6 +42,7 @@ public final class SettingsGroupIcons {
         Map.entry("atomchat.settings.group.appearance.transparency",TablerIcons.LAYERS_SUBTRACT),
         Map.entry("atomchat.settings.group.appearance.presets",SettingsGroupGlyphs.PRESETS),
         Map.entry("atomchat.settings.group.appearance.bubbles",AppIcons.ICON_TAB_CHAT_PATH),
+        Map.entry(AppearanceSettings.TITLE_PREFIX + "group",SettingsIcons.PLUG_CONNECTED),
         Map.entry("atomchat.settings.group.appearance.corners",TablerIcons.BORDER_RADIUS),
         Map.entry("atomchat.settings.group.appearance.message_colors",TablerIcons.PAINT),
         Map.entry("atomchat.settings.group.appearance.ui_colors",TablerIcons.PALETTE),
