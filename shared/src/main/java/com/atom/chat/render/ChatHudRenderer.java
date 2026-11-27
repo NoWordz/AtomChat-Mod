@@ -3,6 +3,7 @@ package com.atom.chat.render;
 import com.atom.chat.AtomChat;
 import com.atom.chat.api.card.CardRenderRegistry;
 import com.atom.chat.api.card.CardStateStore;
+import com.atom.chat.api.ui.AppearanceUi;
 import com.atom.chat.chat.ChatMessage;
 import com.atom.chat.chat.MessageMerge;
 import com.atom.chat.chat.ImageCode;
@@ -140,6 +141,14 @@ public final class ChatHudRenderer {
                         case PERFORMANCE -> null;
                     });
         }
+
+        int fill(boolean own) {
+            return own ? own() : other();
+        }
+
+        int text(boolean own) {
+            return own ? ownText() : otherText();
+        }
     }
 
     private final IdentityHashMap<ChatMessage, Measured> layouts = new IdentityHashMap<>();
@@ -178,6 +187,7 @@ public final class ChatHudRenderer {
     private int lastTimestampInterval;
     private boolean departingRows;
     private Ink lastInk;
+    private AppearanceUi.Resolved lastAppearance;
     private float lastInkDensity;
     private long lastInkGeneration;
     private boolean hasFrame;
@@ -584,9 +594,12 @@ public final class ChatHudRenderer {
 
     private void prepareInk(AtomChatConfig config, Viewport viewport, long generation) {
         var ink = new Ink(config);
-        if (!ink.equals(lastInk) || lastInkDensity != viewport.density() || lastInkGeneration != generation) {
+        var appearance = ChatAppearance.current(config);
+        if (!ink.equals(lastInk) || appearance != lastAppearance || lastInkDensity != viewport.density()
+                || lastInkGeneration != generation) {
             clearRasterInk();
             lastInk = ink;
+            lastAppearance = appearance;
             lastInkDensity = viewport.density();
             lastInkGeneration = generation;
         }
@@ -701,7 +714,8 @@ public final class ChatHudRenderer {
                     HudShadow.drawAvatar(canvas, RRect.makeXYWH(x + avatarInset, y + avatarInset,
                             UiTokens.AVATAR_SIZE, UiTokens.AVATAR_SIZE, UiTokens.AVATAR_SIZE / 2F));
                 }
-                MessagePaint.avatar(canvas, message, uuid, profile, x + avatarInset, y + avatarInset);
+                MessagePaint.avatar(canvas, message, uuid, profile, x + avatarInset, y + avatarInset,
+                        lastAppearance.hudAvatarFrame());
             }
             MessageImage attachment = placed.thumbnailHeight() > 0F
                     ? visibleImage.apply(measured.image().url(), !row.departing()) : null;
@@ -716,10 +730,7 @@ public final class ChatHudRenderer {
                 float scale = Math.min(placed.thumbnailWidth() / image.getWidth(), placed.thumbnailHeight() / image.getHeight());
                 float imageY = y + placed.nameBand() + measured.quoteHeight();
                 float width = image.getWidth() * scale, height = image.getHeight() * scale;
-                if (lastInk.shadow() && !attachment.transparent()) {
-                    HudShadow.draw(canvas, ChatBubble.outline(bubbleX, imageY, width, height, lastInk.shape(), false, 1F, placed.group()));
-                }
-                ChatBubble.drawImage(canvas, image, bubbleX, imageY, width, height, lastInk.shape(), false, placed.group());
+                drawImageBubble(canvas, attachment, bubbleX, imageY, width, height, message.isOwn(), placed.group());
                 repeatX = bubbleX + width;
                 repeatY = imageY + height / 2F;
             } else if (!cacheable || !drawStaticInk(canvas, placed, bubbleX, y, grid, inkSurface, false)) {
@@ -735,6 +746,21 @@ public final class ChatHudRenderer {
         }
     }
 
+    private void drawImageBubble(Canvas canvas, MessageImage attachment, float x, float y, float width, float height,
+                                 boolean own, ChatBubble.Group group) {
+        boolean shadow = lastInk.shadow() && !attachment.transparent();
+        try (var custom = ChatBubble.custom(lastAppearance.hudBubble(), x, y, width, height,
+                own, lastInk.fill(own), lastInk.text(own), group)) {
+            if (custom != null) {
+                if (shadow) custom.drawHudShadow(canvas);
+                custom.drawImage(canvas, attachment.image());
+                return;
+            }
+        }
+        if (shadow) HudShadow.draw(canvas, ChatBubble.outline(x, y, width, height, lastInk.shape(), false, 1F, group));
+        ChatBubble.drawImage(canvas, attachment.image(), x, y, width, height, lastInk.shape(), false, group);
+    }
+
     private boolean drawStaticInk(Canvas canvas, Placed placed, float x, float y, ChatHudRasterCache.PixelGrid grid,
                                   ChatHudRasterCache.SurfaceFactory inkSurface, boolean captionOnly) {
         Measured measured = placed.measured();
@@ -744,10 +770,12 @@ public final class ChatHudRenderer {
             if (captionHeight <= 0F) return true;
             return captionInk.drawAligned(canvas, key, x, y,
                     Math.max(placed.showSender() ? measured.nameWidth() : 0F, measured.quoteWidth()), captionHeight,
-                    grid, inkSurface, (target, inkX, inkY) -> drawCaptionAndQuote(target, placed, inkX, inkY, 0F));
+                    grid, inkSurface, false, (target, inkX, inkY) -> drawCaptionAndQuote(target, placed, inkX, inkY, 0F));
         }
+        boolean positionSensitive = lastAppearance.hudBubble() != null
+                && !measured.message().isSystem() && measured.card() == null;
         return rasterInk.drawAligned(canvas, key, x, y, placed.staticWidth(), captionHeight + measured.bubbleHeight(),
-                grid, inkSurface, (target, inkX, inkY) -> drawInk(target, placed, inkX, inkY, 0F));
+                grid, inkSurface, positionSensitive, (target, inkX, inkY) -> drawInk(target, placed, inkX, inkY, 0F, x, y));
     }
 
     private void drawCaptionAndQuote(Canvas canvas, Placed placed, float x, float y, float liveDensity) {
@@ -782,6 +810,10 @@ public final class ChatHudRenderer {
     }
 
     private void drawInk(Canvas canvas, Placed placed, float x, float y, float liveDensity) {
+        drawInk(canvas, placed, x, y, liveDensity, x, y);
+    }
+
+    private void drawInk(Canvas canvas, Placed placed, float x, float y, float liveDensity, float hudX, float hudY) {
         Measured measured = placed.measured();
         float height = measured.bubbleHeight();
         if (measured.card() != null) {
@@ -812,16 +844,39 @@ public final class ChatHudRenderer {
             drawCaptionAndQuote(canvas, placed, x, y, liveDensity);
             float bubbleY = y + placed.nameBand() + measured.quoteHeight();
             boolean placeholder = measured.imagePlaceholder();
-            if (lastInk.shadow()) {
-                HudShadow.draw(canvas, ChatBubble.outline(x, bubbleY, measured.width(), height, lastInk.shape(), false, 1F, placed.group()));
-            }
-            ChatBubble.draw(canvas, x, bubbleY, measured.width(), height, lastInk.shape(), false,
-                    placeholder ? lastInk.capsule() : own ? lastInk.own() : lastInk.other(), placed.group());
+            int fill = placeholder ? lastInk.capsule() : lastInk.fill(own);
+            int text = placeholder ? lastInk.capsuleText() : lastInk.text(own);
+            float hudBubbleY = hudY + placed.nameBand() + measured.quoteHeight();
+            drawTextBubble(canvas, x, bubbleY, hudX, hudBubbleY, measured.width(), height,
+                    own, fill, text, placed.group());
             RichTextRenderer.drawLines(canvas, measured.bodyFont(), measured.body(), x + UiTokens.BUBBLE_PAD,
-                    bubbleY + height / 2F, measured.lineHeight(),
-                    placeholder ? lastInk.capsuleText() : own ? lastInk.ownText() : lastInk.otherText(),
+                    bubbleY + height / 2F, measured.lineHeight(), text,
                     null, false, placeholder, capsuleTextShadow());
         }
+    }
+
+    private void drawTextBubble(Canvas canvas, float x, float y, float hudX, float hudY,
+                                float width, float height, boolean own, int fill, int text, ChatBubble.Group group) {
+        try (var custom = ChatBubble.custom(lastAppearance.hudBubble(), hudX, hudY, width, height,
+                own, fill, text, group)) {
+            if (custom != null) {
+                int save = canvas.save();
+                try {
+                    canvas.translate(x - hudX, y - hudY);
+                    if (custom.draw(canvas)) {
+                        // The exterior shadow can follow the fill, once custom paint has succeeded.
+                        if (lastInk.shadow()) custom.drawHudShadow(canvas);
+                        return;
+                    }
+                } finally {
+                    canvas.restoreToCount(save);
+                }
+            }
+        }
+        if (lastInk.shadow()) {
+            HudShadow.draw(canvas, ChatBubble.outline(x, y, width, height, lastInk.shape(), false, 1F, group));
+        }
+        ChatBubble.draw(canvas, x, y, width, height, lastInk.shape(), false, fill, group);
     }
 
     private io.github.humbleui.skija.ImageFilter capsuleTextShadow() {

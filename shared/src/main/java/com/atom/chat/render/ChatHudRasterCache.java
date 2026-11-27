@@ -8,6 +8,7 @@ import io.github.humbleui.types.Rect;
 
 import java.util.ArrayDeque;
 import java.util.IdentityHashMap;
+import java.util.Objects;
 
 /** Bounded snapshots of static message ink. A backend target keeps production HUD uploads on the GPU. */
 final class ChatHudRasterCache {
@@ -38,7 +39,8 @@ final class ChatHudRasterCache {
         }
     }
 
-    private record Ink(Image image, float phaseX, float phaseY) { }
+    private record Origin(float x, float y) { }
+    private record Ink(Image image, float phaseX, float phaseY, Origin origin) { }
 
     @FunctionalInterface
     interface SurfaceFactory {
@@ -65,23 +67,26 @@ final class ChatHudRasterCache {
     }
 
     Image bake(Object key, float width, float height, float density, SurfaceFactory factory, Painter painter) {
-        return bake(key, width, height, density, factory, padding, padding, 0F, 0F,
+        return bake(key, width, height, density, factory, padding, padding, 0F, 0F, null,
                 (canvas, x, y) -> painter.draw(canvas, x));
     }
 
     /** Rasterize at the destination glyph phase, then copy physical pixels without resampling. */
     boolean drawAligned(Canvas canvas, Object key, float x, float y, float width, float height,
-                        PixelGrid grid, SurfaceFactory factory, PositionedPainter painter) {
+                        PixelGrid grid, SurfaceFactory factory, boolean positionSensitive, PositionedPainter painter) {
         float density = grid.density();
         float deviceX = x * density + grid.translateX(), deviceY = y * density + grid.translateY();
         float phaseX = deviceX - (float) Math.floor(deviceX);
         float phaseY = deviceY - (float) Math.floor(deviceY);
         int pad = (int) Math.ceil(padding * density);
         float insetX = (pad + phaseX) / density, insetY = (pad + phaseY) / density;
+        // Add-ons see the same bounds on both canvases and may depend on their position.
+        Origin origin = positionSensitive ? new Origin(x, y) : null;
         Ink ink = rows.get(key);
         Image image;
-        if (ink == null || Math.abs(ink.phaseX() - phaseX) > .001F || Math.abs(ink.phaseY() - phaseY) > .001F) {
-            image = bake(key, width, height, density, factory, insetX, insetY, phaseX, phaseY, painter);
+        if (ink == null || Math.abs(ink.phaseX() - phaseX) > .001F || Math.abs(ink.phaseY() - phaseY) > .001F
+                || !Objects.equals(ink.origin(), origin)) {
+            image = bake(key, width, height, density, factory, insetX, insetY, phaseX, phaseY, origin, painter);
         } else {
             image = ink.image();
         }
@@ -93,7 +98,8 @@ final class ChatHudRasterCache {
     }
 
     private Image bake(Object key, float width, float height, float density, SurfaceFactory factory,
-                       float insetX, float insetY, float phaseX, float phaseY, PositionedPainter painter) {
+                       float insetX, float insetY, float phaseX, float phaseY, Origin origin,
+                       PositionedPainter painter) {
         int pixelsWide = (int) Math.ceil((width + insetX + padding) * density);
         int pixelsHigh = (int) Math.ceil((height + insetY + padding) * density);
         long area = (long) pixelsWide * pixelsHigh;
@@ -112,7 +118,7 @@ final class ChatHudRasterCache {
             canvas.scale(density, density);
             painter.draw(canvas, insetX, insetY);
             Image raster = surface.makeImageSnapshot();
-            rows.put(key, new Ink(raster, phaseX, phaseY));
+            rows.put(key, new Ink(raster, phaseX, phaseY, origin));
             insertionOrder.addLast(key);
             pixels += area;
             return raster;
