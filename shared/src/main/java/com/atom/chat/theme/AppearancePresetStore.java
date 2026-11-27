@@ -470,6 +470,7 @@ public final class AppearancePresetStore {
             if (!validSnapshot(snapshot) || !parts.valid()) return null;
 
             boolean legacy = schema == LEGACY_SCHEMA;
+            if (!legacy && root.has("wallpaper") && !parts.dynamic().specified()) return null;
             String extension = root.has("wallpaper") && !root.get("wallpaper").isJsonNull()
                     ? string(root, "wallpaper").toLowerCase(Locale.ROOT) : null;
             String identity = null;
@@ -477,7 +478,7 @@ public final class AppearancePresetStore {
                 if (!WallpaperStore.isSupportedName(extension) || extension.charAt(0) != '.'
                         || extension.indexOf('.', 1) != -1) return null;
                 if (!legacy) {
-                    if (!parts.dynamic().specified() || parts.dynamic().id() != null) return null;
+                    if (parts.dynamic().id() != null) return null;
                     Path image = presetDir.resolve(WALLPAPER + extension);
                     DataMigration.noLinks(image);
                     identity = WallpaperStore.validatedIdentity(image);

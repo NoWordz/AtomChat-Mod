@@ -211,12 +211,8 @@ public final class SettingsActions {
         } else if (actionId != null && actionId.startsWith("wallpaper_preset:")) {
             String id = actionId.substring("wallpaper_preset:".length());
             String selectedDynamic = AtomChatConfig.get().dynamicWallpaperAppearanceId;
-            if (selectedDynamic == null) {
-                com.atom.chat.wallpaper.WallpaperPresets.apply(id);
-            } else {
-                com.atom.chat.wallpaper.WallpaperPresets.apply(id, host.client()::execute,
-                        () -> AppearanceSettings.commitStaticWallpaperFor(selectedDynamic));
-            }
+            com.atom.chat.wallpaper.WallpaperPresets.apply(id, host.client()::execute,
+                    () -> AppearanceSettings.commitStaticWallpaperFor(selectedDynamic));
         } else if ("wallpaper_pick".equals(actionId)) {
             pickWallpaperFile();
         } else if ("wallpaper_clear".equals(actionId)) {

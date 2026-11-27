@@ -80,7 +80,7 @@ final class AppearanceSettings {
     static boolean commitStaticWallpaperFor(String expectedDynamic) {
         AtomChatConfig config = AtomChatConfig.get();
         return Objects.equals(expectedDynamic, config.dynamicWallpaperAppearanceId)
-                && save(Part.DYNAMIC_WALLPAPER, config, null);
+                && (expectedDynamic == null || save(Part.DYNAMIC_WALLPAPER, config, null));
     }
 
     static String label(Part part, String selected) {

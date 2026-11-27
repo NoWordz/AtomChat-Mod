@@ -38,6 +38,7 @@ class AppearanceSettingsTest {
             assertNotSame(original, current);
             current.panelOpacity = .83F;
 
+            assertFalse(AppearanceSettings.commitStaticWallpaperFor(null));
             assertFalse(AppearanceSettings.commitStaticWallpaperFor("appearance_test:another_wallpaper"));
             assertEquals(requested, current.dynamicWallpaperAppearanceId);
             assertTrue(AppearanceSettings.commitStaticWallpaperFor(requested));
@@ -45,6 +46,7 @@ class AppearanceSettingsTest {
             assertEquals(requested, original.dynamicWallpaperAppearanceId);
             AtomChatConfig.reload();
             assertNull(AtomChatConfig.get().dynamicWallpaperAppearanceId);
+            assertTrue(AppearanceSettings.commitStaticWallpaperFor(null));
             assertEquals(.83F, AtomChatConfig.get().panelOpacity);
         } finally {
             instance.set(null, previous);

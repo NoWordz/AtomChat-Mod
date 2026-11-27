@@ -477,6 +477,7 @@ class AppearancePresetStoreTest {
         var fields = json.getAsJsonObject("appearance");
         fields.remove("bubbleAppearanceId");
         fields.remove("dynamicWallpaperAppearanceId");
+        json.remove("wallpaper");
         Files.writeString(manifest(id), json.toString());
 
         var target = new AtomChatConfig();
@@ -484,6 +485,22 @@ class AppearancePresetStoreTest {
         target.dynamicWallpaperAppearanceId = "test:existing_wallpaper";
         assertTrue(store.apply(id, target).ok());
         assertEquals("test:existing_bubble", target.bubbleAppearanceId);
+        assertEquals("test:existing_wallpaper", target.dynamicWallpaperAppearanceId);
+    }
+
+    @Test
+    void explicitNoWallpaperRequiresTheDynamicChoiceInSchemaTwo() throws IOException {
+        var saved = store.saveCurrent(new AtomChatConfig(), null);
+        assertTrue(saved.ok(), saved.error());
+        String id = saved.preset().id();
+        var json = com.google.gson.JsonParser.parseString(Files.readString(manifest(id))).getAsJsonObject();
+        assertTrue(json.get("wallpaper").isJsonNull());
+        json.getAsJsonObject("appearance").remove("dynamicWallpaperAppearanceId");
+        Files.writeString(manifest(id), json.toString());
+
+        var target = new AtomChatConfig();
+        target.dynamicWallpaperAppearanceId = "test:existing_wallpaper";
+        assertFalse(store.apply(id, target).ok());
         assertEquals("test:existing_wallpaper", target.dynamicWallpaperAppearanceId);
     }
 
