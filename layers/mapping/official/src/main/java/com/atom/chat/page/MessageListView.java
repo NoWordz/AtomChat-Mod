@@ -3,6 +3,7 @@ package com.atom.chat.page;
 import com.atom.chat.render.CornerGeometry;
 import com.atom.chat.ui.AtomChatAppearance;
 import com.atom.chat.AtomChat;
+import com.atom.chat.api.ui.AppearanceUi;
 import com.atom.chat.chat.ChatMessage;
 import com.atom.chat.chat.Cicodes;
 import com.atom.chat.chat.ImageCode;
@@ -15,6 +16,7 @@ import com.atom.chat.image.ImageLoader;
 import com.atom.chat.image.MessageImage;
 import com.atom.chat.render.ClickableSpan;
 import com.atom.chat.render.Easing;
+import com.atom.chat.render.ChatAppearance;
 import com.atom.chat.render.ChatBubble;
 import com.atom.chat.render.HudShadow;
 import com.atom.chat.render.MessageNameShadow;
@@ -38,6 +40,7 @@ import io.github.humbleui.skija.Canvas;
 import io.github.humbleui.skija.Color;
 import io.github.humbleui.skija.Font;
 import io.github.humbleui.skija.Paint;
+import io.github.humbleui.skija.Path;
 import io.github.humbleui.types.Rect;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -82,6 +85,13 @@ public final class MessageListView {
                              float bubbleWidth, float bubbleBottom, String imageUrl) {
     }
 
+    private record ImageContour(Path path, float x, float y) {
+        boolean contains(MessageHit hit, float mx, float my) {
+            // The outline is in paint coordinates, before scrolling and message entrance.
+            return path.contains(x + (mx - hit.bubbleX()), y + (my - hit.bubbleY()));
+        }
+    }
+
     /** Url → decoded bitmap. Production is the shared cache; tests inject one. */
     @FunctionalInterface
     public interface ImageLookup {
@@ -100,9 +110,10 @@ public final class MessageListView {
     private final ImageLookup images;
 
     private final List<MessageHit> hits = new ArrayList<>();
+    private final Map<Integer, ImageContour> imageContours = new HashMap<>();
     private final List<ClickableSpan> clickableSpans = new ArrayList<>();
     private final List<com.atom.chat.card.CardHitRegion> cardHits = new ArrayList<>();
-    private UiLayout.Rect cardViewport;
+    private UiLayout.Rect viewport;
     private long pressedCardMessage;
     private com.atom.chat.api.card.ShareCard.CardAction pressedCardAction;
 
@@ -417,9 +428,10 @@ public final class MessageListView {
     public void draw(Canvas canvas, float x, float y, float width, float height,
                      List<ChatMessage> messages, ScrollController scroll) {
         refreshFontEpoch();
-        hits.clear();
+        clearMessageHits();
+        var appearance = ChatAppearance.current();
         cardHits.clear();
-        cardViewport = new UiLayout.Rect(x, y, width, height);
+        viewport = new UiLayout.Rect(x, y, width, height);
         reactionChips.begin(x, y, width, height);
         clickableSpans.clear();
         currentMessages = messages;
@@ -517,7 +529,7 @@ public final class MessageListView {
                     int spanStart = clickableSpans.size();
                     int cardStart = cardHits.size();
                     var bubbleGroup = ChatBubble.Group.of(grouped, isCompactGrouped(messages, mi + 1, from));
-                    MessageHit hit = drawMessage(canvas, msg, x, cursorY, width, hits.size(), grouped, bubbleGroup);
+                    MessageHit hit = drawMessage(canvas, msg, x, cursorY, width, hits.size(), grouped, bubbleGroup, appearance);
                     reactionChips.draw(canvas, msg, msg.isOwn() ? hit.bubbleX()+hit.bubbleWidth() : hit.bubbleX(), hit.bubbleBottom(),
                             Math.max(UiTokens.REACTION_MIN_WIDTH, bubbleMaxWidth(msg, width)), scroll.getScrollY(), dx);
                     // Clickable spans are recorded in content space (like hits
@@ -626,7 +638,7 @@ public final class MessageListView {
         if (fontEpoch == current && messageRevision==revision) return;
         if(messageRevision!=revision){
             preparedMessages=null;preparedScroll=null;
-            messageRevision=revision;hits.clear();clickableSpans.clear();currentMessages=List.of();
+            messageRevision=revision;clearMessageHits();clickableSpans.clear();currentMessages=List.of();
             clearSelection();highlightMessage=null;kindCache.clear();heightList=null;reactionChips.begin(0,0,0,0);
         }
         fontEpoch = current;
@@ -653,12 +665,17 @@ public final class MessageListView {
         return hits;
     }
 
+    private void clearMessageHits() {
+        for (var contour : imageContours.values()) contour.path().close();
+        imageContours.clear();
+        hits.clear();
+    }
+
     /**
-     * The picture a click at (mx,my) opens, or null. Pure geometry over the
-     * last frame's hits: the row must carry a url (the frame found its bitmap)
-     * and the point must be inside the picture's own rect — not the row, and not
-     * the name band above the bubble. A bubble whose image is still downloading,
-     * the [图片] capsule and every text bubble therefore answer nothing.
+     * The picture a click at (mx,my) opens, or null. The last painted frame
+     * supplies the URL and hit geometry: the built-in picture rectangle or
+     * the add-on's actual media contour. Loading plates and image capsules
+     * carry no URL.
      *
      * <p>Screen space, like every other hit test here: the coordinates are the
      * ones the screen already converts its mouse position into.
@@ -666,18 +683,17 @@ public final class MessageListView {
     public MessageHit imageHitAt(float mx, float my) {
         refreshFontEpoch();
         for (MessageHit hit : hits) {
-            if (hit.imageUrl() == null) {
-                continue;
-            }
-            if (mx < hit.bubbleX() || mx > hit.bubbleX() + hit.bubbleWidth()) {
-                continue;
-            }
-            if (my < hit.bubbleY() || my > hit.bubbleBottom()) {
-                continue;
-            }
-            return hit;
+            if (hit.imageUrl() != null && bubbleContains(hit, mx, my)) return hit;
         }
         return null;
+    }
+
+    /** Tests a hit row from the current frame, using the painted contour for custom pictures. */
+    public boolean bubbleContains(MessageHit hit, float mx, float my) {
+        if (!(mx >= hit.bubbleX() && mx <= hit.bubbleX() + hit.bubbleWidth()
+                && my >= hit.bubbleY() && my <= hit.bubbleBottom())) return false;
+        var contour = imageContours.get(hit.index());
+        return contour == null || (viewport.contains(mx, my) && contour.contains(hit, mx, my));
     }
 
     public boolean hasSelection() {
@@ -988,7 +1004,7 @@ public final class MessageListView {
     }
 
     public com.atom.chat.card.CardHitRegion cardHitAt(float x, float y) {
-        if (!AtomChatConfig.get().shareCardsEnabled || cardViewport == null || !cardViewport.contains(x, y)) return null;
+        if (!AtomChatConfig.get().shareCardsEnabled || viewport == null || !viewport.contains(x, y)) return null;
         for (var hit : cardHits) {
             if (hit.action() != null && hit.contains(x, y)) return hit;
         }
@@ -996,16 +1012,17 @@ public final class MessageListView {
     }
 
     public net.minecraft.network.chat.Style cardHoverStyleAt(float x, float y) {
-        if (!AtomChatConfig.get().shareCardsEnabled || cardViewport == null || !cardViewport.contains(x, y)) return null;
+        if (!AtomChatConfig.get().shareCardsEnabled || viewport == null || !viewport.contains(x, y)) return null;
         for (var hit : cardHits) {
             if (hit.hoverStyle() != null && hit.hoverStyle().getHoverEvent() != null && hit.contains(x, y)) return hit.hoverStyle();
         }
         return null;
     }
 
-    /** Drops entrance-animation bookkeeping; called when the screen is removed. */
+    /** Releases the last frame's hit geometry and entrance-animation bookkeeping. */
     public void dispose() {
         preparedMessages=null;preparedScroll=null;
+        clearMessageHits();
         nameShadows.clear();
         messageEnterStart.clear();
         messageEnterSettled.clear();
@@ -1020,7 +1037,8 @@ public final class MessageListView {
      * slide. Decorative, so with motion off the poke never arms and this reduces
      * to a plain draw.
      */
-    private void drawAvatarWithPoke(Canvas canvas, ChatMessage msg, int index, float avatarX, float avatarY) {
+    private void drawAvatarWithPoke(Canvas canvas, ChatMessage msg, float avatarX, float avatarY,
+                                    AppearanceUi.AvatarFrame frame) {
         if (pokeSenderUuid != null && pokeStartTime > 0 && Animations.enabled()
                 && pokeSenderUuid.equals(msg.getSenderUuid())) {
             long elapsed = System.currentTimeMillis() - pokeStartTime;
@@ -1034,7 +1052,7 @@ public final class MessageListView {
                 canvas.rotate(angle);
                 canvas.translate(-cx, -cy);
                 try {
-                    drawAvatar(canvas, msg, avatarX, avatarY);
+                    drawAvatar(canvas, msg, avatarX, avatarY, frame);
                 } finally {
                     canvas.restore();
                 }
@@ -1042,7 +1060,7 @@ public final class MessageListView {
             }
             pokeSenderUuid = null;
         }
-        drawAvatar(canvas, msg, avatarX, avatarY);
+        drawAvatar(canvas, msg, avatarX, avatarY, frame);
     }
 
     /**
@@ -1052,7 +1070,7 @@ public final class MessageListView {
      * edge (no CPU mask + clip double edge, and no placeholder bleeding through
      * the avatar). Falls back to a flat gray circle while the skin is missing.
      */
-    private void drawAvatar(Canvas canvas, ChatMessage msg, float avatarX, float avatarY) {
+    private void drawAvatar(Canvas canvas, ChatMessage msg, float avatarX, float avatarY, AppearanceUi.AvatarFrame frame) {
         UUID uuid = msg.isOwn() ? host.ownUuid() : msg.getSenderUuid();
         String name = msg.isOwn() ? host.ownName() : msg.getProfileName();
         if (!msg.isIdentityUnknown() && (name == null || name.isBlank())) {
@@ -1060,7 +1078,7 @@ public final class MessageListView {
         }
         float size = UiTokens.AVATAR_SIZE;
         HudShadow.drawPanel(canvas, avatarX, avatarY, size, size, size / 2F);
-        MessagePaint.avatar(canvas, msg, uuid, name, avatarX, avatarY);
+        MessagePaint.avatar(canvas, msg, uuid, name, avatarX, avatarY, frame);
     }
 
     /** Clock pill height between messages (see {@link #dividerBefore}). */
@@ -1185,9 +1203,10 @@ public final class MessageListView {
     }
 
     private MessageHit drawMessage(Canvas canvas, ChatMessage msg, float x, float y, float maxWidth, int index,
-                                   boolean grouped, ChatBubble.Group bubbleGroup) {
+                                   boolean grouped, ChatBubble.Group bubbleGroup, AppearanceUi.Resolved appearance) {
         BubbleKind kind = kindOfCached(msg);
-        if (kind == BubbleKind.CARD) return drawCardMessage(canvas, msg, x, y, maxWidth, index, grouped);
+        if (kind == BubbleKind.CARD)
+            return drawCardMessage(canvas, msg, x, y, maxWidth, index, grouped, appearance.panelAvatarFrame());
         if (msg.isSystem()) {
             return drawSystemMessage(canvas, msg, x, y, maxWidth, index);
         }
@@ -1195,11 +1214,11 @@ public final class MessageListView {
         float bubbleMaxWidth = bubbleMaxWidth(msg, maxWidth);
         String raw = msg.getRawText();
         if (kind == BubbleKind.IMAGE_PLACEHOLDER) {
-            return drawImagePlaceholderMessage(canvas, msg, x, y, maxWidth, index, grouped, bubbleGroup);
+            return drawImagePlaceholderMessage(canvas, msg, x, y, maxWidth, index, grouped, bubbleGroup, appearance);
         }
         if (kind == BubbleKind.IMAGE) {
             return drawImageMessage(canvas, msg, raw, Cicodes.extractImageUrl(raw),
-                    x, y, maxWidth, index, grouped, bubbleGroup);
+                    x, y, maxWidth, index, grouped, bubbleGroup, appearance);
         }
         float textMaxWidth = Math.max(1F, bubbleMaxWidth(msg, maxWidth) - UiTokens.BUBBLE_PAD * 2F);
         List<RichLine> richLines = wrappedLines(msg, font, textMaxWidth);
@@ -1247,22 +1266,26 @@ public final class MessageListView {
             // sliding side to side. The wobble itself is decorative, so with motion
             // off the poke is already suppressed at the click site and this block
             // never arms.
-            drawAvatarWithPoke(canvas, msg, index, avatarX, avatarY);
+            drawAvatarWithPoke(canvas, msg, avatarX, avatarY, appearance.panelAvatarFrame());
         }
         if (hasQuote) {
             drawQuotePill(canvas, msg, x, maxWidth, y + band, msg.isOwn());
         }
-        var style = AtomChatConfig.get().effectiveBubbleStyle();
-        HudShadow.drawPanel(canvas, ChatBubble.outline(bubbleX, bubbleTop, bubbleWidth, bubbleHeight, style, msg.isOwn(), 1F, bubbleGroup));
-        ChatBubble.draw(canvas, bubbleX, bubbleTop, bubbleWidth, bubbleHeight,
-                style, msg.isOwn(), msg.isOwn() ? ownBubble() : otherBubble(), bubbleGroup);
-        drawMessageSelection(canvas, msg, richLines, bubbleX + UiTokens.BUBBLE_PAD, bubbleTop + bubbleHeight / 2.0F, lineHeight, font);
+        int fillColor = msg.isOwn() ? ownBubble() : otherBubble();
+        int textColor = bubbleText(msg);
+        try (var custom = ChatBubble.custom(appearance.panelBubble(), bubbleX, bubbleTop, bubbleWidth, bubbleHeight,
+                msg.isOwn(), fillColor, textColor, bubbleGroup)) {
+            boolean painted = drawBubblePlate(canvas, custom, bubbleX, bubbleTop, bubbleWidth, bubbleHeight,
+                    msg.isOwn(), fillColor, bubbleGroup);
+            drawMessageSelection(canvas, msg, richLines, bubbleX + UiTokens.BUBBLE_PAD, bubbleTop + bubbleHeight / 2.0F,
+                    lineHeight, font, painted ? custom : null);
+        }
         // No backing shadow on bubble text (TextSurface.BUBBLE): the soft shadow
         // is reserved for the capsule family and the name band. A bubble fill and
         // its text colour are chosen as a pair by the theme author, so the shadow
         // adds no legibility the pair does not already intend.
         RichTextRenderer.drawLines(canvas, font, richLines, bubbleX + UiTokens.BUBBLE_PAD, bubbleTop + bubbleHeight / 2.0F,
-                lineHeight, bubbleText(msg), clickableSpans, true, TextSurface.BUBBLE.shadowed());
+                lineHeight, textColor, clickableSpans, true, TextSurface.BUBBLE.shadowed());
         drawDuplicateBadge(canvas, msg, bubbleX, bubbleWidth, bubbleTop, bubbleHeight);
 
         float bottom = bubbleTop + bubbleHeight;
@@ -1294,7 +1317,8 @@ public final class MessageListView {
         HudShadow.drawPanel(canvas, bubbleX, bubbleTop, bubbleWidth, bubbleHeight, radius);
         CornerGeometry.drawRoundedRect(canvas, bubbleX, bubbleTop, bubbleWidth, bubbleHeight, radius,
                 secondaryCapsuleBg());
-        drawMessageSelection(canvas, msg, richLines, bubbleX + UiTokens.BUBBLE_PAD, bubbleTop + bubbleHeight / 2.0F, lineHeight, font);
+        drawMessageSelection(canvas, msg, richLines, bubbleX + UiTokens.BUBBLE_PAD, bubbleTop + bubbleHeight / 2.0F,
+                lineHeight, font, null);
         // Capsule text takes a backing shadow (TextSurface.CAPSULE); the shadow
         // polarity follows the capsule tint, not the panel.
         RichTextRenderer.drawLines(canvas, font, richLines, bubbleX + UiTokens.BUBBLE_PAD, bubbleTop + bubbleHeight / 2.0F,
@@ -1479,7 +1503,7 @@ public final class MessageListView {
     }
 
     private MessageHit drawCardMessage(Canvas canvas, ChatMessage message, float x, float y, float maxWidth,
-                                       int index, boolean grouped) {
+                                       int index, boolean grouped, AppearanceUi.AvatarFrame frame) {
         var card = message.getCard();
         boolean sender = cardHasSender(message);
         float[] size = com.atom.chat.card.BuiltInCardRenderer.measure(card, bubbleMaxWidth(message, maxWidth));
@@ -1493,7 +1517,7 @@ public final class MessageListView {
             avatarX = message.isOwn() ? x + maxWidth - UiTokens.AVATAR_SIZE - avatarEdgeInset() : x + avatarEdgeInset();
             avatarY = y + s(4);
             avatarSize = UiTokens.AVATAR_SIZE;
-            drawAvatarWithPoke(canvas, message, index, avatarX, avatarY);
+            drawAvatarWithPoke(canvas, message, avatarX, avatarY, frame);
         }
         if (sender && message.getQuoteName() != null)
             drawQuotePill(canvas, message, x, maxWidth, y + (grouped ? 0 : UiTokens.NAME_BAND), message.isOwn());
@@ -1504,7 +1528,8 @@ public final class MessageListView {
     }
 
     private MessageHit drawImageMessage(Canvas canvas, ChatMessage msg, String raw, String imageUrl,
-                                        float x, float y, float maxWidth, int index, boolean grouped, ChatBubble.Group bubbleGroup) {
+                                        float x, float y, float maxWidth, int index, boolean grouped,
+                                        ChatBubble.Group bubbleGroup, AppearanceUi.Resolved appearance) {
         // Bubble offset from the list edge; includes the avatar's edge inset so
         // the avatar-bubble gap stays AVATAR_GAP after the avatar moved inward.
         float nameOffset = UiTokens.AVATAR_SIZE + UiTokens.AVATAR_GAP + avatarEdgeInset();
@@ -1527,33 +1552,37 @@ public final class MessageListView {
                     : x + avatarEdgeInset();
             avatarY = y + s(4);
             avatarSize = UiTokens.AVATAR_SIZE;
-            drawAvatarWithPoke(canvas, msg, index, avatarX, avatarY);
+            drawAvatarWithPoke(canvas, msg, avatarX, avatarY, appearance.panelAvatarFrame());
         }
         if (hasQuote) {
             drawQuotePill(canvas, msg, x, maxWidth, y + band, msg.isOwn());
         }
-        var style = AtomChatConfig.get().effectiveBubbleStyle();
         MessageImage image = images.get(imageUrl, true);
-        if (image == null || !image.transparent()) {
-            HudShadow.drawPanel(canvas, ChatBubble.outline(bubbleX, bubbleTop, imageW, imageH, style, msg.isOwn(), 1F, bubbleGroup));
-        }
         if (image != null) {
-            // No bubble fill behind a loaded image: a transparent PNG/GIF must
-            // show the panel behind it, not a grey plate. The rounded clip in
-            // drawRoundedImage still shapes the corners; opaque images cover the
-            // area anyway, so they are unchanged.
-            // No aspect fix-up here: the CICode carries the intrinsic size, so
-            // the bubble already has the image's proportions and the bitmap is
-            // simply fitted to it. Stretching only happened because the box used
-            // to be a fixed 275x175 with the height clamped rather than scaled.
-            ChatBubble.drawImage(canvas, image.image(), bubbleX, bubbleTop, imageW, imageH, style, msg.isOwn(), bubbleGroup);
+            // Loaded PNG/GIF frames keep their alpha. The CICode already
+            // supplied the aspect ratio used for the image bounds.
+            try (var custom = ChatBubble.custom(appearance.panelBubble(), bubbleX, bubbleTop, imageW, imageH,
+                    msg.isOwn(), msg.isOwn() ? ownBubble() : otherBubble(), bubbleText(msg), bubbleGroup)) {
+                if (custom != null) {
+                    if (!image.transparent()) custom.drawPanelShadow(canvas);
+                    custom.drawImage(canvas, image.image());
+                    imageContours.put(index, new ImageContour(custom.copyOutline(), bubbleX, bubbleTop));
+                } else {
+                    var style = AtomChatConfig.get().effectiveBubbleStyle();
+                    if (!image.transparent()) {
+                        HudShadow.drawPanel(canvas, ChatBubble.outline(bubbleX, bubbleTop, imageW, imageH,
+                                style, msg.isOwn(), 1F, bubbleGroup));
+                    }
+                    ChatBubble.drawImage(canvas, image.image(), bubbleX, bubbleTop, imageW, imageH, style, msg.isOwn(), bubbleGroup);
+                }
+            }
         } else {
-            // Placeholder only while the download is in flight: once an image
-            // is loaded it must not keep a plate behind its transparent pixels.
-            ChatBubble.draw(canvas, bubbleX, bubbleTop, imageW, imageH, style, msg.isOwn(), otherBubble(), bubbleGroup);
+            int textColor = textSecondary();
+            drawBubblePlate(canvas, appearance.panelBubble(), bubbleX, bubbleTop, imageW, imageH,
+                    msg.isOwn(), otherBubble(), textColor, bubbleGroup);
             Font loadingFont = FontManager.font(UiTokens.FONT_QUOTE);
             SkiaFontRenderer.drawTextCentered(canvas, loadingFont, tr("atomchat.image.loading"),
-                    bubbleX + imageW / 2.0F, bubbleTop + imageH / 2.0F, textSecondary());
+                    bubbleX + imageW / 2.0F, bubbleTop + imageH / 2.0F, textColor);
         }
         drawDuplicateBadge(canvas, msg, bubbleX, imageW, bubbleTop, imageH);
 
@@ -1573,7 +1602,8 @@ public final class MessageListView {
      * still readable.
      */
     private MessageHit drawImagePlaceholderMessage(Canvas canvas, ChatMessage msg, float x, float y,
-                                                   float maxWidth, int index, boolean grouped, ChatBubble.Group bubbleGroup) {
+                                                   float maxWidth, int index, boolean grouped, ChatBubble.Group bubbleGroup,
+                                                   AppearanceUi.Resolved appearance) {
         boolean hasQuote = msg.getQuoteName() != null;
         float quoteH = hasQuote ? UiTokens.QUOTE_HEIGHT + UiTokens.QUOTE_GAP : 0.0F;
         float band = grouped ? 0.0F : UiTokens.NAME_BAND;
@@ -1598,23 +1628,43 @@ public final class MessageListView {
                     : x + avatarEdgeInset();
             avatarY = y + s(4);
             avatarSize = UiTokens.AVATAR_SIZE;
-            drawAvatarWithPoke(canvas, msg, index, avatarX, avatarY);
+            drawAvatarWithPoke(canvas, msg, avatarX, avatarY, appearance.panelAvatarFrame());
         }
         if (hasQuote) {
             drawQuotePill(canvas, msg, x, maxWidth, y + band, msg.isOwn());
         }
-        var style = AtomChatConfig.get().effectiveBubbleStyle();
-        HudShadow.drawPanel(canvas, ChatBubble.outline(pillX, pillTop, pillW, pillH, style, msg.isOwn(), 1F, bubbleGroup));
-        ChatBubble.draw(canvas, pillX, pillTop, pillW, pillH, style, msg.isOwn(), secondaryCapsuleBg(), bubbleGroup);
+        int fillColor = secondaryCapsuleBg();
+        int textColor = placeholderGreen(fillColor);
+        drawBubblePlate(canvas, appearance.panelBubble(), pillX, pillTop, pillW, pillH, msg.isOwn(), fillColor, textColor, bubbleGroup);
         SkiaFontRenderer.drawTextCentered(canvas, font, placeholder,
-                pillX + pillW / 2.0F, pillTop + pillH / 2.0F,
-                placeholderGreen(secondaryCapsuleBg()), TextSurface.CAPSULE.shadowed(), secondaryCapsuleBg());
+                pillX + pillW / 2.0F, pillTop + pillH / 2.0F, textColor, TextSurface.CAPSULE.shadowed(), fillColor);
         drawDuplicateBadge(canvas, msg, pillX, pillW, pillTop, pillH);
         float bottom = pillTop + pillH;
         // The capsule stands in for a picture that is deliberately not shown, so
         // it never carries a url and never opens a preview.
         return new MessageHit(msg, index, x, y, maxWidth, bottom, avatarX, avatarY, avatarSize, pillTop, pillX, pillW, bottom,
                 null);
+    }
+
+    private static void drawBubblePlate(Canvas canvas, AppearanceUi.Bubble appearance, float x, float y, float w, float h,
+                                        boolean own, int fillColor, int textColor, ChatBubble.Group group) {
+        try (var custom = ChatBubble.custom(appearance, x, y, w, h, own, fillColor, textColor, group)) {
+            drawBubblePlate(canvas, custom, x, y, w, h, own, fillColor, group);
+        }
+    }
+
+    private static boolean drawBubblePlate(Canvas canvas, ChatBubble.Custom custom, float x, float y, float w, float h,
+                                           boolean own, int fillColor, ChatBubble.Group group) {
+        if (custom != null && custom.draw(canvas)) {
+            // The custom shadow only paints outside the contour. Wait for
+            // the fill to succeed so a fallback has the built-in shadow.
+            custom.drawPanelShadow(canvas);
+            return true;
+        }
+        var style = AtomChatConfig.get().effectiveBubbleStyle();
+        HudShadow.drawPanel(canvas, ChatBubble.outline(x, y, w, h, style, own, 1F, group));
+        ChatBubble.draw(canvas, x, y, w, h, style, own, fillColor, group);
+        return false;
     }
 
     /**
@@ -1800,7 +1850,7 @@ public final class MessageListView {
      * built and thrown away unread.
      */
     private void drawMessageSelection(Canvas canvas, ChatMessage msg, List<RichLine> richLines, float textX,
-                                      float centerY, float lineHeight, Font font) {
+                                      float centerY, float lineHeight, Font font, ChatBubble.Custom custom) {
         if (richLines.isEmpty() || !hasSelection()) {
             return;
         }
@@ -1818,38 +1868,44 @@ public final class MessageListView {
         int fChar = range[3];
         float totalH = lines.size() * lineHeight;
         float blockTop = centerY - totalH / 2.0F;
-        for (int i = 0; i < lines.size(); i++) {
-            if (i < aLine || i > fLine) {
-                continue;
+        if (custom != null) canvas.save();
+        try {
+            if (custom != null) custom.clip(canvas);
+            for (int i = 0; i < lines.size(); i++) {
+                if (i < aLine || i > fLine) {
+                    continue;
+                }
+                int start;
+                int end;
+                if (aLine == fLine) {
+                    start = aChar;
+                    end = fChar;
+                } else if (i == aLine) {
+                    start = aChar;
+                    end = lines.get(i).length();
+                } else if (i == fLine) {
+                    start = 0;
+                    end = fChar;
+                } else {
+                    start = 0;
+                    end = lines.get(i).length();
+                }
+                start = Math.max(0, Math.min(start, lines.get(i).length()));
+                end = Math.max(0, Math.min(end, lines.get(i).length()));
+                if (start >= end) {
+                    continue;
+                }
+                String line = lines.get(i);
+                RichLine richLine = richLines.get(i);
+                float x0 = textX + RichTextLayout.advanceTo(richLine,
+                        RichTextRenderer.measurer(font), richLine.textStart() + start);
+                float x1 = textX + RichTextLayout.advanceTo(richLine,
+                        RichTextRenderer.measurer(font), richLine.textStart() + end);
+                float y = blockTop + i * lineHeight;
+                CornerGeometry.drawRoundedRect(canvas, Math.min(x0,x1), y, Math.max(1.0F, Math.abs(x1 - x0)), lineHeight, s(1), 0xE02D6FD6);
             }
-            int start;
-            int end;
-            if (aLine == fLine) {
-                start = aChar;
-                end = fChar;
-            } else if (i == aLine) {
-                start = aChar;
-                end = lines.get(i).length();
-            } else if (i == fLine) {
-                start = 0;
-                end = fChar;
-            } else {
-                start = 0;
-                end = lines.get(i).length();
-            }
-            start = Math.max(0, Math.min(start, lines.get(i).length()));
-            end = Math.max(0, Math.min(end, lines.get(i).length()));
-            if (start >= end) {
-                continue;
-            }
-            String line = lines.get(i);
-            RichLine richLine = richLines.get(i);
-            float x0 = textX + RichTextLayout.advanceTo(richLine,
-                    RichTextRenderer.measurer(font), richLine.textStart() + start);
-            float x1 = textX + RichTextLayout.advanceTo(richLine,
-                    RichTextRenderer.measurer(font), richLine.textStart() + end);
-            float y = blockTop + i * lineHeight;
-            CornerGeometry.drawRoundedRect(canvas, Math.min(x0,x1), y, Math.max(1.0F, Math.abs(x1 - x0)), lineHeight, s(1), 0xE02D6FD6);
+        } finally {
+            if (custom != null) canvas.restore();
         }
     }
 

@@ -4901,8 +4901,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
                 if (avatar && ContextMenuActions.canOpenAvatarMenu(menuMessageOf(message)) && !message.isIdentityUnknown()) {
                     return screenClick("avatarMenu", message.getId(), () -> toggleMessageMenu(message, true, mx, my));
                 }
-                if (!message.isSystem() && mx >= hit.bubbleX() && mx <= hit.bubbleX() + hit.bubbleWidth()
-                        && my >= hit.bubbleY() && my <= hit.bubbleBottom()) {
+                if (!message.isSystem() && messageListView.bubbleContains(hit, mx, my)) {
                     return screenClick("bubbleMenu", message.getId(), () -> toggleMessageMenu(message, false, mx, my));
                 }
             }

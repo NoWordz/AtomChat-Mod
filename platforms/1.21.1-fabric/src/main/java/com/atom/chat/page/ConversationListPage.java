@@ -750,6 +750,9 @@ public final class ConversationListPage {
         if (row.kind == RowKind.PUBLIC) {
             com.atom.chat.render.PublicChatAvatarPaint.draw(canvas, iconX, iconY, iconSize,
                     Color.makeARGB(60, 255, 255, 255), textPrimary());
+            float radius = iconSize / 2F;
+            com.atom.chat.render.AvatarRing.drawAddon(canvas, iconX + radius, iconY + radius, radius,
+                    UiTokens.rim(AtomChatAppearance.theme()), com.atom.chat.render.ChatAppearance.current().panelAvatarFrame());
         } else if (row.kind == RowKind.CHANNEL) {
             CornerGeometry.drawRoundedRect(canvas, iconX, iconY, iconSize, iconSize, iconRadius,
                     Color.makeARGB(60, 255, 255, 255));
