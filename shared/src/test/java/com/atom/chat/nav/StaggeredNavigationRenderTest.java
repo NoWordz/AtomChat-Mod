@@ -2,6 +2,7 @@ package com.atom.chat.nav;
 
 import com.atom.chat.config.AtomChatConfig;
 import com.atom.chat.platform.Platform;
+import com.atom.chat.page.ConversationListPage;
 import com.atom.chat.settings.SettingsHomePage;
 import com.atom.chat.settings.SettingsSection;
 import com.atom.chat.settings.SettingsSectionPage;
@@ -85,6 +86,41 @@ class StaggeredNavigationRenderTest {
                 assertEquals(SettingsSection.values()[0],host.home.hit(point.x(),point.y(),layout,0));
             }
         }
+    }
+    @Test void hoveredAppearanceTileCanBeClickedAtItsExpandedEdge() {
+        var page = new SettingsHomePage();
+        var tile = SettingsHomePage.tileRect(layout, 0, 0);
+        float y = tile.y() + tile.h() / 2;
+        try (var surface = Surface.makeRasterN32Premul(560, 960)) {
+            for (long now = 1000; now <= 1300; now += 20) {
+                UiStagger.atFrame(now, () -> page.render(surface.getCanvas(), layout, tile.x() + tile.w() / 2, y, 0));
+            }
+        }
+
+        var point = page.staggerHits().inverse(tile.right() + 2, y);
+        assertEquals(SettingsSection.APPEARANCE, page.hit(point.x(), point.y(), layout, 0));
+    }
+
+    @Test void hoveredPublicCardCanBeClickedAtItsExpandedEdge() {
+        var page = new ConversationListPage(null);
+        var root = UiLayout.ofRoot(10, 10, 520, 900);
+        float x = root.list.x() + root.list.w() / 2;
+        var card = java.util.stream.IntStream.range(0, (int) root.list.h())
+                .mapToObj(i -> page.hit(x, root.list.y() + i, root, 0))
+                .filter(java.util.Objects::nonNull)
+                .filter(hit -> hit.row().kind() == ConversationListPage.RowKind.PUBLIC)
+                .findFirst().orElseThrow();
+        float y = card.y() + card.h() / 2;
+        try (var surface = Surface.makeRasterN32Premul(560, 960)) {
+            for (long now = 1000; now <= 1300; now += 20) {
+                UiStagger.atFrame(now, () -> page.render(surface.getCanvas(), root, x, y, 0));
+            }
+        }
+
+        var point = page.staggerHits().inverse(card.x() + card.w() + 2, y);
+        var hit = page.hit(point.x(), point.y(), root, 0);
+        assertNotNull(hit);
+        assertEquals(ConversationListPage.RowKind.PUBLIC, hit.row().kind());
     }
     private static void save(Surface surface,String name)throws Exception {
         Path dir=Path.of(System.getProperty("atomchat.repoRoot","../.."),".work/v0.7.0-feedback/screenshots");Files.createDirectories(dir);

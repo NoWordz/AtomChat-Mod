@@ -469,9 +469,14 @@ public final class ConversationListPage {
                         // so a SLIDE row never also rises.
                         float styleDx = styleDriftDx(axis, staggerIndex, now);
                         boolean stylePainted = rowAlpha < .995F || row.kind() == RowKind.PLAYER && privateExpansion < 1;
+                        PressScale bounce = rowScale.computeIfAbsent(i, k -> PressScale.bounce());
+                        bounce.update(over, pulsing, dt, Animations.enabled(), rect.w());
+                        float bounceScale = bounce.scale();
+                        float hitScale = stylePainted ? UiStagger.itemStyleZoomScale(entrance, staggerIndex, now, axis) : 1;
+                        if (row.kind() == RowKind.PUBLIC) hitScale *= bounceScale;
                         staggerHits.add(new UiLayout.Rect(rect.x(), y, rect.w(), h), stylePainted ? styleDx : 0,
                                 rowRise + (row.kind() == RowKind.PLAYER ? UiTokens.SETTINGS_FOLD_LIFT * (1 - privateExpansion) : 0),
-                                stylePainted ? UiStagger.itemStyleZoomScale(entrance, staggerIndex, now, axis) : 1);
+                                hitScale);
                         if (row.kind() == RowKind.PLAYER && privateExpansion < 1.0F) {
                             canvas.save();
                             try {
@@ -497,7 +502,7 @@ public final class ConversationListPage {
                                                 new UiLayout.Rect(rect.x(), y, rect.w(), h),
                                                 styleDx, staggerIndex, now);
                                         drawRow(canvas, row, rect.x(), y, rect.w(),
-                                                i == hoverRowIndex ? rowHover : 0.0F, i, over, pulsing, dt);
+                                                i == hoverRowIndex ? rowHover : 0.0F, bounceScale);
                                     } finally {
                                         com.atom.chat.render.CardBackdrop.restoreMaskOpacity(maskOpacity);
                                         // Composite before the alpha Paint is closed.
@@ -515,7 +520,7 @@ public final class ConversationListPage {
                             // plain draw.
                             if (rowAlpha >= 0.995F) {
                                 drawRow(canvas, row, rect.x(), y, rect.w(),
-                                        i == hoverRowIndex ? rowHover : 0.0F, i, over, pulsing, dt);
+                                        i == hoverRowIndex ? rowHover : 0.0F, bounceScale);
                             } else {
                                 // Union of the slot and the travel, plus the
                                 // shadow's reach: saveLayer clips at its rect.
@@ -528,7 +533,7 @@ public final class ConversationListPage {
                                     float maskOpacity = com.atom.chat.render.CardBackdrop.pushMaskOpacity(rowAlpha);
                                     try {
                                         drawRow(canvas, row, rect.x(), y, rect.w(),
-                                                i == hoverRowIndex ? rowHover : 0.0F, i, over, pulsing, dt);
+                                                i == hoverRowIndex ? rowHover : 0.0F, bounceScale);
                                     } finally {
                                         com.atom.chat.render.CardBackdrop.restoreMaskOpacity(maskOpacity);
                                         canvas.restore();
@@ -681,20 +686,14 @@ public final class ConversationListPage {
     }
 
     /**
-     * Draws one row; {@code hoverAlpha} is the animated 0..1 highlight and
-     * {@code hovered} is this frame's unscaled hit - the bounce is draw-only,
-     * so {@link #hit} keeps testing the rect the row actually occupies.
+     * Draws one row with the hover highlight and the spring scale sampled for this frame.
      *
      * <p>Hover scales this row: the width-budget bounce only ever lifts the
      * row's edge by {@code PressScale.BUDGET_PX}, which the list's
      * {@link UiTokens#LIST_GAP} spacing has room for, so the row can breathe
      * where a motionless press-only row would sit dead under the pointer.</p>
      */
-    private void drawRow(Canvas canvas, Row row, float x, float y, float w, float hoverAlpha,
-                         int index, boolean hovered, boolean pressed, float dtMs) {
-        PressScale bounce = rowScale.computeIfAbsent(index, k -> PressScale.bounce());
-        bounce.update(hovered, pressed, dtMs, Animations.enabled(), w);
-        float bounceScale = bounce.scale();
+    private void drawRow(Canvas canvas, Row row, float x, float y, float w, float hoverAlpha, float bounceScale) {
         // Pivot on the row's own centre so a scaling row never shifts its
         // neighbours, and pair save/restore through finally so a throw out of
         // the draw layer cannot leak the matrix into the rest of the frame.

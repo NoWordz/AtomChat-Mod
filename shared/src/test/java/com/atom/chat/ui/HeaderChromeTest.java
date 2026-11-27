@@ -595,6 +595,33 @@ class HeaderChromeTest {
             bitmap.close();
         }
     }
+    @Test void visibleBackCanInterruptBeforeTheFadeSettles() {
+        setUp();
+        var config = com.atom.chat.config.AtomChatConfig.get();
+        boolean previous = config.animationEnabled;
+        config.animationEnabled = true;
+        try (var surface = Surface.makeRasterN32Premul(SURFACE_W, SURFACE_H)) {
+            var root = NavPage.of(AppPage.SETTINGS);
+            var detail = NavPage.settingsSection(SettingsSection.APPEARANCE);
+            var back = chrome.backButton();
+            float x = back.x() + back.w() / 2;
+            float y = back.y() + back.h() / 2;
+            long arrival = 200;
+            long half = Animations.ms(UiMotion.PAGE_NAV_MS) / 2;
+            var canvas = surface.getCanvas();
+            chrome.drawNavigationHeader(canvas, HEADER, root, x, y, null, null, 0);
+            chrome.drawNavigationHeader(canvas, HEADER, detail, x, y, null, null, arrival);
+            assertFalse(chrome.isVisibleBackButtonHit(x, y), "the hidden button cannot be clicked");
+
+            chrome.drawNavigationHeader(canvas, HEADER, detail, x, y, null, null, arrival + half + half / 8);
+            assertTrue(chrome.isVisibleBackButtonHit(x, y), "the visible back arrow can interrupt the transition");
+
+            chrome.drawNavigationHeader(canvas, HEADER, root, x, y, null, null, arrival + half + half / 4);
+            assertFalse(chrome.isVisibleBackButtonHit(x, y), "the outgoing arrow has no back action on the root");
+        } finally {
+            config.animationEnabled = previous;
+        }
+    }
     @Test void adjacentActionMatchesBackSizeAndChatFilterSpacing() {
         var chrome = new HeaderChrome(new Recorder());
         var back = chrome.backButton(); var action = chrome.adjacentButton();

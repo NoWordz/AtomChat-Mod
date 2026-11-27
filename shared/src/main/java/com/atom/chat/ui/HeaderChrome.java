@@ -150,11 +150,11 @@ public final class HeaderChrome {
         ShellHeader.renderNavigation(canvas, header, visible.text(), backLayer.value(), backButtonHover,
                 host.textPrimary(), visible.online(), actionLayer.value(), clockAt(nowMs),
                 titleLayer.opacity(), backLayer.opacity(), actionLayer.opacity(),
-                backFade.accepts(Boolean.TRUE) && showBack, actionFade.accepts(nav), visible.wrap());
+                backFade.acceptsVisible(Boolean.TRUE) && showBack, actionFade.accepts(nav), visible.wrap());
     }
 
     public boolean isVisibleBackButtonHit(float mx, float my) {
-        return isBackButtonHit(mx, my) && (!Animations.enabled() || backFade.accepts(Boolean.TRUE));
+        return isBackButtonHit(mx, my) && (!Animations.enabled() || backFade.acceptsVisible(Boolean.TRUE));
     }
 
     public boolean isActionVisible(NavPage nav) {

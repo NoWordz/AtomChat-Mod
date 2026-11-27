@@ -51,6 +51,11 @@ final class HeaderFade<K, V> {
         return identity != null && drawn != null && identity.equals(drawn.identity()) && drawn.opacity() >= HIT_OPACITY;
     }
 
+    boolean acceptsVisible(K identity) {
+        return identity != null && identity.equals(destination) && drawn != null
+                && identity.equals(drawn.identity()) && drawn.opacity() > 0;
+    }
+
     private Layer<K, V> remember(K identity, V value, float opacity) {
         if (drawn == null || !Objects.equals(drawn.identity(), identity)
                 || !Objects.equals(drawn.value(), value) || drawn.opacity() != opacity) {

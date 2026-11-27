@@ -167,9 +167,9 @@ public final class SettingsHomePage {
                 // while shifted, and SLIDE never gives it a vertical leg.
                 float tileAlpha = UiStagger.itemAlpha(entrance, i, now);
                 float tileRise = UiStagger.itemRise(entrance, i, now, axis);
+                float entranceScale = tileAlpha >= .995F ? 1 : UiStagger.itemStyleZoomScale(entrance, i, now, axis);
                 staggerHits.add(tile, tileAlpha >= .995F ? 0 : UiStagger.itemStyleSlidePx(entrance, i, now, axis),
-                        tileAlpha >= .995F ? 0 : tileRise,
-                        tileAlpha >= .995F ? 1 : UiStagger.itemStyleZoomScale(entrance, i, now, axis));
+                        tileAlpha >= .995F ? 0 : tileRise, entranceScale * tileScale[i].scale());
                 if (tileAlpha >= 0.995F) {
                     drawTile(canvas, tile, sections.get(i).value(), tileHover[i], tileScale[i]);
                 } else {
