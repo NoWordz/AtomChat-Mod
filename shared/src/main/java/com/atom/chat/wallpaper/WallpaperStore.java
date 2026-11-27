@@ -3,6 +3,10 @@ package com.atom.chat.wallpaper;
 import com.atom.chat.AtomChat;
 import com.atom.chat.image.ImageBounds;
 import com.atom.chat.util.DataMigration;
+import io.github.humbleui.skija.Bitmap;
+import io.github.humbleui.skija.Codec;
+import io.github.humbleui.skija.ColorAlphaType;
+import io.github.humbleui.skija.Data;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -75,7 +79,8 @@ public final class WallpaperStore {
                         .filter(Files::isRegularFile)
                         .filter(DataMigration::allowPersonalPath)
                         .sorted().findFirst().orElse(null);
-                if (path != null) identity = validatedIdentity(path);
+                // Active wallpaper decoding belongs to WallpaperImage. This scan only refreshes identity.
+                if (path != null) identity = digest(readBounded(path));
             } catch (IOException ignored) {
                 // A legacy image may need to be cleared even if it cannot be read.
             }
@@ -152,7 +157,7 @@ public final class WallpaperStore {
 
     /** Transaction variant for the cropper's encoded PNG. */
     public static synchronized boolean replacePngWithConfig(byte[] bytes, BooleanSupplier commitConfig) {
-        return ImageBounds.rejection(bytes) == null
+        return ImageBounds.rejection(bytes) == null && decodesPixels(bytes)
                 && replace(bytes, ".png", null, commitConfig) != Outcome.FAILED;
     }
 
@@ -298,11 +303,34 @@ public final class WallpaperStore {
     }
 
     private static byte[] readValidated(Path image) throws IOException {
+        byte[] bytes = readBounded(image);
+        if (!decodesPixels(bytes)) throw new IOException("Cannot decode wallpaper pixels: " + image);
+        return bytes;
+    }
+
+    private static byte[] readBounded(Path image) throws IOException {
         if (!Files.isRegularFile(image)) throw new IOException("Not a wallpaper file: " + image);
         try (var input = Files.newInputStream(image)) {
             byte[] bytes = input.readNBytes(ImageBounds.MAX_BYTES + 1);
             if (ImageBounds.rejection(bytes) != null) throw new IOException("Invalid wallpaper image: " + image);
             return bytes;
+        }
+    }
+
+    private static boolean decodesPixels(byte[] bytes) {
+        try (Data data = Data.makeFromBytes(bytes); Codec codec = Codec.makeFromData(data); Bitmap bitmap = new Bitmap()) {
+            var info = codec.getImageInfo();
+            int width = info.getWidth();
+            int height = info.getHeight();
+            if (width <= 0 || height <= 0 || (long) width * height > ImageBounds.MAX_PIXELS
+                    || !bitmap.allocN32Pixels(width, height, info.getColorAlphaType() == ColorAlphaType.OPAQUE)) {
+                return false;
+            }
+            // Codec reports partial input as an error. An encoded Image can open lazily with the same input.
+            codec.readPixels(bitmap);
+            return true;
+        } catch (RuntimeException invalidImage) {
+            return false;
         }
     }
 

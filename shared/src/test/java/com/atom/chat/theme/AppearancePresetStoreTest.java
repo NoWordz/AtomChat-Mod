@@ -5,10 +5,15 @@ import com.atom.chat.config.AtomChatConfig;
 import com.atom.chat.config.GraphicsQuality;
 import com.atom.chat.platform.Platform;
 import com.atom.chat.wallpaper.WallpaperStore;
+import io.github.humbleui.skija.EncodedImageFormat;
+import io.github.humbleui.skija.Image;
+import io.github.humbleui.skija.Surface;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -19,6 +24,7 @@ import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -43,7 +49,7 @@ class AppearancePresetStoreTest {
         try (var files = Files.list(target)) { assertEquals(0,files.count()); }
     }
     private static final byte[] PNG = Base64.getDecoder().decode(
-            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAFgwJ/lK3Q6wAAAABJRU5ErkJggg==");
+            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/iZk9HQAAAABJRU5ErkJggg==");
 
     @Test void outlineWidthRoundTripsAndLegacyPresetsKeepTwoPixels() throws Exception {
         var c = new AtomChatConfig();
@@ -370,6 +376,115 @@ class AppearancePresetStoreTest {
         assertEquals(new AtomChatConfig().accentColor, config.accentColor);
         assertEquals(active, WallpaperStore.current());
         assertArrayEquals(PNG, Files.readAllBytes(active));
+    }
+
+    @Test
+    void ihdrOnlyWallpaperIsRejectedOnSave() throws IOException {
+        byte[] headerOnly = java.util.Arrays.copyOf(PNG, 33);
+        assertNull(com.atom.chat.image.ImageBounds.rejection(headerOnly), "fixture passes the header gate");
+        Path truncated = tmp.resolve("truncated.png");
+        Files.write(truncated, headerOnly);
+
+        assertFalse(store.saveCurrent(appearance(), truncated).ok(), "saving must validate pixel data");
+        assertTrue(store.list().isEmpty());
+    }
+
+    @Test
+    void pngThatOpensLazilyStillNeedsEnoughPixelsToSave() throws IOException {
+        // Valid chunks describe a 32 × 32 image with compressed data for only one pixel.
+        byte[] incomplete = Base64.getDecoder().decode(
+                "iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAADUlEQVR4nGP4z8DwHwAFAAH/iZk9HQAAAABJRU5ErkJggg==");
+        try (Image lazy = Image.makeFromEncoded(incomplete)) {
+            assertEquals(32, lazy.getWidth());
+            assertEquals(32, lazy.getHeight());
+        }
+        Path source = tmp.resolve("incomplete-pixels.png");
+        Files.write(source, incomplete);
+        assertFalse(store.saveCurrent(appearance(), source).ok());
+        assertTrue(store.list().isEmpty());
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = EncodedImageFormat.class, names = {"JPEG", "WEBP"})
+    void nativeJpegAndWebpRoundTripThroughStaticPresets(EncodedImageFormat format) throws IOException {
+        String extension = format == EncodedImageFormat.JPEG ? ".jpeg" : ".webp";
+        Path source = tmp.resolve("native" + extension);
+        byte[] bytes;
+        try (Surface surface = Surface.makeRasterN32Premul(3, 2)) {
+            surface.getCanvas().clear(0xFF2299FF);
+            try (var image = surface.makeImageSnapshot(); var encoded = image.encodeToData(format)) {
+                assertNotNull(encoded);
+                bytes = encoded.getBytes();
+            }
+        }
+        Files.write(source, bytes);
+
+        var saved = store.saveCurrent(appearance(), source);
+        assertTrue(saved.ok(), saved.error());
+        Files.delete(source);
+        var target = new AtomChatConfig();
+        assertTrue(store.apply(saved.preset().id(), target).ok());
+        assertArrayEquals(bytes, Files.readAllBytes(WallpaperStore.current()));
+        assertEquals(saved.preset().id(), AppearancePresetStore.selected(store.list(), target).id());
+    }
+
+    @Test
+    void applyingAPresetWithATruncatedImageLeavesTheOriginalState() throws IOException {
+        String id = store.saveCurrent(appearance(), wallpaper("original.png")).preset().id();
+        assertTrue(WallpaperStore.set(wallpaper("active.png")));
+        Path active = WallpaperStore.current();
+        var target = new AtomChatConfig();
+        target.selectedAppearancePresetId = "";
+        assertTrue(AtomChatConfig.saveChecked(target));
+        Path config = tmp.resolve("config/atomchat/atomchat-client.json");
+        byte[] previous = Files.readAllBytes(config);
+
+        Files.write(manifest(id).resolveSibling("wallpaper.png"), java.util.Arrays.copyOf(PNG, 33));
+        assertFalse(store.apply(id, target).ok());
+        assertEquals(new AtomChatConfig().accentColor, target.accentColor);
+        assertEquals("", target.selectedAppearancePresetId);
+        assertArrayEquals(previous, Files.readAllBytes(config));
+        assertEquals(active, WallpaperStore.current());
+        assertArrayEquals(PNG, Files.readAllBytes(active));
+        assertTrue(store.refresh().isEmpty());
+    }
+
+    @Test
+    void staticPresetWithMissingDynamicChoiceCannotCreateTwoWallpaperSources() throws IOException {
+        String id = store.saveCurrent(appearance(), wallpaper("original.png")).preset().id();
+        var json = com.google.gson.JsonParser.parseString(Files.readString(manifest(id))).getAsJsonObject();
+        json.getAsJsonObject("appearance").remove("dynamicWallpaperAppearanceId");
+        Files.writeString(manifest(id), json.toString());
+
+        var target = new AtomChatConfig();
+        target.dynamicWallpaperAppearanceId = "test:existing_wallpaper";
+        assertTrue(AtomChatConfig.saveChecked(target));
+        Path config = tmp.resolve("config/atomchat/atomchat-client.json");
+        byte[] previous = Files.readAllBytes(config);
+        assertFalse(store.apply(id, target).ok());
+        assertTrue(store.refresh().isEmpty());
+        assertEquals("test:existing_wallpaper", target.dynamicWallpaperAppearanceId);
+        assertEquals(new AtomChatConfig().accentColor, target.accentColor);
+        assertNull(WallpaperStore.current());
+        assertArrayEquals(previous, Files.readAllBytes(config));
+    }
+
+    @Test
+    void schemaTwoStillPreservesUnspecifiedComponentsAwayFromStaticWallpaper() throws IOException {
+        String id = store.saveCurrent(appearance(), null).preset().id();
+        var json = com.google.gson.JsonParser.parseString(Files.readString(manifest(id))).getAsJsonObject();
+        json.remove("wallpaper");
+        var fields = json.getAsJsonObject("appearance");
+        fields.remove("bubbleAppearanceId");
+        fields.remove("dynamicWallpaperAppearanceId");
+        Files.writeString(manifest(id), json.toString());
+
+        var target = new AtomChatConfig();
+        target.bubbleAppearanceId = "test:existing_bubble";
+        target.dynamicWallpaperAppearanceId = "test:existing_wallpaper";
+        assertTrue(store.apply(id, target).ok());
+        assertEquals("test:existing_bubble", target.bubbleAppearanceId);
+        assertEquals("test:existing_wallpaper", target.dynamicWallpaperAppearanceId);
     }
 
     @Test

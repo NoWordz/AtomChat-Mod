@@ -477,7 +477,7 @@ public final class AppearancePresetStore {
                 if (!WallpaperStore.isSupportedName(extension) || extension.charAt(0) != '.'
                         || extension.indexOf('.', 1) != -1) return null;
                 if (!legacy) {
-                    if (parts.dynamic().id() != null) return null;
+                    if (!parts.dynamic().specified() || parts.dynamic().id() != null) return null;
                     Path image = presetDir.resolve(WALLPAPER + extension);
                     DataMigration.noLinks(image);
                     identity = WallpaperStore.validatedIdentity(image);
