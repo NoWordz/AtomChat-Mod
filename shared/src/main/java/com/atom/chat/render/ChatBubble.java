@@ -50,7 +50,7 @@ public final class ChatBubble {
         if (callback == null || !(w > 0F && h > 0F)) return null;
         var bounds = new AppearanceUi.Bounds(x, y, w, h);
         var context = new AppearanceUi.BubbleContext(bounds, group.addonGroup,
-                own, UiTokens.s(1F), fillColor, textColor);
+                own, UiTokens.SCALE, fillColor, textColor);
         Path path = null;
         boolean accepted = false;
         try {

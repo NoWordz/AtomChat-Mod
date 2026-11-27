@@ -34,14 +34,14 @@ public final class AvatarRing {
         }
     }
 
-    static boolean drawAddon(Canvas canvas, float centerX, float centerY, float avatarRadius, int color,
+    public static boolean drawAddon(Canvas canvas, float centerX, float centerY, float avatarRadius, int color,
                              AppearanceUi.AvatarFrame frame) {
         if (frame == null || !(avatarRadius > 0)) return false;
         float rim = separatorRadius(avatarRadius);
         var avatar = new AppearanceUi.Bounds(centerX - avatarRadius, centerY - avatarRadius,
                 avatarRadius * 2F, avatarRadius * 2F);
         var bounds = new AppearanceUi.Bounds(centerX - rim, centerY - rim, rim * 2F, rim * 2F);
-        var context = new AppearanceUi.AvatarContext(avatar, bounds, UiTokens.s(1F), color);
+        var context = new AppearanceUi.AvatarContext(avatar, bounds, UiTokens.SCALE, color);
         return AddonPaint.draw(canvas, Rect.makeXYWH(bounds.x(), bounds.y(), bounds.width(), bounds.height()), null,
                 output -> frame.draw(output, context), frame, "avatar frame");
     }
