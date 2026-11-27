@@ -25,7 +25,7 @@ class HalfScreenSettingsTest {
         rememberStaticState(Platform.class, "provider");
         Field configInstance = rememberStaticState(AtomChatConfig.class, "instance");
         rememberStaticState(WallpaperStore.class, "dir");
-        rememberStaticState(WallpaperStore.class, "current");
+        rememberStaticState(WallpaperStore.class, "active");
         configInstance.set(null, null);
         Platform.install(new Platform.Provider() {
             public Path configDir() { return tmp; }
