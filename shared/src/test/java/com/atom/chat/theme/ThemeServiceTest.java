@@ -218,7 +218,8 @@ class ThemeServiceTest {
         assertEquals(0xFF151A22, c.textPrimaryColor);
         assertEquals(0xFFFFFFFF, c.cardColor);
         assertEquals(c.textPrimaryColor, c.otherBubbleTextColor);
-        assertEquals(c.textSecondaryColor, c.secondaryCapsuleText);
+        assertEquals(0xFFD4DFEF, c.secondaryCapsuleBg);
+        assertEquals(0xFF4E596B, c.secondaryCapsuleText);
 
         c = new AtomChatConfig();
         ThemeService.apply(c, "summer");
@@ -227,9 +228,10 @@ class ThemeServiceTest {
         assertEquals(0xFFEAFFA6, c.otherBubbleColor);
         assertEquals(0xFFFFFFEC, c.panelBgColor);
         assertEquals(0xFF192521, c.textPrimaryColor);
-        assertEquals(c.panelBgColor, c.cardColor);
+        assertEquals(0xFFECF4D4, c.cardColor);
         assertEquals(c.textPrimaryColor, c.otherBubbleTextColor);
         assertEquals(0xFF466C00, c.panelOutlineColor);
+        assertEquals(0xFFD8E8B6, c.secondaryCapsuleBg);
         assertEquals(c.panelOutlineColor, c.secondaryCapsuleText);
 
         c = new AtomChatConfig();
@@ -242,8 +244,8 @@ class ThemeServiceTest {
         assertEquals(0xFF332E23, c.textPrimaryColor);
         assertEquals(0xFFFFFFFF, c.bubbleTextColor);
         assertEquals(c.textPrimaryColor, c.otherBubbleTextColor);
-        assertEquals(c.textSecondaryColor, c.secondaryCapsuleText);
-        assertEquals(c.panelBgColor, c.secondaryCapsuleBg);
+        assertEquals(0xFF615548, c.secondaryCapsuleText);
+        assertEquals(0xFFEFD4AE, c.secondaryCapsuleBg);
 
         c = new AtomChatConfig();
         ThemeService.apply(c, "raven");
@@ -251,11 +253,11 @@ class ThemeServiceTest {
         assertEquals(0xFFFFC233, c.ownBubbleColor);
         assertEquals(0xFF355171, c.otherBubbleColor);
         assertEquals(0xFF1D283A, c.panelBgColor);
-        assertEquals(0xFF1C2542, c.cardColor);
+        assertEquals(0xFF263650, c.cardColor);
         assertEquals(0xFF07102A, c.panelOutlineColor);
         assertEquals(0xFFF0F4F8, c.textPrimaryColor);
-        assertEquals(c.panelBgColor, c.secondaryCapsuleBg);
-        assertEquals(c.textSecondaryColor, c.secondaryCapsuleText);
+        assertEquals(0xFF3A4B66, c.secondaryCapsuleBg);
+        assertEquals(0xFFCDD7E5, c.secondaryCapsuleText);
 
         c = new AtomChatConfig();
         ThemeService.apply(c, "hub");
@@ -267,7 +269,7 @@ class ThemeServiceTest {
         assertEquals(0xFFFFFFFF, c.textPrimaryColor);
         assertEquals(c.textPrimaryColor, c.otherBubbleTextColor);
         assertEquals(c.panelBgColor, c.bubbleTextColor);
-        assertEquals(c.panelBgColor, c.secondaryCapsuleBg);
+        assertEquals(0xFF423833, c.secondaryCapsuleBg);
         assertEquals(0xFFD4D4D4, c.secondaryCapsuleText);
 
         c = new AtomChatConfig();
@@ -275,12 +277,13 @@ class ThemeServiceTest {
         assertEquals(0xFFFF4D8C, c.accentColor);
         assertEquals(0xFFFF4D8C, c.ownBubbleColor);
         assertEquals(0xFFFFEBF8, c.panelBgColor);
-        assertEquals(0xFFFFEBF1, c.cardColor);
+        assertEquals(0xFFFAD9E9, c.cardColor);
         assertEquals(0xFFDEA6BE, c.otherBubbleColor);
         assertEquals(0xFF36212B, c.textPrimaryColor);
         assertEquals(0xFFFFFFFF, c.bubbleTextColor);
         assertEquals(c.textPrimaryColor, c.otherBubbleTextColor);
-        assertEquals(c.cardColor, c.secondaryCapsuleBg);
+        assertEquals(0xFFF2BFD5, c.secondaryCapsuleBg);
+        assertEquals(0xFF85304F, c.secondaryCapsuleText);
 
         c = new AtomChatConfig();
         ThemeService.apply(c, "dusk");

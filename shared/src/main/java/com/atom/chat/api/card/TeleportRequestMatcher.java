@@ -96,7 +96,7 @@ final class TeleportRequestMatcher {
         if (knownText || player.isEmpty()) {
             title = text;
         } else if (text.contains("stellarrtp.")) {
-            title = toHere ? player + " wants you to teleport to them." : player + " wants to teleport to you.";
+            title = toHere ? player + " wants you to teleport to them" : player + " wants to teleport to you";
         } else if (stellar) {
             title = text;
         } else {

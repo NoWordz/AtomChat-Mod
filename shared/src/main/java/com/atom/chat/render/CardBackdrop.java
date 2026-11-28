@@ -215,6 +215,35 @@ public final class CardBackdrop implements AutoCloseable {
         }
     }
 
+    /** Keep a retained viewport's blur mask in step with its separately painted content. */
+    static Runnable groupMasks(Canvas canvas, Consumer<Canvas> filter) {
+        MaskRecorder recorder = RECORDING.get();
+        if (recorder == null) return null;
+        IRect clip = canvas.getDeviceClipBounds();
+        if (clip == null) return null;
+        Rect bounds = Rect.makeLTRB(clip.getLeft(), clip.getTop(), clip.getRight(), clip.getBottom());
+        Matrix33 matrix = canvas.getLocalToDeviceAsMatrix33();
+        int start = recorder.commands.size();
+        return () -> {
+            if (recorder.commands.size() == start) return;
+            var range = recorder.commands.subList(start, recorder.commands.size());
+            var commands = new ArrayList<>(range);
+            range.clear();
+            recorder.commands.add((mask, paint) -> {
+                int save = mask.save();
+                try {
+                    mask.clipRect(bounds);
+                    mask.saveLayer(bounds, null);
+                    for (MaskCommand command : commands) command.draw(mask, paint);
+                    mask.concat(matrix);
+                    filter.accept(mask);
+                } finally {
+                    mask.restoreToCount(save);
+                }
+            });
+        };
+    }
+
     public static float pushMaskOpacity(float opacity) {
         MaskRecorder masks = RECORDING.get();
         if (masks == null) return 1F;

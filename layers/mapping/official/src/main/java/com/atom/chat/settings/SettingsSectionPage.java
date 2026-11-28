@@ -3,6 +3,7 @@ package com.atom.chat.settings;
 import com.atom.chat.api.ui.SettingsUi;
 import com.atom.chat.api.ui.UiContributions;
 
+import com.atom.chat.render.ScrollEdgeFade;
 import com.atom.chat.render.CornerGeometry;
 import com.atom.chat.settings.contract.HistoryFieldsPage;
 import com.atom.chat.settings.contract.SettingsContractMount;
@@ -1530,8 +1531,12 @@ public final class SettingsSectionPage {
         measuredRowsChip = activeChipId(section);
         measuredRows = rows;
         RowGeometry geometry = buildRowGeometry(section, rows, layout);
-        if (rows.isEmpty()) return UiTokens.ROOT_CONTENT_GAP + chipBarHeight(section);
-        float total = UiTokens.ROOT_CONTENT_GAP + chipBarHeight(section) + geometry.contentHeight();
+        return contentHeight(rows, geometry, chipBarHeight(section));
+    }
+
+    private static float contentHeight(List<Row> rows, RowGeometry geometry, float barH) {
+        if (rows.isEmpty()) return UiTokens.ROOT_CONTENT_GAP + barH;
+        float total = UiTokens.ROOT_CONTENT_GAP + barH + geometry.contentHeight();
         // Leave the same hover-clearance under the last card that rowCardWidth
         // leaves at its sides. Without it, scrolling to the end parks the card
         // exactly on the clip edge and the press spring shears its bottom.
@@ -1702,19 +1707,12 @@ public final class SettingsSectionPage {
         // clip is the plain viewport again, so a resting frame draws no wider.
         float driftClipPad = axis == UiStagger.Axis.HORIZONTAL && !UiStagger.itemsSettled(entrance, now)
                 ? UiStagger.ITEM_STYLE_SLIDE_PX : 0.0F;
-        canvas.save();
-        try {
-            // The chip band owns the top of the list: rows clip below it, so a
-            // scrolled list never draws through the pills.
-            CornerGeometry.clip(canvas, layout.list.x() - CardShadowReach.PAD, layout.list.y() + barH,
-                    layout.list.w() + driftClipPad + CardShadowReach.PAD * 2, layout.list.h() - barH, 0.0F);
-            // One draw of one row set: a chip switch re-armed the entrance, so
-            // the new rows rise in per row rather than crossfading against the
-            // old set (the crossfade's two layers were the "slight jump + very
-            // fast fade" the field reported on a chip switch).
+        // The chip band owns the top of the list, outside the fading content.
+        float contentHeight = contentHeight(rows, rowGeometry(section, rows, layout), barH);
+        try (var scrollClip = ScrollEdgeFade.clip(canvas, layout.list.x() - CardShadowReach.PAD, layout.list.y() + barH,
+                layout.list.w() + driftClipPad + CardShadowReach.PAD * 2, layout.list.h() - barH,
+                scrollY, contentHeight - layout.list.h())) {
             drawRows(canvas, layout, section, rows, vmx, vmy, scrollY, accent, dt, true);
-        } finally {
-            canvas.restore();
         }
 
         if (includeChipBar) renderFixedChipBar(canvas,layout,section,vmx,vmy,accent);

@@ -1,5 +1,6 @@
 package com.atom.chat.page;
 
+import com.atom.chat.render.ScrollEdgeFade;
 import com.atom.chat.render.CornerGeometry;
 import com.atom.chat.ui.AtomChatAppearance;
 import com.atom.chat.nav.PageNavAxis;
@@ -345,8 +346,10 @@ public final class ConversationListPage {
         return PlayerRef.of(client.player.getUUID(), client.player.getName().getString());
     }
 
+    private float measuredContent;
+
     public float measureContent(UiLayout layout) {
-        if (channelFeed.active() != null) return channelFeed.measure(layout);
+        if (channelFeed.active() != null) return measuredContent = channelFeed.measure(layout);
         // Measurement takes the frame's expansion snapshot. Draw and hit only
         // read it, so all three consumers walk exactly the same row geometry.
         long now = UiStagger.frameTimeMillis();
@@ -360,7 +363,7 @@ public final class ConversationListPage {
         for (int i = 0; i < rows.size(); i++) {
             total += rowAdvance(rows, i);
         }
-        return total;
+        return measuredContent = total;
     }
 
     static boolean showEmptyPlayerNotice(List<Row> rows) {
@@ -371,7 +374,7 @@ public final class ConversationListPage {
         var channel = channelFeed.active();
         if (channel != null) {
             staggerHits.clear();
-            channelFeed.render(canvas, layout, channel, scrollY, vmx, vmy,
+            channelFeed.render(canvas, layout, channel, scrollY, measuredContent - layout.list.h(), vmx, vmy,
                     textPrimary(), textSecondary(255), ConversationListPage::tr);
             return;
         }
@@ -386,18 +389,17 @@ public final class ConversationListPage {
         // horizontally only, ZOOM lifts and scales them. One mapping per
         // surface, so the two styles cannot leak into each other.
         UiStagger.Axis axis = PageNavAxis.current();
-        canvas.save();
-        try {
-            // A SLIDE row starts up to ITEM_STYLE_SLIDE_PX right of its slot,
-            // which is past the viewport's right edge (the clip only clears the
-            // row gap on each side) - the rounded corner would be shaved off on
-            // the way in. Widening the right edge by exactly the drift budget
-            // while travel remains keeps it whole; once every slot has landed
-            // the clip is the plain viewport again.
-            float driftClipPad = axis == UiStagger.Axis.HORIZONTAL && !UiStagger.itemsSettled(entrance, now)
-                    ? UiStagger.ITEM_STYLE_SLIDE_PX : 0.0F;
-            CornerGeometry.clip(canvas, layout.list.x() - CardShadowReach.PAD, layout.list.y(),
-                    layout.list.w() + driftClipPad + CardShadowReach.PAD * 2, layout.list.h(), 0.0F);
+        // A SLIDE row starts up to ITEM_STYLE_SLIDE_PX right of its slot,
+        // which is past the viewport's right edge (the clip only clears the
+        // row gap on each side) - the rounded corner would be shaved off on
+        // the way in. Widening the right edge by exactly the drift budget
+        // while travel remains keeps it whole; once every slot has landed
+        // the clip is the plain viewport again.
+        float driftClipPad = axis == UiStagger.Axis.HORIZONTAL && !UiStagger.itemsSettled(entrance, now)
+                ? UiStagger.ITEM_STYLE_SLIDE_PX : 0.0F;
+        try (var scrollClip = ScrollEdgeFade.clip(canvas, layout.list.x() - CardShadowReach.PAD, layout.list.y(),
+                layout.list.w() + driftClipPad + CardShadowReach.PAD * 2, layout.list.h(),
+                scrollY, measuredContent - layout.list.h())) {
             staggerHits.clipVertically(layout.list.y(), layout.list.bottom());
             float y = contentTop(layout, scrollY);
             // Stagger position = the row's slot inside the VISIBLE viewport, so
@@ -551,8 +553,6 @@ public final class ConversationListPage {
                 }
                 y += rowAdvance(rows, i);
             }
-        } finally {
-            canvas.restore();
         }
         hoveredIndex = hovered;
         rowHover = UiMotion.approach(rowHover, hovered >= 0 ? 1.0F : 0.0F, dt, UiMotion.HOVER_MS);

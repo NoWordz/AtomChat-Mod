@@ -1,5 +1,6 @@
 package com.atom.chat.page;
 
+import com.atom.chat.render.ScrollEdgeFade;
 import com.atom.chat.render.CornerGeometry;
 import com.atom.chat.ui.AtomChatAppearance;
 import com.atom.chat.AtomChat;
@@ -444,9 +445,8 @@ public final class MessageListView {
             prepareViewport(messages,width,height,scroll);
         preparedMessages=null;preparedScroll=null;
         int from = Math.max(0, Math.min(visibleStart, messages.size()));
-        canvas.save();
-        try {
-            CornerGeometry.clip(canvas, x, y, width, height, 0.0F);
+        try (var scrollClip = ScrollEdgeFade.clip(canvas, x, y, width, height,
+                scroll.getScrollY(), scroll.getMaxScroll())) {
             if (messages.isEmpty()) {
                 com.atom.chat.ui.EmptyState.draw(canvas, new com.atom.chat.ui.UiLayout.Rect(x, y, width, height),
                         tr("atomchat.conversation.empty"));
@@ -566,8 +566,6 @@ public final class MessageListView {
                     messageEnterStart.remove(msg);
                 }
             }
-        } finally {
-            canvas.restore();
         }
         // Pinned viewport-top "load earlier" button: only while rows are folded
         // away. Drawn after the list (so it floats above the first row) and in

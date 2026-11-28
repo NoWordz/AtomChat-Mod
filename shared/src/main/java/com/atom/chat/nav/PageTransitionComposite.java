@@ -148,8 +148,14 @@ public final class PageTransitionComposite implements AutoCloseable {
             close(departingMask);
             departing = null;
             departingMask = null;
-            if (lastMask != null) CardBackdrop.applyMasks(canvas, cull, lastMask::playback);
-            lastFrame.playback(canvas);
+            int save = canvas.save();
+            try {
+                clipBody(canvas, panel, lastClipTop);
+                if (lastMask != null) CardBackdrop.applyMasks(canvas, cull, lastMask::playback);
+                lastFrame.playback(canvas);
+            } finally {
+                canvas.restoreToCount(save);
+            }
         } else {
             lastMotion = motion.sample(nowMs);
             // The backdrop sits below all page content. Keep the same composition when freezing an interruption.
@@ -210,7 +216,7 @@ public final class PageTransitionComposite implements AutoCloseable {
                                 float clipTop, InterruptiblePageMotion.Frame frame) {
         int save = canvas.save();
         try {
-            canvas.clipRect(Rect.makeLTRB(panel.x(), clipTop, panel.right(), panel.bottom()));
+            clipBody(canvas, panel, clipTop);
             if (frame.alpha() == 0 && previous != null) {
                 previous.playback(canvas);
             } else {
@@ -221,6 +227,10 @@ public final class PageTransitionComposite implements AutoCloseable {
         } finally {
             canvas.restoreToCount(save);
         }
+    }
+
+    private static void clipBody(Canvas canvas, UiLayout.Rect panel, float top) {
+        canvas.clipRect(Rect.makeLTRB(panel.x(), top, panel.right(), panel.bottom()));
     }
 
     private void drawLayer(Canvas canvas, Picture picture, UiLayout.Rect panel,

@@ -3,6 +3,7 @@ package com.atom.chat.settings;
 import com.atom.chat.api.ui.SettingsUi;
 import com.atom.chat.api.ui.UiContributions;
 import com.atom.chat.nav.NavPage;
+import com.atom.chat.render.ScrollEdgeFade;
 import com.atom.chat.render.CornerGeometry;
 import com.atom.chat.ui.AtomChatAppearance;
 import com.atom.chat.font.FontManager;
@@ -66,12 +67,14 @@ public final class SettingsHomePage {
         tileScale = new PressScale[sections.size()];
     }
 
+    private float measuredContent;
+
     public float measureContent(UiLayout layout) {
         refreshEntries();
-        if (sections.isEmpty()) return 0F;
+        if (sections.isEmpty()) return measuredContent = 0F;
         int rows = (sections.size() + UiTokens.SETTINGS_TILE_COLS - 1) / UiTokens.SETTINGS_TILE_COLS;
         float side = tileSide(layout);
-        return UiTokens.ROOT_CONTENT_GAP
+        return measuredContent = UiTokens.ROOT_CONTENT_GAP
                 + rows * side
                 + (rows - 1) * SettingsUi.homeSpacing().tileGap()
                 + UiTokens.ROW_CLIP_INSET;
@@ -145,17 +148,16 @@ public final class SettingsHomePage {
         }
 
         UiStagger.Axis axis = PageNavAxis.current();
-        canvas.save();
-        try {
-            // SLIDE starts every tile up to ITEM_STYLE_SLIDE_PX to the right,
-            // so the viewport clip would shave the rounded right edge off the
-            // tile's early frames. Widening only the right edge by exactly that
-            // budget keeps the corner whole while travel remains, and the clip
-            // drops back to the viewport once every slot has landed.
-            float driftClipPad = axis == UiStagger.Axis.HORIZONTAL && !UiStagger.itemsSettled(entrance, now)
-                    ? UiStagger.ITEM_STYLE_SLIDE_PX : 0.0F;
-            CornerGeometry.clip(canvas, layout.list.x() - CardShadowReach.PAD, layout.list.y(),
-                    layout.list.w() + driftClipPad + CardShadowReach.PAD * 2, layout.list.h(), 0.0F);
+        // SLIDE starts every tile up to ITEM_STYLE_SLIDE_PX to the right,
+        // so the viewport clip would shave the rounded right edge off the
+        // tile's early frames. Widening only the right edge by exactly that
+        // budget keeps the corner whole while travel remains, and the clip
+        // drops back to the viewport once every slot has landed.
+        float driftClipPad = axis == UiStagger.Axis.HORIZONTAL && !UiStagger.itemsSettled(entrance, now)
+                ? UiStagger.ITEM_STYLE_SLIDE_PX : 0.0F;
+        try (var scrollClip = ScrollEdgeFade.clip(canvas, layout.list.x() - CardShadowReach.PAD, layout.list.y(),
+                layout.list.w() + driftClipPad + CardShadowReach.PAD * 2, layout.list.h(),
+                scrollY, measuredContent - layout.list.h())) {
             staggerHits.clipVertically(layout.list.y(), layout.list.bottom());
             for (int i = 0; i < sections.size(); i++) {
                 UiLayout.Rect tile = tileRect(layout, i, scrollY);
@@ -200,8 +202,6 @@ public final class SettingsHomePage {
                     }
                 }
             }
-        } finally {
-            canvas.restore();
         }
     }
 

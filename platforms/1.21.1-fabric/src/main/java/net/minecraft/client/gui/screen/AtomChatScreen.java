@@ -3502,7 +3502,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         float my = toVirtualY(mouseY);
         scroll.setContent(extensionPages.measure(topNav(), layout.list), layout.list.h());
         scroll.updateAnimation(System.currentTimeMillis());
-        extensionPages.draw(canvas, topNav(), layout.list, mx, my, scroll.getScrollY());
+        extensionPages.draw(canvas, topNav(), layout.list, mx, my, scroll.getScrollY(), scroll.getMaxScroll());
         drawScrollbar(canvas, layout, mx, my, scroll);
     }
 
@@ -3562,7 +3562,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
                 case SETTINGS -> settingsHomePage.render(canvas, layout, rootMouseX, rootMouseY,
                         scrollSync.rootScroll().getScrollY());
                 case ADDON_ROOT -> extensionPages.draw(canvas, topNav(), layout.list, rootMouseX, rootMouseY,
-                        scrollSync.rootScroll().getScrollY());
+                        scrollSync.rootScroll().getScrollY(), scrollSync.rootScroll().getMaxScroll());
                 case WORLD_CHAT, PRIVATE_CHAT ->
                         throw new IllegalStateException("Root page body cannot render chat/detail pages");
             }

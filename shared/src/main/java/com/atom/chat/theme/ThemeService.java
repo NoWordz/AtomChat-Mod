@@ -118,7 +118,7 @@ public final class ThemeService {
             0xFFB9CDE6, 0xFF151A22,
             0xFFE7EDFA, 0xFF151A22, 0xFF596273,
             0xFFFFFFFF, 0xFF4A6285,
-            0xFFECEEF2, 0xFF596273,
+            0xFFD4DFEF, 0xFF4E596B,
             null, null, "small");
     /** 青柠 (id "summer", shown as 夏日 before) uses lime bubbles over a cream panel. */
     public static final Preset SUMMER = new Preset("summer",
@@ -126,8 +126,8 @@ public final class ThemeService {
             0xFFACE246, 0xFF1A2E05,
             0xFFEAFFA6, 0xFF192521,
             0xFFFFFFEC, 0xFF192521, 0xFF56634C,
-            0xFFFFFFEC, 0xFF466C00,
-            0xFFEBF2DC, 0xFF466C00,
+            0xFFECF4D4, 0xFF466C00,
+            0xFFD8E8B6, 0xFF466C00,
             null, null, "medium");
     /** 典雅 uses warm paper surfaces with orange and peach chat bubbles. */
     public static final Preset ELEGANT = new Preset("elegant",
@@ -136,7 +136,7 @@ public final class ThemeService {
             0xFFF4B182, 0xFF332E23,
             0xFFF5EBDB, 0xFF332E23, 0xFF685F53,
             0xFFF3DFC8, 0xFF806445,
-            0xFFF5EBDB, 0xFF685F53,
+            0xFFEFD4AE, 0xFF615548,
             null, null, "medium");
     /** 黑鸦 uses dark blue surfaces, a gold accent, and gold outgoing bubbles. */
     public static final Preset RAVEN = new Preset("raven",
@@ -144,8 +144,8 @@ public final class ThemeService {
             0xFFFFC233, 0xFF1C1901,
             0xFF355171, 0xFFF0F4F8,
             0xFF1D283A, 0xFFF0F4F8, 0xFFA4AFBD,
-            0xFF1C2542, 0xFF07102A,
-            0xFF1D283A, 0xFFA4AFBD,
+            0xFF263650, 0xFF07102A,
+            0xFF3A4B66, 0xFFCDD7E5,
             null, null, "medium");
     /** 枢纽 uses charcoal surfaces, a black outline, and an orange accent. */
     public static final Preset HUB = new Preset("hub",
@@ -154,7 +154,7 @@ public final class ThemeService {
             0xFF111111, 0xFFFFFFFF,
             0xFF151414, 0xFFFFFFFF, 0xFFB0B9C7,
             0xFF262323, 0xFF000000,
-            0xFF151414, 0xFFD4D4D4,
+            0xFF423833, 0xFFD4D4D4,
             null, null, "small");
     /** 活力 uses pale pink surfaces, muted rose incoming bubbles, and a bright pink accent. */
     public static final Preset VIVID = new Preset("vivid",
@@ -162,8 +162,8 @@ public final class ThemeService {
             0xFFFF4D8C, 0xFFFFFFFF,
             0xFFDEA6BE, 0xFF36212B,
             0xFFFFEBF8, 0xFF36212B, 0xFF785666,
-            0xFFFFEBF1, 0xFF8C526B,
-            0xFFFFEBF1, 0xFFA13D63,
+            0xFFFAD9E9, 0xFF8C526B,
+            0xFFF2BFD5, 0xFF85304F,
             null, null, "medium");
     /** 薄暮 uses translucent violet surfaces, a lavender accent, and near-white text. */
     public static final Preset DUSK = new Preset("dusk",

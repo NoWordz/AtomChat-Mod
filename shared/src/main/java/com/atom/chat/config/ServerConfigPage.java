@@ -1,5 +1,6 @@
 package com.atom.chat.config;
 
+import com.atom.chat.render.ScrollEdgeFade;
 import com.atom.chat.render.CornerGeometry;
 import com.atom.chat.render.ChromeMaterial;
 import com.atom.chat.ui.AtomChatAppearance;
@@ -570,9 +571,9 @@ public final class ServerConfigPage {
         scroll.updateAnimation(UiStagger.frameTimeMillis());long now=UiStagger.frameTimeMillis();var axis=PageNavAxis.current();
         if (hostingRouteActive() && settingsContract != null) beginHostingBody(now, dt);
         var config=AtomChatConfig.get();int slot=0,index=0;String[] hoveredRow={null};float drift=axis==UiStagger.Axis.HORIZONTAL&&!UiStagger.itemsSettled(entrance,now)?UiStagger.ITEM_STYLE_SLIDE_PX:0;
-        canvas.save();
-        try{
-            CornerGeometry.clip(canvas,layout.list.x()-CardShadowReach.PAD,viewport.y(),layout.list.w()+drift+CardShadowReach.PAD*2,viewport.h(),0);
+        try (var scrollClip = ScrollEdgeFade.clip(canvas, layout.list.x() - CardShadowReach.PAD, viewport.y(),
+                layout.list.w() + drift + CardShadowReach.PAD * 2, viewport.h(),
+                scroll.getScrollY(), scroll.getMaxScroll())) {
             for(var group:groups){
                 float expansion=folds.get(foldOwner(group.id()));
                 if(headerHeight(group)>0){
@@ -613,7 +614,7 @@ public final class ServerConfigPage {
                     }return 0;
                 }));
             }
-        }finally{canvas.restore();}
+        }
         SettingsGroupFrontend.stepHover(hovers,hoveredRow[0],dt);
         SettingsScrollbar.draw(canvas,geometry.scrollViewport(),scroll,mx,my,config.accentColor,dt);
     }

@@ -2,7 +2,7 @@ package com.atom.chat.ui;
 
 import com.atom.chat.api.ui.NavigationUi;
 import com.atom.chat.nav.NavPage;
-import com.atom.chat.render.CornerGeometry;
+import com.atom.chat.render.ScrollEdgeFade;
 import io.github.humbleui.skija.Canvas;
 
 import java.util.HashMap;
@@ -50,18 +50,13 @@ public final class ExtensionPages implements AutoCloseable {
         }
     }
 
-    public void draw(Canvas canvas, NavPage page, UiLayout.Rect rect, float mx, float my, float scroll) {
+    public void draw(Canvas canvas, NavPage page, UiLayout.Rect rect, float mx, float my, float scroll, float maxScroll) {
         var view = view(page);
         if (view == null) return;
-        int saved = canvas.getSaveCount();
-        canvas.save();
-        try {
-            CornerGeometry.clip(canvas, rect.x(), rect.y(), rect.w(), rect.h(), 0);
+        try (var scrollClip = ScrollEdgeFade.clip(canvas, rect.x(), rect.y(), rect.w(), rect.h(), scroll, maxScroll)) {
             view.render(canvas, viewport(rect, mx, my, scroll), context);
         } catch (RuntimeException exception) {
             fail(page, "Could not draw page ", exception);
-        } finally {
-            canvas.restoreToCount(saved);
         }
     }
 

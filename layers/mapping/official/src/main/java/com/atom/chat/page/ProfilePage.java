@@ -1,5 +1,6 @@
 package com.atom.chat.page;
 
+import com.atom.chat.render.ScrollEdgeFade;
 import com.atom.chat.render.CornerGeometry;
 import com.atom.chat.ui.AtomChatAppearance;
 import com.atom.chat.avatar.AvatarStore;
@@ -662,8 +663,10 @@ public final class ProfilePage {
      * blocked row when blocked), followed by the same hover clearance every
      * horizontally inset card keeps. Overflow scrolls, as before.
      */
+    private float measuredContent;
+
     public float measureContent(UiLayout layout) {
-        return contentAboveCard(infoRows().size()) + idCardH()
+        return measuredContent = contentAboveCard(infoRows().size()) + idCardH()
                 + UiTokens.ROW_CLIP_INSET;
     }
 
@@ -1114,10 +1117,9 @@ public final class ProfilePage {
         // again, so a resting frame draws no wider than it used to.
         float driftClipPad = PageNavAxis.current() == UiStagger.Axis.HORIZONTAL && !UiStagger.itemsSettled(entrance, now)
                 ? UiStagger.ITEM_STYLE_SLIDE_PX : 0.0F;
-        canvas.save();
-        try {
-            CornerGeometry.clip(canvas, layout.list.x() - CardShadowReach.PAD, layout.list.y(),
-                    layout.list.w() + driftClipPad + CardShadowReach.PAD * 2, layout.list.h(), 0.0F);
+        try (var scrollClip = ScrollEdgeFade.clip(canvas, layout.list.x() - CardShadowReach.PAD, layout.list.y(),
+                layout.list.w() + driftClipPad + CardShadowReach.PAD * 2, layout.list.h(),
+                scrollY, measuredContent - layout.list.h())) {
             // Page-entrance stagger over the page's blocks in reading order:
             // banner, avatar row, stat tiles, info card, identity card. Each
             // block fades and lifts from ONE progress value, so nothing is
@@ -1136,8 +1138,6 @@ public final class ProfilePage {
                     () -> drawIdentityCard(canvas, layout, scrollY));
             if (avatarMenuOpen) staggerHits.add(menuRect(layout, scrollY), 0, 0, 1);
             drawAvatarMenu(canvas, layout, vmx, vmy, scrollY);
-        } finally {
-            canvas.restore();
         }
 
         UiLayout.Rect avatar = avatarRect(layout, scrollY);

@@ -128,6 +128,21 @@ class TeleportRequestTest {
     }
 
     @Test
+    void generatedStellarTitlesOmitTheFinalPeriodWhileServerTextKeepsIt() {
+        for (boolean toHere : new boolean[]{false, true}) {
+            String key = toHere ? TeleportRequestMatcher.STELLAR_HERE : TeleportRequestMatcher.STELLAR_TO;
+            var raw = new UniversalCardMatcher.MessageSignals(key, null, true,
+                    List.of(key), List.of(), false, "");
+            var built = UniversalCardMatcher.matchTeleportRequest(raw, "Alice", toHere, root -> false);
+            String expected = toHere ? "Alice wants you to teleport to them" : "Alice wants to teleport to you";
+            assertEquals(expected, built.title());
+            assertEquals(expected, built.hudSummary());
+            var literal = signals("[StellarRTP] " + expected + ".", true);
+            assertEquals(expected + ".", UniversalCardMatcher.matchTeleportRequest(literal, "", false, root -> false).title());
+        }
+    }
+
+    @Test
     void namedOutOfOrderReceiptsAndExpiryUpdateOnlyTheirOwnCards() {
         var alice = husk("Alice");
         var bob = husk("Bob");

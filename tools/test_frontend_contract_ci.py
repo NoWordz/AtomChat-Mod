@@ -1,4 +1,5 @@
 """CI behavior uses real Git history and keeps publication off verification jobs."""
+import json
 import subprocess
 import tempfile
 import unittest
@@ -115,6 +116,96 @@ class FrontendContractCiTest(unittest.TestCase):
         (generated / "manifest.fcl").write_bytes(b"a different admission")
         with self.assertRaisesRegex(ValueError, "missing the generated frontend admission"):
             verify_product(project, "strict")
+
+
+class LocalDeliveryTest(unittest.TestCase):
+    def test_publication_replaces_the_previous_complete_set(self):
+        from frontend_contract_ci import publish_local_products
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            output = root / "build-lib"
+            output.mkdir()
+            (output / "atomchat-Fabric-old.jar").write_bytes(b"old")
+            products = []
+            for loader in ("Fabric", "Forge", "NeoForge"):
+                product = root / f"atomchat-{loader}-new.jar"
+                product.write_bytes(loader.encode("ascii"))
+                products.append(product)
+
+            publish_local_products(products, output)
+
+            self.assertEqual({product.name for product in products}, {p.name for p in output.iterdir()})
+            for product in products:
+                self.assertEqual(product.read_bytes(), (output / product.name).read_bytes())
+
+    def test_copy_failure_preserves_the_previous_delivery(self):
+        from frontend_contract_ci import publish_local_products
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            output = root / "build-lib"
+            output.mkdir()
+            old = output / "atomchat-Fabric-old.jar"
+            old.write_bytes(b"previous")
+            good = root / "atomchat-Forge-new.jar"
+            good.write_bytes(b"new")
+            missing = root / "atomchat-Fabric-new.jar"
+
+            with self.assertRaises(FileNotFoundError):
+                publish_local_products([good, missing], output)
+
+            self.assertEqual([old], list(output.iterdir()))
+            self.assertEqual(b"previous", old.read_bytes())
+
+
+    def test_missing_target_cannot_publish_an_incomplete_batch(self):
+        from frontend_contract_ci import build_local
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            versions = root / "versions"
+            versions.mkdir()
+            (versions / "targets.json").write_text(json.dumps({
+                "1.21.1-fabric": {"buildable": True},
+                "1.21.1-neoforge": {"buildable": True},
+                "1.20.1-forge": {"buildable": False},
+            }), encoding="utf-8")
+            output = root / "build-lib"
+            output.mkdir()
+            old = output / "atomchat-Forge-previous.jar"
+            old.write_bytes(b"previous")
+            with self.assertRaisesRegex(ValueError, "1.20.1-forge"):
+                build_local(root, root, "unused", output, {}, False)
+            self.assertEqual(b"previous", old.read_bytes())
+
+    def test_retry_recovers_the_last_directory_if_promotion_and_rollback_fail(self):
+        from frontend_contract_ci import publish_local_products
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            output = root / "build-lib"
+            output.mkdir()
+            old = output / "atomchat-Fabric-old.jar"
+            old.write_bytes(b"previous")
+            next_jar = root / "atomchat-Fabric-new.jar"
+            next_jar.write_bytes(b"new")
+            previous = root / ".build-lib-previous"
+            rename = Path.rename
+
+            def reject_promotion(path, destination):
+                if destination == output:
+                    raise PermissionError("destination locked")
+                return rename(path, destination)
+
+            with patch.object(Path, "rename", reject_promotion):
+                with self.assertRaisesRegex(PermissionError, "destination locked"):
+                    publish_local_products([next_jar], output)
+            self.assertEqual(b"previous", (previous / old.name).read_bytes())
+
+            with self.assertRaises(FileNotFoundError):
+                publish_local_products([root / "absent.jar"], output)
+            self.assertEqual(b"previous", old.read_bytes())
 
 
 if __name__ == "__main__":

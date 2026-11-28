@@ -1,12 +1,12 @@
 package com.atom.chat.channel;
 
 import com.atom.chat.font.FontManager;
+import com.atom.chat.render.ScrollEdgeFade;
 import com.atom.chat.render.SkiaFontRenderer;
 import com.atom.chat.ui.AtomChatAppearance;
 import com.atom.chat.ui.UiLayout;
 import com.atom.lib.design.atomchat.UiTokens;
 import io.github.humbleui.skija.Canvas;
-import io.github.humbleui.types.Rect;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -79,7 +79,7 @@ public final class ChannelFeed {
                 && y < layout.list.y() + GAP + HEADER - scroll;
     }
 
-    public void render(Canvas canvas, UiLayout layout, ChannelInbox.Row active, float scroll,
+    public void render(Canvas canvas, UiLayout layout, ChannelInbox.Row active, float scroll, float maxScroll,
                        float mx, float my, int primary, int secondary, Function<String, String> tr) {
         refresh(layout.list.w());
         var title = FontManager.font(UiTokens.FONT_NAME);
@@ -87,9 +87,8 @@ public final class ChannelFeed {
         float x = layout.list.x() + PAD;
         float w = Math.max(1, layout.list.w() - 2 * PAD);
         float y = layout.list.y() + GAP - scroll;
-        int save = canvas.save();
-        try {
-            canvas.clipRect(Rect.makeXYWH(layout.list.x(), layout.list.y(), layout.list.w(), layout.list.h()));
+        try (var scrollClip = ScrollEdgeFade.clip(canvas, layout.list.x(), layout.list.y(),
+                layout.list.w(), layout.list.h(), scroll, maxScroll)) {
             card(canvas, x, y, w, HEADER, hitBack(layout, mx, my, scroll) ? 1F : 0F);
             String label = tr.apply("atomchat.channels.back") + " · " + active.entry().label();
             SkiaFontRenderer.drawText(canvas, title, SkiaFontRenderer.truncate(title, label, w - 2 * PAD),
@@ -112,8 +111,6 @@ public final class ChannelFeed {
                 }
                 y += height + GAP;
             }
-        } finally {
-            canvas.restoreToCount(save);
         }
     }
 
