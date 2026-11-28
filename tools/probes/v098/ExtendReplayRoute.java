@@ -83,9 +83,11 @@ public final class ExtendReplayRoute {
 
                     @Override public void visitFieldInsn(int opcode, String owner, String field, String descriptor) {
                         if (name.equals("bench$onFrame") && opcode == Opcodes.GETSTATIC
-                                && owner.equals("com/atom/chat/nav/AppPage") && field.equals("SETTINGS_SECTION")) {
+                                && owner.equals("com/atom/chat/nav/AppPage")
+                                && (field.equals("SETTINGS_SECTION") || field.equals("WORLD_CHAT"))) {
+                            String callback = field.equals("SETTINGS_SECTION") ? "expectedAppearancePage" : "expectedPublicPage";
                             super.visitMethodInsn(Opcodes.INVOKESTATIC, "atomchatprobe/ReplayActions",
-                                    "expectedAppearancePage", "()" + descriptor, false);
+                                    callback, "()" + descriptor, false);
                         } else {
                             super.visitFieldInsn(opcode, owner, field, descriptor);
                         }

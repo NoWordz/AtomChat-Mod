@@ -41,6 +41,7 @@ public final class ReplayActions {
     private static CompletableFuture<Void> pendingReload;
     private static int reloads;
     private static boolean addonSettingsChecked;
+    private static boolean shadersTurnedOff;
     public static final GpuTimerQuery HUD_GPU = new GpuTimerQuery(new GlGpuTimer(), 4);
     public static long hudId;
 
@@ -53,6 +54,7 @@ public final class ReplayActions {
         lastAction = sceneStart;
         actionCount = 0;
         ReplayMatrix.reset();
+        if (ReplayMotionRoute.ENABLED) ReplayMotionRoute.reset(name);
     }
 
     public static long sceneDuration(long normal) {
@@ -90,6 +92,11 @@ public final class ReplayActions {
         return HISTORY_COUNT > 0 ? AppPage.WORLD_CHAT : AppPage.SETTINGS_SECTION;
     }
 
+    public static AppPage expectedPublicPage() {
+        return ReplayMotionRoute.ENABLED && ReplayMotionRoute.showingList()
+                ? AppPage.CHAT_LIST : AppPage.WORLD_CHAT;
+    }
+
     public static void startOpenStage() {
         openingStarted = System.nanoTime();
     }
@@ -125,9 +132,18 @@ public final class ReplayActions {
             interval.scene = matrixScene == null ? scene : matrixScene;
             interval.sceneNanos = now - (matrixScene == null ? sceneStart : ReplayMatrix.started);
             interval.elapsedNanos = now - previousFrame;
+            interval.endedAtNanos = now;
             interval.commit();
         }
         previousFrame = now;
+        if (ReplayMotionRoute.ENABLED && Boolean.getBoolean("atomchat.replay.copiedWorld")) {
+            ReplayWorld.confirmCopiedWorld(client);
+        }
+        if (!shadersTurnedOff && scene.equals("appearance") && elapsed >= 3_000_000_000L
+                && Boolean.getBoolean("atomchat.replay.toggleShaders")) {
+            shadersTurnedOff = true;
+            ReplayWorld.turnOffShaders();
+        }
         ReplayMatrix.tick(client, scene, elapsed, now);
         if (reloadInProgress(client, elapsed)) return;
         if (ReplayMatrix.ENABLED && client.field_1724 != null) {
@@ -147,6 +163,7 @@ public final class ReplayActions {
             }
         }
         if (!(client.field_1755 instanceof AtomChatScreen screen)) return;
+        if (ReplayMotionRoute.ENABLED && ReplayMotionRoute.tick(client, screen, scene, now)) return;
         if (!ADDON_SETTINGS.isEmpty() && !addonSettingsChecked && scene.equals("appearance")) {
             checkAddonSettings(screen);
             addonSettingsChecked = true;
@@ -254,7 +271,7 @@ public final class ReplayActions {
     @StackTrace(false)
     public static final class FrameInterval extends Event {
         public String scene;
-        public long sceneNanos, elapsedNanos;
+        public long sceneNanos, elapsedNanos, endedAtNanos;
     }
 
     @Name("bench.AtomChatReplayCpu")

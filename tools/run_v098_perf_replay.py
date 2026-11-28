@@ -31,7 +31,7 @@ JFC = """<?xml version="1.0" encoding="UTF-8"?>
 """
 
 
-def build_probe(retest, java, out, prior):
+def build_probe(retest, java, out, prior, library, motion_trace, without_atomchat):
     classes = out / "probe-classes"
     classes.mkdir()
     with zipfile.ZipFile(prior / "mods/atomprobe.jar") as source:
@@ -39,15 +39,24 @@ def build_probe(retest, java, out, prior):
     libraries = retest.fixture / "libraries"
     minecraft, = (prior / ".fabric/remappedJars").glob("*/client-intermediary.jar")
     asm, = (p for p in libraries.glob("asm-*.jar") if p.name[4:5].isdigit())
-    classpath = os.pathsep.join(map(str, (minecraft, out / "atomchat-reference.jar", libraries / "*")))
+    classpath = os.pathsep.join(map(str, (minecraft, out / "atomchat-reference.jar", library, libraries / "*")))
     subprocess.run([str(java / "javac.exe"), "-proc:none", "-cp", classpath, "-d", str(classes),
                     *map(str, SOURCES.glob("*.java"))], check=True)
-    subprocess.run([str(java / "java.exe"), "-cp", os.pathsep.join(map(str, (classes, asm))),
-                    "ExtendReplayRoute", str(classes / "bench/SteadyProbe.class")], check=True)
     mixin = classes / "cubic-probe.mixins.json"
     metadata = json.loads(mixin.read_text(encoding="utf-8"))
-    metadata["client"] += ["ReplayMeasurements$Panel", "ReplayMeasurements$PanelScreen",
-                           "ReplayMeasurements$Queries", "ReplayMeasurements$ChatHud"]
+    if without_atomchat:
+        metadata["client"] = ["ReplayControl"]
+    else:
+        subprocess.run([str(java / "java.exe"), "-cp", os.pathsep.join(map(str, (classes, asm))),
+                        "ExtendReplayRoute", str(classes / "bench/SteadyProbe.class")], check=True)
+        metadata["client"] += ["ReplayMeasurements$Panel", "ReplayMeasurements$PanelScreen",
+                               "ReplayMeasurements$Queries", "ReplayMeasurements$ChatHud"]
+        if motion_trace:
+            metadata["client"] += [
+                "ReplayMotionMeasurements$Page", "ReplayMotionMeasurements$Fades",
+                "ReplayMotionMeasurements$Glass", "ReplayMotionMeasurements$Stickers",
+                "ReplayMotionMeasurements$Wallpaper", "ReplayMotionMeasurements$Sound",
+            ]
     mixin.write_text(json.dumps(metadata), encoding="utf-8")
     probe = out / "atomprobe.jar"
     with zipfile.ZipFile(probe, "w", compression=zipfile.ZIP_DEFLATED) as jar:
@@ -57,8 +66,10 @@ def build_probe(retest, java, out, prior):
     return probe
 
 
-def with_inputs(launch, mods, history):
+def with_inputs(launch, mods, history, wallpaper, stickers, shaders_off, ccb_profile, world):
     def staged(args, home):
+        if ccb_profile is not None:
+            stage_ccb_profile(ccb_profile, home, world)
         for jar in mods:
             destination = home / "mods" / jar.name
             if destination.exists():
@@ -68,8 +79,75 @@ def with_inputs(launch, mods, history):
             destination = home / "atomchat/client/history" / history.name
             destination.parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(history, destination)
+        if wallpaper is not None:
+            destination = home / "atomchat/client/wallpaper" / wallpaper.name
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(wallpaper, destination)
+        if stickers is not None:
+            destination = home / "atomchat/client/emotes"
+            destination.mkdir(parents=True, exist_ok=True)
+            for sticker in sorted(stickers.iterdir()):
+                if sticker.is_file():
+                    shutil.copyfile(sticker, destination / sticker.name)
+        if shaders_off:
+            iris = home / "config/iris.properties"
+            iris.write_text(iris.read_text(encoding="ascii").replace("enableShaders=true", "enableShaders=false"),
+                            encoding="ascii")
         return launch(args, home)
     return staged
+
+
+def stage_ccb_profile(profile, home, world):
+    mods = home / "mods"
+    for mod in sorted((profile / "mods").glob("*.jar")):
+        if not mod.name.lower().startswith(("atomchat-", "atomlib-")):
+            shutil.copyfile(mod, mods / mod.name)
+
+    graphics = ("sodium-options.json", "sodium-mixins.properties", "sodium-extra-options.json",
+                "sodium-extra.properties", "immediatelyfast.json", "iris.properties",
+                "iris-excluded.json", "entity_model_features.json", "entity_texture_features.json")
+    for name in graphics:
+        config = profile / "config" / name
+        if config.is_file():
+            shutil.copyfile(config, home / "config" / name)
+
+    # Reuse installed resource packs and rendering options in the throwaway instance.
+    profile_options = {}
+    for line in (profile / "options.txt").read_text(encoding="utf-8").splitlines():
+        key, separator, value = line.partition(":")
+        if separator:
+            profile_options[key] = value
+    replay_options = home / "options.txt"
+    options = dict(line.split(":", 1) for line in replay_options.read_text(encoding="utf-8").splitlines())
+    for key in ("renderDistance", "simulationDistance", "mipmapLevels", "graphicsMode", "maxFps",
+                "enableVsync", "resourcePacks", "incompatibleResourcePacks", "screenEffectScale"):
+        if key in profile_options:
+            options[key] = profile_options[key]
+    replay_options.write_text("".join(f"{key}:{value}\n" for key, value in options.items()), encoding="utf-8")
+    for pack in json.loads(options.get("resourcePacks", "[]")):
+        if not pack.startswith("file/"):
+            continue
+        name = pack.removeprefix("file/")
+        if name in {"", ".", ".."} or Path(name).name != name:
+            raise ValueError("resource pack must be an immediate member of the installed profile")
+        source = profile / "resourcepacks" / name
+        if source.is_file():
+            destination = home / "resourcepacks" / name
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(source, destination)
+        elif source.is_dir():
+            shutil.copytree(source, home / "resourcepacks" / name)
+    iris_config = home / "config" / "iris.properties"
+    if iris_config.is_file():
+        shader = next((line.split("=", 1)[1] for line in iris_config.read_text(encoding="utf-8").splitlines()
+                       if line.startswith("shaderPack=")), "")
+        if shader and Path(shader).name == shader:
+            for file in (profile / "shaderpacks" / shader, profile / "shaderpacks" / (shader + ".txt")):
+                if file.is_file():
+                    shutil.copyfile(file, home / "shaderpacks" / file.name)
+    if world is not None:
+        shutil.copytree(world, home / "saves" / "route-world", dirs_exist_ok=True,
+                        ignore=shutil.ignore_patterns("session.lock"))
 
 
 def main():
@@ -103,6 +181,16 @@ def main():
                      help="verify the real settings rows while retaining previous add-on selections")
     cli.add_argument("--measure-panel", action="store_true",
                      help="time the outer AtomChat screen render with diagnostics either on or off")
+    cli.add_argument("--motion-trace", action="store_true", help="replay public chat back and sticker tab clicks with JFR call spans")
+    cli.add_argument("--client-config", type=Path, help="seed the isolated client config from this file")
+    cli.add_argument("--wallpaper", type=Path, help="seed a static wallpaper in the isolated instance")
+    cli.add_argument("--stickers", type=Path, help="copy the sticker fixture into the isolated instance")
+    cli.add_argument("--shaders-off", action="store_true", help="disable Iris shaders in the isolated instance")
+    cli.add_argument("--ccb-profile", type=Path, help="copy installed CCB mods and graphics settings into the isolate")
+    cli.add_argument("--world", type=Path, help="copy this local world into the isolate instead of the flat fixture")
+    cli.add_argument("--without-atomchat", action="store_true", help="record a matched closed-world control without the AtomChat mod")
+    cli.add_argument("--slow-click-log", action="store_true", help="exercise the real click path with a slow diagnostic appender")
+    cli.add_argument("--toggle-shaders-during-replay", action="store_true", help="start with Iris shaders on and disable them in world")
     diagnostics = cli.add_mutually_exclusive_group()
     diagnostics.add_argument("--debug-off", action="store_true", help="measure product mode with diagnostics disabled")
     diagnostics.add_argument("--check-chat-capture", action="store_true",
@@ -122,7 +210,21 @@ def main():
         cli.error("--matrix uses the built-in performance route")
     if not args.expect_marker.strip():
         cli.error("--expect-marker must contain the driver's success text")
+    if args.without_atomchat:
+        if args.motion_trace or args.driver or args.matrix or args.history_fixture or reload_check or args.steady_settings:
+            cli.error("--without-atomchat records the closed-world control only")
+        args.expect_marker = "ATOMCHAT_CONTROL_COMPLETE"
+    if args.slow_click_log and not args.motion_trace:
+        cli.error("--slow-click-log requires --motion-trace")
+    if args.toggle_shaders_during_replay and (not args.motion_trace or args.shaders_off):
+        cli.error("--toggle-shaders-during-replay requires a motion trace starting with shaders on")
     addons = [path.resolve(strict=True) for path in args.extra_mod]
+    wallpaper = args.wallpaper.resolve(strict=True) if args.wallpaper else None
+    stickers = args.stickers.resolve(strict=True) if args.stickers else None
+    ccb_profile = args.ccb_profile.resolve(strict=True) if args.ccb_profile else None
+    world = args.world.resolve(strict=True) if args.world else None
+    if world is not None and (ccb_profile is None or not (world / "level.dat").is_file()):
+        cli.error("--world requires --ccb-profile and a local save with level.dat")
     java = Path(os.environ["JAVA_HOME"]) / "bin"
     release = args.jar.resolve(strict=True)
     library = args.library.resolve(strict=True)
@@ -142,6 +244,21 @@ def main():
     if historical.count(completion) != 1:
         raise ValueError("the archived CCB launcher completion check was not found")
     historical = historical.replace(completion, f"{args.expect_marker!r} in log")
+    if args.without_atomchat:
+        copy_atomchat = "    shutil.copyfile(jar, home/'mods/atomchat.jar')\n"
+        if historical.count(copy_atomchat) != 1:
+            raise ValueError("the archived AtomChat copier was not found")
+        historical = historical.replace(copy_atomchat, "")
+    if ccb_profile is not None:
+        fixture_mods = "    shutil.copytree(fixture/'mods', home/'mods', dirs_exist_ok=True)\n"
+        if historical.count(fixture_mods) != 1:
+            raise ValueError("the archived CCB mod copier was not found")
+        historical = historical.replace(fixture_mods, "")
+    if args.client_config:
+        fixture_reader = "(fixture/'atomchat-client.json')"
+        if historical.count(fixture_reader) != 1:
+            raise ValueError("the archived CCB config reader was not found")
+        historical = historical.replace(fixture_reader, f"Path({str(args.client_config.resolve(strict=True))!r})")
     if args.endurance:
         wait = "WaitForSingleObject(info.process, 300_000)"
         if historical.count(wait) != 1:
@@ -157,8 +274,12 @@ def main():
     retest.java = java / "java.exe"
     retest.archive = out / "reference"
     retest.archive.mkdir()
-    config = json.loads((retest.fixture / "atomchat-client.json").read_text(encoding="utf-8-sig"))
+    config_path = args.client_config or retest.fixture / "atomchat-client.json"
+    config = json.loads(config_path.read_text(encoding="utf-8-sig"))
     reference = json.loads((prior / "run.json").read_text(encoding="utf-8"))
+    if args.client_config:
+        for key in reference["config_overrides"].keys() & config.keys():
+            reference["config_overrides"][key] = config[key]
     history = None
     history_count = 0
     history_digest = None
@@ -175,8 +296,11 @@ def main():
                 or not isinstance(history_count, int) or history_count <= 0
                 or len(history.read_bytes().splitlines()) != history_count):
             cli.error("history fixture does not match the archived world or its declared rows")
-    retest.launch_private = with_inputs(retest.launch_private, addons, history)
+    retest.launch_private = with_inputs(retest.launch_private, addons, history, wallpaper, stickers,
+                                       args.shaders_off, ccb_profile, world)
     reference["options"]["guiScale"] = args.scale
+    if args.motion_trace or args.without_atomchat:
+        reference["options"].update(soundCategory_master="1.0", soundCategory_music="0.0")
     reference["config_overrides"].update(
         debug=not args.debug_off, graphicsQuality=args.quality, chatHudEnabled=True, chatHudTimedExit=False,
         chatHistoryEnabled=history is not None, diagnosticMeasureOnly=False,
@@ -195,6 +319,14 @@ def main():
                      history_fixture_sha256=history_digest,
                      addon_settings_check=args.check_addon_settings,
                      measure_panel=args.measure_panel,
+                     motion_trace=args.motion_trace, shaders_off=args.shaders_off,
+                     without_atomchat=args.without_atomchat,
+                     slow_click_log=args.slow_click_log,
+                     toggle_shaders=args.toggle_shaders_during_replay,
+                     ccb_profile=str(ccb_profile) if ccb_profile else None,
+                     world_sha256=retest.sha(world / "level.dat") if world else None,
+                     wallpaper_sha256=retest.sha(wallpaper) if wallpaper else None,
+                     sticker_fixture={p.name: retest.sha(p) for p in sorted(stickers.iterdir()) if p.is_file()} if stickers else {},
                      interrupt_navigation=args.interrupt_navigation,
                      atomlib_sha256=library_digest,
                      extra_mods={jar.name: retest.sha(jar) for jar in addons})
@@ -206,10 +338,20 @@ def main():
     shutil.copytree(prior / ".fabric/remappedJars", retest.archive / ".fabric/remappedJars")
     shutil.copyfile(args.compile_against or release, out / "atomchat-reference.jar")
     shutil.copyfile(retest.fixture / "manifest.json", out / "fixture-manifest.json")
-    probe = args.driver.resolve(strict=True) if args.driver else build_probe(retest, java, out, prior)
+    probe = args.driver.resolve(strict=True) if args.driver else build_probe(
+        retest, java, out, prior, library, args.motion_trace, args.without_atomchat)
     home = retest.scratch / args.label
     jfc = out / "atomchat.jfc"
-    jfc.write_text(JFC, encoding="utf-8")
+    jfc_contents = JFC
+    if args.motion_trace:
+        jfc_contents = JFC.replace("</configuration>", """
+  <event name="bench.AtomChatMotionCall"><setting name="enabled">true</setting></event>
+  <event name="bench.AtomChatMotionAction"><setting name="enabled">true</setting></event>
+  <event name="jdk.GCPhasePause"><setting name="enabled">true</setting></event>
+  <event name="jdk.ThreadPark"><setting name="enabled">true</setting><setting name="threshold">2 ms</setting></event>
+  <event name="jdk.JavaMonitorEnter"><setting name="enabled">true</setting><setting name="threshold">2 ms</setting></event>
+</configuration>""").replace('name="period">10 ms', 'name="period">5 ms')
+    jfc.write_text(jfc_contents, encoding="utf-8")
     try:
         retest.run(args.label, release, probe, (
             f"-Dsteady.reverse={str(not args.forward).lower()}",
@@ -223,6 +365,10 @@ def main():
             f"-Datomchat.replay.historyCount={history_count}",
             f"-Datomchat.replay.addonSettings={args.check_addon_settings or ''}",
             f"-Datomchat.replay.measurePanel={str(args.measure_panel).lower()}",
+            f"-Datomchat.replay.motionTrace={str(args.motion_trace).lower()}",
+            f"-Datomchat.replay.copiedWorld={str(world is not None).lower()}",
+            f"-Datomchat.replay.slowClickLog={str(args.slow_click_log).lower()}",
+            f"-Datomchat.replay.toggleShaders={str(args.toggle_shaders_during_replay).lower()}",
             f"-XX:StartFlightRecording=settings={jfc},filename={home / 'frames.jfr'},dumponexit=true,maxsize=128m",
         ), library)
     finally:
@@ -267,6 +413,13 @@ def main():
         log = (out / "launcher.log").read_text(encoding="utf-8", errors="replace")
         if f"V098_REPLAY_HISTORY_FIRST_OPEN {history_count}" not in log:
             raise AssertionError("the first chat view did not receive the saved fixture rows")
+
+    if args.motion_trace:
+        log = (out / "launcher.log").read_text(encoding="utf-8", errors="replace")
+        if "ATOMCHAT_MOTION_ROUTE_COMPLETE" not in log:
+            raise AssertionError("the targeted public chat and sticker route did not finish")
+        if args.slow_click_log and "ATOMCHAT_ASYNC_CLICK_VERIFIED" not in log:
+            raise AssertionError("opening the emoji panel did not bypass the slow click diagnostic")
 
 
 if __name__ == "__main__":
