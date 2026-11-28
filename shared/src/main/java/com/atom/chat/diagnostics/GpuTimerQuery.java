@@ -15,9 +15,8 @@ import java.util.function.LongSupplier;
  * {@link #beginFrame(long)} and {@link #endFrame()} -- it is a panel GPU
  * interval, not the whole game frame, and CPU render time is not GPU time.
  *
- * <p><strong>Not wired into the render path.</strong> A real offscreen GL test
- * and a user-authorized in-game re-test are still required before any GPU
- * number from this class may be called a game measurement.
+ * <p>Completed names are kept in the ring's context for reuse. Broken and
+ * expired queries are released without reissuing them.
  */
 public final class GpuTimerQuery implements AutoCloseable {
 
@@ -27,6 +26,7 @@ public final class GpuTimerQuery implements AutoCloseable {
     public interface Gl {
         boolean timerQuerySupported();
         boolean contextStillValid();
+        default Object contextKey() { return this; }
         /** True when the host already owns a query on GL_TIME_ELAPSED. */
         boolean otherQueryActive();
         int createQuery();
@@ -43,11 +43,14 @@ public final class GpuTimerQuery implements AutoCloseable {
     private final Gl gl;
     private final LongSupplier clock;
     private final int[] queries;
+    private final int[] reusableQueries;
     private final long[] frameIds;
     private final long[] endedAt;
     private int head;
     private int count;
+    private int reusableCount;
     private int activeQuery;
+    private Object context;
     private long activeFrameId;
     private long activeEndedAt;
     private boolean closed;
@@ -64,6 +67,7 @@ public final class GpuTimerQuery implements AutoCloseable {
         this.gl = Objects.requireNonNull(gl, "gl");
         this.clock = Objects.requireNonNull(clock, "clock");
         queries = new int[capacity];
+        reusableQueries = new int[capacity];
         frameIds = new long[capacity];
         endedAt = new long[capacity];
     }
@@ -71,15 +75,20 @@ public final class GpuTimerQuery implements AutoCloseable {
     /** Begins a query for one frame. False means the frame is skipped, not stalled. */
     public boolean beginFrame(long frameId) {
         if (closed) return false;
+        if (!gl.timerQuerySupported() || !gl.contextStillValid()) {
+            skipped++;
+            return false;
+        }
+        useContext();
         if (activeQuery != 0) { stalled++; return false; }
-        if (!gl.timerQuerySupported() || !gl.contextStillValid() || gl.otherQueryActive()) {
+        if (gl.otherQueryActive()) {
             skipped++;
             return false;
         }
         if (count == queries.length) { dropped++; return false; }
         int query;
         try {
-            query = gl.createQuery();
+            query = reusableCount == 0 ? gl.createQuery() : reusableQueries[--reusableCount];
         } catch (RuntimeException | Error failure) {
             skipped++;
             return false;
@@ -99,6 +108,8 @@ public final class GpuTimerQuery implements AutoCloseable {
 
     /** Ends the active query and queues it for a later non-blocking read. */
     public void endFrame() {
+        if (activeQuery == 0) return;
+        useContext();
         if (activeQuery == 0) return;
         int query = activeQuery;
         try {
@@ -122,6 +133,7 @@ public final class GpuTimerQuery implements AutoCloseable {
     public List<Sample> poll() {
         if (closed) return List.of();
         if (!gl.contextStillValid()) { reset(); return List.of(); }
+        useContext();
         List<Sample> samples = new ArrayList<>();
         while (count > 0) {
             int slot = head;
@@ -151,7 +163,7 @@ public final class GpuTimerQuery implements AutoCloseable {
             }
             samples.add(new Sample(frameIds[slot], nanos,
                     Math.max(0L, clock.getAsLong() - endedAt[slot])));
-            safeDelete(query);
+            reusableQueries[reusableCount++] = query;
             recycleHead();
             completed++;
         }
@@ -182,7 +194,22 @@ public final class GpuTimerQuery implements AutoCloseable {
         try { gl.deleteQuery(query); } catch (RuntimeException | Error ignored) { }
     }
 
+    private void useContext() {
+        Object current = gl.contextKey();
+        if (context != null && current != context) {
+            expired += count + (activeQuery != 0 ? 1 : 0);
+            // Names belong to their original GL context.
+            head = count = reusableCount = activeQuery = 0;
+        }
+        context = current;
+    }
+
     private void releaseAll() {
+        if (context != gl.contextKey()) {
+            head = count = reusableCount = activeQuery = 0;
+            context = null;
+            return;
+        }
         if (activeQuery != 0) {
             safeDelete(activeQuery);
             activeQuery = 0;
@@ -191,6 +218,8 @@ public final class GpuTimerQuery implements AutoCloseable {
             safeDelete(queries[head]);
             recycleHead();
         }
+        while (reusableCount > 0) safeDelete(reusableQueries[--reusableCount]);
+        context = null;
     }
 
     public long completed() { return completed; }

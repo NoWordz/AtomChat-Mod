@@ -7,8 +7,8 @@ import org.lwjgl.opengl.GLCapabilities;
 
 /**
  * Production {@link GpuTimerQuery.Gl} backed by LWJGL OpenGL 3.3 timer
- * queries. One independent query object per frame; the ring polls results on a
- * later frame only when GL_QUERY_RESULT_AVAILABLE is true.
+ * queries. The ring polls results on a later frame and reuses completed query
+ * names in the current context.
  *
  * <p>Safety contract for the render loop (P1 red lines):
  * <ul>
@@ -50,6 +50,12 @@ public final class GlGpuTimer implements GpuTimerQuery.Gl {
     @Override
     public boolean contextStillValid() {
         return live();
+    }
+
+    @Override
+    public Object contextKey() {
+        try { return GL.getCapabilities(); }
+        catch (IllegalStateException ignored) { return null; }
     }
 
     @Override

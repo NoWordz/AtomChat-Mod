@@ -201,12 +201,15 @@ class PanelDiagnosticsTest {
         int nextQuery = 1;
 
         @Override public boolean timerQuerySupported() { return supported; }
+        private Object context = new Object();
         @Override public boolean contextStillValid() { return alive; }
+        @Override public Object contextKey() { return context; }
         @Override public boolean otherQueryActive() { return conflict; }
         @Override public int createQuery() { created++; return nextQuery++; }
         @Override public void deleteQuery(int query) { deleted++; ready.remove(query); }
         @Override public void beginQuery(int query) {
             if (failBegin) throw new IllegalStateException("GL begin failed");
+            ready.remove(query);
         }
         @Override public void endQuery() {
             if (failEnd) throw new IllegalStateException("GL end failed");
@@ -250,6 +253,44 @@ class PanelDiagnosticsTest {
             ring.endFrame();
             assertEquals(0, ring.expired());
         }
+    }
+
+    @Test
+    void gpuRingReusesReadyNamesWithoutDeletingThemDuringRendering() {
+        var gl = new FakeGl();
+        try (var ring = new GpuTimerQuery(gl, 2)) {
+            assertTrue(ring.beginFrame(101));
+            ring.endFrame();
+            gl.ready.add(1);
+            assertEquals(101, ring.poll().get(0).frameId());
+            assertEquals(0, gl.deleted, "polling a ready query must keep deletion off the frame path");
+
+            assertTrue(ring.beginFrame(102));
+            ring.endFrame();
+            assertEquals(1, gl.created, "the next frame should reuse the ready GL name");
+            assertTrue(ring.poll().isEmpty(), "reusing a GL name must never return its prior sample");
+            gl.ready.add(1);
+            assertEquals(102, ring.poll().get(0).frameId());
+        }
+        assertEquals(1, gl.deleted, "the ring releases its retained name at close");
+    }
+
+    @Test
+    void gpuRingDoesNotUseRetainedNamesInAnotherContext() {
+        var gl = new FakeGl();
+        try (var ring = new GpuTimerQuery(gl, 2)) {
+            assertTrue(ring.beginFrame(101)); ring.endFrame();
+            assertTrue(ring.beginFrame(102)); ring.endFrame();
+            gl.ready.add(1);
+            assertEquals(101, ring.poll().get(0).frameId());
+            gl.context = new Object();
+
+            assertTrue(ring.beginFrame(103)); ring.endFrame();
+            assertEquals(3, gl.created, "the new context gets a new query");
+            assertEquals(0, gl.deleted, "names from the original context are never deleted in the new one");
+            assertEquals(1, ring.expired(), "only the unread frame is lost on a context change");
+        }
+        assertEquals(1, gl.deleted, "close only deletes the new context's query");
     }
 
     @Test
@@ -308,8 +349,9 @@ class PanelDiagnosticsTest {
             assertEquals(1, samples.size(), "the stuck head is reclaimed, the ready result survives");
             assertEquals(2, samples.get(0).frameId());
             assertEquals(1, ring.expired());
-            assertEquals(gl.created, gl.deleted);
+            assertEquals(1, gl.deleted, "only the timed-out head is deleted during polling");
         }
+        assertEquals(gl.created, gl.deleted);
     }
 
     @Test
