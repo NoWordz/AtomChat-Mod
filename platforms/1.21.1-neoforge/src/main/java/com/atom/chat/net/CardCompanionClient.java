@@ -7,6 +7,9 @@ import com.atom.chat.api.card.ShareCard;
 import com.atom.chat.api.card.ComposerLocationCard;
 import com.atom.chat.card.BuiltInCardAdapter;
 import com.atom.chat.chat.ChatMessage;
+import com.atom.chat.chat.ChatPipeline;
+import com.atom.chat.chat.IdentityEvidence;
+import com.atom.chat.config.AtomChatConfig;
 import com.atom.chat.chat.ChatStore;
 import com.atom.chat.text.RichText;
 import net.minecraft.client.Minecraft;
@@ -20,41 +23,65 @@ import java.util.UUID;
  * Client-side receiver &amp; sender for {@link CardPayloads}.
  */
 public final class CardCompanionClient {
-    private static final PlayerCardPairing<UUID> NATIVE_SHARES = PlayerCardPairing.byUuid();
+    private static final ClientShareSubmission SHARES = new ClientShareSubmission();
 
     private static final ConvertedSharePairing CONVERTED_SHARES = new ConvertedSharePairing();
 
     public static void resetNativeShares() {
-        NATIVE_SHARES.clear();
+        SHARES.clear();
         CONVERTED_SHARES.clear();
     }
 
     public static void deliverConvertedShare(UUID fingerprint, Object component, Runnable delivery) {
-        CONVERTED_SHARES.deliver(fingerprint, component, System.nanoTime(), () -> {
+        long now = System.nanoTime();
+        CONVERTED_SHARES.deliver(fingerprint, component, now, paired -> {
+            if (paired == null) return component instanceof Component line ? localConvertedShare(line, now) : null;
+            var local = SHARES.takeLocal(paired.author(), paired.body(), now);
+            return local == null ? paired : paired.correlate(local.receipt());
+        }, () -> {
             var share = CONVERTED_SHARES.current();
             if (share == null || shouldDisplayConverted(share)) delivery.run();
         });
     }
 
-    public static ConvertedSharePairing.Share takeConvertedShare(Object component) {
-        return com.atom.chat.config.AtomChatConfig.get().shareCardsEnabled
+    private static ConvertedSharePairing.Share localConvertedShare(Component component, long now) {
+        if (!SHARES.hasLocalShares(now)) return null;
+        var config = AtomChatConfig.get();
+        if (!config.enabled || !config.shareCardsEnabled) return null;
+        // NCR's decorated player message retains the sender's entity UUID. A name or plain text alone cannot claim the echo.
+        var meta = ChatPipeline.structuredPlayerLine(component);
+        if (meta == null || meta.evidence() != IdentityEvidence.ENTITY) return null;
+        var local = SHARES.takeLocal(meta.senderUuid(), meta.contentText(), now);
+        if (local == null) return null;
+        String profile = meta.profileName() == null ? meta.senderName() : meta.profileName();
+        return new ConvertedSharePairing.Share(meta.senderUuid(), profile, meta.contentText(),
+                BuiltInCardAdapter.localizeComposerLocation(local.card()), local.receipt());
+    }
+
+    public static ConvertedSharePairing.Share takeConvertedShare(Object component, long receipt) {
+        var share = AtomChatConfig.get().shareCardsEnabled
                 ? CONVERTED_SHARES.takeVisible(component) : null;
+        if (share != null) ClientShareSubmission.correlate(share.sendReceipt(), receipt);
+        return share;
     }
 
     public static void discardConvertedShare() {
         CONVERTED_SHARES.discardPending();
     }
 
-    public static ShareCard takeNativeShare(UUID sender, String originalBody) {
-        if (sender == null || originalBody == null) return null;
-        ShareCard card = NATIVE_SHARES.takeVisible(sender, originalBody);
-        if (card != null) CardStateStore.received(card);
+    public static ShareCard takeNativeShare(UUID sender, String originalBody, String visibleBody, long receipt) {
+        if (sender == null || originalBody == null || !AtomChatConfig.get().shareCardsEnabled) return null;
+        ShareCard card = SHARES.takeNative(sender, originalBody, visibleBody, receipt);
+        if (card != null) {
+            card = BuiltInCardAdapter.localizeComposerLocation(card);
+            CardStateStore.received(card);
+        }
         return card;
     }
 
     public static java.util.function.BooleanSupplier deferNativeShare(
-            UUID sender, String originalBody, java.util.function.BooleanSupplier callback) {
-        return sender == null ? callback : NATIVE_SHARES.defer(sender, originalBody, System.nanoTime(), callback);
+            UUID sender, String originalBody, boolean unfiltered, java.util.function.BooleanSupplier callback) {
+        return SHARES.deferNative(sender, originalBody, unfiltered, System.nanoTime(), callback);
     }
 
 
@@ -69,7 +96,7 @@ public final class CardCompanionClient {
 
     private static boolean shouldDisplayConverted(ConvertedSharePairing.Share share) {
         var client = Minecraft.getInstance();
-        var config = com.atom.chat.config.AtomChatConfig.get();
+        var config = AtomChatConfig.get();
         return !config.enabled || (client.getChatStatus().isChatAllowed(client.isLocalServer())
                 && !client.isBlocked(share.author()) && !client.getPlayerSocialManager().isHidden(share.author())
                 && !(config.hideBlockedMessages && com.atom.chat.chat.BlockList.isBlocked(share.name())));
@@ -95,7 +122,7 @@ public final class CardCompanionClient {
         boolean own = !system && client.player != null && senderUuid.equals(client.player.getUUID());
         if (!system && !converted) {
             if (!client.getChatStatus().isChatAllowed(client.isLocalServer()) || !own && client.isBlocked(senderUuid)) return;
-            if (!own && com.atom.chat.config.AtomChatConfig.get().hideBlockedMessages
+            if (!own && AtomChatConfig.get().hideBlockedMessages
                     && com.atom.chat.chat.BlockList.isBlocked(senderName)) return;
         }
 
@@ -112,22 +139,22 @@ public final class CardCompanionClient {
 
         String pairedBody = card.customData().get(PlayerCardPairing.NATIVE_BODY);
         if (converted || pairedBody != null) {
-            var config = com.atom.chat.config.AtomChatConfig.get();
+            var config = AtomChatConfig.get();
             if (system || pairedBody == null || !config.enabled
                     || card.template() != ShareCard.Template.LOCATION && card.template() != ShareCard.Template.ITEM) return;
-            ShareCard presentation = BuiltInCardAdapter.localizeComposerLocation(
-                    ComposerLocationCard.fromPairedWaypoint(card, senderName));
+            ShareCard presentation = ComposerLocationCard.fromPairedWaypoint(card, senderName);
             if (converted) {
                 String fingerprint = card.customData().get(ConvertedSharePairing.FINGERPRINT);
                 if (fingerprint == null) return;
                 try {
-                    var share = new ConvertedSharePairing.Share(senderUuid, senderName, pairedBody, presentation);
+                    var share = new ConvertedSharePairing.Share(senderUuid, senderName, pairedBody,
+                            BuiltInCardAdapter.localizeComposerLocation(presentation));
                     CONVERTED_SHARES.arm(UUID.fromString(fingerprint), share, System.nanoTime());
                 } catch (IllegalArgumentException invalidFingerprint) {
                     // Invalid sidecar leaves the native message alone.
                 }
             } else if (config.shareCardsEnabled && !card.customData().containsKey(ConvertedSharePairing.FINGERPRINT)) {
-                NATIVE_SHARES.arm(senderUuid, pairedBody, presentation, System.nanoTime());
+                SHARES.armNative(senderUuid, pairedBody, presentation, System.nanoTime());
             }
             return;
         }
@@ -142,7 +169,7 @@ public final class CardCompanionClient {
             fallback = Component.literal(card.fallbackPlainText());
         }
 
-        if (!com.atom.chat.config.AtomChatConfig.get().enabled) {
+        if (!AtomChatConfig.get().enabled) {
             client.gui.getChat().addMessage(fallback);
             return;
         }
@@ -181,25 +208,12 @@ public final class CardCompanionClient {
         if (client == null || client.player == null || client.getConnection() == null || card == null) {
             return false;
         }
-        String nativeText = PlayerCardPairing.nativeText(card);
-        if (nativeText == null || nativeText.isBlank()) return false;
-        if (supported()) {
-            // Strip itemSnbt before C2S upload: server re-reads real main-hand ItemStack,
-            // preventing heavy items (e.g. Shulker Boxes) from exceeding packet limits.
-            ShareCard toSend = card;
-            if (card.template() == ShareCard.Template.ITEM && card.item() != null && !card.item().itemSnbt().isEmpty()) {
-                ShareCard.ItemPayload slim = new ShareCard.ItemPayload(
-                        card.item().itemId(), "", card.item().displayName(),
-                        card.item().summary(), card.item().rarityLabel(),
-                        card.item().accentColor(), card.item().count());
-                toSend = card.toBuilder().itemPayload(slim).build();
-            }
-            byte[] encoded = CardWireCodec.encodeCard(toSend);
-            if (encoded.length <= CardWireCodec.MAX_CARD_BYTES) {
-                PacketDistributor.sendToServer(new CardPayloads.ClientCardSharePayload(encoded));
-            }
-        }
-        client.getConnection().sendChat(nativeText);
-        return true;
+        boolean companion = supported();
+        boolean paired = companion && client.getConnection().hasChannel(CardPayloads.ConvertedCardPayload.TYPE);
+        var config = AtomChatConfig.get();
+        UUID localAuthor = config.enabled && config.shareCardsEnabled ? client.player.getUUID() : null;
+        return SHARES.send(card, paired, localAuthor,
+                bytes -> PacketDistributor.sendToServer(new CardPayloads.ClientCardSharePayload(bytes)),
+                client.getConnection()::sendChat);
     }
 }

@@ -113,11 +113,25 @@ public final class CardPayloads {
         }
     }
 
+    /** Advertises uploads that supplement a separate native chat message. */
+    public record PairedClientCardSharePayload(ClientCardSharePayload intent) implements CustomPayload {
+        public static final CustomPayload.Id<PairedClientCardSharePayload> ID =
+                new CustomPayload.Id<>(Identifier.of(AtomChat.MOD_ID, "share_card_paired_v1"));
+        public static final PacketCodec<RegistryByteBuf, PairedClientCardSharePayload> CODEC =
+                ClientCardSharePayload.CODEC.xmap(PairedClientCardSharePayload::new, PairedClientCardSharePayload::intent);
+
+        @Override
+        public CustomPayload.Id<PairedClientCardSharePayload> getId() {
+            return ID;
+        }
+    }
+
     /** Registers all codecs; must run on both logical sides (common init). */
     public static void register() {
         PayloadTypeRegistry.playS2C().register(CardBroadcastPayload.ID, CardBroadcastPayload.CODEC);
         PayloadTypeRegistry.playS2C().register(ConvertedCardPayload.ID, ConvertedCardPayload.CODEC);
         PayloadTypeRegistry.playS2C().register(CardStateUpdatePayload.ID, CardStateUpdatePayload.CODEC);
         PayloadTypeRegistry.playC2S().register(ClientCardSharePayload.ID, ClientCardSharePayload.CODEC);
+        PayloadTypeRegistry.playC2S().register(PairedClientCardSharePayload.ID, PairedClientCardSharePayload.CODEC);
     }
 }

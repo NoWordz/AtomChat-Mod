@@ -11,6 +11,11 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Mixin(Minecraft.class)
 public class MinecraftClientMixin {
+    @Inject(method = "close", at = @At("HEAD"))
+    private void atomchat$finishDiagnostics(CallbackInfo ci) {
+        com.atom.chat.diagnostics.AtomChatLog.finishDiagnostics();
+    }
+
     @Inject(method = "openChatScreen", at = @At("HEAD"), cancellable = true)
     private void atomchat$openChatScreen(String text, CallbackInfo ci) {
         // 原生库不在就不接管这一下：cancel 掉等于连原版聊天都不给开。

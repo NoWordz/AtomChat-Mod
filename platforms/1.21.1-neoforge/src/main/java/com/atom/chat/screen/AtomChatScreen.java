@@ -2434,14 +2434,14 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         com.atom.chat.diagnostics.Truth3Probe probe = com.atom.chat.diagnostics.Truth3Probe.get();
         com.atom.chat.config.AtomChatConfig truth3Cfg = com.atom.chat.config.AtomChatConfig.get();
         String modeSwitch = probe.configure(truth3Cfg.debug, truth3Cfg.diagnosticRenderMode);
-        if (modeSwitch != null) AtomChat.LOGGER.info(modeSwitch);
+        if (modeSwitch != null) com.atom.chat.diagnostics.AtomChatLog.diagnostic("probe", modeSwitch);
         String frameProbe = probe.onRenderFrame(nowNanos);
-        if (frameProbe != null) AtomChat.LOGGER.info(frameProbe);
+        if (frameProbe != null) com.atom.chat.diagnostics.AtomChatLog.diagnostic("probe", frameProbe);
         // [Mode-D] blur_cadence 刷新率统计行：仅 debug=on 且 D 档输出；其余档
         // cadenceLine() 直接返回 null，产品默认（debug=off）零调用、零开销。
         if (truth3Cfg.debug) {
             String cadence = probe.cadenceLine();
-            if (cadence != null) AtomChat.LOGGER.info(cadence);
+            if (cadence != null) com.atom.chat.diagnostics.AtomChatLog.diagnostic("probe", cadence);
         }
         // Sample elapsed time directly: hitches do not change the motion duration.
         panelMotion.target(closing ? 0.0F : 1.0F, nowNanos, Animations.enabled());
@@ -2595,7 +2595,7 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         }
         FirstOpenBudget.addFirstDraw(firstDrawStart);
         String firstOpenLine = FirstOpenBudget.endFrame();
-        if (firstOpenLine != null) AtomChat.LOGGER.info(firstOpenLine);
+        if (firstOpenLine != null) com.atom.chat.diagnostics.AtomChatLog.diagnostic("probe", firstOpenLine);
     }
 
     /**
@@ -3807,18 +3807,23 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         // Shift+F6（E0）翻转运行时 measureOnly（全仪表 ↔ 仅帧探针），不写配置。
         // Alt / Super 组合留给第三方 mod，避免抢键。
         com.atom.chat.diagnostics.Truth3Probe truth3 = com.atom.chat.diagnostics.Truth3Probe.get();
+        if (keyCode == TRUTH3_KEY_F6 && (modifiers & 15) == 2 && truth3.isDebug()) {
+            boolean capturing = com.atom.chat.diagnostics.RawChatCapture.get().toggle();
+            feedback(capturing ? "atomchat.diagnostic.capture.started" : "atomchat.diagnostic.capture.stopped", capturing);
+            return true;
+        }
         boolean truth3Key = keyCode == TRUTH3_KEY_F6
                 && (((modifiers & 15) == 0) || ((modifiers & 3) == 3 && (modifiers & 12) == 0));
         if (truth3Key && truth3.isDebug()) {
             String line = truth3.cycle();
-            if (line != null) AtomChat.LOGGER.info(line);
+            if (line != null) com.atom.chat.diagnostics.AtomChatLog.diagnostic("probe", line);
             return true;
         }
         // Shift+F6：只认「仅 Shift」这一种修饰（裸 F6 / Ctrl+Shift+F6 已在上方分支处理）。
         boolean measureKey = keyCode == TRUTH3_KEY_F6 && (modifiers & 15) == 1;
         if (measureKey && truth3.isDebug()) {
             String line = truth3.toggleMeasureOnly();
-            if (line != null) AtomChat.LOGGER.info(line);
+            if (line != null) com.atom.chat.diagnostics.AtomChatLog.diagnostic("probe", line);
             return true;
         }
         Boolean direct = gate.key(keyCode, scanCode, modifiers);

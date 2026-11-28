@@ -90,7 +90,7 @@ final class WindowsFileDialog {
     private static Result failed(String reason) {
         if (!loggedFailure) {
             loggedFailure = true;
-            AtomChat.LOGGER.warn("[AtomChat/compat] Windows file dialog unavailable, using the desktop picker: {}", reason);
+            AtomChat.LOGGER.warn(com.atom.chat.diagnostics.AtomChatLog.message("compat", "Windows file dialog unavailable, using the desktop picker: {}"), reason);
         }
         return FALLBACK;
     }

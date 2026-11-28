@@ -168,7 +168,7 @@ public final class ChatHistory {
         try (var stream = Files.list(dir)) {
             for (Path file : (Iterable<Path>) stream::iterator) {
                 if (!permit.active()) return;
-                if (file.equals(current)) continue;
+                if (file.equals(current) || HistoryStore.isLegacyMultiplayerFile(file)) continue;
                 try {
                     if (now - Files.getLastModifiedTime(file).toMillis() > limit) {
                         com.atom.chat.util.DataMigration.noLinks(file);
@@ -299,11 +299,8 @@ public final class ChatHistory {
                 levelName = null;
             }
         }
-        String serverName = null;
-        if (client.getCurrentServer() != null) {
-            serverName = client.getCurrentServer().name;
-        }
-        return HistoryStore.keyFor(singleplayer, levelName, serverName);
+        var server = client.getCurrentServer();
+        return HistoryStore.keyFor(singleplayer, levelName, server == null ? null : server.ip);
     }
 
     private static net.minecraft.core.HolderLookup.Provider lookup(Minecraft client) {

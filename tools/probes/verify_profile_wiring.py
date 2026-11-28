@@ -11,7 +11,6 @@ stubs={
 'com/atom/chat/render/NativeFontRenderer.java':'''package com.atom.chat.render; public class NativeFontRenderer {public static void beginFrame(){}public static void prepare(){}public static void endFrame(){}}''',
 'com/mojang/blaze3d/systems/RenderSystem.java':'''package com.mojang.blaze3d.systems; public class RenderSystem { public static void assertOnRenderThread(){} }''',
 'com/atom/chat/AtomChat.java':'''package com.atom.chat; public class AtomChat { public static final Logger LOGGER=new Logger(); public static class Logger { public void info(String s,Object... a){} public void warn(String s,Object... a){} public void debug(String s,Object... a){} } }''',
-'com/atom/chat/diagnostics/AtomChatLog.java':'''package com.atom.chat.diagnostics; public class AtomChatLog { public static String message(String a,String b){return b;} }''',
 'com/atom/chat/config/AtomChatConfig.java':'''package com.atom.chat.config; public class AtomChatConfig { public boolean enabled=true,debug=false,hudIconEnabled=true; public float effectiveBlurStrength(){return 1;} public float effectiveCardBlurStrength(){return 0;} public boolean independentCardBlur; public boolean needsSeparateCardBlur(boolean panelBlurDrawn){return independentCardBlur && !panelBlurDrawn;} private static final AtomChatConfig C=new AtomChatConfig();public static AtomChatConfig get(){return C;} }''',
 'com/atom/chat/render/UiPixelSnap.java':'''package com.atom.chat.render; public class UiPixelSnap { public static void beginFrame(float f){} }''',
 'com/atom/chat/render/PanelBlurRenderer.java':'''package com.atom.chat.render; public class PanelBlurRenderer { public static boolean isAvailable(){return true;} public static boolean renderMasked(java.util.List<?> masks,float s){return true;} public static boolean render(org.joml.Matrix4f m,float x,float y,float w,float h,float r,float a,float s){return render(m,x,y,w,h,r,a);} public static boolean render(org.joml.Matrix4f m,float x,float y,float w,float h,float r,float a){com.atom.chat.diagnostics.FrameSegments.count(com.atom.chat.diagnostics.FrameSegments.Counter.BLUR_RESOURCE); return true;} }''',
@@ -115,7 +114,10 @@ for target in ['official','fabric']:
   gui='net.minecraft.client.gui.GuiGraphics' if target=='official' else 'net.minecraft.client.gui.DrawContext'
   p=src/'com/atom/chat/diagnostics/ProfileWiringHarness.java';p.parent.mkdir(parents=True,exist_ok=True);p.write_text(harness.replace('new GUI()',f'new {gui}()'),encoding='utf-8')
   source=(root/'layers/mapping/official/src/main/java' if target=='official' else root/'platforms/1.21.1-fabric/src/main/java')
-  files=[source/'com/atom/chat/render/SkiaGraphics.java',source/'com/atom/chat/notification/NotificationHudOverlay.java',root/'shared/src/main/java/com/atom/chat/diagnostics/FrameProfile.java',root/'shared/src/main/java/com/atom/chat/diagnostics/FrameSegments.java',*src.rglob('*.java')]
+  diagnostics=root/'shared/src/main/java/com/atom/chat/diagnostics'
+  files=[source/'com/atom/chat/render/SkiaGraphics.java',source/'com/atom/chat/notification/NotificationHudOverlay.java',
+         *(diagnostics/name for name in ('FrameProfile.java','FrameSegments.java','AtomChatLog.java','AsyncDiagnosticOutput.java')),
+         *src.rglob('*.java')]
   subprocess.run([javac,'-encoding','UTF-8','-d',str(out),*[str(f) for f in files]],check=True)
   subprocess.run([java,'-cp',str(out),'com.atom.chat.diagnostics.ProfileWiringHarness'],check=True)
  print(target,'passed')

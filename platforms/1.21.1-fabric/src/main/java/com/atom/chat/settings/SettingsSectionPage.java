@@ -864,13 +864,6 @@ public final class SettingsSectionPage {
         } else if (redConfirm) {
             subtitle = tr(item.subtitleKey());
             verb = tr("atomchat.settings.appearance.wallpaper.clear.confirm");
-        } else if (AppearanceSettings.part(row.actionId()) != null) {
-            Part part = AppearanceSettings.part(row.actionId());
-            String selected = AppearanceSettings.selectedId(part, AtomChatConfig.get());
-            String label = AppearanceSettings.label(part, selected);
-            subtitle = AppearanceSettings.MISSING.equals(label)
-                    ? tr(AppearanceSettings.TITLE_PREFIX + "missing.desc", selected) : "";
-            verb = tr(label);
         } else if ("onboarding_replay".equals(row.actionId())) {
             subtitle = tr(item.subtitleKey());
             verb = tr("atomchat.tutorial.replay");
@@ -1216,14 +1209,6 @@ public final class SettingsSectionPage {
                         RowKind.QUALITY, null, null, null, null, null, null, null, null, null)));
                 addGroup(rows, "atomchat.settings.group.appearance.presets", () -> rows.add(Row.ofThemes()));
                 addGroup(rows, "atomchat.settings.group.appearance.bubbles", () -> rows.add(Row.ofBubbles()));
-                AtomChatConfig config = AtomChatConfig.get();
-                if (AppearanceSettings.visible(Part.BUBBLE, config)
-                        || AppearanceSettings.visible(Part.AVATAR_FRAME, config)) {
-                    addGroup(rows, AppearanceSettings.TITLE_PREFIX + "group", () -> {
-                        addAppearanceSelector(rows, Part.BUBBLE, config);
-                        addAppearanceSelector(rows, Part.AVATAR_FRAME, config);
-                    });
-                }
                 addGroup(rows, "atomchat.settings.group.appearance.wallpaper", () -> {
                     rows.add(new Row(RowKind.WALLPAPERS, null, null, null, null, null, null, null, null, null));
                     rows.add(Row.ofAction(ACTION_WALLPAPER_PICK, wallpaperPickItem()));
@@ -1234,13 +1219,6 @@ public final class SettingsSectionPage {
             }
         }
         return rows;
-    }
-
-    private void addAppearanceSelector(List<Row> rows, Part part, AtomChatConfig config) {
-        if (!AppearanceSettings.visible(part, config)) return;
-        String action = AppearanceSettings.action(part);
-        rows.add(Row.ofAction(action, new SettingsItem(action, AppearanceSettings.title(part),
-                "", () -> false, unused -> {})));
     }
 
     private void addColorGroup(List<Row> rows, String heading, String group) {
@@ -2540,8 +2518,7 @@ public final class SettingsSectionPage {
                 row.x() + UiTokens.SETTINGS_ROW_PAD,
                 SkiaFontRenderer.centerBaselineY(title, row.y() + s(18)), textPrimary());
         String addonLabel = AppearanceSettings.label(Part.BUBBLE, cfg.bubbleAppearanceId);
-        boolean addonSelected = !com.atom.chat.onboarding.TutorialSandbox.active() && cfg.bubbleAppearanceId != null
-                && !AppearanceSettings.MISSING.equals(addonLabel);
+        boolean addonSelected = !com.atom.chat.onboarding.TutorialSandbox.active() && addonLabel != null;
         String current = addonSelected ? tr(addonLabel) : bubbleStyleName(cfg.effectiveBubbleStyle());
         float captionWidth = SkiaFontRenderer.getStringWidth(title, tr("atomchat.settings.appearance.bubble_style"))
                 + SkiaFontRenderer.getStringWidth(value, current) + UiTokens.SETTINGS_COMPACT_GAP;
@@ -3763,7 +3740,9 @@ public final class SettingsSectionPage {
                 if (!item.available()) {
                     return false;
                 }
-                item.set(!item.value());
+                boolean before = item.value();
+                item.set(!before);
+                if (item.isAddon() && item.value() == before) return false;
                 // One-shot pulse on the control the click flipped: the bounce
                 // follows the state change, not the physical press window (the
                 // same frame writes the config, so a press-bound bounce can be

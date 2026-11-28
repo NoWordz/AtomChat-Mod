@@ -26,22 +26,25 @@ class NativeBorrowContractTest {
     }
 
     @Test void itemIconsRenderInTheVanillaPhaseAndImportInsideTheBorrowedPhase() throws Exception {
+        String textures = read("shared/src/main/java/com/atom/chat/render/ItemIconTextures.java");
+        assertTrue(textures.contains("withTextureResources"), "paired AtomLib uses the texture-only scope");
+        assertTrue(textures.contains("Image.borrowTextureFrom"), "older AtomLib can still borrow textures");
         for (String target : TARGETS) {
             String s = read(target + "/src/main/java/com/atom/chat/render/ItemIconRenderer.java");
             assertFalse(s.contains("requireContext"), target);
             assertFalse(s.contains("static DirectContext owner"), "a strong static context owner is the escape hatch: " + target);
-            assertTrue(s.contains("private static WeakReference<DirectContext> owner"), target);
-            int firstBorrow = s.indexOf("bridge.withContext(");
+            assertTrue(s.contains("private static WeakReference<Object> owner"), target);
+            int firstBorrow = s.indexOf("ItemIconTextures.with(bridge,");
             int vanilla = s.indexOf("drawOffscreen(items, info, stack.copy())");
-            int secondBorrow = s.indexOf("bridge.withContext(", firstBorrow + 1);
-            int importCall = s.indexOf("icon.importInto(context, gl)");
-            int textureImport = s.indexOf("Image.borrowTextureFrom");
+            int secondBorrow = s.indexOf("ItemIconTextures.with(bridge,", firstBorrow + 1);
+            int importCall = s.indexOf("icon.importInto(resources, gl)");
+            int textureImport = s.indexOf("resources.borrow(");
             assertTrue(firstBorrow >= 0, target);
             assertTrue(firstBorrow < vanilla, "queued sampling must be submitted before the vanilla render: " + target);
             assertTrue(vanilla < secondBorrow, "the vanilla render must sit between the two borrowed phases: " + target);
             assertTrue(secondBorrow < importCall, "the Skija import must run inside its own borrow: " + target);
             assertTrue(importCall < textureImport, target);
-            assertEquals(2, count(s, "bridge.withContext("), target);
+            assertEquals(2, count(s, "ItemIconTextures.with(bridge,"), target);
         }
     }
 

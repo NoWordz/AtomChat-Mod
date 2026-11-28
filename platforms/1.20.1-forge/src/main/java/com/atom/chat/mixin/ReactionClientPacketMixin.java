@@ -20,10 +20,14 @@ import org.spongepowered.asm.mixin.injection.Redirect;
 public class ReactionClientPacketMixin {
     @Redirect(method="handleSystemChat",at=@At(value="INVOKE",target="Lnet/minecraft/client/multiplayer/chat/ChatListener;handleSystemMessage(Lnet/minecraft/network/chat/Component;Z)V"))
     private void atomchat$delivery0(ChatListener handler,Component content, boolean overlay,ClientboundSystemChatPacket packet) {
+        if (overlay) {
+            handler.handleSystemMessage(content, true);
+            return;
+        }
         var fingerprint = ReactionPacketIdentity.of(packet, Minecraft.getInstance().level.registryAccess());
         try (var ignored = ReactionClient.incoming(fingerprint)) {
             com.atom.chat.net.CardCompanionClient.deliverConvertedShare(fingerprint, content,
-                    () -> handler.handleSystemMessage(content, overlay));
+                    () -> handler.handleSystemMessage(content, false));
         }
     }
     @Redirect(method="handlePlayerChat",at=@At(value="INVOKE",target="Lnet/minecraft/client/multiplayer/chat/ChatListener;handlePlayerChatMessage(Lnet/minecraft/network/chat/PlayerChatMessage;Lcom/mojang/authlib/GameProfile;Lnet/minecraft/network/chat/ChatType$Bound;)V"))

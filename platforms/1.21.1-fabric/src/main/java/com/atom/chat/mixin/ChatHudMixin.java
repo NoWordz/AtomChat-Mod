@@ -211,7 +211,13 @@ public class ChatHudMixin implements NotificationHudOverlay.PanelChatHud {
 
         // Store the original message first; the vanilla HUD copy is rewritten
         // below only after capture has already decided what belongs in ChatStore.
-        ChatMessage presentation = atomchat$captureAndStore(message, NativeMessageBridge.capture(signatureData,indicator));
+        long receipt = AtomChatConfig.get().debug ? com.atom.chat.diagnostics.AtomChatLog.nextReceipt() : 0;
+        ChatMessage presentation = atomchat$captureAndStore(message, NativeMessageBridge.capture(signatureData,indicator), receipt);
+        if (receipt != 0) {
+            com.atom.chat.diagnostics.AtomChatLog.diagnostic("chat.route", "receipt=" + receipt
+                    + (presentation == null ? " filtered=true" : " message=" + presentation.getId()
+                    + " system=" + presentation.isSystem() + " card=" + presentation.hasCard()));
+        }
 
         MinecraftClient client = MinecraftClient.getInstance();
         String ownName = client.player != null ? client.player.getName().getString() : null;
@@ -243,7 +249,7 @@ public class ChatHudMixin implements NotificationHudOverlay.PanelChatHud {
     }
 
     @Unique
-    private ChatMessage atomchat$captureAndStore(Text message, NativeMessageMeta nativeMeta) {
+    private ChatMessage atomchat$captureAndStore(Text message, NativeMessageMeta nativeMeta, long receipt) {
         ChatMessage deleted=NativeMessageSync.knownDeleted(nativeMeta.signature());
         if(deleted!=null){MessageCapture.consume();return deleted;}
         String raw = message.getString();
@@ -254,18 +260,20 @@ public class ChatHudMixin implements NotificationHudOverlay.PanelChatHud {
 
         boolean configured = false;
         SenderMeta meta = MessageCapture.consume();
-        var convertedShare = com.atom.chat.net.CardCompanionClient.takeConvertedShare(message);
+        var convertedShare = com.atom.chat.net.CardCompanionClient.takeConvertedShare(message, receipt);
+        if (receipt != 0) {
+            com.atom.chat.diagnostics.AtomChatLog.diagnostic("capture", "receipt=" + receipt + " meta=" + (meta != null)
+                    + " converted=" + (convertedShare != null) + " length=" + raw.length());
+            if (com.atom.chat.diagnostics.RawChatCapture.get().active()
+                    && !com.atom.chat.card.BuiltInCardAdapter.isLegacyCredentialAnnouncement(message, raw)) {
+                com.atom.chat.diagnostics.AtomChatLog.diagnostic("chat.raw",
+                        "receipt=" + receipt + " line=" + raw.replace("\r", "\\r").replace("\n", "\\n"));
+            }
+        }
         if (convertedShare != null) {
             return atomchat$storeConvertedShare(message, nativeMeta, client, convertedShare);
         }
         if (meta == null) meta = ChatPipeline.structuredPlayerLine(message);
-        if (AtomChatConfig.get().debug) {
-            // Whether the channel-level capture landed at all: a missing meta is
-            // why an own line falls through to the text heuristics (2026-09-11).
-            AtomChat.LOGGER.info(com.atom.chat.diagnostics.AtomChatLog.message("capture", "[capture] meta={} line={}"), meta != null,
-                    com.atom.chat.card.BuiltInCardAdapter.isLegacyCredentialAnnouncement(message, raw)
-                            ? "[private red packet]" : raw);
-        }
         // Machine-to-machine chat protocols must never be claimed as player chat
         // or suppressed as an own echo. e33chat routes them to the system channel
         // ("宁可不杀不可错杀"): when in doubt, let the line through.
@@ -323,7 +331,7 @@ public class ChatHudMixin implements NotificationHudOverlay.PanelChatHud {
                 if (meta == null) meta = TellClickDetector.detectByTellClick(message, raw);
                 if (meta == null) meta = ChatPipeline.tryParsePlayerLine(raw);
                 if (meta == null) meta = EasyBotParser.tryParse(raw);
-                if (meta == null) { atomchat$logParseMiss(raw); return addSystemMessage(message,nativeMeta); }
+                if (meta == null) { atomchat$logParseMiss(receipt); return addSystemMessage(message,nativeMeta); }
             }
         }
 
@@ -381,7 +389,7 @@ public class ChatHudMixin implements NotificationHudOverlay.PanelChatHud {
                 meta.senderUuid(), displayName, unknown ? "" : meta.profileName(), body,
                 senderRich, contentRich).retainPresentation(configured || unknown).withNativeMeta(nativeMeta);
         var pairedCard = meta.evidence() == IdentityEvidence.NATIVE
-                ? com.atom.chat.net.CardCompanionClient.takeNativeShare(meta.senderUuid(), meta.originalContent()) : null;
+                ? com.atom.chat.net.CardCompanionClient.takeNativeShare(meta.senderUuid(), meta.originalContent(), content, receipt) : null;
         presentation = pairedCard == null ? atomchat$attachCard(presentation, message, displayName, meta.system())
                 : presentation.withCard(pairedCard);
         atomchat$addPublic(presentation, body, meta.system() || unknown,
@@ -532,14 +540,12 @@ public class ChatHudMixin implements NotificationHudOverlay.PanelChatHud {
      * debug flag to keep public-chat log volume at zero.
      */
     @Unique
-    private static void atomchat$logParseMiss(String raw) {
+    private static void atomchat$logParseMiss(long receipt) {
+        if (receipt == 0) return;
         var cfg = AtomChatConfig.get();
-        if (!cfg.debug) {
-            return;
-        }
         boolean hasTemplates = !cfg.chatTemplates.isEmpty() || !cfg.whisperTemplates.isEmpty();
-        AtomChat.LOGGER.info(com.atom.chat.diagnostics.AtomChatLog.message("capture", "[atomchat] chat parse miss (guard{} matched nothing): {}"),
-                hasTemplates ? "+templates" : "", raw);
+        com.atom.chat.diagnostics.AtomChatLog.diagnostic("capture",
+                "receipt=" + receipt + " parse_miss templates=" + hasTemplates);
     }
 
     @Unique

@@ -158,6 +158,7 @@ public class AtomChatClient implements ClientModInitializer {
             com.atom.chat.render.FirstOpenWarmup.requestGlWarmup();
         });
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
+            com.atom.chat.diagnostics.RawChatCapture.get().stop();
             com.atom.chat.channel.ChannelInbox.INSTANCE.connection(null);
             // Save before the stores are cleared, then drop the world key.
             com.atom.chat.history.ChatHistory.onDisconnect(client);

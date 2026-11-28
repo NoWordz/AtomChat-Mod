@@ -7,14 +7,8 @@ import com.atom.chat.text.RichText;
 import com.mojang.blaze3d.platform.GlStateManager;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.VertexSorting;
-import io.github.humbleui.skija.BackendTexture;
 import io.github.humbleui.skija.Canvas;
-import io.github.humbleui.skija.ColorAlphaType;
-import io.github.humbleui.skija.ColorType;
-import io.github.humbleui.skija.DirectContext;
-import io.github.humbleui.skija.GLTextureInfo;
 import io.github.humbleui.skija.Image;
-import io.github.humbleui.skija.SurfaceOrigin;
 import io.github.humbleui.types.Rect;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
@@ -50,7 +44,7 @@ public final class ItemIconRenderer {
      * Identity only, never called through: the borrowed context must not be
      * retained, so a collectable reference is enough to spot a new bridge.
      */
-    private static WeakReference<DirectContext> owner;
+    private static WeakReference<Object> owner;
     private static GLCapabilities ownerGl;
     private static boolean failed;
 
@@ -87,13 +81,17 @@ public final class ItemIconRenderer {
             gui.flush();
             // Skija borrow: submit queued sampling before any cached image is
             // closed, and re-identify the context without retaining its handle.
-            bridge.withContext(context -> {
-                context.resetGLAll();
-                context.flushAndSubmit(false);
-                DirectContext previous = owner == null ? null : owner.get();
-                if (previous != context || ownerGl != gl || requests.isEmpty()) CACHE.clear();
-                owner = new WeakReference<>(context);
-                ownerGl = gl;
+            ItemIconTextures.with(bridge, resources -> {
+                resources.flush();
+                Object identity = resources.ownerIdentity();
+                Object previous = owner == null ? null : owner.get();
+                if (previous != identity || ownerGl != gl) {
+                    CACHE.clear();
+                    owner = new WeakReference<>(identity);
+                    ownerGl = gl;
+                } else if (requests.isEmpty()) {
+                    CACHE.clear();
+                }
                 return null;
             });
             releaseRetired(gl);
@@ -118,8 +116,8 @@ public final class ItemIconRenderer {
                 }
             }
             // Skija borrow: import the finished textures under the same guard.
-            bridge.withContext(context -> {
-                for (Prepared icon : prepared) icon.importInto(context, gl);
+            ItemIconTextures.with(bridge, resources -> {
+                for (Prepared icon : prepared) icon.importInto(resources, gl);
                 return null;
             });
         } catch (RuntimeException | LinkageError error) {
@@ -234,15 +232,11 @@ public final class ItemIconRenderer {
             this.texture = texture;
         }
 
-        private void importInto(DirectContext context, GLCapabilities gl) {
-            int ownedTexture = texture;
-            try (BackendTexture backend = BackendTexture.makeGL(PIXELS, PIXELS, false,
-                    new GLTextureInfo(GL11C.GL_TEXTURE_2D, texture, GL11C.GL_RGBA8))) {
-                CACHE.put(info, Image.borrowTextureFrom(context, backend, SurfaceOrigin.BOTTOM_LEFT,
-                        ColorType.RGBA_8888, ColorAlphaType.PREMUL, null,
-                        () -> RETIRED.add(new RetiredTexture(gl, ownedTexture))));
-            }
+        private void importInto(ItemIconTextures resources, GLCapabilities gl) {
+            var retired = new RetiredTexture(gl, texture);
+            Image image = resources.borrow(PIXELS, texture, () -> RETIRED.add(retired));
             imported = true;
+            CACHE.put(info, image);
         }
     }
 

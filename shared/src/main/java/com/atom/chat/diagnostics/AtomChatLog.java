@@ -1,7 +1,42 @@
 package com.atom.chat.diagnostics;
-/** Formats templates only; logger arguments and Throwable handling remain intact. */
+
+import com.atom.chat.AtomChat;
+
+import java.time.Duration;
+import java.util.concurrent.atomic.AtomicLong;
+
+/** AtomChat log prefixes and the asynchronous output used by diagnostic mode. */
 public final class AtomChatLog {
+    private static final AtomicLong RECEIPTS = new AtomicLong();
+
     private AtomChatLog() {}
+
+    private static final class Diagnostics {
+        private static final AsyncDiagnosticOutput OUTPUT = new AsyncDiagnosticOutput(512, AtomChat.LOGGER::info);
+    }
+
+    public static void diagnostic(String category, String message) {
+        Diagnostics.OUTPUT.offer(category, message);
+    }
+
+    public static long nextReceipt() {
+        return RECEIPTS.incrementAndGet();
+    }
+
+    public static void finishDiagnostics() {
+        try {
+            if (Diagnostics.OUTPUT.finish(Duration.ofSeconds(2))) return;
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+        }
+        long discarded = Diagnostics.OUTPUT.discardPending();
+        // A blocked sink must not hold up closing the client.
+        Thread report = new Thread(() -> AtomChat.LOGGER.warn(AtomChatLog.message(
+                "diagnostics", "shutdown_incomplete discarded=" + discarded)), "AtomChat diagnostic exit report");
+        report.setDaemon(true);
+        report.start();
+    }
+
     public static java.util.function.Supplier<String> message(String chain,java.util.function.Supplier<String> template) {
         return () -> message(chain,template.get());
     }

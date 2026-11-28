@@ -13,7 +13,7 @@ public final class SettingsStepper {
 
     public static boolean supports(String action) {
         return "avatar_style".equals(action) || "page_nav_style".equals(action)
-                || "teleport_mode".equals(action) || AppearanceSettings.part(action) != null;
+                || "teleport_mode".equals(action);
     }
 
     public static String teleport(String current, int direction) {

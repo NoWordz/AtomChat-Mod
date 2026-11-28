@@ -1,5 +1,49 @@
 # Changelog
 
+## v1.0.0
+
+> 1.0.0-Preview 为三端本地预览候选。
+
+**修复**
+
+- 修复部分服务器上位置分享显示两张卡片、主手物品分享额外显示一条文本的问题。
+- 调整分享附件与原版聊天消息的配对，信息不足时显示一条普通消息。
+- 新的联机聊天历史按服务器地址区分，保留以前按显示名保存的文件。
+- 修复 NeoForge 组合服务端与已启用的 TrChat 桥接重复注册频道网络的问题。
+- 外观附属自行注册设置项，本体移除外观附属折叠组。
+
+**更改**
+
+- 更新八套内置主题配色，移除澄蓝、暮紫两个内置预设。
+- 半透明预设统一为面板 70%、卡片 60% 不透明度。
+- 诊断日志按类别和关联编号记录，异步写入，默认省略聊天原文和精确坐标。
+
+**性能**
+
+- 减少首次打开面板、加载聊天历史及绘制物品图标时的工作。
+
+----
+
+> 1.0.0-Preview is a local preview candidate for all three loaders.
+
+**Fixed**
+
+- Fixed duplicate location cards and extra plain-text lines from held-item shares on some servers.
+- Improved share attachment matching, with a single plain message when card data is incomplete.
+- New multiplayer chat history uses the server address and preserves older files keyed by display name.
+- Fixed duplicate channel registration with the TrChat bridge on hybrid NeoForge servers.
+- Appearance add-ons register their own settings, and the base mod no longer creates an add-on settings group.
+
+**Changed**
+
+- Updated eight built-in theme palettes and retired the Clear Blue and Dusk Purple presets.
+- Translucent presets now use 70% panel opacity and 60% card opacity.
+- Diagnostic logs use categories and correlation IDs, write asynchronously, and omit chat bodies and exact coordinates by default.
+
+**Performance**
+
+- Reduced work when first opening the panel, loading chat history, and drawing item icons.
+
 ## v0.9.8
 
 **新增**

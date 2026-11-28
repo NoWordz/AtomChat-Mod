@@ -263,7 +263,7 @@ public final class WallpaperStore {
                 Files.deleteIfExists(installed);
             } catch (IOException failure) {
                 restored = false;
-                AtomChat.LOGGER.error("Could not remove tentative wallpaper file {}", installed, failure);
+                AtomChat.LOGGER.error(com.atom.chat.diagnostics.AtomChatLog.message("resource", "Could not remove tentative wallpaper file {}"), installed, failure);
             }
         }
         for (var entry : displaced.entrySet()) {
@@ -271,7 +271,7 @@ public final class WallpaperStore {
                 moveIntoPlace(entry.getValue(), entry.getKey());
             } catch (IOException failure) {
                 restored = false;
-                AtomChat.LOGGER.error("Could not restore wallpaper file {} from {}", entry.getKey(), entry.getValue(), failure);
+                AtomChat.LOGGER.error(com.atom.chat.diagnostics.AtomChatLog.message("resource", "Could not restore wallpaper file {} from {}"), entry.getKey(), entry.getValue(), failure);
             }
         }
         return restored;
@@ -282,12 +282,12 @@ public final class WallpaperStore {
         try (var files = Files.newDirectoryStream(stage)) {
             for (Path file : files) Files.deleteIfExists(file);
         } catch (IOException failure) {
-            AtomChat.LOGGER.warn("Could not clean up wallpaper staging directory {}", stage, failure);
+            AtomChat.LOGGER.warn(com.atom.chat.diagnostics.AtomChatLog.message("resource", "Could not clean up wallpaper staging directory {}"), stage, failure);
         }
         try {
             Files.deleteIfExists(stage);
         } catch (IOException failure) {
-            AtomChat.LOGGER.warn("Could not remove wallpaper staging directory {}", stage, failure);
+            AtomChat.LOGGER.warn(com.atom.chat.diagnostics.AtomChatLog.message("resource", "Could not remove wallpaper staging directory {}"), stage, failure);
         }
     }
 

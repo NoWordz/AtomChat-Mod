@@ -11,8 +11,7 @@ import java.util.Objects;
  * <p>本类是纯 Java：不引用 Minecraft / Skija / GL / SLF4J，也不引用
  * {@code FrameProfile} / {@code FrameSegments} / {@code GlGpuTimer}。因此 C 档
  * （整帧不调用 {@code SkiaGraphics.drawPanel}）时它仍然出数，档位切换也不会改动
- * 原有 profile 的任何桶语义。日志行由本类生成完整字符串，宿主只负责
- * {@code LOGGER.info(line)}，三端因此共用同一份格式。
+ * 原有 profile 的任何桶语义。三端共用日志格式，异步输出交给宿主。
  *
  * <p>采样对象是【屏幕 render 入口相邻两次调用的 {@code System.nanoTime()} 差值】，
  * 即游戏帧间隔。它<strong>不是</strong> GPU 完成时间、<strong>不是</strong> CPU 渲染耗时、

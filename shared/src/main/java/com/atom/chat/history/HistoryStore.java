@@ -1,5 +1,6 @@
 package com.atom.chat.history;
 
+import com.atom.chat.chat.RecognitionServerKey;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
@@ -7,6 +8,8 @@ import com.google.gson.JsonParser;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.HexFormat;
 
 /**
  * Chat-history persistence: world key, file path and JSONL line format.
@@ -16,10 +19,9 @@ import java.security.MessageDigest;
  * orchestration (when to save/load, which messages belong to which channel)
  * lives in {@link ChatHistory}.
  *
- * <p>Key scheme is ported from e33chat: singleplayer / LAN host uses
- * {@code SP:<level name>}, multiplayer uses {@code MP:<server entry name>}.
- * Neither contains an address or a port, so re-opening a LAN world on a new
- * port keeps writing the same file.
+ * <p>Singleplayer and LAN hosts retain {@code SP:<level name>}.
+ * Multiplayer uses the normalized configured address in a new hashed namespace.
+ * Older title-keyed multiplayer files remain available on disk for recovery.
  */
 public final class HistoryStore {
     private HistoryStore() {
@@ -45,21 +47,24 @@ public final class HistoryStore {
      * @param singleplayer true when an integrated server is running (singleplayer
      *                     or a LAN host)
      * @param levelName    integrated-server world name, may be null
-     * @param serverName   multiplayer server-list entry name, may be null
+     * @param serverAddress multiplayer server address, may be null
      */
-    public static String keyFor(boolean singleplayer, String levelName, String serverName) {
+    public static String keyFor(boolean singleplayer, String levelName, String serverAddress) {
         if (singleplayer && levelName != null && !levelName.isBlank()) {
             return "SP:" + levelName;
         }
-        if (serverName != null && !serverName.isBlank()) {
-            return "MP:" + serverName;
-        }
-        return "world";
+        String server = RecognitionServerKey.multiplayer(serverAddress);
+        return server == null ? "world" : "MPADDR:" + sha256(server);
     }
 
     /** Only world-specific keys are persisted; the "world" fallback is memory-only. */
     public static boolean isWorldSpecific(String key) {
-        return key != null && (key.startsWith("SP:") || key.startsWith("MP:"));
+        return key != null && (key.startsWith("SP:") || key.startsWith("MP:") || key.startsWith("MPADDR:"));
+    }
+
+    public static boolean isLegacyMultiplayerFile(Path file) {
+        String name = file.getFileName().toString();
+        return name.startsWith("MP_") && name.endsWith(".jsonl");
     }
 
     public static Path file(String worldKey) {
@@ -72,14 +77,15 @@ public final class HistoryStore {
     }
 
     static String sha256Short(String s) {
+        String digest = sha256(s);
+        return digest.substring(0, Math.min(16, digest.length()));
+    }
+
+    private static String sha256(String s) {
         try {
-            byte[] d = MessageDigest.getInstance("SHA-256").digest(s.getBytes(StandardCharsets.UTF_8));
-            StringBuilder sb = new StringBuilder();
-            for (int i = 0; i < 8; i++) {
-                sb.append(String.format("%02x", d[i]));
-            }
-            return sb.toString();
-        } catch (Exception e) {
+            byte[] digest = MessageDigest.getInstance("SHA-256").digest(s.getBytes(StandardCharsets.UTF_8));
+            return HexFormat.of().formatHex(digest);
+        } catch (NoSuchAlgorithmException unavailable) {
             return Integer.toHexString(s.hashCode());
         }
     }

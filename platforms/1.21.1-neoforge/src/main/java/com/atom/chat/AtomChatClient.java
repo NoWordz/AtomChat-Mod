@@ -179,6 +179,7 @@ public class AtomChatClient {
     }
 
     private static void onPlayerDisconnect(ClientPlayerNetworkEvent.LoggingOut event) {
+        com.atom.chat.diagnostics.RawChatCapture.get().stop();
         com.atom.chat.channel.ChannelInbox.INSTANCE.connection(null);
         Minecraft client = Minecraft.getInstance();
         // Save before the stores are cleared, then drop the world key.

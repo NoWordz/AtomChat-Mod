@@ -9,8 +9,8 @@ class DefaultInstancePaletteTest {
         assertEquals(-15460837, config.panelOutlineColor);
         assertEquals(-14800581, config.otherBubbleColor);
         assertEquals(-390611510, config.textSecondaryColor);
-        assertEquals(.6990596F, config.panelOpacity);
-        assertEquals(.59866506F, config.cardTint);
+        assertEquals(0.70F, config.panelOpacity);
+        assertEquals(0.60F, config.cardTint);
         assertEquals(25F, config.cornerRadius);
         assertEquals(4F, config.panelOutlineWidth);
         config.setPanelOutlineWidth(6F);

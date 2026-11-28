@@ -188,7 +188,7 @@ final class RoundedCoverage {
                 shader = makeShader(key);
             } catch (RuntimeException | LinkageError failure) {
                 unavailable = true;
-                AtomChat.LOGGER.warn("Using Skija coverage for rounded edges", failure);
+                AtomChat.LOGGER.warn(com.atom.chat.diagnostics.AtomChatLog.message("render", "Using Skija coverage for rounded edges"), failure);
                 return null;
             }
             if (SHADERS.size() == MAX_SHADERS) {

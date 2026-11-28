@@ -21,11 +21,13 @@ public final class SettingsUi {
     private static final Map<Scope, UiContributions<Group>> GROUPS = new ConcurrentHashMap<>();
     private static final Map<Scope, Map<String, UiContributions<Control>>> ROWS = new ConcurrentHashMap<>();
     public static final String TOP_ROWS = "atomchat:ungrouped";
-    private static final List<UiContributions.Entry<HomeEntry>> DEFAULT_HOME = List.of(
-            builtIn(SettingsSection.APPEARANCE, "atomchat.settings.appearance", SettingsIcons.PALETTE),
-            builtIn(SettingsSection.CHAT, "atomchat.settings.chat", SettingsIcons.MESSAGES),
-            builtIn(SettingsSection.PRIVACY, "atomchat.settings.privacy", AppIcons.ICON_SETTINGS_PRIVACY_PATH),
-            builtIn(SettingsSection.ABOUT, "atomchat.settings.about", SettingsIcons.INFO_CIRCLE));
+    private static final class DefaultHome {
+        private static final List<UiContributions.Entry<HomeEntry>> ENTRIES = List.of(
+                builtIn(SettingsSection.APPEARANCE, "atomchat.settings.appearance", SettingsIcons.PALETTE),
+                builtIn(SettingsSection.CHAT, "atomchat.settings.chat", SettingsIcons.MESSAGES),
+                builtIn(SettingsSection.PRIVACY, "atomchat.settings.privacy", AppIcons.ICON_SETTINGS_PRIVACY_PATH),
+                builtIn(SettingsSection.ABOUT, "atomchat.settings.about", SettingsIcons.INFO_CIRCLE));
+    }
 
     public static final String HOME_SPACING = "atomchat:settings_home_spacing";
     private static final UiContributions<HomeSpacing> SPACING = new UiContributions<>();
@@ -143,8 +145,9 @@ public final class SettingsUi {
     }
 
     public static List<UiContributions.Entry<HomeEntry>> resolvedHome() {
-        if (!HOME.hasEdits() || com.atom.chat.onboarding.TutorialSandbox.active()) return DEFAULT_HOME;
-        return HOME.resolve(DEFAULT_HOME).stream().filter(entry -> destination(entry.value()) != null).toList();
+        var entries = DefaultHome.ENTRIES;
+        if (!HOME.hasEdits() || com.atom.chat.onboarding.TutorialSandbox.active()) return entries;
+        return HOME.resolve(entries).stream().filter(entry -> destination(entry.value()) != null).toList();
     }
 
     public static NavPage destination(HomeEntry entry) {

@@ -37,7 +37,7 @@ public class MessageHandlerMixin {
                                          BooleanSupplier callback, SignedMessage message, GameProfile profile,
                                          MessageType.Parameters bound) {
         process(signature, com.atom.chat.net.CardCompanionClient.deferNativeShare(
-                message.getSender(), message.getSignedContent(), callback));
+                message.getSender(), message.getSignedContent(), message.filterMask().isPassThrough(), callback));
     }
 
     @org.spongepowered.asm.mixin.injection.ModifyVariable(method="process(Lnet/minecraft/network/message/MessageSignatureData;Ljava/util/function/BooleanSupplier;)V",at=@At("HEAD"),argsOnly=true)

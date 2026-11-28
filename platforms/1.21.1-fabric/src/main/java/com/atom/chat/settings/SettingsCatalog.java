@@ -221,7 +221,10 @@ public final class SettingsCatalog {
                             "atomchat.settings.about.debug",
                             "atomchat.settings.about.debug.desc",
                             () -> AtomChatConfig.get().debug,
-                            v -> AtomChatConfig.get().debug = v));
+                            v -> {
+                                AtomChatConfig.get().debug = v;
+                                if (!v) com.atom.chat.diagnostics.RawChatCapture.get().stop();
+                            }));
         };
     }
 

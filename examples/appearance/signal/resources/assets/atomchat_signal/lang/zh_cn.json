@@ -1,4 +1,7 @@
 {
   "atomchat_signal.bubble.capsule": "信号胶囊气泡",
-  "atomchat_signal.avatar.brackets": "琥珀角标"
+  "atomchat_signal.avatar.brackets": "琥珀角标",
+  "atomchat_signal.settings.appearance": "信号",
+  "atomchat_signal.settings.bubble.desc": "为聊天面板使用信号胶囊气泡。",
+  "atomchat_signal.settings.avatar.desc": "为聊天面板和 HUD 使用琥珀角标。"
 }

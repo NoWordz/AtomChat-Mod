@@ -1,8 +1,8 @@
 package com.atom.chat.theme;
 
 
-import com.atom.lib.design.atomchat.UiTokens;
 import com.atom.chat.config.AtomChatConfig;
+import com.atom.lib.design.atomchat.UiTokens;
 
 /**
  * Built-in theme presets and the corner-style scale factor.
@@ -115,98 +115,88 @@ public final class ThemeService {
     public static final Preset MINIMAL = new Preset("minimal",
             0xFF2563D8,
             0xFF2563D8, 0xFFFFFFFF,
-            0xFFB9CDE6, 0xFF1A1D21,
-            0xFFF7F8FA, 0xFF151A22, 0xFF596273,
+            0xFFB9CDE6, 0xFF151A22,
+            0xFFE7EDFA, 0xFF151A22, 0xFF596273,
             0xFFFFFFFF, 0xFF4A6285,
-            0xFFECEEF2, 0xFF626976,
+            0xFFECEEF2, 0xFF596273,
             null, null, "small");
-    /** 青柠 (id "summer", shown as 夏日 before) — lime accent with soft olive incoming bubbles. */
+    /** 青柠 (id "summer", shown as 夏日 before) uses lime bubbles over a cream panel. */
     public static final Preset SUMMER = new Preset("summer",
-            0xFF84CC16,
-            0xFF84CC16, 0xFF1A2E05,
-            0xFFC3D38D, 0xFF1F2937,
-            0xFFFAFCF3, 0xFF192521, 0xFF56634C,
-            0xFFFFFFFF, 0xFF5A732A,
-            0xFFEBF2DC, 0xFF49730E,
+            0xFFACE246,
+            0xFFACE246, 0xFF1A2E05,
+            0xFFEAFFA6, 0xFF192521,
+            0xFFFFFFEC, 0xFF192521, 0xFF56634C,
+            0xFFFFFFEC, 0xFF466C00,
+            0xFFEBF2DC, 0xFF466C00,
             null, null, "medium");
-    /** 典雅 — warm paper, clay-sand incoming bubbles and a terracotta accent. */
+    /** 典雅 uses warm paper surfaces with orange and peach chat bubbles. */
     public static final Preset ELEGANT = new Preset("elegant",
-            0xFFB45639,
-            0xFFB45639, 0xFFFFFFFF,
-            0xFFD0B294, 0xFF3D3929,
-            0xFFF5F0E8, 0xFF332E23, 0xFF685F53,
-            0xFFE8DDD0, 0xFF806445,
-            0xFFEAE1D3, 0xFF6B6255,
+            0xFFDE6E1A,
+            0xFFDE6E1A, 0xFFFFFFFF,
+            0xFFF4B182, 0xFF332E23,
+            0xFFF5EBDB, 0xFF332E23, 0xFF685F53,
+            0xFFF3DFC8, 0xFF806445,
+            0xFFF5EBDB, 0xFF685F53,
             null, null, "medium");
-    /** 黑鸦 — deep black-blue night, gold accent, GitHub-dark surfaces. */
+    /** 黑鸦 uses dark blue surfaces, a gold accent, and gold outgoing bubbles. */
     public static final Preset RAVEN = new Preset("raven",
-            0xFFE3B341,
-            0xFFE3B341, 0xFF1C1901,
-            0xFF27323F, 0xFFF0F4F8,
-            0xFF0D1117, 0xFFF0F4F8, 0xFFA4AFBD,
-            0xFF161B27, 0xFFAAB5C4,
-            0xFF2A313C, 0xFF99A3AF,
+            0xFFFFC233,
+            0xFFFFC233, 0xFF1C1901,
+            0xFF355171, 0xFFF0F4F8,
+            0xFF1D283A, 0xFFF0F4F8, 0xFFA4AFBD,
+            0xFF1C2542, 0xFF07102A,
+            0xFF1D283A, 0xFFA4AFBD,
             null, null, "medium");
-    /** 枢纽 — pure black terminal with the orange accent; sharp corners, no softness. */
+    /** 枢纽 uses charcoal surfaces, a black outline, and an orange accent. */
     public static final Preset HUB = new Preset("hub",
-            0xFFFF9000,
-            0xFFFF9000, 0xFF1A0E00,
-            0xFF111111, 0xFFF5F5F5,
-            0xFF0A0A0A, 0xFFFFFFFF, 0xFFB0B9C7,
-            0xFF141414, 0xFFC0CAD5,
-            0xFF161616, 0xFFD4D4D4,
+            0xFFFF8203,
+            0xFFFF8203, 0xFF151414,
+            0xFF111111, 0xFFFFFFFF,
+            0xFF151414, 0xFFFFFFFF, 0xFFB0B9C7,
+            0xFF262323, 0xFF000000,
+            0xFF151414, 0xFFD4D4D4,
             null, null, "small");
-    /** 活力 — pale pink background, muted rose incoming bubbles and a punchy pink accent. */
+    /** 活力 uses pale pink surfaces, muted rose incoming bubbles, and a bright pink accent. */
     public static final Preset VIVID = new Preset("vivid",
-            0xFFCA3F70,
-            0xFFCA3F70, 0xFFFFFFFF,
-            0xFFDEA6BE, 0xFF3D2C35,
-            0xFFFDF0F4, 0xFF36212B, 0xFF785666,
-            0xFFFFFFFF, 0xFF8C526B,
-            0xFFF9DCE7, 0xFFA13D63,
+            0xFFFF4D8C,
+            0xFFFF4D8C, 0xFFFFFFFF,
+            0xFFDEA6BE, 0xFF36212B,
+            0xFFFFEBF8, 0xFF36212B, 0xFF785666,
+            0xFFFFEBF1, 0xFF8C526B,
+            0xFFFFEBF1, 0xFFA13D63,
             null, null, "medium");
-    /** 薄暮 — grey-blue dusk with a violet cast: translucent smoky panel over
-     *  the blurred world, lavender accent and bubbles, near-white text. */
+    /** 薄暮 uses translucent violet surfaces, a lavender accent, and near-white text. */
     public static final Preset DUSK = new Preset("dusk",
-            0xFFA78BFA,
-            0xFFA78BFA, 0xFF241536,
-            0xFF333950, 0xFFECEEF4,
-            0xFF232633, 0xFFF5F6FA, 0xFFB3B8CD,
-            0xFF2B2E3D, 0xFFB9B2D5,
-            0xFF313548, 0xFFC9CDE0,
-            0.88F, true, "large");
-    /** 薄荷 — deep teal-green base worn translucent, mint accent and bubble,
-     *  dark teal text on the bright mint surfaces. */
+            0xFFB69DFF,
+            0xFFB69DFF, 0xFF241536,
+            0xFF433579, 0xFFF5F6FA,
+            0xFF352B48, 0xFFF5F6FA, 0xFFF5F6FA,
+            0xFF302958, 0xFF1D124C,
+            0xFF413960, 0xFFF5F6FA,
+            AtomChatConfig.DEFAULT_PANEL_OPACITY, true, "large");
+    /** 薄荷 uses a translucent teal panel with a lighter mint card surface. */
     public static final Preset MINT = new Preset("mint",
             0xFF5EEAD4,
             0xFF5EEAD4, 0xFF082620,
-            0xFF1B3B34, 0xFFE7F5F0,
-            0xFF0F2622, 0xFFF3FCF8, 0xFFB2CEC3,
-            0xFF16332D, 0xFF9EDCCB,
-            0xFF1E423A, 0xFFBFE8DC,
-            0.9F, true, "large");
+            0xFF1B3B34, 0xFFEBFDF7,
+            0xFF2E7E72, 0xFFEBFDF7, 0xFFEBFDF7,
+            0xFF61B8A0, 0xFF12392F,
+            0xFF348C78, 0xFFEBFDF7,
+            AtomChatConfig.DEFAULT_PANEL_OPACITY, true, "large");
 
-    /** Deep blue glass, light blue glass, plum glass and warm paper glass keep the world visible. */
-    public static final Preset AZURE_GLASS = new Preset("azure_glass",
-            0xFF82BEFF, 0xFF82BEFF, 0xFF10263E, 0xFF253E5A, 0xFFF0F6FF,
-            0xFF12263B, 0xFFF5F8FF, 0xFFD2E5FB, 0xFF29425D, 0xFFA9C6E8,
-            0xD9233B56, 0xFFE0ECFB, .70F, true, "large");
-    public static final Preset PLUM_GLASS = new Preset("plum_glass",
-            0xFFE1AFF1, 0xFFE1AFF1, 0xFF35143D, 0xFF50334F, 0xFFFFF0FC,
-            0xFF2D1C31, 0xFFFFF4FD, 0xFFECD2F2, 0xFF49304E, 0xFFD9B6E0,
-            0xD9452B4C, 0xFFF4DDF7, .72F, true, "large");
+    /** Ice and sand glass keep the world visible. */
     public static final Preset ICE_GLASS = new Preset("ice_glass",
             0xFF246889, 0xFF246889, 0xFFFFFFFF, 0xFFC4DBE5, 0xFF173243,
             0xFFE4F0F5, 0xFF152D3B, 0xFF314653, 0xFFF2F8FB, 0xFF536E7D,
-            0xD9C4DCE7, 0xFF294D63, .74F, true, "large");
+            0xD9C4DCE7, 0xFF294D63, AtomChatConfig.DEFAULT_PANEL_OPACITY, true, "large");
     public static final Preset SAND_GLASS = new Preset("sand_glass",
             0xFF926027, 0xFF926027, 0xFFFFFFFF, 0xFFE1CCAC, 0xFF3C2D1B,
             0xFFF2E7D6, 0xFF352819, 0xFF51412E, 0xFFFFF8EB, 0xFF826C50,
-            0xD9DFCCAF, 0xFF584025, .76F, true, "large");
+            0xD9DFCCAF, 0xFF584025, AtomChatConfig.DEFAULT_PANEL_OPACITY, true, "large");
 
     private static final Preset[] COLOR_PRESETS =
             {MINIMAL, SUMMER, ELEGANT, RAVEN, HUB, VIVID, DUSK, MINT,
-                    AZURE_GLASS, PLUM_GLASS, ICE_GLASS, SAND_GLASS};
+                    ICE_GLASS, SAND_GLASS};
 
     /** The colour presets in picker order (the frosted tile is rendered separately). */
     public static Preset[] presets() {

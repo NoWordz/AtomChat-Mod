@@ -1,6 +1,7 @@
 package com.atom.chat.config;
 
 import com.atom.chat.AtomChat;
+import com.atom.chat.config.AtomChatConfig.ConfigSnapshot;
 import com.atom.chat.util.CacheDirs;
 import com.atom.chat.util.DataMigration;
 import com.google.gson.*;
@@ -18,12 +19,13 @@ final class PersonalDataStore {
     private PersonalDataStore() { }
     private static Path path() { return CacheDirs.clientDataPath(); }
 
-    static boolean load(AtomChatConfig config) {
+    static ConfigSnapshot load(AtomChatConfig config) {
         Path file = path();
         try {
             DataMigration.noLinks(file);
-            if (!Files.exists(file)) return true;
-            JsonObject data = read(file);
+            ConfigSnapshot snapshot = ConfigSnapshot.read(file);
+            JsonObject data = snapshot.original();
+            if (data == null) return snapshot;
             // Validate every value before touching the live config.
             JsonObject merged = GSON.toJsonTree(config).getAsJsonObject();
             for (String name : FIELDS) if (data.has(name)) merged.add(name, data.get(name));
@@ -31,11 +33,11 @@ final class PersonalDataStore {
             for (String name : FIELDS) field(name).set(config, field(name).get(parsed));
             if (config.quickPhrases == null) config.quickPhrases = new java.util.ArrayList<>();
             if (config.blockedPlayers == null) config.blockedPlayers = new java.util.ArrayList<>();
-            return true;
+            return snapshot;
         } catch (IOException | RuntimeException | ReflectiveOperationException e) {
             DataMigration.noteWarning();
             AtomChat.LOGGER.error(com.atom.chat.diagnostics.AtomChatLog.message("config", "Could not read AtomChat personal data at {}; original data and config retained, check before sharing config"), file, e);
-            return false;
+            return null;
         }
     }
 
@@ -47,9 +49,12 @@ final class PersonalDataStore {
     }
 
     /** Personal data must commit before its fields may be stripped from the old config. */
-    static JsonObject saveAndStrip(AtomChatConfig config, Path legacyConfig) throws IOException {
-        DataMigration.noLinks(path());
-        JsonObject existing = Files.exists(path()) ? read(path()) : null;
+    static JsonObject saveAndStrip(AtomChatConfig config, ConfigSnapshot snapshot,
+                                   ConfigSnapshot loadedPersonal) throws IOException {
+        Path file = path();
+        DataMigration.noLinks(file);
+        ConfigSnapshot previous = loadedPersonal == null ? ConfigSnapshot.read(file) : loadedPersonal;
+        JsonObject existing = previous.original();
         if (existing != null) GSON.fromJson(existing, AtomChatConfig.class);
         JsonObject settings = GSON.toJsonTree(config).getAsJsonObject();
         JsonObject personal = new JsonObject();
@@ -57,21 +62,23 @@ final class PersonalDataStore {
             JsonElement value = settings.remove(name);
             if (value != null && !value.isJsonNull()) personal.add(name, value);
         }
-        if (Files.isRegularFile(legacyConfig)) {
-            JsonObject old = read(legacyConfig);
-            if (FIELDS.stream().anyMatch(old::has)) {
-                DataMigration.backupConfig(legacyConfig, CacheDirs.migrationBackupDir());
-            }
+        JsonObject original = snapshot.original();
+        if (original != null && FIELDS.stream().anyMatch(original::has)) {
+            snapshot.requireCurrent();
+            previous.requireCurrent();
+            DataMigration.backupConfig(snapshot.path(), CacheDirs.migrationBackupDir());
         }
         // JsonPrimitive(Float) compares differently from the same decimal parsed from disk.
         personal = JsonParser.parseString(GSON.toJson(personal)).getAsJsonObject();
         if (personal.equals(existing)) return settings;
-        Files.createDirectories(path().getParent());
-        Path staged = Files.createTempFile(path().getParent(), "client-data-", ".tmp");
+        Files.createDirectories(file.getParent());
+        Path staged = Files.createTempFile(file.getParent(), "client-data-", ".tmp");
         try {
             Files.writeString(staged, GSON.toJson(personal));
-            replace(staged, path());
-            if (!personal.equals(read(path()))) throw new IOException("Personal data read-back failed");
+            snapshot.requireCurrent();
+            previous.requireCurrent();
+            replace(staged, file);
+            if (!personal.equals(read(file))) throw new IOException("Personal data read-back failed");
         } finally { Files.deleteIfExists(staged); }
         return settings;
     }

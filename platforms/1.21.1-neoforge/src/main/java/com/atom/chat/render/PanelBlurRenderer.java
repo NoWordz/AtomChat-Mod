@@ -382,7 +382,7 @@ public final class PanelBlurRenderer {
         if (com.atom.chat.diagnostics.Truth3Probe.instrumentEnabled(cfg.debug, com.atom.chat.diagnostics.Truth3Probe.get().measureOnly())) {
             String prepassLine = com.atom.chat.diagnostics.PrepassProbe.get().onFrame(
                     com.atom.chat.diagnostics.Truth3Probe.get().mode().ordinal(), true);
-            if (prepassLine != null) AtomChat.LOGGER.info(prepassLine);
+            if (prepassLine != null) com.atom.chat.diagnostics.AtomChatLog.diagnostic("probe", prepassLine);
         }
         return !disabled && roundedShader != null && kawaseShader != null;
     }

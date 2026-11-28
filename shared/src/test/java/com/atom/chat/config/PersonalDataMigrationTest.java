@@ -173,9 +173,11 @@ class PersonalDataMigrationTest {
     }
 
     @Test void repeatedReloadsDoNotDuplicateAnUnchangedLegacyConfigBackup() throws Exception {
-        Path legacy = write("config/atomchat/atomchat-client.json", "{\"quickPhrases\":[\"keep\"]}");
-        PersonalDataStore.saveAndStrip(new AtomChatConfig(), legacy);
-        PersonalDataStore.saveAndStrip(new AtomChatConfig(), legacy);
+        String legacy = "{\"quickPhrases\":[\"keep\"]}";
+        write("config/atomchat/atomchat-client.json", legacy);
+        AtomChatConfig.reload();
+        write("config/atomchat/atomchat-client.json", legacy);
+        AtomChatConfig.reload();
         assertEquals(1, retiredTexts().size());
     }
 

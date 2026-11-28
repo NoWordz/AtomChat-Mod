@@ -38,7 +38,7 @@ public final class RecognitionMemory {
                 DataMigration.noLinks(source);
                 if (Files.isRegularFile(source) && Files.size(source) <= 8_388_608)
                     saved = JSON.fromJson(Files.readString(source), Saved.class);
-            } catch (Exception error) { AtomChat.LOGGER.warn("Unable to load confirmed chat recognition memory", error); }
+            } catch (Exception error) { AtomChat.LOGGER.warn(com.atom.chat.diagnostics.AtomChatLog.message("capture", "Unable to load confirmed chat recognition memory"), error); }
             Saved incoming = saved;
             clientThread.accept(() -> { synchronized (RecognitionMemory.class) {
                 if (token != epoch || !Objects.equals(source, file)) return;
@@ -69,7 +69,7 @@ public final class RecognitionMemory {
                 Files.writeString(temporary, JSON.toJson(saved));
                 try { Files.move(temporary, target, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING); }
                 catch (AtomicMoveNotSupportedException unsupported) { Files.move(temporary, target, StandardCopyOption.REPLACE_EXISTING); }
-            } catch (Exception error) { AtomChat.LOGGER.warn("Unable to save confirmed chat recognition memory", error); }
+            } catch (Exception error) { AtomChat.LOGGER.warn(com.atom.chat.diagnostics.AtomChatLog.message("capture", "Unable to save confirmed chat recognition memory"), error); }
             finally { if (temporary != null) try { Files.deleteIfExists(temporary); } catch (Exception ignored) {} }
         });
     }

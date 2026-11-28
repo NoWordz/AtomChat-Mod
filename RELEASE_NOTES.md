@@ -1,5 +1,29 @@
 # Release Notes
 
+## v1.0.0
+
+> 1.0.0-Preview 为三端本地预览候选。
+
+- 修复部分服务器的位置分享双卡片及物品分享附带多余文字。
+- 新的联机聊天历史按地址区分，保留以前的历史文件。
+- 修复 NeoForge 组合服务端的 TrChat 频道注册冲突。
+- 更新八套预设配色，移除澄蓝和暮紫，统一半透明主题的面板和卡片不透明度。
+- 外观附属自行添加设置项。
+- 减少面板首次打开、聊天历史加载与物品图标绘制的开销。
+- 诊断日志分类型异步写入，默认省略聊天原文和精确坐标。
+
+----
+
+> 1.0.0-Preview is a local preview candidate for all three loaders.
+
+- Fixed duplicate location cards and extra text from item shares on some servers.
+- New multiplayer history uses the server address while preserving older history files.
+- Fixed a TrChat channel registration conflict on hybrid NeoForge servers.
+- Updated eight theme palettes, retired Clear Blue and Dusk Purple, and standardized panel and card opacity for translucent presets.
+- Appearance add-ons add their own settings.
+- Reduced the cost of opening the panel, loading chat history, and drawing item icons.
+- Diagnostic logs are categorized and written asynchronously, omitting chat bodies and exact coordinates by default.
+
 ## v0.9.8
 
 **新增**

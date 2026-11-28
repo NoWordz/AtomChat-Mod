@@ -6,6 +6,7 @@
   "mixins": [
     "ReactionServerSendMixin",
     "ReactionSystemBroadcastMixin",
+    "ShareChatIntakeMixin",
     "ReactionPrivateMessageMixin"
   ],
   "client": [

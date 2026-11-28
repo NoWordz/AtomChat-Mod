@@ -4,10 +4,13 @@ import com.atom.chat.history.HistoryStore.Entry;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -20,8 +23,30 @@ class HistoryStoreTest {
     }
 
     @Test
-    void multiplayerKeyUsesServerListNameAndIgnoresAddress() {
-        assertEquals("MP:NCR", HistoryStore.keyFor(false, null, "NCR"));
+    void multiplayerKeyNormalizesTheAddress() {
+        String key = HistoryStore.keyFor(false, null, "play.example.invalid:25565");
+        assertEquals(key, HistoryStore.keyFor(false, null, " PLAY.EXAMPLE.INVALID:25565 "));
+        assertNotEquals(key, HistoryStore.keyFor(false, null, "play.example.invalid:25566"));
+        assertTrue(HistoryStore.isWorldSpecific(key));
+    }
+
+    @Test
+    void addressFileKeepsTheLegacyTitleFileIntact(@TempDir Path tmp) throws Exception {
+        HistoryStore.init(tmp);
+        String address = "play.example.invalid:25565";
+        Path legacy = HistoryStore.file("MP:" + address);
+        Path current = HistoryStore.file(HistoryStore.keyFor(false, null, address));
+
+        assertNotEquals(legacy, current);
+        assertFalse(current.getFileName().toString().contains("play.example.invalid"));
+        assertTrue(HistoryStore.isLegacyMultiplayerFile(legacy));
+        assertFalse(HistoryStore.isLegacyMultiplayerFile(current));
+
+        String oldContents = "{\"legacy\":true}\n";
+        Files.writeString(legacy, oldContents);
+        assertTrue(HistoryFiles.write(current, List.of(HistoryFilesTest.entry(1)), () -> true));
+        assertEquals(1, HistoryFiles.read(current).entries().size());
+        assertEquals(oldContents, Files.readString(legacy));
     }
 
     @Test

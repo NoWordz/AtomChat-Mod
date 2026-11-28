@@ -100,11 +100,10 @@ class AppearanceV070Test {
     @Test void defaultSurfacesAreLayeredAndTranslucentWithoutChangingBlue() {
         var c = new AtomChatConfig();
         assertEquals(0xFF4A90E2, c.accentColor);
-        assertEquals(.6990596F,c.panelOpacity);
+        assertEquals(0.70F, c.panelOpacity);
         assertEquals(0xFF101418, c.panelBgColor);
         assertEquals(0xFF14161B, c.cardColor);
         assertEquals(0xFF14161B, c.panelOutlineColor);
-        float cardAlpha = c.cardTint;
-        assertTrue(cardAlpha >= .4F && cardAlpha <= .6F);
+        assertEquals(0.60F, c.cardTint);
     }
 }

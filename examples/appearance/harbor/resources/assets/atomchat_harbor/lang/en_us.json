@@ -2,5 +2,8 @@
   "atomchat_harbor.bubble.chamfer": "Harbor Chamfer",
   "atomchat_harbor.panel.chamfer": "Harbor Cut Corners",
   "atomchat_harbor.avatar.tide_ring": "Tide Ring",
-  "atomchat_harbor.wallpaper.moonlit_harbor": "Moonlit Harbor"
+  "atomchat_harbor.wallpaper.moonlit_harbor": "Moonlit Harbor",
+  "atomchat_harbor.settings.appearance": "Harbor",
+  "atomchat_harbor.settings.bubble.desc": "Use Harbor's chamfered bubble in chat and the HUD.",
+  "atomchat_harbor.settings.avatar.desc": "Use the tide ring in chat and the HUD."
 }

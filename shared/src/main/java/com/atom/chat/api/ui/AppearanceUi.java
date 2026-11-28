@@ -1,5 +1,6 @@
 package com.atom.chat.api.ui;
 
+import com.atom.chat.config.AtomChatConfig;
 import io.github.humbleui.skija.Canvas;
 import io.github.humbleui.skija.Paint;
 import io.github.humbleui.skija.Path;
@@ -175,10 +176,52 @@ public final class AppearanceUi {
         }
     }
 
-    /** Immutable add-on choices for one part, sorted by ID. The host supplies the built-in choice. */
+    /** Immutable add-on choices for one part, sorted by ID. */
     public static List<Option> options(Part part) {
         synchronized (LOCK) {
             return registry(part).options();
+        }
+    }
+
+    /** On the client thread, reads the saved ID. Null means the built-in appearance. */
+    public static String selectedId(Part part) {
+        return selectedId(part, AtomChatConfig.get());
+    }
+
+    /** On the client thread, saves a registered choice. Pass null to restore the built-in appearance. */
+    public static boolean select(Part part, String id) {
+        if (id != null) {
+            synchronized (LOCK) {
+                if (registry(part).find(id) == null) return false;
+            }
+        }
+        AtomChatConfig config = AtomChatConfig.get();
+        String previous = selectedId(part, config);
+        setSelectedId(part, config, id);
+        boolean saved = false;
+        try {
+            saved = AtomChatConfig.saveChecked(config);
+            return saved;
+        } finally {
+            if (!saved) setSelectedId(part, config, previous);
+        }
+    }
+
+    private static String selectedId(Part part, AtomChatConfig config) {
+        return switch (part) {
+            case BUBBLE -> config.bubbleAppearanceId;
+            case PANEL_OUTLINE -> config.panelOutlineAppearanceId;
+            case AVATAR_FRAME -> config.avatarFrameAppearanceId;
+            case DYNAMIC_WALLPAPER -> config.dynamicWallpaperAppearanceId;
+        };
+    }
+
+    private static void setSelectedId(Part part, AtomChatConfig config, String id) {
+        switch (part) {
+            case BUBBLE -> config.bubbleAppearanceId = id;
+            case PANEL_OUTLINE -> config.panelOutlineAppearanceId = id;
+            case AVATAR_FRAME -> config.avatarFrameAppearanceId = id;
+            case DYNAMIC_WALLPAPER -> config.dynamicWallpaperAppearanceId = id;
         }
     }
 

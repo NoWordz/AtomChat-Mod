@@ -1,4 +1,7 @@
 {
   "atomchat_signal.bubble.capsule": "Signal Capsule",
-  "atomchat_signal.avatar.brackets": "Amber Brackets"
+  "atomchat_signal.avatar.brackets": "Amber Brackets",
+  "atomchat_signal.settings.appearance": "Signal",
+  "atomchat_signal.settings.bubble.desc": "Use the Signal capsule bubble in the chat panel.",
+  "atomchat_signal.settings.avatar.desc": "Use the amber brackets in chat and the HUD."
 }

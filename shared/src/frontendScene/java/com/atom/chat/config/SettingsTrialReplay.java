@@ -15,6 +15,16 @@ import java.util.*;
 
 /** Current or independently frozen production fixture; caller chooses an explicit classpath. No game window. */
 public final class SettingsTrialReplay {
+    // Keep the reviewed 0.9.8 light scene inputs stable across player-facing preset edits.
+    private static final ThemeService.Preset LIGHT_REFERENCE = new ThemeService.Preset("minimal",
+            0xFF2563D8,
+            0xFF2563D8, 0xFFFFFFFF,
+            0xFFB9CDE6, 0xFF1A1D21,
+            0xFFF7F8FA, 0xFF151A22, 0xFF596273,
+            0xFFFFFFFF, 0xFF4A6285,
+            0xFFECEEF2, 0xFF626976,
+            null, null, "small");
+
     public static void main(String[] args)throws Exception {
         run(Path.of(args[0]),args[1],args[2],Integer.parseInt(args[3]),args[4].equals("light"),
                 args.length == 6 && args[5].equals("interaction"), Boolean.getBoolean("fcl.strictBody"), null);
@@ -30,7 +40,12 @@ public final class SettingsTrialReplay {
         var test=Class.forName("com.atom.chat.config.SharedSettingsFrontendTest");var ctor=test.getDeclaredConstructor();ctor.setAccessible(true);Object owner=ctor.newInstance();
         var temp=test.getDeclaredField("temp");temp.setAccessible(true);temp.set(owner,out.resolve("isolated-config"));invoke(test,owner,"setup");
         try(var language=PreviewLanguage.install(locale)){
-            if(light)ThemeService.MINIMAL.applyTo(AtomChatConfig.get());AtomChatConfig.get().animationEnabled=true;AtomChatConfig.get().blurEnabled=false;
+            var config = AtomChatConfig.get();
+            if (light) LIGHT_REFERENCE.applyTo(config);
+            config.panelOpacity = 0.6990596F;
+            config.cardTint = 0.59866506F;
+            config.animationEnabled = true;
+            config.blurEnabled = false;
             for(String resource:List.of("/com/atom/lib/fonts/bundled-default.otf","/com/atom/lib/fonts/bundled-default-bold.otf"))if(SettingsTrialReplay.class.getResource(resource)==null)throw new AssertionError("MISSING_FONT "+resource);
             if (page.equals("about")) {
                 AboutSettingsReplay.run(out, width, locale, light, capture);

@@ -2,20 +2,42 @@ package com.atom.chat.settings;
 
 import com.atom.chat.api.ui.AppearanceUi;
 import com.atom.chat.api.ui.AppearanceUi.Part;
+import com.atom.chat.api.ui.SettingsUi;
+import com.atom.chat.api.ui.UiContributions;
 import com.atom.chat.config.AtomChatConfig;
 import com.atom.chat.platform.Platform;
-import com.atom.chat.ui.UiLayout;
 import com.atom.chat.wallpaper.WallpaperStore;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
-import java.lang.reflect.Proxy;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 
 class AppearanceSettingsTest {
+    @Test
+    void savedUninstalledPartsDoNotCreateNativeSettingsRows() throws Exception {
+        var instance = AtomChatConfig.class.getDeclaredField("instance");
+        instance.setAccessible(true);
+        var previous = instance.get(null);
+        var config = new AtomChatConfig();
+        config.bubbleAppearanceId = "atomchat_signal:capsule";
+        config.avatarFrameAppearanceId = "atomchat_harbor:tide_ring";
+        instance.set(null, config);
+        try {
+            var rows = new SettingsSectionPage().rows(SettingsSection.APPEARANCE);
+            assertFalse(rows.stream().anyMatch(row ->
+                    "atomchat.settings.appearance.parts.group".equals(row.labelKey())
+                    || row.actionId() != null && row.actionId().startsWith("appearance_part_")));
+            assertEquals("atomchat_signal:capsule", config.bubbleAppearanceId);
+            assertEquals("atomchat_harbor:tide_ring", config.avatarFrameAppearanceId);
+        } finally {
+            instance.set(null, previous);
+        }
+    }
+
     @Test
     void generatedWallpaperCommitsAgainstReloadedConfigAndChecksItsOriginalSelection(@TempDir Path dir) throws Exception {
         Platform.install(new Platform.Provider() {
@@ -54,7 +76,7 @@ class AppearanceSettingsTest {
     }
 
     @Test
-    void nativeRowsExposeWorkingPartsAndKeepHiddenChoicesInOldConfigs(@TempDir Path dir) throws Exception {
+    void onlyAddonContributionsCreateAppearanceControls(@TempDir Path dir) throws Exception {
         Platform.install(new Platform.Provider() {
             public Path configDir() { return dir.resolve("config"); }
             public Path gameDir() { return dir; }
@@ -71,85 +93,71 @@ class AppearanceSettingsTest {
         String outline = "appearance_test_b:outline";
         String avatar = "appearance_test_a:avatar";
         String wallpaper = "appearance_test_b:wallpaper";
+        String groupId = "appearance_test_a:settings";
+        String groupLabel = "sample.appearance.group";
+        var groups = SettingsUi.groups(SettingsSection.APPEARANCE, SettingsUi.builtInTabId("theme"));
         try {
             AppearanceUi.registerBubble(bubble, "sample.bubble", c -> null, null);
             AppearanceUi.registerPanelOutline(outline, "sample.outline", c -> null);
             AppearanceUi.registerAvatarFrame(avatar, "sample.avatar", (c, f) -> {}, null);
             AppearanceUi.registerDynamicWallpaper(wallpaper, "sample.wallpaper", () -> (c, f) -> {});
-
-            var page = new SettingsSectionPage();
-            var avatars = new com.atom.chat.avatar.AvatarStore(dir.resolve("avatars"));
-            var host = (SettingsActions.Host) Proxy.newProxyInstance(SettingsActions.Host.class.getClassLoader(),
-                    new Class<?>[]{SettingsActions.Host.class}, (proxy, method, args) -> switch (method.getName()) {
-                        case "sectionPage" -> page;
-                        case "avatarStore" -> avatars;
-                        default -> throw new AssertionError("Unexpected host call " + method.getName());
-                    });
-            var actions = new SettingsActions(host);
-
-            assertFalse(hasAppearanceRow(page, Part.PANEL_OUTLINE), "Registered outline has no selector");
-            assertFalse(hasAppearanceRow(page, Part.DYNAMIC_WALLPAPER), "Registered dynamic wallpaper has no selector");
             config.panelOutlineAppearanceId = outline;
             config.dynamicWallpaperAppearanceId = wallpaper;
-            clickArrow(page, Part.BUBBLE, 1);
-            clickArrow(page, Part.AVATAR_FRAME, 1);
-            actions.handleSettingsAction(AppearanceSettings.action(Part.PANEL_OUTLINE) + ":prev");
-            actions.handleSettingsAction(AppearanceSettings.action(Part.DYNAMIC_WALLPAPER) + ":prev");
-            assertEquals(new AppearanceSettings.Selection(bubble, outline, avatar, wallpaper),
-                    AppearanceSettings.Selection.capture(config));
 
-            instance.set(null, null);
-            config = AtomChatConfig.get();
-            assertEquals(new AppearanceSettings.Selection(bubble, outline, avatar, wallpaper),
-                    AppearanceSettings.Selection.capture(config));
-            assertFalse(hasAppearanceRow(page, Part.PANEL_OUTLINE), "Old outline selection remains hidden");
-            assertFalse(hasAppearanceRow(page, Part.DYNAMIC_WALLPAPER), "Old dynamic selection remains hidden");
-            assertTrue(page.rows(SettingsSection.APPEARANCE).stream()
-                    .anyMatch(row -> row.kind() == SettingsSectionPage.RowKind.WALLPAPERS));
-            assertTrue(page.rows(SettingsSection.APPEARANCE).stream()
-                    .anyMatch(row -> "wallpaper_pick".equals(row.actionId())));
+            var section = SettingsSection.APPEARANCE;
+            var page = new SettingsSectionPage();
+            int nativeRows = page.rows(section).size();
+            assertFalse(page.rows(section).stream().anyMatch(row ->
+                    "atomchat.settings.appearance.parts.group".equals(row.labelKey())
+                    || row.actionId() != null && row.actionId().startsWith("appearance_part_")));
+            assertFalse(AppearanceUi.select(Part.BUBBLE, "appearance_test_a:unregistered"));
+            assertNull(AppearanceUi.selectedId(Part.BUBBLE));
 
+            var toggle = new SettingsUi.Toggle("appearance_test_a:bubble_setting", "sample.bubble", "sample.desc",
+                    () -> bubble.equals(AppearanceUi.selectedId(Part.BUBBLE)),
+                    enabled -> AppearanceUi.select(Part.BUBBLE, enabled ? bubble : null));
+            groups.add(groupId, new SettingsUi.Group(groupLabel, List.of(toggle)), UiContributions.Position.last());
+            var rows = page.rows(section);
+            assertTrue(rows.stream().anyMatch(row -> groupLabel.equals(row.labelKey())));
+            var switchRow = rows.stream().filter(row -> row.item() != null && toggle.id().equals(row.item().id()))
+                    .findFirst().orElseThrow();
+            var hit = new SettingsSectionPage.RowHit(switchRow, rows.indexOf(switchRow), 0, 0, 10, 10, 0);
+            assertTrue(page.perform(hit));
+            assertTrue(AppearanceUi.select(Part.AVATAR_FRAME, avatar));
+            var selections = new AppearanceSettings.Selection(bubble, outline, avatar, wallpaper);
+            assertEquals(selections, AppearanceSettings.Selection.capture(AtomChatConfig.get()));
+
+            AtomChatConfig.reload();
+            assertEquals(selections, AppearanceSettings.Selection.capture(AtomChatConfig.get()));
+            assertTrue(switchRow.item().value(), "the contributed row reads the current saved value");
+            Path configPath = dir.resolve("config/atomchat/atomchat-client.json");
+            byte[] settings = Files.readAllBytes(configPath);
+            Files.writeString(configPath, "{");
+            assertFalse(page.perform(hit), "failed persistence must not report a toggled row");
+            assertEquals(bubble, AppearanceUi.selectedId(Part.BUBBLE));
+            assertEquals("{", Files.readString(configPath));
+            Files.write(configPath, settings);
+            assertTrue(groups.unregister(groupId));
+            assertTrue(AppearanceUi.unregister(Part.BUBBLE, bubble));
             assertTrue(AppearanceUi.unregister(Part.AVATAR_FRAME, avatar));
-            assertEquals(AppearanceSettings.MISSING, AppearanceSettings.label(Part.AVATAR_FRAME, avatar));
-            clickArrow(page, Part.AVATAR_FRAME, -1);
-            assertNull(config.avatarFrameAppearanceId);
-            assertEquals(bubble, config.bubbleAppearanceId);
-            assertEquals(outline, config.panelOutlineAppearanceId);
-            assertEquals(wallpaper, config.dynamicWallpaperAppearanceId);
+            assertEquals(nativeRows, page.rows(section).size());
+            assertEquals(selections, AppearanceSettings.Selection.capture(AtomChatConfig.get()));
+            assertNull(AppearanceSettings.label(Part.BUBBLE, bubble));
+            assertTrue(page.rows(section).stream().anyMatch(row -> row.kind() == SettingsSectionPage.RowKind.WALLPAPERS));
+            assertTrue(page.rows(section).stream().anyMatch(row -> "wallpaper_pick".equals(row.actionId())));
 
-            assertTrue(SettingsTabDefaults.reset(config, SettingsSection.APPEARANCE, "theme",
+            assertTrue(SettingsTabDefaults.reset(AtomChatConfig.get(), section, "theme",
                     () -> AtomChatConfig.saveChecked(AtomChatConfig.get())));
             assertEquals(new AppearanceSettings.Selection(null, null, null, null),
-                    AppearanceSettings.Selection.capture(config));
+                    AppearanceSettings.Selection.capture(AtomChatConfig.get()));
         } finally {
-            for (var option : List.of(bubble, outline, avatar, wallpaper)) {
-                for (Part part : Part.values()) AppearanceUi.unregister(part, option);
-            }
+            groups.unregister(groupId);
+            AppearanceUi.unregister(Part.BUBBLE, bubble);
+            AppearanceUi.unregister(Part.PANEL_OUTLINE, outline);
+            AppearanceUi.unregister(Part.AVATAR_FRAME, avatar);
+            AppearanceUi.unregister(Part.DYNAMIC_WALLPAPER, wallpaper);
             WallpaperStore.init(null);
             instance.set(null, previous);
         }
-    }
-
-    private static boolean hasAppearanceRow(SettingsSectionPage page, Part part) {
-        return page.rows(SettingsSection.APPEARANCE).stream()
-                .anyMatch(row -> AppearanceSettings.action(part).equals(row.actionId()));
-    }
-
-    private static void clickArrow(SettingsSectionPage page, Part part, int direction) throws Exception {
-        var section = SettingsSection.APPEARANCE;
-        var layout = UiLayout.ofDetail(0, 0, 520, 1800);
-        var rows = page.rows(section);
-        String expected = AppearanceSettings.action(part);
-        var row = rows.stream().filter(candidate -> expected.equals(candidate.actionId())).findFirst().orElseThrow();
-        var rowRect = SettingsSectionPage.class.getDeclaredMethod("rowRect", SettingsSection.class,
-                List.class, int.class, float.class, UiLayout.class);
-        rowRect.setAccessible(true);
-        var rect = (UiLayout.Rect) rowRect.invoke(page, section, rows, rows.indexOf(row), 0F, layout);
-        var geometry = page.stepperGeometry(row, rect);
-        var arrow = direction < 0 ? geometry.previous() : geometry.next();
-        var hit = page.hit(arrow.x() + arrow.w() / 2, arrow.y() + arrow.h() / 2, layout, section, 0);
-        assertNotNull(hit, part.toString());
-        assertEquals(direction < 0 ? expected + ":prev" : expected, hit.row().actionId());
-        assertTrue(page.perform(hit));
     }
 }

@@ -2,7 +2,10 @@ from pathlib import Path
 import re
 ROOT=Path(__file__).resolve().parent.parent
 CALL=re.compile(r'\b(?:AtomChat\.LOGGER|LOGGER|logger|LOG|log)\.(?:info|warn|error|debug|trace|warning|severe)\s*\(')
-WRAP='com.atom.chat.diagnostics.AtomChatLog.message('
+ASYNC_CALL=re.compile(r'\bAtomChatLog\.diagnostic\s*\(')
+CHAIN=re.compile(r'"[a-z][a-z0-9.]*"')
+WRAP=re.compile(r'(?:com\.atom\.chat\.diagnostics\.)?AtomChatLog\.message\(\s*"[a-z][a-z0-9.]*"\s*,')
+WRAP_NAME=re.compile(r'(?:com\.atom\.chat\.diagnostics\.)?AtomChatLog\.message\(')
 def first_end(text,start):
     depth=0; quoted=False; escape=False
     for i in range(start,len(text)):
@@ -41,9 +44,12 @@ def violations(text):
     errors=[]
     for call in CALL.finditer(text):
         start=call.end(); end=first_end(text,start); expr=text[start:end].strip()
-        if not expr.startswith(WRAP): errors.append(('missing',call.start()))
-        elif not re.match(re.escape(WRAP)+r'\s*"[a-z][a-z0-9.]*"\s*,',expr): errors.append(('chain',call.start()))
+        if not WRAP_NAME.match(expr): errors.append(('missing',call.start()))
+        elif not WRAP.match(expr): errors.append(('chain',call.start()))
         if '[AtomChat][AtomChat]' in expr or re.search(r'\[AtomChat\]\[[^]]+\].*?\[AtomChat\]\[',expr): errors.append(('duplicate',call.start()))
+    for call in ASYNC_CALL.finditer(text):
+        start=call.end(); end=first_end(text,start)
+        if not CHAIN.fullmatch(text[start:end].strip()): errors.append(('chain',call.start()))
     if re.search(r'\bSystem\.(?:out|err)\.|\.printStackTrace\(',text): errors.append(('unowned-outlet',0))
     return errors
 
@@ -52,7 +58,7 @@ def verify():
     failures=[]
     for p in sources():
         text=p.read_text(encoding='utf-8')
-        count+=len(CALL.findall(text))
+        count+=len(CALL.findall(text))+len(ASYNC_CALL.findall(text))
         failures.extend((str(p),kind,text[:pos].count('\n')+1) for kind,pos in violations(text))
     if count<246: failures.append((str(ROOT),'coverage-floor',count))
     for item in failures: print(*item,sep=':')

@@ -17,6 +17,7 @@ import net.minecraft.registry.RegistryKey;
 import net.minecraft.registry.RegistryKeys;
 import net.minecraft.registry.entry.RegistryEntry;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.network.message.SignedMessage;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.text.HoverEvent;
@@ -48,6 +49,8 @@ public final class CardCompanionServer {
     public static void register() {
         ServerPlayNetworking.registerGlobalReceiver(CardPayloads.ClientCardSharePayload.ID,
                 CardCompanionServer::handleClientShare);
+        ServerPlayNetworking.registerGlobalReceiver(CardPayloads.PairedClientCardSharePayload.ID,
+                (payload, context) -> handleClientShare(payload.intent(), context));
     }
 
     public static void onPlayerLogout(UUID uuid) {
@@ -122,32 +125,32 @@ public final class CardCompanionServer {
     /**
      * Handles C2S player share requests (only LOCATION and ITEM templates are accepted;
      * all labels/dimensions/items are re-validated and re-authored server-side).
+     * Fabric calls this on the server thread. Rescheduling here can let the next
+     * native chat reach intake before its preceding attachment has been armed.
      */
     private static void handleClientShare(CardPayloads.ClientCardSharePayload payload,
                                           ServerPlayNetworking.Context ctx) {
         MinecraftServer server = ctx.server();
         if (server == null) return;
-        server.execute(() -> {
-            ServerPlayerEntity sender = ctx.player();
-            if (sender == null) return;
-            long now = System.currentTimeMillis();
-            Long prev = LAST_CLIENT_SHARE.get(sender.getUuid());
-            if (prev != null && now - prev < SHARE_COOLDOWN_MS) return;
-            LAST_CLIENT_SHARE.put(sender.getUuid(), now);
+        ServerPlayerEntity sender = ctx.player();
+        if (sender == null) return;
+        long now = System.currentTimeMillis();
+        Long prev = LAST_CLIENT_SHARE.get(sender.getUuid());
+        if (prev != null && now - prev < SHARE_COOLDOWN_MS) return;
+        LAST_CLIENT_SHARE.put(sender.getUuid(), now);
 
-            ShareCard incoming = CardWireCodec.decodeCard(payload.cardBytes());
-            if (incoming == null) return;
-            if (incoming.template() != ShareCard.Template.LOCATION
-                    && incoming.template() != ShareCard.Template.ITEM) {
-                return;
-            }
+        ShareCard incoming = CardWireCodec.decodeCard(payload.cardBytes());
+        if (incoming == null) return;
+        if (incoming.template() != ShareCard.Template.LOCATION
+                && incoming.template() != ShareCard.Template.ITEM) {
+            return;
+        }
 
-            ShareCard sanitized = sanitizeClientCard(incoming, sender, server);
-            if (sanitized == null) return;
+        ShareCard sanitized = sanitizeClientCard(incoming, sender, server);
+        if (sanitized == null) return;
 
-            String nativeBody = PlayerCardPairing.nativeText(incoming);
-            if (nativeBody != null) PLAYER_SHARES.arm(sender, nativeBody, sanitized, System.nanoTime());
-        });
+        String nativeBody = PlayerCardPairing.nativeText(incoming);
+        if (nativeBody != null) PLAYER_SHARES.arm(sender, nativeBody, sanitized, System.nanoTime());
     }
 
     public record PlayerShareDelivery(UUID sender, String name, String body, ShareCard card,
@@ -156,10 +159,15 @@ public final class CardCompanionServer {
     private record OutboundShare(ServerPlayerEntity target, Text convertedLine, PlayerShareDelivery share) {}
     private static final ThreadLocal<OutboundShare> OUTBOUND_SHARE = new ThreadLocal<>();
 
+    public static void bindAcceptedPlayerShare(ServerPlayerEntity sender, SignedMessage nativeMessage) {
+        if (sender == null || !sender.getUuid().equals(nativeMessage.getSender())) return;
+        PLAYER_SHARES.bindAccepted(sender, nativeMessage.signedBody(), nativeMessage.getSignedContent(), System.nanoTime());
+    }
+
     public static PlayerShareDelivery claimPlayerShare(ServerPlayerEntity sender, net.minecraft.network.message.SignedMessage nativeMessage) {
         if (sender == null || !sender.getUuid().equals(nativeMessage.getSender())) return null;
         String body = nativeMessage.getSignedContent();
-        ShareCard card = PLAYER_SHARES.take(sender, body, System.nanoTime());
+        ShareCard card = PLAYER_SHARES.takeAccepted(sender, nativeMessage.signedBody(), System.nanoTime());
         if (card == null) return null;
         return new PlayerShareDelivery(sender.getUuid(), sender.getGameProfile().getName(), body, card, nativeMessage.filterMask().isPassThrough());
     }
@@ -210,7 +218,8 @@ public final class CardCompanionServer {
             }
             CardAudience.delivered(target.getServer(), target.getUuid(), share.card(), false);
         } catch (RuntimeException failure) {
-            com.atom.chat.AtomChat.LOGGER.debug("Card delivery failed; forwarding native chat", failure);
+            com.atom.chat.AtomChat.LOGGER.debug(com.atom.chat.diagnostics.AtomChatLog.message("card",
+                    "Card delivery failed; forwarding native chat"), failure);
         }
     }
 

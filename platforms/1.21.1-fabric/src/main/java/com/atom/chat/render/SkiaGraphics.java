@@ -113,7 +113,8 @@ public final class SkiaGraphics {
             if (outerSurface != null) FrameProfile.restoreSurface(outerSurface);
         }
         if (segmentId != 0 && FrameProfile.frame(profileStart, allocatedBefore, segmentId)) {
-            AtomChat.LOGGER.info(com.atom.chat.diagnostics.AtomChatLog.message("render", FrameProfile.summary() + com.atom.chat.diagnostics.FrameSegments.summary()));
+            com.atom.chat.diagnostics.AtomChatLog.diagnostic("render",
+                    FrameProfile.summary() + com.atom.chat.diagnostics.FrameSegments.summary());
         }
     }
 

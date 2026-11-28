@@ -5,13 +5,18 @@ import com.atom.chat.api.ui.AppearanceUi;
 import com.atom.chat.chat.MessageFilter;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
+import java.util.Objects;
 
 public class AtomChatConfig {
+    public static final float DEFAULT_PANEL_OPACITY = 0.70F;
     public static final AtomChatConfig DEFAULT = new AtomChatConfig();
 
     static {
@@ -151,7 +156,7 @@ public class AtomChatConfig {
      * to the blur tint alike, so one slider governs how much world shows
      * through regardless of whether blur is on.
      */
-    public float panelOpacity = 0.6990596F;
+    public float panelOpacity = DEFAULT_PANEL_OPACITY;
     /**
      * AtomChat-only UI scale multiplier on top of the vanilla GUI scale. It is
      * applied at the Skia canvas and in every coordinate conversion, never to
@@ -366,7 +371,7 @@ public class AtomChatConfig {
      * panel colour. In between they slide through a semi-transparent grey —
      * one axis, three visual stops.
      */
-    public float cardTint = 0.59866506F;
+    public float cardTint = 0.60F;
 
     /** Strength of the per-card backdrop, independent of panel blur and tint. */
     public float cardBlurStrength = 2F;
@@ -609,6 +614,11 @@ public class AtomChatConfig {
         return current == null ? GraphicsQuality.ULTRA : current.graphicsQuality;
     }
 
+    public static boolean diagnosticsEnabled() {
+        AtomChatConfig current = instance;
+        return current != null && current.debug;
+    }
+
     /**
      * Re-reads the config file. Called when a chat screen opens so hand-edited
      * templates take effect without a game restart.
@@ -643,88 +653,25 @@ public class AtomChatConfig {
         }
     }
 
-    /**
-     * pageNavStyle is the config's first enum field, and Gson throws on an
-     * unknown enum name — one hand-edited "slide" (lowercase) would fail the
-     * whole load(), fall back to a fresh default instance and immediately
-     * overwrite the file, wiping every saved option with it. Normalizing the
-     * value in the JSON tree first keeps a bad edit scoped to the one key.
-     */
-    /**
-     * Whether the raw file already carries {@code key}. The "absent means
-     * legacy" migrations need this because Gson cannot tell an absent boolean
-     * from a stored {@code false} — and a stored false is a real answer.
-     */
-    private static boolean hasKey(String json, String key) {
+    /** Resolve hand-edited enum values before Gson loads the full configuration. */
+    private static <E extends Enum<E>> void sanitizeStyle(com.google.gson.JsonObject obj, String key, Class<E> type) {
+        if (!obj.has(key)) return;
         try {
-            com.google.gson.JsonObject obj = GSON.fromJson(json, com.google.gson.JsonObject.class);
-            return obj != null && obj.has(key);
-        } catch (RuntimeException e) {
-            // Unparseable JSON is the caller's own failure path; treat it as
-            // "no key" so a legacy-shaped migration still runs.
-            return false;
+            String raw = obj.get(key).getAsString();
+            obj.addProperty(key, Enum.valueOf(type, raw.trim().toUpperCase(java.util.Locale.ROOT)).name());
+        } catch (RuntimeException ignored) {
+            obj.remove(key);
         }
-    }
-
-    private static String sanitizePageNavStyle(String json) {
-        try {
-            com.google.gson.JsonObject obj = GSON.fromJson(json, com.google.gson.JsonObject.class);
-            if (obj == null || !obj.has("pageNavStyle")
-                    || !obj.get("pageNavStyle").isJsonPrimitive()) {
-                return json;
-            }
-            String raw = obj.get("pageNavStyle").getAsString();
-            obj.addProperty("pageNavStyle", PageNavStyle.valueOf(raw.trim().toUpperCase(java.util.Locale.ROOT)).name());
-            return obj.toString();
-        } catch (Exception e) {
-            // Not JSON, or an unrecognizable style: drop the key so the load
-            // proceeds with the field default instead of failing entirely.
-            try {
-                com.google.gson.JsonObject obj = GSON.fromJson(json, com.google.gson.JsonObject.class);
-                if (obj != null) {
-                    obj.remove("pageNavStyle");
-                    return obj.toString();
-                }
-            } catch (Exception ignored) {
-                // Fall through: the caller's catch logs it and uses defaults.
-            }
-            return json;
-        }
-    }
-
-    /** Keep malformed avatar-style values from discarding the rest of the config. */
-    private static String sanitizeAvatarStyle(String json) {
-        com.google.gson.JsonObject obj = GSON.fromJson(json, com.google.gson.JsonObject.class);
-        if (obj != null && obj.has("avatarStyle")) {
-            try {
-                String raw = obj.get("avatarStyle").getAsString();
-                obj.addProperty("avatarStyle",
-                        AvatarStyle.valueOf(raw.trim().toUpperCase(java.util.Locale.ROOT)).name());
-            } catch (RuntimeException ignored) {
-                obj.remove("avatarStyle");
-            }
-            return obj.toString();
-        }
-        return json;
-    }
-
-    private static String sanitizeBubbleStyle(String json) {
-        com.google.gson.JsonObject obj = GSON.fromJson(json, com.google.gson.JsonObject.class);
-        if (obj != null && obj.has("bubbleStyle")) {
-            try {
-                String raw = obj.get("bubbleStyle").getAsString();
-                obj.addProperty("bubbleStyle", BubbleStyle.valueOf(raw.trim().toUpperCase(java.util.Locale.ROOT)).name());
-            } catch (RuntimeException ignored) {
-                obj.remove("bubbleStyle");
-            }
-            return obj.toString();
-        }
-        return json;
     }
 
     static String sanitizeWorldFeedFilterAndTemplates(String json) {
         com.google.gson.JsonObject obj = GSON.fromJson(json, com.google.gson.JsonObject.class);
         if (obj == null) return json;
+        sanitizeWorldFeedFilterAndTemplates(obj);
+        return obj.toString();
+    }
+
+    private static void sanitizeWorldFeedFilterAndTemplates(com.google.gson.JsonObject obj) {
         if (obj.has("worldFeedFilter")) {
             try {
                 String raw = obj.get("worldFeedFilter").getAsJsonPrimitive().getAsString();
@@ -750,16 +697,13 @@ public class AtomChatConfig {
                 templates.remove(i);
             }
         }
-        return obj.toString();
     }
 
     private static void warnTemplateType(String path) {
         AtomChat.LOGGER.warn(com.atom.chat.diagnostics.AtomChatLog.message("config", "Ignoring invalid template type at {}"), path);
     }
 
-    private static String migrateGraphicsQuality(String json) {
-        var settings = GSON.fromJson(json, com.google.gson.JsonObject.class);
-        if (settings == null) return json;
+    private static void migrateGraphicsQuality(com.google.gson.JsonObject settings) {
         var tier = settings.get("graphicsQuality");
         var legacy = settings.remove("performanceMode");
         GraphicsQuality migrated = legacy != null && legacy.isJsonPrimitive() && legacy.getAsBoolean()
@@ -773,12 +717,16 @@ public class AtomChatConfig {
             }
         }
         settings.addProperty("graphicsQuality", migrated.name());
-        return settings.toString();
     }
 
     static String sanitizeAppearanceSelections(String json) {
         var settings = GSON.fromJson(json, com.google.gson.JsonObject.class);
         if (settings == null) return json;
+        sanitizeAppearanceSelections(settings);
+        return settings.toString();
+    }
+
+    private static void sanitizeAppearanceSelections(com.google.gson.JsonObject settings) {
         for (String key : java.util.List.of("bubbleAppearanceId", "panelOutlineAppearanceId",
                 "avatarFrameAppearanceId", "dynamicWallpaperAppearanceId")) {
             var value = settings.get(key);
@@ -787,50 +735,74 @@ public class AtomChatConfig {
                 settings.remove(key);
             }
         }
-        return settings.toString();
     }
 
     private static AtomChatConfig load() {
         com.atom.chat.util.CacheDirs.migrateFromOldConfigPaths();
         Path path = com.atom.chat.platform.Platform.configDir().resolve("atomchat/atomchat-client.json");
-        if (Files.exists(path)) {
+        try {
             try {
-                String json = Files.readString(path, StandardCharsets.UTF_8);
-                boolean halfWidthKeyPresent = hasKey(json, "halfScreenWidthCustomized");
-                String sanitized = sanitizeAppearanceSelections(sanitizePageNavStyle(sanitizeAvatarStyle(
-                        sanitizeBubbleStyle(sanitizeWorldFeedFilterAndTemplates(migrateGraphicsQuality(json))))));
-                AtomChatConfig config = GSON.fromJson(sanitized, AtomChatConfig.class);
-                if (config != null) {
-                    boolean personalLoaded = PersonalDataStore.load(config);
-                    if (config.blockedPlayers == null) {
-                        config.blockedPlayers = new java.util.ArrayList<>();
-                    }
-                    config.avatarStyle = config.effectiveAvatarStyle();
-                    config.bubbleStyle = config.effectiveBubbleStyle();
-                    config.worldFeedFilter = config.effectiveWorldFeedFilter();
-                    config.blurStrength = config.storedBlurStrength();
-                    config.cardBlurStrength = config.storedCardBlurStrength();
-                    config.chatHudMaxMessages = config.effectiveChatHudMaxMessages();
-                    config.migrateOutlineWidth(hasKey(json, "panelOutlineWidth"));
-                    config.migrateCornerStyle();
-                    config.migratePixelRadius();
-                    config.clampContentScale();
-                    config.migrateHalfScreenWidth(halfWidthKeyPresent);
-                    config.notifyVolume = com.atom.chat.audio.FeedbackSoundPolicy.volume(true,true,config.notifyVolume);
-                    config.feedbackVolume = com.atom.chat.audio.FeedbackSoundPolicy.volume(true,true,config.feedbackVolume);
-                    // Write the merged instance straight back: options added in
-                    // newer builds are absent from an older file, and Gson drops
-                    // unknown keys — so without this a new option could never be
-                    // switched on by editing the file, it simply would not be
-                    // there. Existing values are preserved by the round trip.
-                    seedGuiTip(config);
-                    if (personalLoaded) save(config);
-                    return config;
-                }
-            } catch (Exception e) {
-                AtomChat.LOGGER.error(com.atom.chat.diagnostics.AtomChatLog.message("config", "Failed to load AtomChat config, using defaults"), e);
+                return load(ConfigSnapshot.read(path), true);
+            } catch (ConfigChanged changed) {
+                // Use the editor's observed contents and leave migration for the next reload.
+                ConfigSnapshot current = path.equals(changed.path)
+                        ? ConfigSnapshot.parse(path, changed.current)
+                        : ConfigSnapshot.read(path);
+                return load(current, false);
             }
+        } catch (IOException | RuntimeException e) {
+            com.atom.chat.util.DataMigration.noteWarning();
+            AtomChat.LOGGER.error(com.atom.chat.diagnostics.AtomChatLog.message("config", "Failed to load AtomChat config, using defaults"), e);
         }
+        AtomChatConfig config = freshConfig();
+        PersonalDataStore.load(config);
+        seedGuiTip(config);
+        return config;
+    }
+
+    private static AtomChatConfig load(ConfigSnapshot snapshot, boolean writeBack) throws ConfigChanged {
+        // Retain the original tree for comparison and legacy field detection.
+        JsonObject settings = snapshot.original() == null ? null : snapshot.original().deepCopy();
+        AtomChatConfig config;
+        if (settings == null) {
+            config = freshConfig();
+        } else {
+            migrateGraphicsQuality(settings);
+            sanitizeWorldFeedFilterAndTemplates(settings);
+            sanitizeStyle(settings, "bubbleStyle", BubbleStyle.class);
+            sanitizeStyle(settings, "avatarStyle", AvatarStyle.class);
+            if (settings.has("pageNavStyle") && settings.get("pageNavStyle").isJsonPrimitive()) {
+                sanitizeStyle(settings, "pageNavStyle", PageNavStyle.class);
+            }
+            sanitizeAppearanceSelections(settings);
+            config = GSON.fromJson(settings, AtomChatConfig.class);
+        }
+        ConfigSnapshot personal = PersonalDataStore.load(config);
+        if (settings != null) {
+            if (config.blockedPlayers == null) {
+                config.blockedPlayers = new java.util.ArrayList<>();
+            }
+            config.avatarStyle = config.effectiveAvatarStyle();
+            config.bubbleStyle = config.effectiveBubbleStyle();
+            config.worldFeedFilter = config.effectiveWorldFeedFilter();
+            config.blurStrength = config.storedBlurStrength();
+            config.cardBlurStrength = config.storedCardBlurStrength();
+            config.chatHudMaxMessages = config.effectiveChatHudMaxMessages();
+            config.migrateOutlineWidth(settings.has("panelOutlineWidth"));
+            config.migrateCornerStyle();
+            config.migratePixelRadius();
+            config.clampContentScale();
+            config.migrateHalfScreenWidth(settings.has("halfScreenWidthCustomized"));
+            config.notifyVolume = com.atom.chat.audio.FeedbackSoundPolicy.volume(true,true,config.notifyVolume);
+            config.feedbackVolume = com.atom.chat.audio.FeedbackSoundPolicy.volume(true,true,config.feedbackVolume);
+        }
+        seedGuiTip(config);
+        // Write newly introduced settings so they are available for hand editing.
+        if (writeBack && personal != null) saveChecked(config, snapshot, personal);
+        return config;
+    }
+
+    private static AtomChatConfig freshConfig() {
         AtomChatConfig config = new AtomChatConfig();
         config.panelHeightAutomatic = true;
         config.panelWidthAutomatic = true;
@@ -840,10 +812,42 @@ public class AtomChatConfig {
         // fresh 20 down to ~14.3.
         config.pixelRadiusMigrated = true;
         config.wallpaperFirstUsePending = false;
-        boolean personalLoaded = PersonalDataStore.load(config);
-        seedGuiTip(config);
-        if (personalLoaded) save(config);
         return config;
+    }
+
+    record ConfigSnapshot(Path path, String text, JsonObject original) {
+        static ConfigSnapshot read(Path path) throws IOException {
+            return parse(path, readText(path));
+        }
+
+        static ConfigSnapshot parse(Path path, String text) throws IOException {
+            JsonObject original = text == null ? null : GSON.fromJson(text, JsonObject.class);
+            if (text != null && original == null) throw new IOException("Client settings are not an object: " + path);
+            return new ConfigSnapshot(path, text, original);
+        }
+
+        private static String readText(Path path) throws IOException {
+            try {
+                return Files.readString(path, StandardCharsets.UTF_8);
+            } catch (NoSuchFileException missing) {
+                return null;
+            }
+        }
+
+        void requireCurrent() throws IOException {
+            String current = readText(path);
+            if (!Objects.equals(text, current)) throw new ConfigChanged(path, current);
+        }
+    }
+
+    private static final class ConfigChanged extends IOException {
+        private final Path path;
+        private final String current;
+
+        private ConfigChanged(Path path, String current) {
+            this.path = path;
+            this.current = current;
+        }
     }
 
     public static void save(AtomChatConfig config) {
@@ -854,29 +858,49 @@ public class AtomChatConfig {
     public static boolean saveChecked(AtomChatConfig config) {
         if (ConfigPreviewTransaction.interceptSave(config)) return true;
         Path path = com.atom.chat.platform.Platform.configDir().resolve("atomchat/atomchat-client.json");
+        try {
+            return saveChecked(config, ConfigSnapshot.read(path), null);
+        } catch (ConfigChanged changed) {
+            return false;
+        } catch (IOException | RuntimeException e) {
+            return saveFailed(e);
+        }
+    }
+
+    private static boolean saveChecked(AtomChatConfig config, ConfigSnapshot snapshot,
+                                       ConfigSnapshot personal) throws ConfigChanged {
+        Path path = snapshot.path();
         Path staged = null;
         try {
-            com.google.gson.JsonObject settings = PersonalDataStore.saveAndStrip(config, path);
-            if (Files.isRegularFile(path) && com.google.gson.JsonParser.parseString(GSON.toJson(settings)).equals(com.google.gson.JsonParser.parseString(
-                    Files.readString(path, StandardCharsets.UTF_8)))) return true;
+            JsonObject settings = PersonalDataStore.saveAndStrip(config, snapshot, personal);
+            String json = GSON.toJson(settings);
+            if (JsonParser.parseString(json).equals(snapshot.original())) return true;
             Files.createDirectories(path.getParent());
             staged = Files.createTempFile(path.getParent(), "atomchat-config-", ".tmp");
-            Files.writeString(staged, GSON.toJson(settings), StandardCharsets.UTF_8);
+            Files.writeString(staged, json, StandardCharsets.UTF_8);
+            snapshot.requireCurrent();
             try {
                 Files.move(staged, path, java.nio.file.StandardCopyOption.ATOMIC_MOVE,
                         java.nio.file.StandardCopyOption.REPLACE_EXISTING);
             } catch (java.nio.file.AtomicMoveNotSupportedException e) {
+                snapshot.requireCurrent();
                 Files.move(staged, path, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
             }
             return true;
+        } catch (ConfigChanged changed) {
+            throw changed;
         } catch (IOException | RuntimeException e) {
-            com.atom.chat.util.DataMigration.noteWarning();
-            AtomChat.LOGGER.error(com.atom.chat.diagnostics.AtomChatLog.message("config", "Failed to save AtomChat config or personal data; original config retained"), e);
-            return false;
+            return saveFailed(e);
         } finally {
             if (staged != null) {
                 try { Files.deleteIfExists(staged); } catch (IOException ignored) { }
             }
         }
+    }
+
+    private static boolean saveFailed(Exception error) {
+        com.atom.chat.util.DataMigration.noteWarning();
+        AtomChat.LOGGER.error(com.atom.chat.diagnostics.AtomChatLog.message("config", "Failed to save AtomChat config or personal data; original config retained"), error);
+        return false;
     }
 }

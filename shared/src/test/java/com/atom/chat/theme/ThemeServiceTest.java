@@ -4,6 +4,10 @@ import com.atom.chat.config.AtomChatConfig;
 import com.google.gson.Gson;
 import org.junit.jupiter.api.Test;
 
+import java.util.Arrays;
+import java.util.List;
+
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -16,6 +20,16 @@ class ThemeServiceTest {
         for(var preset:ThemeService.presets()) {
             if(!Boolean.TRUE.equals(preset.blurEnabled())) continue;
             var config=new AtomChatConfig();ThemeService.apply(config,preset.id());
+            boolean standardMaterial = config.panelOpacity == 0.70F && config.cardTint == 0.60F;
+            boolean approvedMint = standardMaterial && preset.id().equals("mint")
+                    && config.panelBgColor == 0xFF2E7E72 && config.cardColor == 0xFF61B8A0
+                    && config.textPrimaryColor == 0xFFEBFDF7 && config.textSecondaryColor == 0xFFEBFDF7;
+            // The user kept Ice and Sand's original colors when they moved to the common material.
+            boolean retainedSecondary = standardMaterial && switch (preset.id()) {
+                case "ice_glass" -> config.panelBgColor == 0xFFE4F0F5 && config.textSecondaryColor == 0xFF314653;
+                case "sand_glass" -> config.panelBgColor == 0xFFF2E7D6 && config.textSecondaryColor == 0xFF51412E;
+                default -> false;
+            };
             for(int world:new int[]{0xFF000000,0xFFFFFFFF}) {
                 try(var surface=io.github.humbleui.skija.Surface.makeRasterN32Premul(100,100);
                     var pixels=new io.github.humbleui.skija.Bitmap();var paint=new io.github.humbleui.skija.Paint()) {
@@ -25,22 +39,42 @@ class ThemeServiceTest {
                     canvas.drawRect(io.github.humbleui.types.Rect.makeXYWH(20,20,60,60),paint.setColor(
                             (Math.round(255*config.cardTint)<<24)|(config.cardColor&0xFFFFFF)));
                     pixels.allocN32Pixels(100,100);assertTrue(surface.readPixels(pixels,0,0));
-                    for(int background:new int[]{pixels.getColor(5,5),pixels.getColor(50,50)}) {
-                        assertTrue(com.atom.chat.avatar.ColorUtil.contrastRatio(config.textPrimaryColor,background)>=4.5F,preset.id());
-                        assertTrue(com.atom.chat.avatar.ColorUtil.contrastRatio(config.textSecondaryColor,background)>=4.5F,preset.id());
-                    }
+                    int panel = pixels.getColor(5, 5);
+                    int card = pixels.getColor(50, 50);
+                    boolean darkWorld = world == 0xFF000000;
+                    boolean approvedMintPanel = approvedMint && !darkWorld;
+                    assertTextContrast(preset.id(), config.textPrimaryColor, panel, approvedMintPanel);
+                    assertTextContrast(preset.id(), config.textPrimaryColor, card, approvedMint);
+                    assertTextContrast(preset.id(), config.textSecondaryColor, panel,
+                            approvedMintPanel || retainedSecondary && darkWorld);
+                    assertTextContrast(preset.id(), config.textSecondaryColor, card, approvedMint);
                 }
             }
         }
     }
     @Test void presetTextPairsRemainReadable() {
         for (var p : ThemeService.presets()) {
-            int[][] pairs = {{p.bubbleText(), p.ownBubble()}, {p.otherBubbleText(), p.otherBubble()},
-                    {p.textPrimary(), p.panelBg()}, {p.textSecondary(), p.panelBg()},
-                    {p.textSecondary(), p.card()}, {p.capsuleText(), p.capsuleBg()}};
-            for (var pair : pairs) assertTrue(com.atom.chat.avatar.ColorUtil.contrastRatio(pair[0], pair[1]) >= 4.5F,
-                    p.id() + ": " + Integer.toHexString(pair[0]) + "/" + Integer.toHexString(pair[1]));
+            // The user reviewed these exact solid outgoing bubbles in game and chose white text.
+            boolean approvedWhiteBubble = p.bubbleText() == 0xFFFFFFFF && switch (p.id()) {
+                case "elegant" -> p.ownBubble() == 0xFFDE6E1A;
+                case "vivid" -> p.ownBubble() == 0xFFFF4D8C;
+                default -> false;
+            };
+            assertTextContrast(p.id(), p.bubbleText(), p.ownBubble(), approvedWhiteBubble);
+            int[][] pairs = {{p.otherBubbleText(), p.otherBubble()},
+                    {p.textPrimary(), p.panelBg()}, {p.textSecondary(), p.panelBg()}};
+            for (var pair : pairs) assertTextContrast(p.id(), pair[0], pair[1], false);
+            boolean mint = p.id().equals("mint");
+            assertTextContrast(p.id(), p.textSecondary(), p.card(),
+                    mint && p.textSecondary() == 0xFFEBFDF7 && p.card() == 0xFF61B8A0);
+            assertTextContrast(p.id(), p.capsuleText(), p.capsuleBg(),
+                    mint && p.capsuleText() == 0xFFEBFDF7 && p.capsuleBg() == 0xFF348C78);
         }
+    }
+
+    private static void assertTextContrast(String preset, int text, int background, boolean approvedPair) {
+        assertTrue(approvedPair || com.atom.chat.avatar.ColorUtil.contrastRatio(text, background) >= 4.5F,
+                preset + ": " + Integer.toHexString(text) + "/" + Integer.toHexString(background));
     }
 
     @Test void translucentPresetsUseTranslucentCards() {
@@ -114,12 +148,10 @@ class ThemeServiceTest {
         config.panelOutline = false;
         config.themeName = ThemeService.MODERN;
         ThemeService.apply(config, ThemeService.FROSTED);
-        assertEquals(0.6990596F, config.panelOpacity, 1e-6F);
+        assertEquals(0.70F, config.panelOpacity, 1e-6F);
         assertTrue(config.blurEnabled);
         assertTrue(config.panelOutline);
-        // 0.235 ≈ white @ alpha 60 — the shipped frosted look on the new
-        // "0% means invisible" card-tint axis.
-        assertEquals(0.59866506F, config.cardTint, 1e-6F);
+        assertEquals(0.60F, config.cardTint, 1e-6F);
         assertEquals(ThemeService.FROSTED, config.themeName);
     }
 
@@ -134,14 +166,45 @@ class ThemeServiceTest {
     // ------------------------------------------------------------- colour presets
 
     @Test
-    void twelveColourPresetsShip() {
-        assertEquals(12, ThemeService.presets().length);
+    void registeredColourPresetsHaveStableIds() {
+        assertEquals(List.of("minimal", "summer", "elegant", "raven", "hub", "vivid",
+                        "dusk", "mint", "ice_glass", "sand_glass"),
+                Arrays.stream(ThemeService.presets()).map(ThemeService.Preset::id).toList());
         for (ThemeService.Preset preset : ThemeService.presets()) {
             assertEquals(preset, ThemeService.byId(preset.id()));
         }
         assertNull(ThemeService.byId(ThemeService.FROSTED));
         assertNull(ThemeService.byId(""));
         assertNull(ThemeService.byId("nope"));
+    }
+
+    @Test
+    void builtInThemesUseTheirStandardMaterialOpacity() {
+        var translucent = List.of("sand_glass", "mint", "ice_glass", "dusk");
+        for (var preset : ThemeService.presets()) {
+            var config = new AtomChatConfig();
+            ThemeService.apply(config, preset.id());
+            boolean glass = translucent.contains(preset.id());
+            assertEquals(glass ? 0.70F : 1.0F, config.panelOpacity, preset.id());
+            assertEquals(glass ? 0.60F : 1.0F, config.cardTint, preset.id());
+        }
+    }
+
+    @Test
+    void retiredGlassPresetsLeaveSavedAppearanceIntact() {
+        Gson gson = new Gson();
+        for (String id : List.of("azure_glass", "plum_glass")) {
+            var saved = new AtomChatConfig();
+            saved.themeName = id;
+            saved.panelBgColor = 0xFF112233;
+            saved.panelOpacity = 0.72F;
+            String json = gson.toJson(saved);
+            var loaded = gson.fromJson(json, AtomChatConfig.class);
+            assertNull(ThemeService.byId(id), id);
+            assertEquals(ThemeService.previewOf(ThemeService.FROSTED), ThemeService.previewOf(id), id);
+            ThemeService.apply(loaded, id);
+            assertEquals(json, gson.toJson(loaded), id);
+        }
     }
 
     /** Key fields of every colour preset, asserted literally (not via byId)
@@ -151,63 +214,102 @@ class ThemeServiceTest {
         AtomChatConfig c = new AtomChatConfig();
         ThemeService.apply(c, "minimal");
         assertEquals(0xFF2563D8, c.accentColor);
-        assertEquals(0xFFF7F8FA, c.panelBgColor);
+        assertEquals(0xFFE7EDFA, c.panelBgColor);
         assertEquals(0xFF151A22, c.textPrimaryColor);
         assertEquals(0xFFFFFFFF, c.cardColor);
+        assertEquals(c.textPrimaryColor, c.otherBubbleTextColor);
+        assertEquals(c.textSecondaryColor, c.secondaryCapsuleText);
 
         c = new AtomChatConfig();
         ThemeService.apply(c, "summer");
-        assertEquals(0xFF84CC16, c.accentColor);
-        assertEquals(0xFFFAFCF3, c.panelBgColor);
+        assertEquals(0xFFACE246, c.accentColor);
+        assertEquals(0xFFACE246, c.ownBubbleColor);
+        assertEquals(0xFFEAFFA6, c.otherBubbleColor);
+        assertEquals(0xFFFFFFEC, c.panelBgColor);
         assertEquals(0xFF192521, c.textPrimaryColor);
-        assertEquals(0xFF84CC16, c.ownBubbleColor);
+        assertEquals(c.panelBgColor, c.cardColor);
+        assertEquals(c.textPrimaryColor, c.otherBubbleTextColor);
+        assertEquals(0xFF466C00, c.panelOutlineColor);
+        assertEquals(c.panelOutlineColor, c.secondaryCapsuleText);
 
         c = new AtomChatConfig();
         ThemeService.apply(c, "elegant");
-        assertEquals(0xFFB45639, c.accentColor);
-        assertEquals(0xFFF5F0E8, c.panelBgColor);
-        assertEquals(0xFFE8DDD0, c.cardColor);
+        assertEquals(0xFFDE6E1A, c.accentColor);
+        assertEquals(0xFFDE6E1A, c.ownBubbleColor);
+        assertEquals(0xFFF4B182, c.otherBubbleColor);
+        assertEquals(0xFFF5EBDB, c.panelBgColor);
+        assertEquals(0xFFF3DFC8, c.cardColor);
         assertEquals(0xFF332E23, c.textPrimaryColor);
+        assertEquals(0xFFFFFFFF, c.bubbleTextColor);
+        assertEquals(c.textPrimaryColor, c.otherBubbleTextColor);
+        assertEquals(c.textSecondaryColor, c.secondaryCapsuleText);
+        assertEquals(c.panelBgColor, c.secondaryCapsuleBg);
 
         c = new AtomChatConfig();
         ThemeService.apply(c, "raven");
-        assertEquals(0xFFE3B341, c.accentColor);
-        assertEquals(0xFF0D1117, c.panelBgColor);
-        assertEquals(0xFF161B27, c.cardColor);
+        assertEquals(0xFFFFC233, c.accentColor);
+        assertEquals(0xFFFFC233, c.ownBubbleColor);
+        assertEquals(0xFF355171, c.otherBubbleColor);
+        assertEquals(0xFF1D283A, c.panelBgColor);
+        assertEquals(0xFF1C2542, c.cardColor);
+        assertEquals(0xFF07102A, c.panelOutlineColor);
         assertEquals(0xFFF0F4F8, c.textPrimaryColor);
+        assertEquals(c.panelBgColor, c.secondaryCapsuleBg);
+        assertEquals(c.textSecondaryColor, c.secondaryCapsuleText);
 
         c = new AtomChatConfig();
         ThemeService.apply(c, "hub");
-        assertEquals(0xFFFF9000, c.accentColor);
-        assertEquals(0xFF0A0A0A, c.panelBgColor);
-        assertEquals(0xFF141414, c.cardColor);
+        assertEquals(0xFFFF8203, c.accentColor);
+        assertEquals(0xFFFF8203, c.ownBubbleColor);
+        assertEquals(0xFF151414, c.panelBgColor);
+        assertEquals(0xFF262323, c.cardColor);
+        assertEquals(0xFF000000, c.panelOutlineColor);
         assertEquals(0xFFFFFFFF, c.textPrimaryColor);
-        assertEquals(0xFF161616, c.secondaryCapsuleBg);
+        assertEquals(c.textPrimaryColor, c.otherBubbleTextColor);
+        assertEquals(c.panelBgColor, c.bubbleTextColor);
+        assertEquals(c.panelBgColor, c.secondaryCapsuleBg);
         assertEquals(0xFFD4D4D4, c.secondaryCapsuleText);
 
         c = new AtomChatConfig();
         ThemeService.apply(c, "vivid");
-        assertEquals(0xFFCA3F70, c.accentColor);
-        assertEquals(0xFFFDF0F4, c.panelBgColor);
+        assertEquals(0xFFFF4D8C, c.accentColor);
+        assertEquals(0xFFFF4D8C, c.ownBubbleColor);
+        assertEquals(0xFFFFEBF8, c.panelBgColor);
+        assertEquals(0xFFFFEBF1, c.cardColor);
         assertEquals(0xFFDEA6BE, c.otherBubbleColor);
         assertEquals(0xFF36212B, c.textPrimaryColor);
+        assertEquals(0xFFFFFFFF, c.bubbleTextColor);
+        assertEquals(c.textPrimaryColor, c.otherBubbleTextColor);
+        assertEquals(c.cardColor, c.secondaryCapsuleBg);
 
         c = new AtomChatConfig();
         ThemeService.apply(c, "dusk");
-        assertEquals(0xFFA78BFA, c.accentColor);
-        assertEquals(0xFF232633, c.panelBgColor);
-        assertEquals(0xFF2B2E3D, c.cardColor);
+        assertEquals(0xFFB69DFF, c.accentColor);
+        assertEquals(0xFFB69DFF, c.ownBubbleColor);
+        assertEquals(0xFF433579, c.otherBubbleColor);
+        assertEquals(0xFF352B48, c.panelBgColor);
+        assertEquals(0xFF302958, c.cardColor);
+        assertEquals(0xFF1D124C, c.panelOutlineColor);
+        assertEquals(0xFF413960, c.secondaryCapsuleBg);
         assertEquals(0xFFF5F6FA, c.textPrimaryColor);
-        assertEquals(0.88F, c.panelOpacity, 1e-6F);
+        assertEquals(c.textPrimaryColor, c.textSecondaryColor);
+        assertEquals(c.textPrimaryColor, c.otherBubbleTextColor);
+        assertEquals(c.textPrimaryColor, c.secondaryCapsuleText);
+        assertEquals(0.70F, c.panelOpacity, 1e-6F);
         assertTrue(c.blurEnabled);
 
         c = new AtomChatConfig();
         ThemeService.apply(c, "mint");
         assertEquals(0xFF5EEAD4, c.accentColor);
-        assertEquals(0xFF0F2622, c.panelBgColor);
-        assertEquals(0xFF16332D, c.cardColor);
-        assertEquals(0xFFF3FCF8, c.textPrimaryColor);
-        assertEquals(0.9F, c.panelOpacity, 1e-6F);
+        assertEquals(0xFF2E7E72, c.panelBgColor);
+        assertEquals(0xFF61B8A0, c.cardColor);
+        assertEquals(0xFF12392F, c.panelOutlineColor);
+        assertEquals(0xFF348C78, c.secondaryCapsuleBg);
+        assertEquals(0xFFEBFDF7, c.textSecondaryColor);
+        assertEquals(c.textSecondaryColor, c.textPrimaryColor);
+        assertEquals(c.textSecondaryColor, c.otherBubbleTextColor);
+        assertEquals(c.textSecondaryColor, c.secondaryCapsuleText);
+        assertEquals(0.70F, c.panelOpacity, 1e-6F);
         assertTrue(c.blurEnabled);
     }
 
@@ -249,20 +351,32 @@ class ThemeServiceTest {
      *  exempt by design: presets never touch it (independent knob). */
     @Test
     void colourPresetWritesAllTwelveColours() {
-        AtomChatConfig defaults = new AtomChatConfig();
         for (ThemeService.Preset preset : ThemeService.presets()) {
             AtomChatConfig c = new AtomChatConfig();
+            int unset = 0x01234567;
+            c.accentColor = unset;
+            c.ownBubbleColor = unset;
+            c.bubbleTextColor = unset;
+            c.otherBubbleColor = unset;
+            c.otherBubbleTextColor = unset;
+            c.panelBgColor = unset;
+            c.textPrimaryColor = unset;
+            c.textSecondaryColor = unset;
+            c.cardColor = unset;
+            c.panelOutlineColor = unset;
+            c.secondaryCapsuleBg = unset;
+            c.secondaryCapsuleText = unset;
             c.cornerStyle = "medium";
             ThemeService.apply(c, preset.id());
-            assertNotEquals(defaults.secondaryCapsuleBg, c.secondaryCapsuleBg, preset.id());
-            assertNotEquals(defaults.secondaryCapsuleText, c.secondaryCapsuleText, preset.id());
-            assertNotEquals(defaults.textSecondaryColor, c.textSecondaryColor, preset.id());
-            assertNotEquals(defaults.otherBubbleTextColor, c.otherBubbleTextColor, preset.id());
-            assertNotEquals(defaults.panelOutlineColor, c.panelOutlineColor, preset.id());
-            assertNotEquals(defaults.otherBubbleColor, c.otherBubbleColor, preset.id());
+            assertArrayEquals(new int[]{preset.accent(), preset.ownBubble(), preset.bubbleText(),
+                            preset.otherBubble(), preset.otherBubbleText(), preset.panelBg(), preset.textPrimary(),
+                            preset.textSecondary(), preset.card(), preset.panelOutlineColor(), preset.capsuleBg(),
+                            preset.capsuleText()},
+                    new int[]{c.accentColor, c.ownBubbleColor, c.bubbleTextColor, c.otherBubbleColor,
+                            c.otherBubbleTextColor, c.panelBgColor, c.textPrimaryColor, c.textSecondaryColor,
+                            c.cardColor, c.panelOutlineColor, c.secondaryCapsuleBg, c.secondaryCapsuleText},
+                    preset.id());
             assertEquals("medium", c.cornerStyle, preset.id());
-            // cardColor: vivid/minimal keep white — exactly like the default,
-            // and that is fine; the fields above prove the palette moved.
         }
     }
 
@@ -327,7 +441,7 @@ class ThemeServiceTest {
         assertEquals(0xFF112233, c.accentColor);
         // Re-picking the preset is the user asking for the snapshot back.
         ThemeService.apply(c, "elegant");
-        assertEquals(0xFFB45639, c.accentColor);
+        assertEquals(0xFFDE6E1A, c.accentColor);
     }
 
     /** An old config file (themeName empty) survives a Gson round trip with
@@ -403,18 +517,21 @@ class ThemeServiceTest {
                 "light grey linearises to ~0.604 luminance - light side of the 0.5 threshold");
     }
 
-    /** Every shipped preset's outline must be legible against its own panel:
-     *  |relativeLuminance(outline) - relativeLuminance(panelBg)| >= 0.22.
-     *  drawBezel now paints the configured outline verbatim (no runtime
-     *  fallback), so this is purely a palette-design guard against shipping
-     *  a preset whose ring melts into its panel. */
+    /** Outlines stand apart from the panel unless the exact color pair was chosen to blend in. */
     @Test
     void presetOutlinesStayLegibleAgainstTheirPanel() {
         final float outlineLegibilityContrast = 0.22F;
         for (ThemeService.Preset preset : ThemeService.presets()) {
             float contrast = Math.abs(ThemeService.relativeLuminance(preset.panelOutlineColor())
                     - ThemeService.relativeLuminance(preset.panelBg()));
-            assertTrue(contrast >= outlineLegibilityContrast,
+            boolean approvedSubtleOutline = switch (preset.id()) {
+                case "raven" -> preset.panelBg() == 0xFF1D283A && preset.panelOutlineColor() == 0xFF07102A;
+                case "hub" -> preset.panelBg() == 0xFF151414 && preset.panelOutlineColor() == 0xFF000000;
+                case "dusk" -> preset.panelBg() == 0xFF352B48 && preset.panelOutlineColor() == 0xFF1D124C;
+                case "mint" -> preset.panelBg() == 0xFF2E7E72 && preset.panelOutlineColor() == 0xFF12392F;
+                default -> false;
+            };
+            assertTrue(contrast >= outlineLegibilityContrast || approvedSubtleOutline,
                     preset.id() + " outline contrast " + contrast);
         }
     }

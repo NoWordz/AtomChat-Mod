@@ -1,7 +1,5 @@
 package com.atom.chat.diagnostics;
 
-import com.atom.chat.AtomChat;
-
 /** Debug-only, bounded state traces. Never accepts typed characters, message text or image URLs. */
 public final class FaultTrace {
     public enum Kind { KEY, CHAR, UPLOAD, THEME, FOCUS }
@@ -24,16 +22,16 @@ public final class FaultTrace {
     }
     public static void input(boolean character, String consumer) {
         Kind kind=character?Kind.CHAR:Kind.KEY;
-        if(claim(kind)) AtomChat.LOGGER.info("[AtomChat][fault] event={} consumer={}",kind,consumer);
+        if (claim(kind)) AtomChatLog.diagnostic("fault", "event=" + kind + " consumer=" + consumer);
     }
     public static void upload(long request, String stage, long epoch) {
-        if(claim(Kind.UPLOAD)) AtomChat.LOGGER.info("[AtomChat][fault] upload={} stage={} epoch={}",request,stage,epoch);
+        if (claim(Kind.UPLOAD)) AtomChatLog.diagnostic("fault", "upload=" + request + " stage=" + stage + " epoch=" + epoch);
     }
     public static void theme(String name, boolean saved) {
-        if(claim(Kind.THEME)) AtomChat.LOGGER.info("[AtomChat][fault] theme={} saved={}",name,saved);
+        if (claim(Kind.THEME)) AtomChatLog.diagnostic("fault", "theme=" + name + " saved=" + saved);
     }
     public static void focus(String page, boolean composer, boolean field, boolean readOnly, boolean modal, boolean tutorial) {
-        if(claim(Kind.FOCUS)) AtomChat.LOGGER.info("[AtomChat][fault] page={} focus={} field={} readonly={} modal={} tutorial={}",
-                page,composer,field,readOnly,modal,tutorial);
+        if (claim(Kind.FOCUS)) AtomChatLog.diagnostic("fault", "page=" + page + " focus=" + composer
+                + " field=" + field + " readonly=" + readOnly + " modal=" + modal + " tutorial=" + tutorial);
     }
 }

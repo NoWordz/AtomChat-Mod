@@ -260,7 +260,7 @@ public final class CardBackdrop implements AutoCloseable {
     private static void report(Throwable failure) {
         if (!reportedFailure) {
             reportedFailure = true;
-            AtomChat.LOGGER.warn("[AtomChat/render] Card backdrop unavailable", failure);
+            AtomChat.LOGGER.warn(com.atom.chat.diagnostics.AtomChatLog.message("render", "Card backdrop unavailable"), failure);
         }
     }
 

@@ -48,7 +48,7 @@ public final class WallpaperPresets {
                 error="atomchat.feedback.wallpaperPresetFailed";loading=false;
                 publication = Runnable::run;
                 commitConfig = () -> true;
-                AtomChat.LOGGER.warn("[AtomChat/wallpaper] Static preset generation failed",failure);
+                AtomChat.LOGGER.warn(com.atom.chat.diagnostics.AtomChatLog.message("resource", "Static preset generation failed"),failure);
             });
     private WallpaperPresets() { }
     public static Preset[] presets() { return PRESETS.clone(); }
@@ -145,7 +145,7 @@ public final class WallpaperPresets {
         WORKER.execute(() -> {
             try { PREVIEWS.put(id,Image.makeFromEncoded(renderPng(id,144,256))); }
             catch(RuntimeException failure) {
-                AtomChat.LOGGER.warn("[AtomChat/wallpaper] Preset preview failed: {}",id,failure);
+                AtomChat.LOGGER.warn(com.atom.chat.diagnostics.AtomChatLog.message("resource", "Preset preview failed: {}"),id,failure);
             }
         });
         return null;

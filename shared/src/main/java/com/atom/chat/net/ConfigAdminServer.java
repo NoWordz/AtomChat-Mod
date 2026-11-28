@@ -103,7 +103,7 @@ public final class ConfigAdminServer {
             byte[] bytes = PublicChatAvatar.read(CacheDirs.publicChatAvatar());
             return bytes == null ? null : AdminAsset.imported(PublicChatAvatar.FILE_NAME, bytes);
         } catch (IOException error) {
-            com.atom.chat.AtomChat.LOGGER.warn("Could not read the public chat avatar", error);
+            com.atom.chat.AtomChat.LOGGER.warn(com.atom.chat.diagnostics.AtomChatLog.message("config", "Could not read the public chat avatar"), error);
             return null;
         }
     }

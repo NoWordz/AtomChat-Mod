@@ -38,6 +38,8 @@ public final class ChannelNetwork {
     }
 
     public static void register(RegisterPayloadHandlersEvent event) {
+        // Only clients consume this channel. Leave dedicated-server ownership to any Bukkit bridge.
+        if (FMLEnvironment.dist != Dist.CLIENT) return;
         event.registrar("1").optional().playBidirectional(Payload.TYPE, Payload.CODEC, (payload, ctx) -> {
             if (FMLEnvironment.dist == Dist.CLIENT) receive(payload, ctx.listener());
         });

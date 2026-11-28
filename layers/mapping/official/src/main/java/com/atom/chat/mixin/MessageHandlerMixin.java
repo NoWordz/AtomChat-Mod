@@ -80,7 +80,7 @@ public class MessageHandlerMixin {
     private void atomchat$deferShareCard(ChatListener listener, MessageSignature signature, BooleanSupplier callback,
                                          PlayerChatMessage message, GameProfile profile, ChatType.Bound bound) {
         handleMessage(signature, com.atom.chat.net.CardCompanionClient.deferNativeShare(
-                message.sender(), message.signedContent(), callback));
+                message.sender(), message.signedContent(), message.filterMask().isEmpty(), callback));
     }
 
     @Redirect(method = "handleDisguisedChatMessage", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/multiplayer/chat/ChatListener;handleMessage(Lnet/minecraft/network/chat/MessageSignature;Ljava/util/function/BooleanSupplier;)V"))

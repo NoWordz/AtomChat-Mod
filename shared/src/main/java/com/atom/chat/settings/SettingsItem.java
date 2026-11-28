@@ -72,6 +72,10 @@ public final class SettingsItem {
         return !performanceLocked() && getter.getAsBoolean();
     }
 
+    boolean isAddon() {
+        return !persistAtomChatConfig;
+    }
+
     /** False when another setting currently overrides this one. */
     public boolean available() {
         return !performanceLocked() && (available == null || available.getAsBoolean());

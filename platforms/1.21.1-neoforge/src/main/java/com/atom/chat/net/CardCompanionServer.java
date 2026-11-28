@@ -18,6 +18,7 @@ import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.network.chat.PlayerChatMessage;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Rarity;
@@ -147,10 +148,15 @@ public final class CardCompanionServer {
     private record OutboundShare(ServerPlayer target, Component convertedLine, PlayerShareDelivery share) {}
     private static final ThreadLocal<OutboundShare> OUTBOUND_SHARE = new ThreadLocal<>();
 
+    public static void bindAcceptedPlayerShare(ServerPlayer sender, PlayerChatMessage nativeMessage) {
+        if (sender == null || !sender.getUUID().equals(nativeMessage.sender())) return;
+        PLAYER_SHARES.bindAccepted(sender, nativeMessage.signedBody(), nativeMessage.signedContent(), System.nanoTime());
+    }
+
     public static PlayerShareDelivery claimPlayerShare(ServerPlayer sender, net.minecraft.network.chat.PlayerChatMessage nativeMessage) {
         if (sender == null || !sender.getUUID().equals(nativeMessage.sender())) return null;
         String body = nativeMessage.signedContent();
-        ShareCard card = PLAYER_SHARES.take(sender, body, System.nanoTime());
+        ShareCard card = PLAYER_SHARES.takeAccepted(sender, nativeMessage.signedBody(), System.nanoTime());
         if (card == null) return null;
         return new PlayerShareDelivery(sender.getUUID(), sender.getGameProfile().getName(), body, card, nativeMessage.filterMask().isEmpty());
     }
@@ -201,7 +207,8 @@ public final class CardCompanionServer {
             }
             CardAudience.delivered(target.server, target.getUUID(), share.card(), false);
         } catch (RuntimeException failure) {
-            com.atom.chat.AtomChat.LOGGER.debug("Card delivery failed; forwarding native chat", failure);
+            com.atom.chat.AtomChat.LOGGER.debug(com.atom.chat.diagnostics.AtomChatLog.message("card",
+                    "Card delivery failed; forwarding native chat"), failure);
         }
     }
 

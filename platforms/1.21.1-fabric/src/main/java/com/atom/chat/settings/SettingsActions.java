@@ -2,6 +2,7 @@ package com.atom.chat.settings;
 
 import com.atom.chat.AtomChat;
 import com.atom.chat.api.ui.AppearanceUi.Part;
+import com.atom.chat.api.ui.AppearanceUi;
 import com.atom.chat.avatar.AvatarImage;
 import com.atom.chat.avatar.AvatarStore;
 import com.atom.chat.banner.BannerImage;
@@ -144,7 +145,7 @@ public final class SettingsActions {
                     AtomChatConfig config = AtomChatConfig.get();
                     boolean saved = config.dynamicWallpaperAppearanceId == null ? WallpaperStore.setPng(pngBytes)
                             : WallpaperStore.replacePngWithConfig(pngBytes,
-                                    () -> AppearanceSettings.save(Part.DYNAMIC_WALLPAPER, config, null));
+                                    () -> AppearanceUi.select(Part.DYNAMIC_WALLPAPER, null));
                     if (saved) {
                         WallpaperImage.release();
                     }
@@ -194,8 +195,7 @@ public final class SettingsActions {
         if (com.atom.chat.onboarding.TutorialSandbox.active() && (
                 actionId == null || actionId.contains("wallpaper") || actionId.contains("preset")
                 || actionId.contains("clear") || actionId.contains("avatar") || actionId.contains("banner")
-                || "onboarding_replay".equals(actionId) || "panel_edit".equals(actionId)
-                || AppearanceSettings.part(actionId) != null)) {
+                || "onboarding_replay".equals(actionId) || "panel_edit".equals(actionId))) {
             host.feedback("atomchat.tutorial.preview_only",false);return;
         }
         if ("onboarding_replay".equals(actionId)) { host.openTutorial(); return; }
@@ -206,8 +206,6 @@ public final class SettingsActions {
         } else if (actionId != null && actionId.startsWith(SettingsSectionPage.ACTION_THEME_PRESET_DELETE)) {
             deleteThemePreset(actionId.substring(
                     SettingsSectionPage.ACTION_THEME_PRESET_DELETE.length()));
-        } else if (AppearanceSettings.part(actionId) != null) {
-            chooseAppearancePart(AppearanceSettings.part(actionId), actionId.endsWith(":prev") ? -1 : 1);
         } else if (actionId != null && actionId.startsWith("wallpaper_preset:")) {
             String id = actionId.substring("wallpaper_preset:".length());
             String selectedDynamic = AtomChatConfig.get().dynamicWallpaperAppearanceId;
@@ -240,7 +238,7 @@ public final class SettingsActions {
                     AtomChatConfig cfg = AtomChatConfig.get();
                     var previous = cfg.bubbleStyle;
                     cfg.bubbleStyle = style;
-                    if (!AppearanceSettings.save(Part.BUBBLE, cfg, null)) {
+                    if (!AppearanceUi.select(Part.BUBBLE, null)) {
                         cfg.bubbleStyle = previous;
                         host.feedback(AppearanceSettings.SAVE_FAILED, false);
                     }
@@ -282,16 +280,6 @@ public final class SettingsActions {
             int deleted = ImageLoader.get().clearDiskCache();
             host.feedback(deleted < 0 ? "atomchat.feedback.cacheClearFailed" : "atomchat.feedback.cacheCleared",
                     deleted >= 0);
-        }
-    }
-
-    private void chooseAppearancePart(Part part, int direction) {
-        AtomChatConfig config = AtomChatConfig.get();
-        String selected = AppearanceSettings.selectedId(part, config);
-        String next = AppearanceSettings.next(part, selected, direction);
-        if (java.util.Objects.equals(selected, next)) return;
-        if (!AppearanceSettings.save(part, config, next)) {
-            host.feedback(AppearanceSettings.SAVE_FAILED, false);
         }
     }
 

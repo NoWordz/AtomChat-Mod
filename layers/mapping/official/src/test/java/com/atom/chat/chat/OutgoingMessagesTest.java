@@ -144,4 +144,112 @@ class OutgoingMessagesTest {
         assertEquals(local.getId(),ChatStore.get().snapshot().get(0).getId());
         assertEquals("rewritten",ChatStore.get().snapshot().get(0).getContentText());
     }
+
+    @Test void overflowStillConfirmsDistinctPublicEchoWithProof() {
+        var evicted = queueToCapacity(SELF, null, "earlier visible", "earlier wire");
+        var local = enqueue(SELF, null, "new visible", "new wire");
+        assertEquals(OutgoingMessages.State.UNCONFIRMED, evicted.deliveryState());
+        var echo = msg(SELF, "Self", "new visible");
+        assertFalse(OutgoingMessages.reconcile(echo, null, false, "new wire"));
+        assertFalse(OutgoingMessages.reconcile(msg(UUID.randomUUID(), "Other", "earlier visible"),
+                null, true, "new wire"));
+        assertFalse(OutgoingMessages.reconcile(echo, PlayerRef.of(null, "Alice"), true, "new wire"));
+        assertTrue(OutgoingMessages.reconcile(echo, null, true, null));
+        var rows = ChatStore.get().snapshot();
+        assertEquals(2, rows.size());
+        assertEquals(local.getId(), rows.get(1).getId());
+        assertEquals(OutgoingMessages.State.CONFIRMED, rows.get(1).deliveryState());
+    }
+
+    @Test void overflowStillConfirmsSameTextInUnrelatedPrivateConversation() {
+        var alice = PlayerRef.of(UUID.randomUUID(), "Alice");
+        var bob = PlayerRef.of(UUID.randomUUID(), "Bob");
+        var evicted = queueToCapacity(SELF, alice, "shared text", "shared text");
+        var local = enqueue(SELF, bob, "shared text", "shared text");
+        var echo = msg(SELF, "Self", "shared text");
+        assertFalse(OutgoingMessages.reconcile(echo, alice, true, "shared text"));
+        assertTrue(OutgoingMessages.reconcile(echo, bob, true, "shared text"));
+        assertEquals(OutgoingMessages.State.UNCONFIRMED, evicted.deliveryState());
+        assertEquals(local.getId(), PrivateChatStore.messages(bob).get(0).getId());
+        assertEquals(OutgoingMessages.State.CONFIRMED, PrivateChatStore.messages(bob).get(0).deliveryState());
+    }
+
+    @Test void evictedVisibleTextAndWireRemainAmbiguousForTheSamePrivatePartner() {
+        var alice = PlayerRef.of(UUID.randomUUID(), "Alice");
+        var evicted = queueToCapacity(SELF, alice, "visible", "earlier wire");
+        var local = enqueue(SELF, alice, "visible", "earlier wire");
+        assertFalse(OutgoingMessages.reconcile(msg(SELF, "Self", "visible"), alice, true, null));
+        assertFalse(OutgoingMessages.reconcile(msg(SELF, "Self", "rewrite"), alice, true, "earlier wire"));
+        assertEquals(OutgoingMessages.State.UNCONFIRMED, evicted.deliveryState());
+        assertEquals(OutgoingMessages.State.PENDING, local.deliveryState());
+    }
+
+    @Test void matchingEvictionFromAnotherSenderCannotBlockProvenEcho() {
+        queueToCapacity(UUID.randomUUID(), null, "shared text", "shared text");
+        var local = enqueue(SELF, null, "shared text", "shared text");
+        assertTrue(OutgoingMessages.reconcile(msg(SELF, "Self", "shared text"), null, true, null));
+        assertEquals(local.getId(), ChatStore.get().snapshot().get(1).getId());
+    }
+
+    @Test void conflictingPartnerUuidDoesNotLetEvictionClaimTheConversation() {
+        var oldAlice = PlayerRef.of(UUID.randomUUID(), "Alice");
+        var alice = PlayerRef.of(UUID.randomUUID(), "Alice");
+        queueToCapacity(SELF, oldAlice, "visible", "earlier wire");
+        enqueue(SELF, alice, "visible", "earlier wire");
+        assertFalse(OutgoingMessages.reconcile(msg(SELF, "Self", "visible"), oldAlice, true, "earlier wire"));
+        assertTrue(OutgoingMessages.reconcile(msg(SELF, "Self", "visible"), alice, true, "earlier wire"));
+    }
+
+    @Test void clearMarksPendingRowsAndDropsEvictionAmbiguity() {
+        queueToCapacity(SELF, null, "visible", "same wire");
+        var pending = enqueue(SELF, null, "visible", "same wire");
+        var echo = msg(SELF, "Self", "visible");
+        assertFalse(OutgoingMessages.reconcile(echo, null, true, "same wire"));
+        OutgoingMessages.clear();
+        assertEquals(OutgoingMessages.State.UNCONFIRMED, pending.deliveryState());
+        var next = enqueue(SELF, null, "visible", "same wire");
+        assertTrue(OutgoingMessages.reconcile(echo, null, true, "same wire"));
+        assertEquals(next.getId(), ChatStore.get().snapshot().get(2).getId());
+    }
+
+    @Test void evictionCollisionExpiresWithItsOriginalSend() {
+        queueToCapacity(SELF, null, "visible", "same wire");
+        var old = enqueue(SELF, null, "visible", "same wire");
+        OutgoingMessages.expire(System.currentTimeMillis() + 120_001);
+        assertEquals(OutgoingMessages.State.UNCONFIRMED, old.deliveryState());
+        var next = enqueue(SELF, null, "visible", "same wire");
+        assertTrue(OutgoingMessages.reconcile(msg(SELF, "Self", "visible"), null, true, "same wire"));
+        assertEquals(next.getId(), ChatStore.get().snapshot().get(2).getId());
+    }
+
+    @Test void exhaustionOfEvictionHistoryKeepsConservativeFallback() {
+        queueToCapacity(SELF, null, "first", "first");
+        for (int i = 0; i < 32; i++) {
+            String body = "another " + i;
+            OutgoingMessages.sent(msg(SELF, "Self", body), null, body);
+        }
+        var next = enqueue(SELF, null, "new", "new");
+        assertFalse(OutgoingMessages.reconcile(msg(SELF, "Self", "new"), null, true, "new"));
+        assertEquals(OutgoingMessages.State.PENDING, next.deliveryState());
+        OutgoingMessages.expire(System.currentTimeMillis() + 120_001);
+        enqueue(SELF, null, "new", "new");
+        assertTrue(OutgoingMessages.reconcile(msg(SELF, "Self", "new"), null, true, "new"));
+    }
+
+    private ChatMessage queueToCapacity(UUID sender, PlayerRef partner, String visible, String wire) {
+        var evicted = enqueue(sender, partner, visible, wire);
+        for (int i = 0; i < 31; i++) {
+            String body = "queued " + i;
+            OutgoingMessages.sent(msg(SELF, "Self", body), null, body);
+        }
+        return evicted; // The next enqueue is the 33rd send and evicts this row.
+    }
+
+    private ChatMessage enqueue(UUID sender, PlayerRef partner, String visible, String wire) {
+        var local = msg(sender, "Self", visible);
+        OutgoingMessages.sent(local, partner, wire);
+        if (partner == null) ChatStore.get().add(local);
+        else PrivateChatStore.addOutgoing(partner, local);
+        return local;
+    }
 }

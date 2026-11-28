@@ -1,13 +1,11 @@
 package com.atom.chat.diagnostics;
 
-import com.atom.chat.AtomChat;
 import com.atom.chat.config.AtomChatConfig;
 
 /**
  * E1 外部尺子的宿主：把「与当前屏幕无关」的每帧 HUD/界面事件转给
  * {@link Truth3Probe#onPumpFrame(long, boolean, String)}，并负责唯一一次
- * 原样输出探针行（与 frame_probe / prepass_probe 的既有约定一致：
- * 探针类生成完整字符串，宿主只转发，不加日志前缀）。
+ * 异步输出探针行，沿用 frame_probe / prepass_probe 的日志分类。
  *
  * <p>三端各注册<strong>恰好一处</strong>：Fabric {@code HudRenderCallback}、
  * Forge 1.20.1 {@code RenderGuiEvent.Post}、NeoForge 1.21.1
@@ -35,7 +33,7 @@ public final class FramePump {
         String work = ClientWorkBudget.get().summaryLine();
         // 仍是唯一一个日志出口：两行按各自窗口节奏合并后一次转发，不新增 outlet。
         if (line != null || work != null) {
-            AtomChat.LOGGER.info(line == null ? work : (work == null ? line : line + "\n" + work));
+            AtomChatLog.diagnostic("probe", line == null ? work : (work == null ? line : line + "\n" + work));
         }
     }
 }

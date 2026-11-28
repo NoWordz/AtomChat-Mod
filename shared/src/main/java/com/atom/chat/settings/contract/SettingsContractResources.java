@@ -37,7 +37,7 @@ public final class SettingsContractResources {
              var manifest = SettingsContractResources.class.getResourceAsStream(BASE + "manifest.fcl")) {
             Admission admission = admit(design, manifest);
             if (admission.incompatibility() != null) {
-                AtomChat.LOGGER.warn("Using ordinary AtomChat settings because the settings contract could not be loaded: {}",
+                AtomChat.LOGGER.warn(com.atom.chat.diagnostics.AtomChatLog.message("config", "Using ordinary AtomChat settings because the settings contract could not be loaded: {}"),
                         admission.incompatibility().getMessage());
             }
             return admission;

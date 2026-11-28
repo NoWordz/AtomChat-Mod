@@ -3,6 +3,7 @@ package com.atom.chat.render;
 import com.atom.chat.config.AtomChatConfig;
 import com.atom.chat.diagnostics.FirstOpenBudget;
 import com.atom.chat.font.FontManager;
+import com.atom.chat.settings.contract.SettingsContractResources;
 import com.atom.lib.design.atomchat.UiTokens;
 
 import java.util.List;
@@ -77,7 +78,11 @@ public final class FirstOpenWarmup {
                     FirstOpenBudget.setPrewarmFont(System.nanoTime() - started);
                     fontReady.countDown();
                 }
-                if (AtomChatConfig.get().enabled) prewarmPickerGlyphs();
+                if (AtomChatConfig.get().enabled) {
+                    prewarmPickerGlyphs();
+                    // The packaged registry is pure data and shared by the first settings pages.
+                    SettingsContractResources.approved();
+                }
             } catch (Throwable ignored) {
                 // SkiaSupport reports unavailable natives. The draw path can build
                 // any glyph whose background prewarm could not finish.

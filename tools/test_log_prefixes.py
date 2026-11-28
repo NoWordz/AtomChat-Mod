@@ -19,4 +19,11 @@ class LogPrefixGuardTest(unittest.TestCase):
         self.assertFalse(violations(prefix + '"profile"  , "failed"), problem);'))
         self.assertTrue(violations(prefix + 'chainVariable, "failed"), problem);'))
         self.assertTrue(violations(prefix + '"Bad_Tag", "failed"), problem);'))
+
+    def test_asynchronous_messages_use_literal_categories(self):
+        self.assertFalse(violations('AtomChatLog.diagnostic("capture", traceLine);'))
+        self.assertTrue(violations('AtomChatLog.diagnostic(category, traceLine);'))
+
+    def test_imported_formatter_is_valid(self):
+        self.assertFalse(violations('LOGGER.warn(AtomChatLog.message("capture", traceLine));'))
 if __name__=='__main__': unittest.main()

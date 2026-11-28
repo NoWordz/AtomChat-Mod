@@ -19,14 +19,14 @@ def stats(rows, unit):
 
 
 def export_jfr(folder, jfr):
-    events = ("bench.AtomChatReplayCpu,bench.AtomChatReplayGpu,bench.AtomChatReplayFrameInterval,"
+    events = ("bench.AtomChatReplayCpu,bench.AtomChatReplayGpu,bench.AtomChatReplayFrameInterval,bench.AtomChatReplayOpenStage,"
               "com.atomchat.PanelSegments,com.atomchat.ScreenLifecycle,com.atomchat.Navigation")
     raw = subprocess.check_output([str(jfr), "print", "--json", "--events", events, str(folder / "frames.jfr")])
     (folder / "events.json").write_bytes(raw)
     return json.loads(raw)["recording"]["events"]
 
 
-def phase(row):
+def phase(row, steady_settings=False, history_fixture=False):
     scenario, elapsed = row["scene"], row["sceneNanos"]
     if "-" in scenario:
         # Leave out tier/scale population and the screenshot readback at 1.1 s.
@@ -35,11 +35,18 @@ def phase(row):
         return scenario if elapsed < 1_100_000_000 else None
     if scenario == "startup":
         return None
+    if scenario == "appearance" and history_fixture:
+        if elapsed < 1_000_000_000:
+            return "history-open"
+        return "history-visible" if 6_000_000_000 <= elapsed < 25_000_000_000 else None
     if elapsed < 1_000_000_000 and scenario in {"appearance", "media", "text", "empty"}:
         return scenario + "-open"
     if scenario == "appearance":
         if 2_000_000_000 <= elapsed < 4_400_000_000:
             return "appearance-steady"
+        if steady_settings:
+            # The historical driver captures at about four seconds. Measure the settled page after it.
+            return "appearance-hold" if 6_000_000_000 <= elapsed < 25_000_000_000 else None
         if elapsed >= 4_500_000_000:
             return "appearance-navigation"
     if scenario == "empty" and 2_000_000_000 <= elapsed < 4_000_000_000:
@@ -55,6 +62,10 @@ def iso_ms(value):
 
 def summarize(folder, jfr):
     summary = {}
+    metadata = folder / "run.json"
+    run = json.loads(metadata.read_text(encoding="utf-8-sig")) if metadata.is_file() else {}
+    steady_settings = run.get("steady_settings", False)
+    history_fixture = bool(run.get("history_fixture_sha256"))
     frames = defaultdict(list)
     with (folder / "frames.csv").open(newline="", encoding="utf-8") as file:
         for row in csv.DictReader(file):
@@ -70,17 +81,22 @@ def summarize(folder, jfr):
                 if event["type"] == "com.atomchat.PanelSegments"}
     by_scene = defaultdict(lambda: defaultdict(list))
     lifecycle = []
+    replay_open_stages = []
     for event in events:
         row = event["values"]
+        if event["type"] == "bench.AtomChatReplayOpenStage":
+            label = "history" if history_fixture and row["scene"] == "appearance" else row["scene"]
+            replay_open_stages.append({"scene": label, "stage": row["stage"],
+                                       "ms": round(row["elapsedNanos"] / 1e6, 3)})
         if event["type"] == "com.atomchat.ScreenLifecycle":
             lifecycle.append({"stage": row["stage"], "ms": iso_ms(row["elapsedNanos"]), "success": row["success"]})
         if event["type"] == "bench.AtomChatReplayFrameInterval":
-            scene = phase(row)
+            scene = phase(row, steady_settings, history_fixture)
             if scene is not None:
                 by_scene[scene]["render_loop_ms"].append(row["elapsedNanos"] / 1e6)
         if event["type"] != "bench.AtomChatReplayCpu" or not row["rendered"]:
             continue
-        scene = phase(row)
+        scene = phase(row, steady_settings, history_fixture)
         if scene is None:
             continue
         scope, frame_id = row["scope"], row["frameId"]
@@ -92,7 +108,8 @@ def summarize(folder, jfr):
         if gpu_ns is not None:
             metrics[f"{scope}_gpu"].append(gpu_ns / 1e6)
         if scope == "panel" and frame_id in segments:
-            for key in ("blurNanos", "drawNanos", "listNanos", "bridgeEnterNanos", "bridgeExitNanos"):
+            for key in ("preUiNanos", "blurNanos", "iconsNanos", "drawNanos", "listNanos",
+                        "bridgeEnterNanos", "bridgeExitNanos"):
                 duration = segments[frame_id].get(key)
                 if duration is not None:
                     duration_ms = iso_ms(duration)
@@ -108,6 +125,7 @@ def summarize(folder, jfr):
             for key, values in sorted(metrics.items())
         })
     summary["screen_lifecycle"] = lifecycle
+    summary["replay_open_stages"] = replay_open_stages
     (folder / "summary.json").write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
 
 
