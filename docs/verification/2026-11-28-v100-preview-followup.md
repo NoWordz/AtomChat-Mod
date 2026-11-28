@@ -47,3 +47,10 @@ python tools/frontend_contract_ci.py build-local "$mavenRepo" --reviewed "$revis
 - 青柠原面板与卡片同为 `#FFFFEC`。典雅、黑鸦、枢纽的原次级胶囊与各自面板同色，活力的原胶囊与卡片同色。重新点选内置主题时应用新配色，已存的手调颜色沿用原值
 - 用户截图的设置卡片在面板底部贴着固定视口，被裁成一条横线。顶部上栏和设置页签下缘用同类视口裁切。验收要检查滚动中两端渐隐、滚到头时对应端恢复、固定栏及点击区域一致，玻璃的颜色层和模糊遮罩同时渐隐
 - 简中和英文的玩家文案按项目契约省略末尾单个句号，段落内标点和数据原文保留
+
+## 本地验收
+
+- Windows Fabric、Forge、NeoForge 各完成 `clean build frontendContractCheck --offline`。7,512 项实际通过、59 项跳过、零失败。三端各 196 个正式场景通过。交付工具 13 项测试通过。
+- 每端各更新有变化的 166 张正式场景图。同一场景的非图像字段和声效逐字节一致，像素及观测容差仍为 0。主要变化见上下缘，画面内部少量像素有合成取整差异。 [离屏前后图](D:/AtomChat-Backups/2026-11-28-v100-preview-followup/evidence)
+- 三端包内构建戳的版本和目标正确，`git_commit` 显示为 `unknown`。构建回执记录实际源码修订、三端摘要及测试计数。 [构建回执](D:/AtomChat-Backups/2026-11-28-v100-preview-followup/build-delivery.json) · [原始构建日志](D:/AtomChat-Backups/2026-11-28-v100-preview-followup/build-local.log)
+- 15:43 部署到三套已明确的本地测试实例并回读校验。渐隐的运行时整帧开销与 516 双基线复测待覆盖。 [部署回执](D:/AtomChat-Backups/2026-11-28-v100-preview-followup/deployment/20261128-154306-550532/deployment.json)

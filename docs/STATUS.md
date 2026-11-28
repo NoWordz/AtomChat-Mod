@@ -1,5 +1,12 @@
 # AtomChat 当前状态
 
+## 2026-11-28 · 1.0.0-Preview 配色、渐隐与本地交付
+
+- 构建修订 `8fad2a3c`。Windows 三端正式构建、包内资源和依赖核对通过，7,512 项通过、59 项跳过、零失败，各 196 个正式场景。三个 JAR 已归集至 `D:/AtomChat-Main/build-lib`。 [构建回执](D:/AtomChat-Backups/2026-11-28-v100-preview-followup/build-delivery.json)
+- 15:43 备份并替换 CCB、Forge 主实例、NeoForge 航空学的 AtomChat 安装包。安装包与交付目录逐端读回摘要一致，配套 AtomLib 和配置读回一致。 [部署回执](D:/AtomChat-Backups/2026-11-28-v100-preview-followup/deployment/20261128-154306-550532/deployment.json)
+- 调整六套不透明主题的表面对比，重选主题时生效。中英文案按项目契约省略末尾单句号。设置、聊天等滚动卡片和消息在上下视口边缘渐隐，抵达端点时恢复该端。
+- 两位 GPT‑6.2‑Astra High 完成性能审计，516 的转场、空闲 HUD、消息接收与存盘均有可独立复测的候选。持续实机性能和 AtomLib 反哺按报告取证。 [审计与验收](verification/2026-11-28-v100-preview-followup.md)
+
 ## 2026-11-28 · 1.0.0-Preview 三端本地部署
 
 - 13:26 备份并安装 Fabric 1.21.1 CCB、Forge 1.20.1 主实例、NeoForge 1.21.1 航空学。六个活动 JAR 的 SHA-256 均与已验收候选一致，原 AtomChat、AtomLib 及 AtomChat 配置已备份。AtomChat 源码为 `e586d360`，配套 AtomLib 0.7.1 图标优化源码为 `bfcca160`。三端使用原固定 AtomLib 编译输入和已配套实测的优化运行包。 [部署与回滚回执](D:/AtomChat-Backups/2026-11-27-v100-preview/regular-deployment/20261128-132627-760949/deployment.json)
