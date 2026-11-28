@@ -12,7 +12,7 @@ import shutil
 import subprocess
 from tempfile import TemporaryDirectory
 
-from frontend_contract_ci import ROOT, command, resolve, verify_product
+from frontend_contract_ci import ROOT, command, publish_local_product, resolve, verify_product
 
 
 TARGET = "1.21.1-fabric"
@@ -125,6 +125,7 @@ def main():
     parser.add_argument("maven", type=Path)
     parser.add_argument("backup", type=Path)
     parser.add_argument("--reviewed", required=True)
+    parser.add_argument("--delivery-root", type=Path, help="checkout whose Fabric libs should receive the JAR")
     args = parser.parse_args()
     instance = args.instance.resolve(strict=True)
     if instance.name != "1.21.1-CCB":
@@ -132,7 +133,11 @@ def main():
     require_closed(instance)
     reviewed = resolve(ROOT, args.reviewed)
     lock = json.loads((ROOT / "versions/atomlib.json").read_text(encoding="utf-8"))
+    delivery_project = ((args.delivery_root / "platforms" / TARGET).resolve(strict=True)
+                        if args.delivery_root is not None else None)
     product = build_candidate(ROOT / "platforms" / TARGET, args.maven.resolve(strict=True), reviewed)
+    if delivery_project is not None:
+        print(publish_local_product(product, delivery_project))
     print(install(instance, args.backup.resolve(), product, lock["sha256"][TARGET], reviewed))
 
 

@@ -2,7 +2,7 @@
 
 ## 2026-11-28 · 1.0.0-Preview 配色、渐隐与本地交付
 
-- 构建修订 `8fad2a3c`。Windows 三端正式构建、包内资源和依赖核对通过，7,512 项通过、59 项跳过、零失败，各 196 个正式场景。三个 JAR 已归集至 `D:/AtomChat-Main/build-lib`。 [构建回执](D:/AtomChat-Backups/2026-11-28-v100-preview-followup/build-delivery.json)
+- 构建修订 `8fad2a3c`。Windows 三端正式构建、包内资源和依赖核对通过，7,512 项通过、59 项跳过、零失败，各 196 个正式场景。三个 JAR 已分别放到 `D:/AtomChat-Main/platforms/<目标>/build/atomlib-consumer/libs/`。 [构建回执](D:/AtomChat-Backups/2026-11-28-v100-preview-followup/build-delivery.json) · [交付路径与摘要](D:/AtomChat-Backups/2026-11-28-v100-preview-followup/platform-libs-delivery.json)
 - 15:43 备份并替换 CCB、Forge 主实例、NeoForge 航空学的 AtomChat 安装包。安装包与交付目录逐端读回摘要一致，配套 AtomLib 和配置读回一致。 [部署回执](D:/AtomChat-Backups/2026-11-28-v100-preview-followup/deployment/20261128-154306-550532/deployment.json)
 - 调整六套不透明主题的表面对比，重选主题时生效。中英文案按项目契约省略末尾单句号。设置、聊天等滚动卡片和消息在上下视口边缘渐隐，抵达端点时恢复该端。
 - 两位 GPT‑6.2‑Astra High 完成性能审计，516 的转场、空闲 HUD、消息接收与存盘均有可独立复测的候选。持续实机性能和 AtomLib 反哺按报告取证。 [审计与验收](verification/2026-11-28-v100-preview-followup.md)

@@ -1,6 +1,7 @@
 """CI behavior uses real Git history and keeps publication off verification jobs."""
 import json
 import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -119,93 +120,118 @@ class FrontendContractCiTest(unittest.TestCase):
 
 
 class LocalDeliveryTest(unittest.TestCase):
-    def test_publication_replaces_the_previous_complete_set(self):
-        from frontend_contract_ci import publish_local_products
+    targets = {"1.21.1-fabric": 21, "1.20.1-forge": 17, "1.21.1-neoforge": 21}
 
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            output = root / "build-lib"
-            output.mkdir()
-            (output / "atomchat-Fabric-old.jar").write_bytes(b"old")
-            products = []
-            for loader in ("Fabric", "Forge", "NeoForge"):
-                product = root / f"atomchat-{loader}-new.jar"
-                product.write_bytes(loader.encode("ascii"))
-                products.append(product)
+    def setUp(self):
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        self.root = Path(directory.name)
+        self.worktree = self.root / "worktree"
+        self.delivery_root = self.root / "main"
+        versions = self.worktree / "versions"
+        versions.mkdir(parents=True)
+        (versions / "targets.json").write_text(json.dumps({
+            target: {"buildable": True, "java": java, "project": f"platforms/{target}"}
+            for target, java in self.targets.items()
+        }), encoding="utf-8")
+        for target in self.targets:
+            (self.worktree / "platforms" / target).mkdir(parents=True)
+            (self.delivery_root / "platforms" / target).mkdir(parents=True)
 
-            publish_local_products(products, output)
+    def destination(self, target):
+        return self.delivery_root / "platforms" / target / "build/atomlib-consumer/libs"
 
-            self.assertEqual({product.name for product in products}, {p.name for p in output.iterdir()})
-            for product in products:
-                self.assertEqual(product.read_bytes(), (output / product.name).read_bytes())
+    def product_name(self, target):
+        return f"atomchat-{target}-Preview.jar"
 
-    def test_copy_failure_preserves_the_previous_delivery(self):
-        from frontend_contract_ci import publish_local_products
-
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            output = root / "build-lib"
-            output.mkdir()
-            old = output / "atomchat-Fabric-old.jar"
-            old.write_bytes(b"previous")
-            good = root / "atomchat-Forge-new.jar"
-            good.write_bytes(b"new")
-            missing = root / "atomchat-Fabric-new.jar"
-
-            with self.assertRaises(FileNotFoundError):
-                publish_local_products([good, missing], output)
-
-            self.assertEqual([old], list(output.iterdir()))
-            self.assertEqual(b"previous", old.read_bytes())
-
-
-    def test_missing_target_cannot_publish_an_incomplete_batch(self):
+    def build(self, *, target=None, failing_target=None):
         from frontend_contract_ci import build_local
 
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            versions = root / "versions"
-            versions.mkdir()
-            (versions / "targets.json").write_text(json.dumps({
-                "1.21.1-fabric": {"buildable": True},
-                "1.21.1-neoforge": {"buildable": True},
-                "1.20.1-forge": {"buildable": False},
-            }), encoding="utf-8")
-            output = root / "build-lib"
-            output.mkdir()
-            old = output / "atomchat-Forge-previous.jar"
-            old.write_bytes(b"previous")
-            with self.assertRaisesRegex(ValueError, "1.20.1-forge"):
-                build_local(root, root, "unused", output, {}, False)
-            self.assertEqual(b"previous", old.read_bytes())
+        def run(tasks, *, cwd, env, check):
+            if cwd.name == failing_target:
+                raise subprocess.CalledProcessError(1, tasks)
+            # Each successful build after the first must see the previous
+            # target's JAR already discoverable in its usual Gradle directory.
+            if target is None and cwd.name != "1.21.1-fabric":
+                first = self.destination("1.21.1-fabric") / self.product_name("1.21.1-fabric")
+                self.assertEqual(b"1.21.1-fabric", first.read_bytes())
+            out = cwd / "build/atomlib-consumer/libs"
+            out.mkdir(parents=True)
+            (out / self.product_name(cwd.name)).write_bytes(cwd.name.encode("ascii"))
 
-    def test_retry_recovers_the_last_directory_if_promotion_and_rollback_fail(self):
-        from frontend_contract_ci import publish_local_products
+        def verified(project, mode, *, require_clean):
+            self.assertEqual("strict", mode)
+            self.assertFalse(require_clean)
+            return project / "build/atomlib-consumer/libs" / self.product_name(project.name)
 
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            output = root / "build-lib"
-            output.mkdir()
-            old = output / "atomchat-Fabric-old.jar"
-            old.write_bytes(b"previous")
-            next_jar = root / "atomchat-Fabric-new.jar"
-            next_jar.write_bytes(b"new")
-            previous = root / ".build-lib-previous"
-            rename = Path.rename
+        with (patch("frontend_contract_ci.resolve", return_value="a" * 40),
+              patch("frontend_contract_ci.command", return_value=["gradlew.bat", "build"]),
+              patch("frontend_contract_ci.subprocess.run", side_effect=run),
+              patch("frontend_contract_ci.verify_product", side_effect=verified)):
+            java_homes = {17: self.root / "jdk17", 21: self.root / "jdk21"}
+            if target is None:
+                build_local(self.worktree, self.root, "reviewed", self.delivery_root, java_homes, False)
+            else:
+                build_local(self.worktree, self.root, "reviewed", self.delivery_root, java_homes, False, target=target)
 
-            def reject_promotion(path, destination):
-                if destination == output:
-                    raise PermissionError("destination locked")
-                return rename(path, destination)
+    def test_each_build_delivers_to_the_matching_platform_libs(self):
+        self.build()
 
-            with patch.object(Path, "rename", reject_promotion):
-                with self.assertRaisesRegex(PermissionError, "destination locked"):
-                    publish_local_products([next_jar], output)
-            self.assertEqual(b"previous", (previous / old.name).read_bytes())
+        for target in self.targets:
+            self.assertEqual(target.encode("ascii"),
+                             (self.destination(target) / self.product_name(target)).read_bytes())
+        self.assertFalse((self.delivery_root / "build-lib").exists())
 
-            with self.assertRaises(FileNotFoundError):
-                publish_local_products([root / "absent.jar"], output)
-            self.assertEqual(b"previous", old.read_bytes())
+    def test_single_target_updates_only_its_distribution_jar(self):
+        destination = self.destination("1.21.1-fabric")
+        destination.mkdir(parents=True)
+        previous = destination / self.product_name("1.21.1-fabric")
+        previous.write_bytes(b"previous")
+        sources = destination / "example-sources.jar"
+        sources.write_bytes(b"sources")
+        self.build(target="1.21.1-fabric")
+
+        self.assertEqual(b"1.21.1-fabric", previous.read_bytes())
+        self.assertEqual(b"sources", sources.read_bytes())
+        self.assertFalse(self.destination("1.20.1-forge").exists())
+        self.assertFalse(self.destination("1.21.1-neoforge").exists())
+
+    def test_ccb_build_also_delivers_the_verified_fabric_jar(self):
+        import deploy_ccb
+
+        target = "1.21.1-fabric"
+        instance = self.root / "1.21.1-CCB"
+        instance.mkdir()
+        (self.worktree / "versions/atomlib.json").write_text(
+            json.dumps({"sha256": {target: "runtime-digest"}}), encoding="utf-8")
+        product = self.worktree / self.product_name(target)
+        product.write_bytes(b"fabric")
+        argv = ["deploy_ccb.py", str(instance), str(self.root), str(self.root / "backup"),
+                "--reviewed", "reviewed", "--delivery-root", str(self.delivery_root)]
+
+        with (patch.object(sys, "argv", argv),
+              patch.object(deploy_ccb, "ROOT", self.worktree),
+              patch.object(deploy_ccb, "require_closed"),
+              patch.object(deploy_ccb, "resolve", return_value="reviewed"),
+              patch.object(deploy_ccb, "build_candidate", return_value=product),
+              patch.object(deploy_ccb, "install") as install):
+            deploy_ccb.main()
+
+        self.assertEqual(b"fabric", (self.destination(target) / product.name).read_bytes())
+        self.assertEqual(product, install.call_args.args[2])
+
+    def test_failed_build_retains_its_previous_jar(self):
+        destination = self.destination("1.20.1-forge")
+        destination.mkdir(parents=True)
+        previous = destination / self.product_name("1.20.1-forge")
+        previous.write_bytes(b"previous")
+
+        with self.assertRaises(subprocess.CalledProcessError):
+            self.build(failing_target="1.20.1-forge")
+
+        self.assertEqual(b"previous", previous.read_bytes())
+        self.assertEqual(b"1.21.1-fabric",
+                         (self.destination("1.21.1-fabric") / self.product_name("1.21.1-fabric")).read_bytes())
 
 
 if __name__ == "__main__":

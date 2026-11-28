@@ -4,16 +4,17 @@ import argparse
 import json
 import os
 from pathlib import Path
-from tempfile import TemporaryDirectory
 import platform
 import re
 import shutil
 import subprocess
 import sys
+from tempfile import TemporaryDirectory
 from zipfile import ZipFile
 
 ROOT = Path(__file__).resolve().parent.parent
 CONTRACT_RESOURCES = "META-INF/atomlib/frontend/"
+DISTRIBUTION_LIBS = Path("build/atomlib-consumer/libs")
 LOCAL_TARGETS = {"1.20.1-forge", "1.21.1-fabric", "1.21.1-neoforge"}
 
 
@@ -91,7 +92,7 @@ def command(project, maven, mode, revision, operation, system, machine):
 
 def verify_product(project, mode, *, require_clean=True):
     build = project / "build/atomlib-consumer"
-    products = [jar for jar in (build / "libs").glob("*.jar")
+    products = [jar for jar in (project / DISTRIBUTION_LIBS).glob("*.jar")
                 if "sources" not in jar.name and "-slim" not in jar.name]
     if len(products) != 1:
         raise ValueError(f"Expected one AtomChat distribution JAR, found {products}")
@@ -118,70 +119,44 @@ def verify_product(project, mode, *, require_clean=True):
 
 
 
-def check_local_directory(directory):
-    if directory.is_symlink() or directory.exists() and (
-        not directory.is_dir()
-        or any(item.is_symlink() or not item.is_file() or
-               not item.name.startswith("atomchat-") or item.suffix != ".jar" for item in directory.iterdir())
-    ):
-        raise ValueError(f"Local delivery directory contains files outside the AtomChat builds: {directory}")
+def publish_local_product(product, delivery_project):
+    libs = delivery_project / DISTRIBUTION_LIBS
+    destination = libs / product.name
+    if product.resolve() == destination.resolve():
+        return destination
+    libs.mkdir(parents=True, exist_ok=True)
+    with TemporaryDirectory(prefix=".atomchat-delivery-", dir=libs) as directory:
+        staged = Path(directory) / product.name
+        shutil.copy2(product, staged)
+        os.replace(staged, destination)
+    return destination
 
 
-def publish_local_products(products, output):
-    output.parent.mkdir(parents=True, exist_ok=True)
-    previous = output.with_name(f".{output.name}-previous")
-    check_local_directory(output)
-    check_local_directory(previous)
-    if previous.exists() and not output.exists():
-        previous.rename(output)
-
-    with TemporaryDirectory(prefix=".atomchat-delivery-", dir=output.parent) as directory:
-        staging = Path(directory)
-        incoming = staging / "incoming"
-        incoming.mkdir()
-        for product in products:
-            shutil.copy2(product, incoming / product.name)
-
-        # Keep the old batch outside automatic cleanup until the swap succeeds.
-        if previous.exists():
-            previous.rename(staging / "retired")
-        if output.exists():
-            output.rename(previous)
-        try:
-            incoming.rename(output)
-        except BaseException:
-            if previous.exists() and not output.exists():
-                previous.rename(output)
-            raise
-        if previous.exists():
-            previous.rename(staging / "previous")
-
-
-def build_local(root, maven, reviewed, output, java_homes, offline):
+def build_local(root, maven, reviewed, delivery_root, java_homes, offline, *, target=None):
     targets = json.loads((root / "versions/targets.json").read_text(encoding="utf-8"))
-    enabled = {key: target for key, target in targets.items()
-               if isinstance(target, dict) and target.get("buildable")}
-    if enabled.keys() != LOCAL_TARGETS:
-        raise ValueError(f"Expected local builds for {sorted(LOCAL_TARGETS)}, found {sorted(enabled)}")
+    wanted = {target} if target is not None else LOCAL_TARGETS
+    enabled = {key: definition for key, definition in targets.items()
+               if key in wanted and definition.get("buildable")}
+    if enabled.keys() != wanted:
+        raise ValueError(f"Local build targets unavailable: {sorted(wanted - enabled.keys())}")
+    missing_java = {definition["java"] for definition in enabled.values()} - java_homes.keys()
+    if missing_java:
+        raise ValueError(f"Pass a JDK directory for Java {sorted(missing_java)}")
     revision = resolve(root, reviewed)
     environment = os.environ.copy()
     environment.pop("FCL_REVIEWED_REVISION", None)
-    products = []
-    for target in enabled.values():
-        project = root / target["project"]
-        java = java_homes[target["java"]]
+    for definition in enabled.values():
+        relative = definition["project"]
+        project = root / relative
+        delivery_project = (delivery_root / relative).resolve(strict=True)
+        java = java_homes[definition["java"]]
         tasks = command(project, maven, "strict", revision, "build", platform.system(), platform.machine())
         if offline:
             tasks.append("--offline")
         print(subprocess.list2cmdline(tasks), flush=True)
         subprocess.run(tasks, cwd=project, env=dict(environment, JAVA_HOME=str(java)), check=True)
-        products.append(verify_product(project, "strict", require_clean=False))
-
-    if len({product.name for product in products}) != len(LOCAL_TARGETS):
-        raise ValueError(f"Expected a unique distribution JAR for every enabled target, found {products}")
-    publish_local_products(products, output)
-    for product in products:
-        print(output / product.name)
+        product = verify_product(project, "strict", require_clean=False)
+        print(publish_local_product(product, delivery_project))
 
 
 def main():
@@ -196,17 +171,20 @@ def main():
         job.add_argument("--reviewed", default="")
         if operation == "build":
             job.add_argument("--dist", type=Path)
-    local = sub.add_parser("build-local", help="build all enabled Windows targets and collect only AtomChat JARs")
+    local = sub.add_parser("build-local", help="build Windows targets and mirror their JARs into each platform's libs")
     local.add_argument("maven", type=Path)
     local.add_argument("--reviewed", required=True)
-    local.add_argument("--java17", type=Path, required=True)
-    local.add_argument("--java21", type=Path, required=True)
-    local.add_argument("--output", type=Path, required=True)
+    local.add_argument("--java17", type=Path)
+    local.add_argument("--java21", type=Path)
+    local.add_argument("--target", choices=sorted(LOCAL_TARGETS), help="build only this platform")
+    local.add_argument("--delivery-root", type=Path, required=True, help="checkout containing the destination platforms")
     local.add_argument("--offline", action="store_true")
     args = parser.parse_args()
     if args.operation == "build-local":
-        build_local(ROOT, args.maven.resolve(strict=True), args.reviewed, args.output.absolute(),
-                    {17: args.java17.resolve(strict=True), 21: args.java21.resolve(strict=True)}, args.offline)
+        java_homes = {version: path.resolve(strict=True) for version, path in
+                      ((17, args.java17), (21, args.java21)) if path is not None}
+        build_local(ROOT, args.maven.resolve(strict=True), args.reviewed,
+                    args.delivery_root.resolve(strict=True), java_homes, args.offline, target=args.target)
         return
     if args.operation == "matrix":
         builds, distributors = route_jobs(ROOT, json.loads(args.targets.read_text(encoding="utf-8")),

@@ -2,16 +2,16 @@
 
 ## 构建与交付
 
-三端各自的 Gradle 分发包写入 `platforms/<目标>/build/atomlib-consumer/libs/`。上轮从单独的工作树构建，三个游戏实例里保留与安装回执一致的成品。固定本机交付目录为 `D:/AtomChat-Main/build-lib`，只放 Fabric、Forge、NeoForge 的 AtomChat 安装包。
+Gradle 在执行构建的工作树里生成 JAR。本地交付放到主工作区 `D:/AtomChat-Main/platforms/<目标>/build/atomlib-consumer/libs/`，Fabric、Forge、NeoForge 分别进入各自的目录。 [三端路径与摘要回执](D:/AtomChat-Backups/2026-11-28-v100-preview-followup/platform-libs-delivery.json)
 
 Windows 正式本地构建使用以下入口。命令从 Preview 源码工作树执行，传入当前构建对应的已审定 Git 修订和项目固定的 AtomLib Maven 输入：
 
 ```powershell
 python tools/frontend_contract_ci.py build-local "$mavenRepo" --reviewed "$revision" `
-  --java17 "$jdk17" --java21 "$jdk21" --output "D:/AtomChat-Main/build-lib"
+  --java17 "$jdk17" --java21 "$jdk21" --delivery-root "D:/AtomChat-Main"
 ```
 
-需要用已经备好的依赖时可加 `--offline`。命令读取仓库构建矩阵，按端使用 Java 17 或 21，跑现有正式构建和 JAR 检查，三端成功后才更换交付目录。一次定向测试或普通单端构建仍在该端 Gradle 输出目录取件。
+需要用已经备好的依赖时可加 `--offline`。每端通过正式构建和 JAR 检查后，就把可安装包放到主工作区对应的 `libs`。只构建 Fabric 时加 `--target 1.21.1-fabric`，并传入 `--java21`。单独用 `deploy_ccb.py` 构建部署时同样传入 `--delivery-root "D:/AtomChat-Main"`。
 
 ## 性能独审
 
