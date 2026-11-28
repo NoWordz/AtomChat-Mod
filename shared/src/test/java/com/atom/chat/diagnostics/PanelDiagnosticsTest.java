@@ -8,7 +8,9 @@ import org.junit.jupiter.api.io.TempDir;
 
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.IdentityHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -202,20 +204,30 @@ class PanelDiagnosticsTest {
 
         @Override public boolean timerQuerySupported() { return supported; }
         private Object context = new Object();
+        private final Map<Object, Integer> activeNames = new IdentityHashMap<>();
+        private final java.util.Set<Integer> failAvailability = new java.util.HashSet<>();
+        private int reads;
         @Override public boolean contextStillValid() { return alive; }
         @Override public Object contextKey() { return context; }
         @Override public boolean otherQueryActive() { return conflict; }
+        @Override public boolean ownsActiveQuery(int query) { return activeNames.getOrDefault(context, 0) == query; }
         @Override public int createQuery() { created++; return nextQuery++; }
         @Override public void deleteQuery(int query) { deleted++; ready.remove(query); }
         @Override public void beginQuery(int query) {
             if (failBegin) throw new IllegalStateException("GL begin failed");
             ready.remove(query);
+            activeNames.put(context, query);
         }
         @Override public void endQuery() {
             if (failEnd) throw new IllegalStateException("GL end failed");
+            activeNames.remove(context);
         }
-        @Override public boolean resultAvailable(int query) { return ready.contains(query); }
+        @Override public boolean resultAvailable(int query) {
+            if (failAvailability.contains(query)) throw new IllegalStateException("GL readiness failed");
+            return ready.contains(query);
+        }
         @Override public long resultNanos(int query) {
+            reads++;
             if (failResult) throw new IllegalStateException("GL result failed");
             return query * 1_000_000L;
         }
@@ -276,21 +288,62 @@ class PanelDiagnosticsTest {
     }
 
     @Test
-    void gpuRingDoesNotUseRetainedNamesInAnotherContext() {
+    void gpuRingReleasesRetiredQueriesOnlyWhenTheirContextReturns() {
         var gl = new FakeGl();
+        Object firstContext = gl.context;
         try (var ring = new GpuTimerQuery(gl, 2)) {
             assertTrue(ring.beginFrame(101)); ring.endFrame();
             assertTrue(ring.beginFrame(102)); ring.endFrame();
             gl.ready.add(1);
             assertEquals(101, ring.poll().get(0).frameId());
+            assertTrue(ring.beginFrame(103));
             gl.context = new Object();
+            ring.endFrame();
 
-            assertTrue(ring.beginFrame(103)); ring.endFrame();
+            assertTrue(ring.beginFrame(104)); ring.endFrame();
             assertEquals(3, gl.created, "the new context gets a new query");
             assertEquals(0, gl.deleted, "names from the original context are never deleted in the new one");
-            assertEquals(1, ring.expired(), "only the unread frame is lost on a context change");
+            assertEquals(2, ring.expired(), "the unread and interrupted frames are lost");
+
+            gl.context = firstContext;
+            assertTrue(ring.poll().isEmpty());
+            assertFalse(gl.activeNames.containsKey(firstContext), "the orphan active query is ended in its context");
+            assertEquals(2, gl.deleted, "the original GL names are released once their context returns");
         }
-        assertEquals(1, gl.deleted, "close only deletes the new context's query");
+    }
+
+    @Test
+    void gpuRingDoesNotReadAResultWhenTheReadinessCheckThrows() {
+        var gl = new FakeGl();
+        try (var ring = new GpuTimerQuery(gl, 2)) {
+            assertTrue(ring.beginFrame(101)); ring.endFrame();
+            assertTrue(ring.beginFrame(102)); ring.endFrame();
+            gl.failAvailability.add(1);
+            gl.ready.add(2);
+            assertEquals(List.of(102L), ring.poll().stream().map(GpuTimerQuery.Sample::frameId).toList());
+            assertEquals(1, gl.reads);
+            assertEquals(1, ring.expired());
+        }
+    }
+
+    @Test
+    void gpuRingReleasesAnIdleNameAfterItsContextReturnsToAClosedRing() {
+        var gl = new FakeGl();
+        var ring = new GpuTimerQuery(gl, 2);
+        var original = gl.context;
+        assertTrue(ring.beginFrame(101));
+        ring.endFrame();
+        gl.ready.add(1);
+        assertEquals(101, ring.poll().get(0).frameId());
+        gl.context = new Object();
+        ring.close();
+        assertEquals(0, gl.deleted);
+
+        gl.context = original;
+        assertTrue(ring.poll().isEmpty());
+        assertFalse(ring.beginFrame(102));
+        ring.close();
+        assertEquals(1, gl.deleted, "the idle name is released once in its own context");
     }
 
     @Test

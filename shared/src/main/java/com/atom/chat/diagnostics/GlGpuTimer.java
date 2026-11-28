@@ -55,7 +55,12 @@ public final class GlGpuTimer implements GpuTimerQuery.Gl {
     @Override
     public Object contextKey() {
         try { return GL.getCapabilities(); }
-        catch (IllegalStateException ignored) { return null; }
+        catch (IllegalStateException | LinkageError ignored) { return null; }
+    }
+
+    @Override
+    public boolean ownsActiveQuery(int query) {
+        return live() && GL15C.glGetQueryi(TARGET, GL15C.GL_CURRENT_QUERY) == query;
     }
 
     @Override

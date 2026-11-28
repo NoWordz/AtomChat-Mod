@@ -3,6 +3,7 @@ package com.atom.chat.diagnostics;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.WeakHashMap;
 import java.util.function.LongSupplier;
 
 /**
@@ -27,6 +28,7 @@ public final class GpuTimerQuery implements AutoCloseable {
         boolean timerQuerySupported();
         boolean contextStillValid();
         default Object contextKey() { return this; }
+        default boolean ownsActiveQuery(int query) { return false; }
         /** True when the host already owns a query on GL_TIME_ELAPSED. */
         boolean otherQueryActive();
         int createQuery();
@@ -46,6 +48,7 @@ public final class GpuTimerQuery implements AutoCloseable {
     private final int[] reusableQueries;
     private final long[] frameIds;
     private final long[] endedAt;
+    private final WeakHashMap<Object, RetiredQueries> retired = new WeakHashMap<>();
     private int head;
     private int count;
     private int reusableCount;
@@ -74,7 +77,10 @@ public final class GpuTimerQuery implements AutoCloseable {
 
     /** Begins a query for one frame. False means the frame is skipped, not stalled. */
     public boolean beginFrame(long frameId) {
-        if (closed) return false;
+        if (closed) {
+            releaseRetiredInCurrentContext();
+            return false;
+        }
         if (!gl.timerQuerySupported() || !gl.contextStillValid()) {
             skipped++;
             return false;
@@ -131,7 +137,10 @@ public final class GpuTimerQuery implements AutoCloseable {
 
     /** Reads only ready results, in submission order. Never waits for the GPU. */
     public List<Sample> poll() {
-        if (closed) return List.of();
+        if (closed) {
+            releaseRetiredInCurrentContext();
+            return List.of();
+        }
         if (!gl.contextStillValid()) { reset(); return List.of(); }
         useContext();
         List<Sample> samples = new ArrayList<>();
@@ -142,7 +151,10 @@ public final class GpuTimerQuery implements AutoCloseable {
             try {
                 available = gl.resultAvailable(query);
             } catch (RuntimeException | Error failure) {
-                available = true; // reclaim a broken query on the normal path
+                safeDelete(query);
+                recycleHead();
+                expired++;
+                continue;
             }
             if (!available) {
                 // A stuck head must not starve ready results behind it.
@@ -178,7 +190,10 @@ public final class GpuTimerQuery implements AutoCloseable {
 
     @Override
     public void close() {
-        if (closed) return;
+        if (closed) {
+            releaseRetiredInCurrentContext();
+            return;
+        }
         closed = true;
         expired += count + (activeQuery != 0 ? 1 : 0);
         releaseAll();
@@ -196,31 +211,51 @@ public final class GpuTimerQuery implements AutoCloseable {
 
     private void useContext() {
         Object current = gl.contextKey();
-        if (context != null && current != context) {
+        if (current != context) {
             expired += count + (activeQuery != 0 ? 1 : 0);
-            // Names belong to their original GL context.
-            head = count = reusableCount = activeQuery = 0;
+            retireCurrent();
+            context = current;
+            releaseRetired(current);
         }
-        context = current;
     }
 
     private void releaseAll() {
-        if (context != gl.contextKey()) {
-            head = count = reusableCount = activeQuery = 0;
-            context = null;
-            return;
-        }
-        if (activeQuery != 0) {
-            safeDelete(activeQuery);
-            activeQuery = 0;
-        }
-        while (count > 0) {
-            safeDelete(queries[head]);
-            recycleHead();
-        }
-        while (reusableCount > 0) safeDelete(reusableQueries[--reusableCount]);
+        Object current = gl.contextKey();
+        retireCurrent();
         context = null;
+        releaseRetired(current);
     }
+
+    private void retireCurrent() {
+        if (context != null && (count != 0 || reusableCount != 0 || activeQuery != 0)) {
+            int[] names = new int[count + reusableCount];
+            for (int index = 0; index < count; index++) {
+                names[index] = queries[(head + index) % queries.length];
+            }
+            System.arraycopy(reusableQueries, 0, names, count, reusableCount);
+            retired.put(context, new RetiredQueries(activeQuery, names));
+        }
+        head = count = reusableCount = activeQuery = 0;
+    }
+
+    private void releaseRetired(Object current) {
+        if (current == null || retired.isEmpty()) return;
+        RetiredQueries pending = retired.remove(current);
+        if (pending == null) return;
+        if (pending.active() != 0) {
+            try {
+                if (gl.ownsActiveQuery(pending.active())) gl.endQuery();
+            } catch (RuntimeException | Error ignored) { }
+            safeDelete(pending.active());
+        }
+        for (int name : pending.names()) safeDelete(name);
+    }
+
+    private void releaseRetiredInCurrentContext() {
+        if (!retired.isEmpty()) releaseRetired(gl.contextKey());
+    }
+
+    private record RetiredQueries(int active, int[] names) {}
 
     public long completed() { return completed; }
     public long dropped() { return dropped; }
