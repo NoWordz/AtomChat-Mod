@@ -50,6 +50,7 @@ public final class FeedbackSoundController {
         if(client==null) return;
         var sound=SOUNDS.get(cue);
         client.getSoundManager().play(PositionedSoundInstance.master(sound,1.0F,volume));
-        if(cfg.debug) AtomChat.LOGGER.info(com.atom.chat.diagnostics.AtomChatLog.message("feedback", "[AtomChat][feedback] play cue={} volume={}"),cue,volume);
+        if (cfg.debug) com.atom.chat.diagnostics.AtomChatLog.diagnostic("feedback",
+                "play cue=" + cue + " volume=" + volume);
     }
 }

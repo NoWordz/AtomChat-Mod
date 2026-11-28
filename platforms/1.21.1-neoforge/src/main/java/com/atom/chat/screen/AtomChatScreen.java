@@ -3747,9 +3747,10 @@ public final class AtomChatScreen extends ChatScreen implements PageHost, Notifi
         // else" — and the virtual pair is what decides which element was under
         // the pointer. Debug-gated: one line per click is fine to opt into.
         if (AtomChatConfig.get().debug) {
-            AtomChat.LOGGER.info(com.atom.chat.diagnostics.AtomChatLog.message("ui", "click: gui=({}, {}) virtual=({}, {}) button={}"),
-                    (int) mouseX, (int) mouseY,
-                    (int) toVirtualX(mouseX), (int) toVirtualY(mouseY), button);
+            com.atom.chat.diagnostics.AtomChatLog.diagnostic("ui",
+                    "click: gui=(" + (int) mouseX + ", " + (int) mouseY
+                            + ") virtual=(" + (int) toVirtualX(mouseX) + ", " + (int) toVirtualY(mouseY)
+                            + ") button=" + button);
         }
         // Quark reads raw mouse state while painting; observe even presses the
         // animation gate will consume, and retain the mask until raw release.
