@@ -161,6 +161,8 @@ def main():
     cli.add_argument("--compile-against", type=Path, help="released 0.9.7 jar if testing newer builds")
     cli.add_argument("--quality", choices=["ULTRA", "BALANCED", "PERFORMANCE"], default="BALANCED")
     cli.add_argument("--scale", choices=["2", "3", "5"], default="5")
+    cli.add_argument("--framebuffer", type=int, nargs=2, metavar=("WIDTH", "HEIGHT"),
+                     help="request this window size on the private replay desktop")
     cli.add_argument("--driver", type=Path, help="replace the performance route with a remapped Fabric probe")
     cli.add_argument("--extra-mod", action="append", type=Path, default=[], help="copy this JAR only into the isolated mods directory")
     cli.add_argument("--expect-marker", default="STEADY_PROBE_COMPLETE", help="required completion line in the private client log")
@@ -198,6 +200,8 @@ def main():
     cli.add_argument("--theme", choices=["dark", "light"], default="dark")
     cli.add_argument("--out", type=Path, default=ROOT / "build/v098-perf")
     args = cli.parse_args()
+    if args.framebuffer and min(args.framebuffer) <= 0:
+        cli.error("--framebuffer requires positive dimensions")
     reload_check = args.reload_check or args.endurance
     if (reload_check or args.check_addon_settings or args.steady_settings) and (args.forward or args.driver):
         cli.error("settings checks require the built-in reverse route with an appearance scene")
@@ -244,6 +248,12 @@ def main():
     if historical.count(completion) != 1:
         raise ValueError("the archived CCB launcher completion check was not found")
     historical = historical.replace(completion, f"{args.expect_marker!r} in log")
+    if args.framebuffer:
+        original_size = "'--width','1600','--height','900'"
+        if historical.count(original_size) != 1:
+            raise ValueError("the archived CCB window size was not found")
+        width, height = args.framebuffer
+        historical = historical.replace(original_size, f"'--width','{width}','--height','{height}'")
     if args.without_atomchat:
         copy_atomchat = "    shutil.copyfile(jar, home/'mods/atomchat.jar')\n"
         if historical.count(copy_atomchat) != 1:
@@ -277,6 +287,8 @@ def main():
     config_path = args.client_config or retest.fixture / "atomchat-client.json"
     config = json.loads(config_path.read_text(encoding="utf-8-sig"))
     reference = json.loads((prior / "run.json").read_text(encoding="utf-8"))
+    if args.framebuffer:
+        reference["width"], reference["height"] = args.framebuffer
     if args.client_config:
         for key in reference["config_overrides"].keys() & config.keys():
             reference["config_overrides"][key] = config[key]
@@ -420,6 +432,13 @@ def main():
             raise AssertionError("the targeted public chat and sticker route did not finish")
         if args.slow_click_log and "ATOMCHAT_ASYNC_CLICK_VERIFIED" not in log:
             raise AssertionError("opening the emoji panel did not bypass the slow click diagnostic")
+    if args.framebuffer:
+        log = (out / "launcher.log").read_text(encoding="utf-8", errors="replace")
+        observations = [line for line in log.splitlines()
+                        if "STEADY_PROBE_SCENE" in line or "ATOMCHAT_CONTROL_COMPLETE frames=" in line]
+        expected_size = f" fb={args.framebuffer[0]}x{args.framebuffer[1]}"
+        if not observations or any(expected_size not in line for line in observations):
+            raise AssertionError(f"the private desktop did not report the requested{expected_size}")
 
 
 if __name__ == "__main__":

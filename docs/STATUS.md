@@ -1,5 +1,11 @@
 # AtomChat 当前状态
 
+## 2026-11-28 · CCB 长帧复现与诊断优化
+
+- 完整隔离 CCB 逐帧记录确认点击诊断同步写入卡住渲染线程，并在切页中捕获已完成 GL 查询的删除和 Skija 提交长帧。三端已把点击及反馈诊断挪到后台，GPU 计时复用已读的查询对象
+- 2560×1600 实机回放的快速切设置最长帧从 37.195 降到 24.679 ms。现场 712 ms 尖峰的原生提交原因仍待确认，继续保持 `main` 和正式实例原状态
+- 三端正式构建 7,524 项通过、59 跳过，各 196 个场景通过。三个 JAR 分别交付到 D 盘对应 `libs`。 [逐帧、验收与交付](verification/2026-11-28-ccb-motion-and-main-audit.md)
+
 ## 2026-11-28 · 1.0.0-Preview 配色、渐隐与本地交付
 
 - 构建修订 `8fad2a3c`。Windows 三端正式构建、包内资源和依赖核对通过，7,512 项通过、59 项跳过、零失败，各 196 个正式场景。三个 JAR 已分别放到 `D:/AtomChat-Main/platforms/<目标>/build/atomlib-consumer/libs/`。 [构建回执](D:/AtomChat-Backups/2026-11-28-v100-preview-followup/build-delivery.json) · [交付路径与摘要](D:/AtomChat-Backups/2026-11-28-v100-preview-followup/platform-libs-delivery.json)

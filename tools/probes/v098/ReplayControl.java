@@ -52,7 +52,9 @@ public class ReplayControl {
         long elapsed = now - controlWorld;
         if (elapsed >= 12_000_000_000L) {
             if (controlFrames == 0) throw new IllegalStateException("No closed-world control frames were recorded");
-            System.out.println("ATOMCHAT_CONTROL_COMPLETE frames=" + controlFrames);
+            var window = client.method_22683();
+            System.out.println("ATOMCHAT_CONTROL_COMPLETE frames=" + controlFrames
+                    + " fb=" + window.method_4489() + "x" + window.method_4506());
             client.method_1592();
         } else if (client.field_1755 == null) {
             ReplayWorld.controlFrame(elapsed, now, controlPrevious);
