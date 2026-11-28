@@ -12,8 +12,8 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 /** Measures the same copied world with the AtomChat JAR absent. */
 @Mixin(class_310.class)
 public class ReplayControl {
-    @Unique private long controlReady, controlWorld, controlPrevious;
-    @Unique private boolean controlRequested;
+    @Unique private long controlReady, controlWorld, controlPrevious, controlFrames;
+    @Unique private boolean controlRequested, controlMeasured;
 
     @Inject(method = "method_1523(Z)V", at = @At("RETURN"), remap = false)
     private void measureControl(CallbackInfo info) {
@@ -40,12 +40,23 @@ public class ReplayControl {
             return;
         }
         if (controlWorld == 0) controlWorld = now;
+        if (!controlMeasured) {
+            if (now - controlWorld < 12_000_000_000L) return;
+            client.method_1507(null);
+            controlMeasured = true;
+            controlWorld = now;
+            controlPrevious = now;
+            return;
+        }
+
         long elapsed = now - controlWorld;
-        if (elapsed >= 24_000_000_000L) {
-            System.out.println("ATOMCHAT_CONTROL_COMPLETE");
+        if (elapsed >= 12_000_000_000L) {
+            if (controlFrames == 0) throw new IllegalStateException("No closed-world control frames were recorded");
+            System.out.println("ATOMCHAT_CONTROL_COMPLETE frames=" + controlFrames);
             client.method_1592();
-        } else if (client.field_1755 == null && elapsed >= 12_000_000_000L && controlPrevious != 0) {
-            ReplayWorld.controlFrame(elapsed - 12_000_000_000L, now, controlPrevious);
+        } else if (client.field_1755 == null) {
+            ReplayWorld.controlFrame(elapsed, now, controlPrevious);
+            controlFrames++;
         }
         controlPrevious = now;
     }
