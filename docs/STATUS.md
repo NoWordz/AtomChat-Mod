@@ -1,5 +1,14 @@
 # AtomChat 当前状态
 
+## 2026-11-28 · 1.0.0-Preview 三端本地部署
+
+- 13:26 备份并安装 Fabric 1.21.1 CCB、Forge 1.20.1 主实例、NeoForge 1.21.1 航空学。六个活动 JAR 的 SHA-256 均与已验收候选一致，原 AtomChat、AtomLib 及 AtomChat 配置已备份。AtomChat 源码为 `e586d360`，配套 AtomLib 0.7.1 图标优化源码为 `bfcca160`。三端使用原固定 AtomLib 编译输入和已配套实测的优化运行包。 [部署与回滚回执](D:/AtomChat-Backups/2026-11-27-v100-preview/regular-deployment/20261128-132627-760949/deployment.json)
+- 516 原服由用户实发坐标和主手物品，面板及 HUD 每次各一张卡。临时安装已恢复旧配套。隔离验证覆盖 Paper、Youer、已有插件桥接和 Fabric 的 NCR 开关。 [分享及兼容回执](verification/2026-11-27-v100-preview-baseline.md#516-原服复测与现场问题)
+- 三端候选各通过 196 个正式设置场景，常规用例共 7,497 项通过、59 项跳过、零失败。11 套内置主题已做三端双语回放，配色和材质按本轮定稿。 [三端验证记录](verification/2026-11-27-v100-preview-baseline.md#11-月-28-日补验)
+- 516 重载环境仍有明显切页卡顿，需同负载分段对照。客户端另记录一次 `Connection reset`，原因待查。 [现场性能与断连记录](verification/2026-11-27-v100-preview-baseline.md#516-原服复测与现场问题)
+- 已移入 Windows 回收站 112 个临时路径、20,118 个文件、约 2.20 GiB，逐项核对回收站条目。候选包、回滚备份和验收证据均通过清理后读回检查。 [清理回执](D:/AtomChat-Backups/2026-11-27-v100-preview/regular-deployment/20261128-132627-760949/cleanup.json)
+- 当前为本地预览分支，公开发行另行安排。预览卡片和更多附属接口继续按正式版后计划跟进。 [扩展计划](superpowers/plans/2026-11-27-post-1.0-appearance-extensions.md)
+
 ## 2026-11-27 · 0.9.8 本地收尾
 
 - 交付代码 `15645ecb`，分支 `codex/atomchat-v0.9.8`。三端测试实例已于 14:41 备份替换并核对 SHA-256，分别为 Fabric 1.21.1 CCB、NeoForge 1.21.1 航空学、Forge 1.20.1 主实例，均沿用各自的 AtomLib 0.7.1。本版本尚未合入或推送 main，上一份核实的公开发行是 0.9.7。 [部署回执](D:/AtomChat-Backups/2026-11-27-appearance-api/closeout/15645ecb/deployment/20261127-144135-734038/deployment.json)
@@ -8,12 +17,6 @@
 - 审定提交三端各跑 `clean build frontendContractCheck --offline`，共 7,392 项通过、59 项跳过、零失败。每端 196 个原有设置场景通过。归档回执记录审定提交，JAR 内构建戳的 `git_commit` 仍为 `unknown`。 [构建与场景回执](D:/AtomChat-Backups/2026-11-27-appearance-api/closeout/15645ecb/verification.json)
 - Fabric 历史性能回放未复现外观切页持续变慢，冷开仍捕获过 267.45 ms 的首个游戏循环间隔。该样本来自收尾前的 `dd142886`。以最终 `15645ecb` 包重新采集前后端性能基线属于下一轮工作。 [外观性能记录](verification/2026-11-27-appearance-phase2-performance.md)
 - 已将 131 个临时路径移入 Windows 回收站，涉及 14,139 个文件、约 5.35 GiB。清理后回读验收图、测试结果、三端安装包及回滚原包，保留性能原始数据、固定 Maven 输入和复跑母本。已减去运行副本的隔离案例仍可核对原证据，重跑时重新准备客户端。 [清理回执](D:/AtomChat-Backups/2026-11-27-appearance-api/closeout/15645ecb/cleanup.json)
-
-## 下一轮 · 1.0.0-Preview
-
-- 拟从本地 0.9.8 收尾基线起步。先留存同环境的 0.9.8 基准，把预览版升号单独记录，再全量盘点前端与后端的真实入口。当前源码版本仍是 0.9.8。
-- 前端覆盖冷开、切页、长列表滚动、HUD、输入和动画打断、资源加载。优先追踪冷开和首次进入聊天历史的长帧，分开测整帧、CPU/GPU 阶段与输入反馈。后端覆盖收发、身份与频道、重连、历史持久化、卡片与媒体、协议兼容。优先测高并发下的主线程开销、队列与尾延迟，同时核对权限和失败恢复。
-- 全量审计先列覆盖范围和缺口，优化按复现证据与影响排序。每项性能改动保留同场景前后对照，兼顾画面、交互、消息与数据语义。三端与 Official/Yarn 同步验证。预览卡片和其他附属接口延至 1.0.0 正式版后按实际需求排期。 [正式版后扩展安排](superpowers/plans/2026-11-27-post-1.0-appearance-extensions.md)
 
 ## 2026-11-26 · 0.9.7 正式发布
 
