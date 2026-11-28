@@ -1,11 +1,11 @@
 {
   "schema_version": 1,
   "group": "com.atom.lib",
-  "version": "0.7.1",
-  "compatibility_range": "[0.7.1,0.8.0)",
+  "version": "0.8.0",
+  "compatibility_range": "[0.8.0,)",
   "input_archive": {
-    "url": "https://github.com/NoWordz/AtomChat-Mod/releases/download/atomlib-input-0.7.1/atomlib-input-0.7.1.zip",
-    "sha256": "6b226cde719114cc879928cf7178b5fa31ebcbd1bf9f4c6748b4153fcd611ab8"
+    "url": "https://github.com/NoWordz/AtomLib-Mod/releases/download/v0.8.0/atomlib-input-0.8.0.zip",
+    "sha256": "3d323afadb417149e7c96d1eed213e0135b93feb911b9df8a368c7f075b0131c"
   },
   "client_platforms": [
     "windows-x64",
@@ -26,8 +26,8 @@
     }
   },
   "sha256": {
-    "1.20.1-forge": "e509905ccc39b8d2f3e2426f596f89919d33fa373a97c4cac24b19c4f3dc72b4",
-    "1.21.1-fabric": "7351adebd4d12f11ab1bcac253aafe4abd44c50d74a6df3e9a9a56286d965308",
-    "1.21.1-neoforge": "3addffcff509ce3a0962aa9fa484c10fc684511ce80793cc9597ba1db2226ab0"
+    "1.20.1-forge": "c39747505bc15ea6452e40ce3fae6d7b8299bc7d4e57bf4f4852620afc21b087",
+    "1.21.1-fabric": "9f68e7d362711a619cca7d4d5d30109ec63ae1834c6e0113a93bda2c76a7fb1d",
+    "1.21.1-neoforge": "15933e3a9ef81d75f8b13ab53f83c677557c59a0a8891871decddf049dc0cf6f"
   }
 }

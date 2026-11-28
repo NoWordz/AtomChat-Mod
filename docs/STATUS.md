@@ -1,5 +1,12 @@
 # AtomChat 当前状态
 
+## 2026-11-28 · 1.0.0-Preview 收尾
+
+- Fabric、Forge、NeoForge 客户端要求同端 AtomLib 0.8.0 或更新版本。Fabric 保留客户端启动校验，Forge 与 NeoForge 用各自加载器的客户端必需依赖声明。候选三端本地试装均使用完整 0.8.0
+- CCB 22:00 的用户测试确认加载 AtomChat 1.0.0-Preview 与 AtomLib 0.8.0。重复设置转场的面板绘制 P95 为 8.34 ms，最高 13.07 ms。首次聊天转场出现 348.59 ms 绘制，整帧探针最高 517.09 ms。该会话没有同负载对照，用户主观感受接近上一版
+- 保留外观预设行布局复用、异步点击诊断和 OpenGL 查询复用。现场长帧仍作为后续性能问题跟踪，本轮按用户决定结束性能排查
+- [本版发布页](https://github.com/NoWordz/AtomChat-Mod/releases/tag/v1.0.0-Preview) · [配套 AtomLib 0.8.0](https://github.com/NoWordz/AtomLib-Mod/releases/tag/v0.8.0)
+
 ## 2026-11-28 · CCB 长帧复现与诊断优化
 
 - 完整隔离 CCB 逐帧记录确认点击诊断同步写入卡住渲染线程，并在切页中捕获已完成 GL 查询的删除和 Skija 提交长帧。三端已把点击及反馈诊断挪到后台，GPU 计时复用已读的查询对象

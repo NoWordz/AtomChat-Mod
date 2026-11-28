@@ -1,8 +1,6 @@
 # Changelog
 
-## v1.0.0
-
-> 1.0.0-Preview 为三端本地预览候选。
+## v1.0.0-Preview
 
 **修复**
 
@@ -17,14 +15,18 @@
 - 更新八套内置主题配色，移除澄蓝、暮紫两个内置预设。
 - 半透明预设统一为面板 70%、卡片 60% 不透明度。
 - 诊断日志按类别和关联编号记录，异步写入，默认省略聊天原文和精确坐标。
+- 拉开蓝、青柠等六套不透明主题的面板、卡片与胶囊层次，重新选用主题即可应用新配色。
+- 滚动卡片与聊天消息在靠近视口上下边缘时渐隐，滚到首尾后完整显示。
+- 简中和英文内置界面文案省略末尾句号，保留玩家与服务器原文。
+- 三端客户端从 AtomLib 0.8.0 起加载，专用服务器继续沿用可独立部署的入口。
 
 **性能**
 
 - 减少首次打开面板、加载聊天历史及绘制物品图标时的工作。
+- 预设页复用已测量的行布局，输入变化时重新计算。
+- 点击诊断在后台写入，已读的 OpenGL 计时查询对象可复用。
 
 ----
-
-> 1.0.0-Preview is a local preview candidate for all three loaders.
 
 **Fixed**
 
@@ -39,10 +41,16 @@
 - Updated eight built-in theme palettes and retired the Clear Blue and Dusk Purple presets.
 - Translucent presets now use 70% panel opacity and 60% card opacity.
 - Diagnostic logs use categories and correlation IDs, write asynchronously, and omit chat bodies and exact coordinates by default.
+- Six opaque presets, including Blue and Lime, have clearer panel, card, and capsule colors. Reselect a preset to apply its updated palette.
+- Scrollable cards and chat messages fade near the viewport edges and are fully visible at the ends of the list.
+- Built-in English and Simplified Chinese UI copy omits final periods while preserving player and server text.
+- Clients on all three loaders require AtomLib 0.8.0 or newer. Dedicated servers can still run independently.
 
 **Performance**
 
 - Reduced work when first opening the panel, loading chat history, and drawing item icons.
+- The preset page reuses measured row layouts and recalculates them when inputs change.
+- Click diagnostics are written in the background, and completed OpenGL timer query objects are reused.
 
 ## v0.9.8
 

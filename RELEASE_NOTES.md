@@ -1,27 +1,36 @@
 # Release Notes
 
-## v1.0.0
+## v1.0.0-Preview
 
-> 1.0.0-Preview 为三端本地预览候选。
+**安装**
+
+- Fabric、Forge、NeoForge 客户端需要同加载器的 AtomLib 0.8.0 或更新版本。
+
+**变更**
 
 - 修复部分服务器的位置分享双卡片及物品分享附带多余文字。
 - 新的联机聊天历史按地址区分，保留以前的历史文件。
 - 修复 NeoForge 组合服务端的 TrChat 频道注册冲突。
 - 更新八套预设配色，移除澄蓝和暮紫，统一半透明主题的面板和卡片不透明度。
+- 蓝、青柠等不透明主题的面板、卡片和胶囊更易区分，重选主题即可应用。
+- 滚动卡片和消息在边缘渐隐，滚到头时完整显示。
 - 外观附属自行添加设置项。
-- 减少面板首次打开、聊天历史加载与物品图标绘制的开销。
+- 减少面板、历史和物品图标的重复工作，复用外观预设的行布局。
+- 简中和英文内置界面文案省略末尾句号。
 - 诊断日志分类型异步写入，默认省略聊天原文和精确坐标。
 
 ----
 
-> 1.0.0-Preview is a local preview candidate for all three loaders.
-
+- Fabric, Forge, and NeoForge clients require AtomLib 0.8.0 or newer for the matching loader.
 - Fixed duplicate location cards and extra text from item shares on some servers.
 - New multiplayer history uses the server address while preserving older history files.
 - Fixed a TrChat channel registration conflict on hybrid NeoForge servers.
 - Updated eight theme palettes, retired Clear Blue and Dusk Purple, and standardized panel and card opacity for translucent presets.
+- Opaque themes such as Blue and Lime have clearer panel, card, and capsule colors. Reselect a preset to apply its updated palette.
+- Scrollable cards and messages fade near the edges and appear in full at the ends of the list.
 - Appearance add-ons add their own settings.
-- Reduced the cost of opening the panel, loading chat history, and drawing item icons.
+- Reduced repeated work in panels, history, and item icons, and reused row layouts on the appearance preset page.
+- Built-in English and Simplified Chinese UI copy omits final periods.
 - Diagnostic logs are categorized and written asynchronously, omitting chat bodies and exact coordinates by default.
 
 ## v0.9.8

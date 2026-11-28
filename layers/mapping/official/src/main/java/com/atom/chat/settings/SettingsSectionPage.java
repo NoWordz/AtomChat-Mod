@@ -720,7 +720,7 @@ public final class SettingsSectionPage {
     private record CompactText(List<String> title, List<String> description,
                                float titleH, float descriptionH, float controlH, float height) {}
 
-    /** One frame's row heights, tops and text measurements. */
+    /** Measured row heights, tops and text shared by layout, drawing and input. */
     private record RowGeometry(List<Row> rows, SettingsSection section,
                                float listX, float listY, float listW,
                                float cardWidth, float[] tops, float[] heights,
@@ -1409,16 +1409,18 @@ public final class SettingsSectionPage {
         private final Font titleFont;
         private final Font subtitleFont;
         private final long languageRevision;
-        private final boolean hasWallpaper;
+        private final long wallpaperRevision;
         private final long appearanceRevision;
         private final AppearanceSettings.Selection appearanceSelection;
         private final boolean tutorial;
         private final IdentityHashMap<Row, CompactText> text = new IdentityHashMap<>();
+        // Drawing can recompute per-frame geometry mid-fold. Retain only the settled measurement here.
+        private RowGeometry geometry;
         private int nextRow;
         private boolean themePreviewsPending;
 
         private AppearanceMeasurement(List<Row> rows, float width, java.util.Set<String> collapsed,
-                                      Font titleFont, Font subtitleFont, long languageRevision, boolean hasWallpaper,
+                                      Font titleFont, Font subtitleFont, long languageRevision, long wallpaperRevision,
                                       long appearanceRevision, AppearanceSettings.Selection appearanceSelection, boolean tutorial) {
             this.rows = rows;
             this.width = width;
@@ -1426,7 +1428,7 @@ public final class SettingsSectionPage {
             this.titleFont = titleFont;
             this.subtitleFont = subtitleFont;
             this.languageRevision = languageRevision;
-            this.hasWallpaper = hasWallpaper;
+            this.wallpaperRevision = wallpaperRevision;
             this.appearanceRevision = appearanceRevision;
             this.appearanceSelection = appearanceSelection;
             this.tutorial = tutorial;
@@ -1436,10 +1438,15 @@ public final class SettingsSectionPage {
 
     private AppearanceMeasurement appearanceMeasurement(UiLayout layout) {
         if (!"theme".equals(activeChipId(SettingsSection.APPEARANCE))) return null;
+        String tab = SettingsUi.builtInTabId("theme");
+        var groups = SettingsUi.registeredGroups(SettingsSection.APPEARANCE, tab);
+        if ((groups != null && groups.hasEdits()) || !SettingsUi.registeredRows(SettingsSection.APPEARANCE, tab).isEmpty()) {
+            return null;
+        }
         for (var fold : groupExpansion.entrySet()) {
             if (fold.getValue() != (collapsedColorGroups.contains(fold.getKey()) ? 0F : 1F)) return null;
         }
-        boolean hasWallpaper = WallpaperStore.isSet();
+        long wallpaperRevision = WallpaperStore.revision();
         AtomChatConfig config = AtomChatConfig.get();
         long appearanceRevision = AppearanceUi.revision();
         boolean tutorial = com.atom.chat.onboarding.TutorialSandbox.active();
@@ -1450,11 +1457,11 @@ public final class SettingsSectionPage {
         AppearanceMeasurement measurement = appearanceMeasurement;
         if (measurement == null || measurement.width != width || measurement.titleFont != title
                 || measurement.subtitleFont != subtitle || measurement.languageRevision != languageRevision
-                || measurement.hasWallpaper != hasWallpaper || measurement.appearanceRevision != appearanceRevision
+                || measurement.wallpaperRevision != wallpaperRevision || measurement.appearanceRevision != appearanceRevision
                 || !measurement.appearanceSelection.matches(config) || measurement.tutorial != tutorial
                 || !measurement.collapsed.equals(collapsedColorGroups)) {
             measurement = new AppearanceMeasurement(rows(SettingsSection.APPEARANCE), width,
-                    collapsedColorGroups, title, subtitle, languageRevision, hasWallpaper,
+                    collapsedColorGroups, title, subtitle, languageRevision, wallpaperRevision,
                     appearanceRevision, AppearanceSettings.Selection.capture(config), tutorial);
             appearanceMeasurement = measurement;
         }
@@ -1530,7 +1537,14 @@ public final class SettingsSectionPage {
         measuredRowsSection = section;
         measuredRowsChip = activeChipId(section);
         measuredRows = rows;
-        RowGeometry geometry = buildRowGeometry(section, rows, layout);
+        RowGeometry geometry;
+        if (prepared == null) {
+            geometry = buildRowGeometry(section, rows, layout);
+        } else {
+            rowGeometry = prepared.geometry;
+            geometry = rowGeometry(section, rows, layout);
+            prepared.geometry = geometry;
+        }
         return contentHeight(rows, geometry, chipBarHeight(section));
     }
 
